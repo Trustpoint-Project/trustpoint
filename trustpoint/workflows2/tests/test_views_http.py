@@ -428,6 +428,106 @@ workflow:
         self.assertEqual(approval_response.status_code, 200)
         self.assertContains(approval_response, "Approval review")
 
+    def test_waiting_list_includes_approvals_paused_instances_and_errors(self) -> None:
+        self.client.force_login(self.user)
+
+        definition = self._store_approval_definition()
+        run = Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={"device": {"id": "dev-1"}},
+            source_json={"trustpoint": True},
+            status=Workflow2Run.STATUS_AWAITING,
+            finalized=False,
+        )
+        awaiting = Workflow2Instance.objects.create(
+            run=run,
+            definition=definition,
+            event_json={},
+            vars_json={},
+            status=Workflow2Instance.STATUS_AWAITING,
+            current_step="approve",
+        )
+        Workflow2Approval.objects.create(
+            instance=awaiting,
+            step_id="approve",
+            status=Workflow2Approval.STATUS_PENDING,
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+        Workflow2Instance.objects.create(
+            run=run,
+            definition=definition,
+            event_json={},
+            vars_json={},
+            status=Workflow2Instance.STATUS_PAUSED,
+            current_step="mark_review",
+            status_message="Waiting for operator resume",
+        )
+        Workflow2Instance.objects.create(
+            run=run,
+            definition=definition,
+            event_json={},
+            vars_json={},
+            status=Workflow2Instance.STATUS_ERROR,
+            current_step="approve",
+            status_message="Notification backend failed",
+        )
+
+        response = self.client.get(reverse("workflows2:approvals-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["summary_total"], 3)
+        self.assertEqual(response.context["summary_pending_approvals"], 1)
+        self.assertEqual(response.context["summary_paused_instances"], 1)
+        self.assertEqual(response.context["summary_error_instances"], 1)
+        self.assertEqual(
+            {row["kind"] for row in response.context["waiting_rows"]},
+            {"approval", "paused", "error"},
+        )
+        approval_row = next(row for row in response.context["waiting_rows"] if row["kind"] == "approval")
+        self.assertEqual(approval_row["detail"], "Decision required")
+        self.assertContains(response, "Expires:")
+        self.assertContains(response, "Waiting for operator resume")
+        self.assertContains(response, "Notification backend failed")
+
+    def test_waiting_list_kind_filter_shows_only_paused_instances(self) -> None:
+        self.client.force_login(self.user)
+
+        definition = self._store_definition()
+        run = Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={},
+            source_json={"trustpoint": True},
+            status=Workflow2Run.STATUS_PAUSED,
+            finalized=False,
+        )
+        Workflow2Instance.objects.create(
+            run=run,
+            definition=definition,
+            event_json={},
+            vars_json={},
+            status=Workflow2Instance.STATUS_PAUSED,
+            current_step="decide",
+            status_message="Paused on purpose",
+        )
+        Workflow2Instance.objects.create(
+            run=run,
+            definition=definition,
+            event_json={},
+            vars_json={},
+            status=Workflow2Instance.STATUS_ERROR,
+            current_step="decide",
+            status_message="Should be hidden by the filter",
+        )
+
+        response = self.client.get(reverse("workflows2:approvals-list"), {"kind": "paused", "sort": "bad-sort"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["kind"], "paused")
+        self.assertEqual(response.context["sort"], "created")
+        self.assertEqual([row["kind"] for row in response.context["waiting_rows"]], ["paused"])
+        self.assertContains(response, "Paused on purpose")
+        self.assertNotContains(response, "Should be hidden by the filter")
+
     def test_stop_error_instance_preserves_error_context(self) -> None:
         self.client.force_login(self.user)
 

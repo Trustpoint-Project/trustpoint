@@ -5,7 +5,7 @@ from django.test import SimpleTestCase
 
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.compiler.errors import CompileError
-from workflows2.engine.adapters import WebhookResponse
+from workflows2.engine.adapters import NotificationCreateRequest, WebhookResponse
 from workflows2.engine.executor import WorkflowExecutor
 
 
@@ -94,6 +94,15 @@ class CapturingEmail:
         self.sent.append({"to": to, "subject": subject, "body": body})
 
 
+class CapturingNotification:
+    def __init__(self) -> None:
+        self.requests: list[NotificationCreateRequest] = []
+
+    def create(self, request: NotificationCreateRequest) -> dict[str, object]:
+        self.requests.append(request)
+        return {"notification_id": "notif-1", "status": "NEW"}
+
+
 class ExecutorTests(SimpleTestCase):
     def test_happy_path_routes_ok_and_computes(self) -> None:
         ir = compile_workflow_yaml(YAML, compiler_version="test")
@@ -122,3 +131,53 @@ class ExecutorTests(SimpleTestCase):
         )
         with self.assertRaises(CompileError):
             compile_workflow_yaml(bad, compiler_version="test")
+
+    def test_notification_step_renders_text_event_and_related_ids(self) -> None:
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: Notification Example
+enabled: true
+
+trigger:
+  on: device.updated
+  sources:
+    trustpoint: true
+
+workflow:
+  start: create_notice
+
+  steps:
+    create_notice:
+      type: notification
+      severity: warning
+      source: device
+      short: "Device ${event.device.common_name} needs review"
+      long: "Device id: ${event.device.id}"
+      initial_status: pending
+      event: "workflow.${event.device.id}.review"
+      related:
+        device_id: ${event.device.id}
+
+  flow: []
+"""
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+        notification = CapturingNotification()
+        ex = WorkflowExecutor(notification=notification)
+
+        res = ex.run(
+            ir,
+            event={"device": {"id": "123", "common_name": "Router-01"}},
+            vars={},
+        )
+
+        self.assertEqual(res.status, "finished")
+        self.assertEqual(res.runs[0].output, {"notification_id": "notif-1", "status": "NEW"})
+
+        request = notification.requests[0]
+        self.assertEqual(request.severity, "warning")
+        self.assertEqual(request.source, "device")
+        self.assertEqual(request.short, "Device Router-01 needs review")
+        self.assertEqual(request.long, "Device id: 123")
+        self.assertEqual(request.initial_status, "pending")
+        self.assertEqual(request.event, "workflow.123.review")
+        self.assertEqual(request.related, {"device_id": "123"})
