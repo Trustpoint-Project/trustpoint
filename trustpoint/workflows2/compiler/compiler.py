@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, ClassVar, Literal, cast
+from typing import Any, ClassVar, Literal, NoReturn, cast
 
 from workflows2.compiler.step_types import StepTypes
 from workflows2.events.registry import get_event_registry
@@ -1025,7 +1025,7 @@ class WorkflowCompiler:
         raise CompileError(msg, path=path)
 
     @staticmethod
-    def _raise_unsafe_timeout_route(*, step_id: str, path: str) -> None:
+    def _raise_unsafe_timeout_route(*, step_id: str, path: str) -> NoReturn:
         msg = (
             f'Approval timeout route reaches "{step_id}" without an explicit '
             'non-continuing set_status result'
