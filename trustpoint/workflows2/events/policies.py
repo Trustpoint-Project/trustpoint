@@ -21,7 +21,7 @@ BASE_ADAPTERS: set[str] = {
 # Status control is handled by the explicit set_status step.
 BASE_TERMINALS: set[str] = set()
 
-# Common presets
+# Common step policy sets
 AUTOMATION_NO_APPROVAL: set[str] = BASE_AUTOMATION | BASE_ADAPTERS
 AUTOMATION_WITH_APPROVAL: set[str] = BASE_AUTOMATION | {StepTypes.APPROVAL} | BASE_ADAPTERS
 
