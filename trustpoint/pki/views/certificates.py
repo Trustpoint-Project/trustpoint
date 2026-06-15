@@ -84,14 +84,18 @@ class CertificateTableView(
     def get_base_queryset(self) -> QuerySet[CertificateModel]:
         """Return the annotated base queryset used by the certificates table."""
         now = timezone.now()
-        return CertificateModel.objects.annotate(
-            certificate_status_sort=Case(
-                When(revoked_certificate__isnull=False, then=Value(3)),
-                When(not_valid_before__gt=now, then=Value(4)),
-                When(not_valid_after__lte=now, then=Value(2)),
-                default=Value(0),
-                output_field=IntegerField(),
-            ),
+        return (
+            CertificateModel.objects
+            .select_related('revoked_certificate')
+            .annotate(
+                certificate_status_sort=Case(
+                    When(revoked_certificate__isnull=False, then=Value(3)),
+                    When(not_valid_before__gt=now, then=Value(4)),
+                    When(not_valid_after__lte=now, then=Value(2)),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                ),
+            )
         )
 
     def get_queryset(self) -> QuerySet[CertificateModel]:
@@ -137,6 +141,20 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
     ignore_url = reverse_lazy('pki:certificates')
     template_name = 'pki/certificates/details.html'
     context_object_name = 'cert'
+
+    def get_queryset(self) -> QuerySet[CertificateModel]:
+        """Return the queryset with relations eagerly loaded for the detail template."""
+        return (
+            CertificateModel.objects
+            .select_related(
+                'subject_alternative_name_extension__subject_alt_name',
+            )
+            .prefetch_related(
+                'subject',
+                'issuer',
+                'subject_alternative_name_extension__subject_alt_name__ip_addresses',
+            )
+        )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adding map of attribute and its oid with its values.
