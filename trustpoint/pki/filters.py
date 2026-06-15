@@ -7,7 +7,8 @@ from django.db.models import QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from pki.models import CertificateModel
+from pki.models import CaModel, CertificateModel, CrlModel
+from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
 
 
@@ -195,3 +196,170 @@ class TruststoreFilter(django_filters.FilterSet):
 
         model = TruststoreModel
         fields = ('unique_name', 'intended_usage')
+
+
+class DomainFilter(django_filters.FilterSet):
+    """FilterSet for the domains list page."""
+
+    unique_name = django_filters.CharFilter(
+        label=_('Domain Name'),
+        lookup_expr='icontains',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control form-control-sm',
+            'placeholder': _('Search…'),
+        })
+    )
+    issuing_ca = django_filters.ModelChoiceFilter(
+        queryset=CaModel.objects.all(),
+        label=_('Issuing CA'),
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+    created_at_from = django_filters.DateFilter(
+        field_name='created_at',
+        label=_('Created from'),
+        lookup_expr='date__gte',
+        widget=forms.DateInput(attrs={
+            'class': 'form-control form-control-sm',
+            'type': 'date',
+        })
+    )
+    created_at_to = django_filters.DateFilter(
+        field_name='created_at',
+        label=_('Created to'),
+        lookup_expr='date__lte',
+        widget=forms.DateInput(attrs={
+            'class': 'form-control form-control-sm',
+            'type': 'date',
+        })
+    )
+
+    class Meta:
+        """Meta class configuration."""
+
+        model = DomainModel
+        fields = ('unique_name', 'issuing_ca')
+
+
+class CaFilter(django_filters.FilterSet):
+    """FilterSet for the CA list page."""
+
+    unique_name = django_filters.CharFilter(
+        label=_('CA Name'),
+        lookup_expr='icontains',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control form-control-sm',
+            'placeholder': _('Search…'),
+        })
+    )
+    ca_type_group = django_filters.ChoiceFilter(
+        label=_('Type'),
+        choices=(
+            ('ca', _('CA')),
+            ('ra', _('RA')),
+            ('keyless', _('Keyless CA')),
+        ),
+        method='filter_ca_type_group',
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+    is_active = django_filters.ChoiceFilter(
+        label=_('Status'),
+        choices=(
+            ('true', _('Active')),
+            ('false', _('Inactive')),
+        ),
+        method='filter_is_active',
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+
+    def filter_ca_type_group(
+        self,
+        queryset: QuerySet[CaModel],
+        name: str,
+        value: str,
+    ) -> QuerySet[CaModel]:
+        """Filter CAs by display type group (CA / RA / Keyless)."""
+        del name
+        if value == 'ca':
+            return queryset.exclude(ca_type__in=[-1, 4, 5])
+        if value == 'ra':
+            return queryset.filter(ca_type__in=[4, 5])
+        if value == 'keyless':
+            return queryset.filter(ca_type=-1)
+        return queryset
+
+    def filter_is_active(
+        self,
+        queryset: QuerySet[CaModel],
+        name: str,
+        value: str,
+    ) -> QuerySet[CaModel]:
+        """Filter CAs by active/inactive status."""
+        del name
+        if value == 'true':
+            return queryset.filter(is_active=True)
+        if value == 'false':
+            return queryset.filter(is_active=False)
+        return queryset
+
+    class Meta:
+        """Meta class configuration."""
+
+        model = CaModel
+        fields = ('unique_name',)
+
+
+class CrlFilter(django_filters.FilterSet):
+    """FilterSet for the CRL list page."""
+
+    ca = django_filters.ModelChoiceFilter(
+        queryset=CaModel.objects.all(),
+        label=_('CA'),
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+    is_active = django_filters.ChoiceFilter(
+        label=_('Status'),
+        choices=(
+            ('true', _('Active')),
+            ('false', _('Inactive')),
+        ),
+        method='filter_is_active',
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+    this_update_from = django_filters.DateFilter(
+        field_name='this_update',
+        label=_('Updated from'),
+        lookup_expr='date__gte',
+        widget=forms.DateInput(attrs={
+            'class': 'form-control form-control-sm',
+            'type': 'date',
+        })
+    )
+    this_update_to = django_filters.DateFilter(
+        field_name='this_update',
+        label=_('Updated to'),
+        lookup_expr='date__lte',
+        widget=forms.DateInput(attrs={
+            'class': 'form-control form-control-sm',
+            'type': 'date',
+        })
+    )
+
+    def filter_is_active(
+        self,
+        queryset: QuerySet[CrlModel],
+        name: str,
+        value: str,
+    ) -> QuerySet[CrlModel]:
+        """Filter CRLs by active/inactive status."""
+        del name
+        if value == 'true':
+            return queryset.filter(is_active=True)
+        if value == 'false':
+            return queryset.filter(is_active=False)
+        return queryset
+
+    class Meta:
+        """Meta class configuration."""
+
+        model = CrlModel
+        fields = ('ca',)

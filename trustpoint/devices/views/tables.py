@@ -33,6 +33,7 @@ from devices.models import (
 )
 from onboarding.enums import OnboardingStatus
 from pki.models import IssuedCredentialModel
+from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
@@ -50,7 +51,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
-class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
+class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceModel], abc.ABC):
     """Device Table View."""
 
     http_method_names = ('get',)
@@ -63,6 +64,41 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
 
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
+
+    def get_export_config(self) -> ExportConfig:
+        """Return the CSV export configuration for the device table."""
+        return ExportConfig.from_model(
+            DeviceModel,
+            include=['common_name', 'serial_number', 'domain', 'ip_address', 'created_at'],
+            labels={
+                'common_name': str(gettext_lazy('Name')),
+                'serial_number': str(gettext_lazy('Serial Number')),
+                'created_at': str(gettext_lazy('Created At')),
+            },
+            extra=[
+                ExportColumn(
+                    key='enrollment',
+                    label=str(gettext_lazy('Enrollment Status')),
+                    accessor=lambda d: self._get_onboarding_progress(d)['status_label'],
+                ),
+                ExportColumn(
+                    key='pki_protocols',
+                    label=str(gettext_lazy('PKI Protocols')),
+                    accessor=self._get_pki_protocols,
+                ),
+                ExportColumn(
+                    key='domain_credential',
+                    label=str(gettext_lazy('Domain Credential Status')),
+                    accessor=lambda d: self._get_domain_credential_status(d)['status_label'],
+                ),
+                ExportColumn(
+                    key='application_certificates',
+                    label=str(gettext_lazy('Application Certificate Status')),
+                    accessor=lambda d: self._get_application_certificate_status(d)['status_label'],
+                ),
+            ],
+            filename='devices',
+        )
 
     def apply_filters(self, qs: QuerySet[DeviceModel]) -> QuerySet[DeviceModel]:
         """Applies the `DeviceFilter` to the given queryset.
