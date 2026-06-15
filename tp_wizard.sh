@@ -113,7 +113,7 @@ sftpgo_web_port(){
 
 # -------------------------- Input helpers ------------------------------------
 ask(){ local prompt="$1" def="${2:-}"; if [[ -n "$def" ]]; then read -r -p "$(bold)${prompt}$(rst) [default: ${def}] > " REPLY || true; REPLY="${REPLY:-$def}"; else read -r -p "$(bold)${prompt}$(rst) > " REPLY || true; fi; }
-ask_yes_no(){ local prompt="$1" def="${2:-y}" a; case "${def}" in y|yes) a="[Y/n]";; n|no) a="[y/N]";; *) a="[y/n]";; esac; read -r -p "$(bold)${prompt} ${a}$(rst) > " resp || true; resp="${resp:-$def}"; [[ "${resp}" =~ ^y ]]; }
+ask_yes_no(){ local prompt="$1" def="${2:-y}" a; case "${def}" in y|yes) a="[Y/n]";; n|no) a="[y/N]";; *) a="[y/n]";; esac; read -r -p "$(bold)${prompt} ${a}$(rst) > " resp || true; resp="${resp:-$def}"; [[ "${resp}" =~ ^[yY] ]]; }
 ask_port(){ local prompt="$1" def="$2" p; while true; do ask "$prompt" "$def"; p="$REPLY"; [[ "$p" =~ ^[0-9]{1,5}$ ]] && (( p>0 && p<65536 )) && { echo "$p"; return; } ; warn "Invalid port. Enter 1..65535."; done; }
 ask_free_port(){ local prompt="$1" def="$2" p; while true; do p="$(ask_port "$prompt" "$def")"; if port_in_use "$p"; then warn "Port ${p} is already in use on this host. Pick another."; else echo "$p"; return; fi; done; }
 ask_user(){ local prompt="$1" def="$2" u; while true; do ask "$prompt" "$def"; u="$REPLY"; [[ "$u" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]] && { echo "$u"; return; } ; warn "Invalid username."; done; }
@@ -481,7 +481,7 @@ start_app(){
     -e "DATABASE_PASSWORD=$APP_DB_PASS" \
     -e "DATABASE_HOST=$APP_DB_HOST" \
     -e "DATABASE_PORT=$APP_DB_PORT" \
-    "${smtp_env[@]}" \
+    ${smtp_env[@]+"${smtp_env[@]}"} \
     "$APP_IMAGE" >/dev/null
 }
 
