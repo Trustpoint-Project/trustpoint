@@ -54,10 +54,6 @@
     {{ form.permissions }}
 </div>
 
-{# Hidden select that actually gets submitted with the form #}
-<select multiple name="permissions" id="hidden-perms" class="d-none">
-</select>
-
 <script>
 (function () {
     "use strict";
@@ -65,7 +61,7 @@
     // ---- References ----
     const availableSelect = document.getElementById("available-perms");
     const assignedSelect  = document.getElementById("assigned-perms");
-    const hiddenSelect    = document.getElementById("hidden-perms");
+    const hiddenSelect    = document.getElementById("{{ form.permissions.id_for_label }}");
     const filterAvailable = document.getElementById("filter-available");
     const filterAssigned  = document.getElementById("filter-assigned");
 

@@ -154,3 +154,24 @@ class TrustpointUser(AbstractUser):
 
         # Ensure the user belongs to exactly the role group.
         self.groups.set([self.role])
+
+class AppPermission(models.Model):
+    """Dummy model used only to host app-level permissions.
+
+    No database usage beyond auth_permission table.
+    """
+
+    class Meta:
+        """Define permissions."""
+
+        default_permissions = ()  # disables add/change/delete/view
+        permissions = (
+            ('manage_workflow', 'Can manage workflow'),
+            ('onboard_device', 'Can onboard device'),
+            ('manage_ca', 'Can manage CA'),
+            ('manage_role', 'Can manage role')
+        )
+
+    def __str__(self) -> str:
+        """Return a string representation for the AppPermission."""
+        return 'app_permission_model'

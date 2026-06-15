@@ -18,6 +18,7 @@ class TrustpointSuperUserCreationForm(UserCreationForm[TrustpointUser]):
 
     class Meta(UserCreationForm.Meta):
         """Metaclass extending the standard UserCreationForm with the TrustpointUser model."""
+
         model = TrustpointUser
         fields = UserCreationForm.Meta.fields
 
@@ -74,10 +75,9 @@ class _PermissionMultipleChoiceField(forms.ModelMultipleChoiceField[Permission])
             obj: The ``Permission`` instance to label.
 
         Returns:
-            A string formatted as ``'app_label | model | permission name'``.
+            A string formatted as ``'permission name'``.
         """
-        ct = obj.content_type
-        return f'{ct.app_label} | {ct.model} | {obj.name}'
+        return f'{obj.name}'
 
 
 class GroupPermissionForm(forms.ModelForm[Group]):
@@ -94,10 +94,8 @@ class GroupPermissionForm(forms.ModelForm[Group]):
     """
 
     permissions = _PermissionMultipleChoiceField(
-        queryset=Permission.objects.select_related('content_type').order_by(
-            'content_type__app_label',
-            'content_type__model',
-            'codename',
+        queryset=Permission.objects.select_related('content_type').filter(
+             content_type__model='apppermission'
         ),
         required=False,
         widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '15'}),
