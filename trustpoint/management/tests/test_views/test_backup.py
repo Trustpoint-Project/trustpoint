@@ -1,16 +1,21 @@
 """Test suite for the Backup views."""
-from unittest.mock import patch, MagicMock, Mock
-from django.test import TestCase, Client
-from django.urls import reverse
-from django.contrib.messages import get_messages
-from django.contrib.auth.models import User
-from django.core.management.base import CommandError
-from management.models import BackupOptions
-from management.views.backup import get_backup_file_data, create_db_backup
-from util.sftp import SftpError
-from pathlib import Path
-import tempfile
 import datetime
+import io
+import tarfile
+import tempfile
+import zipfile
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
+
+from django.contrib.auth.models import User
+from django.contrib.messages import get_messages
+from django.core.management.base import CommandError
+from django.test import Client, TestCase
+from django.urls import reverse
+
+from management.models import BackupOptions
+from management.views.backup import create_db_backup, get_backup_file_data
+from util.sftp import SftpError
 
 
 class GetBackupFileDataTest(TestCase):
@@ -508,6 +513,31 @@ class BackupFileDownloadViewTest(TestCase):
         self.assertEqual(response.content, b'test content')
 
     @patch('management.views.backup.settings')
+    def test_download_existing_file_with_manifest_returns_bundle(self, mock_settings: MagicMock) -> None:
+        """Test downloading a backup with its manifest sidecar as a ZIP bundle."""
+        mock_settings.BACKUP_FILE_PATH = self.backup_dir
+
+        test_file = self.backup_dir / 'backup_test.dump.gz'
+        manifest_file = self.backup_dir / 'backup_test.dump.gz.manifest.json'
+        test_file.write_bytes(b'test content')
+        manifest_file.write_bytes(b'{"manifest_version":1}')
+
+        url = reverse('management:backup-download', kwargs={'filename': 'backup_test.dump.gz'})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/zip')
+        self.assertIn('backup_test.zip', response['Content-Disposition'])
+
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            self.assertEqual(
+                set(archive.namelist()),
+                {'backup_test.dump.gz', 'backup_test.dump.gz.manifest.json'},
+            )
+            self.assertEqual(archive.read('backup_test.dump.gz'), b'test content')
+            self.assertEqual(archive.read('backup_test.dump.gz.manifest.json'), b'{"manifest_version":1}')
+
+    @patch('management.views.backup.settings')
     def test_download_nonexistent_file(self, mock_settings: MagicMock) -> None:
         """Test downloading a nonexistent backup file."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
@@ -538,12 +568,14 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
 
     @patch('management.views.backup.settings')
     def test_download_multiple_as_zip(self, mock_settings: MagicMock) -> None:
-        """Test downloading multiple backups as ZIP."""
+        """Test downloading multiple backups as ZIP containing one ZIP artifact per backup."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
         
         # Create test backup files
         (self.backup_dir / 'backup_1.dump.gz').write_bytes(b'content1')
+        (self.backup_dir / 'backup_1.dump.gz.manifest.json').write_bytes(b'manifest1')
         (self.backup_dir / 'backup_2.dump.gz').write_bytes(b'content2')
+        (self.backup_dir / 'backup_2.dump.gz.manifest.json').write_bytes(b'manifest2')
         
         url = reverse('management:backup-download-multiple', kwargs={'archive_format': 'zip'})
         response = self.client.post(url, {'selected': ['backup_1.dump.gz', 'backup_2.dump.gz']})
@@ -551,15 +583,23 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertIn('backups.zip', response['Content-Disposition'])
+        with zipfile.ZipFile(io.BytesIO(response.content)) as outer_archive:
+            self.assertEqual(set(outer_archive.namelist()), {'backup_1.zip', 'backup_2.zip'})
+            with zipfile.ZipFile(io.BytesIO(outer_archive.read('backup_1.zip'))) as artifact:
+                self.assertEqual(set(artifact.namelist()), {'backup_1.dump.gz', 'backup_1.dump.gz.manifest.json'})
+                self.assertEqual(artifact.read('backup_1.dump.gz'), b'content1')
+                self.assertEqual(artifact.read('backup_1.dump.gz.manifest.json'), b'manifest1')
 
     @patch('management.views.backup.settings')
     def test_download_multiple_as_tar_gz(self, mock_settings: MagicMock) -> None:
-        """Test downloading multiple backups as tar.gz."""
+        """Test downloading multiple backups as tar.gz containing one tar.gz artifact per backup."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
         
         # Create test backup files
         (self.backup_dir / 'backup_1.dump.gz').write_bytes(b'content1')
+        (self.backup_dir / 'backup_1.dump.gz.manifest.json').write_bytes(b'manifest1')
         (self.backup_dir / 'backup_2.dump.gz').write_bytes(b'content2')
+        (self.backup_dir / 'backup_2.dump.gz.manifest.json').write_bytes(b'manifest2')
         
         url = reverse('management:backup-download-multiple', kwargs={'archive_format': 'tar.gz'})
         response = self.client.post(url, {'selected': ['backup_1.dump.gz', 'backup_2.dump.gz']})
@@ -567,6 +607,21 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertIn('backups.tar.gz', response['Content-Disposition'])
+        with tarfile.open(fileobj=io.BytesIO(response.content), mode='r:gz') as outer_archive:
+            self.assertEqual({member.name for member in outer_archive.getmembers()}, {'backup_1.tar.gz', 'backup_2.tar.gz'})
+            artifact_bytes = outer_archive.extractfile('backup_1.tar.gz')
+            self.assertIsNotNone(artifact_bytes)
+            with tarfile.open(fileobj=io.BytesIO(artifact_bytes.read()), mode='r:gz') as artifact:
+                self.assertEqual(
+                    {member.name for member in artifact.getmembers()},
+                    {'backup_1.dump.gz', 'backup_1.dump.gz.manifest.json'},
+                )
+                payload_file = artifact.extractfile('backup_1.dump.gz')
+                manifest_file = artifact.extractfile('backup_1.dump.gz.manifest.json')
+                self.assertIsNotNone(payload_file)
+                self.assertIsNotNone(manifest_file)
+                self.assertEqual(payload_file.read(), b'content1')
+                self.assertEqual(manifest_file.read(), b'manifest1')
 
     def test_download_multiple_no_selection(self) -> None:
         """Test downloading with no files selected."""

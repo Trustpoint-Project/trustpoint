@@ -260,7 +260,7 @@ def test_pkcs11_app_secret_decryptability_uses_staged_backend() -> None:
         'setup_wizard.views.apply_pkcs11_probe_fallbacks',
         return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
     ), patch('setup_wizard.views.Pkcs11AppSecretService') as service_class:
-        service_class.return_value.unwrap_existing_dek.return_value = b'a' * 32
+        service_class.return_value.recover_existing_dek.return_value = b'a' * 32
         checks = app_secret_decryptability_checks(
             config_model=config_model,
             target=_target(crypto_backend_kind='pkcs11', app_secret_backend_kind='pkcs11'),
@@ -269,10 +269,10 @@ def test_pkcs11_app_secret_decryptability_uses_staged_backend() -> None:
 
     assert checks[0].code == 'appsecret.decryptability_ok'
     assert checks[0].severity == CompatibilitySeverity.INFO
-    service_class.return_value.unwrap_existing_dek.assert_called_once_with()
+    service_class.return_value.recover_existing_dek.assert_called_once_with()
 
 
-def test_pkcs11_app_secret_decryptability_blocks_when_unwrap_fails() -> None:
+def test_pkcs11_app_secret_decryptability_blocks_when_recovery_fails() -> None:
     config_model = SetupWizardConfigModel(
         crypto_storage=SetupWizardConfigModel.CryptoStorageType.HsmStorage,
         fresh_install_pkcs11_token_label='Trustpoint-SoftHSM',
@@ -296,7 +296,7 @@ def test_pkcs11_app_secret_decryptability_blocks_when_unwrap_fails() -> None:
         'setup_wizard.views.apply_pkcs11_probe_fallbacks',
         return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
     ), patch('setup_wizard.views.Pkcs11AppSecretService') as service_class:
-        service_class.return_value.unwrap_existing_dek.side_effect = AppSecretConfigurationError('missing kek')
+        service_class.return_value.recover_existing_dek.side_effect = AppSecretConfigurationError('missing kek')
         checks = app_secret_decryptability_checks(
             config_model=config_model,
             target=_target(crypto_backend_kind='pkcs11', app_secret_backend_kind='pkcs11'),

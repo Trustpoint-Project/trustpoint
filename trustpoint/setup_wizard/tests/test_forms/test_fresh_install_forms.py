@@ -14,6 +14,7 @@ from setup_wizard.forms import (
 from setup_wizard.models import SetupWizardConfigModel
 
 SLOT_ID = 3
+pytestmark = pytest.mark.django_db
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +386,11 @@ class TestRestoreBackupImportFormCleanBackupArchive:
     def test_valid_gpg_extension(self) -> None:
         """Encrypted dump variants pass validation."""
         form = self._make_form('backup.dump.gz.gpg')
+        assert form.is_valid(), form.errors
+
+    def test_valid_zip_bundle_extension(self) -> None:
+        """Trustpoint backup ZIP bundles pass validation."""
+        form = self._make_form('backup.zip')
         assert form.is_valid(), form.errors
 
     def test_invalid_extension_fails(self) -> None:

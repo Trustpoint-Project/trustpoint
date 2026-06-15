@@ -668,7 +668,8 @@ class RestoreBackupImportForm(forms.Form):
         required=False,
         label=gettext_lazy('Backup archive'),
         help_text=gettext_lazy(
-            'Upload a Trustpoint PostgreSQL backup archive as .dump, .dump.gz, or a GPG-encrypted variant.'
+            'Upload a Trustpoint PostgreSQL backup archive as .dump, .dump.gz, a Trustpoint .zip bundle, '
+            'or a GPG-encrypted variant.'
         ),
     )
     backup_archive_password = forms.CharField(
@@ -699,10 +700,10 @@ class RestoreBackupImportForm(forms.Form):
             raise forms.ValidationError(gettext_lazy('Upload a Trustpoint backup archive.'))
 
         filename = str(getattr(backup_archive, 'name', '')).lower()
-        valid_suffixes = ('.dump', '.dump.gz', '.dump.gpg', '.dump.gz.gpg', '.gpg')
+        valid_suffixes = ('.dump', '.dump.gz', '.zip', '.dump.gpg', '.dump.gz.gpg', '.zip.gpg', '.gpg')
         if not filename.endswith(valid_suffixes):
             raise forms.ValidationError(
-                gettext_lazy('Upload a .dump, .dump.gz, .dump.gpg, or .dump.gz.gpg backup archive.')
+                gettext_lazy('Upload a .dump, .dump.gz, .zip, .dump.gpg, .dump.gz.gpg, or .zip.gpg backup archive.')
             )
         return backup_archive
 

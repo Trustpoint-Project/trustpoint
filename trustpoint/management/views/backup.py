@@ -304,10 +304,20 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
 
 
 class BackupFileDownloadView(View):
-    """Serve a single backup file for download."""
+    """Serve a backup file, bundled with its manifest when available."""
+
+    @staticmethod
+    def _bundle_filename(filename: str) -> str:
+        """Return a download filename for a backup bundle."""
+        if filename.endswith('.dump.gz'):
+            return f'{filename.removesuffix(".dump.gz")}.zip'
+        return f'{filename}.zip'
 
     def get(self, _request: Any, filename: str) -> HttpResponse:
         """Return the requested backup file as an attachment.
+
+        If the backup manifest sidecar exists, the response is a ZIP bundle containing both the database dump and the
+        manifest. Legacy backup files without a manifest are still streamed as the original file.
 
         Args:
             _request: The HTTP request (unused).
@@ -325,10 +335,67 @@ class BackupFileDownloadView(View):
             msg = f'Backup file not found: {filename}'
             raise Http404(msg)
 
+        manifest_path = backup_manifest_path(file_path)
+        if manifest_path.is_file():
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_archive:
+                zip_archive.write(file_path, arcname=filename)
+                zip_archive.write(manifest_path, arcname=manifest_path.name)
+            buffer.seek(0)
+
+            bundle_filename = self._bundle_filename(filename)
+            response = HttpResponse(buffer.read(), content_type='application/zip')
+            response['Content-Disposition'] = f'attachment; filename="{bundle_filename}"'
+            return response
+
         content = file_path.read_bytes()
         response = HttpResponse(content, content_type='application/octet-stream')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+
+def _backup_artifact_filename(filename: str, archive_format: str) -> str:
+    """Return the nested artifact filename for a selected backup payload."""
+    if filename.endswith('.dump.gz'):
+        base_name = filename.removesuffix('.dump.gz')
+    elif filename.endswith('.dump'):
+        base_name = filename.removesuffix('.dump')
+    else:
+        base_name = Path(filename).stem
+    return f'{base_name}.{archive_format}'
+
+
+def _backup_payload_paths(backup_dir: Path, filename: str) -> tuple[Path, Path | None] | None:
+    """Return the selected backup payload path and optional manifest sidecar."""
+    if Path(filename).name != filename:
+        return None
+
+    path = backup_dir / filename
+    if not path.is_file():
+        return None
+
+    manifest_path = backup_manifest_path(path)
+    return path, manifest_path if manifest_path.is_file() else None
+
+
+def _build_zip_backup_artifact(filename: str, path: Path, manifest_path: Path | None) -> tuple[str, bytes]:
+    """Build one self-contained ZIP artifact for a backup payload."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_archive:
+        zip_archive.write(path, arcname=filename)
+        if manifest_path is not None:
+            zip_archive.write(manifest_path, arcname=manifest_path.name)
+    return _backup_artifact_filename(filename, 'zip'), buffer.getvalue()
+
+
+def _build_tar_gz_backup_artifact(filename: str, path: Path, manifest_path: Path | None) -> tuple[str, bytes]:
+    """Build one self-contained tar.gz artifact for a backup payload."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode='w:gz') as tar_archive:
+        tar_archive.add(path, arcname=filename)
+        if manifest_path is not None:
+            tar_archive.add(manifest_path, arcname=manifest_path.name)
+    return _backup_artifact_filename(filename, 'tar.gz'), buffer.getvalue()
 
 
 class BackupFilesDownloadMultipleView(View):
@@ -353,17 +420,18 @@ class BackupFilesDownloadMultipleView(View):
             return redirect('management:backups')
 
         backup_dir: Path = settings.BACKUP_FILE_PATH
-        valid_paths: list[tuple[str, Path]] = []
+        backup_artifacts: list[tuple[str, bytes]] = []
         for filename in filenames:
-            path = backup_dir / filename
-            if not path.is_file():
+            payload_paths = _backup_payload_paths(backup_dir, filename)
+            if payload_paths is None:
                 continue
-            valid_paths.append((filename, path))
-            manifest_path = backup_manifest_path(path)
-            if manifest_path.is_file():
-                valid_paths.append((manifest_path.name, manifest_path))
+            path, manifest_path = payload_paths
+            if archive_format.lower() == 'zip':
+                backup_artifacts.append(_build_zip_backup_artifact(filename, path, manifest_path))
+            else:
+                backup_artifacts.append(_build_tar_gz_backup_artifact(filename, path, manifest_path))
 
-        if not valid_paths:
+        if not backup_artifacts:
             messages.error(request, 'No valid files to download.')
             return redirect('management:backups')
 
@@ -372,13 +440,11 @@ class BackupFilesDownloadMultipleView(View):
 
         if ext == 'zip':
             with zipfile.ZipFile(buffer, 'w') as zip_archive:
-                for fname, path in valid_paths:
-                    data = path.read_bytes()
+                for fname, data in backup_artifacts:
                     zip_archive.writestr(fname, data)
         else:
             with tarfile.open(fileobj=buffer, mode='w:gz') as tar_archive:
-                for fname, path in valid_paths:
-                    data = path.read_bytes()
+                for fname, data in backup_artifacts:
                     info = tarfile.TarInfo(name=fname)
                     info.size = len(data)
                     tar_archive.addfile(info, io.BytesIO(data))
