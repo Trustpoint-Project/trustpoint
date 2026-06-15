@@ -97,7 +97,8 @@ Use these step types to build workflows:
 
 ``approval``
     Wait for an operator decision. Approved and rejected outcomes may either end
-    directly or route to another step. Timeout is terminal.
+    directly or route to another step. Timeout may route to follow-up handling,
+    but that route must end with an explicit non-continuing result.
 
 ``logic``
     Evaluate ordered conditions and route by outcome.
@@ -153,7 +154,9 @@ Important rules:
 * ``logic`` outcomes must be routed.
 * ``approval`` approved and rejected outcomes may be routed, but do not have to
   be.
-* ``approval`` timeout outcomes cannot be routed.
+* ``approval`` timeout outcomes may be routed, but every timeout branch must end
+  with ``set_status`` as ``rejected``, ``timed_out``, ``stopped``, or
+  ``paused``.
 * A ``set_status`` terminal result cannot have outgoing flow.
 * ``set_status: paused`` must have one linear outgoing flow entry. That target
   becomes the resume point.

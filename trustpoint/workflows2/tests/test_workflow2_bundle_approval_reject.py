@@ -120,6 +120,45 @@ workflow:
 """
 
 
+YAML_APPROVAL_TIMEOUT_ROUTE = """
+schema: trustpoint.workflow.v2
+name: Approval Timeout Route
+enabled: true
+
+trigger:
+  on: workflows2.test
+  sources:
+    trustpoint: true
+
+workflow:
+  start: approve
+
+  steps:
+    approve:
+      type: approval
+      timeout_outcome: deadline_missed
+      timeout_seconds: 1
+
+    record_timeout:
+      type: set
+      vars:
+        vars.timeout_seen: true
+
+    mark_timeout:
+      type: set_status
+      status: timed_out
+      reason: approval_timed_out
+      message: Approval timed out after escalation.
+
+  flow:
+    - from: approve
+      on: deadline_missed
+      to: record_timeout
+    - from: record_timeout
+      to: mark_timeout
+"""
+
+
 class Workflow2BundleApprovalRejectTests(TestCase):
     def _store_def(self, yaml_text: str, *, name: str) -> Workflow2Definition:
         ir = compile_workflow_yaml(yaml_text)
@@ -376,8 +415,10 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         approval.expires_at = timezone.now() - timedelta(seconds=1)
         approval.save(update_fields=["expires_at"])
 
-        with self.assertRaisesMessage(ValueError, "Approval has expired"):
-            runtime.resolve_approval(approval=approval, decision="approved")
+        result = runtime.resolve_approval(approval=approval, decision="approved")
+
+        self.assertTrue(result.expired)
+        self.assertFalse(result.continued)
 
         approval.refresh_from_db()
         self.assertEqual(approval.status, Workflow2Approval.STATUS_EXPIRED)
@@ -400,8 +441,10 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         approval.expires_at = timezone.now() - timedelta(seconds=1)
         approval.save(update_fields=["expires_at"])
 
-        with self.assertRaisesMessage(ValueError, "Approval has expired"):
-            runtime.resolve_approval(approval=approval, decision="approved")
+        result = runtime.resolve_approval(approval=approval, decision="approved")
+
+        self.assertTrue(result.expired)
+        self.assertFalse(result.continued)
 
         inst.refresh_from_db()
         self.assertEqual(inst.status, Workflow2Instance.STATUS_TIMED_OUT)
@@ -410,6 +453,41 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         self.assertEqual(step_run.status, "timed_out")
         self.assertEqual(step_run.outcome, "deadline_missed")
         self.assertEqual(step_run.output["selected_outcome"], "deadline_missed")
+
+    def test_approval_timeout_can_route_to_followup_steps(self) -> None:
+        d = self._store_def(YAML_APPROVAL_TIMEOUT_ROUTE, name="approval-timeout-route")
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+
+        inst = runtime.create_instance(definition=d, event={"device": {"id": "x"}})
+        runtime.run_one_step(inst)
+
+        approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+        approval.expires_at = timezone.now() - timedelta(seconds=1)
+        approval.save(update_fields=["expires_at"])
+
+        result = runtime.resolve_approval(approval=approval, decision="approved")
+
+        self.assertTrue(result.expired)
+        self.assertTrue(result.continued)
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_RUNNING)
+        self.assertEqual(inst.current_step, "record_timeout")
+
+        step_run = Workflow2StepRun.objects.get(instance=inst, run_index=2)
+        self.assertEqual(step_run.status, "continued")
+        self.assertEqual(step_run.outcome, "deadline_missed")
+        self.assertEqual(step_run.next_step, "record_timeout")
+
+        runtime.run_one_step(inst)
+        inst.refresh_from_db()
+        self.assertEqual(inst.current_step, "mark_timeout")
+        self.assertEqual(inst.vars_json["timeout_seen"], True)
+
+        runtime.run_one_step(inst)
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_TIMED_OUT)
+        self.assertEqual(inst.status_reason, "approval_timed_out")
 
     def test_recompute_run_status_marks_single_cancelled_instance_run_cancelled(self) -> None:
         d = self._store_def(YAML_TWO_WORKFLOWS, name="cancel-agg")

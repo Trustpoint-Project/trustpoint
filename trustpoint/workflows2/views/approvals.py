@@ -48,7 +48,9 @@ def _expire_pending_approvals() -> None:
     if not approval_ids:
         return
 
-    runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+    executor = WorkflowExecutor()
+    runtime = WorkflowRuntimeService(executor=executor)
+    dispatch = WorkflowDispatchService(executor=executor)
     for approval_id in approval_ids:
         with transaction.atomic():
             approval = (
@@ -67,7 +69,9 @@ def _expire_pending_approvals() -> None:
 
             inst = approval.instance
             if inst.status == Workflow2Instance.STATUS_AWAITING and inst.current_step == approval.step_id:
-                runtime.record_approval_timeout_locked(inst=inst, approval=approval)
+                continued = runtime.record_approval_timeout_locked(inst=inst, approval=approval)
+                if continued:
+                    dispatch.continue_instance(instance=inst)
 
 
 def _build_timeout_context(
@@ -327,7 +331,7 @@ class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
                 approval = Workflow2Approval.objects.select_for_update().select_related('instance').get(id=approval_id)
 
                 # Resolve approval updates instance.current_step -> next step and sets instance RUNNING/current_step
-                runtime.resolve_approval(
+                resolution = runtime.resolve_approval(
                     approval=approval,
                     decision=decision,
                     decided_by=request.user.get_username() or None,
@@ -338,7 +342,11 @@ class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
 
                 if inst.status == Workflow2Instance.STATUS_RUNNING and inst.current_step:
                     dispatch.continue_instance(instance=inst)
-                    if continue_inline:
+                    if resolution.expired and continue_inline:
+                        success_message = _('Approval expired. Timeout branch continued inline.')
+                    elif resolution.expired:
+                        success_message = _('Approval expired. Timeout branch queued.')
+                    elif continue_inline:
                         success_message = _(
                             'Approval resolved: %(decision)s. Workflow continued inline.'
                         ) % {'decision': decision}

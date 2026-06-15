@@ -65,6 +65,12 @@ SET_STATUS_ALLOWED_STATUSES: tuple[str, ...] = (
     'stopped',
     'paused',
 )
+APPROVAL_TIMEOUT_SAFE_STATUSES: frozenset[str] = frozenset({
+    'rejected',
+    'timed_out',
+    'stopped',
+    'paused',
+})
 
 
 @dataclass(frozen=True)
@@ -941,9 +947,14 @@ class WorkflowCompiler:
                         msg = f'Unknown approval outcome mappings: {unknown}'
                         raise CompileError(msg, path=f'workflow.flow({step_id})')
                     timeout_outcome = (s.get('params') or {}).get('timeout_outcome')
-                    if timeout_outcome in mapped:
-                        msg = 'Approval timeout outcome is terminal and cannot have an outgoing transition'
-                        raise CompileError(msg, path=f'workflow.flow({step_id})')
+                    timeout_target = tr['map'].get(timeout_outcome)
+                    if isinstance(timeout_target, str):
+                        self._validate_approval_timeout_route(
+                            start_id=timeout_target,
+                            steps_ir=steps_ir,
+                            transitions=transitions,
+                            path=f'workflow.flow({step_id})',
+                        )
                     continue
                 missing = [o for o in outs if o not in mapped]
                 if missing:
@@ -955,6 +966,95 @@ class WorkflowCompiler:
                 if tr.get('kind') != 'linear':
                     msg = 'Non-outcome step requires a linear transition (or omit it to end)'
                     raise CompileError(msg, path=f'workflow.flow({step_id})')
+
+    def _validate_approval_timeout_route(
+        self,
+        *,
+        start_id: str,
+        steps_ir: dict[str, Any],
+        transitions: dict[str, Any],
+        path: str,
+    ) -> None:
+        """Ensure timeout handling cannot implicitly continue an enrollment request."""
+        pending = [start_id]
+        visited: set[str] = set()
+
+        while pending:
+            step_id = pending.pop()
+            if step_id in visited:
+                continue
+            visited.add(step_id)
+
+            step = steps_ir.get(step_id) or {}
+            step_type = step.get('type')
+            transition = transitions.get(step_id)
+
+            if step_type == StepTypes.SET_STATUS:
+                self._validate_timeout_set_status(step_id=step_id, step=step, path=path)
+                continue
+
+            if transition is None:
+                self._raise_unsafe_timeout_route(step_id=step_id, path=path)
+
+            if transition.get('kind') == 'linear':
+                target = transition.get('to')
+                if isinstance(target, str):
+                    pending.append(target)
+                continue
+
+            if transition.get('kind') == 'by_outcome':
+                self._extend_timeout_outcome_targets(
+                    pending=pending,
+                    step_id=step_id,
+                    step=step,
+                    transition=transition,
+                    path=path,
+                )
+
+    @staticmethod
+    def _validate_timeout_set_status(*, step_id: str, step: dict[str, Any], path: str) -> None:
+        status = ((step.get('params') or {}).get('status') or '').strip()
+        if status in APPROVAL_TIMEOUT_SAFE_STATUSES:
+            return
+
+        allowed = ', '.join(sorted(APPROVAL_TIMEOUT_SAFE_STATUSES))
+        msg = (
+            f'Approval timeout route step "{step_id}" must end with set_status '
+            f'{allowed}; got "{status}"'
+        )
+        raise CompileError(msg, path=path)
+
+    @staticmethod
+    def _raise_unsafe_timeout_route(*, step_id: str, path: str) -> None:
+        msg = (
+            f'Approval timeout route reaches "{step_id}" without an explicit '
+            'non-continuing set_status result'
+        )
+        raise CompileError(msg, path=path)
+
+    def _extend_timeout_outcome_targets(
+        self,
+        *,
+        pending: list[str],
+        step_id: str,
+        step: dict[str, Any],
+        transition: dict[str, Any],
+        path: str,
+    ) -> None:
+        target_map = transition.get('map') or {}
+        if not isinstance(target_map, dict):
+            self._raise_unsafe_timeout_route(step_id=step_id, path=path)
+
+        if step.get('type') == StepTypes.APPROVAL:
+            approved_outcome = (step.get('params') or {}).get('approved_outcome')
+            if approved_outcome not in target_map:
+                msg = (
+                    f'Approval timeout route reaches approval step "{step_id}" '
+                    'whose approved outcome could continue the request'
+                )
+                raise CompileError(msg, path=path)
+
+        pending.extend(target for target in target_map.values() if isinstance(target, str))
 
     @staticmethod
     def _collect_reachable_steps(start_id: str, steps_ir: dict[str, Any], transitions: dict[str, Any]) -> set[str]:

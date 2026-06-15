@@ -154,6 +154,79 @@ workflow:
 
         self.assertEqual(ir['workflow']['steps']['approve']['type'], 'approval')
 
+    def test_approval_timeout_outcome_can_route_to_explicit_timeout_status(self) -> None:
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: Approval timeout route
+enabled: true
+
+trigger:
+  on: workflows2.test
+  sources:
+    trustpoint: true
+
+workflow:
+  start: approve
+
+  steps:
+    approve:
+      type: approval
+      timeout_outcome: deadline_missed
+      timeout_seconds: 1
+
+    mark_timeout:
+      type: set_status
+      status: timed_out
+      reason: approval_timed_out
+      message: Approval timed out.
+
+  flow:
+    - from: approve
+      on: deadline_missed
+      to: mark_timeout
+"""
+
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        transition = ir['workflow']['transitions']['approve']
+        self.assertEqual(transition['map']['deadline_missed'], 'mark_timeout')
+
+    def test_approval_timeout_route_must_not_end_implicitly(self) -> None:
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: Unsafe approval timeout route
+enabled: true
+
+trigger:
+  on: workflows2.test
+  sources:
+    trustpoint: true
+
+workflow:
+  start: approve
+
+  steps:
+    approve:
+      type: approval
+      timeout_outcome: deadline_missed
+      timeout_seconds: 1
+
+    notify_timeout:
+      type: set
+      vars:
+        vars.timeout_seen: true
+
+  flow:
+    - from: approve
+      on: deadline_missed
+      to: notify_timeout
+"""
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('Approval timeout route reaches "notify_timeout"', str(ctx.exception))
+
     def test_yaml_key_on_is_not_boolean(self) -> None:
         ir = compile_workflow_yaml(VALID_YAML, compiler_version="test")
         self.assertEqual(ir["trigger"]["on"], "device.created")

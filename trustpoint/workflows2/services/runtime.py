@@ -36,6 +36,14 @@ class StepResult:
     terminal: bool
 
 
+@dataclass(frozen=True)
+class ApprovalResolutionResult:
+    """Describe how an approval resolution affected workflow execution."""
+
+    expired: bool = False
+    continued: bool = False
+
+
 class _NonRunnableInstanceError(ValueError):
     """Raised when a caller asks to execute an instance that must not run."""
 
@@ -229,33 +237,26 @@ class WorkflowRuntimeService:
         return approval, inst
 
     @staticmethod
-    def _approval_next_step(
-        *,
-        inst: Workflow2Instance,
-        approval: Workflow2Approval,
-        decision: str,
-    ) -> tuple[str | None, dict[str, Any]]:
+    def _approval_step_params(*, inst: Workflow2Instance, approval: Workflow2Approval) -> dict[str, Any]:
         ir = inst.definition.ir_json
         wf = (ir or {}).get('workflow') or {}
         steps_map = wf.get('steps') or {}
+        step = steps_map.get(approval.step_id)
+        return (step.get('params') or {}) if isinstance(step, dict) else {}
+
+    @staticmethod
+    def _approval_outcome_next_step(
+        *,
+        inst: Workflow2Instance,
+        approval: Workflow2Approval,
+        selected_outcome: str,
+    ) -> tuple[str | None, dict[str, Any]]:
+        ir = inst.definition.ir_json
+        wf = (ir or {}).get('workflow') or {}
         transitions = (wf.get('transitions') or {}).get(approval.step_id)
 
-        step = steps_map.get(approval.step_id)
-        params = (step.get('params') or {}) if isinstance(step, dict) else {}
-        selected_outcome = (
-            params.get('approved_outcome')
-            if decision == 'approved'
-            else params.get('rejected_outcome')
-        )
-        if not isinstance(selected_outcome, str) or not selected_outcome:
-            msg = f"Approval step missing configured outcome for decision '{decision}'"
-            raise ValueError(msg)
-
         if transitions is None:
-            return None, {
-                'selected_outcome': selected_outcome,
-                'decision': decision,
-            }
+            return None, {'selected_outcome': selected_outcome}
 
         if not isinstance(transitions, dict) or transitions.get('kind') != 'by_outcome':
             msg = 'Approval step transitions must be by_outcome'
@@ -268,18 +269,37 @@ class WorkflowRuntimeService:
 
         next_step = outcome_map.get(selected_outcome)
         if next_step is None:
-            return None, {
-                'selected_outcome': selected_outcome,
-                'decision': decision,
-            }
+            return None, {'selected_outcome': selected_outcome}
         if not isinstance(next_step, str) or not next_step:
             msg = f"Invalid route for approval outcome '{selected_outcome}'"
             raise ValueError(msg)
 
-        return next_step, {
-            'selected_outcome': selected_outcome,
-            'decision': decision,
-        }
+        return next_step, {'selected_outcome': selected_outcome}
+
+    def _approval_next_step(
+        self,
+        *,
+        inst: Workflow2Instance,
+        approval: Workflow2Approval,
+        decision: str,
+    ) -> tuple[str | None, dict[str, Any]]:
+        params = self._approval_step_params(inst=inst, approval=approval)
+        selected_outcome = (
+            params.get('approved_outcome')
+            if decision == 'approved'
+            else params.get('rejected_outcome')
+        )
+        if not isinstance(selected_outcome, str) or not selected_outcome:
+            msg = f"Approval step missing configured outcome for decision '{decision}'"
+            raise ValueError(msg)
+
+        next_step, payload = self._approval_outcome_next_step(
+            inst=inst,
+            approval=approval,
+            selected_outcome=selected_outcome,
+        )
+        payload['decision'] = decision
+        return next_step, payload
 
     def _resolve_pending_approval_locked(
         self,
@@ -289,7 +309,7 @@ class WorkflowRuntimeService:
         decision: str,
         decided_by: str | None,
         comment: str | None,
-    ) -> None:
+    ) -> bool:
         next_step, payload = self._approval_next_step(
             inst=inst,
             approval=approval,
@@ -340,43 +360,52 @@ class WorkflowRuntimeService:
             status_reason=f'approval_{decision}' if terminal_decision else '',
             status_message=(comment or f'Approval {decision}.') if terminal_decision else '',
         )
+        return not terminal_decision
 
-    def record_approval_timeout_locked(self, *, inst: Workflow2Instance, approval: Workflow2Approval) -> None:
+    def record_approval_timeout_locked(self, *, inst: Workflow2Instance, approval: Workflow2Approval) -> bool:
         """Record a timed-out approval decision on an already-locked instance."""
-        self._apply_approval_timeout_locked(inst=inst, approval=approval)
+        return self._apply_approval_timeout_locked(inst=inst, approval=approval)
 
-    def _apply_approval_timeout_locked(self, *, inst: Workflow2Instance, approval: Workflow2Approval) -> None:
+    def _apply_approval_timeout_locked(self, *, inst: Workflow2Instance, approval: Workflow2Approval) -> bool:
         run_index = int(inst.run_count) + 1
         timeout_outcome = self._approval_timeout_outcome(inst=inst, approval=approval)
-        Workflow2StepRun.objects.create(
-            instance=inst,
+        next_step, payload = self._approval_outcome_next_step(
+            inst=inst,
+            approval=approval,
+            selected_outcome=timeout_outcome,
+        )
+        terminal_decision = next_step is None
+        payload.update(
+            {
+                'status': 'timed_out' if terminal_decision else 'continued',
+                'decision': 'timed_out',
+                'next_step_id': next_step,
+                'decided_by': '',
+                'comment': '',
+            }
+        )
+        self._create_approval_step_run(
+            inst=inst,
+            approval=approval,
             run_index=run_index,
-            step_id=approval.step_id,
-            step_type='approval',
-            status='timed_out',
-            outcome=timeout_outcome,
-            next_step='',
-            vars_delta={},
-            output={'decision': 'timed_out', 'selected_outcome': timeout_outcome},
-            error='',
-            created_at=timezone.now(),
+            payload=payload,
         )
         inst.run_count = run_index
-        WorkflowInstanceTransitionService.mark_timed_out(
-            inst,
-            reason='approval_timed_out',
-            message='Approval timed out.',
-        )
+        if terminal_decision:
+            WorkflowInstanceTransitionService.mark_timed_out(
+                inst,
+                reason='approval_timed_out',
+                message='Approval timed out.',
+            )
+        else:
+            WorkflowInstanceTransitionService.mark_running(inst)
+            inst.current_step = next_step or ''
         save_instance_status(inst, extra_fields=['run_count'])
         self._recompute_run_if_present(inst)
+        return not terminal_decision
 
-    @staticmethod
-    def _approval_timeout_outcome(*, inst: Workflow2Instance, approval: Workflow2Approval) -> str:
-        ir = inst.definition.ir_json
-        wf = (ir or {}).get('workflow') or {}
-        steps_map = wf.get('steps') or {}
-        step = steps_map.get(approval.step_id)
-        params = (step.get('params') or {}) if isinstance(step, dict) else {}
+    def _approval_timeout_outcome(self, *, inst: Workflow2Instance, approval: Workflow2Approval) -> str:
+        params = self._approval_step_params(inst=inst, approval=approval)
         timeout_outcome = params.get('timeout_outcome')
         if isinstance(timeout_outcome, str) and timeout_outcome.strip():
             return timeout_outcome.strip()
@@ -402,8 +431,8 @@ class WorkflowRuntimeService:
             output={
                 'decision': payload['decision'],
                 'selected_outcome': payload['selected_outcome'],
-                'comment': payload['comment'] or '',
-                'decided_by': payload['decided_by'] or '',
+                'comment': payload.get('comment') or '',
+                'decided_by': payload.get('decided_by') or '',
             },
             error='',
             created_at=timezone.now(),
@@ -572,13 +601,14 @@ class WorkflowRuntimeService:
         decision: str,
         decided_by: str | None = None,
         comment: str | None = None,
-    ) -> None:
+    ) -> ApprovalResolutionResult:
         """Resolve an approval step and move the instance to its next state."""
         if decision not in {'approved', 'rejected'}:
             msg = "decision must be 'approved' or 'rejected'"
             raise ValueError(msg)
 
         expired = False
+        continued = False
         with transaction.atomic():
             approval, inst = self._load_approval_resolution_context(
                 approval.id,
@@ -590,13 +620,13 @@ class WorkflowRuntimeService:
                 raise ValueError(msg)
 
             if self._expire_pending_approval_if_needed(approval):
-                self.record_approval_timeout_locked(inst=inst, approval=approval)
+                continued = self.record_approval_timeout_locked(inst=inst, approval=approval)
                 expired = True
             elif approval.status != Workflow2Approval.STATUS_PENDING:
                 msg = 'Approval is already resolved'
                 raise ValueError(msg)
             else:
-                self._resolve_pending_approval_locked(
+                continued = self._resolve_pending_approval_locked(
                     inst=inst,
                     approval=approval,
                     decision=decision,
@@ -604,9 +634,7 @@ class WorkflowRuntimeService:
                     comment=comment,
                 )
 
-        if expired:
-            msg = 'Approval has expired'
-            raise ValueError(msg)
+        return ApprovalResolutionResult(expired=expired, continued=continued)
 
     def _ensure_approval(self, *, instance: Workflow2Instance, step_id: str) -> Workflow2Approval:
         ir = instance.definition.ir_json
