@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from django.http import HttpResponse
@@ -78,7 +78,7 @@ def generate_csv_response(
     filename: str,
 ) -> HttpResponse:
     """Generate an HTTP response containing the queryset rows as a CSV file."""
-    timestamp = datetime.now(tz=datetime.UTC).strftime('%Y%m%dT%H%M%SZ')
+    timestamp = datetime.now(tz=timezone.utc).strftime('%Y%m%dT%H%M%SZ')  # noqa: UP017
     full_filename = f'tp_{filename}_{timestamp}.csv'
 
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
