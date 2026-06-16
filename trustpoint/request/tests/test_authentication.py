@@ -8,7 +8,8 @@ from pki.models import IssuedCredentialModel
 
 from request.authentication.base import ClientCertificateAuthentication
 from request.authentication.est import UsernamePasswordAuthentication
-from request.request_context import BaseRequestContext, EstBaseRequestContext
+from request.authentication.rest import RestUsernamePasswordAuthentication
+from request.request_context import BaseRequestContext, EstBaseRequestContext, RestBaseRequestContext
 
 
 class TestUsernamePasswordAuthentication:
@@ -81,6 +82,25 @@ class TestUsernamePasswordAuthentication:
         result = self.auth.authenticate(self.context)
 
         assert result is None
+
+
+class TestRestUsernamePasswordAuthentication:
+    """Test cases for REST username/password authentication."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.auth = RestUsernamePasswordAuthentication()
+        self.context = Mock(spec=RestBaseRequestContext)
+
+    def test_authenticate_success(self, est_device_without_onboarding):
+        """Test successful REST username/password authentication."""
+        device = est_device_without_onboarding['device']
+        self.context.rest_username = device.common_name
+        self.context.rest_password = device.no_onboarding_config.est_password
+
+        self.auth.authenticate(self.context)
+
+        assert self.context.device == device
 
 
 class TestClientCertificateAuthentication:

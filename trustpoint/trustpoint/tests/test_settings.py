@@ -70,6 +70,75 @@ def test_tp_urls_deduplicates_hosts_and_origins(monkeypatch):
     assert settings.CSRF_TRUSTED_ORIGINS.count('https://dup.local:9443') == 1
 
 
+def test_env_bool_uses_default_when_variable_is_missing(monkeypatch):
+    """Ensure boolean environment settings keep their default when unset."""
+    monkeypatch.delenv('POSTGRESQL', raising=False)
+
+    assert settings._env_bool('POSTGRESQL', default=True) is True
+    assert settings._env_bool('POSTGRESQL', default=False) is False
+
+
+def test_env_bool_uses_default_when_variable_is_blank(monkeypatch):
+    """Ensure blank boolean environment settings keep their default."""
+    monkeypatch.setenv('EMAIL_USE_TLS', '')
+
+    assert settings._env_bool('EMAIL_USE_TLS', default=True) is True
+    assert settings._env_bool('EMAIL_USE_TLS', default=False) is False
+
+
+def test_env_bool_parses_truthy_values(monkeypatch):
+    """Ensure common truthy strings enable boolean settings."""
+    for value in ('1', 'true', 'yes', 'on', ' TRUE '):
+        monkeypatch.setenv('POSTGRESQL', value)
+
+        assert settings._env_bool('POSTGRESQL', default=False) is True
+
+
+def test_env_bool_treats_other_values_as_false(monkeypatch):
+    """Ensure non-truthy strings disable boolean settings."""
+    for value in ('0', 'false', 'no', 'off', 'unexpected'):
+        monkeypatch.setenv('POSTGRESQL', value)
+
+        assert settings._env_bool('POSTGRESQL', default=True) is False
+
+
+def test_env_value_prefers_direct_environment_variable(monkeypatch, tmp_path):
+    """Ensure direct environment variables win over Docker secret files."""
+    secret_file = tmp_path / 'db_user'
+    secret_file.write_text('secret-user\n')
+    monkeypatch.setenv('DATABASE_USER', 'env-user')
+    monkeypatch.setenv('DATABASE_USER_FILE', str(secret_file))
+
+    assert settings._env_value('DATABASE_USER', 'admin', file_var='DATABASE_USER_FILE') == 'env-user'
+
+
+def test_env_value_reads_docker_secret_file(monkeypatch, tmp_path):
+    """Ensure settings can be loaded from Docker secret files."""
+    secret_file = tmp_path / 'db_password'
+    secret_file.write_text('secret-password\n')
+    monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
+    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret_file))
+
+    assert settings._env_value(
+        'DATABASE_PASSWORD',
+        'testing321',
+        file_var='DATABASE_PASSWORD_FILE',
+    ) == 'secret-password'
+
+
+def test_env_value_falls_back_when_secret_file_is_unreadable(monkeypatch, tmp_path):
+    """Ensure unreadable Docker secret paths do not break settings import."""
+    missing_file = tmp_path / 'missing_secret'
+    monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
+    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(missing_file))
+
+    assert settings._env_value(
+        'DATABASE_PASSWORD',
+        'testing321',
+        file_var='DATABASE_PASSWORD_FILE',
+    ) == 'testing321'
+
+
 def test_database_settings(monkeypatch):
     """Ensure database settings are set correctly."""
     with mock.patch('socket.create_connection') as mock_socket_conn:
