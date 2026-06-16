@@ -23,10 +23,17 @@ from management.forms import (
     InternationalizationConfigForm,
     LoggingConfigForm,
     NotificationConfigForm,
+    PrometheusConfigForm,
     SecurityConfigForm,
     WorkflowExecutionConfigForm,
 )
-from management.models import InternationalizationConfig, LoggingConfig, NotificationConfig, SecurityConfig
+from management.models import (
+    InternationalizationConfig,
+    LoggingConfig,
+    NotificationConfig,
+    PrometheusConfig,
+    SecurityConfig,
+)
 from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security.features import AutoGenPkiFeature
@@ -262,7 +269,11 @@ def build_workflow_execution_context(
 
 
 class SettingsFormViewMixin[FormType: (
-    InternationalizationConfigForm | LoggingConfigForm | NotificationConfigForm | SecurityConfigForm
+    InternationalizationConfigForm
+    | LoggingConfigForm
+    | NotificationConfigForm
+    | PrometheusConfigForm
+    | SecurityConfigForm
 )](
     PageContextMixin,
     SecurityLevelMixin,
@@ -341,18 +352,18 @@ class SettingsTabView(TemplateView):
         metrics_view.setup(self.request)
         metrics_context = metrics_view.get_context_data()
 
+        context['prometheus_form'] = metrics_context['form']
+        context['prometheus_config'] = metrics_context['prometheus_config']
         context['uptime'] = metrics_context['uptime']
         context['started_time'] = metrics_context['started_time']
         context['database_size'] = metrics_context['database_size']
         context['started_time_ts'] = int(APP_STARTED_AT.timestamp())
+        for key in ('memory_available', 'memory_message', 'memory_usage', 'memory_usage_number',
+                    'memory_usage_unit', 'memory_limit', 'memory_anon', 'memory_file', 'memory_kernel',
+                    'disk_available', 'disk_message', 'disk_read', 'disk_write',
+                    'network_available', 'network_message', 'network_received', 'network_transmitted'):
+            context[key] = metrics_context[key]
 
-        context.update(get_memory_metrics())
-        context.update(get_disk_metrics())
-        context.update(get_network_metrics())
-
-        return context
-        workflow_execution_form = kwargs.get('workflow_execution_form')
-        context.update(build_workflow_execution_context(self.request, workflow_execution_form))
         return context
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
@@ -660,21 +671,35 @@ class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
         return context
 
 
-class MetricsSettingsView(TemplateView):
-    """View for displaying runtime metrics."""
+class MetricsSettingsView(SettingsFormViewMixin[PrometheusConfigForm]):
+    """View for displaying runtime metrics and managing the Prometheus export toggle."""
 
     template_name = 'management/includes/metrics_configuration.html'
+    form_class = PrometheusConfigForm
+    setting_type = 'metrics'
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Load the singleton PrometheusConfig instance into the form."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = PrometheusConfig.get()
+        return kwargs
+
+    def form_valid(self, form: PrometheusConfigForm) -> HttpResponse:
+        """Save the Prometheus configuration and redirect back to the metrics tab."""
+        form.save()
+        messages.success(self.request, _('Prometheus configuration saved successfully.'))
+        return redirect(self.get_success_url())
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build the context dictionary for the metrics settings page."""
         context = super().get_context_data(**kwargs)
-        context['page_category'] = 'management'
-        context['page_name'] = 'settings'
-        context['setting_type'] = 'metrics'
-
+        context['prometheus_config'] = PrometheusConfig.get()
         context['uptime'] = format_uptime(APP_STARTED_AT)
         context['started_time'] = APP_STARTED_AT
         context['database_size'] = get_database_size()
+        context.update(get_memory_metrics())
+        context.update(get_disk_metrics())
+        context.update(get_network_metrics())
         return context
 
 class ChangeLogLevelView(View):
