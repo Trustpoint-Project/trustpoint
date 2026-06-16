@@ -23,6 +23,16 @@ class Migration(migrations.Migration):
             ],
         ),
         migrations.CreateModel(
+            name='PrometheusConfig',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('enabled', models.BooleanField(default=False, help_text='When enabled, the /prometheus/metrics endpoint is available for scraping.', verbose_name='Enable Prometheus metrics endpoint')),
+            ],
+            options={
+                'verbose_name': 'Prometheus Configuration',
+            },
+        ),
+        migrations.CreateModel(
             name='WorkflowExecutionConfig',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),

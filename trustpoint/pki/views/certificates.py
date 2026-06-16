@@ -25,6 +25,7 @@ from pki.filters import CertificateFilter
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.serializer.certificate import CertificateSerializer
+from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.page_context import (
     PKI_PAGE_CATEGORY,
     PKI_PAGE_CERTIFICATES_SUBCATEGORY,
@@ -52,7 +53,7 @@ class CertificatesContextMixin(PageContextMixin):
 
 
 class CertificateTableView(
-    CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]):
+    ExportMixin, CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]):
     """Certificate Table View."""
 
     model = CertificateModel
@@ -61,6 +62,29 @@ class CertificateTableView(
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
     filterset_class = CertificateFilter
+
+    def get_export_config(self) -> ExportConfig:
+        """Return the CSV export configuration for the certificates table."""
+        return ExportConfig.from_model(
+            CertificateModel,
+            include=[
+                'common_name', 'serial_number',
+                'not_valid_before', 'not_valid_after',
+                'spki_algorithm', 'sha256_fingerprint',
+            ],
+            labels={
+                'not_valid_before': 'Not Valid Before',
+                'not_valid_after': 'Not Valid After',
+            },
+            extra=[
+                ExportColumn(
+                    key='status',
+                    label='Status',
+                    accessor=self._get_table_status,
+                ),
+            ],
+            filename='certificates',
+        )
 
     def apply_filters(self, qs: QuerySet[CertificateModel]) -> QuerySet[CertificateModel]:
         """Apply the certificate filterset to the base queryset."""

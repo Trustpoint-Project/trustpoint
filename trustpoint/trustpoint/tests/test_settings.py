@@ -252,6 +252,7 @@ def test_public_paths():
         '/crl',
         '/setup-wizard',
         '/devices/browser',
+        '/prometheus/'
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
