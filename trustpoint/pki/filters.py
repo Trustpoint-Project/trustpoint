@@ -280,11 +280,18 @@ class CaFilter(django_filters.FilterSet):
         """Filter CAs by display type group (CA / RA / Keyless)."""
         del name
         if value == 'ca':
-            return queryset.exclude(ca_type__in=[-1, 4, 5])
+            return queryset.exclude(ca_type__in=[
+                CaModel.CaTypeChoice.KEYLESS,
+                CaModel.CaTypeChoice.REMOTE_EST_RA,
+                CaModel.CaTypeChoice.REMOTE_CMP_RA,
+            ])
         if value == 'ra':
-            return queryset.filter(ca_type__in=[4, 5])
+            return queryset.filter(ca_type__in=[
+                CaModel.CaTypeChoice.REMOTE_EST_RA,
+                CaModel.CaTypeChoice.REMOTE_CMP_RA,
+            ])
         if value == 'keyless':
-            return queryset.filter(ca_type=-1)
+            return queryset.filter(ca_type=CaModel.CaTypeChoice.KEYLESS)
         return queryset
 
     def filter_is_active(
