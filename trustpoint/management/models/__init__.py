@@ -17,6 +17,7 @@ from management.models.notifications import (
     WeakSignatureAlgorithm,
 )
 from management.models.pkcs11 import PKCS11Token
+from management.models.prometheus import PrometheusConfig
 from management.models.security import SecurityConfig
 from management.models.tls import TlsSettings
 
@@ -33,6 +34,7 @@ __all__ = [
     'NotificationModel',
     'NotificationStatus',
     'PKCS11Token',
+    'PrometheusConfig',
     'SecurityConfig',
     'SmtpEmailConfig',
     'TlsSettings',
