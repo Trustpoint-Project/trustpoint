@@ -37,6 +37,10 @@ Getting started with Docker Compose
 The .env file
 ^^^^^^^^^^^^^
 
+.. warning::
+
+   Trustpoint **requires** a ``.env`` file to start. If no ``.env`` file is present, startup will fail with an error.
+
 Docker Compose and ``tp_wizard.sh`` read the ``.env`` file in the project root.
 The repository contains development defaults. For production-like deployments,
 copy the example and replace at least the database password:
@@ -69,9 +73,21 @@ The following variables are supported:
    * - ``DATABASE_PORT``
      - No
      - Database port used by the Trustpoint containers. Defaults to ``5432``.
-   * - ``TP_URLS``
+   * - ``TP_TLS_IPV4_ADDRESSES``
      - No
-     - Comma-separated hostnames or IPs at which Trustpoint is reachable (no protocol prefix). Defaults to ``trustpoint.local``.
+     - Comma-separated IPv4 addresses where Trustpoint is reachable. Used for TLS certificate SANs and Django ``ALLOWED_HOSTS``. Defaults to ``127.0.0.1``.
+   * - ``TP_TLS_IPV6_ADDRESSES``
+     - No
+     - Comma-separated IPv6 addresses where Trustpoint is reachable. Used for TLS certificate SANs and Django ``ALLOWED_HOSTS``. Defaults to ``::1``.
+   * - ``TP_TLS_DNS_NAMES``
+     - No
+     - Comma-separated DNS names where Trustpoint is reachable. Used for TLS certificate SANs and Django ``ALLOWED_HOSTS``. Defaults to ``localhost``.
+   * - ``TP_HTTP_PORT``
+     - No
+     - HTTP port for external access. Used in ``CSRF_TRUSTED_ORIGINS`` and Docker port mapping. Defaults to ``80``.
+   * - ``TP_HTTPS_PORT``
+     - No
+     - HTTPS port for external access. Used in ``CSRF_TRUSTED_ORIGINS`` and Docker port mapping. Defaults to ``443``.
    * - ``DEFAULT_FROM_EMAIL``
      - No
      - Sender address for Trustpoint emails. Defaults to ``no-reply@trustpoint.de``.
@@ -79,16 +95,64 @@ The following variables are supported:
      - No
      - SMTP host. Leave empty to use Django's console backend.
 
-Minimal ``.env`` example:
+Auto-Setup from Environment Variables
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Trustpoint can be configured to skip the interactive setup wizard and auto-configure from environment variables.
+This is useful for automated deployments, CI/CD pipelines, or headless installations.
+
+.. important::
+
+   When ``TP_AUTO_SETUP=true``, the ``TP_ADMIN_USERNAME`` and ``TP_ADMIN_PASSWORD`` variables become **required**.
+
+To enable auto-setup, add the following variables to your ``.env`` file:
+
+.. list-table::
+   :widths: 30 10 60
+   :header-rows: 1
+
+   * - Variable
+     - Required
+     - Description
+   * - ``TP_AUTO_SETUP``
+     - Yes
+     - Set to ``true`` to enable automatic setup. Default: ``false``
+   * - ``TP_ADMIN_USERNAME``
+     - Yes*
+     - Initial superuser username. *Required when auto-setup is enabled.
+   * - ``TP_ADMIN_PASSWORD``
+     - Yes*
+     - Initial superuser password. *Required when auto-setup is enabled.
+   * - ``TP_INJECT_DEMO_DATA``
+     - No
+     - Set to ``true`` to inject demo domains and devices for testing. Default: ``false``
+
+.. note::
+
+   The TLS certificate SANs (``TP_TLS_IPV4_ADDRESSES``, ``TP_TLS_IPV6_ADDRESSES``, ``TP_TLS_DNS_NAMES``) 
+   are also used to configure Django's ``ALLOWED_HOSTS`` and ``CSRF_TRUSTED_ORIGINS``, ensuring consistency
+   between your TLS certificate and Django security settings.
+
+Auto-setup ``.env`` example:
 
 .. code-block:: bash
 
+    # Database configuration
     POSTGRES_DB=trustpoint_db
     DATABASE_USER=admin
     DATABASE_PASSWORD=correct-horse-battery-staple
     DATABASE_HOST=postgres
     DATABASE_PORT=5432
-    TP_URLS=trustpoint.myfactory.local,10.0.0.5
+
+    # TLS/Network configuration
+    TP_TLS_IPV4_ADDRESSES=10.0.0.5
+    TP_TLS_DNS_NAMES=trustpoint.local
+
+    # Auto-setup configuration
+    TP_AUTO_SETUP=true
+    TP_ADMIN_USERNAME=admin
+    TP_ADMIN_PASSWORD=secure_admin_password_here
+    TP_INJECT_DEMO_DATA=false
 
 Setup (Load from Docker Hub)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

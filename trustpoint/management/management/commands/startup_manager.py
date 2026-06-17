@@ -4,8 +4,12 @@ This file shows how to refactor the managestartup.py command to use the strategy
 Copy the relevant parts into managestartup.py to complete the refactoring.
 """
 
+import os
+import sys
+from pathlib import Path
+
 from django.conf import settings as django_settings
-from django.core.management import CommandError
+from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand
 from django.db.utils import OperationalError, ProgrammingError
 from packaging.version import InvalidVersion, Version
@@ -14,6 +18,7 @@ from management.models import AppVersion
 from management.util.output_wrapper import CommandOutputWrapper
 from management.util.startup_context import StartupContextBuilder
 from management.util.startup_strategies import StartupStrategySelector
+from setup_wizard.models import SetupWizardCompletedModel
 
 
 class Command(BaseCommand):
@@ -23,7 +28,40 @@ class Command(BaseCommand):
 
     def handle(self, **_options: dict[str, str]) -> None:
         """Entrypoint for the command."""
+        self._check_env_file_exists()
         self.manage_startup()
+        self._check_auto_setup()
+
+    def _check_env_file_exists(self) -> None:
+        """Check if .env file exists, fail startup if it does not."""
+        env_file = Path('/var/www/html/trustpoint/.env')
+        if not env_file.exists():
+            self.stdout.write(
+                self.style.ERROR(
+                    'FATAL: No .env file found. Trustpoint requires a .env file to start.\n'
+                    'Please create /var/www/html/trustpoint/.env with the required configuration.\n'
+                    'See .env.example for reference.'
+                )
+            )
+            sys.exit(1)
+
+    def _check_auto_setup(self) -> None:
+        """Check if auto-setup should be performed from environment variables."""
+        auto_setup = os.getenv('TP_AUTO_SETUP', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+        if not auto_setup:
+            return
+
+        if SetupWizardCompletedModel.setup_wizard_completed():
+            self.stdout.write(self.style.WARNING('TP_AUTO_SETUP is enabled but setup already completed, skipping'))
+            return
+
+        self.stdout.write(self.style.WARNING('TP_AUTO_SETUP is enabled, running auto-setup from environment...'))
+        try:
+            call_command('auto_setup_from_env')
+        except CommandError as e:
+            self.stdout.write(self.style.ERROR(f'Auto-setup failed: {e}'))
+            raise
 
     def manage_startup(self) -> None:
         """Checks current state of trustpoint and acts accordingly."""

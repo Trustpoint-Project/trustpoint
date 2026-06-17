@@ -18,7 +18,6 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ClassVar
-from urllib.parse import urlparse
 
 import django_stubs_ext
 import psycopg
@@ -189,33 +188,55 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
 
-TP_URLS = _env_value('TP_URLS', '')
-raw_urls = TP_URLS
+TP_TLS_IPV4_ADDRESSES = _env_value('TP_TLS_IPV4_ADDRESSES', '')
+TP_TLS_IPV6_ADDRESSES = _env_value('TP_TLS_IPV6_ADDRESSES', '')
+TP_TLS_DNS_NAMES = _env_value('TP_TLS_DNS_NAMES', '')
 
-if raw_urls:
-    # Split by comma and clean up whitespace
-    url_list = [url.strip() for url in raw_urls.split(',') if url.strip()]
+TP_HTTP_PORT = _env_value('TP_HTTP_PORT', '80')
+TP_HTTPS_PORT = _env_value('TP_HTTPS_PORT', '443')
 
-    for url in url_list:
-        # Ensure scheme is present (fallback to https)
-        parsed = urlparse(url) if url.startswith(('http://', 'https://')) else urlparse(f'https://{url}')
+tls_ipv4_list = [addr.strip() for addr in TP_TLS_IPV4_ADDRESSES.split(',') if addr.strip()]
+tls_ipv6_list = [addr.strip() for addr in TP_TLS_IPV6_ADDRESSES.split(',') if addr.strip()]
+tls_dns_list = [name.strip() for name in TP_TLS_DNS_NAMES.split(',') if name.strip()]
 
-        host_with_port = parsed.netloc
+def _format_origin(scheme: str, host: str, port: str) -> str:
+    """Format an origin URL with optional port."""
+    default_port = '80' if scheme == 'http' else '443'
+    if port == default_port:
+        return f'{scheme}://{host}'
+    return f'{scheme}://{host}:{port}'
 
-        # 1. Extract just host/IP for ALLOWED_HOSTS (strip port)
-        host_only = host_with_port.split(':')[0]
-        if host_only not in ALLOWED_HOSTS:
-            ALLOWED_HOSTS.append(host_only)
+for ipv4 in tls_ipv4_list:
+    if ipv4 not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ipv4)
+    http_origin = _format_origin('http', ipv4, TP_HTTP_PORT)
+    https_origin = _format_origin('https', ipv4, TP_HTTPS_PORT)
+    if http_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(http_origin)
+    if https_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(https_origin)
 
-            # If mDNS domain, trust subdomains too
-            if host_only.endswith('.local') and f'.{host_only}' not in ALLOWED_HOSTS:
-                ALLOWED_HOSTS.append(f'.{host_only}')
+for ipv6 in tls_ipv6_list:
+    if ipv6 not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ipv6)
+    http_origin = _format_origin('http', f'[{ipv6}]', TP_HTTP_PORT)
+    https_origin = _format_origin('https', f'[{ipv6}]', TP_HTTPS_PORT)
+    if http_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(http_origin)
+    if https_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(https_origin)
 
-        # 2. Extract the exact origin (scheme + host + port) for CSRF
-        # e.g., "https://trustpoint.local:8443" or "http://10.10.0.2"
-        exact_origin = f'{parsed.scheme}://{host_with_port}'
-        if exact_origin not in CSRF_TRUSTED_ORIGINS:
-            CSRF_TRUSTED_ORIGINS.append(exact_origin)
+for dns_name in tls_dns_list:
+    if dns_name not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(dns_name)
+        if dns_name.endswith('.local') and f'.{dns_name}' not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(f'.{dns_name}')
+    http_origin = _format_origin('http', dns_name, TP_HTTP_PORT)
+    https_origin = _format_origin('https', dns_name, TP_HTTPS_PORT)
+    if http_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(http_origin)
+    if https_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(https_origin)
 
 
 # Settings for PostgreSQL database

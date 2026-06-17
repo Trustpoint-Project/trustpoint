@@ -7,8 +7,8 @@ services:
     container_name: trustpoint
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${TP_HTTP_PORT:-80}:80"
+      - "${TP_HTTPS_PORT:-443}:443"
     depends_on:
       softhsm:
         condition: service_healthy
