@@ -30,7 +30,7 @@ class SmtpEmailConfig(models.Model):
     username = models.CharField(max_length=255, blank=True)
     password = models.CharField(max_length=1024, blank=True)
     timeout_seconds = models.PositiveIntegerField(default=10)
-    default_from_email = models.EmailField(default='no-reply@trustpoint.de')
+    default_from_email = models.EmailField(default='no-reply.trustpoint@localhost')
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -74,7 +74,7 @@ class SmtpEmailConfig(models.Model):
             'username': getattr(settings, 'EMAIL_HOST_USER', ''),
             'password': getattr(settings, 'EMAIL_HOST_PASSWORD', ''),
             'timeout_seconds': cls._settings_int('EMAIL_TIMEOUT', 10),
-            'default_from_email': getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de'),
+            'default_from_email': getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost'),
         }
 
     @classmethod
