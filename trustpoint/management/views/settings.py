@@ -34,9 +34,9 @@ from management.models import (
     InternationalizationConfig,
     LoggingConfig,
     NotificationConfig,
-    SmtpEmailConfig,
     PrometheusConfig,
     SecurityConfig,
+    SmtpEmailConfig,
 )
 from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
