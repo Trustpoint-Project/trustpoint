@@ -27,9 +27,11 @@ def test_debug_setting():
     assert settings.DEBUG is (not settings.DOCKER_CONTAINER), 'DEBUG should be the inverse of DOCKER_CONTAINER.'
 
 
-def test_tp_urls_not_set_keeps_default_hosts_and_origins(monkeypatch):
-    """Ensure defaults remain unchanged when TP_URLS is not set."""
-    monkeypatch.delenv('TP_URLS', raising=False)
+def test_tls_addresses_not_set_keeps_default_hosts_and_origins(monkeypatch):
+    """Ensure defaults remain unchanged when TLS address variables are not set."""
+    monkeypatch.delenv('TP_TLS_IPV4_ADDRESSES', raising=False)
+    monkeypatch.delenv('TP_TLS_IPV6_ADDRESSES', raising=False)
+    monkeypatch.delenv('TP_TLS_DNS_NAMES', raising=False)
 
     importlib.reload(settings)
 
@@ -40,34 +42,94 @@ def test_tp_urls_not_set_keeps_default_hosts_and_origins(monkeypatch):
     assert 'http://127.0.0.1:8000' in settings.CSRF_TRUSTED_ORIGINS
 
 
-def test_tp_urls_derives_allowed_hosts_and_csrf_origins(monkeypatch):
-    """Ensure TP_URLS entries are parsed into ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS."""
-    monkeypatch.setenv('TP_URLS', 'trustpoint.local:8443, http://10.10.0.2, https://example.org')
+def test_tls_ipv4_addresses_derives_allowed_hosts_and_csrf_origins(monkeypatch):
+    """Ensure TP_TLS_IPV4_ADDRESSES entries are parsed into ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS."""
+    monkeypatch.setenv('TP_TLS_IPV4_ADDRESSES', '10.10.0.2, 192.168.1.100')
+    monkeypatch.setenv('TP_HTTP_PORT', '8080')
+    monkeypatch.setenv('TP_HTTPS_PORT', '8443')
+
+    importlib.reload(settings)
+
+    assert '10.10.0.2' in settings.ALLOWED_HOSTS
+    assert '192.168.1.100' in settings.ALLOWED_HOSTS
+
+    assert 'http://10.10.0.2:8080' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://10.10.0.2:8443' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://192.168.1.100:8080' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://192.168.1.100:8443' in settings.CSRF_TRUSTED_ORIGINS
+
+
+def test_tls_ipv6_addresses_derives_allowed_hosts_and_csrf_origins(monkeypatch):
+    """Ensure TP_TLS_IPV6_ADDRESSES entries are parsed into ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS."""
+    monkeypatch.setenv('TP_TLS_IPV6_ADDRESSES', 'fe80::1, 2001:db8::1')
+    monkeypatch.setenv('TP_HTTP_PORT', '80')
+    monkeypatch.setenv('TP_HTTPS_PORT', '443')
+
+    importlib.reload(settings)
+
+    assert 'fe80::1' in settings.ALLOWED_HOSTS
+    assert '2001:db8::1' in settings.ALLOWED_HOSTS
+
+    assert 'http://[fe80::1]' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://[fe80::1]' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://[2001:db8::1]' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://[2001:db8::1]' in settings.CSRF_TRUSTED_ORIGINS
+
+
+def test_tls_dns_names_derives_allowed_hosts_and_csrf_origins(monkeypatch):
+    """Ensure TP_TLS_DNS_NAMES entries are parsed into ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS."""
+    monkeypatch.setenv('TP_TLS_DNS_NAMES', 'trustpoint.local, example.org')
+    monkeypatch.setenv('TP_HTTP_PORT', '8080')
+    monkeypatch.setenv('TP_HTTPS_PORT', '8443')
 
     importlib.reload(settings)
 
     assert 'trustpoint.local' in settings.ALLOWED_HOSTS
     assert '.trustpoint.local' in settings.ALLOWED_HOSTS
-    assert '10.10.0.2' in settings.ALLOWED_HOSTS
     assert 'example.org' in settings.ALLOWED_HOSTS
 
+    assert 'http://trustpoint.local:8080' in settings.CSRF_TRUSTED_ORIGINS
     assert 'https://trustpoint.local:8443' in settings.CSRF_TRUSTED_ORIGINS
-    assert 'http://10.10.0.2' in settings.CSRF_TRUSTED_ORIGINS
-    assert 'https://example.org' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://example.org:8080' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://example.org:8443' in settings.CSRF_TRUSTED_ORIGINS
 
 
-def test_tp_urls_deduplicates_hosts_and_origins(monkeypatch):
-    """Ensure repeated TP_URLS values do not create duplicate entries."""
-    monkeypatch.setenv(
-        'TP_URLS',
-        ' https://dup.local:9443,https://dup.local:9443 , dup.local:9443 ',
-    )
+def test_tls_dns_names_adds_wildcard_for_local_domains(monkeypatch):
+    """Ensure .local domains get wildcard subdomain entries in ALLOWED_HOSTS."""
+    monkeypatch.setenv('TP_TLS_DNS_NAMES', 'trustpoint.local, other.local')
 
     importlib.reload(settings)
 
+    assert 'trustpoint.local' in settings.ALLOWED_HOSTS
+    assert '.trustpoint.local' in settings.ALLOWED_HOSTS
+    assert 'other.local' in settings.ALLOWED_HOSTS
+    assert '.other.local' in settings.ALLOWED_HOSTS
+
+
+def test_tls_addresses_deduplicates_hosts_and_origins(monkeypatch):
+    """Ensure repeated TLS address values do not create duplicate entries."""
+    monkeypatch.setenv('TP_TLS_IPV4_ADDRESSES', '10.10.0.2, 10.10.0.2')
+    monkeypatch.setenv('TP_TLS_DNS_NAMES', 'dup.local, dup.local')
+
+    importlib.reload(settings)
+
+    assert settings.ALLOWED_HOSTS.count('10.10.0.2') == 1
     assert settings.ALLOWED_HOSTS.count('dup.local') == 1
     assert settings.ALLOWED_HOSTS.count('.dup.local') == 1
-    assert settings.CSRF_TRUSTED_ORIGINS.count('https://dup.local:9443') == 1
+
+
+def test_tls_addresses_handles_default_ports(monkeypatch):
+    """Ensure default ports (80/443) are omitted from CSRF_TRUSTED_ORIGINS."""
+    monkeypatch.setenv('TP_TLS_IPV4_ADDRESSES', '10.10.0.2')
+    monkeypatch.setenv('TP_HTTP_PORT', '80')
+    monkeypatch.setenv('TP_HTTPS_PORT', '443')
+
+    importlib.reload(settings)
+
+    assert 'http://10.10.0.2' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://10.10.0.2' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://10.10.0.2:80' not in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://10.10.0.2:443' not in settings.CSRF_TRUSTED_ORIGINS
 
 
 def test_env_bool_uses_default_when_variable_is_missing(monkeypatch):

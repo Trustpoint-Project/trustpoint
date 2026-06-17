@@ -156,14 +156,21 @@ class InitTrustpointCommandTest(TestCase):
 class StartupManagerCommandTest(TestCase):
     """Test suite for startup_manager command."""
 
+    @patch('management.management.commands.startup_manager.Path')
     @patch('management.management.commands.startup_manager.StartupStrategySelector')
     @patch('management.management.commands.startup_manager.StartupContextBuilder')
     def test_startup_manager_db_not_initialized(
         self,
         mock_builder: MagicMock,
-        mock_selector: MagicMock
+        mock_selector: MagicMock,
+        mock_path_class: MagicMock
     ) -> None:
         """Test startup_manager when database is not initialized."""
+        # Mock .env file existence check
+        mock_env_path = Mock()
+        mock_env_path.exists.return_value = True
+        mock_path_class.return_value = mock_env_path
+        
         # Simulate ProgrammingError when querying AppVersion
         with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             from django.db.utils import ProgrammingError
@@ -186,14 +193,21 @@ class StartupManagerCommandTest(TestCase):
             )
             mock_strategy.execute.assert_called_once_with(mock_context)
 
+    @patch('management.management.commands.startup_manager.Path')
     @patch('management.management.commands.startup_manager.StartupStrategySelector')
     @patch('management.management.commands.startup_manager.StartupContextBuilder')
     def test_startup_manager_db_initialized_no_version(
         self,
         mock_builder: MagicMock,
-        mock_selector: MagicMock
+        mock_selector: MagicMock,
+        mock_path_class: MagicMock
     ) -> None:
         """Test startup_manager when database is initialized but no version record."""
+        # Mock .env file existence check
+        mock_env_path = Mock()
+        mock_env_path.exists.return_value = True
+        mock_path_class.return_value = mock_env_path
+        
         with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             mock_first.return_value = None
             
