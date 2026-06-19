@@ -27,9 +27,9 @@ MAILPIT_IMAGE="axllent/mailpit:v1.27"
 SFTPGO_IMAGE="drakkan/sftpgo:2.6.x-slim"
 WF2_WORKER_NAME="trustpoint-worker"
 
-# Fixed trustpoint ports
-APP_HTTP_HOST=80
-APP_HTTPS_HOST=443
+# Trustpoint ports
+DEF_TP_HTTP_PORT=80
+DEF_TP_HTTPS_PORT=443
 
 # PostgreSQL defaults
 DEF_DB_NAME="${POSTGRES_DB:-trustpoint_db}"
@@ -38,7 +38,9 @@ DEF_DB_PASS="${DATABASE_PASSWORD:-testing321}"
 DEF_DB_PORT="${DATABASE_PORT:-5432}"
 DEF_DB_HOST="${DATABASE_HOST:-postgres}"
 DEF_DB_HOST_INTERNAL="postgres"   # container name/hostname
-DEF_TP_URLS="${TP_URLS:-trustpoint.local}"
+DEF_TP_TLS_DNS_NAMES="${TP_TLS_DNS_NAMES:-trustpoint.local}"
+DEF_TP_TLS_IPV4_ADDRESSES="${TP_TLS_IPV4_ADDRESSES:-}"
+DEF_TP_TLS_IPV6_ADDRESSES="${TP_TLS_IPV6_ADDRESSES:-}"
 
 # Mailpit defaults
 DEF_MAILPIT_SMTP_PORT=1025
@@ -177,7 +179,9 @@ sync_env_file(){
   upsert_env_var "DATABASE_PASSWORD" "$env_db_pass"
   upsert_env_var "DATABASE_HOST" "$env_db_host"
   upsert_env_var "DATABASE_PORT" "$env_db_port"
-  upsert_env_var "TP_URLS" "$TP_URLS_VALUE"
+  upsert_env_var "TP_TLS_DNS_NAMES" "$TP_TLS_DNS_NAMES_VALUE"
+  upsert_env_var "TP_TLS_IPV4_ADDRESSES" "$TP_TLS_IPV4_ADDRESSES_VALUE"
+  upsert_env_var "TP_TLS_IPV6_ADDRESSES" "$TP_TLS_IPV6_ADDRESSES_VALUE"
   chmod 600 "$ENV_FILE" 2>/dev/null || true
   ok "Updated ${ENV_FILE}"
 }
@@ -197,7 +201,9 @@ APP_DB_PORT="$DB_PORT"
 APP_DB_NAME="$DB_NAME"
 APP_DB_USER="$DB_USER"
 APP_DB_PASS="$DEF_DB_PASS"
-TP_URLS_VALUE="$DEF_TP_URLS"
+TP_TLS_DNS_NAMES_VALUE="$DEF_TP_TLS_DNS_NAMES"
+TP_TLS_IPV4_ADDRESSES_VALUE="$DEF_TP_TLS_IPV4_ADDRESSES"
+TP_TLS_IPV6_ADDRESSES_VALUE="$DEF_TP_TLS_IPV6_ADDRESSES"
 
 MAILPIT_SMTP_PORT="$DEF_MAILPIT_SMTP_PORT"
 MAILPIT_UI_PORT="$DEF_MAILPIT_UI_PORT"
@@ -286,10 +292,16 @@ step_app_db_binding(){
   fi
 }
 
-step_trustpoint_urls(){
+step_trustpoint_tls_identifiers(){
   $EN_APP || return 0
-  ask "Trustpoint reachable hostnames/IPs (comma-separated, no protocol)" "$TP_URLS_VALUE"
-  TP_URLS_VALUE="$REPLY"
+  ask "Trustpoint TLS DNS names (comma-separated, no protocol)" "$TP_TLS_DNS_NAMES_VALUE"
+  TP_TLS_DNS_NAMES_VALUE="$REPLY"
+
+  ask "Trustpoint TLS IPv4 addresses (comma-separated, optional)" "$TP_TLS_IPV4_ADDRESSES_VALUE"
+  TP_TLS_IPV4_ADDRESSES_VALUE="$REPLY"
+
+  ask "Trustpoint TLS IPv6 addresses (comma-separated, optional)" "$TP_TLS_IPV6_ADDRESSES_VALUE"
+  TP_TLS_IPV6_ADDRESSES_VALUE="$REPLY"
 }
 
 step_helpers(){
@@ -351,7 +363,9 @@ show_plan(){
     printf "%-22s %s\n" "trustpoint DB name:" "$APP_DB_NAME"
     printf "%-22s %s\n" "trustpoint DB user:" "$APP_DB_USER"
     printf "%-22s %s\n" "trustpoint DB pass:" "$(mask "$APP_DB_PASS")"
-    printf "%-22s %s\n" "trustpoint URLs:" "$TP_URLS_VALUE"
+    printf "%-22s %s\n" "TLS DNS names:" "$TP_TLS_DNS_NAMES_VALUE"
+    printf "%-22s %s\n" "TLS IPv4 addresses:" "${TP_TLS_IPV4_ADDRESSES_VALUE:-(none)}"
+    printf "%-22s %s\n" "TLS IPv6 addresses:" "${TP_TLS_IPV6_ADDRESSES_VALUE:-(none)}"
   fi
   echo
   printf "%-22s %s\n" "Mailpit enabled:" "$EN_MAILPIT"
@@ -511,7 +525,9 @@ DATABASE_USER=${APP_DB_USER}
 DATABASE_PASSWORD=${APP_DB_PASS}
 DATABASE_HOST=${APP_DB_HOST}
 DATABASE_PORT=${APP_DB_PORT}
-TP_URLS=${TP_URLS_VALUE}
+TP_TLS_DNS_NAMES=${TP_TLS_DNS_NAMES_VALUE}
+TP_TLS_IPV4_ADDRESSES=${TP_TLS_IPV4_ADDRESSES_VALUE}
+TP_TLS_IPV6_ADDRESSES=${TP_TLS_IPV6_ADDRESSES_VALUE}
 TRUSTPOINT_SERVICE_ROLE=worker
 WORKFLOWS2_WORKER_ID=${WF2_WORKER_NAME}
 WORKFLOWS2_WORKER_LEASE=${WF2_WORKER_LEASE}
@@ -536,8 +552,8 @@ start_app(){
   local name="trustpoint"
   stop_one "$name"
   # die early if 80/443 are busy
-  if port_in_use "$APP_HTTP_HOST"; then die "Host port ${APP_HTTP_HOST} is in use (trustpoint HTTP)."; fi
-  if port_in_use "$APP_HTTPS_HOST"; then die "Host port ${APP_HTTPS_HOST} is in use (trustpoint HTTPS)."; fi
+  if port_in_use "$DEF_TP_HTTP_PORT"; then die "Host port ${DEF_TP_HTTP_PORT} is in use (trustpoint HTTP)."; fi
+  if port_in_use "$DEF_TP_HTTPS_PORT"; then die "Host port ${DEF_TP_HTTPS_PORT} is in use (trustpoint HTTPS)."; fi
 
   log "Starting trustpoint..."
   local smtp_env=()
@@ -545,14 +561,16 @@ start_app(){
     smtp_env+=( -e "EMAIL_HOST=mailpit" -e "EMAIL_PORT=1025" -e "EMAIL_USE_TLS=0" -e "EMAIL_USE_SSL=0" -e "DEFAULT_FROM_EMAIL=no-reply@trustpoint.local" )
   fi
   docker run -d --name "$name" --network "$NET" \
-    -p "${APP_HTTP_HOST}:80" \
-    -p "${APP_HTTPS_HOST}:443" \
+    -p "${DEF_TP_HTTP_PORT}:80" \
+    -p "${DEF_TP_HTTPS_PORT}:443" \
     -e "POSTGRES_DB=$APP_DB_NAME" \
     -e "DATABASE_USER=$APP_DB_USER" \
     -e "DATABASE_PASSWORD=$APP_DB_PASS" \
     -e "DATABASE_HOST=$APP_DB_HOST" \
     -e "DATABASE_PORT=$APP_DB_PORT" \
-    -e "TP_URLS=$TP_URLS_VALUE" \
+    -e "TP_TLS_DNS_NAMES=$TP_TLS_DNS_NAMES_VALUE" \
+    -e "TP_TLS_IPV4_ADDRESSES=$TP_TLS_IPV4_ADDRESSES_VALUE" \
+    -e "TP_TLS_IPV6_ADDRESSES=$TP_TLS_IPV6_ADDRESSES_VALUE" \
     ${smtp_env[@]+"${smtp_env[@]}"} \
     "$APP_IMAGE" >/dev/null
 }
@@ -600,9 +618,9 @@ await_readiness(){
     echo
   fi
   if $EN_APP; then
-    echo "Waiting (<= ${READINESS_TIMEOUT}s) for trustpoint HTTP on localhost:${APP_HTTP_HOST} ..."
+    echo "Waiting (<= ${READINESS_TIMEOUT}s) for trustpoint HTTP on localhost:${DEF_TP_HTTP_PORT} ..."
     while (( $(date +%s) < deadline )); do
-      if tcp_check 127.0.0.1 "$APP_HTTP_HOST" 1; then ok "trustpoint reachable on :$APP_HTTP_HOST"; break; fi
+      if tcp_check 127.0.0.1 "$DEF_TP_HTTP_PORT" 1; then ok "trustpoint reachable on :$DEF_TP_HTTP_PORT"; break; fi
       printf "."; sleep 1
     done
     echo
@@ -791,7 +809,7 @@ show_runtime_status(){
   echo
 
   if exists trustpoint; then
-    local http_port https_port db_host db_port db_name db_user db_pass tp_urls
+    local http_port https_port db_host db_port db_name db_user db_pass tp_tls_dns_names tp_tls_ipv4_addresses tp_tls_ipv6_addresses
     http_port="$(container_host_port trustpoint 80/tcp)"
     https_port="$(container_host_port trustpoint 443/tcp)"
     db_host="$(container_env trustpoint DATABASE_HOST)"
@@ -799,11 +817,15 @@ show_runtime_status(){
     db_name="$(container_env trustpoint POSTGRES_DB)"
     db_user="$(container_env trustpoint DATABASE_USER)"
     db_pass="$(container_env trustpoint DATABASE_PASSWORD)"
-    tp_urls="$(container_env trustpoint TP_URLS)"
+    tp_tls_dns_names="$(container_env trustpoint TP_TLS_DNS_NAMES)"
+    tp_tls_ipv4_addresses="$(container_env trustpoint TP_TLS_IPV4_ADDRESSES)"
+    tp_tls_ipv6_addresses="$(container_env trustpoint TP_TLS_IPV6_ADDRESSES)"
 
     [[ -n "$http_port" ]] && printf "%-22s %s\n" "trustpoint HTTP:" "http://localhost:${http_port}"
     [[ -n "$https_port" ]] && printf "%-22s %s\n" "trustpoint HTTPS:" "https://localhost:${https_port}"
-    [[ -n "$tp_urls" ]] && printf "%-22s %s\n" "trustpoint URLs:" "${tp_urls}"
+    [[ -n "$tp_tls_dns_names" ]] && printf "%-22s %s\n" "TLS DNS names:" "${tp_tls_dns_names}"
+    [[ -n "$tp_tls_ipv4_addresses" ]] && printf "%-22s %s\n" "TLS IPv4 addresses:" "${tp_tls_ipv4_addresses}"
+    [[ -n "$tp_tls_ipv6_addresses" ]] && printf "%-22s %s\n" "TLS IPv6 addresses:" "${tp_tls_ipv6_addresses}"
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings"
     if [[ -n "$db_host" || -n "$db_port" || -n "$db_name" || -n "$db_user" ]]; then
       printf "%-22s %s\n" "DB connect:" "host=${db_host:-?} port=${db_port:-?} db=${db_name:-?} user=${db_user:-?} pass=$(mask "${db_pass:-}")"
@@ -860,7 +882,9 @@ final_summary(){
   echo
   if $EN_APP; then
     printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
-    printf "%-22s %s\n" "trustpoint URLs:" "$TP_URLS_VALUE"
+    printf "%-22s %s\n" "TLS DNS names:" "$TP_TLS_DNS_NAMES_VALUE"
+    printf "%-22s %s\n" "TLS IPv4 addresses:" "${TP_TLS_IPV4_ADDRESSES_VALUE:-(none)}"
+    printf "%-22s %s\n" "TLS IPv6 addresses:" "${TP_TLS_IPV6_ADDRESSES_VALUE:-(none)}"
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings (default: auto)"
   fi
   if $DB_INTERNAL; then
@@ -907,7 +931,7 @@ wizard(){
   step_enable_postgres
   step_postgres_config
   step_app_db_binding
-  step_trustpoint_urls
+  step_trustpoint_tls_identifiers
   step_helpers
   step_workflows2_worker
   show_plan
