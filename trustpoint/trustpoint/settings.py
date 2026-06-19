@@ -210,8 +210,8 @@ DATABASE_USER = 'admin'
 DATABASE_PASSWORD = 'testing321'  # noqa: S105
 
 
-# Settomg for email backend
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+# Setting for email backend
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
 # Default: console (safe for dev/showcases)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
