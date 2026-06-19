@@ -38,6 +38,8 @@ DEF_DB_PASS="${DATABASE_PASSWORD:-testing321}"
 DEF_DB_PORT="${DATABASE_PORT:-5432}"
 DEF_DB_HOST="${DATABASE_HOST:-postgres}"
 DEF_DB_HOST_INTERNAL="postgres"   # container name/hostname
+
+# Trustpoint TLS URLs (also used for allowed hosts and CSRF origins)
 DEF_TP_TLS_DNS_NAMES="${TP_TLS_DNS_NAMES:-trustpoint.local}"
 DEF_TP_TLS_IPV4_ADDRESSES="${TP_TLS_IPV4_ADDRESSES:-}"
 DEF_TP_TLS_IPV6_ADDRESSES="${TP_TLS_IPV6_ADDRESSES:-}"
@@ -292,7 +294,7 @@ step_app_db_binding(){
   fi
 }
 
-step_trustpoint_tls_identifiers(){
+step_trustpoint_tls_urls(){
   $EN_APP || return 0
   ask "Trustpoint TLS DNS names (comma-separated, no protocol)" "$TP_TLS_DNS_NAMES_VALUE"
   TP_TLS_DNS_NAMES_VALUE="$REPLY"
@@ -931,7 +933,7 @@ wizard(){
   step_enable_postgres
   step_postgres_config
   step_app_db_binding
-  step_trustpoint_tls_identifiers
+  step_trustpoint_tls_urls
   step_helpers
   step_workflows2_worker
   show_plan
