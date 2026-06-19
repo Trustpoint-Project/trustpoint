@@ -15,6 +15,16 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
+            name='AppPermission',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+            ],
+            options={
+                'permissions': (('manage_workflow', 'Can manage workflow'), ('onboard_device', 'Can onboard device'), ('manage_ca', 'Can manage CA'), ('manage_role', 'Can manage role')),
+                'default_permissions': (),
+            },
+        ),
+        migrations.CreateModel(
             name='TrustpointUser',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
