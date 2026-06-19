@@ -97,7 +97,9 @@ class JSONCertRequestConverter:
         req = {'type': 'cert_request', 'subj': {}, 'ext': {}}
         subj_dict: dict[str, str] = {}
         for attr in subject_dn or []:
-            subj_dict[attr.oid.dotted_string] = attr.value
+            raw_attr_val = attr.value
+            attr_value_str = raw_attr_val.hex().upper() if isinstance(raw_attr_val, bytes) else raw_attr_val
+            subj_dict[attr.oid.dotted_string] = str(attr_value_str)
         req['subj'] = subj_dict
         req['ext'] = JSONCertRequestConverter._extensions_to_json(extensions)
 

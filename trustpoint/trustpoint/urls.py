@@ -39,6 +39,7 @@ from rest_framework_simplejwt.views import (
 from pki.views.issuing_cas import CrlDownloadView
 
 from .views import base
+from .views.prometheus import prometheus_metrics_view
 
 last_modified_date = timezone.now()
 
@@ -76,6 +77,7 @@ urlpatterns += [
     path('home/', include('home.urls')),
     path('devices/', include('devices.urls')),
     path('management/', include('management.urls')),
+    path('prometheus/metrics', prometheus_metrics_view, name='prometheus-metrics'),
     path('i18n/', include('django.conf.urls.i18n')),
     path(
         'jsi18n/',

@@ -18,6 +18,7 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ClassVar
+from urllib.parse import urlparse
 
 import django_stubs_ext
 import psycopg
@@ -85,6 +86,7 @@ PUBLIC_PATHS = [
     '/crl',
     '/setup-wizard',
     '/devices/browser',
+    '/prometheus/',
 ]
 
 
@@ -141,13 +143,8 @@ def is_postgre_available() -> bool:
 
 # ------------- Variables --------------
 
-ALLOWED_HOSTS = ['*']
 WSGI_APPLICATION = 'trustpoint.wsgi.application'
 
-
-# mDNS service discovery advertisement
-ADVERTISED_HOST = '127.0.0.1'
-ADVERTISED_PORT = 443
 
 
 DOCKER_CONTAINER = False
@@ -161,6 +158,38 @@ DEBUG = not DOCKER_CONTAINER
 ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = DEBUG
 
+# Reverse proxy SSL header settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
+
+raw_urls = os.getenv('TP_URLS', '')
+
+if raw_urls:
+    # Split by comma and clean up whitespace
+    url_list = [url.strip() for url in raw_urls.split(',') if url.strip()]
+
+    for url in url_list:
+        # Ensure scheme is present (fallback to https)
+        parsed = urlparse(url) if url.startswith(('http://', 'https://')) else urlparse(f'https://{url}')
+
+        host_with_port = parsed.netloc
+
+        # 1. Extract just host/IP for ALLOWED_HOSTS (strip port)
+        host_only = host_with_port.split(':')[0]
+        if host_only not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(host_only)
+
+            # If mDNS domain, trust subdomains too
+            if host_only.endswith('.local') and f'.{host_only}' not in ALLOWED_HOSTS:
+                ALLOWED_HOSTS.append(f'.{host_only}')
+
+        # 2. Extract the exact origin (scheme + host + port) for CSRF
+        # e.g., "https://trustpoint.local:8443" or "http://10.10.0.2"
+        exact_origin = f'{parsed.scheme}://{host_with_port}'
+        if exact_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(exact_origin)
 
 
 # Basic SMTP backend
@@ -181,8 +210,8 @@ DATABASE_USER = 'admin'
 DATABASE_PASSWORD = 'testing321'  # noqa: S105
 
 
-# Settomg for email backend
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+# Setting for email backend
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
 # Default: console (safe for dev/showcases)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -273,6 +302,7 @@ INSTALLED_APPS = [
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
     'trustpoint_core',
+    'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -295,6 +325,7 @@ if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     INSTALLED_APPS.append('behave_django')
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
@@ -306,6 +337,7 @@ MIDDLEWARE = [
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 
