@@ -19,6 +19,7 @@ from management.models.pkcs11 import PKCS11Token
 from management.models.prometheus import PrometheusConfig
 from management.models.security import SecurityConfig
 from management.models.tls import TlsSettings
+from management.models.ui_config import UIConfig
 
 __all__ = [
     'AppVersion',
@@ -36,6 +37,7 @@ __all__ = [
     'PrometheusConfig',
     'SecurityConfig',
     'TlsSettings',
+    'UIConfig',
     'WeakECCCurve',
     'WeakSignatureAlgorithm',
 ]

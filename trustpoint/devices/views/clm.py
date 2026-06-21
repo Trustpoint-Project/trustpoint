@@ -25,6 +25,7 @@ from devices.forms import (
 from devices.models import (
     DeviceModel,
 )
+from management.models import UIConfig as UIConfigModel
 from onboarding.models import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
@@ -223,8 +224,6 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['application_credentials'] = self.application_credentials_qs
 
         self._add_credential_pages_to_context(context)
-
-        context['main_url'] = f'{self.page_category}:{self.page_name}'
 
         is_cmp_ra = (
             self.object.domain

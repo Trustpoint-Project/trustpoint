@@ -25,6 +25,7 @@ from management.forms import (
     NotificationConfigForm,
     PrometheusConfigForm,
     SecurityConfigForm,
+    UIConfigForm,
     WorkflowExecutionConfigForm,
 )
 from management.models import (
@@ -33,6 +34,7 @@ from management.models import (
     NotificationConfig,
     PrometheusConfig,
     SecurityConfig,
+    UIConfig,
 )
 from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -274,6 +276,7 @@ class SettingsFormViewMixin[FormType: (
     | NotificationConfigForm
     | PrometheusConfigForm
     | SecurityConfigForm
+    | UIConfigForm
 )](
     PageContextMixin,
     SecurityLevelMixin,
@@ -326,6 +329,11 @@ class SettingsTabView(TemplateView):
         internationalization_view.request = self.request
         internationalization_view.setup(self.request)
         context['internationalization_form'] = internationalization_view.get_form()
+
+        ui_view = UISettingsView()
+        ui_view.request = self.request
+        ui_view.setup(self.request)
+        context['ui_form'] = ui_view.get_form()
 
         security_view = SecuritySettingsView()
         security_view.request = self.request
@@ -445,6 +453,42 @@ class InternationalizationSettingsView(SettingsFormViewMixin[Internationalizatio
 
         messages.success(self.request, _('Internationalization configuration saved successfully.'))
         return response
+
+
+class UISettingsView(SettingsFormViewMixin[UIConfigForm]):
+    """View for managing UI settings."""
+
+    template_name = 'management/includes/ui_configuration.html'
+    form_class = UIConfigForm
+    setting_type = 'ui'
+
+    def get_initial(self) -> dict[str, Any]:
+        """Get initial form data with current UI settings."""
+        initial = super().get_initial()
+        config = UIConfig.get_current()
+        initial['view_mode'] = config.view_mode
+        return initial
+
+    def form_valid(self, form: UIConfigForm) -> HttpResponse:
+        """Handle valid UI form submission."""
+        view_mode = form.cleaned_data['view_mode']
+
+        self.logger.info('Changing view mode to: %s', view_mode)
+
+        UIConfig.objects.update_or_create(
+            id=1,
+            defaults={
+                'view_mode': view_mode,
+            },
+        )
+
+        messages.success(
+            self.request,
+            _('UI configuration saved successfully. Redirecting to apply changes...')
+        )
+        # Redirect to home to immediately show the new view mode
+        return redirect('home:index')
+
 
 
 class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):

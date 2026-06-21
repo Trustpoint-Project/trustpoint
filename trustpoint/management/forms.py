@@ -31,6 +31,7 @@ from management.models import (
     PKCS11Token,
     PrometheusConfig,
     SecurityConfig,
+    UIConfig,
 )
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
@@ -1097,3 +1098,27 @@ class InternationalizationConfigForm(forms.Form):
                 'timezone': self.cleaned_data['timezone'],
             }
         )
+
+
+class UIConfigForm(forms.Form):
+    """Form for managing UI configuration."""
+
+    view_mode = forms.ChoiceField(
+        label=_('View Mode'),
+        choices=[
+            ('standard', _('Standard View')),
+            ('simplified', _('Simplified View')),
+        ],
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text=_('Choose between standard sidebar navigation or simplified domain-centric view'),
+    )
+
+    def save(self) -> None:
+        """Save the UI configuration."""
+        UIConfig.objects.update_or_create(
+            id=1,
+            defaults={
+                'view_mode': self.cleaned_data['view_mode'],
+            }
+        )
+
