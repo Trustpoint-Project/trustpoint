@@ -82,12 +82,12 @@ class Workflow2DefinitionViewSet(viewsets.ModelViewSet[Workflow2Definition]):
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         svc = WorkflowDefinitionService()
-        obj, res = svc.create_definition(name=None, enabled=None, yaml_text=yaml_text)
+        obj, res = svc.create_definition(enabled=None, yaml_text=yaml_text)
 
         if not res.ok:
             return Response({'detail': res.error or 'Workflow compilation failed.'}, status=status.HTTP_400_BAD_REQUEST)
         if obj is None:
-            return Response({'detail': 'Workflow save succeeded without returning a definition.'}, status=500)
+            return Response({'detail': 'Workflow save completed without returning a definition.'}, status=500)
 
         serializer = self.get_serializer(obj)
         headers = self.get_success_headers(serializer.data)
@@ -108,7 +108,6 @@ class Workflow2DefinitionViewSet(viewsets.ModelViewSet[Workflow2Definition]):
         svc = WorkflowDefinitionService()
         updated, res = svc.update_definition(
             definition=definition,
-            name=None,
             enabled=None,
             yaml_text=yaml_text,
         )
@@ -116,7 +115,7 @@ class Workflow2DefinitionViewSet(viewsets.ModelViewSet[Workflow2Definition]):
         if not res.ok:
             return Response({'detail': res.error or 'Workflow compilation failed.'}, status=status.HTTP_400_BAD_REQUEST)
         if updated is None:
-            return Response({'detail': 'Workflow update succeeded without returning a definition.'}, status=500)
+            return Response({'detail': 'Workflow update completed without returning a definition.'}, status=500)
 
         serializer = self.get_serializer(updated)
         return Response(serializer.data)

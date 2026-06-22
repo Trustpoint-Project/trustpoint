@@ -1,7 +1,7 @@
 """CRL views for the PKI application."""
 
 import binascii
-from typing import Any
+from typing import Any, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -17,7 +17,9 @@ from django.views.generic import ListView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 
+from pki.filters import CrlFilter
 from pki.models import CaModel, CertificateModel, CrlModel
+from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin
 
 
@@ -28,19 +30,58 @@ class CrlContextMixin(ContextDataMixin):
     context_page_name = 'crls'
 
 
-class CrlTableView(CrlContextMixin, ListView[CrlModel]):
+class CrlTableView(ExportMixin, CrlContextMixin, ListView[CrlModel]):
     """Table view for all CRLs."""
 
     model = CrlModel
     template_name = 'pki/crls/crls.html'
     context_object_name = 'crls'
     paginate_by = None
+    filterset_class = CrlFilter
+
+    def get_export_config(self) -> ExportConfig:
+        """Return the CSV export configuration for the CRLs table."""
+        return ExportConfig.from_model(
+            CrlModel,
+            include=['crl_number', 'ca', 'this_update', 'next_update', 'is_active'],
+            labels={
+                'this_update': _('This Update'),
+                'next_update': _('Next Update'),
+                'is_active': _('Active'),
+            },
+            extra=[
+                ExportColumn(
+                    key='revoked_count',
+                    label=_('Revoked Certificates'),
+                    accessor=lambda c: str(len(c.get_revoked_serial_numbers())),
+                ),
+            ],
+            filename='crls',
+        )
+
+    def apply_filters(self, qs: QuerySet[CrlModel]) -> QuerySet[CrlModel]:
+        """Apply the CrlFilter to the given queryset."""
+        self.filterset = CrlFilter(self.request.GET, queryset=qs)
+        return cast('QuerySet[CrlModel]', self.filterset.qs)
 
     def get_queryset(self) -> QuerySet[CrlModel]:
-        """Return all CRL models with related CA information."""
-        return (super().get_queryset()
-               .select_related('ca')
-               .order_by('-this_update'))
+        """Return CRL models with related CA information, respecting active filters."""
+        base_qs = (
+            super().get_queryset()
+            .select_related('ca')
+            .order_by('-this_update')
+        )
+        return self.apply_filters(base_qs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add filter state to the context."""
+        context = super().get_context_data(**kwargs)
+        context['filter'] = getattr(self, 'filterset', None)
+        context['filters_active'] = any(
+            self.request.GET.get(k)
+            for k in ('ca', 'is_active', 'this_update_from', 'this_update_to')
+        )
+        return context
 
 
 class CrlBulkDeleteConfirmView(BulkDeleteView):

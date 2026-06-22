@@ -8,7 +8,8 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h1>{% trans "Certificate Revocation Lists" %}</h1>
     </div>
-    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
+    {% include 'pki/crls/table_filter.html' with table_url='pki:crls' %}
+    <div class="card-body text-start pt-0" style="overflow-y: auto; flex: 1;">
         <table class="table">
             <thead>
                 <tr>

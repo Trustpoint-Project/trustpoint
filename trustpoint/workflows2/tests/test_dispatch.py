@@ -101,7 +101,7 @@ class DispatchTests(TestCase):
         self.assertEqual(len(instances), 1)
         self.assertEqual(instances[0].definition.name, "TP device created")
         instances[0].refresh_from_db()
-        self.assertEqual(instances[0].status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(instances[0].status, Workflow2Instance.STATUS_FINISHED)
 
         # Single scheduling mechanism: jobs exist even in inline mode (they are just drained).
         self.assertGreaterEqual(Workflow2Job.objects.filter(instance=instances[0]).count(), 1)
@@ -128,14 +128,14 @@ class DispatchTests(TestCase):
         self.assertEqual(inst.status, Workflow2Instance.STATUS_QUEUED)
         self.assertEqual(Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(), 1)
 
-        # Run worker once -> should execute and mark succeeded.
+        # Run worker once -> should execute and mark finished.
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
         worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id="test-worker")
         stats = worker.tick()
         self.assertEqual(stats.claimed, 1)
 
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
 
     def test_dispatch_auto_mode_falls_back_to_inline_when_no_worker_is_alive(self) -> None:
         cfg = WorkflowExecutionConfig.load()
@@ -156,7 +156,7 @@ class DispatchTests(TestCase):
         self.assertEqual(len(instances), 1)
         inst = instances[0]
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(
             Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(),
             0,
@@ -217,8 +217,8 @@ class DispatchTests(TestCase):
         self.assertTrue(drained)
         first.refresh_from_db()
         second.refresh_from_db()
-        self.assertEqual(first.status, Workflow2Instance.STATUS_SUCCEEDED)
-        self.assertEqual(second.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(first.status, Workflow2Instance.STATUS_FINISHED)
+        self.assertEqual(second.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(Workflow2Job.objects.filter(status=Workflow2Job.STATUS_QUEUED).count(), 0)
 
     def test_drain_pending_jobs_if_inline_is_noop_when_worker_is_alive_in_auto_mode(self) -> None:
@@ -370,7 +370,7 @@ class DispatchTests(TestCase):
             event_json={"x": 1},
             source_json={"trustpoint": True},
             idempotency_key="same-key",
-            status=Workflow2Run.STATUS_SUCCEEDED,
+            status=Workflow2Run.STATUS_FINISHED,
             finalized=True,
         )
 
@@ -442,7 +442,7 @@ class DispatchTests(TestCase):
             event_json={"x": 1},
             source_json={"trustpoint": True},
             idempotency_key="",
-            status=Workflow2Run.STATUS_SUCCEEDED,
+            status=Workflow2Run.STATUS_FINISHED,
             finalized=True,
             created_at=now,
         )
@@ -451,7 +451,7 @@ class DispatchTests(TestCase):
             run=expected_run,
             event_json={"x": 1},
             vars_json={},
-            status=Workflow2Instance.STATUS_SUCCEEDED,
+            status=Workflow2Instance.STATUS_FINISHED,
         )
 
         Workflow2Run.objects.create(
@@ -459,8 +459,8 @@ class DispatchTests(TestCase):
             event_json={"x": 2},
             source_json={"trustpoint": True},
             idempotency_key="",
-            status=Workflow2Run.STATUS_FAILED,
-            finalized=True,
+            status=Workflow2Run.STATUS_ERROR,
+            finalized=False,
             created_at=now + timedelta(seconds=1),
         )
 

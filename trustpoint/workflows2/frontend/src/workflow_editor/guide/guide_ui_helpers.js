@@ -255,17 +255,31 @@ export function buildVariableSuggestions(context, catalog) {
   };
 }
 
-export function contextSupportsVariableInsertion(context) {
+function findStepField(catalog, stepType, fieldKey) {
+  if (!stepType || !fieldKey) {
+    return null;
+  }
+
+  const commonFields = catalog?.meta?.common_step_fields || [];
+  const stepSpec = findStepSpec(catalog, stepType);
+  return [...commonFields, ...(stepSpec?.fields || [])].find((field) => field.key === fieldKey) || null;
+}
+
+export function contextSupportsVariableInsertion(context, catalog = null) {
   if (!context?.ok) {
     return false;
   }
 
-  return [
-    'apply',
-    'apply.item',
-    'workflow.steps.item',
-    'workflow.steps.field',
-  ].includes(context.area);
+  if (context.area === 'apply' || context.area === 'apply.item') {
+    return true;
+  }
+
+  if (context.area !== 'workflow.steps.field') {
+    return false;
+  }
+
+  const field = findStepField(catalog, context.stepType, context.fieldKey);
+  return ['template', 'text'].includes(field?.field_kind);
 }
 
 export function renderEventList(events) {

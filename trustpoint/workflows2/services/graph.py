@@ -7,8 +7,6 @@ from typing import Any
 
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2StepRun
 
-_END_NODE_IDS = {'$end', '$reject'}
-
 
 @dataclass(frozen=True)
 class GraphNode:
@@ -37,9 +35,7 @@ class IRGraphAdapter:
 
     - Derived from IR (YAML stays source of truth).
     - No layout in v1.
-    - Workflow end states are represented via virtual nodes:
-      - $end
-      - $reject
+    - Workflow end states are represented by real steps without outgoing edges.
     """
 
     def to_graph(self, ir: dict[str, Any]) -> dict[str, Any]:
@@ -51,7 +47,6 @@ class IRGraphAdapter:
         edges = self._build_edges(transitions)
 
         has_outgoing: set[str] = {e.frm for e in edges}
-        referenced_targets: set[str] = {e.to for e in edges if isinstance(e.to, str)}
 
         nodes: list[GraphNode] = []
         for step_id, s in steps.items():
@@ -83,33 +78,6 @@ class IRGraphAdapter:
                     outcomes=outcomes,
                     is_terminal=is_terminal,
                     is_virtual=False,
-                )
-            )
-
-        # Add virtual end/reject nodes if referenced by flow.
-        if '$end' in referenced_targets:
-            nodes.append(
-                GraphNode(
-                    id='$end',
-                    type='end',
-                    title='End',
-                    produces_outcome=False,
-                    outcomes=[],
-                    is_terminal=True,
-                    is_virtual=True,
-                )
-            )
-
-        if '$reject' in referenced_targets:
-            nodes.append(
-                GraphNode(
-                    id='$reject',
-                    type='reject',
-                    title='Reject',
-                    produces_outcome=False,
-                    outcomes=[],
-                    is_terminal=True,
-                    is_virtual=True,
                 )
             )
 

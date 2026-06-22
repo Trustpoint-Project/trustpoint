@@ -37,7 +37,7 @@ def _create_rejected_request_run(*, trigger_on: str) -> Workflow2Run:
         trigger_on=trigger_on,
         event_json={'x': 1},
         source_json={'trustpoint': True},
-        status=Workflow2Run.STATUS_SUCCEEDED,
+        status=Workflow2Run.STATUS_FINISHED,
         finalized=True,
     )
     definition = Workflow2Definition.objects.create(
@@ -53,7 +53,7 @@ def _create_rejected_request_run(*, trigger_on: str) -> Workflow2Run:
         definition=definition,
         event_json={'x': 1},
         vars_json={},
-        status=Workflow2Instance.STATUS_SUCCEEDED,
+        status=Workflow2Instance.STATUS_FINISHED,
     )
     Workflow2Approval.objects.create(
         instance=instance,
@@ -99,8 +99,8 @@ class TestEstMessageResponder:
         assert context.http_response_content_type == 'text/plain'
         assert context.http_response_content == 'Enrollment request rejected by workflow.'
 
-    def test_build_response_rejected_workflow2_outcome_when_run_succeeded_after_rejection(self) -> None:
-        """A rejected approval must still reject the requester even if the workflow later succeeded."""
+    def test_build_response_rejected_workflow2_outcome_when_run_finished_after_rejection(self) -> None:
+        """A rejected approval must still reject the requester even if the workflow later finished."""
         context = EstCertificateRequestContext(protocol='est', operation='simpleenroll')
         run = _create_rejected_request_run(trigger_on='est.simpleenroll')
         context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[])
@@ -111,19 +111,19 @@ class TestEstMessageResponder:
         assert context.http_response_content_type == 'text/plain'
         assert context.http_response_content == 'Enrollment request rejected by workflow.'
 
-    def test_build_response_failed_workflow2_outcome(self) -> None:
-        """Test build_response with a failed Workflow 2 run."""
+    def test_build_response_error_workflow2_outcome(self) -> None:
+        """Test build_response with a retryable errored Workflow 2 run."""
         context = Mock(spec=EstCertificateRequestContext)
         run = Mock()
         run.id = 'run-123'
-        run.status = Workflow2Run.STATUS_FAILED
-        context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+        run.status = Workflow2Run.STATUS_ERROR
+        context.workflow2_outcome = DispatchOutcome(status='blocked', run=run, instances=[Mock()])
 
         EstCertificateMessageResponder.build_response(context)
 
-        assert context.http_response_status == 500
+        assert context.http_response_status == 202
         assert context.http_response_content_type == 'text/plain'
-        assert '/workflows2/runs/run-123/' in context.http_response_content
+        assert context.http_response_content == 'Enrollment request pending workflow processing.'
 
     def test_build_response_simpleenroll_valid(
         self,
@@ -356,21 +356,21 @@ class TestRestMessageResponder:
         payload = json.loads(context.http_response_content)
         assert payload['status'] == 'pending'
 
-    def test_build_response_failed_workflow2_outcome(self) -> None:
-        """Test REST response when Workflow 2 failed."""
+    def test_build_response_error_workflow2_outcome(self) -> None:
+        """Test REST response when Workflow 2 is in a retryable error state."""
         context = Mock(spec=RestCertificateRequestContext)
         run = Mock()
         run.id = 'run-123'
-        run.status = Workflow2Run.STATUS_FAILED
-        context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+        run.status = Workflow2Run.STATUS_ERROR
+        context.workflow2_outcome = DispatchOutcome(status='blocked', run=run, instances=[Mock()])
 
         RestCertificateMessageResponder.build_response(context)
 
-        assert context.http_response_status == 500
+        assert context.http_response_status == 202
         assert context.http_response_content_type == 'application/json'
         payload = json.loads(context.http_response_content)
-        assert payload['status'] == 'failed'
-        assert '/workflows2/runs/run-123/' in payload['detail']
+        assert payload['status'] == 'pending'
+        assert payload['detail'] == 'Enrollment request pending workflow processing.'
 
     def test_build_response_valid_without_workflow2_match(
         self,

@@ -13,6 +13,27 @@ import {
   openNodeEditor,
 } from './preview_state_helpers.js';
 
+function readApplyRuleIndex(actionEl) {
+  const index = Number.parseInt(actionEl.getAttribute('data-apply-rule-index') || '-1', 10);
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error('Apply rule action is missing a valid rule index.');
+  }
+  return index;
+}
+
+function readApplyNodePath(actionEl) {
+  const path = actionEl.getAttribute('data-apply-node-path') || '[]';
+  try {
+    const parsed = JSON.parse(path);
+    if (!Array.isArray(parsed)) {
+      throw new Error();
+    }
+  } catch {
+    throw new Error('Apply rule action is missing a valid condition path.');
+  }
+  return path;
+}
+
 export async function handleGraphAction({
   action,
   actionEl,
@@ -55,30 +76,6 @@ export async function handleGraphAction({
       actionEl.closest('[data-inline-variable-scope="true"]') || scope,
       actionEl,
     );
-    return;
-  }
-
-  if (action === 'apply-step-field-suggestion') {
-    const row = actionEl.closest('[data-step-field-row]');
-    const input = row?.querySelector('[data-step-field-input="true"]');
-    if (input) {
-      input.value = decodeURIComponent(actionEl.getAttribute('data-suggestion-value') || '');
-    }
-    return;
-  }
-
-  if (action === 'apply-approval-outcome-preset') {
-    const approvedRow = scope.querySelector('[data-step-field-row="approved_outcome"]');
-    const rejectedRow = scope.querySelector('[data-step-field-row="rejected_outcome"]');
-    const approvedInput = approvedRow?.querySelector('[data-step-field-input="true"]');
-    const rejectedInput = rejectedRow?.querySelector('[data-step-field-input="true"]');
-
-    if (approvedInput) {
-      approvedInput.value = actionEl.getAttribute('data-approved-outcome') || '';
-    }
-    if (rejectedInput) {
-      rejectedInput.value = actionEl.getAttribute('data-rejected-outcome') || '';
-    }
     return;
   }
 
@@ -127,6 +124,101 @@ export async function handleGraphAction({
     clearEditor(state);
     clearCanvasMenu(state);
     render();
+    return;
+  }
+
+  if (action === 'save-trigger-on') {
+    const triggerKey = readInputValue(scope, '[data-trigger-select="true"]');
+    if (!triggerKey) {
+      throw new Error('Choose a trigger before applying the event change.');
+    }
+    await callbacks.onSetTriggerOn(triggerKey);
+    return;
+  }
+
+  if (action === 'set-trigger-trustpoint') {
+    await callbacks.onSetTriggerTrustpoint(actionEl.getAttribute('data-trigger-trustpoint') === 'true');
+    return;
+  }
+
+  if (action === 'add-trigger-source-selected') {
+    const sourceKind = actionEl.getAttribute('data-trigger-source-kind');
+    await callbacks.onAddTriggerSourceValue(
+      sourceKind,
+      readInputValue(scope, `[data-trigger-source-select="${sourceKind}"]`),
+    );
+    return;
+  }
+
+  if (action === 'remove-trigger-source-value') {
+    await callbacks.onRemoveTriggerSourceValue(
+      actionEl.getAttribute('data-trigger-source-kind'),
+      actionEl.getAttribute('data-trigger-source-value'),
+    );
+    return;
+  }
+
+  if (action === 'add-apply-rule') {
+    await callbacks.onAddApplyRule(actionEl.getAttribute('data-apply-operator') || 'compare');
+    return;
+  }
+
+  if (action === 'remove-apply-rule') {
+    await callbacks.onRemoveApplyRule(readApplyRuleIndex(actionEl));
+    return;
+  }
+
+  if (action === 'set-apply-node-operator') {
+    const nodeScope = actionEl.closest('[data-apply-scope="true"]');
+    const operator = readInputValue(nodeScope, '[data-apply-node-operator-input="true"]');
+    if (!operator) {
+      throw new Error('Choose an apply operator before saving.');
+    }
+    await callbacks.onSetApplyNodeOperator(
+      readApplyRuleIndex(actionEl),
+      readApplyNodePath(actionEl),
+      operator,
+    );
+    return;
+  }
+
+  if (action === 'save-apply-exists') {
+    const nodeScope = actionEl.closest('[data-apply-scope="true"]');
+    await callbacks.onSaveApplyExists(
+      readApplyRuleIndex(actionEl),
+      readApplyNodePath(actionEl),
+      readInputValue(nodeScope, '[data-apply-exists-input="true"]'),
+    );
+    return;
+  }
+
+  if (action === 'save-apply-compare') {
+    const nodeScope = actionEl.closest('[data-apply-scope="true"]');
+    await callbacks.onSaveApplyCompare(
+      readApplyRuleIndex(actionEl),
+      readApplyNodePath(actionEl),
+      readInputValue(nodeScope, '[data-apply-compare-left="true"]'),
+      readInputValue(nodeScope, '[data-apply-compare-op="true"]'),
+      readInputValue(nodeScope, '[data-apply-compare-right="true"]'),
+    );
+    return;
+  }
+
+  if (action === 'add-apply-child') {
+    const childScope = actionEl.closest('[data-apply-child-controls="true"]');
+    await callbacks.onAddApplyChild(
+      readApplyRuleIndex(actionEl),
+      readApplyNodePath(actionEl),
+      readInputValue(childScope, '[data-apply-child-operator-input="true"]') || 'compare',
+    );
+    return;
+  }
+
+  if (action === 'remove-apply-child') {
+    await callbacks.onRemoveApplyChild(
+      readApplyRuleIndex(actionEl),
+      readApplyNodePath(actionEl),
+    );
     return;
   }
 
