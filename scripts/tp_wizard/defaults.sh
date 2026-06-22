@@ -4,8 +4,13 @@ NET="${PROJECT}-net"
 VOL_DB="${PROJECT}_postgres_data"
 VOL_GRAFANA="${PROJECT}_grafana_data"
 ENV_FILE="${ENV_FILE:-${PWD}/.env}"
+TP_WIZARD_ENV_FILE="${TP_WIZARD_ENV_FILE:-${PWD}/.env.tp_wizard}"
+TP_WIZARD_WRITE_PROJECT_ENV="${TP_WIZARD_WRITE_PROJECT_ENV:-false}"
 
-# Load .env early so defaults below can inherit repository-local configuration.
+# Load the repository .env as read-only input so defaults below can inherit
+# developer-local configuration. The wizard writes generated values to
+# TP_WIZARD_ENV_FILE by default and does not modify .env unless
+# TP_WIZARD_WRITE_PROJECT_ENV=true is set explicitly.
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck source=/dev/null

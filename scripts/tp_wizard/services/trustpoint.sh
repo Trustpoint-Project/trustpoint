@@ -101,8 +101,12 @@ start_app(){
   if port_in_use "$APP_HTTPS_HOST"; then die "Host port ${APP_HTTPS_HOST} is in use (trustpoint HTTPS)."; fi
 
   log "Starting trustpoint..."
-  local env_file_arg=()
-  [[ -f "$ENV_FILE" ]] && env_file_arg=( --env-file "$ENV_FILE" )
+  local env_file_arg=() wizard_env_target
+  wizard_env_target="$(tp_wizard_env_target)"
+  [[ -f "$ENV_FILE" ]] && env_file_arg+=( --env-file "$ENV_FILE" )
+  if [[ "$wizard_env_target" != "$ENV_FILE" && -f "$wizard_env_target" ]]; then
+    env_file_arg+=( --env-file "$wizard_env_target" )
+  fi
 
   local smtp_env=()
   if $EN_MAILPIT; then

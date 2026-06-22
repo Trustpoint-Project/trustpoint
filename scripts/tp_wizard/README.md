@@ -65,3 +65,19 @@ wizard -> runtime -> services -> lib
 ```
 
 Rules: `lib/` does not call services or commands; services do not parse CLI args; commands stay thin; `runtime.sh` owns shared orchestration.
+## Environment files
+
+The wizard reads the repository `.env` as input, but does not modify it by default.
+Generated runtime values are written to `.env.tp_wizard`. Containers started by
+the wizard receive `.env` first and `.env.tp_wizard` second, followed by explicit
+`docker run -e` values for the active wizard selection.
+
+To intentionally let the wizard update `.env` directly, run with:
+
+```bash
+TP_WIZARD_WRITE_PROJECT_ENV=true ./tp_wizard.sh up demo light
+```
+
+When the wizard writes to an existing env file, it creates a timestamped backup
+next to that file before changing it.
+

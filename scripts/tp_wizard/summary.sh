@@ -2,9 +2,9 @@ show_plan(){
   echo
   echo "==================== Configuration Summary (Planned) ===================="
   printf "%-22s %s\n" "Network:" "$NET"
-  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
+  printf "%-22s %s\n" "Repo .env input:" "$ENV_FILE"
+  printf "%-22s %s\n" "Wizard env output:" "$(tp_wizard_env_target)"
   printf "%-22s %s\n" "DB Volume:" "$VOL_DB"
-  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
   printf "%-22s %s\n" "Grafana Volume:" "$VOL_GRAFANA"
   echo
   printf "%-22s %s\n" "trustpoint enabled:" "$EN_APP"
@@ -75,7 +75,8 @@ show_runtime_status(){
   echo
   echo "=========================== Runtime Status (Live) ========================"
   printf "%-22s %s\n" "Network:" "${NET} (${net_state})"
-  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
+  printf "%-22s %s\n" "Repo .env input:" "$ENV_FILE"
+  printf "%-22s %s\n" "Wizard env output:" "$(tp_wizard_env_target)"
   printf "%-22s %s\n" "DB volume:" "${VOL_DB} (${vol_state})"
   printf "%-22s %s\n" "Grafana volume:" "${VOL_GRAFANA} (${grafana_vol_state})"
   printf "%-22s %s\n" "workflow2 folder:" "$([ -d "$WF2_FOLDER" ] && echo "${WF2_FOLDER} (present)" || echo "${WF2_FOLDER} (absent)")"
@@ -176,7 +177,8 @@ final_summary(){
   echo
   echo "========================= Runtime Summary (Actual) ======================="
   printf "%-22s %s\n" "Network:" "$NET"
-  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
+  printf "%-22s %s\n" "Repo .env input:" "$ENV_FILE"
+  printf "%-22s %s\n" "Wizard env output:" "$(tp_wizard_env_target)"
   printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo|trustpoint-worker|prometheus|grafana)$' || true)"
   echo
   if $EN_APP; then
