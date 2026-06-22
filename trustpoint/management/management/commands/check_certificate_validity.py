@@ -100,7 +100,6 @@ class Command(BaseCommand):
         message_data = {'common_name': certificate.common_name,
                         'not_valid_after': certificate.not_valid_after.strftime('%Y-%m-%d %H:%M:%S')}
         
-        # Try to find the domain through issued credential
         issued_credential = (
             IssuedCredentialModel.objects
             .filter(credential__certificate=certificate)
@@ -109,7 +108,6 @@ class Command(BaseCommand):
         )
         
         if issued_credential and issued_credential.domain:
-            # Create domain-associated notification
             if not NotificationModel.objects.filter(
                 event=event, certificate=certificate, domain=issued_credential.domain
             ).exists():
@@ -125,7 +123,6 @@ class Command(BaseCommand):
                 )
                 notification.statuses.add(new_status)
         else:
-            # Create standalone notification
             if not NotificationModel.objects.filter(event=event, certificate=certificate, domain__isnull=True).exists():
                 notification = NotificationModel.objects.create(
                     certificate=certificate,

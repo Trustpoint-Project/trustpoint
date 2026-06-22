@@ -53,11 +53,9 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
         """Add additional context for the simplified overview."""
         context = super().get_context_data(**kwargs)
 
-        # Get all domains for the selector
         context['all_domains'] = DomainModel.objects.all().order_by('unique_name')
         context['selected_domain_id'] = self.request.GET.get('domain')
 
-        # Get certificate statistics and prepare devices for each domain
         for domain in context['domains']:
             devices = domain.devices.all()
 
@@ -102,8 +100,6 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
             domain.expiring_certificates = expiring_certs
             domain.expired_certificates = expired_certs
 
-            # Get recent notifications for this domain
-            # Filter by domain, issuing_ca, devices in domain, certificates in domain, or system notifications
             domain_notifications = NotificationModel.objects.filter(
                 Q(domain=domain) |
                 Q(issuing_ca=domain.issuing_ca) |
@@ -120,7 +116,6 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
             ).distinct().order_by('-created_at')[:5]
             domain.recent_notifications = domain_notifications
 
-            # Prepare filtered devices with table data
             prepared_devices_list: list[Any] = list(filtered_devices)
             for device in prepared_devices_list:
                 self._prepare_device_for_table(device)
