@@ -31,8 +31,8 @@ from management.models import (
     PKCS11Token,
     PrometheusConfig,
     SecurityConfig,
-    UIConfig,
     SmtpEmailConfig,
+    UIConfig,
 )
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
