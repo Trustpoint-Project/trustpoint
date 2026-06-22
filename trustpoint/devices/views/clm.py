@@ -25,7 +25,6 @@ from devices.forms import (
 from devices.models import (
     DeviceModel,
 )
-from management.models import UIConfig as UIConfigModel
 from onboarding.models import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
