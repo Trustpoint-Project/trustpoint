@@ -149,9 +149,12 @@
                         {% trans "Runs" %}
                     </a>
 
-                    <a href="{% url 'workflows2:approvals-list' %}"
-                    class="tp-menu-item {% if page_name == 'approvals-list' %}tp-menu-active{% endif %}">
-                        {% trans "Approvals" %}
+                    <a href="{% url 'workflows2:waiting-list' %}"
+                    class="tp-menu-item tp-menu-item-with-badge {% if page_name == 'waiting-list' %}tp-menu-active{% endif %}">
+                        <span>{% trans "Waiting" %}</span>
+                        {% if workflow_waiting_total %}
+                          <span class="badge rounded-pill text-bg-warning">{{ workflow_waiting_total }}</span>
+                        {% endif %}
                     </a>
                 </div>
             </div>

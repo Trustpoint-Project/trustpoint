@@ -166,6 +166,12 @@ a.tp-primary:focus, a.tp-primary:hover, a.tp-primary:active,
     color: rgba(var(--bs-emphasis-color-rgb), .6)
 }
 
+.tp-menu-group .tp-menu-item-with-badge {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding-right: var(--tp-menu-head-padding);
+}
+
 .tp-menu-item:hover, .tp-menu-item:focus, .tp-menu-item:active, .tp-menu-item.tp-menu-active {
     color: rgba(var(--bs-emphasis-color-rgb), 1);
 }

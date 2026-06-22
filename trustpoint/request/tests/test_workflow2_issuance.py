@@ -21,7 +21,7 @@ def _create_rejected_request_run(*, trigger_on: str) -> Workflow2Run:
         event_json={'x': 1},
         source_json={'trustpoint': True},
         idempotency_key='same-request',
-        status=Workflow2Run.STATUS_SUCCEEDED,
+        status=Workflow2Run.STATUS_FINISHED,
         finalized=True,
     )
     definition = Workflow2Definition.objects.create(
@@ -37,7 +37,7 @@ def _create_rejected_request_run(*, trigger_on: str) -> Workflow2Run:
         definition=definition,
         event_json={'x': 1},
         vars_json={},
-        status=Workflow2Instance.STATUS_SUCCEEDED,
+        status=Workflow2Instance.STATUS_FINISHED,
     )
     Workflow2Approval.objects.create(
         instance=instance,
@@ -55,7 +55,7 @@ def test_release_delivered_workflow2_request_releases_successful_est_run() -> No
         event_json={'x': 1},
         source_json={'trustpoint': True},
         idempotency_key='same-request',
-        status=Workflow2Run.STATUS_SUCCEEDED,
+        status=Workflow2Run.STATUS_FINISHED,
         finalized=True,
     )
     context = EstCertificateRequestContext(protocol='est', operation='simpleenroll')
@@ -88,6 +88,50 @@ def test_release_delivered_workflow2_request_keeps_pending_est_run() -> None:
 
 
 @pytest.mark.django_db
+def test_error_workflow2_request_waits_and_keeps_est_run() -> None:
+    """A retryable workflow error should wait for an operator decision, not fail the request."""
+    run = Workflow2Run.objects.create(
+        trigger_on='est.simpleenroll',
+        event_json={'x': 1},
+        source_json={'trustpoint': True},
+        idempotency_key='same-request',
+        status=Workflow2Run.STATUS_ERROR,
+        finalized=False,
+    )
+    context = EstCertificateRequestContext(protocol='est', operation='simpleenroll')
+    context.workflow2_outcome = DispatchOutcome(status='blocked', run=run, instances=[])
+
+    assert get_workflow2_issuance_decision(context) == Workflow2IssuanceDecision.WAIT
+
+    release_delivered_workflow2_request(context)
+
+    run.refresh_from_db()
+    assert run.idempotency_key == 'same-request'
+
+
+@pytest.mark.django_db
+def test_stopped_workflow2_request_fails_and_keeps_est_run() -> None:
+    """A stopped workflow is terminal for the request but should still replay the same result."""
+    run = Workflow2Run.objects.create(
+        trigger_on='est.simpleenroll',
+        event_json={'x': 1},
+        source_json={'trustpoint': True},
+        idempotency_key='same-request',
+        status=Workflow2Run.STATUS_STOPPED,
+        finalized=True,
+    )
+    context = EstCertificateRequestContext(protocol='est', operation='simpleenroll')
+    context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[])
+
+    assert get_workflow2_issuance_decision(context) == Workflow2IssuanceDecision.FAIL
+
+    release_delivered_workflow2_request(context)
+
+    run.refresh_from_db()
+    assert run.idempotency_key == 'same-request'
+
+
+@pytest.mark.django_db
 def test_release_delivered_workflow2_request_keeps_rejected_est_run() -> None:
     """A rejected EST response must keep its idempotency key so retries replay the rejection."""
     run = Workflow2Run.objects.create(
@@ -108,8 +152,8 @@ def test_release_delivered_workflow2_request_keeps_rejected_est_run() -> None:
 
 
 @pytest.mark.django_db
-def test_rejected_approval_branch_keeps_succeeded_est_run_rejected_for_requests() -> None:
-    """A rejected approval must stay rejected even when the workflow run later ends succeeded."""
+def test_rejected_approval_branch_keeps_finished_est_run_rejected_for_requests() -> None:
+    """A rejected approval must stay rejected even when the workflow run later ends finished."""
     run = _create_rejected_request_run(trigger_on='est.simpleenroll')
     context = EstCertificateRequestContext(protocol='est', operation='simpleenroll')
     context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[])
@@ -130,7 +174,7 @@ def test_release_delivered_workflow2_request_releases_cmp_terminal_run() -> None
         event_json={'x': 1},
         source_json={'trustpoint': True},
         idempotency_key='same-request',
-        status=Workflow2Run.STATUS_SUCCEEDED,
+        status=Workflow2Run.STATUS_FINISHED,
         finalized=True,
     )
     transaction = CmpTransactionModel.objects.create(

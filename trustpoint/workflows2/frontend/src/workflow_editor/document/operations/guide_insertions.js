@@ -82,7 +82,7 @@ function chooseFromStep(context, explicitFrom = null, { requireOutcomes = false 
   throw new Error('No steps available in workflow.');
 }
 
-function chooseToStep(context, fromStep, explicitTo = null, { allowEnd = true } = {}) {
+function chooseToStep(context, fromStep, explicitTo = null) {
   const stepIds = Array.isArray(context?.stepIds) ? context.stepIds : [];
 
   if (explicitTo) {
@@ -103,7 +103,7 @@ function chooseToStep(context, fromStep, explicitTo = null, { allowEnd = true } 
     return firstOther;
   }
 
-  return allowEnd ? '$end' : fromStep;
+  throw new Error('No target step available. Add another step first or leave the branch without an outgoing edge.');
 }
 
 function chooseOutcome(context, fromStep, explicitOutcome = null) {
@@ -213,7 +213,7 @@ export function insertWebhookCaptureRule({ yamlText, cursorOffset, context }) {
 
 export function insertFlowLinearEdge({ yamlText, context, fromStep = null, toStep = null }) {
   const resolvedFrom = chooseFromStep(context, fromStep, { requireOutcomes: false });
-  const resolvedTo = chooseToStep(context, resolvedFrom, toStep, { allowEnd: true });
+  const resolvedTo = chooseToStep(context, resolvedFrom, toStep);
 
   return appendFlowItem(yamlText, {
     from: resolvedFrom,
@@ -229,7 +229,7 @@ export function insertFlowOutcomeEdge({
   outcome = null,
 }) {
   const resolvedFrom = chooseFromStep(context, fromStep, { requireOutcomes: true });
-  const resolvedTo = chooseToStep(context, resolvedFrom, toStep, { allowEnd: true });
+  const resolvedTo = chooseToStep(context, resolvedFrom, toStep);
   const resolvedOutcome = chooseOutcome(context, resolvedFrom, outcome);
 
   return appendFlowItem(yamlText, {
