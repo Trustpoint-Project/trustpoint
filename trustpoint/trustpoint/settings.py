@@ -86,6 +86,7 @@ PUBLIC_PATHS = [
     '/crl',
     '/setup-wizard',
     '/devices/browser',
+    '/prometheus/',
 ]
 
 
@@ -301,6 +302,7 @@ INSTALLED_APPS = [
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
     'trustpoint_core',
+    'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -323,6 +325,7 @@ if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     INSTALLED_APPS.append('behave_django')
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
@@ -334,6 +337,7 @@ MIDDLEWARE = [
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 

@@ -29,6 +29,7 @@ from management.models import (
     LoggingConfig,
     NotificationConfig,
     PKCS11Token,
+    PrometheusConfig,
     SecurityConfig,
 )
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -357,6 +358,33 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 }
             )
         return crl_expiry
+
+
+class PrometheusConfigForm(forms.ModelForm['PrometheusConfig']):
+    """Form for managing the Prometheus metrics endpoint configuration."""
+
+    class Meta:
+        """ModelForm Meta configuration for PrometheusConfigForm."""
+
+        model = PrometheusConfig
+        fields: ClassVar[list[str]] = ['enabled']
+        widgets: ClassVar[dict[str, Any]] = {
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the PrometheusConfigForm."""
+        super().__init__(*args, **kwargs)
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            Fieldset(
+                _('Prometheus Metrics Export'),
+                Field('enabled'),
+            ),
+        )
+
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""

@@ -1,0 +1,55 @@
+{% load i18n %}
+{% if export_config %}
+<div class="dropdown mb-1">
+  <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+          type="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false">
+    <i class="bi bi-download me-1"></i>
+    {% trans "Export" %}
+  </button>
+
+  <ul class="dropdown-menu">
+    <li>
+      <button type="button"
+              class="dropdown-item"
+              id="tp-exp-filtered-btn">
+        <i class="bi bi-funnel me-2"></i>
+        {% trans "Export filtered (CSV)" %}
+      </button>
+    </li>
+    <li>
+      <button type="button"
+              class="dropdown-item"
+              id="tp-exp-all-btn">
+        <i class="bi bi-download me-2"></i>
+        {% trans "Export all (CSV)" %}
+      </button>
+    </li>
+  </ul>
+</div>
+
+<script>
+  (function () {
+    'use strict';
+
+    const filteredBtn = document.getElementById('tp-exp-filtered-btn');
+    const allBtn = document.getElementById('tp-exp-all-btn');
+
+    if (filteredBtn) {
+      filteredBtn.addEventListener('click', function () {
+        const params = new URLSearchParams(window.location.search);
+        params.delete('export');
+        params.set('export', 'csv');
+        window.location.href = '?' + params.toString();
+      });
+    }
+
+    if (allBtn) {
+      allBtn.addEventListener('click', function () {
+        window.location.href = '?export=csv';
+      });
+    }
+  }());
+</script>
+{% endif %}
