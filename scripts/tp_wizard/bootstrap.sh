@@ -9,6 +9,7 @@ source "${TP_WIZARD_ROOT}/scripts/tp_wizard/lib/validation.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/lib/ports.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/lib/docker.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/lib/input.sh"
+source "${TP_WIZARD_ROOT}/scripts/tp_wizard/lib/env.sh"
 
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/summary.sh"
 

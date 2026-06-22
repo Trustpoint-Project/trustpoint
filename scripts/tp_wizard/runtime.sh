@@ -31,6 +31,7 @@ runtime_after_start(){
 }
 
 runtime_start_enabled(){
+  sync_env_file
   resolve_app_image
   $DB_INTERNAL && ensure_volumes
   start_postgres
@@ -45,6 +46,7 @@ runtime_start_enabled(){
 }
 
 runtime_start_selected(){
+  sync_env_file
   resolve_app_image
   $ONLY_DB   && { EN_PG=true; ensure_volumes; start_postgres; }
   $ONLY_MAIL && { EN_MAILPIT=true; start_mailpit; }

@@ -6,6 +6,7 @@ wizard(){
   step_enable_postgres
   step_postgres_config
   step_app_db_binding
+  step_trustpoint_runtime_env
   mailpit_prompt_config
   sftpgo_prompt_config
   step_workflows2_worker

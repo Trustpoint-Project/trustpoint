@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 from types import MappingProxyType
-from typing import Any
+from typing import Any, ClassVar
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -361,6 +361,16 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
+
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=['not_valid_after'],   name='pki_cert_not_valid_after_idx'),
+            models.Index(fields=['not_valid_before'],  name='pki_cert_not_valid_before_idx'),
+            models.Index(fields=['serial_number'],     name='pki_cert_serial_num_idx'),
+            models.Index(fields=['subject_public_bytes'],
+                         name='pki_cert_subj_pub_bytes_idx'),
+            models.Index(fields=['issuer_public_bytes', 'issuer_id'],
+                         name='pki_cert_iss_pub_bytes_isid_idx'),
+        ]
 
     # ------------------------------------------ Magic and default methods -------------------------------------------
 
@@ -795,6 +805,10 @@ class RevokedCertificateModel(models.Model):
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
+
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=['ca', 'revoked_at'], name='pki_revoked_ca_revoked_at_idx'),
+        ]
 
     def __str__(self) -> str:
         """String representation of the RevokedCertificateModel instance."""

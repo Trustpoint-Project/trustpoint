@@ -27,6 +27,12 @@ DATABASE_USER=${APP_DB_USER}
 DATABASE_PASSWORD=${APP_DB_PASS}
 DATABASE_HOST=${APP_DB_HOST}
 DATABASE_PORT=${APP_DB_PORT}
+TP_HTTP_PORT=${APP_HTTP_HOST}
+TP_HTTPS_PORT=${APP_HTTPS_HOST}
+TP_TLS_DNS_NAMES=${TP_TLS_DNS_NAMES_VALUE}
+TP_TLS_IPV4_ADDRESSES=${TP_TLS_IPV4_ADDRESSES_VALUE}
+TP_TLS_IPV6_ADDRESSES=${TP_TLS_IPV6_ADDRESSES_VALUE}
+${TRUSTPOINT_SKIP_SETUP_ENV_KEY}=${TP_SKIP_SETUP_VALUE}
 TRUSTPOINT_SERVICE_ROLE=worker
 WORKFLOWS2_WORKER_ID=${WF2_WORKER_NAME}
 WORKFLOWS2_WORKER_LEASE=${WF2_WORKER_LEASE}
@@ -53,9 +59,5 @@ start_workflows2_worker(){
   stop_one "$name"
   prepare_workflows2_worker_folder
   log "Starting dedicated workflows2 worker..."
-  docker run -d --name "$name" --network "$NET" \
-    --env-file "$WF2_WORKER_ENV_FILE" \
-    "$APP_IMAGE" >/dev/null
+  docker run -d --name "$name" --network "$NET"     --env-file "$WF2_WORKER_ENV_FILE"     "$APP_IMAGE" >/dev/null
 }
-
-# -------------------------- Readiness & Provision -----------------------------

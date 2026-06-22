@@ -2,7 +2,9 @@ show_plan(){
   echo
   echo "==================== Configuration Summary (Planned) ===================="
   printf "%-22s %s\n" "Network:" "$NET"
+  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
   printf "%-22s %s\n" "DB Volume:" "$VOL_DB"
+  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
   printf "%-22s %s\n" "Grafana Volume:" "$VOL_GRAFANA"
   echo
   printf "%-22s %s\n" "trustpoint enabled:" "$EN_APP"
@@ -28,6 +30,10 @@ show_plan(){
     printf "%-22s %s\n" "trustpoint DB name:" "$APP_DB_NAME"
     printf "%-22s %s\n" "trustpoint DB user:" "$APP_DB_USER"
     printf "%-22s %s\n" "trustpoint DB pass:" "$(mask "$APP_DB_PASS")"
+    printf "%-22s %s\n" "TLS DNS names:" "$TP_TLS_DNS_NAMES_VALUE"
+    printf "%-22s %s\n" "TLS IPv4 addresses:" "${TP_TLS_IPV4_ADDRESSES_VALUE:-(none)}"
+    printf "%-22s %s\n" "TLS IPv6 addresses:" "${TP_TLS_IPV6_ADDRESSES_VALUE:-(none)}"
+    printf "%-22s %s\n" "Setup skipped:" "${TRUSTPOINT_SKIP_SETUP_ENV_KEY}=${TP_SKIP_SETUP_VALUE}"
   fi
   echo
   printf "%-22s %s\n" "Mailpit enabled:" "$EN_MAILPIT"
@@ -69,6 +75,7 @@ show_runtime_status(){
   echo
   echo "=========================== Runtime Status (Live) ========================"
   printf "%-22s %s\n" "Network:" "${NET} (${net_state})"
+  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
   printf "%-22s %s\n" "DB volume:" "${VOL_DB} (${vol_state})"
   printf "%-22s %s\n" "Grafana volume:" "${VOL_GRAFANA} (${grafana_vol_state})"
   printf "%-22s %s\n" "workflow2 folder:" "$([ -d "$WF2_FOLDER" ] && echo "${WF2_FOLDER} (present)" || echo "${WF2_FOLDER} (absent)")"
@@ -85,7 +92,7 @@ show_runtime_status(){
   echo
 
   if exists trustpoint; then
-    local http_port https_port db_host db_port db_name db_user db_pass
+    local http_port https_port db_host db_port db_name db_user db_pass tp_tls_dns_names tp_tls_ipv4_addresses tp_tls_ipv6_addresses tp_skip_setup
     http_port="$(container_host_port trustpoint 80/tcp)"
     https_port="$(container_host_port trustpoint 443/tcp)"
     db_host="$(container_env trustpoint DATABASE_HOST)"
@@ -93,9 +100,17 @@ show_runtime_status(){
     db_name="$(container_env trustpoint POSTGRES_DB)"
     db_user="$(container_env trustpoint DATABASE_USER)"
     db_pass="$(container_env trustpoint DATABASE_PASSWORD)"
+    tp_tls_dns_names="$(container_env trustpoint TP_TLS_DNS_NAMES)"
+    tp_tls_ipv4_addresses="$(container_env trustpoint TP_TLS_IPV4_ADDRESSES)"
+    tp_tls_ipv6_addresses="$(container_env trustpoint TP_TLS_IPV6_ADDRESSES)"
+    tp_skip_setup="$(container_env trustpoint "$TRUSTPOINT_SKIP_SETUP_ENV_KEY")"
 
     [[ -n "$http_port" ]] && printf "%-22s %s\n" "trustpoint HTTP:" "http://localhost:${http_port}"
     [[ -n "$https_port" ]] && printf "%-22s %s\n" "trustpoint HTTPS:" "https://localhost:${https_port}"
+    [[ -n "$tp_tls_dns_names" ]] && printf "%-22s %s\n" "TLS DNS names:" "${tp_tls_dns_names}"
+    [[ -n "$tp_tls_ipv4_addresses" ]] && printf "%-22s %s\n" "TLS IPv4 addresses:" "${tp_tls_ipv4_addresses}"
+    [[ -n "$tp_tls_ipv6_addresses" ]] && printf "%-22s %s\n" "TLS IPv6 addresses:" "${tp_tls_ipv6_addresses}"
+    [[ -n "$tp_skip_setup" ]] && printf "%-22s %s\n" "Setup skipped:" "${TRUSTPOINT_SKIP_SETUP_ENV_KEY}=${tp_skip_setup}"
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings"
     if [[ -n "$db_host" || -n "$db_port" || -n "$db_name" || -n "$db_user" ]]; then
       printf "%-22s %s\n" "DB connect:" "host=${db_host:-?} port=${db_port:-?} db=${db_name:-?} user=${db_user:-?} pass=$(mask "${db_pass:-}")"
@@ -161,10 +176,15 @@ final_summary(){
   echo
   echo "========================= Runtime Summary (Actual) ======================="
   printf "%-22s %s\n" "Network:" "$NET"
+  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
   printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo|trustpoint-worker|prometheus|grafana)$' || true)"
   echo
   if $EN_APP; then
-    printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
+    printf "%-22s %s\n" "trustpoint:" "http://localhost:${APP_HTTP_HOST}  |  https://localhost:${APP_HTTPS_HOST}"
+    printf "%-22s %s\n" "TLS DNS names:" "$TP_TLS_DNS_NAMES_VALUE"
+    printf "%-22s %s\n" "TLS IPv4 addresses:" "${TP_TLS_IPV4_ADDRESSES_VALUE:-(none)}"
+    printf "%-22s %s\n" "TLS IPv6 addresses:" "${TP_TLS_IPV6_ADDRESSES_VALUE:-(none)}"
+    printf "%-22s %s\n" "Setup skipped:" "${TRUSTPOINT_SKIP_SETUP_ENV_KEY}=${TP_SKIP_SETUP_VALUE}"
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings (default: auto)"
   fi
   if $DB_INTERNAL; then

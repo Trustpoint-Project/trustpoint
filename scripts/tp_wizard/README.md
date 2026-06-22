@@ -2,7 +2,7 @@
 
 `tp_wizard.sh` is the developer-facing setup helper for the local trustpoint Docker stack.
 
-It can run the interactive setup wizard or manage selected runtime services: trustpoint, PostgreSQL, Mailpit, SFTPGo, workflows2 worker, Prometheus, and Grafana.
+It can run the interactive setup wizard or manage selected runtime services: trustpoint, PostgreSQL, Mailpit, SFTPGo, the optional workflows2 worker, Prometheus, and Grafana.
 
 ## Commands
 
@@ -19,25 +19,41 @@ Run from the repository root:
 
 Demo presets:
 
+```text
+demo light  = trustpoint + PostgreSQL
+demo        = trustpoint + PostgreSQL + Mailpit + SFTPGo + workflows2 worker
+demo full   = demo + Prometheus + Grafana
+```
+
+## Environment handling
+
+The wizard reads and updates `.env` before starting trustpoint containers. The file is used for database settings, TLS host settings, host ports, and the trustpoint setup-skip flag.
+
+Default setup-skip variable:
+
+```text
+TP_SKIP_SETUP=true
+```
+
+If the application uses a different variable name, run the wizard with:
+
 ```bash
-./tp_wizard.sh up demo light    # trustpoint + PostgreSQL
-./tp_wizard.sh up demo          # trustpoint + PostgreSQL + Mailpit + SFTPGo + workflows2 worker
-./tp_wizard.sh up demo full     # demo + Prometheus + Grafana
+TRUSTPOINT_SKIP_SETUP_ENV_KEY=YOUR_ENV_NAME ./tp_wizard.sh up demo light
 ```
 
 ## Design
 
-The root `tp_wizard.sh` stays small and only bootstraps the implementation in `scripts/tp_wizard/`.
+The root `tp_wizard.sh` is only the stable entrypoint. Implementation lives in `scripts/tp_wizard/`:
 
 ```text
-defaults.sh          constants and default values
+defaults.sh          constants and defaults; loads .env early
 state.sh             mutable wizard/runtime state
 cli.sh               argument parsing and dispatch
 wizard.sh            interactive wizard flow
 runtime.sh           shared start/wait/provision/summary orchestration
-summary.sh           planned/live/final output
+summary.sh           plan, status, and final output
 lib/                 generic helpers
-services/            service-specific prompt/start/wait/provision logic
+services/            service-specific logic
 commands/            command handlers
 ```
 
@@ -48,4 +64,4 @@ cli -> commands -> runtime -> services -> lib
 wizard -> runtime -> services -> lib
 ```
 
-Keep command handlers thin. Shared startup logic belongs in `runtime.sh`; service details belong in `services/`.
+Rules: `lib/` does not call services or commands; services do not parse CLI args; commands stay thin; `runtime.sh` owns shared orchestration.

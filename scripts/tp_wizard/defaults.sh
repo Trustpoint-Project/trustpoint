@@ -3,6 +3,15 @@ PROJECT="trustpoint"
 NET="${PROJECT}-net"
 VOL_DB="${PROJECT}_postgres_data"
 VOL_GRAFANA="${PROJECT}_grafana_data"
+ENV_FILE="${ENV_FILE:-${PWD}/.env}"
+
+# Load .env early so defaults below can inherit repository-local configuration.
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+fi
 
 # trustpoint image handling
 TP_DOCKERFILE="docker/trustpoint/Dockerfile"
@@ -18,16 +27,32 @@ PROMETHEUS_IMAGE="prom/prometheus:latest"
 GRAFANA_IMAGE="grafana/grafana:latest"
 WF2_WORKER_NAME="trustpoint-worker"
 
-# Fixed trustpoint ports
-APP_HTTP_HOST=80
-APP_HTTPS_HOST=443
+# trustpoint host ports. These names match docker-compose.yml.
+APP_HTTP_HOST="${TP_HTTP_PORT:-80}"
+APP_HTTPS_HOST="${TP_HTTPS_PORT:-443}"
 
-# PostgreSQL defaults
-DEF_DB_NAME="trustpoint_db"
-DEF_DB_USER="admin"
-DEF_DB_PASS="testing321"
-DEF_DB_PORT=5432
+# PostgreSQL defaults. These names match docker-compose.yml and .env.
+DEF_DB_NAME="${POSTGRES_DB:-trustpoint_db}"
+DEF_DB_USER="${DATABASE_USER:-admin}"
+DEF_DB_PASS="${DATABASE_PASSWORD:-testing321}"
+DEF_DB_PORT="${DATABASE_PORT:-5432}"
+DEF_DB_HOST="${DATABASE_HOST:-postgres}"
 DEF_DB_HOST_INTERNAL="postgres"   # container name/hostname
+
+# trustpoint runtime environment.
+DEF_TP_TLS_DNS_NAMES="${TP_TLS_DNS_NAMES:-trustpoint.local}"
+DEF_TP_TLS_IPV4_ADDRESSES="${TP_TLS_IPV4_ADDRESSES:-}"
+DEF_TP_TLS_IPV6_ADDRESSES="${TP_TLS_IPV6_ADDRESSES:-}"
+
+# The setup-skip variable is configurable because the exact application-side
+# name can change. The default used by the wizard is TP_SKIP_SETUP=true.
+TRUSTPOINT_SKIP_SETUP_ENV_KEY="${TRUSTPOINT_SKIP_SETUP_ENV_KEY:-TP_SKIP_SETUP}"
+TRUSTPOINT_SKIP_SETUP_ENV_VALUE="${TRUSTPOINT_SKIP_SETUP_ENV_VALUE:-true}"
+if [[ -v "$TRUSTPOINT_SKIP_SETUP_ENV_KEY" ]]; then
+  DEF_TRUSTPOINT_SKIP_SETUP_VALUE="${!TRUSTPOINT_SKIP_SETUP_ENV_KEY}"
+else
+  DEF_TRUSTPOINT_SKIP_SETUP_VALUE="$TRUSTPOINT_SKIP_SETUP_ENV_VALUE"
+fi
 
 # Mailpit defaults
 DEF_MAILPIT_SMTP_PORT=1025
