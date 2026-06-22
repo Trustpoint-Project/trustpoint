@@ -24,7 +24,7 @@ from trustpoint.views.base import ContextDataMixin
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
-    from django.http import HttpRequest, HttpResponse
+    from django.http import HttpRequest, HttpResponse, HttpResponseBase
     from django.utils.safestring import SafeString
 
 
@@ -121,14 +121,15 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
             domain.recent_notifications = domain_notifications
 
             # Prepare filtered devices with table data
-            domain.prepared_devices = list(filtered_devices)
-            for device in domain.prepared_devices:
+            prepared_devices_list: list[Any] = list(filtered_devices)
+            for device in prepared_devices_list:
                 self._prepare_device_for_table(device)
+            domain.prepared_devices = prepared_devices_list
 
         return context
 
-    def _prepare_device_for_table(self, device: DeviceModel) -> None:
-        """Prepare device data for table display."""
+    def _prepare_device_for_table(self, device: Any) -> None:
+        """Prepare device data for table display by adding display attributes."""
         device.onboarding_progress = self._get_onboarding_progress(device)
         device.domain_credential_status = self._get_domain_credential_status(device)
         device.application_certificate_status = self._get_application_certificate_status(device)
@@ -266,7 +267,7 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
             '<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', clm_url, gettext_lazy('Manage')
         )
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Check if simplified mode is enabled, otherwise redirect to standard dashboard."""
         ui_config = UIConfig.get_current()
         if not ui_config.is_simplified_mode:
