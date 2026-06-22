@@ -10,7 +10,6 @@ import {
 
 export function renderFlowGuide(context, catalog) {
   const stepIds = Array.isArray(context?.stepIds) ? context.stepIds : [];
-  const toOptions = [...stepIds, ...(catalog?.meta?.end_targets || [])];
   const currentFlowFrom = context?.currentFlowItem?.from || null;
   const currentFlowTo = context?.currentFlowItem?.to || null;
   const currentFlowOn = context?.currentFlowItem?.on || null;
@@ -28,7 +27,7 @@ export function renderFlowGuide(context, catalog) {
   } else if (context.flowFieldKey === 'to') {
     fieldOptions = renderGuideSection({
       title: 'Choose target',
-      body: renderGuideButtonRow(renderScalarSetterButtons(toOptions)),
+      body: renderGuideButtonRow(renderScalarSetterButtons(stepIds)),
     });
   } else if (context.flowFieldKey === 'on') {
     fieldOptions = renderGuideSection({
@@ -119,13 +118,6 @@ export function renderFlowGuide(context, catalog) {
           <div class="fw-semibold mb-1">Known outcomes</div>
           ${renderChips(context.currentFlowOutcomeOptions || [], (outcome) => {
             return `<span class="wf2-chip"><strong>${escapeHtml(outcome)}</strong></span>`;
-          })}
-        </div>
-
-        <div>
-          <div class="fw-semibold mb-1">End targets</div>
-          ${renderChips(catalog?.meta?.end_targets || [], (target) => {
-            return `<span class="wf2-chip"><strong>${escapeHtml(target)}</strong></span>`;
           })}
         </div>
       `,

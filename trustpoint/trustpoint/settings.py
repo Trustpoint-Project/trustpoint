@@ -250,7 +250,7 @@ DATABASE_PASSWORD = _env_value('DATABASE_PASSWORD', 'testing321', file_var='DATA
 
 
 # Setting for email backend
-DEFAULT_FROM_EMAIL = _env_value('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
 # Default: console (safe for dev/showcases)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -391,6 +391,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'trustpoint.settings.app_version',
                 'management.context_processors.notification_alerts',
+                'workflows2.context_processors.waiting_counts',
             ],
         },
     },

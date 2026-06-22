@@ -31,6 +31,7 @@ from management.models import (
     PKCS11Token,
     PrometheusConfig,
     SecurityConfig,
+    SmtpEmailConfig,
 )
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
@@ -1015,6 +1016,110 @@ class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
             'mode': forms.Select(attrs={'class': 'form-select'}),
             'worker_stale_after_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
         }
+
+
+class SmtpEmailConfigForm(forms.ModelForm[SmtpEmailConfig]):
+    """Form for managing SMTP email backend settings."""
+
+    PORT_MIN: ClassVar[int] = 1
+    PORT_MAX: ClassVar[int] = 65535
+
+    class Meta:
+        """Metadata for the SMTP email settings form."""
+
+        model = SmtpEmailConfig
+        fields: ClassVar[tuple[str, ...]] = (
+            'enabled',
+            'host',
+            'port',
+            'use_tls',
+            'use_ssl',
+            'username',
+            'password',
+            'timeout_seconds',
+            'default_from_email',
+        )
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'host': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'smtp.example.com'}),
+            'port': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 65535}),
+            'use_tls': forms.CheckboxInput(
+                attrs={'class': 'form-check-input', 'role': 'switch', 'data-smtp-security': 'starttls'}
+            ),
+            'use_ssl': forms.CheckboxInput(
+                attrs={'class': 'form-check-input', 'role': 'switch', 'data-smtp-security': 'ssl'}
+            ),
+            'username': forms.TextInput(
+                attrs={'class': 'form-control', 'autocomplete': 'off', 'data-smtp-auth': 'username'}
+            ),
+            'password': forms.PasswordInput(
+                attrs={'class': 'form-control', 'autocomplete': 'new-password', 'data-smtp-auth': 'password'},
+                render_value=True,
+            ),
+            'timeout_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+            'default_from_email': forms.EmailInput(attrs={'class': 'form-control'}),
+        }
+        labels: ClassVar[dict[str, Any]] = {
+            'enabled': _('Use SMTP server for outgoing email'),
+            'host': _('SMTP host'),
+            'port': _('SMTP port'),
+            'use_tls': _('Use STARTTLS'),
+            'use_ssl': _('Use SSL/TLS'),
+            'username': _('Username'),
+            'password': _('Password'),
+            'timeout_seconds': _('Timeout'),
+            'default_from_email': _('Default sender address'),
+        }
+        help_texts: ClassVar[dict[str, Any]] = {
+            'enabled': _(
+                'When enabled, Trustpoint sends workflow and system email through this SMTP server. '
+                "When disabled, email is written to Django's console backend."
+            ),
+            'host': _('Hostname or IP address of the SMTP server.'),
+            'port': _('Common ports are 587 for STARTTLS, 465 for SSL/TLS, and 25 for plain SMTP.'),
+            'use_tls': _('Connect first, then upgrade the connection with STARTTLS. Usually used with port 587.'),
+            'use_ssl': _('Start with an encrypted TLS connection immediately. Usually used with port 465.'),
+            'username': _('Leave empty when the SMTP server does not require authentication or does not support AUTH.'),
+            'password': _('Leave empty when the SMTP server does not require authentication or does not support AUTH.'),
+            'timeout_seconds': _('Connection timeout in seconds.'),
+            'default_from_email': _('Sender address used when a workflow or notification does not specify one.'),
+        }
+
+    def clean_port(self) -> int:
+        """Validate the SMTP port range."""
+        port = self.cleaned_data['port']
+        if port < self.PORT_MIN or port > self.PORT_MAX:
+            raise ValidationError(_('Port must be between 1 and 65535.'))
+        return int(port)
+
+    def clean(self) -> dict[str, Any]:
+        """Validate SMTP settings that depend on each other."""
+        cleaned: dict[str, Any] = super().clean() or {}
+        enabled = bool(cleaned.get('enabled'))
+        host = str(cleaned.get('host') or '').strip()
+        username = str(cleaned.get('username') or '').strip()
+        password = str(cleaned.get('password') or '')
+
+        cleaned['host'] = host
+        cleaned['username'] = username
+        cleaned['password'] = password
+
+        if enabled and not host:
+            self.add_error('host', _('SMTP host is required when SMTP delivery is enabled.'))
+
+        if cleaned.get('use_tls') and cleaned.get('use_ssl'):
+            self.add_error('use_ssl', _('STARTTLS and SSL/TLS cannot both be enabled.'))
+
+        return cleaned
+
+
+class SmtpEmailTestForm(forms.Form):
+    """Form for sending a test email through the saved SMTP settings."""
+
+    recipient = forms.EmailField(
+        label=_('Test recipient'),
+        widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'admin@example.com'}),
+    )
 
 
 class LoggingConfigForm(forms.Form):

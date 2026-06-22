@@ -3,6 +3,7 @@
 from management.models.appversion import AppVersion
 from management.models.audit_log import AuditLog
 from management.models.backup import BackupOptions
+from management.models.email import SmtpEmailConfig
 from management.models.internationalization import InternationalizationConfig
 from management.models.key_storage import KeyStorageConfig
 from management.models.logging import LoggingConfig
@@ -35,6 +36,7 @@ __all__ = [
     'PKCS11Token',
     'PrometheusConfig',
     'SecurityConfig',
+    'SmtpEmailConfig',
     'TlsSettings',
     'WeakECCCurve',
     'WeakSignatureAlgorithm',
