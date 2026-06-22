@@ -522,7 +522,10 @@
                 var checkboxes = document.querySelectorAll('.device-checkbox:checked');
                 var ids = [];
                 checkboxes.forEach(function(checkbox) {
-                    var value = String(checkbox.value).trim();
+                    var value = String(checkbox.value || '');
+                    if (/^\d+$/.test(value)) {
+                        ids.push(value);
+                    }
                     // Only allow expected numeric device IDs from DOM values
                     if (/^\d+$/.test(value)) {
                         ids.push(value);
@@ -537,7 +540,8 @@
                 
                 if (deviceIds.length === 0) {
                     alert('{% trans "Please select at least one device to revoke." %}');
-                    return;
+                var encodedIds = deviceIds.map(function(id) { return encodeURIComponent(id); });
+                var url = '/devices/revoke-device/' + encodedIds.join('/') + '/';
                 }
 
                 // Build URL with device IDs
@@ -551,7 +555,8 @@
                 var deviceIds = getSelectedDeviceIds();
                 
                 if (deviceIds.length === 0) {
-                    alert('{% trans "Please select at least one device to delete." %}');
+                var encodedIds = deviceIds.map(function(id) { return encodeURIComponent(id); });
+                var url = '/devices/delete-device/' + encodedIds.join('/') + '/';
                     return;
                 }
 
