@@ -522,7 +522,11 @@
                 var checkboxes = document.querySelectorAll('.device-checkbox:checked');
                 var ids = [];
                 checkboxes.forEach(function(checkbox) {
-                    ids.push(checkbox.value);
+                    var value = String(checkbox.value).trim();
+                    // Only allow expected numeric device IDs from DOM values
+                    if (/^\d+$/.test(value)) {
+                        ids.push(value);
+                    }
                 });
                 return ids;
             }
@@ -537,7 +541,8 @@
                 }
 
                 // Build URL with device IDs
-                var url = '/devices/revoke-device/' + deviceIds.join('/') + '/';
+                var encodedIds = deviceIds.map(function(id) { return encodeURIComponent(id); });
+                var url = '/devices/revoke-device/' + encodedIds.join('/') + '/';
                 window.location.href = url;
             }
 
@@ -551,7 +556,8 @@
                 }
 
                 // Build URL with device IDs
-                var url = '/devices/delete-device/' + deviceIds.join('/') + '/';
+                var encodedIds = deviceIds.map(function(id) { return encodeURIComponent(id); });
+                var url = '/devices/delete-device/' + encodedIds.join('/') + '/';
                 window.location.href = url;
             }
 
