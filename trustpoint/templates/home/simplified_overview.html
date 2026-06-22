@@ -25,7 +25,7 @@
                 <div class="d-flex align-items-center gap-3">
                     <h1 class="mb-0">{% trans "Domain Overview" %}</h1>
                     {% if all_domains.count > 1 %}
-                        <select id="domain-selector" class="form-select form-select-sm" style="width: auto; min-width: 200px;" onchange="window.location.href='?domain=' + this.value">
+                        <select id="domain-selector" class="form-select form-select-sm" style="width: auto; min-width: 200px;" onchange="window.location.href='?domain=' + encodeURIComponent(this.value)">
                             {% for domain in all_domains %}
                                 <option value="{{ domain.pk }}" {% if selected_domain_id == domain.pk|stringformat:"s" or not selected_domain_id and forloop.first %}selected{% endif %}>
                                     {{ domain.unique_name }}
