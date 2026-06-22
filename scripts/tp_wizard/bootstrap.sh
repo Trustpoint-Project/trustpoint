@@ -23,6 +23,7 @@ source "${TP_WIZARD_ROOT}/scripts/tp_wizard/services/monitoring.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/runtime.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/wizard.sh"
 
+source "${TP_WIZARD_ROOT}/scripts/tp_wizard/commands/demo.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/commands/up.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/commands/down.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/commands/logs.sh"

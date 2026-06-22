@@ -3,19 +3,24 @@ usage(){
 Commands:
   (no command)       Run interactive wizard
 
-  up [demo [light|full]|trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring] [--nowait]
-  down [demo [light|full]|trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring]
+  demo [light|full] [--skip-setup|--no-skip-setup] [--nowait]
+  up [trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring] [--skip-setup|--no-skip-setup] [--nowait]
+  down [trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring]
   logs [trustpoint|db|mail|sftp|worker|prometheus|grafana]
   status
   nuke
   help
 
 Demo presets:
-  up demo light      trustpoint + PostgreSQL
-  up demo            trustpoint + PostgreSQL + Mailpit + SFTPGo + workflows2 worker
-  up demo full       demo + Prometheus + Grafana
+  demo light         trustpoint + PostgreSQL
+  demo               trustpoint + PostgreSQL + Mailpit + SFTPGo + workflows2 worker
+  demo full          demo + Prometheus + Grafana
 
-Also supported (legacy): --only trustpoint|db|mail|sftp|worker|demo
+Notes:
+  - Use `demo ...` for non-interactive demo presets.
+  - Use `up ...` for individual containers/services only.
+  - `up demo ...` is intentionally not supported.
+  - Use `--skip-setup` to make trustpoint skip its in-app setup wizard.
 EOF2
 }
 
@@ -53,9 +58,6 @@ map_demo_preset_to_flags(){
 
 map_only_to_flags(){
   case "$1" in
-    demo) map_demo_preset_to_flags default ;;
-    demo-light|light) map_demo_preset_to_flags light ;;
-    demo-full|full) map_demo_preset_to_flags full ;;
     trustpoint|app) ONLY_APP=true ;;
     db) ONLY_DB=true ;;
     mail) ONLY_MAIL=true ;;
@@ -64,7 +66,27 @@ map_only_to_flags(){
     prometheus|prom) ONLY_PROMETHEUS=true ;;
     grafana) ONLY_GRAFANA=true ;;
     monitoring|metrics) ONLY_PROMETHEUS=true; ONLY_GRAFANA=true ;;
-    *) die "Unknown target: $1 (use demo|trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring)" ;;
+    demo|light|full|demo-light|demo-full)
+      die "Demo presets are not valid for 'up'. Use './tp_wizard.sh demo [light|full]' instead."
+      ;;
+    *) die "Unknown target: $1 (use trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring)" ;;
+  esac
+}
+
+set_common_runtime_flag(){
+  case "$1" in
+    --skip-setup|--skip-trustpoint-setup)
+      TP_SKIP_SETUP_VALUE="true"
+      ;;
+    --no-skip-setup|--no-skip-trustpoint-setup)
+      TP_SKIP_SETUP_VALUE="false"
+      ;;
+    --nowait)
+      NOWAIT=true
+      ;;
+    *)
+      return 1
+      ;;
   esac
 }
 
@@ -72,34 +94,33 @@ set_targets_from_args(){
   local any=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      demo)
-        if [[ "${2:-}" == "light" || "${2:-}" == "full" ]]; then
-          map_demo_preset_to_flags "$2"
-          shift 2
-        else
-          map_demo_preset_to_flags default
-          shift
-        fi
-        any=true
-        ;;
-      demo-light|demo-full|light|full|trustpoint|app|db|mail|sftp|worker|prometheus|prom|grafana|monitoring|metrics)
+      trustpoint|app|db|mail|sftp|worker|prometheus|prom|grafana|monitoring|metrics)
         map_only_to_flags "$1"
         any=true
         shift
         ;;
       --only)
-        map_only_to_flags "${2:-}"
+        [[ $# -ge 2 ]] || die "--only requires a target"
+        map_only_to_flags "$2"
         any=true
         shift 2
         ;;
-      --nowait)
-        NOWAIT=true
+      --skip-setup|--skip-trustpoint-setup|--no-skip-setup|--no-skip-trustpoint-setup|--nowait)
+        set_common_runtime_flag "$1"
         shift
+        ;;
+      demo|light|full|demo-light|demo-full)
+        map_only_to_flags "$1"
         ;;
       *) die "Unknown option/target: $1" ;;
     esac
   done
-  if ! $any; then ONLY_APP=true; ONLY_DB=true; fi
+
+  # Historical default for `up`: start trustpoint + DB when no target is given.
+  if ! $any; then
+    ONLY_APP=true
+    ONLY_DB=true
+  fi
 }
 
 tp_main(){
@@ -113,7 +134,15 @@ tp_main(){
     help|-h|--help)
       usage
       ;;
+    demo)
+      preflight
+      shift || true
+      cmd_demo "$@"
+      ;;
     up)
+      if [[ "${2:-}" == "demo" || "${2:-}" == "light" || "${2:-}" == "full" || "${2:-}" == "demo-light" || "${2:-}" == "demo-full" ]]; then
+        die "Demo presets are not valid for 'up'. Use './tp_wizard.sh demo [light|full]' instead."
+      fi
       preflight
       shift || true
       cmd_up "$@"

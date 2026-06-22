@@ -57,7 +57,7 @@ step_trustpoint_runtime_env(){
   ask "Trustpoint TLS IPv6 addresses (comma-separated, optional)" "$TP_TLS_IPV6_ADDRESSES_VALUE"
   TP_TLS_IPV6_ADDRESSES_VALUE="$REPLY"
 
-  if ask_yes_no "Skip trustpoint in-app setup wizard using ${TRUSTPOINT_SKIP_SETUP_ENV_KEY}?" "y"; then
+  if ask_yes_no "Skip trustpoint in-app setup wizard using ${TRUSTPOINT_SKIP_SETUP_ENV_KEY}?" "n"; then
     TP_SKIP_SETUP_VALUE="true"
   else
     TP_SKIP_SETUP_VALUE="false"
@@ -112,7 +112,38 @@ start_app(){
   if $EN_MAILPIT; then
     smtp_env+=( -e "EMAIL_HOST=mailpit" -e "EMAIL_PORT=1025" -e "EMAIL_USE_TLS=0" -e "EMAIL_USE_SSL=0" -e "DEFAULT_FROM_EMAIL=no-reply@trustpoint.local" )
   fi
-  docker run -d --name "$name" --network "$NET"     -p "${APP_HTTP_HOST}:80"     -p "${APP_HTTPS_HOST}:443"     "${env_file_arg[@]}"     -e "POSTGRES_DB=$APP_DB_NAME"     -e "DATABASE_USER=$APP_DB_USER"     -e "DATABASE_PASSWORD=$APP_DB_PASS"     -e "DATABASE_HOST=$APP_DB_HOST"     -e "DATABASE_PORT=$APP_DB_PORT"     -e "TP_HTTP_PORT=$APP_HTTP_HOST"     -e "TP_HTTPS_PORT=$APP_HTTPS_HOST"     -e "TP_TLS_DNS_NAMES=$TP_TLS_DNS_NAMES_VALUE"     -e "TP_TLS_IPV4_ADDRESSES=$TP_TLS_IPV4_ADDRESSES_VALUE"     -e "TP_TLS_IPV6_ADDRESSES=$TP_TLS_IPV6_ADDRESSES_VALUE"     -e "${TRUSTPOINT_SKIP_SETUP_ENV_KEY}=${TP_SKIP_SETUP_VALUE}"     "${smtp_env[@]}"     "$APP_IMAGE" >/dev/null
+
+  local skip_env=() skip_key
+  for skip_key in $TRUSTPOINT_SKIP_SETUP_ENV_KEYS; do
+    [[ -n "$skip_key" ]] || continue
+    skip_env+=( -e "${skip_key}=${TP_SKIP_SETUP_VALUE}" )
+  done
+  if [[ "$TP_SKIP_SETUP_VALUE" == "true" ]]; then
+    skip_env+=(
+      -e "TP_ADMIN_USERNAME=${TP_ADMIN_USERNAME_VALUE}"
+      -e "TP_ADMIN_PASSWORD=${TP_ADMIN_PASSWORD_VALUE}"
+      -e "TP_ADMIN_EMAIL=${TP_ADMIN_EMAIL_VALUE}"
+      -e "TP_INJECT_DEMO_DATA=${TP_INJECT_DEMO_DATA_VALUE}"
+    )
+  fi
+
+  docker run -d --name "$name" --network "$NET" \
+    -p "${APP_HTTP_HOST}:80" \
+    -p "${APP_HTTPS_HOST}:443" \
+    "${env_file_arg[@]}" \
+    -e "POSTGRES_DB=$APP_DB_NAME" \
+    -e "DATABASE_USER=$APP_DB_USER" \
+    -e "DATABASE_PASSWORD=$APP_DB_PASS" \
+    -e "DATABASE_HOST=$APP_DB_HOST" \
+    -e "DATABASE_PORT=$APP_DB_PORT" \
+    -e "TP_HTTP_PORT=$APP_HTTP_HOST" \
+    -e "TP_HTTPS_PORT=$APP_HTTPS_HOST" \
+    -e "TP_TLS_DNS_NAMES=$TP_TLS_DNS_NAMES_VALUE" \
+    -e "TP_TLS_IPV4_ADDRESSES=$TP_TLS_IPV4_ADDRESSES_VALUE" \
+    -e "TP_TLS_IPV6_ADDRESSES=$TP_TLS_IPV6_ADDRESSES_VALUE" \
+    "${skip_env[@]}" \
+    "${smtp_env[@]}" \
+    "$APP_IMAGE" >/dev/null
 }
 
 
