@@ -5,16 +5,24 @@ configure_selected(){
   fi
   $ONLY_MAIL && EN_MAILPIT=true
   $ONLY_SFTP && EN_SFTPGO=true
+  $ONLY_PROMETHEUS && EN_PROMETHEUS=true
+  $ONLY_GRAFANA && EN_GRAFANA=true
 
   if $ONLY_APP; then
     EN_APP=true
     configure_app_image_prompt
-    EN_WF2_WORKER=$(
-      ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
-    )
+    if [[ -z "$DEMO_PRESET" ]]; then
+      EN_WF2_WORKER=$(
+        ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
+      )
+    fi
   elif $ONLY_WF2_WORKER; then
     EN_WF2_WORKER=true
     configure_app_image_prompt
+  fi
+
+  if $ONLY_WF2_WORKER; then
+    EN_WF2_WORKER=true
   fi
 
   if $ONLY_APP || $ONLY_WF2_WORKER; then
@@ -30,7 +38,6 @@ configure_selected(){
     APP_DB_PASS="$DB_PASS"
   fi
 }
-
 
 cmd_up(){
   set_targets_from_args "$@"

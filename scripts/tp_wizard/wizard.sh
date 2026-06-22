@@ -9,6 +9,7 @@ wizard(){
   mailpit_prompt_config
   sftpgo_prompt_config
   step_workflows2_worker
+  monitoring_prompt_config
   show_plan
   ask_yes_no "Proceed with these settings?" "y" || { warn "Aborted by user."; exit 1; }
   runtime_start_enabled

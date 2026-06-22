@@ -19,9 +19,8 @@ await_readiness(){
     echo
   fi
   await_sftpgo_ready
+  await_monitoring_ready
 }
-
-# ---- SFTPGo provisioning via REST -------------------------------------------
 
 runtime_after_start(){
   $NOWAIT || await_readiness
@@ -40,6 +39,8 @@ runtime_start_enabled(){
   $EN_WF2_WORKER || stop_one "$WF2_WORKER_NAME"
   start_app
   start_workflows2_worker
+  start_prometheus
+  start_grafana
   runtime_after_start
 }
 
@@ -51,6 +52,8 @@ runtime_start_selected(){
   $EN_WF2_WORKER || { $ONLY_APP && stop_one "$WF2_WORKER_NAME"; }
   $ONLY_APP  && start_app
   $EN_WF2_WORKER && start_workflows2_worker
+  $ONLY_PROMETHEUS && { EN_PROMETHEUS=true; start_prometheus; }
+  $ONLY_GRAFANA && { EN_GRAFANA=true; start_grafana; }
 
   runtime_after_start
 }

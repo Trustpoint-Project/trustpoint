@@ -3,15 +3,16 @@ show_plan(){
   echo "==================== Configuration Summary (Planned) ===================="
   printf "%-22s %s\n" "Network:" "$NET"
   printf "%-22s %s\n" "DB Volume:" "$VOL_DB"
+  printf "%-22s %s\n" "Grafana Volume:" "$VOL_GRAFANA"
   echo
   printf "%-22s %s\n" "trustpoint enabled:" "$EN_APP"
   if $EN_APP; then
     if $BUILD_LOCAL; then
-      printf "%-22s %s\n" "App image:" "Build local → trustpoint:local"
+      printf "%-22s %s\n" "App image:" "Build local -> trustpoint:local"
     else
-      printf "%-22s %s\n" "App image:" "Pull → ${APP_IMAGE}"
+      printf "%-22s %s\n" "App image:" "Pull -> ${APP_IMAGE}"
     fi
-    printf "%-22s %s\n" "Host ports:" "80→80 (HTTP), 443→443 (HTTPS)"
+    printf "%-22s %s\n" "Host ports:" "80->80 (HTTP), 443->443 (HTTPS)"
   fi
   echo
   printf "%-22s %s\n" "Internal Postgres:" "$DB_INTERNAL"
@@ -45,21 +46,33 @@ show_plan(){
     printf "%-22s %s\n" "SFTP backup user:" "${SFTPGO_BACKUP_USER} / $(mask "$SFTPGO_BACKUP_PASS")"
     printf "%-22s %s\n" "Backup home:" "${SFTPGO_BACKUP_HOME}"
   }
+  echo
+  printf "%-22s %s\n" "Prometheus enabled:" "$EN_PROMETHEUS"
+  $EN_PROMETHEUS && {
+    printf "%-22s %s\n" "Prometheus UI:" "http://localhost:${PROMETHEUS_PORT}"
+    printf "%-22s %s\n" "Prometheus config:" "$PROMETHEUS_CONFIG"
+  }
+  printf "%-22s %s\n" "Grafana enabled:" "$EN_GRAFANA"
+  $EN_GRAFANA && {
+    printf "%-22s %s\n" "Grafana UI:" "http://localhost:${GRAFANA_PORT}"
+    printf "%-22s %s\n" "Grafana admin:" "${GRAFANA_ADMIN_USER} / $(mask "$GRAFANA_ADMIN_PASS")"
+  }
   echo "========================================================================="
 }
 
-# -------------------------- Build/Pull & Start -------------------------------
-
 show_runtime_status(){
-  local net_state="absent" vol_state="absent"
+  local net_state="absent" vol_state="absent" grafana_vol_state="absent"
   docker network inspect "$NET" >/dev/null 2>&1 && net_state="present"
   docker volume inspect "$VOL_DB" >/dev/null 2>&1 && vol_state="present"
+  docker volume inspect "$VOL_GRAFANA" >/dev/null 2>&1 && grafana_vol_state="present"
 
   echo
   echo "=========================== Runtime Status (Live) ========================"
   printf "%-22s %s\n" "Network:" "${NET} (${net_state})"
   printf "%-22s %s\n" "DB volume:" "${VOL_DB} (${vol_state})"
+  printf "%-22s %s\n" "Grafana volume:" "${VOL_GRAFANA} (${grafana_vol_state})"
   printf "%-22s %s\n" "workflow2 folder:" "$([ -d "$WF2_FOLDER" ] && echo "${WF2_FOLDER} (present)" || echo "${WF2_FOLDER} (absent)")"
+  printf "%-22s %s\n" "Grafana provisioning:" "$([ -d "$GRAFANA_PROVISIONING_ROOT" ] && echo "${GRAFANA_PROVISIONING_ROOT} (present)" || echo "${GRAFANA_PROVISIONING_ROOT} (absent)")"
   echo
   printf "%-20s %-10s %-10s %s\n" "Container" "State" "Health" "Image"
   print_container_status_row trustpoint
@@ -67,6 +80,8 @@ show_runtime_status(){
   print_container_status_row mailpit
   print_container_status_row sftpgo
   print_container_status_row "$WF2_WORKER_NAME"
+  print_container_status_row prometheus
+  print_container_status_row grafana
   echo
 
   if exists trustpoint; then
@@ -124,16 +139,29 @@ show_runtime_status(){
     printf "%-22s %s\n" "SFTPGo data dir:" "${SFTPGO_ROOT}"
   fi
 
+  if exists prometheus; then
+    local prometheus_port
+    prometheus_port="$(container_host_port prometheus 9090/tcp)"
+    [[ -n "$prometheus_port" ]] && printf "%-22s %s\n" "Prometheus:" "http://localhost:${prometheus_port}"
+    printf "%-22s %s\n" "Prometheus config:" "$PROMETHEUS_CONFIG"
+  fi
+
+  if exists grafana; then
+    local grafana_port grafana_user
+    grafana_port="$(container_host_port grafana 3000/tcp)"
+    grafana_user="$(container_env grafana GF_SECURITY_ADMIN_USER)"
+    [[ -n "$grafana_port" ]] && printf "%-22s %s\n" "Grafana:" "http://localhost:${grafana_port}"
+    [[ -n "$grafana_user" ]] && printf "%-22s %s\n" "Grafana admin:" "${grafana_user}"
+  fi
+
   echo "========================================================================="
 }
-
-# -------------------------- Summary ------------------------------------------
 
 final_summary(){
   echo
   echo "========================= Runtime Summary (Actual) ======================="
   printf "%-22s %s\n" "Network:" "$NET"
-  printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo|trustpoint-worker)$' || true)"
+  printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo|trustpoint-worker|prometheus|grafana)$' || true)"
   echo
   if $EN_APP; then
     printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
@@ -160,6 +188,14 @@ final_summary(){
     printf "%-22s %s\n" "Backup URL:" "sftp://${SFTPGO_BACKUP_USER}:***@127.0.0.1:${SFTPGO_SFTP_PORT}/"
     printf "%-22s %s\n" "Data dir:" "${SFTPGO_ROOT}"
   fi
+  if $EN_PROMETHEUS; then
+    printf "%-22s %s\n" "Prometheus:" "http://localhost:${PROMETHEUS_PORT}"
+    printf "%-22s %s\n" "Prometheus config:" "$PROMETHEUS_CONFIG"
+  fi
+  if $EN_GRAFANA; then
+    printf "%-22s %s\n" "Grafana:" "http://localhost:${GRAFANA_PORT}"
+    printf "%-22s %s\n" "Grafana admin:" "${GRAFANA_ADMIN_USER} / $(mask "$GRAFANA_ADMIN_PASS")"
+  fi
   if $EN_APP; then
     if [[ -n "$TLS_FP_FOUND" ]]; then
       printf "%-22s %s\n" "TLS fingerprint:" "$TLS_FP_FOUND"
@@ -173,5 +209,3 @@ final_summary(){
   fi
   echo "========================================================================="
 }
-
-# -------------------------- High-level orchestration -------------------------

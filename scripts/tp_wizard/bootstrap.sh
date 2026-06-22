@@ -17,6 +17,7 @@ source "${TP_WIZARD_ROOT}/scripts/tp_wizard/services/trustpoint.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/services/mailpit.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/services/sftpgo.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/services/workflows2_worker.sh"
+source "${TP_WIZARD_ROOT}/scripts/tp_wizard/services/monitoring.sh"
 
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/runtime.sh"
 source "${TP_WIZARD_ROOT}/scripts/tp_wizard/wizard.sh"
