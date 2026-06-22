@@ -2,29 +2,24 @@
 {% load crispy_forms_filters %}
 
 <div class="card">
-  <div class="card-body pt-4 pb-4">
-    <h4 class="mb-3">{% trans "User Interface Settings" %}</h4>
-    <p class="text-muted mb-4">{% trans "Configure the appearance and navigation of the Trustpoint interface" %}</p>
-    
-    <div class="alert alert-info mb-4">
-      <i class="bi bi-info-circle me-2"></i>
-      {% trans "After saving, you will be redirected to the home page to apply the new view mode." %}
+    <div class="card-header">
+        <h5 class="mb-0">{% trans "User Interface Settings" %}</h5>
     </div>
-    
+
+    <div class="card-body pt-4 pb-4">
+    <p class="text-muted mb-4">{% trans "Configure the appearance and navigation of the Trustpoint interface" %}</p>
+        
     <form method="POST" action="{% url 'management:settings-ui' %}" id="ui_configuration">
       {% csrf_token %}
       {{ form|crispy }}
-      
-      <div class="alert alert-light mt-3 mb-3">
-        <strong>{% trans "Standard View" %}:</strong> {% trans "Traditional sidebar navigation with all menus accessible from the left side" %}<br>
-        <strong>{% trans "Simplified View" %}:</strong> {% trans "Domain-centric layout with bottom navigation bar, ideal for focused domain management" %}
-      </div>
-      
-      <div class="d-flex justify-content-end mt-4">
-        <button type="submit" class="btn btn-primary">
-          {% trans "Save and Apply" %}
-        </button>
-      </div>
     </form>
   </div>
+
+  <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary" type="submit" form="ui_configuration">
+                {% trans "Save" %}
+            </button>
+        </div>
+    </div>
 </div>

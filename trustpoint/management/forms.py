@@ -1110,7 +1110,6 @@ class UIConfigForm(forms.Form):
             ('simplified', _('Simplified View')),
         ],
         widget=forms.Select(attrs={'class': 'form-select'}),
-        help_text=_('Choose between standard sidebar navigation or simplified domain-centric view'),
     )
 
     def save(self) -> None:

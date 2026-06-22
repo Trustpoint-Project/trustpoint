@@ -5,19 +5,21 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from django.contrib import messages
 from django.db.models import Q
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy
+from django.views import View
 from django.views.generic import ListView
 
 from devices.filters import DeviceFilter
 from devices.models import DeviceModel
 from management.models import NotificationModel, UIConfig
 from onboarding.enums import OnboardingStatus
-from pki.models import CertificateModel, DomainModel, IssuedCredentialModel
+from pki.models import CaModel, CertificateModel, DomainModel, IssuedCredentialModel
 from trustpoint.views.base import ContextDataMixin
 
 if TYPE_CHECKING:
@@ -80,24 +82,34 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
             active_certs = CertificateModel.objects.filter(
                 credential__issued_credential__domain=domain,
                 revoked_certificate__isnull=True,
+                not_valid_after__gt=timezone.now(),
             ).count()
 
             expiring_certs = CertificateModel.objects.filter(
                 credential__issued_credential__domain=domain,
                 revoked_certificate__isnull=True,
                 not_valid_after__lte=timezone.now() + timedelta(days=30),
+                not_valid_after__gt=timezone.now(),
+            ).count()
+
+            expired_certs = CertificateModel.objects.filter(
+                credential__issued_credential__domain=domain,
+                revoked_certificate__isnull=True,
+                not_valid_after__lte=timezone.now(),
             ).count()
 
             domain.active_certificates = active_certs
             domain.expiring_certificates = expiring_certs
+            domain.expired_certificates = expired_certs
 
             # Get recent notifications for this domain
-            # Filter by domain, issuing_ca, devices in domain, or certificates in domain
+            # Filter by domain, issuing_ca, devices in domain, certificates in domain, or system notifications
             domain_notifications = NotificationModel.objects.filter(
                 Q(domain=domain) |
                 Q(issuing_ca=domain.issuing_ca) |
                 Q(device__domain=domain) |
-                Q(certificate__credential__issued_credential__domain=domain)
+                Q(certificate__credential__issued_credential__domain=domain) |
+                Q(notification_source=NotificationModel.NotificationSource.SYSTEM)
             ).filter(
                 notification_type__in=[
                     NotificationModel.NotificationTypes.INFO,
@@ -261,3 +273,32 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
             return redirect('home:dashboard')
 
         return super().dispatch(request, *args, **kwargs)
+
+
+class EnableCrlCycleQuickActionView(View):
+    """Quick action to enable CRL cycle with predefined settings (48h cycle, 72h validity)."""
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """Enable CRL cycle updates with preset values."""
+        ui_config = UIConfig.get_current()
+        if not ui_config.is_simplified_mode:
+            return redirect('home:dashboard')
+
+        issuing_ca = get_object_or_404(CaModel, pk=pk)
+
+        if issuing_ca.crl_cycle_enabled:
+            messages.info(request, gettext_lazy('CRL cycle updates are already enabled for this CA.'))
+        else:
+            issuing_ca.crl_cycle_enabled = True
+            issuing_ca.crl_cycle_interval_hours = 48.0
+            issuing_ca.crl_validity_hours = 72.0
+            issuing_ca.save()
+            messages.success(
+                request,
+                gettext_lazy('CRL cycle updates enabled successfully (48h cycle, 72h validity).')
+            )
+
+        domain = issuing_ca.domains.first()
+        if domain:
+            return redirect(f"{reverse('home:simplified_overview')}?domain={domain.pk}")
+        return redirect('home:simplified_overview')
