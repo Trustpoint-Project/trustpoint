@@ -1,0 +1,39 @@
+{% load i18n %}
+<table class="table">
+    <thead>
+    <tr>
+        <th class="text-nowrap">{% trans 'Username' %}</th>
+        <th class="text-nowrap">{% trans 'First Name' %}</th>
+        <th class="text-nowrap">{% trans 'Last Name' %}</th>
+        <th class="text-nowrap">{% trans 'Email' %}</th>
+        <th class="text-nowrap">{% trans 'Role' %}</th>
+        <th class="text-end">{% trans 'Actions' %}</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for user in users %}
+    <tr>
+        <td>{{ user.username }}</td>
+        <td>{{ user.first_name }}</td>
+        <td>{{ user.last_name }}</td>
+        <td>{{ user.email }}</td>
+        <td>{{ user.role.name }}</td>
+
+        <td class="text-end">
+            {# Change role link #}
+            <a href="{% url 'management:change_role' user.pk %}" class="btn btn-link text-body p-0 me-2" title="{% trans 'Change Role' %}">
+                <i class="bi bi-pencil-square fs-5"></i>
+            </a>
+            {# Delete link — navigates to the confirmation page (GET) before deleting #}
+            <a href="{% url 'management:delete_user' user.pk %}" class="btn btn-link text-body p-0" title="{% trans 'Delete' %}">
+                <i class="bi bi-trash fs-5"></i>
+            </a>
+        </td>
+    </tr>
+    {% empty %}
+    <tr>
+        <td colspan="6" class="middle">{% trans 'No users have been added yet.' %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>

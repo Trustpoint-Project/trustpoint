@@ -1,10 +1,11 @@
 from unittest import mock
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from management.forms import PKCS11ConfigForm
 
+User = get_user_model()
 
 class PKCS11ConfigFormTestCase(TestCase):
     def setUp(self):
@@ -44,7 +45,6 @@ class PKCS11ConfigFormTestCase(TestCase):
         mock_get_or_create.assert_called_once_with(
             label='Trustpoint-SoftHSM',  # Cleaned data for softhsm
             defaults={
-                'hsm_type': 'softhsm',
                 'slot': 0,
                 'module_path': '/usr/lib/libpkcs11-proxy.so',
             }

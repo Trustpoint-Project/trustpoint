@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -57,6 +58,10 @@ class DjangoEmailAdapter:
 
     def __init__(self, *, default_from_email: str | None = None) -> None:
         """Initialize the adapter with an optional default sender address."""
+        with suppress(Exception):
+            from management.models.email import apply_saved_smtp_email_config  # noqa: PLC0415
+
+            apply_saved_smtp_email_config()
         self.default_from_email = default_from_email or getattr(settings, 'DEFAULT_FROM_EMAIL', None)
 
     def send(

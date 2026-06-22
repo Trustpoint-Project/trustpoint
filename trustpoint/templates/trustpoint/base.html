@@ -124,9 +124,13 @@
                     <a href="{% url 'management:key_storage' %}" class="tp-menu-item {% if page_name == 'key_storage' %}tp-menu-active{% endif %}">{% trans "Key Storage" %}</a>
                     <a href="{% url 'management:notifications' %}" class="tp-menu-item {% if page_name == 'notifications' %}tp-menu-active{% endif %}">{% trans "Notifications" %}</a>
                     <a href="{% url 'management:organization' %}" class="tp-menu-item {% if page_name == 'organization' %}tp-menu-active{% endif %}">{% trans "Organization" %}</a>
+                    {% if perms.users.manage_role %}
+                    <a href="{% url 'management:user_management' %}" class="tp-menu-item {% if page_name == 'user_management' %}tp-menu-active{% endif %}">{% trans "Users" %}</a>
+                    <a href="{% url 'management:role_management' %}" class="tp-menu-item {% if page_name == 'role_management' %}tp-menu-active{% endif %}">{% trans "Roles" %}</a>
+                    {% endif %}
                 </div>
             </div>
-
+            {% if perms.users.manage_workflow %}
             <div class="tp-menu-group">
                 <a href="{% url 'workflows2:definitions_list' %}"
                 class="tp-menu-head {% if page_category == 'workflows2' %}tp-menu-active{% endif %}">
@@ -156,6 +160,7 @@
                     </a>
                 </div>
             </div>
+            {% endif %}
             <div class="tp-menu-footer">
                 <div class="tp-menu-group">
                     <button class="tp-menu-head theme-toggle" type="button">
