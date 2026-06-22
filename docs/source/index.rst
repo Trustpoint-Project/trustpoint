@@ -48,6 +48,7 @@ Welcome to Trustpoint's documentation!
    :caption: 🌟 Features
 
    features/mdns
+   Workflow Engine <features/workflows>
 
 
 .. toctree::
@@ -78,4 +79,3 @@ Welcome to Trustpoint's documentation!
    development/pipeline
    release-checklist
    development/rest_api
-

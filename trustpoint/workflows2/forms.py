@@ -7,14 +7,8 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Workflow2DefinitionForm(forms.Form):
-    """Edit one Workflow 2 definition as YAML plus a small amount of metadata."""
+    """Edit one Workflow 2 definition as YAML plus enabled metadata."""
 
-    name = forms.CharField(
-        max_length=200,
-        required=True,
-        label=_('Name'),
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-    )
     enabled = forms.BooleanField(
         required=False,
         initial=True,

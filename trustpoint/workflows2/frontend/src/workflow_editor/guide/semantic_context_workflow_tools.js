@@ -128,6 +128,7 @@ export function extractStepOutcomes(stepObj) {
     return uniqStrings([
       stepObj.approved_outcome,
       stepObj.rejected_outcome,
+      stepObj.timeout_outcome,
     ]);
   }
 

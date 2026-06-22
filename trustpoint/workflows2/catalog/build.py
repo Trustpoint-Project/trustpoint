@@ -7,19 +7,12 @@ from typing import Any
 from django.utils.encoding import force_str
 from django.utils.translation import gettext as _
 
-from workflows2.catalog.presets import PRESETS
 from workflows2.catalog.steps import COMMON_STEP_FIELDS, step_specs
 from workflows2.catalog.trigger_sources import build_trigger_source_catalog
 from workflows2.compiler.compiler import COMPUTE_OPERATORS
 from workflows2.compiler.conditions import COMPARE_OPERATORS, CONDITION_OPERATORS
 from workflows2.compiler.expr import ALLOWED_REF_ROOTS, EXPRESSION_FUNCTION_GROUPS
 from workflows2.events.registry import get_event_registry
-
-
-def _sorted_or_none(value: Any) -> list[str] | None:
-    if value is None:
-        return None
-    return sorted(str(x) for x in value)
 
 
 def _text(value: Any, fallback: str = '') -> str:
@@ -122,22 +115,9 @@ def build_context_catalog() -> dict[str, Any]:
         for step in step_specs()
     ]
 
-    presets = [
-        {
-            'id': preset.id,
-            'title': _text(preset.title),
-            'description': _text(preset.description),
-            'areas': sorted(getattr(preset, 'areas', set())),
-            'triggers': _sorted_or_none(getattr(preset, 'triggers', None)),
-            'step_types': _sorted_or_none(getattr(preset, 'step_types', None)),
-        }
-        for preset in PRESETS
-    ]
-
     return {
         'events': events,
         'steps': steps,
-        'presets': presets,
         'trigger_sources': build_trigger_source_catalog(),
         'dsl': {
             'conditions': {
@@ -159,7 +139,7 @@ def build_context_catalog() -> dict[str, Any]:
             },
         },
         'meta': {
-            'version': 7,
+            'version': 9,
             'common_step_fields': [
                 {
                     'key': f.key,
@@ -174,7 +154,6 @@ def build_context_catalog() -> dict[str, Any]:
                 }
                 for f in COMMON_STEP_FIELDS
             ],
-            'end_targets': ['$end', '$reject'],
             'i18n': {
                 'guide_trigger_browse_description': _(
                     'Search documented triggers by name, key, or group.'

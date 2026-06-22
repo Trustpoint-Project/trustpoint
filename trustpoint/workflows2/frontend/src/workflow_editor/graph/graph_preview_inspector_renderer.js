@@ -58,7 +58,7 @@ function summarizeStepBehavior(node) {
   }
 
   if (node?.type === 'approval') {
-    return `Waits for approval · approved => ${step.approved_outcome || '-'} · rejected => ${step.rejected_outcome || '-'}`;
+    return `Waits for approval · approved => ${step.approved_outcome || '-'} · rejected => ${step.rejected_outcome || '-'} · timeout => ${step.timeout_outcome || '-'}`;
   }
 
   return node?.title || node?.type || 'No summary available';
