@@ -18,7 +18,6 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ClassVar
-from urllib.parse import urlparse
 
 import django_stubs_ext
 import psycopg
@@ -93,6 +92,31 @@ PUBLIC_PATHS = [
 # ------------- Functions --------------
 
 
+def _env_bool(name: str, *, default: bool) -> bool:
+    """Return a boolean setting from an environment variable."""
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == '':
+        return default
+    return raw_value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _env_value(name: str, default: str, *, file_var: str | None = None) -> str:
+    """Return a setting from an environment variable or Docker secret file."""
+    value = os.getenv(name)
+    if value is not None:
+        return value
+
+    if file_var:
+        file_path = os.getenv(file_var)
+        if file_path is not None:
+            try:
+                return Path(file_path).read_text().strip()
+            except OSError:
+                return default
+
+    return default
+
+
 def is_postgre_available() -> bool:
     """Checks whether PostgreSQL is available and issues differentiated error messages.
 
@@ -106,11 +130,11 @@ def is_postgre_available() -> bool:
         print('PostgreSQL is disabled. Set POSTGRESQL=True in settings.')
         return False
 
-    host = os.environ.get('DATABASE_HOST', DATABASE_HOST)
-    port = int(os.environ.get('DATABASE_PORT', DATABASE_PORT))
-    user = os.environ.get('DATABASE_USER', DATABASE_USER)
-    password = os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD)
-    db_name = os.environ.get('POSTGRES_DB', POSTGRES_DB)
+    host = DATABASE_HOST
+    port = int(DATABASE_PORT)
+    user = DATABASE_USER
+    password = DATABASE_PASSWORD
+    db_name = POSTGRES_DB
 
     try:
         print(f'Trying to connect to {host}:{port}...')
@@ -164,50 +188,65 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
 
-raw_urls = os.getenv('TP_URLS', '')
+TP_TLS_IPV4_ADDRESSES = _env_value('TP_TLS_IPV4_ADDRESSES', '')
+TP_TLS_IPV6_ADDRESSES = _env_value('TP_TLS_IPV6_ADDRESSES', '')
+TP_TLS_DNS_NAMES = _env_value('TP_TLS_DNS_NAMES', '')
 
-if raw_urls:
-    # Split by comma and clean up whitespace
-    url_list = [url.strip() for url in raw_urls.split(',') if url.strip()]
+TP_HTTP_PORT = _env_value('TP_HTTP_PORT', '80')
+TP_HTTPS_PORT = _env_value('TP_HTTPS_PORT', '443')
 
-    for url in url_list:
-        # Ensure scheme is present (fallback to https)
-        parsed = urlparse(url) if url.startswith(('http://', 'https://')) else urlparse(f'https://{url}')
+tls_ipv4_list = [addr.strip() for addr in TP_TLS_IPV4_ADDRESSES.split(',') if addr.strip()]
+tls_ipv6_list = [addr.strip() for addr in TP_TLS_IPV6_ADDRESSES.split(',') if addr.strip()]
+tls_dns_list = [name.strip() for name in TP_TLS_DNS_NAMES.split(',') if name.strip()]
 
-        host_with_port = parsed.netloc
+def _format_origin(scheme: str, host: str, port: str) -> str:
+    """Format an origin URL with optional port."""
+    default_port = '80' if scheme == 'http' else '443'
+    if port == default_port:
+        return f'{scheme}://{host}'
+    return f'{scheme}://{host}:{port}'
 
-        # 1. Extract just host/IP for ALLOWED_HOSTS (strip port)
-        host_only = host_with_port.split(':')[0]
-        if host_only not in ALLOWED_HOSTS:
-            ALLOWED_HOSTS.append(host_only)
+for ipv4 in tls_ipv4_list:
+    if ipv4 not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ipv4)
+    http_origin = _format_origin('http', ipv4, TP_HTTP_PORT)
+    https_origin = _format_origin('https', ipv4, TP_HTTPS_PORT)
+    if http_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(http_origin)
+    if https_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(https_origin)
 
-            # If mDNS domain, trust subdomains too
-            if host_only.endswith('.local') and f'.{host_only}' not in ALLOWED_HOSTS:
-                ALLOWED_HOSTS.append(f'.{host_only}')
+for ipv6 in tls_ipv6_list:
+    if ipv6 not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ipv6)
+    http_origin = _format_origin('http', f'[{ipv6}]', TP_HTTP_PORT)
+    https_origin = _format_origin('https', f'[{ipv6}]', TP_HTTPS_PORT)
+    if http_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(http_origin)
+    if https_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(https_origin)
 
-        # 2. Extract the exact origin (scheme + host + port) for CSRF
-        # e.g., "https://trustpoint.local:8443" or "http://10.10.0.2"
-        exact_origin = f'{parsed.scheme}://{host_with_port}'
-        if exact_origin not in CSRF_TRUSTED_ORIGINS:
-            CSRF_TRUSTED_ORIGINS.append(exact_origin)
+for dns_name in tls_dns_list:
+    if dns_name not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(dns_name)
+        if dns_name.endswith('.local') and f'.{dns_name}' not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(f'.{dns_name}')
+    http_origin = _format_origin('http', dns_name, TP_HTTP_PORT)
+    https_origin = _format_origin('https', dns_name, TP_HTTPS_PORT)
+    if http_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(http_origin)
+    if https_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(https_origin)
 
 
-# Basic SMTP backend
-if DEBUG:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-else:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no-reply@trustpoint.ai')
-
-
-# Settings for postgreql database
-POSTGRESQL = True
-DATABASE_ENGINE = 'django.db.backends.postgresql'
-DATABASE_HOST = 'localhost'
-DATABASE_PORT = '5432'
-POSTGRES_DB = 'trustpoint_db'
-DATABASE_USER = 'admin'
-DATABASE_PASSWORD = 'testing321'  # noqa: S105
+# Settings for PostgreSQL database
+POSTGRESQL = _env_bool('POSTGRESQL', default=True)
+DATABASE_ENGINE = _env_value('DATABASE_ENGINE', 'django.db.backends.postgresql')
+DATABASE_HOST = _env_value('DATABASE_HOST', 'localhost')
+DATABASE_PORT = _env_value('DATABASE_PORT', '5432')
+POSTGRES_DB = _env_value('POSTGRES_DB', 'trustpoint_db')
+DATABASE_USER = _env_value('DATABASE_USER', 'admin', file_var='DATABASE_USER_FILE')
+DATABASE_PASSWORD = _env_value('DATABASE_PASSWORD', 'testing321', file_var='DATABASE_PASSWORD_FILE')
 
 
 # Setting for email backend
@@ -217,23 +256,21 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localh
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # If EMAIL_HOST is present, switch to SMTP
-_email_host = os.getenv('EMAIL_HOST')  # e.g. "smtp.customer.tld" or "mailpit"
+_email_host = _env_value('EMAIL_HOST', '')  # e.g. "smtp.customer.tld" or "mailpit"
 if _email_host:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = _email_host
-    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    EMAIL_PORT = int(_env_value('EMAIL_PORT', '587'))
 
     # Sensible defaults based on port; env can override
     _SMTP_TLS_PORT = 587
     _SMTP_SSL_PORT = 465
-    _use_tls_env = os.getenv('EMAIL_USE_TLS')
-    _use_ssl_env = os.getenv('EMAIL_USE_SSL')
-    EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == _SMTP_TLS_PORT)
-    EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == _SMTP_SSL_PORT)
+    EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', default=EMAIL_PORT == _SMTP_TLS_PORT)
+    EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', default=EMAIL_PORT == _SMTP_SSL_PORT)
 
-    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # auth only if both non-empty
-    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-    EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
+    EMAIL_HOST_USER = _env_value('EMAIL_HOST_USER', '')  # auth only if both non-empty
+    EMAIL_HOST_PASSWORD = _env_value('EMAIL_HOST_PASSWORD', '')
+    EMAIL_TIMEOUT = int(_env_value('EMAIL_TIMEOUT', '10'))
 
 
 STORAGES = {
@@ -386,11 +423,11 @@ if is_postgre_available():
     DATABASES = {
         'default': {
             'ENGINE': DATABASE_ENGINE,
-            'NAME': os.environ.get('POSTGRES_DB', POSTGRES_DB),
-            'USER': os.environ.get('DATABASE_USER', DATABASE_USER),
-            'PASSWORD': os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD),
-            'HOST': os.environ.get('DATABASE_HOST', DATABASE_HOST),
-            'PORT': os.environ.get('DATABASE_PORT', DATABASE_PORT),
+            'NAME': POSTGRES_DB,
+            'USER': DATABASE_USER,
+            'PASSWORD': DATABASE_PASSWORD,
+            'HOST': DATABASE_HOST,
+            'PORT': DATABASE_PORT,
         }
     }
 else:

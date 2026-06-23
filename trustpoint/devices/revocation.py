@@ -13,7 +13,10 @@ class DeviceCredentialRevocation:
     def revoke_certificate(issued_credential_id: int, reason: str) -> tuple[bool, str]:
         """Revokes a certificate given an ID of an IssuedCredentialModel instance."""
         try:
-            issued_credential = IssuedCredentialModel.objects.get(id=issued_credential_id)
+            issued_credential = IssuedCredentialModel.objects.select_related(
+                'credential__certificate__revoked_certificate',
+                'domain__issuing_ca',
+            ).get(id=issued_credential_id)
         except IssuedCredentialModel.DoesNotExist:
             return False, 'The credential to revoke does not exist.'
 
