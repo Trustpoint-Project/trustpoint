@@ -6,7 +6,11 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from django import forms
+    from django.core.files.uploadedfile import UploadedFile
+    from django.utils.datastructures import MultiValueDict
 
     from pki.models import CaModel
     from pki.models.ca_rollover import CaRolloverModel, CaRolloverStrategyType
@@ -29,8 +33,8 @@ class RolloverStrategy(ABC):
     def get_plan_form(
         self,
         old_ca: CaModel,
-        data: dict[str, object] | None = None,
-        files: dict[str, object] | None = None,
+        data: Mapping[str, object] | None = None,
+        files: MultiValueDict[str, UploadedFile] | None = None,
     ) -> forms.Form:
         """Return the form used to plan a rollover with this strategy."""
 
@@ -41,8 +45,8 @@ class RolloverStrategy(ABC):
     def get_awaiting_form(
         self,
         rollover: CaRolloverModel,  # noqa: ARG002
-        data: dict[str, object] | None = None,  # noqa: ARG002
-        files: dict[str, object] | None = None,  # noqa: ARG002
+        data: Mapping[str, object] | None = None,  # noqa: ARG002
+        files: MultiValueDict[str, UploadedFile] | None = None,  # noqa: ARG002
     ) -> forms.Form | None:
         """Return a form for the AWAITING_NEW_CA state, if applicable."""
         return None

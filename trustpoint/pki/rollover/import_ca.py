@@ -24,6 +24,11 @@ from pki.rollover.registry import rollover_registry
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from django.core.files.uploadedfile import UploadedFile
+    from django.utils.datastructures import MultiValueDict
+
     from pki.models.ca_rollover import CaRolloverModel
 
 logger = logging.getLogger(__name__)
@@ -163,8 +168,8 @@ class ImportCaRolloverStrategy(RolloverStrategy):
     def get_plan_form(
         self,
         old_ca: CaModel,  # noqa: ARG002
-        data: dict[str, object] | None = None,
-        files: dict[str, object] | None = None,
+        data: Mapping[str, object] | None = None,
+        files: MultiValueDict[str, UploadedFile] | None = None,
     ) -> ImportCaRolloverForm:
         """Return the PKCS#12 import form.
 

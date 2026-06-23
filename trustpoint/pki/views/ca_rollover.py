@@ -71,7 +71,7 @@ class PlanRolloverView(LoginRequiredMixin, View):
                 old_ca=issuing_ca,
                 strategy_type=strategy_type,
                 form=form,
-                initiated_by=request.user,
+                initiated_by=request.user if request.user.is_authenticated else None,
             )
             messages.success(request, _('CA rollover planned successfully.'))
             actor = request.user if request.user.is_authenticated else None

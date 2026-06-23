@@ -12,7 +12,7 @@ from pki.rollover.registry import rollover_registry
 
 if TYPE_CHECKING:
     from django import forms
-    from django.contrib.auth.models import AbstractBaseUser
+    from django.contrib.auth.models import User
     from django.db.models import QuerySet
 
     from pki.models import CaModel
@@ -57,7 +57,7 @@ class CaRolloverService:
         old_ca: CaModel,
         strategy_type: CaRolloverStrategyType,
         form: forms.Form,
-        initiated_by: AbstractBaseUser | None = None,
+        initiated_by: User | None = None,
     ) -> CaRolloverModel:
         """Plan and create a new CA rollover.
 

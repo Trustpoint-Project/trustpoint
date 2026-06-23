@@ -8,7 +8,11 @@ from pki.models.ca_rollover import CaRolloverStrategyType
 from pki.rollover.base import RolloverStrategy
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from django import forms
+    from django.core.files.uploadedfile import UploadedFile
+    from django.utils.datastructures import MultiValueDict
 
     from pki.models import CaModel
 
@@ -38,8 +42,8 @@ class GenerateKeypairRolloverStrategy(RolloverStrategy):
     def get_plan_form(
         self,
         old_ca: CaModel,
-        data: dict[str, object] | None = None,
-        files: dict[str, object] | None = None,
+        data: Mapping[str, object] | None = None,
+        files: MultiValueDict[str, UploadedFile] | None = None,
     ) -> forms.Form:
         """Return the form for configuring key generation parameters.
 
