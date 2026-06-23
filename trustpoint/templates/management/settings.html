@@ -10,8 +10,10 @@
 
   <div class="tp-settings-tabs">
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=internationalization" data-settings-tab="panel-internationalization">{% trans "Internationalization" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=ui" data-settings-tab="panel-ui">{% trans "User Interface" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=security" data-settings-tab="panel-security">{% trans "Security" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=workflow" data-settings-tab="panel-workflow">{% trans "Workflow Execution" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=smtp-email" data-settings-tab="panel-smtp-email">{% trans "SMTP Email" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=log" data-settings-tab="panel-log">{% trans "Logging" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=notifications" data-settings-tab="panel-notifications">{% trans "Notifications" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=metrics" data-settings-tab="panel-metrics">{% trans "Metrics" %}</a>
@@ -21,6 +23,10 @@
 
     <div id="panel-internationalization" class="tp-settings-panel">
       {% include 'management/includes/internationalization_configuration.html' with form=internationalization_form %}
+    </div>
+
+    <div id="panel-ui" class="tp-settings-panel">
+      {% include 'management/includes/ui_configuration.html' with form=ui_form %}
     </div>
 
     <div id="panel-security" class="tp-settings-panel">
@@ -73,6 +79,193 @@
       </div>
     </div>
 
+    <div id="panel-smtp-email" class="tp-settings-panel">
+      <div class="card">
+        <div class="card-header"><h5 class="mb-0">{% trans "SMTP Email Configuration" %}</h5></div>
+        <div class="card-body pt-4 pb-4">
+          <form method="POST" id="smtp_email_configuration">
+            {% csrf_token %}
+            <input type="hidden" name="form_name" value="smtp_email">
+
+            <fieldset class="form-group tp-form-group">
+              {% if smtp_email_form.non_field_errors %}
+                <div class="invalid-feedback d-block mb-3">
+                  {{ smtp_email_form.non_field_errors }}
+                </div>
+              {% endif %}
+
+              <div class="mb-4">
+                <div class="form-check form-switch">
+                  {{ smtp_email_form.enabled }}
+                  <label class="form-check-label fw-semibold" for="{{ smtp_email_form.enabled.id_for_label }}">
+                    {{ smtp_email_form.enabled.label }}
+                  </label>
+                </div>
+                <div class="form-text">{{ smtp_email_form.enabled.help_text }}</div>
+                {% if smtp_email_form.enabled.errors %}
+                  <div class="invalid-feedback d-block">{{ smtp_email_form.enabled.errors.0 }}</div>
+                {% endif %}
+              </div>
+
+              <div class="row g-3">
+                <div class="col-lg-6">
+                  <label class="form-label" for="{{ smtp_email_form.host.id_for_label }}">
+                    {{ smtp_email_form.host.label }}
+                  </label>
+                  {{ smtp_email_form.host }}
+                  <div class="form-text">{{ smtp_email_form.host.help_text }}</div>
+                  {% if smtp_email_form.host.errors %}
+                    <div class="invalid-feedback d-block">{{ smtp_email_form.host.errors.0 }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-lg-6">
+                  <label class="form-label" for="{{ smtp_email_form.port.id_for_label }}">
+                    {{ smtp_email_form.port.label }}
+                  </label>
+                  {{ smtp_email_form.port }}
+                  <div class="form-text">{{ smtp_email_form.port.help_text }}</div>
+                  {% if smtp_email_form.port.errors %}
+                    <div class="invalid-feedback d-block">{{ smtp_email_form.port.errors.0 }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-lg-6">
+                  <label class="form-label" for="{{ smtp_email_form.default_from_email.id_for_label }}">
+                    {{ smtp_email_form.default_from_email.label }}
+                  </label>
+                  {{ smtp_email_form.default_from_email }}
+                  <div class="form-text">{{ smtp_email_form.default_from_email.help_text }}</div>
+                  {% if smtp_email_form.default_from_email.errors %}
+                    <div class="invalid-feedback d-block">{{ smtp_email_form.default_from_email.errors.0 }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-lg-6">
+                  <label class="form-label" for="{{ smtp_email_form.timeout_seconds.id_for_label }}">
+                    {{ smtp_email_form.timeout_seconds.label }}
+                  </label>
+                  {{ smtp_email_form.timeout_seconds }}
+                  <div class="form-text">{{ smtp_email_form.timeout_seconds.help_text }}</div>
+                  {% if smtp_email_form.timeout_seconds.errors %}
+                    <div class="invalid-feedback d-block">{{ smtp_email_form.timeout_seconds.errors.0 }}</div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <h6 class="mb-3">{% trans "Transport Security" %}</h6>
+              <div class="row g-3">
+                <div class="col-lg-6">
+                  <div class="form-check form-switch">
+                    {{ smtp_email_form.use_tls }}
+                    <label class="form-check-label fw-semibold" for="{{ smtp_email_form.use_tls.id_for_label }}">
+                      {{ smtp_email_form.use_tls.label }}
+                    </label>
+                  </div>
+                  <div class="form-text">{{ smtp_email_form.use_tls.help_text }}</div>
+                  {% if smtp_email_form.use_tls.errors %}
+                    <div class="invalid-feedback d-block">{{ smtp_email_form.use_tls.errors.0 }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-lg-6">
+                  <div class="form-check form-switch">
+                    {{ smtp_email_form.use_ssl }}
+                    <label class="form-check-label fw-semibold" for="{{ smtp_email_form.use_ssl.id_for_label }}">
+                      {{ smtp_email_form.use_ssl.label }}
+                    </label>
+                  </div>
+                  <div class="form-text">{{ smtp_email_form.use_ssl.help_text }}</div>
+                  {% if smtp_email_form.use_ssl.errors %}
+                    <div class="invalid-feedback d-block">{{ smtp_email_form.use_ssl.errors.0 }}</div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+                <h6 class="mb-0">{% trans "Authentication" %}</h6>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-smtp-action="clear-auth">
+                  {% trans "Clear Authentication" %}
+                </button>
+              </div>
+              <div class="row g-3">
+                <div class="col-lg-6">
+                  <label class="form-label" for="{{ smtp_email_form.username.id_for_label }}">
+                    {{ smtp_email_form.username.label }}
+                  </label>
+                  {{ smtp_email_form.username }}
+                  <div class="form-text">{{ smtp_email_form.username.help_text }}</div>
+                  {% if smtp_email_form.username.errors %}
+                    <div class="invalid-feedback d-block">{{ smtp_email_form.username.errors.0 }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-lg-6">
+                  <label class="form-label" for="{{ smtp_email_form.password.id_for_label }}">
+                    {{ smtp_email_form.password.label }}
+                  </label>
+                  {{ smtp_email_form.password }}
+                  <div class="form-text">{{ smtp_email_form.password.help_text }}</div>
+                  {% if smtp_email_form.password.errors %}
+                    <div class="invalid-feedback d-block">{{ smtp_email_form.password.errors.0 }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </fieldset>
+
+            <div class="alert alert-info mt-3" role="alert">
+              <div class="text-start">
+                <strong>{% trans "Active backend" %}:</strong> {{ smtp_email_backend }}<br>
+                {% if smtp_email_config.enabled %}
+                  <strong>{% trans "Server" %}:</strong> {{ smtp_email_config.host }}:{{ smtp_email_config.port }}<br>
+                  <strong>{% trans "Sender" %}:</strong> {{ smtp_email_config.default_from_email }}
+                {% else %}
+                  {% trans "SMTP delivery is disabled. Workflow email steps use Django's console email backend until SMTP is enabled." %}
+                {% endif %}
+              </div>
+            </div>
+
+            <hr class="my-4">
+
+            <h6 class="mb-3">{% trans "Test SMTP Connection" %}</h6>
+            <div class="row g-3 align-items-end">
+              <div class="col-lg-6">
+                <label class="form-label" for="{{ smtp_email_test_form.recipient.id_for_label }}">
+                  {{ smtp_email_test_form.recipient.label }}
+                </label>
+                {{ smtp_email_test_form.recipient }}
+                {% if smtp_email_test_form.recipient.errors %}
+                  <div class="invalid-feedback d-block">{{ smtp_email_test_form.recipient.errors.0 }}</div>
+                {% else %}
+                  <div class="form-text">
+                    {% trans "Sends a small test email using the SMTP values currently shown above." %}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-lg-6">
+                <button class="btn btn-outline-primary w-100" type="submit" name="form_name" value="smtp_email_test">
+                  {% trans "Send Test Email" %}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between">
+          <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary" type="submit" form="smtp_email_configuration" name="form_name" value="smtp_email">
+              {% trans "Save" %}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="panel-log" class="tp-settings-panel">
       {% include 'management/includes/log_configuration.html' with form=logging_form %}
     </div>
@@ -82,7 +275,7 @@
     </div>
 
     <div id="panel-metrics" class="tp-settings-panel">
-      {% include 'management/includes/metrics.html' %}
+      {% include 'management/includes/metrics_configuration.html' with form=prometheus_form %}
     </div>
 
   </div>
@@ -95,6 +288,11 @@
 
     var tabs = document.querySelectorAll('[data-settings-tab]');
     var panels = document.querySelectorAll('.tp-settings-panel');
+    var starttls = document.querySelector('[data-smtp-security="starttls"]');
+    var ssl = document.querySelector('[data-smtp-security="ssl"]');
+    var clearAuth = document.querySelector('[data-smtp-action="clear-auth"]');
+    var smtpUsername = document.querySelector('[data-smtp-auth="username"]');
+    var smtpPassword = document.querySelector('[data-smtp-auth="password"]');
 
     function activate(tabId) {
         tabs.forEach(function (link) {
@@ -112,6 +310,23 @@
             activate(this.dataset.settingsTab);
         });
     });
+
+    function keepSmtpSecurityExclusive(changed, other) {
+        if (!changed || !other) return;
+        changed.addEventListener('change', function () {
+            if (changed.checked) other.checked = false;
+        });
+    }
+
+    keepSmtpSecurityExclusive(starttls, ssl);
+    keepSmtpSecurityExclusive(ssl, starttls);
+
+    if (clearAuth) {
+        clearAuth.addEventListener('click', function () {
+            if (smtpUsername) smtpUsername.value = '';
+            if (smtpPassword) smtpPassword.value = '';
+        });
+    }
 
     // Get tab from URL parameter or localStorage
     var urlParams = new URLSearchParams(window.location.search);

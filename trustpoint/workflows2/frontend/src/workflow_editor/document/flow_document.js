@@ -6,8 +6,6 @@ function normalizeOutcome(edge) {
   return isNonEmptyString(edge?.on) ? edge.on.trim() : null;
 }
 
-export const END_TARGETS = new Set(['$end', '$reject']);
-
 export function normalizeFlowEdge(edge) {
   if (!edge || typeof edge !== 'object' || Array.isArray(edge)) {
     return null;

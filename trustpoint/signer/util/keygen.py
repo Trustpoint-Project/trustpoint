@@ -9,7 +9,7 @@ from trustpoint_core.oid import AlgorithmIdentifier, NamedCurve
 from trustpoint_core.serializer import PrivateKeySerializer
 
 if TYPE_CHECKING:
-    from cryptography.hazmat.primitives.asymmetric.types import PRIVATE_KEY_TYPES
+    from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
 
 def generate_private_key(algorithm_oid_str: str, curve_name: str | None, key_size: int | None) -> str:
@@ -24,7 +24,7 @@ def generate_private_key(algorithm_oid_str: str, curve_name: str | None, key_siz
         Gives out the private key. In string pem format.
 
     """
-    private_key: PRIVATE_KEY_TYPES
+    private_key: PrivateKeyTypes
 
     algorithm_enum = None
     for enum_member in AlgorithmIdentifier:
@@ -57,8 +57,8 @@ def generate_private_key(algorithm_oid_str: str, curve_name: str | None, key_siz
         private_key = ec.generate_private_key(curve_obj())
     else:
         if not key_size:
-            x = 'RSA key length is required.'
-            raise ValueError(x)
+            msg = 'RSA key length is required.'
+            raise ValueError(msg)
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
 
     pem = PrivateKeySerializer(private_key).as_pkcs8_pem()

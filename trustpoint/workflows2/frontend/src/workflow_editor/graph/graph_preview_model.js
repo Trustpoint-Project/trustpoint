@@ -43,7 +43,7 @@ export function normalizeGraph(graph) {
     nodes: [
       ...realNodes.map((node) => ({
         ...node,
-        is_virtual: false,
+        is_virtual: Boolean(node.is_virtual),
       })),
       ...virtualNodes,
     ],

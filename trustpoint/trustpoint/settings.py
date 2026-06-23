@@ -86,6 +86,7 @@ PUBLIC_PATHS = [
     '/crl',
     '/setup-wizard',
     '/devices/browser',
+    '/prometheus/',
 ]
 
 
@@ -209,8 +210,8 @@ DATABASE_USER = 'admin'
 DATABASE_PASSWORD = 'testing321'  # noqa: S105
 
 
-# Settomg for email backend
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+# Setting for email backend
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
 # Default: console (safe for dev/showcases)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -301,6 +302,7 @@ INSTALLED_APPS = [
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
     'trustpoint_core',
+    'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -323,17 +325,20 @@ if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     INSTALLED_APPS.append('behave_django')
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 
@@ -350,6 +355,8 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'trustpoint.settings.app_version',
                 'management.context_processors.notification_alerts',
+                'management.context_processors.ui_config',
+                'workflows2.context_processors.waiting_counts',
             ],
         },
     },
