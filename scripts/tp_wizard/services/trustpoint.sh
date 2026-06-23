@@ -118,16 +118,21 @@ start_app(){
     [[ -n "$skip_key" ]] || continue
     skip_env+=( -e "${skip_key}=${TP_SKIP_SETUP_VALUE}" )
   done
+  if [[ " $TRUSTPOINT_SKIP_SETUP_ENV_KEYS " != *" TP_SKIP_SETUP "* ]]; then
+    skip_env+=( -e "TP_SKIP_SETUP=" )
+  fi
   if [[ "$TP_SKIP_SETUP_VALUE" == "true" ]]; then
     skip_env+=(
       -e "TP_ADMIN_USERNAME=${TP_ADMIN_USERNAME_VALUE}"
       -e "TP_ADMIN_PASSWORD=${TP_ADMIN_PASSWORD_VALUE}"
       -e "TP_ADMIN_EMAIL=${TP_ADMIN_EMAIL_VALUE}"
       -e "TP_INJECT_DEMO_DATA=${TP_INJECT_DEMO_DATA_VALUE}"
+      -e "TP_ENABLE_PROMETHEUS_METRICS=${TP_ENABLE_PROMETHEUS_METRICS_VALUE}"
     )
   fi
 
   docker run -d --name "$name" --network "$NET" \
+    --network-alias trustpoint.local \
     -p "${APP_HTTP_HOST}:80" \
     -p "${APP_HTTPS_HOST}:443" \
     "${env_file_arg[@]}" \

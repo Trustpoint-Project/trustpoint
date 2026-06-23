@@ -12,7 +12,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import DatabaseError, transaction
 from django.db.models import ProtectedError
 
-from management.models import KeyStorageConfig
+from management.models import KeyStorageConfig, PrometheusConfig
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -74,6 +74,20 @@ class Command(BaseCommand):
         except Exception as e:
             err_msg = f'Failed to configure storage: {e}'
             raise CommandError(err_msg) from e
+
+    def _configure_prometheus_metrics(self) -> None:
+        """Enable the Prometheus metrics endpoint when requested."""
+        if not self._env_bool('TP_ENABLE_PROMETHEUS_METRICS', default=False):
+            return
+
+        config = PrometheusConfig.get()
+        if config.enabled:
+            self.stdout.write(self.style.WARNING('Prometheus metrics endpoint already enabled'))
+            return
+
+        config.enabled = True
+        config.save(update_fields=['enabled'])
+        self.stdout.write(self.style.SUCCESS('Prometheus metrics endpoint enabled'))
 
     def _parse_csv_list(self, value: str | None) -> list[str]:
         """Parse comma-separated values into a list."""
@@ -151,6 +165,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.WARNING('=== Trustpoint Auto-Setup from Environment Variables ==='))
 
         if SetupWizardCompletedModel.setup_wizard_completed():
+            self._configure_prometheus_metrics()
             self.stdout.write(self.style.WARNING('Setup wizard already completed, skipping auto-setup'))
             return
 
@@ -198,6 +213,7 @@ class Command(BaseCommand):
                 credential_model = self._generate_tls_credential(tls_ipv4, tls_ipv6, tls_dns)
                 self._apply_tls_credential(credential_model)
 
+                self._configure_prometheus_metrics()
                 SetupWizardCompletedModel.mark_setup_complete_once()
                 self.stdout.write(self.style.SUCCESS('Setup marked as complete'))
 

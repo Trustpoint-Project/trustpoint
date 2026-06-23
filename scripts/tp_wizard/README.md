@@ -87,8 +87,8 @@ Generated files:
 Prometheus scrapes trustpoint with these defaults:
 
 ```text
-TRUSTPOINT_METRICS_SCHEME=http
-TRUSTPOINT_METRICS_TARGET=trustpoint:80
+TRUSTPOINT_METRICS_SCHEME=https
+TRUSTPOINT_METRICS_TARGET=trustpoint.local:443
 TRUSTPOINT_METRICS_PATH=/prometheus/metrics
 ```
 

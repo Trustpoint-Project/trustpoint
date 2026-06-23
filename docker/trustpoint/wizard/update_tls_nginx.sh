@@ -39,7 +39,13 @@ mkdir -p "$NGINX_TLS_DIR"
 log INFO "Move TLS Server credentials into $NGINX_TLS_DIR"
 
 # Copies the TLS-Server credentials into the nginx TLS directory.
-if ! mv /var/www/html/trustpoint/docker/trustpoint/nginx/tls/* "$NGINX_TLS_DIR"
+shopt -s nullglob
+TLS_FILES=(/var/www/html/trustpoint/docker/trustpoint/nginx/tls/*)
+shopt -u nullglob
+
+if [ ${#TLS_FILES[@]} -eq 0 ]; then
+    log INFO "No staged TLS files found; keeping existing nginx TLS files"
+elif ! mv "${TLS_FILES[@]}" "$NGINX_TLS_DIR"
 then
     log ERROR "Failed to copy Trustpoint TLS files to $NGINX_TLS_DIR."
     exit 3
