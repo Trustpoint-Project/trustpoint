@@ -111,7 +111,7 @@
 
         <div class="card-footer">
             <div class="tp-card-btn-footer">
-                <a href="{% url 'home:dashboard' %}" class="btn btn-secondary">{% trans "Back" %}</a>
+                <a href="{% url 'home:index' %}" class="btn btn-secondary">{% trans "Back" %}</a>
                 {% if notification.notification_type == 'WAR' or notification.notification_type == 'CRI' %}
                     {% if not is_solved %}
                         <!-- Mark as Solved Button -->

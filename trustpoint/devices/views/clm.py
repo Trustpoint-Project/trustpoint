@@ -224,8 +224,6 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
         self._add_credential_pages_to_context(context)
 
-        context['main_url'] = f'{self.page_category}:{self.page_name}'
-
         is_cmp_ra = (
             self.object.domain
             and self.object.domain.issuing_ca
@@ -277,6 +275,8 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
         context['help_dispatch_domain_url'] = f'{self.page_category}:{self.page_name}_help_dispatch_domain'
         context['help_dispatch_device_type_url'] = f'{self.page_category}:{self.page_name}_help_dispatch_domain'
+
+        context['main_url'] = f'{self.page_category}:{self.page_name}'
 
         context['pki_protocols'] = self._get_pki_protocols(self.object)
 
