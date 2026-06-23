@@ -35,10 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 class ImportCaRolloverForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
-    """Form for importing a new Issuing CA from a PKCS#12 file during rollover.
-
-    Reuses the existing PKCS#12 import validation logic from IssuingCaImportMixin.
-    """
+    """Form for importing a new Issuing CA from a PKCS#12 file during rollover."""
 
     unique_name = forms.CharField(
         max_length=256,
@@ -74,11 +71,7 @@ class ImportCaRolloverForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
     )
 
     def clean(self) -> dict[str, Any] | None:
-        """Validate the PKCS#12 file and create the new Issuing CA.
-
-        The new CaModel is stored on the form instance as `new_issuing_ca`
-        for retrieval by the strategy after validation.
-        """
+        """Validate the PKCS#12 file and create the new Issuing CA."""
         cleaned_data = super().clean()
         if not cleaned_data:
             return cleaned_data
@@ -142,18 +135,12 @@ class ImportCaRolloverForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
 
     @property
     def new_issuing_ca(self) -> CaModel:
-        """Return the newly created CaModel after successful validation.
-
-        :raises AttributeError: If the form has not been validated yet.
-        """
+        """Return the newly created CaModel after successful validation."""
         return self._new_issuing_ca
 
 
 class ImportCaRolloverStrategy(RolloverStrategy):
-    """Rollover strategy: import a new Issuing CA from a PKCS#12 file.
-
-    The new CA is available immediately at plan time — no AWAITING_NEW_CA state needed.
-    """
+    """Rollover strategy: import a new Issuing CA from a PKCS#12 file."""
 
     @property
     def strategy_type(self) -> CaRolloverStrategyType:
@@ -171,22 +158,11 @@ class ImportCaRolloverStrategy(RolloverStrategy):
         data: Mapping[str, object] | None = None,
         files: MultiValueDict[str, UploadedFile] | None = None,
     ) -> ImportCaRolloverForm:
-        """Return the PKCS#12 import form.
-
-        :param old_ca: The current Issuing CA (unused for import strategy).
-        :param data: Optional POST data.
-        :param files: Optional uploaded files.
-        :returns: An ImportCaRolloverForm instance.
-        """
+        """Return the PKCS#12 import form."""
         return ImportCaRolloverForm(data=data, files=files)
 
     def create_new_ca(self, form: forms.Form, old_ca: CaModel) -> CaModel | None:
-        """Return the new CA created during form validation.
-
-        :param form: The validated ImportCaRolloverForm.
-        :param old_ca: The old Issuing CA being replaced.
-        :returns: The new CaModel.
-        """
+        """Return the new CA created during form validation."""
         _ = old_ca
         if not isinstance(form, ImportCaRolloverForm):
             msg = 'Expected ImportCaRolloverForm instance.'
@@ -194,10 +170,7 @@ class ImportCaRolloverStrategy(RolloverStrategy):
         return form.new_issuing_ca
 
     def on_complete(self, rollover: CaRolloverModel) -> None:
-        """Reassign domains and deactivate the old CA when rollover completes.
-
-        :param rollover: The completed rollover.
-        """
+        """Reassign domains and deactivate the old CA when rollover completes."""
         old_ca = rollover.old_issuing_ca
         new_ca = rollover.new_issuing_ca
 

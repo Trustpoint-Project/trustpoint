@@ -13,11 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class RolloverStrategyRegistry:
-    """Registry mapping strategy type identifiers to strategy instances.
-
-    Strategies register themselves at module load time. The service and views
-    resolve the appropriate strategy from this registry by type identifier.
-    """
+    """Registry mapping strategy type identifiers to strategy instances."""
 
     def __init__(self) -> None:
         """Initialize an empty registry."""

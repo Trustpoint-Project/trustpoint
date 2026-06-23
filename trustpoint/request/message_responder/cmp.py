@@ -16,6 +16,8 @@ from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
 from cmp.models import CmpTransactionModel
 from onboarding.models import OnboardingStatus
+from pki.models.ca_rollover import CaRolloverState
+from pki.services.ca_rollover import CaRolloverService
 from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
 from request.request_context import (
@@ -239,6 +241,32 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         pki_message['header']['generalInfo'].append(itav_val)
         return pki_message
 
+    @staticmethod
+    def _build_certificate_chain_with_rollover(
+        issuer_credential: CredentialModel,
+        context: BaseRequestContext,
+    ) -> list[x509.Certificate]:
+        """Build certificate chain, including new CA if in PREPARATION state."""
+        certificate_chain = [
+            issuer_credential.get_certificate(),
+            *issuer_credential.get_certificate_chain(),
+        ]
+
+        if context.domain and context.domain.issuing_ca:
+            active_rollover = CaRolloverService.get_active_rollover(context.domain.issuing_ca)
+            if (active_rollover
+                and active_rollover.state == CaRolloverState.PREPARATION
+                and active_rollover.new_issuing_ca
+                and active_rollover.new_issuing_ca.credential):
+                new_ca_credential = active_rollover.new_issuing_ca.credential
+                new_ca_chain = [
+                    new_ca_credential.get_certificate(),
+                    *new_ca_credential.get_certificate_chain(),
+                ]
+                certificate_chain.extend(new_ca_chain)
+
+        return certificate_chain
+
 
 class CmpInitializationResponder(CmpMessageResponder):
     """Respond to a CMP initialization request (IR) with the issued certificate (IP)."""
@@ -252,6 +280,7 @@ class CmpInitializationResponder(CmpMessageResponder):
             signer_credential: CredentialModel | None = None,
             status: int = 0,
             status_text: str | None = None,
+            context: BaseRequestContext | None = None,
             ) -> rfc4210.PKIMessage:
         """Builds the IP response message (without the protection)."""
         ip_header = CmpInitializationResponder._build_response_message_header(
@@ -262,10 +291,16 @@ class CmpInitializationResponder(CmpMessageResponder):
 
         ip_extra_certs = univ.SequenceOf()
 
-        certificate_chain = [
-            issuer_credential.get_certificate(),
-            *issuer_credential.get_certificate_chain(),
-        ]
+        if context:
+            certificate_chain = CmpMessageResponder._build_certificate_chain_with_rollover(
+                issuer_credential, context
+            )
+        else:
+            certificate_chain = [
+                issuer_credential.get_certificate(),
+                *issuer_credential.get_certificate_chain(),
+            ]
+
         if signer_credential and issuer_credential.pk != signer_credential.pk:
             # Include both the DevOwnerID (signer) and the Issuer CA in extraCerts
             signer_chain = [
@@ -352,7 +387,8 @@ class CmpInitializationResponder(CmpMessageResponder):
             issued_cert=context.issued_certificate,
             sender_kid=sender_kid,
             issuer_credential=issuing_ca_credential,
-            signer_credential=signer_credential
+            signer_credential=signer_credential,
+            context=context,
         )
         if context.implicit_confirm:
             pki_message = CmpInitializationResponder._grant_implicit_confirm(pki_message)
@@ -386,6 +422,7 @@ class CmpCertificationResponder(CmpMessageResponder):
             sender_kid: rfc2459.KeyIdentifier,
             status: int = 0,
             status_text: str | None = None,
+            context: BaseRequestContext | None = None,
     ) -> rfc4210.PKIMessage:
         """Builds the CR response message (without the protection)."""
         cp_header = CmpCertificationResponder._build_response_message_header(
@@ -395,10 +432,15 @@ class CmpCertificationResponder(CmpMessageResponder):
 
         cp_extra_certs = univ.SequenceOf()
 
-        certificate_chain = [
-            issuer_credential.get_certificate(),
-            *issuer_credential.get_certificate_chain(),
-        ]
+        if context:
+            certificate_chain = CmpMessageResponder._build_certificate_chain_with_rollover(
+                issuer_credential, context
+            )
+        else:
+            certificate_chain = [
+                issuer_credential.get_certificate(),
+                *issuer_credential.get_certificate_chain(),
+            ]
         for certificate in certificate_chain:
             der_bytes = certificate.public_bytes(encoding=Encoding.DER)
             asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
@@ -474,6 +516,7 @@ class CmpCertificationResponder(CmpMessageResponder):
             issued_cert=context.issued_certificate,
             sender_kid=sender_kid,
             issuer_credential=issuing_ca_credential,
+            context=context,
         )
         if context.implicit_confirm:
             pki_message = CmpCertificationResponder._grant_implicit_confirm(pki_message)
@@ -603,6 +646,7 @@ class CmpTransactionResponder(CmpMessageResponder):
                 signer_credential=signer_credential,
                 status=status,
                 status_text=status_text,
+                context=context,
             )
 
         if context.operation == 'certification':
@@ -614,6 +658,7 @@ class CmpTransactionResponder(CmpMessageResponder):
                 issuer_credential=issuing_ca_credential,
                 status=status,
                 status_text=status_text,
+                context=context,
             )
 
         return None
@@ -712,6 +757,7 @@ class CmpRevocationResponder(CmpMessageResponder):
             parsed_message: rfc4210.PKIMessage,
             issuer_credential: CredentialModel,
             sender_kid: rfc2459.KeyIdentifier,
+            context: BaseRequestContext | None = None,
     ) -> rfc4210.PKIMessage:
         """Builds the CR response message (without the protection)."""
         rp_header = CmpRevocationResponder._build_response_message_header(
@@ -721,10 +767,15 @@ class CmpRevocationResponder(CmpMessageResponder):
 
         rp_extra_certs = univ.SequenceOf()
 
-        certificate_chain = [
-            issuer_credential.get_certificate(),
-            *issuer_credential.get_certificate_chain(),
-        ]
+        if context:
+            certificate_chain = CmpMessageResponder._build_certificate_chain_with_rollover(
+                issuer_credential, context
+            )
+        else:
+            certificate_chain = [
+                issuer_credential.get_certificate(),
+                *issuer_credential.get_certificate_chain(),
+            ]
         for certificate in certificate_chain:
             der_bytes = certificate.public_bytes(encoding=Encoding.DER)
             asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
@@ -768,6 +819,7 @@ class CmpRevocationResponder(CmpMessageResponder):
             parsed_message=context.parsed_message,
             sender_kid=sender_kid,
             issuer_credential=issuing_ca_credential,
+            context=context,
         )
         pki_message = CmpRevocationResponder._sign_pki_message(
             pki_message=pki_message, context=context

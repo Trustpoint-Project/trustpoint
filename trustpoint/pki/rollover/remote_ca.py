@@ -20,9 +20,6 @@ if TYPE_CHECKING:
 class RemoteCaRolloverStrategy(RolloverStrategy):
     """Rollover strategy: request a new Issuing CA certificate from a remote CA.
 
-    NOT YET IMPLEMENTED — this is a stub to ensure the architecture supports
-    future extension without modifying existing code.
-
     Flow:
     1. Plan: Configure remote CA endpoint (URL, auth)
     2. AWAITING_NEW_CA: Initiate CMP/EST request to upstream CA
@@ -46,18 +43,12 @@ class RemoteCaRolloverStrategy(RolloverStrategy):
         data: Mapping[str, object] | None = None,
         files: MultiValueDict[str, UploadedFile] | None = None,
     ) -> forms.Form:
-        """Return the form for configuring remote CA endpoint.
-
-        :raises NotImplementedError: Strategy not yet implemented.
-        """
+        """Return the form for configuring remote CA endpoint."""
         msg = 'RemoteCaRolloverStrategy is not yet implemented.'
         raise NotImplementedError(msg)
 
     def create_new_ca(self, form: forms.Form, old_ca: CaModel) -> CaModel | None:
-        """Initiate remote request — returns None (async provisioning).
-
-        :raises NotImplementedError: Strategy not yet implemented.
-        """
+        """Initiate remote request — returns None (async provisioning)."""
         msg = 'RemoteCaRolloverStrategy is not yet implemented.'
         raise NotImplementedError(msg)
 
