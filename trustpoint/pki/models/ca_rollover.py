@@ -24,7 +24,8 @@ class CaRolloverState(models.TextChoices):
 
     PLANNED = 'planned', _('Planned')
     AWAITING_NEW_CA = 'awaiting_new_ca', _('Awaiting New CA')
-    IN_PROGRESS = 'in_progress', _('In Progress')
+    PREPARATION = 'preparation', _('Preparation')
+    TRANSITION = 'transition', _('Transition')
     COMPLETED = 'completed', _('Completed')
     CANCELLED = 'cancelled', _('Cancelled')
 
@@ -95,7 +96,7 @@ class CaRolloverModel(LoggerMixin, models.Model):
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=['old_issuing_ca'],
-                condition=models.Q(state__in=['planned', 'awaiting_new_ca', 'in_progress']),
+                condition=models.Q(state__in=['planned', 'awaiting_new_ca', 'preparation', 'transition']),
                 name='unique_active_rollover_per_old_ca',
             ),
         ]
@@ -107,11 +108,12 @@ class CaRolloverModel(LoggerMixin, models.Model):
 
     @property
     def is_active(self) -> bool:
-        """Return True if the rollover is planned, awaiting, or in progress."""
+        """Return True if the rollover is planned, awaiting, in preparation, or in transition."""
         return self.state in (
             CaRolloverState.PLANNED,
             CaRolloverState.AWAITING_NEW_CA,
-            CaRolloverState.IN_PROGRESS,
+            CaRolloverState.PREPARATION,
+            CaRolloverState.TRANSITION,
         )
 
     @property
@@ -122,7 +124,7 @@ class CaRolloverModel(LoggerMixin, models.Model):
         return timezone.now() >= self.overlap_end
 
     def start(self) -> None:
-        """Transition from PLANNED to IN_PROGRESS.
+        """Transition from PLANNED to PREPARATION.
 
         :raises ValueError: If the rollover is not in PLANNED state or new CA is not set.
         """
@@ -132,16 +134,27 @@ class CaRolloverModel(LoggerMixin, models.Model):
         if self.new_issuing_ca is None:
             msg = 'Cannot start rollover without a new Issuing CA.'
             raise ValueError(msg)
-        self.state = CaRolloverState.IN_PROGRESS
+        self.state = CaRolloverState.PREPARATION
         self.started_at = timezone.now()
         self.save(update_fields=['state', 'started_at'])
 
-    def complete(self) -> None:
-        """Transition from IN_PROGRESS to COMPLETED.
+    def transition_to_transition(self) -> None:
+        """Transition from PREPARATION to TRANSITION.
 
-        :raises ValueError: If the rollover is not in IN_PROGRESS state.
+        :raises ValueError: If the rollover is not in PREPARATION state.
         """
-        if self.state != CaRolloverState.IN_PROGRESS:
+        if self.state != CaRolloverState.PREPARATION:
+            msg = f'Cannot transition to TRANSITION state from {self.get_state_display()}.'
+            raise ValueError(msg)
+        self.state = CaRolloverState.TRANSITION
+        self.save(update_fields=['state'])
+
+    def complete(self) -> None:
+        """Transition from TRANSITION to COMPLETED.
+
+        :raises ValueError: If the rollover is not in TRANSITION state.
+        """
+        if self.state != CaRolloverState.TRANSITION:
             msg = f'Cannot complete rollover in state {self.get_state_display()}.'
             raise ValueError(msg)
         self.state = CaRolloverState.COMPLETED

@@ -26,7 +26,8 @@ class GenerateKeypairRolloverStrategy(RolloverStrategy):
     Flow:
     1. Plan: Generate keypair + CSR
     2. AWAITING_NEW_CA: Operator downloads CSR, gets it signed externally, uploads signed cert
-    3. IN_PROGRESS: New CA is active
+    3. PREPARATION: New CA added to truststores, old CA still issues
+    4. TRANSITION: New CA issues, old CA still in truststore
     """
 
     @property

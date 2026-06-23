@@ -5,7 +5,13 @@ from django.urls import path, re_path
 from devices.views import owner_credentials
 from help_pages import pki_help_views
 from pki.views import ca, cert_profiles, certificates, crls, domains, issuing_cas, truststores
-from pki.views.ca_rollover import CancelRolloverView, CompleteRolloverView, PlanRolloverView, StartRolloverView
+from pki.views.ca_rollover import (
+    CancelRolloverView,
+    CompleteRolloverView,
+    PlanRolloverView,
+    StartRolloverView,
+    TransitionRolloverView,
+)
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 
@@ -167,6 +173,11 @@ urlpatterns = [
         'issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/start/',
         StartRolloverView.as_view(),
         name='issuing_cas-rollover-start',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/transition/',
+        TransitionRolloverView.as_view(),
+        name='issuing_cas-rollover-transition',
     ),
     path(
         'issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/complete/',

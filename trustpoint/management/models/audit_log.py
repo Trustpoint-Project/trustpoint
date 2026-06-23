@@ -34,6 +34,7 @@ class AuditLog(models.Model):
         CA_DELETED = 'CA_DELETED', _('CA Deleted')
         CA_ROLLOVER_PLANNED = 'CA_ROLLOVER_PLANNED', _('CA Rollover Planned')
         CA_ROLLOVER_STARTED = 'CA_ROLLOVER_STARTED', _('CA Rollover Started')
+        CA_ROLLOVER_TRANSITIONED = 'CA_ROLLOVER_TRANSITIONED', _('CA Rollover Transitioned')
         CA_ROLLOVER_COMPLETED = 'CA_ROLLOVER_COMPLETED', _('CA Rollover Completed')
         CA_ROLLOVER_CANCELLED = 'CA_ROLLOVER_CANCELLED', _('CA Rollover Cancelled')
         DOMAIN_CREATED = 'DOMAIN_CREATED', _('Domain Created')

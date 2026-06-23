@@ -70,7 +70,12 @@ class CaRolloverService:
         """
         active_exists = CaRolloverModel.objects.filter(
             old_issuing_ca=old_ca,
-            state__in=[CaRolloverState.PLANNED, CaRolloverState.AWAITING_NEW_CA, CaRolloverState.IN_PROGRESS],
+            state__in=[
+                CaRolloverState.PLANNED,
+                CaRolloverState.AWAITING_NEW_CA,
+                CaRolloverState.PREPARATION,
+                CaRolloverState.TRANSITION,
+            ],
         ).exists()
         if active_exists:
             msg = f'Issuing CA "{old_ca}" already has an active rollover.'
@@ -114,7 +119,7 @@ class CaRolloverService:
 
     @staticmethod
     def execute_rollover(rollover: CaRolloverModel) -> None:
-        """Start the rollover: transition from PLANNED to IN_PROGRESS.
+        """Start the rollover: transition from PLANNED to PREPARATION.
 
         :param rollover: The rollover to execute.
         :raises CaRolloverError: If the rollover cannot be started.
@@ -181,7 +186,8 @@ class CaRolloverService:
             state__in=[
                 CaRolloverState.PLANNED,
                 CaRolloverState.AWAITING_NEW_CA,
-                CaRolloverState.IN_PROGRESS,
+                CaRolloverState.PREPARATION,
+                CaRolloverState.TRANSITION,
             ],
         ).first()
 

@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
             name='CaRolloverModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('state', models.CharField(choices=[('planned', 'Planned'), ('awaiting_new_ca', 'Awaiting New CA'), ('in_progress', 'In Progress'), ('completed', 'Completed'), ('cancelled', 'Cancelled')], default='planned', max_length=20, verbose_name='State')),
+                ('state', models.CharField(choices=[('planned', 'Planned'), ('awaiting_new_ca', 'Awaiting New CA'), ('preparation', 'Preparation'), ('transition', 'Transition'), ('completed', 'Completed'), ('cancelled', 'Cancelled')], default='planned', max_length=20, verbose_name='State')),
                 ('strategy_type', models.CharField(choices=[('import_ca', 'Import new Issuing CA from file'), ('generate_keypair', 'Generate keypair and request certificate'), ('remote_ca', 'Configure a remote Issuing CA')], help_text='How the new Issuing CA is provisioned.', max_length=20, verbose_name='Strategy')),
                 ('planned_at', models.DateTimeField(auto_now_add=True, verbose_name='Planned At')),
                 ('started_at', models.DateTimeField(blank=True, null=True, verbose_name='Started At')),
@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
                 'verbose_name': 'CA Rollover',
                 'verbose_name_plural': 'CA Rollovers',
                 'ordering': ['-planned_at'],
-                'constraints': [models.UniqueConstraint(condition=models.Q(('state__in', ['planned', 'awaiting_new_ca', 'in_progress'])), fields=('old_issuing_ca',), name='unique_active_rollover_per_old_ca')],
+                'constraints': [models.UniqueConstraint(condition=models.Q(('state__in', ['planned', 'awaiting_new_ca', 'preparation', 'transition'])), fields=('old_issuing_ca',), name='unique_active_rollover_per_old_ca')],
             },
             bases=(trustpoint.logger.LoggerMixin, models.Model),
         ),

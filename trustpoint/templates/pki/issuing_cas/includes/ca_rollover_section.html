@@ -89,7 +89,13 @@
                     {% trans 'Start Rollover' %}
                 </a>
                 {% endif %}
-                {% if active_rollover.state == 'in_progress' %}
+                {% if active_rollover.state == 'preparation' %}
+                <a href="{% url 'pki:issuing_cas-rollover-transition' pk=issuing_ca.pk rollover_pk=active_rollover.pk %}"
+                   class="btn btn-primary btn-sm me-2">
+                    {% trans 'Move to Transition' %}
+                </a>
+                {% endif %}
+                {% if active_rollover.state == 'transition' %}
                 <a href="{% url 'pki:issuing_cas-rollover-complete' pk=issuing_ca.pk rollover_pk=active_rollover.pk %}"
                    class="btn btn-primary btn-sm me-2">
                     {% trans 'Complete Rollover' %}

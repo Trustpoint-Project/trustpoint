@@ -108,11 +108,11 @@ class TestCaRolloverServiceExecute:
 
         CaRolloverService.execute_rollover(rollover)
         rollover.refresh_from_db()
-        assert rollover.state == CaRolloverState.IN_PROGRESS
+        assert rollover.state == CaRolloverState.PREPARATION
         assert rollover.started_at is not None
 
     def test_execute_wrong_state(self, issuing_ca_model, second_issuing_ca_model):
-        """Test that executing from IN_PROGRESS raises an error."""
+        """Test that executing from PREPARATION raises an error."""
         import pki.rollover.import_ca  # noqa: F401
 
         rollover = CaRolloverModel.objects.create(

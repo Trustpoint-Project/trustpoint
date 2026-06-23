@@ -26,7 +26,8 @@ class RemoteCaRolloverStrategy(RolloverStrategy):
     Flow:
     1. Plan: Configure remote CA endpoint (URL, auth)
     2. AWAITING_NEW_CA: Initiate CMP/EST request to upstream CA
-    3. IN_PROGRESS: New CA is active after response received
+    3. PREPARATION: New CA added to truststores, old CA still issues
+    4. TRANSITION: New CA issues, old CA still in truststore
     """
 
     @property

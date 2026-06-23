@@ -57,7 +57,7 @@ class RolloverStrategy(ABC):
         raise NotImplementedError(msg)
 
     def on_start(self, rollover: CaRolloverModel) -> None:
-        """Hook called when a rollover transitions to IN_PROGRESS."""
+        """Hook called when a rollover transitions to PREPARATION."""
         _ = rollover
 
     def on_complete(self, rollover: CaRolloverModel) -> None:

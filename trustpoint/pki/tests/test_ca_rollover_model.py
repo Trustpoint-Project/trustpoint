@@ -26,7 +26,7 @@ class TestCaRolloverModelStates:
         """Test starting a rollover from PLANNED state."""
         _rollover.start()
         _rollover.refresh_from_db()
-        assert _rollover.state == CaRolloverState.IN_PROGRESS
+        assert _rollover.state == CaRolloverState.PREPARATION
         assert _rollover.started_at is not None
 
     def test_start_requires_new_ca(self, issuing_ca_model):
@@ -41,14 +41,22 @@ class TestCaRolloverModelStates:
             rollover.start()
 
     def test_start_from_wrong_state(self, _rollover):
-        """Test that start from IN_PROGRESS raises."""
+        """Test that start from PREPARATION raises."""
         _rollover.start()
         with pytest.raises(ValueError, match='Cannot start rollover'):
             _rollover.start()
 
-    def test_complete_from_in_progress(self, _rollover):
-        """Test completing a rollover from IN_PROGRESS state."""
+    def test_transition_to_transition(self, _rollover):
+        """Test transitioning from PREPARATION to TRANSITION state."""
         _rollover.start()
+        _rollover.transition_to_transition()
+        _rollover.refresh_from_db()
+        assert _rollover.state == CaRolloverState.TRANSITION
+
+    def test_complete_from_transition(self, _rollover):
+        """Test completing a rollover from TRANSITION state."""
+        _rollover.start()
+        _rollover.transition_to_transition()
         _rollover.complete()
         _rollover.refresh_from_db()
         assert _rollover.state == CaRolloverState.COMPLETED
@@ -65,9 +73,17 @@ class TestCaRolloverModelStates:
         _rollover.refresh_from_db()
         assert _rollover.state == CaRolloverState.CANCELLED
 
-    def test_cancel_from_in_progress(self, _rollover):
-        """Test cancelling from IN_PROGRESS state."""
+    def test_cancel_from_preparation(self, _rollover):
+        """Test cancelling from PREPARATION state."""
         _rollover.start()
+        _rollover.cancel()
+        _rollover.refresh_from_db()
+        assert _rollover.state == CaRolloverState.CANCELLED
+
+    def test_cancel_from_transition(self, _rollover):
+        """Test cancelling from TRANSITION state."""
+        _rollover.start()
+        _rollover.transition_to_transition()
         _rollover.cancel()
         _rollover.refresh_from_db()
         assert _rollover.state == CaRolloverState.CANCELLED
@@ -75,6 +91,7 @@ class TestCaRolloverModelStates:
     def test_cancel_from_completed_raises(self, _rollover):
         """Test that cancel from COMPLETED raises."""
         _rollover.start()
+        _rollover.transition_to_transition()
         _rollover.complete()
         with pytest.raises(ValueError, match='Cannot cancel rollover'):
             _rollover.cancel()
@@ -136,7 +153,7 @@ class TestCaRolloverModelConstraints:
             CaRolloverModel.objects.create(
                 old_issuing_ca=issuing_ca_model,
                 new_issuing_ca=second_issuing_ca_model,
-                state=CaRolloverState.IN_PROGRESS,
+                state=CaRolloverState.PREPARATION,
                 strategy_type=CaRolloverStrategyType.IMPORT_CA,
             )
 
