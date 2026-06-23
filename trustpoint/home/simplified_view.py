@@ -56,6 +56,15 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
         context['all_domains'] = DomainModel.objects.all().order_by('unique_name')
         context['selected_domain_id'] = self.request.GET.get('domain')
 
+        context['has_available_cas'] = CaModel.objects.filter(
+            is_active=True
+        ).exclude(
+            ca_type__in=[
+                CaModel.CaTypeChoice.AUTOGEN_ROOT,
+                CaModel.CaTypeChoice.KEYLESS,
+            ]
+        ).exists()
+
         for domain in context['domains']:
             devices = domain.devices.all()
 
