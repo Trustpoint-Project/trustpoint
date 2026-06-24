@@ -419,15 +419,20 @@ TEMPLATE_CONTEXT_PROCESSORS = [
     'django.contrib.messages.context_processors.messages',
     'trustpoint.settings.app_version',
     'management.context_processors.notification_alerts',
+]
+
+BOOTSTRAP_EXCLUDED_CONTEXT_PROCESSORS = [
+    'management.context_processors.notification_alerts',
     'management.context_processors.ui_config',
     'workflows2.context_processors.waiting_counts',
 ]
+
 
 if TRUSTPOINT_IS_BOOTSTRAP:
     TEMPLATE_CONTEXT_PROCESSORS = [
         context_processor
         for context_processor in TEMPLATE_CONTEXT_PROCESSORS
-        if context_processor != 'management.context_processors.notification_alerts'
+        if context_processor not in BOOTSTRAP_EXCLUDED_CONTEXT_PROCESSORS
     ]
 
 TEMPLATES: list[dict[str, Any]] = [
