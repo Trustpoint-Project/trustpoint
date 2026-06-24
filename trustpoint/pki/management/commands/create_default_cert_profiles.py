@@ -32,6 +32,7 @@ class Command(BaseCommand):
                 profile_dict = json.loads(profile_json)
                 CertProfilePydanticModel.model_validate(profile_dict)
                 display_name = profile_dict.get('display_name', '')
+                credential_type = profile_dict.get('credential_type', 'application')
             except (ValidationError, ValueError) as e:
                 print(f'Invalid JSON certificate profile in {profile_file}: {e}')
                 continue
@@ -41,7 +42,12 @@ class Command(BaseCommand):
 
             _obj, created = CertificateProfileModel.objects.get_or_create(
                 unique_name=unique_name,
-                defaults={'profile_json': profile_json, 'is_default': is_default, 'display_name': display_name},
+                defaults={
+                    'profile_json': profile_json,
+                    'is_default': is_default,
+                    'display_name': display_name,
+                    'credential_type': credential_type
+                },
             )
 
             if created:

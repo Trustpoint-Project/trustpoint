@@ -6,7 +6,12 @@ from cryptography.hazmat.primitives.serialization import Encoding
 
 from onboarding.models import OnboardingStatus
 from request.request_context import BaseRequestContext, RestBaseRequestContext, RestCertificateRequestContext
-from workflows.models import State
+from request.workflow2_issuance import (
+    Workflow2IssuanceDecision,
+    get_workflow2_dispatch_outcome,
+    get_workflow2_issuance_decision,
+    get_workflow2_run_detail_path,
+)
 
 from .base import AbstractMessageResponder
 
@@ -36,42 +41,50 @@ class RestCertificateMessageResponder(RestMessageResponder):
     @staticmethod
     def _check_workflow_state(context: RestCertificateRequestContext) -> bool:
         """Check if the workflow state allows for certificate issuance."""
-        if not context.enrollment_request:
-            exc_msg = 'No enrollment request is set in the context.'
-            raise ValueError(exc_msg)
+        workflow2_outcome = get_workflow2_dispatch_outcome(context)
+        if workflow2_outcome is None:
+            return True
 
-        workflow_state = context.enrollment_request.aggregated_state
-        if workflow_state == State.AWAITING:
-            context.http_response_status = 202
-            context.http_response_content_type = 'application/json'
-            context.http_response_content = json.dumps(
-                {'status': 'pending', 'detail': 'Enrollment request pending manual approval.'}
-            )
-            return False
-        if workflow_state == State.REJECTED:
-            context.enrollment_request.finalize(State.REJECTED)
-            context.http_response_status = 403
-            context.http_response_content_type = 'application/json'
-            context.http_response_content = json.dumps({'status': 'rejected', 'detail': 'Enrollment request rejected.'})
-            return False
-        if workflow_state == State.FAILED:
-            context.http_response_status = 500
-            context.http_response_content_type = 'application/json'
-            context.http_response_content = json.dumps({
-                'status': 'failed',
-                'detail': f'Workflow failed. Check here: -> /workflows/requests/{context.enrollment_request.id}',
-            })
-            return False
-        if not context.enrollment_request.is_valid():
-            context.http_response_status = 500
-            context.http_response_content_type = 'application/json'
-            context.http_response_content = json.dumps({
+        decision = get_workflow2_issuance_decision(context)
+        run_status = str(workflow2_outcome.run.status)
+        response_status: int
+        response_payload: dict[str, str]
+        if decision == Workflow2IssuanceDecision.WAIT:
+            response_status = 202
+            response_payload = {
+                'status': 'pending',
+                'detail': (
+                    'Enrollment request pending workflow approval.'
+                    if run_status == 'awaiting'
+                    else 'Enrollment request pending workflow processing.'
+                ),
+            }
+        elif decision == Workflow2IssuanceDecision.REJECT:
+            response_status = 403
+            response_payload = {
+                'status': 'rejected',
+                'detail': 'Enrollment request rejected by workflow.',
+            }
+        elif decision == Workflow2IssuanceDecision.FAIL:
+            detail = 'Enrollment request failed in workflow processing.'
+            run_path = get_workflow2_run_detail_path(context)
+            if run_path:
+                detail = f'{detail} Check here: -> {run_path}'
+            response_status = 500
+            response_payload = {'status': 'failed', 'detail': detail}
+        elif decision == Workflow2IssuanceDecision.CONTINUE:
+            return True
+        else:
+            response_status = 500
+            response_payload = {
                 'status': 'error',
-                'detail': 'Enrollment request is not in a valid state for certificate issuance.',
-            })
-            return False
-        context.enrollment_request.finalize(State.FINALIZED)
-        return True
+                'detail': f'Enrollment request is in an unsupported workflow state: {run_status}.',
+            }
+
+        context.http_response_status = response_status
+        context.http_response_content_type = 'application/json'
+        context.http_response_content = json.dumps(response_payload)
+        return False
 
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:

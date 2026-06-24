@@ -539,11 +539,17 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
         self.save()
 
         for name in entry.value:
-            existing_entry = AttributeTypeAndValue.objects.filter(oid=name.oid.dotted_string, value=name.value).first()
+            raw_name_value = name.value
+            name_value_str = raw_name_value.hex().upper() if isinstance(raw_name_value, bytes) else raw_name_value
+
+            existing_entry = AttributeTypeAndValue.objects.filter(
+                oid=name.oid.dotted_string,
+                value=name_value_str,
+            ).first()
             if existing_entry:
                 directory_name.names.add(existing_entry)
             else:
-                attr_type_and_val = AttributeTypeAndValue(oid=name.oid.dotted_string, value=name.value)
+                attr_type_and_val = AttributeTypeAndValue(oid=name.oid.dotted_string, value=name_value_str)
                 attr_type_and_val.save()
                 directory_name.names.add(attr_type_and_val)
 
@@ -1153,9 +1159,11 @@ class GeneralNameModel(OrphanDeletionMixin, CustomDeleteActionModel):
             for rdn in gname.value.rdns:
                 for attr in rdn:
                     # Possibly store attribute in your DB
-                    atv = AttributeTypeAndValue.objects.filter(oid=attr.oid.dotted_string, value=attr.value).first()
+                    raw_attr_val = attr.value
+                    attr_value_str = raw_attr_val.hex().upper() if isinstance(raw_attr_val, bytes) else raw_attr_val
+                    atv = AttributeTypeAndValue.objects.filter(oid=attr.oid.dotted_string, value=attr_value_str).first()
                     if not atv:
-                        atv = AttributeTypeAndValue(oid=attr.oid.dotted_string, value=attr.value)
+                        atv = AttributeTypeAndValue(oid=attr.oid.dotted_string, value=attr_value_str)
                         atv.save()
                     dir_name.names.add(atv)
             dir_name.save()

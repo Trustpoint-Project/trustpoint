@@ -92,17 +92,45 @@ class Command(BaseCommand):
         """Helper function to create a notification for a certificate.
 
         Skips notification creation if one already exists for the given event and certificate.
+        If the certificate is associated with a domain through an issued credential, creates
+        a domain-associated notification. Otherwise, creates a standalone notification.
         """
-        if not NotificationModel.objects.filter(event=event, certificate=certificate).exists():
-            message_data = {'common_name': certificate.common_name,
-                            'not_valid_after': certificate.not_valid_after.isoformat()}
-            notification = NotificationModel.objects.create(
-                certificate=certificate,
-                created_at=timezone.now(),
-                notification_source=NotificationModel.NotificationSource.CERTIFICATE,
-                notification_type=notification_type,
-                message_type=message_type,
-                event=event,
-                message_data=message_data,
-            )
-            notification.statuses.add(new_status)
+        from pki.models import IssuedCredentialModel  # noqa: PLC0415
+
+        message_data = {'common_name': certificate.common_name,
+                        'not_valid_after': certificate.not_valid_after.strftime('%Y-%m-%d %H:%M:%S')}
+        
+        issued_credential = (
+            IssuedCredentialModel.objects
+            .filter(credential__certificate=certificate)
+            .select_related('domain')
+            .first()
+        )
+        
+        if issued_credential and issued_credential.domain:
+            if not NotificationModel.objects.filter(
+                event=event, certificate=certificate, domain=issued_credential.domain
+            ).exists():
+                notification = NotificationModel.objects.create(
+                    domain=issued_credential.domain,
+                    certificate=certificate,
+                    created_at=timezone.now(),
+                    notification_source=NotificationModel.NotificationSource.CERTIFICATE,
+                    notification_type=notification_type,
+                    message_type=message_type,
+                    event=event,
+                    message_data=message_data,
+                )
+                notification.statuses.add(new_status)
+        else:
+            if not NotificationModel.objects.filter(event=event, certificate=certificate, domain__isnull=True).exists():
+                notification = NotificationModel.objects.create(
+                    certificate=certificate,
+                    created_at=timezone.now(),
+                    notification_source=NotificationModel.NotificationSource.CERTIFICATE,
+                    notification_type=notification_type,
+                    message_type=message_type,
+                    event=event,
+                    message_data=message_data,
+                )
+                notification.statuses.add(new_status)

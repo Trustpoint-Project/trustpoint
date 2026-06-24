@@ -148,7 +148,7 @@ How It Works:
 Requirements:
 
 - Access to the Device.
-- Python 3.12 or greater on device.
+- Python 3.13 or greater on device.
 - Trustpoint-Client installed on the device (via `pip install trustpoint-client`).
 - A connection to communicate with Trustpoint services.
 

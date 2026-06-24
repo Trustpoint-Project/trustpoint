@@ -1,0 +1,201 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n static %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
+{% block content %}
+
+<div class="container-fluid py-3 wf2-list-page">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 wf2-list-header">
+    <div>
+      <h1 class="h4 mb-0 wf2-list-title">{% trans "Workflow Runs" %}</h1>
+      <div class="small wf2-list-subtitle">{% trans "Trigger executions and their resulting workflow instances." %}</div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 wf2-metric-card">
+        <div class="card-body">
+          <div class="wf2-metric-label">{% trans "Visible runs" %}</div>
+          <div class="wf2-metric-value">{{ summary_total }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 wf2-metric-card">
+        <div class="card-body">
+          <div class="wf2-metric-label">{% trans "Active" %}</div>
+          <div class="wf2-metric-value">{{ summary_active }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 wf2-metric-card">
+        <div class="card-body">
+          <div class="wf2-metric-label">{% trans "Awaiting" %}</div>
+          <div class="wf2-metric-value">{{ summary_awaiting }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 wf2-metric-card">
+        <div class="card-body">
+          <div class="wf2-metric-label">{% trans "Completed" %}</div>
+          <div class="wf2-metric-value">{{ summary_completed }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3 wf2-filter-card">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-12 col-xl-5">
+          <label class="form-label">{% trans "Search" %}</label>
+          <input
+            class="form-control"
+            type="search"
+            name="q"
+            value="{{ query }}"
+            placeholder="{% trans 'Device, workflow, event, CA, domain, run ID...' %}"
+          >
+        </div>
+
+        <div class="col-6 col-xl-3">
+          <label class="form-label">{% trans "Status" %}</label>
+          <select name="status" class="form-select">
+            <option value="">{% trans "All" %}</option>
+            {% for val, label in status_choices %}
+              <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-xl-3">
+          <label class="form-label">{% trans "Request lock" %}</label>
+          <select name="idempotency" class="form-select">
+            <option value="" {% if not idempotency %}selected{% endif %}>{% trans "All" %}</option>
+            <option value="locked" {% if idempotency == "locked" %}selected{% endif %}>{% trans "Locked" %}</option>
+            <option value="released" {% if idempotency == "released" %}selected{% endif %}>{% trans "Released" %}</option>
+            <option value="manual" {% if idempotency == "manual" %}selected{% endif %}>{% trans "Released manually" %}</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-xl-8">
+          <label class="form-label">{% trans "Trigger" %}</label>
+          <details class="border rounded p-2">
+            <summary class="d-flex align-items-center justify-content-between gap-2 wf2-details-summary">
+              <span>
+                {% if selected_triggers %}
+                  {% blocktrans count count=selected_triggers|length %}
+                    {{ count }} trigger selected
+                  {% plural %}
+                    {{ count }} triggers selected
+                  {% endblocktrans %}
+                {% else %}
+                  {% trans "All triggers" %}
+                {% endif %}
+              </span>
+              <span class="text-muted small">{% trans "Show options" %}</span>
+            </summary>
+            <div class="pt-2 d-flex flex-column gap-2">
+              {% for trigger in trigger_choices %}
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="trigger_on" value="{{ trigger }}" id="trigger_{{ forloop.counter }}" {% if trigger in selected_triggers %}checked{% endif %}>
+                  <label class="form-check-label" for="trigger_{{ forloop.counter }}">{{ trigger }}</label>
+                </div>
+              {% empty %}
+                <div class="text-muted small">{% trans "No triggers found yet." %}</div>
+              {% endfor %}
+            </div>
+          </details>
+        </div>
+
+        <div class="col-12 col-xl-2">
+          <button class="btn btn-primary w-100" type="submit">{% trans "Apply filters" %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card wf2-table-card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="wf2-table-title">{% trans "Runs" %}</div>
+      <div class="small text-muted">{{ summary_total }} {% trans "visible" %}</div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>{% trans "State" %}</th>
+            <th>{% trans "Run ID" %}</th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if query_without_sort %}{{ query_without_sort }}&{% endif %}sort={% if sort == 'trigger' %}trigger_desc{% else %}trigger{% endif %}">
+                {% trans "Trigger" %}
+              </a>
+            </th>
+            <th>{% trans "Source" %}</th>
+            <th>{% trans "Instances" %}</th>
+            <th>{% trans "Request lock" %}</th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if query_without_sort %}{{ query_without_sort }}&{% endif %}sort={% if sort == 'updated' %}updated_asc{% else %}updated{% endif %}">
+                {% trans "Updated" %}
+              </a>
+            </th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if query_without_sort %}{{ query_without_sort }}&{% endif %}sort={% if sort == 'created' %}created_asc{% else %}created{% endif %}">
+                {% trans "Created" %}
+              </a>
+            </th>
+            <th class="text-end">{% trans "Open" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in run_rows %}
+            <tr>
+              <td>
+                <span class="badge {{ row.badge }}">{{ row.run.get_status_display }}</span>
+              </td>
+              <td>
+                <code>{{ row.run.id }}</code>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ row.run.trigger_on }}</div>
+              </td>
+              <td>
+                <div>{{ row.source_summary }}</div>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ row.run.instance_count }}</div>
+                {% if not row.has_instances %}
+                  <div class="text-muted small">{% trans "No instances were created." %}</div>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge {{ row.idempotency_badge }}">{{ row.idempotency_label }}</span>
+              </td>
+              <td>{{ row.run.updated_at|date:"Y-m-d H:i" }}</td>
+              <td>{{ row.run.created_at|date:"Y-m-d H:i" }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:runs-detail' row.run.id %}">
+                  {% trans "Open" %}
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="9" class="wf2-empty-row">{% trans "No runs found." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include 'trustpoint/pagination.html' with page_obj=page_obj %}
+</div>
+
+{% endblock %}

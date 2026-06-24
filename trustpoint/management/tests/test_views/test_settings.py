@@ -1,14 +1,16 @@
 """Test suite for settings views."""
 import logging
+import smtplib
 from unittest.mock import Mock, patch
 
+from django.conf import settings as django_settings
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.messages import get_messages
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
-from management.forms import SecurityConfigForm
-from management.models import LoggingConfig, SecurityConfig
-from management.views.settings import ChangeLogLevelView, SecuritySettingsView, SettingsTabView
+from management.forms import SecurityConfigForm, SmtpEmailConfigForm, SmtpEmailTestForm
+from management.models import LoggingConfig, SecurityConfig, SmtpEmailConfig
+from management.views.settings import ChangeLogLevelView, SecuritySettingsView, SettingsTabView, MetricsSettingsView
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
@@ -266,10 +268,250 @@ class SettingsTabViewTest(TestCase):
         self.assertIn('current_loglevel', context)
         self.assertIsInstance(context['current_loglevel'], str)
 
+    def test_get_context_data_includes_workflow_and_smtp_forms(self):
+        """Test get_context_data includes inline settings forms."""
+        context = self.view.get_context_data()
+
+        self.assertIn('workflow_execution_form', context)
+        self.assertIn('smtp_email_form', context)
+        self.assertIn('smtp_email_test_form', context)
+        self.assertIsInstance(context['smtp_email_form'], SmtpEmailConfigForm)
+        self.assertIsInstance(context['smtp_email_test_form'], SmtpEmailTestForm)
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend',
+        DEFAULT_FROM_EMAIL='before@example.com',
+    )
+    def test_post_smtp_email_settings_saves_and_applies_runtime_settings(self):
+        """Test SMTP email settings can be saved from the tab view."""
+        request = self.factory.post('/settings/', {
+            'form_name': 'smtp_email',
+            'enabled': 'on',
+            'host': 'smtp.example.com',
+            'port': '2525',
+            'use_tls': 'on',
+            'username': 'mailer',
+            'password': 'secret',
+            'timeout_seconds': '15',
+            'default_from_email': 'no-reply@example.com',
+        })
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        setattr(request, 'session', 'session')
+        messages_storage = FallbackStorage(request)
+        setattr(request, '_messages', messages_storage)
+
+        response = self.view.post(request)
+
+        smtp_config = SmtpEmailConfig.load()
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('tab=smtp-email', response.url)
+        self.assertTrue(smtp_config.enabled)
+        self.assertEqual(smtp_config.host, 'smtp.example.com')
+        self.assertEqual(django_settings.EMAIL_BACKEND, SmtpEmailConfig.SMTP_BACKEND)
+        self.assertEqual(django_settings.EMAIL_HOST, 'smtp.example.com')
+        self.assertEqual(django_settings.EMAIL_PORT, 2525)
+        self.assertEqual(django_settings.DEFAULT_FROM_EMAIL, 'no-reply@example.com')
+
+    def test_post_smtp_email_test_sends_using_current_form_settings(self):
+        """Test SMTP email test sends through the current unsaved form configuration."""
+        SmtpEmailConfig.objects.create(
+            enabled=True,
+            host='smtp.example.com',
+            port=2525,
+            default_from_email='saved@example.com',
+        )
+        request = self.factory.post('/settings/', {
+            'form_name': 'smtp_email_test',
+            'enabled': 'on',
+            'host': 'smtp.example.com',
+            'port': '2525',
+            'timeout_seconds': '15',
+            'default_from_email': 'unsaved@example.com',
+            'recipient': 'admin@example.com',
+        })
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        setattr(request, 'session', 'session')
+        messages_storage = FallbackStorage(request)
+        setattr(request, '_messages', messages_storage)
+
+        def fake_send_test_email(config: SmtpEmailConfig, recipient: str) -> int:
+            self.assertEqual(config.default_from_email, 'unsaved@example.com')
+            self.assertEqual(recipient, 'admin@example.com')
+            return 1
+
+        with patch.object(SmtpEmailConfig, 'send_test_email', autospec=True, side_effect=fake_send_test_email) as mock_send:
+            response = self.view.post(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('tab=smtp-email', response.url)
+        mock_send.assert_called_once()
+        messages_list = list(get_messages(request))
+        self.assertTrue(any('sent to admin@example.com' in str(msg) for msg in messages_list))
+
+    @patch.object(SmtpEmailConfig, 'send_test_email', side_effect=smtplib.SMTPNotSupportedError)
+    def test_post_smtp_email_test_clears_auth_when_server_does_not_support_auth(self, mock_send_test_email):
+        """Test unsupported SMTP AUTH clears username and password in the rendered form."""
+        SmtpEmailConfig.objects.create(
+            enabled=True,
+            host='smtp.example.com',
+            port=2525,
+            default_from_email='saved@example.com',
+        )
+        request = self.factory.post('/settings/', {
+            'form_name': 'smtp_email_test',
+            'enabled': 'on',
+            'host': 'smtp.example.com',
+            'port': '2525',
+            'username': 'admin',
+            'password': 'secret',
+            'timeout_seconds': '15',
+            'default_from_email': 'unsaved@example.com',
+            'recipient': 'admin@example.com',
+        })
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        setattr(request, 'session', 'session')
+        messages_storage = FallbackStorage(request)
+        setattr(request, '_messages', messages_storage)
+
+        response = self.view.post(request)
+
+        self.assertEqual(response.status_code, 200)
+        mock_send_test_email.assert_called_once()
+        smtp_email_form = response.context_data['smtp_email_form']
+        self.assertEqual(smtp_email_form.data['username'], '')
+        self.assertEqual(smtp_email_form.data['password'], '')
+        messages_list = list(get_messages(request))
+        self.assertTrue(any('Username and password were cleared' in str(msg) for msg in messages_list))
+
+    @patch.object(SmtpEmailConfig, 'send_test_email', return_value=1)
+    def test_post_smtp_email_test_requires_enabled_smtp(self, mock_send_test_email):
+        """Test SMTP email test requires enabled SMTP settings in the current form."""
+        SmtpEmailConfig.objects.create(
+            enabled=True,
+            host='smtp.example.com',
+            port=2525,
+            default_from_email='no-reply@example.com',
+        )
+        request = self.factory.post('/settings/', {
+            'form_name': 'smtp_email_test',
+            'host': 'smtp.example.com',
+            'port': '2525',
+            'timeout_seconds': '15',
+            'default_from_email': 'no-reply@example.com',
+            'recipient': 'admin@example.com',
+        })
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        setattr(request, 'session', 'session')
+        messages_storage = FallbackStorage(request)
+        setattr(request, '_messages', messages_storage)
+
+        response = self.view.post(request)
+
+        self.assertEqual(response.status_code, 200)
+        mock_send_test_email.assert_not_called()
+        messages_list = list(get_messages(request))
+        self.assertTrue(any('Enable SMTP email delivery' in str(msg) for msg in messages_list))
+
+    @patch.object(SmtpEmailConfig, 'send_test_email', return_value=1)
+    def test_post_smtp_email_test_with_invalid_security_settings_rerenders(self, mock_send_test_email):
+        """Test invalid SMTP security settings re-render without binding unrelated settings forms."""
+        SmtpEmailConfig.objects.create(
+            enabled=True,
+            host='smtp.example.com',
+            port=2525,
+            default_from_email='no-reply@example.com',
+        )
+        request = self.factory.post('/settings/', {
+            'form_name': 'smtp_email_test',
+            'enabled': 'on',
+            'host': 'smtp.example.com',
+            'port': '2525',
+            'use_tls': 'on',
+            'use_ssl': 'on',
+            'timeout_seconds': '15',
+            'default_from_email': 'no-reply@example.com',
+            'recipient': 'admin@example.com',
+        })
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        setattr(request, 'session', 'session')
+        messages_storage = FallbackStorage(request)
+        setattr(request, '_messages', messages_storage)
+
+        response = self.view.post(request)
+
+        self.assertEqual(response.status_code, 200)
+        mock_send_test_email.assert_not_called()
+        messages_list = list(get_messages(request))
+        self.assertTrue(any('correct the SMTP email settings' in str(msg) for msg in messages_list))
+
     def test_inherits_from_template_view(self):
         """Test SettingsTabView inherits from TemplateView."""
         from django.views.generic import TemplateView
         self.assertTrue(issubclass(SettingsTabView, TemplateView))
+
+
+class SmtpEmailConfigFormTest(TestCase):
+    """Test suite for SmtpEmailConfigForm."""
+
+    def test_valid_enabled_smtp_config(self):
+        """Test a complete enabled SMTP configuration is valid."""
+        form = SmtpEmailConfigForm(data={
+            'enabled': 'on',
+            'host': 'smtp.example.com',
+            'port': '587',
+            'use_tls': 'on',
+            'username': 'mailer',
+            'password': 'secret',
+            'timeout_seconds': '10',
+            'default_from_email': 'no-reply@example.com',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_enabled_requires_host(self):
+        """Test SMTP host is required when delivery is enabled."""
+        form = SmtpEmailConfigForm(data={
+            'enabled': 'on',
+            'host': '',
+            'port': '587',
+            'timeout_seconds': '10',
+            'default_from_email': 'no-reply@example.com',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('host', form.errors)
+
+    def test_tls_and_ssl_are_mutually_exclusive(self):
+        """Test STARTTLS and SSL/TLS cannot be enabled together."""
+        form = SmtpEmailConfigForm(data={
+            'enabled': 'on',
+            'host': 'smtp.example.com',
+            'port': '465',
+            'use_tls': 'on',
+            'use_ssl': 'on',
+            'timeout_seconds': '10',
+            'default_from_email': 'no-reply@example.com',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('use_ssl', form.errors)
+
+
+class SmtpEmailTestFormTest(TestCase):
+    """Test suite for SmtpEmailTestForm."""
+
+    def test_valid_recipient(self):
+        """Test valid recipient email is accepted."""
+        form = SmtpEmailTestForm(data={'recipient': 'admin@example.com'})
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_invalid_recipient(self):
+        """Test invalid recipient email is rejected."""
+        form = SmtpEmailTestForm(data={'recipient': 'not-an-email'})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('recipient', form.errors)
 
 
 
@@ -401,6 +643,25 @@ class ChangeLogLevelViewTest(TestCase):
         """Test ChangeLogLevelView inherits from View."""
         from django.views import View
         self.assertTrue(issubclass(ChangeLogLevelView, View))
+
+
+class MetricsSettingsViewTest(TestCase):
+    """Test suite for MetricsSettingsView."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_get_context_data(self):
+        """Test get_context_data returns expected values."""
+        request = self.factory.get('/settings/')
+        view = MetricsSettingsView()
+        view.request = request
+
+        context = view.get_context_data()
+
+        self.assertIn('uptime', context)
+        self.assertIn('started_time', context)
+        self.assertIn('database_size', context)
 
 
 class LogLevelsConstantTest(TestCase):

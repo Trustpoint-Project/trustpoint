@@ -1,0 +1,371 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
+{% endblock head %}
+
+{% block header_actions %}
+    <form method="POST" action="{% url 'users:logout' %}" class="tp-setup-header-logout-form">
+        {% csrf_token %}
+        <button class="tp-menu-head tp-setup-header-logout" type="submit">
+            <svg class="bi" fill="currentColor" role="img" aria-hidden="true">
+                <use href="{% static 'img/icons.svg' %}#icon-door"></use>
+            </svg>
+            {% trans "Logout" %}
+        </button>
+    </form>
+    <div class="theme-toggle theme-toggle-icon">
+        <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
+            <use href="{% static 'img/icons.svg' %}#icon-sun-fill"></use></svg>
+        <svg class="bi theme-icon light-only" width="20" height="20" fill="#000000" role="img" aria-label="Change theme">
+            <use href="{% static 'img/icons.svg' %}#icon-night"></use></svg>
+    </div>
+{% endblock header_actions %}
+
+{% block content %}
+    {% if messages %}
+        <section class="tp-setup-form-shell tp-fresh-install-shell">
+        <div class="messages tp-messages text-center tp-setup-form-messages">
+            {% for message in messages %}
+                <div class="tp-message alert
+                                {% if message.tags %}
+                                    {% if message.tags == "error" %}
+                                        alert-danger
+                                    {% else %}
+                                        alert-{{ message.tags }}
+                                    {% endif %}
+                                {% endif %} d-flex" role="alert">
+                    <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img"
+                         aria-label="{{ message.tags }}:">
+                        <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use>
+                    </svg>
+                    <div>
+                        {{ message }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        </section>
+    {% endif %}
+
+    <section class="tp-setup-form-shell tp-fresh-install-shell">
+        <div class="tp-setup-form-header">
+            <h1 class="tp-setup-form-heading">{% trans 'Setup Wizard' %}</h1>
+        </div>
+
+    <form method="POST" enctype="multipart/form-data" class="text-start"{% if form.storage_selection %} data-summary-submit-form{% endif %}>
+        {% csrf_token %}
+        <div class="card tp-card-setup-wizard tp-card-setup-steps text-center">
+            <div class="card-header">
+                <div class="px-1 py-2">
+                    <div class="tp-wizard-stepper" role="list" aria-label="{% trans 'Setup progress' %}">
+                    {% for step in steps %}
+                            <div class="tp-wizard-step">
+                                {% if step.state == "done" %}
+                                    <a href="{{ step.url }}" class="tp-wizard-step-link" role="listitem">
+                                        <span class="tp-wizard-step-indicator">&#10003;</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing is-done" aria-hidden="true">&#10003;</span>
+                                    </a>
+                                {% elif step.state == "active" %}
+                                    <a href="{{ step.url }}" class="tp-wizard-step-current" role="listitem" aria-current="step">
+                                        <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing{% if step.submitted %} is-done{% endif %}" aria-hidden="true">{% if step.submitted %}&#10003;{% endif %}</span>
+                                    </a>
+                                {% elif step.state == "available" %}
+                                    <a href="{{ step.url }}" class="tp-wizard-step-available" role="listitem">
+                                        <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing" aria-hidden="true"></span>
+                                    </a>
+                                {% else %}
+                                    <span class="tp-wizard-step-disabled" role="listitem" aria-disabled="true">
+                                        <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing" aria-hidden="true"></span>
+                                    </span>
+                                {% endif %}
+                            </div>
+                    {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card tp-card-setup-wizard tp-card-setup-content text-center"{% if form.storage_selection %} data-summary-submit-card{% endif %}>
+            <div class="card-body tp-wizard-body">
+                <h2 class="tp-wizard-heading">{{ body_heading }}</h2>
+                <fieldset class="form-group tp-form-group">
+                    {% if form.non_field_errors and not form.tls_mode %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    {% if form.storage_selection %}
+                        <div class="tp-summary-list">
+                            <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.storage_selection.label }}</div>
+                                <div class="tp-summary-value">{{ form.storage_selection.value|default:"-" }}</div>
+                            </div>
+                            <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.inject_demo_data_selection.label }}</div>
+                                <div class="tp-summary-value">{{ form.inject_demo_data_selection.value|default:"-" }}</div>
+                            </div>
+                            <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.tls_server_configuration.label }}</div>
+                                <div class="tp-summary-value">{{ form.tls_server_configuration.value|default:"-" }}</div>
+                                <div class="tp-summary-details">
+                                    <div class="tp-summary-detail">
+                                        <div class="tp-summary-detail-label">{{ form.tls_common_name.label }}</div>
+                                        <div class="tp-summary-detail-value">{{ form.tls_common_name.value|default:"-" }}</div>
+                                    </div>
+                                    <div class="tp-summary-detail">
+                                        <div class="tp-summary-detail-label">{{ form.tls_ipv4_addresses.label }}</div>
+                                        <div class="tp-summary-detail-value">{{ form.tls_ipv4_addresses.value|default:"-" }}</div>
+                                    </div>
+                                    <div class="tp-summary-detail">
+                                        <div class="tp-summary-detail-label">{{ form.tls_ipv6_addresses.label }}</div>
+                                        <div class="tp-summary-detail-value">{{ form.tls_ipv6_addresses.value|default:"-" }}</div>
+                                    </div>
+                                    <div class="tp-summary-detail">
+                                        <div class="tp-summary-detail-label">{{ form.tls_dns_names.label }}</div>
+                                        <div class="tp-summary-detail-value">{{ form.tls_dns_names.value|default:"-" }}</div>
+                                    </div>
+                                </div>
+                                <div class="tp-summary-downloads">
+                                    <div class="tp-summary-detail-label">Truststore (import in your browser)</div>
+                                    <div class="tp-summary-download-actions">
+                                        <a class="btn btn-primary min-width-15"
+                                           href="{% url 'setup_wizard:fresh_install_summary_truststore_download' file_format='pem' %}">
+                                            Download as PEM
+                                        </a>
+                                        <a class="btn btn-primary min-width-15"
+                                           href="{% url 'setup_wizard:fresh_install_summary_truststore_download' file_format='der' %}">
+                                            Download as DER
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% elif form.tls_mode %}
+                        <div class="mb-3 text-start">
+                            <div class="tp-choice-group">
+                                {% for option in form.tls_mode %}
+                                    <label for="{{ option.id_for_label }}" class="tp-choice-option{% if option.data.disabled %} is-disabled{% endif %}">
+                                        {{ option.tag }}
+                                        <span class="tp-choice-card">
+                                            <span class="tp-choice-title">{{ option.choice_label }}</span>
+                                            {% if option.data.description %}
+                                                <span class="tp-choice-description">{{ option.data.description }}</span>
+                                            {% endif %}
+                                        </span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                            {% if form.tls_mode.errors %}
+                                <div class="text-danger mt-2">
+                                    {{ form.tls_mode.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <hr class="tp-form-divider">
+
+                        {% if form.non_field_errors %}
+                            <div class="tp-tls-error" role="alert">
+                                <div class="tp-tls-error-lines">
+                                    {% for error in form.non_field_errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <div class="tp-tls-panel" data-tls-mode="generate">
+                            <div class="mb-3 text-start">
+                                {{ form.ipv4_addresses|as_crispy_field }}
+                                {% if form.ipv4_addresses.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.ipv4_addresses.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.ipv6_addresses|as_crispy_field }}
+                                {% if form.ipv6_addresses.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.ipv6_addresses.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.domain_names|as_crispy_field }}
+                                {% if form.domain_names.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.domain_names.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="tp-tls-panel" data-tls-mode="pkcs12">
+                            <div class="mb-3 text-start">
+                                {{ form.pkcs12_file|as_crispy_field }}
+                                {% if form.pkcs12_file.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.pkcs12_file.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.pkcs12_password|as_crispy_field }}
+                                {% if form.pkcs12_password.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.pkcs12_password.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="tp-tls-panel" data-tls-mode="separate_files">
+                            <div class="mb-3 text-start">
+                                {{ form.tls_server_certificate|as_crispy_field }}
+                                {% if form.tls_server_certificate.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.tls_server_certificate.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.further_certificates|as_crispy_field }}
+                                {% if form.further_certificates.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.further_certificates.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.key_file|as_crispy_field }}
+                                {% if form.key_file.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.key_file.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.key_password|as_crispy_field }}
+                                {% if form.key_password.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.key_password.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        {% for field in form %}
+                            <div class="mb-3 text-start">
+                                {% if field.field.widget.input_type == 'radio' %}
+                                    <div class="tp-choice-group">
+                                        {% for option in field %}
+                                            <label for="{{ option.id_for_label }}" class="tp-choice-option{% if option.data.disabled %} is-disabled{% endif %}">
+                                                {{ option.tag }}
+                                                <span class="tp-choice-card">
+                                                    <span class="tp-choice-title">{{ option.choice_label }}</span>
+                                                    {% if option.data.description %}
+                                                        <span class="tp-choice-description">{{ option.data.description }}</span>
+                                                    {% endif %}
+                                                </span>
+                                            </label>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    {{ field }}
+                                {% endif %}
+                                {% if field.help_text %}
+                                    <div class="form-text">{{ field.help_text }}</div>
+                                {% endif %}
+                                {% if field.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ field.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </fieldset>
+                <hr class="tp-form-divider">
+                <div class="tp-setup-form-actions">
+                    {% if back_url %}
+                        <a href="{{ back_url }}" class="btn tp-setup-form-back">{% trans 'Back' %}</a>
+                    {% else %}
+                        <button class="btn tp-setup-form-back"
+                                type="submit"
+                                formaction="{% url 'setup_wizard:fresh_install_cancel' %}"
+                                formnovalidate>{% trans 'Cancel' %}</button>
+                    {% endif %}
+                    <button class="btn tp-setup-form-submit" type="submit">
+                        {% trans 'Apply and Continue' %}
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% if form.storage_selection %}
+            <div class="tp-summary-loading-state" data-summary-loading-state hidden aria-live="polite" aria-busy="true">
+                <div class="card tp-card-setup-wizard tp-summary-loading-card">
+                    <div class="card-body">
+                        <div class="tp-summary-loading-visual" aria-hidden="true">
+                            <div class="spinner-border tp-summary-loading-spinner" aria-hidden="true"></div>
+                        </div>
+                        <h2 class="tp-summary-loading-title">{% trans 'Just a Moment!' %}</h2>
+                        <p class="tp-summary-loading-copy">{% trans 'We are preparing the instance for you!' %}</p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </form>
+    </section>
+
+    {% if form.tls_mode %}
+        <script>
+            (() => {
+                const radios = document.querySelectorAll('input[name="tls_mode"]');
+                const panels = document.querySelectorAll('[data-tls-mode]');
+
+                const updateTlsPanels = () => {
+                    const selected = document.querySelector('input[name="tls_mode"]:checked')?.value;
+                    panels.forEach((panel) => {
+                        panel.hidden = panel.dataset.tlsMode !== selected;
+                    });
+                };
+
+                radios.forEach((radio) => radio.addEventListener('change', updateTlsPanels));
+                updateTlsPanels();
+            })();
+        </script>
+    {% endif %}
+
+    {% if form.storage_selection %}
+        <script>
+            (() => {
+                const form = document.querySelector('[data-summary-submit-form]');
+                const card = document.querySelector('[data-summary-submit-card]');
+                const loadingState = document.querySelector('[data-summary-loading-state]');
+
+                if (!form || !card || !loadingState) {
+                    return;
+                }
+
+                form.addEventListener('submit', () => {
+                    card.hidden = true;
+                    loadingState.hidden = false;
+                });
+            })();
+        </script>
+    {% endif %}
+
+{% endblock content %}

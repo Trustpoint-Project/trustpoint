@@ -1,0 +1,181 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n static %}
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
+{% block content %}
+
+<div class="container-fluid py-3 wf2-list-page">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 wf2-list-header">
+    <div>
+      <h1 class="h4 mb-0 wf2-list-title">{% trans "Waiting" %}</h1>
+      <div class="small wf2-list-subtitle">{% trans "Review workflow items that are waiting for user action." %}</div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 wf2-metric-card">
+        <div class="card-body">
+          <div class="wf2-metric-label">{% trans "Visible waiting" %}</div>
+          <div class="wf2-metric-value">{{ summary_total }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 wf2-metric-card">
+        <div class="card-body">
+          <div class="wf2-metric-label">{% trans "Pending approvals" %}</div>
+          <div class="wf2-metric-value">{{ summary_pending_approvals }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 wf2-metric-card">
+        <div class="card-body">
+          <div class="wf2-metric-label">{% trans "Paused workflows" %}</div>
+          <div class="wf2-metric-value">{{ summary_paused_instances }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 wf2-metric-card">
+        <div class="card-body">
+          <div class="wf2-metric-label">{% trans "Errored workflows" %}</div>
+          <div class="wf2-metric-value">{{ summary_error_instances }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3 wf2-filter-card">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-12 col-lg-3">
+          <label class="form-label">{% trans "Type" %}</label>
+          <select name="kind" class="form-select">
+            <option value="">{% trans "All" %}</option>
+            <option value="approval" {% if kind == 'approval' %}selected{% endif %}>{% trans "Pending approvals" %}</option>
+            <option value="paused" {% if kind == 'paused' %}selected{% endif %}>{% trans "Paused workflows" %}</option>
+            <option value="error" {% if kind == 'error' %}selected{% endif %}>{% trans "Errored workflows" %}</option>
+          </select>
+        </div>
+        <div class="col-12 col-lg-6">
+          <label class="form-label">{% trans "Sort" %}</label>
+          <select name="sort" class="form-select">
+            <option value="created" {% if sort == 'created' %}selected{% endif %}>{% trans "Newest first" %}</option>
+            <option value="created_asc" {% if sort == 'created_asc' %}selected{% endif %}>{% trans "Oldest first" %}</option>
+          </select>
+        </div>
+        <div class="col-12 col-lg-3">
+          <button class="btn btn-primary w-100" type="submit">{% trans "Apply filters" %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card wf2-table-card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="wf2-table-title">{% trans "Waiting" %}</div>
+      <div class="small text-muted">{{ summary_total }} {% trans "visible" %}</div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>{% trans "State" %}</th>
+            <th>{% trans "Item" %}</th>
+            <th>{% trans "Workflow" %}</th>
+            <th>{% trans "Instance" %}</th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if kind %}kind={{ kind|urlencode }}&{% endif %}sort={% if sort == 'created' %}created_asc{% else %}created{% endif %}">
+                {% trans "Waiting since" %}
+              </a>
+            </th>
+            <th>{% trans "Details" %}</th>
+            <th class="text-end">{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in waiting_rows %}
+            <tr>
+              <td>
+                <span class="badge {{ row.badge }}">{{ row.state_label }}</span>
+                <div class="text-muted small mt-1">{{ row.kind_label }}</div>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ row.title }}</div>
+                {% if row.step_id %}
+                  <div class="text-muted small"><code>{{ row.step_id }}</code></div>
+                {% endif %}
+              </td>
+              <td>
+                {% if row.workflow %}
+                  <div class="fw-semibold"><a href="{% url 'workflows2:definitions_edit' row.workflow.id %}">{{ row.workflow.name }}</a></div>
+                {% endif %}
+                {% if row.run %}
+                  <div class="small">
+                    <span class="text-muted">{% trans "Run" %}:</span>
+                    <a href="{% url 'workflows2:runs-detail' row.run.id %}" class="ms-1">
+                      <code>{{ row.run.id }}</code>
+                    </a>
+                  </div>
+                {% endif %}
+              </td>
+              <td>
+                {% if row.instance %}
+                  <div class="small text-muted">{{ row.instance.get_status_display }}</div>
+                  <div class="small mt-1">
+                    <a href="{% url 'workflows2:instances-detail' row.instance.id %}"><code>{{ row.instance.id }}</code></a>
+                  </div>
+                {% endif %}
+              </td>
+              <td>{{ row.created_at|date:"Y-m-d H:i" }}</td>
+              <td>
+                {% if row.expires_at %}
+                  <span class="text-muted">{% trans "Expires" %}:</span> {{ row.expires_at|date:"Y-m-d H:i" }}
+                {% else %}
+                  {{ row.detail }}
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <div class="d-inline-flex flex-wrap justify-content-end gap-1">
+                  {% if row.can_resume and row.instance %}
+                    <form method="post" action="{% url 'workflows2:instances-resume' row.instance.id %}">
+                      {% csrf_token %}
+                      <button
+                        class="btn btn-sm btn-primary"
+                        type="submit"
+                        title="{% trans 'Continues from the current step.' %}"
+                      >
+                        {% trans "Resume" %}
+                      </button>
+                    </form>
+                  {% endif %}
+                  {% if row.can_stop and row.instance %}
+                    <form method="post" action="{% url 'workflows2:instances-stop' row.instance.id %}">
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Stop" %}</button>
+                    </form>
+                  {% endif %}
+                  <a class="btn btn-sm btn-outline-primary" href="{% url row.open_url_name row.open_url_arg %}">
+                    {{ row.open_label }}
+                  </a>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="wf2-empty-row">{% trans "No waiting workflow items found." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include 'trustpoint/pagination.html' with page_obj=page_obj %}
+</div>
+
+{% endblock %}

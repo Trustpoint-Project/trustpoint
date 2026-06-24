@@ -1,34 +1,78 @@
-// Helper function to format a date as YYYY-MM-DD
 function formatDate(date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-based
+  const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-function generateDate(period) {
-  // Get today's date
+function generatePeriodDate(period) {
   const today = new Date();
-  var periodStartDate = today;
+  const periodStartDate = new Date(today);
   if (period === "today") {
-    periodStartDate = today;
+    return formatDate(periodStartDate);
   } else if (period === "last_week") {
-    periodStartDate.setDate(today.getDate() - 7);
+    periodStartDate.setDate(periodStartDate.getDate() - 7);
   } else if (period === "last_month") {
-    periodStartDate.setMonth(today.getMonth() - 1);
+    periodStartDate.setMonth(periodStartDate.getMonth() - 1);
   } else {
-    periodStartDate = new Date("2023-01-01");
+    return "2023-01-01";
   }
 
   return formatDate(periodStartDate);
 }
 
-// Fetch dashboard data for a given period from the server backend API
-async function fetchDashboardData(period) {
+function generateReferenceDate(preset) {
+  const today = new Date();
+  const referenceDate = new Date(today);
+
+  if (preset === "in_7_days") {
+    referenceDate.setDate(referenceDate.getDate() + 7);
+  } else if (preset === "in_30_days") {
+    referenceDate.setDate(referenceDate.getDate() + 30);
+  }
+
+  return formatDate(referenceDate);
+}
+
+function getDashboardRequestParams(filterType, preset = "", options = {}) {
+  if (filterType === "date_range") {
+    const params = {};
+
+    if (options.startDate) {
+      params.start_date = options.startDate;
+    }
+
+    if (options.endDate) {
+      params.end_date = options.endDate;
+    }
+
+    return params;
+  }
+
+  if (filterType === "period") {
+    return { start_date: generatePeriodDate(preset) };
+  }
+
+  if (filterType === "as_of") {
+    return { reference_date: generateReferenceDate(preset) };
+  }
+
+  return {};
+}
+
+async function fetchDashboardData(requestParams = {}) {
   try {
-    const formattedStartDate = generateDate(period);
-    console.log("date", formattedStartDate);
-    const response = await fetch(`/home/dashboard_data?start_date=${formattedStartDate}`);
+    const queryParams = new URLSearchParams();
+
+    Object.entries(requestParams).forEach(([key, value]) => {
+      if (value) {
+        queryParams.set(key, value);
+      }
+    });
+
+    const queryString = queryParams.toString();
+    const url = queryString ? `/home/dashboard_data?${queryString}` : "/home/dashboard_data";
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -63,15 +107,10 @@ function updateDeltaIcon(id, value) {
 async function loadDashboardData(){
   try{
     const [todayData, weekData, totalData] = await Promise.all([
-      fetchDashboardData('today'),
-      fetchDashboardData('last_week'),
-      fetchDashboardData('total')
+      fetchDashboardData({ start_date: generatePeriodDate('today') }),
+      fetchDashboardData({ start_date: generatePeriodDate('last_week') }),
+      fetchDashboardData({ start_date: generatePeriodDate('total') })
     ]);
-
-    // debug
-    console.log("todayData", todayData);
-    console.log("weekData", weekData);
-    console.log("totalData", totalData);
 
     const event = new CustomEvent('dashboardData', {
       detail:{
@@ -83,16 +122,147 @@ async function loadDashboardData(){
 
     document.dispatchEvent(event);
   }catch(error){
-    console.log("Error loadDashboardEvent", error)
+    console.error("Error loadDashboardEvent", error)
   }
 }
 
+function normalizeChartValue(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
+function truncateChartLabel(label, maxLength = 34) {
+  const safeLabel = String(label || 'Unknown');
+  return safeLabel.length > maxLength
+    ? `${safeLabel.slice(0, maxLength - 1)}…`
+    : safeLabel;
+}
+
+function getVisibleChartValues(chart) {
+  const dataset = chart?.data?.datasets?.[0];
+  if (!dataset || !Array.isArray(dataset.data)) {
+    return [];
+  }
+
+  return dataset.data
+    .map((value, index) => {
+      if (typeof chart.getDataVisibility === 'function' && !chart.getDataVisibility(index)) {
+        return 0;
+      }
+      return normalizeChartValue(value);
+    });
+}
+
+function getVisibleChartTotal(chart) {
+  return getVisibleChartValues(chart).reduce((sum, value) => sum + value, 0);
+}
+
+function hasVisibleChartData(chart) {
+  return getVisibleChartValues(chart).some(value => value > 0);
+}
+
+function toggleChartItemVisibility(chart, index, hiddenIndices = null) {
+  if (!chart || index == null || typeof chart.toggleDataVisibility !== 'function') {
+    return;
+  }
+
+  chart.toggleDataVisibility(index);
+
+  if (hiddenIndices) {
+    if (chart.getDataVisibility(index)) {
+      hiddenIndices.delete(index);
+    } else {
+      hiddenIndices.add(index);
+    }
+  }
+
+  chart.update();
+}
+
+function applyHiddenIndices(chart, hiddenIndices) {
+  if (!chart || !hiddenIndices?.size || typeof chart.toggleDataVisibility !== 'function') {
+    return;
+  }
+
+  hiddenIndices.forEach((index) => {
+    if (chart.getDataVisibility(index)) {
+      chart.toggleDataVisibility(index);
+    }
+  });
+
+  chart.update();
+}
+
+function renderBarLegend(legendEl, items, hiddenIndices, colorForIndex, onToggle) {
+  if (!legendEl) {
+    return;
+  }
+
+  legendEl.innerHTML = '';
+
+  if (!items.length) {
+    return;
+  }
+
+  const ul = document.createElement('ul');
+  ul.className = 'bar-chart-legend-list';
+
+  items.forEach((item, index) => {
+    const li = document.createElement('li');
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `bar-chart-legend-item${hiddenIndices.has(index) ? ' is-hidden' : ''}`;
+    button.title = `${item.fullLabel || item.label} (${item.value})`;
+    button.addEventListener('click', () => onToggle(index));
+
+    const dot = document.createElement('span');
+    dot.className = 'bar-chart-legend-dot';
+    dot.style.background = colorForIndex(index);
+
+    const label = document.createElement('span');
+    label.className = 'bar-chart-legend-label';
+    label.textContent = item.fullLabel || item.label;
+
+    const value = document.createElement('span');
+    value.className = 'bar-chart-legend-value';
+    value.textContent = item.value;
+
+    button.append(dot, label, value);
+    li.appendChild(button);
+    ul.appendChild(li);
+  });
+
+  legendEl.appendChild(ul);
+}
+
+function setBarChartContainerHeight(canvasEl, itemCount) {
+  const containerEl = canvasEl?.closest('.bar-chart-container');
+  const scrollContentEl = canvasEl?.closest('.bar-chart-scroll-content');
+  if (!containerEl || !scrollContentEl) {
+    return;
+  }
+
+  const minimumViewportHeight = 220;
+  const viewportHeight = Math.max(containerEl.clientHeight || 0, minimumViewportHeight);
+  const minimumContentHeight = viewportHeight;
+  const basePadding = 24;
+  const rowHeight = 44;
+  const calculatedHeight = itemCount > 0
+    ? basePadding + (itemCount * rowHeight)
+    : minimumContentHeight;
+
+  scrollContentEl.style.height = `${Math.max(minimumContentHeight, calculatedHeight)}px`;
+}
+
 function createHorizontalBarChart(
-  labels,
-  values,
+  items,
   canvasId,
   legendId,
-  chartInstanceName
+  chartInstanceName,
+  hiddenIndices,
+  onToggle,
+  options = {}
 ) {
   // Farben immer beim Zeichnen neu auslesen
   const style = getComputedStyle(document.documentElement);
@@ -101,13 +271,8 @@ function createHorizontalBarChart(
   const textColor = style.getPropertyValue('--chart-text-color').trim() || '#dee2e6';
 
   // Validation of input parameters
-  if (!Array.isArray(labels) || !Array.isArray(values)) {
-    console.error('Invalid data: labels and values must be arrays');
-    return;
-  }
-
-  if (labels.length !== values.length) {
-    console.error('Invalid data: labels and values must be arrays of equal length');
+  if (!Array.isArray(items)) {
+    console.error('Invalid data: items must be an array');
     return;
   }
 
@@ -124,19 +289,11 @@ function createHorizontalBarChart(
     return;
   }
 
-  const allItems = labels
-    .map((label, index) => ({
-      label,
-      value: Number(values[index]) || 0
-    }))
-    .filter(item => item.value > 0)
-    .sort((a, b) => b.value - a.value);
-
-  // Important: Chart is created even when allItems is empty.
   // The plugin then handles the "No Data" display.
-  const chartDisplayItems = allItems.slice(0, 5);
+  const visibleItems = items.filter((item) => !hiddenIndices.has(item.sourceIndex));
+  const hasData = visibleItems.length > 0;
 
-  const hasData = chartDisplayItems.length > 0;
+  setBarChartContainerHeight(canvasEl, visibleItems.length);
 
   const palette = [
     '#0B5ED7', '#86B7FE', '#A6C8FF',
@@ -160,44 +317,13 @@ function createHorizontalBarChart(
         ctx.font = '600 12px system-ui,-apple-system,Segoe UI,Roboto,Arial';
         ctx.fillStyle =
           getComputedStyle(document.documentElement)
-            .getPropertyValue('--bs-body-color') || '#000';
+            .getPropertyValue('--bs-body-color')
+            .trim() || '#000';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(val), bar.x + 6, bar.y);
         ctx.restore();
       });
-    }
-  };
-
-  // HTML Legend Plugin
-  const htmlLegend = {
-    id: `htmlLegend${chartInstanceName}`,
-    afterUpdate(chart) {
-      const container = legendEl;
-      if (!container) return;
-
-      container.innerHTML = '';
-      const ul = document.createElement('ul');
-      ul.className = 'list-unstyled small mb-0';
-
-      allItems.forEach((item, idx) => {
-        const li = document.createElement('li');
-        li.className = 'd-flex align-items-center mb-1';
-
-        const dot = document.createElement('span');
-        dot.className = 'rounded-circle d-inline-block me-2 flex-shrink-0';
-        dot.style.width = '10px';
-        dot.style.height = '10px';
-        dot.style.background = colorForIndex(idx);
-
-        const text = document.createElement('span');
-        text.textContent = `${item.label} (${item.value})`;
-
-        li.append(dot, text);
-        ul.appendChild(li);
-      });
-
-      container.appendChild(ul);
     }
   };
 
@@ -211,10 +337,10 @@ function createHorizontalBarChart(
   window[chartInstanceKey] = new Chart(canvasEl, {
     type: 'bar',
     data: {
-      labels: chartDisplayItems.map(i => i.label),
+      labels: visibleItems.map(i => i.fullLabel || i.label),
       datasets: [{
-        data: chartDisplayItems.map(i => i.value),
-        backgroundColor: chartDisplayItems.map((_, i) => colorForIndex(i)),
+        data: visibleItems.map(i => i.value),
+        backgroundColor: visibleItems.map((item) => colorForIndex(item.sourceIndex)),
         borderColor: 'transparent',
         borderRadius: 12,
         barPercentage: 0.6,
@@ -253,21 +379,33 @@ function createHorizontalBarChart(
             display: true,
             color: borderColor 
           },
-          ticks: { 
-            color: textColor 
+          ticks: {
+            color: textColor,
+            callback: function(value) {
+              const label = this.getLabelForValue(value);
+              return truncateChartLabel(label, 34);
+            }
           }
         }
       },
       plugins: {
         legend: { display: false },
-        // 👇 Here you configure the No-Data plugin
         noDataImagePlugin: {
-          text: 'No Data'
+          text: 'No Data',
+          zeroValuesAreData: options.zeroValuesAreData === true,
+        },
+        tooltip: {
+          callbacks: {
+            title: (context) => context?.[0]?.label || '',
+            label: (context) => `Count: ${context.parsed.x ?? context.raw ?? 0}`
+          }
         }
       }
     },
-    plugins: [valueLabels, htmlLegend, noDataImagePlugin]
+    plugins: [valueLabels, noDataImagePlugin]
   });
+
+  renderBarLegend(legendEl, items, hiddenIndices, colorForIndex, onToggle);
 
   return window[chartInstanceKey];
 }
@@ -280,13 +418,9 @@ const noDataImagePlugin = {
     const text = opts.text ?? 'No Data';
 
     // Check if there is any meaningful data
-    const hasData =
-      chart.data &&
-      chart.data.datasets &&
-      chart.data.datasets.length > 0 &&
-      chart.data.datasets.some(ds =>
-        Array.isArray(ds.data) && ds.data.some(v => v != null && v !== 0)
-      );
+    const hasData = opts.zeroValuesAreData
+      ? (chart?.data?.labels?.length ?? 0) > 0
+      : hasVisibleChartData(chart);
 
     if (hasData) return;
 
@@ -326,7 +460,8 @@ const noDataImagePlugin = {
 
       img.onload = () => {
         opts._imgLoaded = true;
-        chart.draw(); // Reload → Redraw canvas
+        // Reload → Redraw canvas
+        chart.draw();
       };
       img.onerror = () => {
         opts._imgLoaded = false;
@@ -362,47 +497,43 @@ const noDataImagePlugin = {
 
     ctx.restore();
   }
-}
+};
 
-function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
+function createDonutChart(data, canvasId, chartInstanceName, options = {}, hiddenIndices = new Set()) {
   // Dynamically read colors
   const style = getComputedStyle(document.documentElement);
   const textColor = style.getPropertyValue('--chart-text-color').trim() || '#dee2e6';
 
   const colorMap = {
-    active: '#0B5ED7',    // Blue
-    pending: '#CFE2FF',   // Light Blue
-    expiring: '#DC3545',  // Red
-    expired: '#E9ECEF'    // Gray
+    no_onboarding: '#198754',
+    pending: '#CFE2FF',
+    onboarded: '#0B5ED7',
+    none: '#E9ECEF',
+    valid: '#0B5ED7',
+    active: '#198754',
+    expiring: '#DC3545',
+    expired: '#ADB5BD'
   };
 
   const showLegend = true;
   const {
     centerText = 'Certificates',
-    labels = ['Active Certificates', 'Expiring Certificates', 'Expired Certificates']
+    labels = ['Active Certificates', 'Expiring Certificates', 'Expired Certificates'],
+    dataKeys = ['active', 'expiring', 'expired']
   } = options;
 
-  const { active, pending, expiring, expired, total } = data;
-  const hasData = total > 0;
+  const chartDataArray = dataKeys.map((key) => normalizeChartValue(data[key]));
+  const hasData = chartDataArray.some(value => normalizeChartValue(value) > 0);
 
-  const hasPending = pending > 0;
-  const chartDataArray = hasPending 
-    ? [active, pending, expiring, expired]
-    : [active, expiring, expired];
-
-  const dataKeys = hasPending 
-    ? ['active', 'pending', 'expiring', 'expired']
-    : ['active', 'expiring', 'expired'];
-
-  // Use light pink gradient for expiring instead of blue
-  const chartColors = dataKeys.map(key => key === 'expiring' ? '#FFE8E8' : colorMap[key]);
-  // Create border colors - light pink for expiring, transparent for others
+  const chartColors = dataKeys.map(key => key === 'expiring' ? '#FFE8E8' : (colorMap[key] || '#0B5ED7'));
   const borderColors = dataKeys.map(key => key === 'expiring' ? '#FFB3B3' : 'transparent');
 
   const centerTextPlugin = {
     id: `centerText${chartInstanceName}`,
     afterDraw(chart) {
-      if (!hasData) return;
+      const visibleTotal = getVisibleChartTotal(chart);
+      if (!visibleTotal) return;
+
       const meta = chart.getDatasetMeta(0);
       if (!meta?.data?.length) return;
       const { ctx } = chart;
@@ -412,14 +543,14 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Subtitle
-      ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       const currentTextColor = getComputedStyle(document.documentElement)
-        .getPropertyValue('--bs-body-color') || '#000';
-      ctx.fillStyle = currentTextColor;
-      ctx.fillText(total, x, y - 8);
+        .getPropertyValue('--bs-body-color')
+        .trim() || '#000';
 
-      // Subtitle
+      ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillStyle = currentTextColor;
+      ctx.fillText(visibleTotal, x, y - 8);
+
       ctx.font = '500 12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       ctx.globalAlpha = 0.85;
       ctx.fillText(centerText, x, y + 16);
@@ -427,7 +558,6 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
     }
   };
 
-  // Destroy old chart
   const chartInstanceKey = `_${chartInstanceName}Chart`;
   if (window[chartInstanceKey]) {
     window[chartInstanceKey].destroy();
@@ -461,11 +591,14 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
           display: showLegend && hasData,
           position: 'bottom',
           align: 'start',
+          onClick: (_event, legendItem, legend) => {
+            toggleChartItemVisibility(legend.chart, legendItem.index, hiddenIndices);
+          },
           onHover: (event) => {
-          event.native.target.style.cursor = 'pointer';
+            event.native.target.style.cursor = 'pointer';
           },
           onLeave: (event) => {
-          event.native.target.style.cursor = 'default';
+            event.native.target.style.cursor = 'default';
           },
           labels: {
             usePointStyle: true,
@@ -484,7 +617,8 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
           callbacks: {
             label: (context) => {
               const value = context.parsed || 0;
-              const percentage = total ? Math.round((value / total) * 100) : 0;
+              const visibleTotal = getVisibleChartTotal(context.chart);
+              const percentage = visibleTotal ? Math.round((value / visibleTotal) * 100) : 0;
               return `${context.label}: ${value} (${percentage}%)`;
             }
           }
@@ -494,139 +628,275 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
     plugins: [centerTextPlugin, noDataImagePlugin]
   });
 
+  applyHiddenIndices(window[chartInstanceKey], hiddenIndices);
+
   return window[chartInstanceKey];
 }
 
 document.addEventListener("DOMContentLoaded", loadDashboardData)
 
-function initializeBarChart(identifier, dataset) {
+function getDonutChartConfig(datasetName, chartTitle) {
+  const chartConfigs = {
+    device_enrollment_counts: {
+      centerText: chartTitle,
+      dataKeys: ['no_onboarding', 'pending', 'onboarded'],
+      labels: ['No Onboarding', 'Pending', 'Onboarded'],
+    },
+    device_domain_credential_counts: {
+      centerText: chartTitle,
+      dataKeys: ['none', 'valid', 'expiring', 'expired'],
+      labels: ['No Domain Credentials', 'Valid Domain Credentials', 'Expiring Domain Credentials', 'Expired Domain Credentials'],
+    },
+    device_application_certificate_counts: {
+      centerText: chartTitle,
+      dataKeys: ['none', 'active', 'expired'],
+      labels: ['No Application Certificates', 'Active Application Certificates', 'Expired Application Certificates'],
+    },
+    cert_counts: {
+      centerText: chartTitle,
+      dataKeys: ['active', 'expiring', 'expired'],
+      labels: ['Active Certificates', 'Expiring Certificates', 'Expired Certificates'],
+      mapData: (sourceData) => ({
+        active: sourceData.active || 0,
+        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0) + (sourceData.expiring_in_30_days || 0),
+        expired: sourceData.expired || 0,
+      }),
+    },
+    issuing_ca_counts: {
+      centerText: chartTitle,
+      dataKeys: ['active', 'expiring', 'expired'],
+      labels: ['Active Issuing CAs', 'Expiring Issuing CAs', 'Expired Issuing CAs'],
+      mapData: (sourceData) => ({
+        active: sourceData.active || 0,
+        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0) + (sourceData.expiring_in_30_days || 0),
+        expired: sourceData.expired || 0,
+      }),
+    },
+  };
+
+  return chartConfigs[datasetName] || {
+    centerText: chartTitle,
+    dataKeys: ['active', 'expiring', 'expired'],
+    labels: ['Active', 'Expiring', 'Expired'],
+  };
+}
+
+function getBarChartConfig(datasetName, dataVariant = "default") {
+  const expiringWindowItems = (sourceData) => ([
+    { label: "24 Hours", value: sourceData.expiring_in_1_day || 0 },
+    { label: "2-7 Days", value: sourceData.expiring_in_7_days || 0 },
+    { label: "8-30 Days", value: sourceData.expiring_in_30_days || 0 },
+  ]);
+
+  const mapArrayItems = (sourceData) => sourceData.map(item => {
+    const labelKey = Object.keys(item).find(key => key.includes('name'));
+    const valueKey = Object.keys(item).find(key => key.includes('count'));
+    return {
+      label: labelKey ? item[labelKey] : 'Unknown',
+      value: valueKey ? item[valueKey] : 0
+    };
+  });
+
+  const mapObjectItems = (sourceData) => Object.entries(sourceData).map(([key, value]) => ({
+    label: key || 'Unknown',
+    value: value || 0
+  }));
+
+  const chartConfigs = {
+    "cert_counts_by_issuing_ca:default": { mapData: mapArrayItems, keepZeroValues: true, zeroValuesAreData: true },
+    "cert_counts_by_status:default": { mapData: mapObjectItems },
+    "cert_counts_by_profile:default": { mapData: mapObjectItems },
+    "device_counts_by_op:default": { mapData: mapObjectItems },
+    "device_counts_by_domain:default": { mapData: mapArrayItems },
+    "cert_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
+    "device_dashboard_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
+    "expiring_application_certificate_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
+    "issuing_ca_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
+  };
+
+  return chartConfigs[`${datasetName}:${dataVariant}`] || {
+    mapData: (sourceData) => Array.isArray(sourceData) ? mapArrayItems(sourceData) : mapObjectItems(sourceData || {}),
+    limit: 5,
+  };
+}
+
+function buildBarChartItems(dataSource, datasetName, dataVariant = "default") {
+  const config = getBarChartConfig(datasetName, dataVariant);
+  const items = config.mapData(Array.isArray(dataSource) ? dataSource : (dataSource || {}))
+    .map((item) => {
+      const fullLabel = item.label || 'Unknown';
+      return {
+        label: fullLabel,
+        fullLabel,
+        value: normalizeChartValue(item.value),
+      };
+    })
+    .filter((item) => config.keepZeroValues || item.value > 0);
+
+  const orderedItems = config.sortItems === false
+    ? items
+    : items.sort((a, b) => b.value - a.value);
+
+  return orderedItems
+    .slice(0, config.limit || 5)
+    .map((item, index) => ({
+      ...item,
+      sourceIndex: index,
+    }));
+}
+
+function initializeBarChart(identifier, dataset, filterType = "", defaultPreset = "", dataVariant = "default") {
   const chartCanvasId = `chart_${identifier}`;
   const legendContainerId = `legend_${identifier}`;
+  const filterSelect = document.getElementById(`chart_filter_${identifier}`);
+  const startDateInput = document.getElementById(`chart_filter_start_${identifier}`);
+  const endDateInput = document.getElementById(`chart_filter_end_${identifier}`);
+  const applyButton = document.getElementById(`chart_filter_apply_${identifier}`);
+  const resetButton = document.getElementById(`chart_filter_reset_${identifier}`);
 
   let chartInstance = null;
-  let chartLabels = [];
-  let chartValues = [];
+  let chartItems = [];
+  const hiddenIndices = new Set();
 
   function drawChart() {
     if (chartInstance && typeof chartInstance.destroy === 'function') {
       chartInstance.destroy();
     }
 
-    const legendContainer = document.getElementById(legendContainerId);
-    if (legendContainer) {
-        legendContainer.innerHTML = '';
-    }
-
     chartInstance = createHorizontalBarChart(
-      chartLabels,
-      chartValues,
+      chartItems,
       chartCanvasId,
       legendContainerId,
-      identifier
+      identifier,
+      hiddenIndices,
+      (index) => {
+        if (hiddenIndices.has(index)) {
+          hiddenIndices.delete(index);
+        } else {
+          hiddenIndices.add(index);
+        }
+        drawChart();
+      },
+      getBarChartConfig(dataset, dataVariant),
     );
   }
 
-  document.addEventListener('dashboardData', (event) => {
-    const total = event.detail.total || {};
-    let dataSource = total[dataset];
-    let items;
-
-    if (!dataSource) {
-      dataSource = [];
-    }
-
-    if (Array.isArray(dataSource)) {
-      items = dataSource.map(item => {
-        const labelKey = Object.keys(item).find(key => key.includes('name'));
-        const valueKey = Object.keys(item).find(key => key.includes('count'));
-        return {
-          label: labelKey ? item[labelKey] : 'Unknown',
-          value: valueKey ? item[valueKey] : 0
-        };
-      });
-    } else {
-      items = Object.entries(dataSource).map(([key, value]) => ({
-        label: key || 'unknown',
-        value: value || 0
-      }));
-    }
-
-    const sortedItems = items.sort((a, b) => b.value - a.value);
-    chartLabels = sortedItems.map(i => i.label);
-    chartValues = sortedItems.map(i => i.value);
-
+  function updateChartItems(responseData) {
+    const sourceData = responseData?.[dataset] || [];
+    chartItems = buildBarChartItems(sourceData, dataset, dataVariant);
+    hiddenIndices.clear();
     drawChart();
-  });
+  }
 
-const observer = new MutationObserver(() => {
-  drawChart(); 
-});
-observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+  if (filterType === 'date_range' && startDateInput && endDateInput) {
+    const loadDateRangeChart = async () => {
+      const responseData = await fetchDashboardData(
+        getDashboardRequestParams(filterType, '', {
+          startDate: startDateInput.value,
+          endDate: endDateInput.value,
+        })
+      );
+      updateChartItems(responseData || {});
+    };
+
+    const applyDateRange = () => {
+      loadDateRangeChart();
+    };
+
+    applyButton?.addEventListener('click', applyDateRange);
+    resetButton?.addEventListener('click', () => {
+      startDateInput.value = '';
+      endDateInput.value = '';
+      loadDateRangeChart();
+    });
+
+    [startDateInput, endDateInput].forEach((input) => {
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          applyDateRange();
+        }
+      });
+    });
+
+    loadDateRangeChart();
+  } else if (filterType && filterSelect) {
+    const loadFilteredChart = async () => {
+      const responseData = await fetchDashboardData(
+        getDashboardRequestParams(filterType, filterSelect.value || defaultPreset)
+      );
+      updateChartItems(responseData || {});
+    };
+
+    filterSelect.addEventListener('change', loadFilteredChart);
+    loadFilteredChart();
+  } else {
+    document.addEventListener('dashboardData', (event) => {
+      const total = event.detail.total || {};
+      updateChartItems(total);
+    });
+  }
+
+  const observer = new MutationObserver(() => {
+    drawChart(); 
+  });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 }
 
-function initializeDonutChart(identifier, datasetName, chartTitle) {
+function initializeDonutChart(identifier, datasetName, chartTitle, filterType = "", defaultPreset = "") {
   const chartCanvasId = `chart_dount_${identifier}`;
+  const filterSelect = document.getElementById(`chart_filter_${identifier}`);
   
   let chartInstance = null;
   let chartData = null;
   let chartOptions = null;
+  const hiddenIndices = new Set();
 
   function drawChart() {
     if (chartInstance && typeof chartInstance.destroy === 'function') {
       chartInstance.destroy();
     }
     if (chartData) {
-      chartInstance = createDonutChart(chartData, chartCanvasId, identifier, chartOptions);
+      chartInstance = createDonutChart(chartData, chartCanvasId, identifier, chartOptions, hiddenIndices);
     }
   }
 
-  document.addEventListener("dashboardData", (event) => {
-    const today = event.detail.today || {};
-    const sourceData = today[datasetName] || {};
+  function updateChartData(responseData) {
+    const sourceData = responseData?.[datasetName] || {};
+    const config = getDonutChartConfig(datasetName, chartTitle);
 
     if (!Array.isArray(sourceData)) {
-      const isDeviceChart = chartTitle.toLowerCase().includes('device');
-      
-      chartData = {
-        active: sourceData.active || sourceData.Onboarded || 0,
-        pending: sourceData.pending || 0,
-        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0),
-        expired: sourceData.expired || 0,
-        total: sourceData.total || 0
-      };
-      
-      if (!isDeviceChart) {
-        chartData.pending = 0;
-        chartData.total = chartData.active + chartData.expiring + chartData.expired;
-      }
-      
-      const labelMap = isDeviceChart ? {
-        active: 'Active Devices',
-        pending: 'Pending Devices',
-        expiring: 'Expiring Devices',
-        expired: 'Expired Devices'
-      } : {
-        active: 'Active Certificates',
-        pending: 'Pending Certificates',
-        expiring: 'Expiring Certificates',
-        expired: 'Expired Certificates'
-      };
-      
-      const dataKeys = isDeviceChart 
-        ? ['active', 'pending', 'expiring', 'expired']
-        : ['active', 'expiring', 'expired'];
-      
+      chartData = config.mapData ? config.mapData(sourceData) : sourceData;
       chartOptions = {
-        centerText: chartTitle,
-        labels: dataKeys.map(key => labelMap[key])
+        centerText: config.centerText,
+        labels: config.labels,
+        dataKeys: config.dataKeys,
       };
     }
+    hiddenIndices.clear();
     
     drawChart();
-  });
+  }
 
-const observer = new MutationObserver(() => {
-  drawChart(); 
-});
-observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+  if (filterType && filterSelect) {
+    const loadFilteredChart = async () => {
+      const responseData = await fetchDashboardData(
+        getDashboardRequestParams(filterType, filterSelect.value || defaultPreset)
+      );
+      updateChartData(responseData || {});
+    };
+
+    filterSelect.addEventListener('change', loadFilteredChart);
+    loadFilteredChart();
+  } else {
+    document.addEventListener("dashboardData", (event) => {
+      const today = event.detail.today || {};
+      updateChartData(today);
+    });
+  }
+
+  const observer = new MutationObserver(() => {
+    drawChart(); 
+  });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 }

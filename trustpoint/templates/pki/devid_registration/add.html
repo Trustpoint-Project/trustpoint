@@ -37,7 +37,7 @@
                             <!-- Example Serial Number Input -->
                             <div id="example-serial-field" class="mb-3">
                                 <label for="example-serial" class="form-label">
-                                    {% trans 'Enter an example Serial Number:' %}
+                                    {% trans 'Enter an example Serial Number or SAN URI:' %}
                                 </label>
                                 <input type="text" id="example-serial" class="form-control" placeholder="{% trans 'e.g.' %} ABC-1234-XYZ">
                                 <small class="form-text text-muted">
@@ -53,9 +53,9 @@
                         </div>
                     </div>
                     <br>
-                    <!-- Serial Number Pattern (Auto-filled from JavaScript) -->
+                    <!-- Serial Number / SAN URI Pattern (Auto-filled from JavaScript) -->
                     <div class="mb-3">
-                        <label for="id_serial_number_pattern" class="form-label">{% trans 'Serial Number Pattern (Regex)' %}</label>
+                        <label for="id_serial_number_pattern" class="form-label">{% trans 'Serial Number / SAN URI Pattern (Regex)' %}</label>
                         <input type="text" id="id_serial_number_pattern" name="serial_number_pattern"
                                class="form-control" placeholder="{% trans 'Select a regex from above' %}" readonly>
                     </div>

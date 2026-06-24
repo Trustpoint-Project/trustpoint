@@ -12,9 +12,7 @@
     </div>
 
     <div class="card-footer">
-        <a href="{% url 'pki:issuing_cas-config' pk=issuing_ca.pk %}" class="btn btn-secondary">
-            {% trans 'Back to CA' %}
-        </a>
+        <button type="button" class="btn btn-secondary" onclick="history.back()">{% trans 'Back' %}</button>
     </div>
 </div>
 {% endblock content %}

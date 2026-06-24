@@ -854,6 +854,7 @@ class TestCertificateIssuanceForm:
         
         mock_builder = Mock()
         mock_builder.fields = {'cn': Mock()}
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
         
         form = CertificateIssuanceForm(profile)
@@ -876,6 +877,7 @@ class TestCertificateIssuanceForm:
             'o': forms.CharField(required=False),
             'c': forms.CharField(required=True, initial='US', disabled=True)
         }
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
         
         profile = {
@@ -912,6 +914,7 @@ class TestCertificateIssuanceForm:
             'dns_names': forms.CharField(required=True),
             'ip_addresses': forms.CharField(required=False)
         }
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
         
         profile = {
@@ -944,6 +947,7 @@ class TestCertificateIssuanceForm:
             'days': forms.IntegerField(required=True, initial=365),
             'hours': forms.IntegerField(required=False)
         }
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
         
         profile = {
@@ -978,6 +982,7 @@ class TestCertificateIssuanceForm:
             'dns_names': forms.CharField(required=False),
             'days': forms.IntegerField(required=True)
         }
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
         
         profile = {
@@ -1021,6 +1026,7 @@ class TestCertificateIssuanceForm:
         mock_builder.fields = {
             'cn': forms.CharField(required=True)
         }
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
         
         profile = {
@@ -1047,6 +1053,7 @@ class TestCertificateIssuanceForm:
         
         mock_builder = Mock()
         mock_builder.fields = {}
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         # Set the labels on the mock class
         mock_builder_class.SUBJECT_LABELS = {
             'cn': 'Common Name (CN)',
@@ -1085,6 +1092,7 @@ class TestCertificateIssuanceForm:
         
         mock_builder = Mock()
         mock_builder.fields = {}
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         # Set the SUBJECT_LABELS on the mock class
         mock_builder_class.SUBJECT_LABELS = {
             'cn': 'Common Name (CN)',
@@ -1122,6 +1130,7 @@ class TestCertificateIssuanceForm:
         
         mock_builder = Mock()
         mock_builder.fields = {}
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         # Set the SAN_LABELS on the mock class
         mock_builder_class.SAN_LABELS = {
             'dns_names': 'DNS Names (comma separated)',
@@ -1155,6 +1164,7 @@ class TestCertificateIssuanceForm:
         
         mock_builder = Mock()
         mock_builder.fields = {}
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         # Set the VALIDITY_LABELS on the mock class
         mock_builder_class.VALIDITY_LABELS = {
             'days': 'Days',
@@ -1186,6 +1196,7 @@ class TestCertificateIssuanceForm:
         
         mock_builder = Mock()
         mock_builder.fields = {}
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         # Set the labels on the mock class
         mock_builder_class.SUBJECT_LABELS = {
             'cn': 'Common Name (CN)',
@@ -1229,6 +1240,7 @@ class TestCertificateIssuanceForm:
             'common_name': forms.CharField(required=True, initial='test'),
             'organization_name': forms.CharField(required=False)
         }
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
         
         profile = {
@@ -1265,6 +1277,7 @@ class TestCertificateIssuanceForm:
             'rfc822_names': forms.CharField(),
             'uris': forms.CharField()
         }
+        mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
         
         profile = {

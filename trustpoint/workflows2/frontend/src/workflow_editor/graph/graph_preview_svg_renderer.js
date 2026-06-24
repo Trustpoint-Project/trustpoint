@@ -1,0 +1,231 @@
+import { escapeHtml } from '../shared/dom.js';
+
+function truncate(value, max = 28) {
+  const s = String(value || '');
+  if (s.length <= max) {
+    return s;
+  }
+  return `${s.slice(0, max - 1)}…`;
+}
+
+function edgePath(from, to) {
+  const x1 = from.x + from.w;
+  const y1 = from.y + from.h / 2;
+  const x2 = to.x;
+  const y2 = to.y + to.h / 2;
+  const dx = Math.max(60, Math.abs(x2 - x1) / 2);
+
+  return {
+    path: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`,
+    labelX: (x1 + x2) / 2,
+    labelY: (y1 + y2) / 2 - 8,
+  };
+}
+
+function renderConnectionPreview(connectPreview) {
+  if (!connectPreview) {
+    return '';
+  }
+
+  return `
+    <path
+      class="wf2-graph-connection-preview"
+      d="M ${connectPreview.fromX} ${connectPreview.fromY} C ${connectPreview.fromX + 60} ${connectPreview.fromY}, ${connectPreview.toX - 60} ${connectPreview.toY}, ${connectPreview.toX} ${connectPreview.toY}"
+    ></path>
+  `;
+}
+
+export function renderGraphSvg(
+  graph,
+  layout,
+  selectedNodeId,
+  selectedEdgeId,
+  connectPreview = null,
+  dragNodeId = null,
+) {
+  const defs = `
+    <defs>
+      <marker id="wf2-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="var(--wf2-graph-edge-color)"></path>
+      </marker>
+      <marker id="wf2-arrow-selected" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="var(--wf2-graph-accent)"></path>
+      </marker>
+    </defs>
+  `;
+
+  const background = `
+    <rect
+      data-graph-background="true"
+      x="0"
+      y="0"
+      width="${layout.width}"
+      height="${layout.height}"
+      fill="transparent"
+    ></rect>
+  `;
+
+  const edgeSvg = (graph.edges || [])
+    .map((edge) => {
+      const from = layout.positions.get(edge.from);
+      const to = layout.positions.get(edge.to);
+      if (!from) {
+        return '';
+      }
+
+      if (!to) {
+        return '';
+      }
+
+      const { path, labelX, labelY } = edgePath(from, to);
+      const selectable = !(edge.is_helper_edge || edge.is_start_edge);
+      const selected = selectable && edge.id === selectedEdgeId;
+      const edgeLabel = edge.label || (edge.is_start_edge ? 'start' : edge.on);
+
+      return `
+        <g
+          class="wf2-graph-edge ${edge.is_helper_edge || edge.is_start_edge ? 'is-start-edge' : ''} ${selected ? 'is-selected' : ''}"
+          ${selectable ? `data-edge-id="${escapeHtml(edge.id)}"` : ''}
+        >
+          <path
+            d="${path}"
+            fill="none"
+            stroke="${selected ? 'var(--wf2-graph-accent)' : 'var(--wf2-graph-edge-color)'}"
+            stroke-width="${selected ? '3' : '2'}"
+            marker-end="url(#${selected ? 'wf2-arrow-selected' : 'wf2-arrow'})"
+          ></path>
+          ${
+            edgeLabel
+              ? `
+                <text
+                  x="${labelX}"
+                  y="${labelY}"
+                  class="wf2-graph-edge-label"
+                  ${selectable ? `data-edge-label-id="${escapeHtml(edge.id)}"` : ''}
+                >
+                  ${escapeHtml(edgeLabel)}
+                </text>
+              `
+              : ''
+          }
+        </g>
+      `;
+    })
+    .join('');
+
+  const nodeSvg = (graph.nodes || [])
+    .map((node) => {
+      const pos = layout.positions.get(node.id);
+      if (!pos) {
+        return '';
+      }
+
+      const selected = node.id === selectedNodeId;
+      const dragging = node.id === dragNodeId;
+      const unreachable = !!node.is_unreachable;
+      const fill = node.is_trigger
+        ? 'var(--wf2-accent-soft)'
+        : node.is_apply
+        ? 'var(--wf2-graph-virtual-fill)'
+        : node.is_virtual
+        ? 'var(--wf2-graph-virtual-fill)'
+        : unreachable
+          ? 'var(--wf2-graph-unreachable-fill)'
+          : 'var(--wf2-graph-node-fill)';
+      const stroke = selected
+        ? 'var(--wf2-graph-accent)'
+        : node.is_trigger || node.is_apply
+          ? 'var(--wf2-graph-accent)'
+        : unreachable
+          ? 'var(--wf2-graph-warning)'
+          : 'var(--wf2-graph-node-stroke)';
+      const dash = node.is_trigger || node.is_apply ? 'none' : (node.is_virtual ? '6 4' : (unreachable ? '8 4' : 'none'));
+      const title = node.is_trigger ? (node.title || 'Trigger') : (node.title || node.id);
+      const metaLine = node.is_trigger ? 'trigger' : (node.is_apply ? 'preconditions' : node.id);
+      const detailLine = node.is_trigger || node.is_apply ? (node.scope_summary || '') : (node.type || '');
+
+      return `
+        <g
+          class="wf2-graph-node ${selected ? 'is-selected' : ''} ${dragging ? 'is-dragging' : ''}"
+          data-node-id="${escapeHtml(node.id)}"
+        >
+          <rect
+            x="${pos.x}"
+            y="${pos.y}"
+            width="${pos.w}"
+            height="${pos.h}"
+            rx="12"
+            ry="12"
+            fill="${fill}"
+            stroke="${stroke}"
+            stroke-width="${selected ? '3' : '1.5'}"
+            stroke-dasharray="${dash}"
+          ></rect>
+
+          <text x="${pos.x + 14}" y="${pos.y + 24}" class="wf2-graph-node-title">
+            ${escapeHtml(truncate(title, 28))}
+          </text>
+
+          <text x="${pos.x + 14}" y="${pos.y + 45}" class="wf2-graph-node-meta">
+            ${escapeHtml(truncate(metaLine, 28))}
+          </text>
+
+          <text x="${pos.x + 14}" y="${pos.y + 62}" class="wf2-graph-node-meta">
+            ${escapeHtml(truncate(detailLine, 28))}
+          </text>
+
+          ${
+            node.is_trigger
+              ? `<text x="${pos.x + pos.w - 48}" y="${pos.y + 20}" class="wf2-graph-badge">EVENT</text>`
+              : node.is_apply
+                ? `<text x="${pos.x + pos.w - 48}" y="${pos.y + 20}" class="wf2-graph-badge">APPLY</text>`
+              : ''
+          }
+
+          ${
+            graph.start === node.id && !node.is_trigger
+              ? `<text x="${pos.x + pos.w - 44}" y="${pos.y + 20}" class="wf2-graph-badge">START</text>`
+              : ''
+          }
+
+          ${
+            unreachable
+              ? `<text x="${pos.x + pos.w - 76}" y="${pos.y + pos.h - 10}" class="wf2-graph-node-warning">UNREACHED</text>`
+              : ''
+          }
+
+          ${
+            (!node.is_virtual || node.is_trigger || node.is_apply)
+              ? `
+                <circle
+                  class="wf2-graph-output-handle"
+                  data-node-handle="${escapeHtml(node.id)}"
+                  cx="${pos.x + pos.w}"
+                  cy="${pos.y + pos.h / 2}"
+                  r="7"
+                ></circle>
+              `
+              : ''
+          }
+        </g>
+      `;
+    })
+    .join('');
+
+  return `
+    <svg
+      class="wf2-graph-svg"
+      viewBox="0 0 ${layout.width} ${layout.height}"
+      width="${layout.width}"
+      height="${layout.height}"
+      preserveAspectRatio="xMinYMin meet"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      ${defs}
+      ${background}
+      ${renderConnectionPreview(connectPreview)}
+      ${edgeSvg}
+      ${nodeSvg}
+    </svg>
+  `;
+}

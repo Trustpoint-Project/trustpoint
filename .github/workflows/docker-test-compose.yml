@@ -13,7 +13,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Step: Run Docker Compose to start services.
       # Uses the hoverkraft-tech/compose-action to manage Docker Compose commands.
@@ -22,7 +22,7 @@ jobs:
       #   --build : forces a rebuild of the images.
       #   --wait  : waits for the services to be up and running.
       - name: Run Docker compose
-        uses: hoverkraft-tech/compose-action@v2.5.0
+        uses: hoverkraft-tech/compose-action@v3.0.0
         with:
           compose-file: "./docker-compose.yml"
           up-flags: "--build --wait"

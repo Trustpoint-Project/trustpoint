@@ -25,13 +25,47 @@ from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
 from pki.models import CaModel
+from setup_wizard.models import SetupWizardCompletedModel
 from pki.util.x509 import CertificateGenerator
 from trustpoint_core.serializer import CredentialSerializer
 
 
 @pytest.fixture(autouse=True)
-def enable_db_access_for_all_tests(db: None) -> None:
-    """Fixture to enable database access for all tests."""
+def enable_db_access_for_all_tests(request: pytest.FixtureRequest) -> None:
+    """Enable DB access for application tests that exercise Django models/views."""
+    test_path = str(request.node.fspath)
+    excluded_paths = (
+        '/trustpoint/tests/test_settings.py',
+    )
+    if any(path_fragment in test_path for path_fragment in excluded_paths):
+        return
+
+    request.getfixturevalue('db')
+
+
+@pytest.fixture(autouse=True)
+def complete_setup_wizard_by_default(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    """Treat setup as completed for non-setup-wizard tests.
+
+    Most application tests exercise behavior after initial setup. Inside Docker,
+    middleware otherwise redirects those requests into the fresh-install flow.
+    Monkeypatching the completion check keeps those tests focused on their own
+    behavior without depending on setup-wizard database state.
+    """
+    test_path = str(request.node.fspath)
+    excluded_paths = (
+        '/setup_wizard/tests/',
+        '/trustpoint/tests/test_middleware.py',
+        '/trustpoint/tests/test_settings.py',
+    )
+    if any(path_fragment in test_path for path_fragment in excluded_paths):
+        return
+
+    monkeypatch.setattr(
+        SetupWizardCompletedModel,
+        'setup_wizard_completed',
+        classmethod(lambda cls: True),
+    )
 
 
 # ----------------------------
@@ -582,7 +616,3 @@ class CSRFixture:
 def test_csr_fixture() -> CSRFixture:
     """Create a test CSR fixture that can be retrieved in multiple formats."""
     return CSRFixture()
-
-
-
-

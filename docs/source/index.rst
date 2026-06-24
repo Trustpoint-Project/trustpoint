@@ -42,6 +42,15 @@ Welcome to Trustpoint's documentation!
    security/pkcs11
    security/db_encryption
 
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 🌟 Features
+
+   features/mdns
+   Workflow Engine <features/workflows>
+
+
 .. toctree::
    :maxdepth: 2
    :caption: 📍 Indices and Tables
@@ -70,4 +79,3 @@ Welcome to Trustpoint's documentation!
    development/pipeline
    release-checklist
    development/rest_api
-

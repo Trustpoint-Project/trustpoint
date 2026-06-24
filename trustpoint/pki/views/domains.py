@@ -16,10 +16,14 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import viewsets
+from rest_framework import filters, status, viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from management.models.audit_log import AuditLog
+from pki.filters import DomainFilter
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
     CaModel,
@@ -29,7 +33,9 @@ from pki.models import (
     DomainModel,
 )
 from pki.models.truststore import TruststoreModel
+from pki.serializer.devid_registration import DevIdRegistrationDetailSerializer, DevIdRegistrationSerializer
 from pki.serializer.domain import DomainDetailSerializer, DomainSerializer
+from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -39,9 +45,12 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
+    from rest_framework.request import Request
 
 
 class DomainContextMixin(ContextDataMixin):
@@ -51,7 +60,7 @@ class DomainContextMixin(ContextDataMixin):
     context_page_name = 'domains'
 
 
-class DomainTableView(DomainContextMixin, SortableTableMixin[DomainModel], ListView[DomainModel]):
+class DomainTableView(ExportMixin, DomainContextMixin, SortableTableMixin[DomainModel], ListView[DomainModel]):
     """Domain Table View."""
 
     model = DomainModel
@@ -59,6 +68,60 @@ class DomainTableView(DomainContextMixin, SortableTableMixin[DomainModel], ListV
     context_object_name = 'domain-new'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
+    filterset_class = DomainFilter
+
+    def get_export_config(self) -> ExportConfig:
+        """Return the CSV export configuration for the domains table."""
+        return ExportConfig.from_model(
+            DomainModel,
+            include=['unique_name', 'issuing_ca', 'created_at'],
+            labels={
+                'unique_name': str(_('Domain Name')),
+                'issuing_ca': str(_('Issuing CA')),
+                'created_at': str(_('Created At')),
+            },
+            extra=[
+                ExportColumn(
+                    key='signature_suite',
+                    label=str(_('Signature Suite')),
+                    accessor=self._domain_signature_suite,
+                ),
+            ],
+            filename='domains',
+        )
+
+    @staticmethod
+    def _domain_signature_suite(domain: Any) -> str:
+        """Safely return the signature suite label for a domain."""
+        try:
+            ss = domain.signature_suite
+            return str(ss) if ss is not None else '-'
+        except ValueError:
+            return '-'
+
+    def apply_filters(self, qs: QuerySet[DomainModel]) -> QuerySet[DomainModel]:
+        """Apply the DomainFilter to the given queryset."""
+        self.filterset = DomainFilter(self.request.GET, queryset=qs)
+        return cast('QuerySet[DomainModel]', self.filterset.qs)
+
+    def get_queryset(self) -> QuerySet[DomainModel]:
+        """Return all domains with the issuing CA relationship prefetched."""
+        base_qs = (
+            DomainModel.objects
+            .select_related('issuing_ca__credential__certificate')
+        )
+        qs = self.apply_filters(base_qs)
+        return qs.order_by(self.request.GET.get('sort', self.default_sort_param))
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add filter state to the context."""
+        context = super().get_context_data(**kwargs)
+        context['filter'] = getattr(self, 'filterset', None)
+        context['filters_active'] = any(
+            self.request.GET.get(k)
+            for k in ('unique_name', 'issuing_ca', 'created_at_from', 'created_at_to')
+        )
+        return context
 
 
 class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm[DomainModel]]):
@@ -155,8 +218,9 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             context['profile_data'][profile_id]['alias'] = allowed_profile.alias
             context['profile_data'][profile_id]['is_allowed'] = True
 
-        all_profiles = list(CertificateProfileModel.objects.all())
-        context['domain_credential_profiles'] = all_profiles
+        domain_credential_profiles = list(CertificateProfileModel.objects.filter(
+            credential_type=CertificateProfileModel.ProfileCredentialType.DOMAIN))
+        context['domain_credential_profiles'] = domain_credential_profiles
         context['current_domain_credential_profile_id'] = (
             domain.domain_credential_profile.id if domain.domain_credential_profile else None
         )
@@ -479,5 +543,62 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
         if self.action == 'retrieve':
             return DomainDetailSerializer
         return DomainSerializer
+
+
+@extend_schema(tags=['DevID Registration'])
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all DevID registrations.'),
+    retrieve=extend_schema(description='Retrieve a single DevID registration by id.'),
+    create=extend_schema(description='Create a new DevID registration.'),
+    update=extend_schema(description='Update an existing DevID registration.'),
+    partial_update=extend_schema(description='Partially update an existing DevID registration.'),
+    destroy=extend_schema(description='Delete a DevID registration.'),
+)
+class DevIdRegistrationViewSet(viewsets.ModelViewSet[DevIdRegistration]):
+    """ViewSet for managing DevIdRegistration instances via REST API.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = DevIdRegistration.objects.all()
+    serializer_class = DevIdRegistrationSerializer
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
+    filterset_fields: ClassVar = ['domain', 'truststore']
+    search_fields: ClassVar = ['unique_name', 'serial_number_pattern']
+    ordering_fields: ClassVar = ['unique_name']
+
+    def get_serializer_class(
+        self,
+    ) -> type[DevIdRegistrationDetailSerializer | DevIdRegistrationSerializer]:
+        """Return the detail serializer for retrieve, and the list serializer for all other actions."""
+        if self.action == 'retrieve':
+            return DevIdRegistrationDetailSerializer
+        return DevIdRegistrationSerializer
+
+    def create(self, request: Request, *_args: Any, **_kwargs: Any) -> Response:
+        """Create a new DevID registration.
+
+        If ``unique_name`` is blank the truststore's name is used as default.
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        unique_name: str = serializer.validated_data.get('unique_name', '')
+        if not unique_name:
+            truststore = serializer.validated_data.get('truststore')
+            if truststore is not None:
+                serializer.validated_data['unique_name'] = truststore.unique_name
+
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Delete a DevID registration."""
+        del request, args, kwargs
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 

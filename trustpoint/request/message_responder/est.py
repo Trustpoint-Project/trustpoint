@@ -5,7 +5,12 @@ from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 
 from onboarding.models import OnboardingStatus
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
-from workflows.models import State
+from request.workflow2_issuance import (
+    Workflow2IssuanceDecision,
+    get_workflow2_dispatch_outcome,
+    get_workflow2_issuance_decision,
+    get_workflow2_run_detail_path,
+)
 
 from .base import AbstractMessageResponder
 
@@ -35,36 +40,38 @@ class EstCertificateMessageResponder(EstMessageResponder):
     @staticmethod
     def _check_workflow_state(context: EstCertificateRequestContext) -> bool:
         """Check if the workflow state allows for certificate issuance."""
-        if not context.enrollment_request:
-            exc_msg = 'No enrollment request is set in the context.'
-            raise ValueError(exc_msg)
+        workflow2_outcome = get_workflow2_dispatch_outcome(context)
+        if workflow2_outcome is None:
+            return True
 
-        workflow_state = context.enrollment_request.aggregated_state
-        if workflow_state == State.AWAITING:
-            context.http_response_status = 202
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request pending manual approval.'
-            # TODO(Air): Implement Retry-After header  # noqa: FIX002
-            return False
-        if workflow_state == State.REJECTED:
-            context.enrollment_request.finalize(State.REJECTED)
-            context.http_response_status = 403
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request Rejected.'
-            return False
-        if workflow_state == State.FAILED:
-            context.http_response_status = 500
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = \
-                f'Workflow failed. Check here: -> /workflows/requests/{context.enrollment_request.id}'
-            return False
-        if not context.enrollment_request.is_valid():
-            context.http_response_status = 500
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request is not in a valid state for certificate issuance.'
-            return False
-        context.enrollment_request.finalize(State.FINALIZED)
-        return True
+        decision = get_workflow2_issuance_decision(context)
+        run_status = str(workflow2_outcome.run.status)
+        if decision == Workflow2IssuanceDecision.WAIT:
+            status = 202
+            detail = (
+                'Enrollment request pending workflow approval.'
+                if run_status == 'awaiting'
+                else 'Enrollment request pending workflow processing.'
+            )
+        elif decision == Workflow2IssuanceDecision.REJECT:
+            status = 403
+            detail = 'Enrollment request rejected by workflow.'
+        elif decision == Workflow2IssuanceDecision.FAIL:
+            detail = 'Enrollment request failed in workflow processing.'
+            run_path = get_workflow2_run_detail_path(context)
+            if run_path:
+                detail = f'{detail} Check here: -> {run_path}'
+            status = 500
+        elif decision == Workflow2IssuanceDecision.CONTINUE:
+            return True
+        else:
+            status = 500
+            detail = f'Enrollment request is in an unsupported workflow state: {run_status}.'
+
+        context.http_response_status = status
+        context.http_response_content_type = 'text/plain'
+        context.http_response_content = detail
+        return False
 
     @staticmethod
     def _prepare_certificate_data(context: EstCertificateRequestContext) -> tuple[str | bytes, str]:

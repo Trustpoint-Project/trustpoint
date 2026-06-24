@@ -21,9 +21,11 @@ urlpatterns = [
     # Settings URLs
     path('settings/', settings.SettingsTabView.as_view(), name='settings'),
     path('settings/internationalization/',settings.InternationalizationSettingsView.as_view(),name='settings-internationalization'),
+    path('settings/ui/', settings.UISettingsView.as_view(), name='settings-ui'),
     path('settings/security/', settings.SecuritySettingsView.as_view(), name='settings-security'),
     path('settings/logging/', settings.LoggingSettingsView.as_view(), name='settings-logging'),
     path('settings/notifications/', settings.NotificationSettingsView.as_view(), name='settings-notifications'),
+    path('settings/metrics/', settings.MetricsSettingsView.as_view(), name='settings-metrics'),
     # Backward compatibility for log level change
     path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
     # Logging file views
@@ -88,6 +90,12 @@ urlpatterns = [
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
     path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
+    path('notifications/', notifications.NotificationsListView.as_view(), name='notifications'),
+    path('notifications/<int:pk>/', notifications.NotificationDetailsView.as_view(), name='notification_details'),
+    path('notifications/<int:pk>/mark-as-solved/',
+        notifications.NotificationMarkSolvedView.as_view(), name='mark_as_solved'),
+    path('notifications/<int:pk>/toggle-read/',
+        notifications.NotificationToggleReadView.as_view(), name='notification_toggle_read'),
     # Audit log
     path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
 ]

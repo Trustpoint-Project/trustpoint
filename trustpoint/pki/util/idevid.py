@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 import secrets
+import uuid
 from typing import TYPE_CHECKING
 
 from cryptography import x509
@@ -95,7 +97,8 @@ class IDevIDAuthenticator(LoggerMixin):
     """Authenticates IDevID certificates as used e.g. by EST with mutual TLS auth."""
 
     @staticmethod
-    def _get_matching_registrations(idevid_subj_sn: str, domain: DomainModel | None) -> list[DevIdRegistration]:
+    def _get_matching_registrations(candidate_reg_strings: list[str], domain: DomainModel | None
+                                    ) -> list[DevIdRegistration]:
         """Get DevIdRegistration patters matching the given domain and serial number."""
         domain_name = domain.unique_name if domain else 'Any'
         if domain:
@@ -108,17 +111,18 @@ class IDevIDAuthenticator(LoggerMixin):
 
         matching_registrations = [
             r for r in domain_registrations
-            if re.fullmatch(r.serial_number_pattern, idevid_subj_sn)
+            if any(re.fullmatch(r.serial_number_pattern, candidate) for candidate in candidate_reg_strings)
         ]
         if not matching_registrations:
-            error_message = (f'No DevID registration pattern matching SN {idevid_subj_sn} '
+            error_message = (f'No DevID registration pattern matching refs {candidate_reg_strings} '
                              f'for requested domain {domain_name}.')
             raise IDevIDAuthenticationError(error_message)
         return matching_registrations
 
     @staticmethod
-    def _auto_create_device_from_idevid(
-        idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel,
+    def _auto_create_device_from_idevid(  # noqa: PLR0913 (multiple args are cleaner here than re-extracting values from idevid again)
+        idevid_cert: x509.Certificate, idevid_subj_sn: str, idevid_uuid: str | None,
+        domain: DomainModel,
         pki_protocol: OnboardingPkiProtocol,
         onboarding_protocol: OnboardingProtocol,
     ) -> DeviceModel:
@@ -141,8 +145,12 @@ class IDevIDAuthenticator(LoggerMixin):
             serial_number=idevid_subj_sn,
             common_name=common_name,
             domain=domain,
-            onboarding_config=onboarding_config_model
+            onboarding_config=onboarding_config_model,
         )
+        # if a device with the same UUID already exists (e.g. in a different domain),
+        # this will violate the unique constraint, so a random UUID is assigned instead
+        if idevid_uuid and not DeviceModel.objects.filter(rfc_4122_uuid=idevid_uuid).exists():
+            device.rfc_4122_uuid = idevid_uuid
         onboarding_config_model.full_clean()
         onboarding_config_model.save()
         device.full_clean()
@@ -151,27 +159,57 @@ class IDevIDAuthenticator(LoggerMixin):
         return device
 
     @staticmethod
-    def get_subject_serial_number(idevid_cert: x509.Certificate) -> str:
+    def get_subject_serial_number(idevid_cert: x509.Certificate) -> str | None:
         """Get the serial number from the subject of the IDevID certificate."""
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
-        except (ValueError, IndexError) as e:
-            # TODO(Air): Check if we want to add field to associate IDevID with device by fingerprint  # noqa: FIX002
-            # This would however be incompatible with the current approach to Registration patterns
-            # One option is to modify the registration pattern to allow matching certain Issuer DN fields instead of SN
-            error_message = 'IDevID certificates without a serial number in the subject DN are not supported.'
-            raise IDevIDAuthenticationError(error_message) from e
+        except (ValueError, IndexError):
+            return None
 
         return sn_b.decode() if isinstance(sn_b, bytes) else sn_b
+
+    @staticmethod
+    def get_idevid_san_uris(idevid_cert: x509.Certificate) -> list[str] | None:
+        """Get the Owner ID SAN URI(s) from the IDevID certificate SAN, or None if there is no URI in the IDevID SAN."""
+        try:
+            san_ext = idevid_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound:
+            return None
+        return san_ext.value.get_values_for_type(x509.UniformResourceIdentifier)
+
+    @staticmethod
+    def get_idevid_uuid(idevid_cert: x509.Certificate) -> str | None:
+        """Get the first valid UUID from the IDevID certificate SAN, or None if no valid UUID in the IDevID SAN."""
+        san_uris = IDevIDAuthenticator.get_idevid_san_uris(idevid_cert)
+        if not san_uris:
+            return None
+        for uri in san_uris:
+            if uri.startswith('urn:uuid:'):
+                uri_candidate = uri.removeprefix('urn:uuid:')
+                try:
+                    return str(uuid.UUID(uri_candidate))
+                except ValueError:
+                    continue
+        return None
 
     @classmethod
     def authenticate_idevid_from_x509_no_device(
         cls, idevid_cert: x509.Certificate, intermediate_cas: list[x509.Certificate], domain: DomainModel | None = None
-    ) -> tuple[DomainModel, str]:
+    ) -> tuple[DomainModel, str | None]:
         """Authenticate client using an IDevID certificate."""
         idevid_subj_sn = cls.get_subject_serial_number(idevid_cert)
+        idevid_san_uris = cls.get_idevid_san_uris(idevid_cert)
+        if not idevid_subj_sn and not idevid_san_uris:
+            error_message = ('IDevID certificates without a Subject DN Serial Number '
+                             'or a unique SAN URI for registration are not supported.')
+            cls.logger.warning(error_message)
+            raise IDevIDAuthenticationError(error_message)
 
-        matching_registrations = cls._get_matching_registrations(idevid_subj_sn, domain)
+        candidate_reg_strings = [idevid_subj_sn] if idevid_subj_sn else []
+        if idevid_san_uris:
+            candidate_reg_strings.extend(idevid_san_uris)
+
+        matching_registrations = cls._get_matching_registrations(candidate_reg_strings, domain)
 
         # verify IDevID against Truststore
         for registration in matching_registrations:
@@ -204,27 +242,48 @@ class IDevIDAuthenticator(LoggerMixin):
         domain, idevid_subj_sn = cls.authenticate_idevid_from_x509_no_device(
             idevid_cert=idevid_cert, intermediate_cas=intermediate_cas, domain=domain
         )
-        # Check if we have a device with the same serial number
-        existing_device = None
-        try:
-            existing_device = DeviceModel.objects.get(
-                domain=domain,
-                serial_number=idevid_subj_sn,
+        # Check if we have an existing device with the same UUID in the domain already
+        idevid_uuid = cls.get_idevid_uuid(idevid_cert)
+        if idevid_uuid:
+            existing_device = None
+            with contextlib.suppress(DeviceModel.DoesNotExist):
+                existing_device = DeviceModel.objects.get(
+                    domain=domain,
+                    rfc_4122_uuid=idevid_uuid,
+                )
+            # Multiple objects returned can not happen since rfc_4122_uuid is unique,
+            # but if it does, error out (MultipleObjectsReturned)
+            # TODO(Air): This may be an issue onboarding the same physical device to multiple domains,  #noqa: FIX002
+            # since the same IDevID certificate with the same UUID would be used for onboarding in each domain.
+            # Therefore, support for one device onboarding to multiple domains in the future,
+            # rather than creating a new device for each domain in Trustpoint may be desirable.
 
-            )
-        except DeviceModel.DoesNotExist:
-            pass
-        except DeviceModel.MultipleObjectsReturned:
-            error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
-                            f'found in domain {domain.unique_name}.')
-            cls.logger.warning(error_message)
-            cls.logger.warning('Auto-creating new device.')
+            if existing_device:
+                return existing_device
+        # Check if we have an existing device with the same serial number in the domain already
+        if idevid_subj_sn:
+            existing_device = None
+            try:
+                existing_device = DeviceModel.objects.get(
+                    domain=domain,
+                    serial_number=idevid_subj_sn,
 
-        if existing_device:
-            return existing_device
+                )
+            except DeviceModel.DoesNotExist:
+                pass
+            except DeviceModel.MultipleObjectsReturned:
+                error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
+                                f'found in domain {domain.unique_name}.')
+                cls.logger.warning(error_message)
+                cls.logger.warning('Auto-creating new device.')
+
+            if existing_device:
+                return existing_device
+
         return cls._auto_create_device_from_idevid(
             idevid_cert=idevid_cert,
-            idevid_subj_sn=idevid_subj_sn,
+            idevid_subj_sn=idevid_subj_sn or '',
+            idevid_uuid=idevid_uuid,
             domain=domain,
             onboarding_protocol=onboarding_protocol,
             pki_protocol=pki_protocol

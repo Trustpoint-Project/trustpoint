@@ -18,6 +18,7 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ClassVar
+from urllib.parse import urlparse
 
 import django_stubs_ext
 import psycopg
@@ -34,6 +35,7 @@ try:
 except FileNotFoundError:
     CONTAINER_ID = 'unknown'
 
+
 def app_version(_request: Any) -> dict[str, str]:
     """Provide application version and container ID for use in templates.
 
@@ -43,8 +45,8 @@ def app_version(_request: Any) -> dict[str, str]:
     Returns:
         dict: A dictionary containing the application version and container ID.
     """
-    return {'APP_VERSION': APP_VERSION,
-            'CONTAINER_ID': CONTAINER_ID}
+    return {'APP_VERSION': APP_VERSION, 'CONTAINER_ID': CONTAINER_ID}
+
 
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs
@@ -74,17 +76,22 @@ LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
 
 BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
 
+# Allows all paths that start with:
 PUBLIC_PATHS = [
-    '/setup-wizard',
     '/.well-known/cmp',
     '/.well-known/est',
     '/rest',
+    '/api',
     '/aoki',
     '/crl',
+    '/setup-wizard',
+    '/devices/browser',
+    '/prometheus/',
 ]
 
 
 # ------------- Functions --------------
+
 
 def is_postgre_available() -> bool:
     """Checks whether PostgreSQL is available and issues differentiated error messages.
@@ -136,13 +143,8 @@ def is_postgre_available() -> bool:
 
 # ------------- Variables --------------
 
-ALLOWED_HOSTS = ['*']
 WSGI_APPLICATION = 'trustpoint.wsgi.application'
 
-
-# mDNS service discovery advertisement
-ADVERTISED_HOST = '127.0.0.1'
-ADVERTISED_PORT = 443
 
 
 DOCKER_CONTAINER = False
@@ -156,6 +158,38 @@ DEBUG = not DOCKER_CONTAINER
 ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = DEBUG
 
+# Reverse proxy SSL header settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
+
+raw_urls = os.getenv('TP_URLS', '')
+
+if raw_urls:
+    # Split by comma and clean up whitespace
+    url_list = [url.strip() for url in raw_urls.split(',') if url.strip()]
+
+    for url in url_list:
+        # Ensure scheme is present (fallback to https)
+        parsed = urlparse(url) if url.startswith(('http://', 'https://')) else urlparse(f'https://{url}')
+
+        host_with_port = parsed.netloc
+
+        # 1. Extract just host/IP for ALLOWED_HOSTS (strip port)
+        host_only = host_with_port.split(':')[0]
+        if host_only not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(host_only)
+
+            # If mDNS domain, trust subdomains too
+            if host_only.endswith('.local') and f'.{host_only}' not in ALLOWED_HOSTS:
+                ALLOWED_HOSTS.append(f'.{host_only}')
+
+        # 2. Extract the exact origin (scheme + host + port) for CSRF
+        # e.g., "https://trustpoint.local:8443" or "http://10.10.0.2"
+        exact_origin = f'{parsed.scheme}://{host_with_port}'
+        if exact_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(exact_origin)
 
 
 # Basic SMTP backend
@@ -176,8 +210,8 @@ DATABASE_USER = 'admin'
 DATABASE_PASSWORD = 'testing321'  # noqa: S105
 
 
-# Settomg for email backend
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+# Setting for email backend
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
 # Default: console (safe for dev/showcases)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -197,7 +231,7 @@ if _email_host:
     EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == _SMTP_TLS_PORT)
     EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == _SMTP_SSL_PORT)
 
-    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')       # auth only if both non-empty
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # auth only if both non-empty
     EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
     EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 
@@ -269,6 +303,7 @@ INSTALLED_APPS = [
     'management.apps.ManagementConfig',
     'agents.apps.AgentsConfig',
     'trustpoint_core',
+    'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -279,11 +314,11 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'django_filters',
     'dbbackup',
-    'workflows.apps.WorkflowsConfig',
     'rest_framework',
     'drf_spectacular',
     'django_q',
-    'drf_yasg'
+    'drf_yasg',
+    'workflows2.apps.Workflows2Config',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -291,15 +326,19 @@ if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     INSTALLED_APPS.append('behave_django')
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'trustpoint.middleware.SetupWizardRedirectMiddleware',
+    'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 
@@ -315,6 +354,9 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'trustpoint.settings.app_version',
+                'management.context_processors.notification_alerts',
+                'management.context_processors.ui_config',
+                'workflows2.context_processors.waiting_counts',
             ],
         },
     },
@@ -416,7 +458,8 @@ class UIConfig:
     """User interface configuration defaults."""
 
     paginate_by: ClassVar[int] = 50
-    notifications_paginate_by: ClassVar[int] = 5
+    notifications_paginate_by: ClassVar[int] = 50
+
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

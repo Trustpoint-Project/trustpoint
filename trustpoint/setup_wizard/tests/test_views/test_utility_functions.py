@@ -97,7 +97,7 @@ class ExecuteShellScriptTests(TestCase):
             with self.assertRaises(FileNotFoundError) as cm:
                 execute_shell_script(script_path)
             
-            assert 'State bump script not found' in str(cm.exception)
+            assert 'Script not found' in str(cm.exception)
 
     def test_execute_script_not_a_file(self) -> None:
         """Test error when path is not a file."""

@@ -88,19 +88,41 @@ class Command(BaseCommand):
         """Helper function to create a notification for an Issuing CA.
 
         Skips notification creation if one already exists for the given event and Issuing CA.
+        If the CA is associated with domains, creates a separate notification for each domain.
+        Otherwise, creates a single notification without domain association.
         """
-        if not NotificationModel.objects.filter(event=event, issuing_ca=issuing_ca).exists():
-            message_data = {
-                'unique_name': issuing_ca.unique_name,
-                'not_valid_after': issuing_ca.credential.get_certificate().not_valid_after,
-            }
-            notification = NotificationModel.objects.create(
-                issuing_ca=issuing_ca,
-                created_at=timezone.now(),
-                notification_source=NotificationModel.NotificationSource.CERTIFICATE,
-                notification_type=notification_type,
-                message_type=message_type,
-                event=event,
-                message_data=message_data,
-            )
-            notification.statuses.add(new_status)
+        from pki.models import DomainModel  # noqa: PLC0415
+
+        message_data = {
+            'unique_name': issuing_ca.unique_name,
+            'not_valid_after': issuing_ca.credential.get_certificate().not_valid_after.strftime('%Y-%m-%d %H:%M:%S'),
+        }
+
+        domains_using_ca = DomainModel.objects.filter(issuing_ca=issuing_ca)
+
+        if domains_using_ca.exists():
+            for domain in domains_using_ca:
+                if not NotificationModel.objects.filter(event=event, issuing_ca=issuing_ca, domain=domain).exists():
+                    notification = NotificationModel.objects.create(
+                        domain=domain,
+                        issuing_ca=issuing_ca,
+                        created_at=timezone.now(),
+                        notification_source=NotificationModel.NotificationSource.ISSUING_CA,
+                        notification_type=notification_type,
+                        message_type=message_type,
+                        event=event,
+                        message_data=message_data,
+                    )
+                    notification.statuses.add(new_status)
+        else:
+            if not NotificationModel.objects.filter(event=event, issuing_ca=issuing_ca, domain__isnull=True).exists():
+                notification = NotificationModel.objects.create(
+                    issuing_ca=issuing_ca,
+                    created_at=timezone.now(),
+                    notification_source=NotificationModel.NotificationSource.ISSUING_CA,
+                    notification_type=notification_type,
+                    message_type=message_type,
+                    event=event,
+                    message_data=message_data,
+                )
+                notification.statuses.add(new_status)

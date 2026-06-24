@@ -30,7 +30,10 @@ body {
 }
 
 .body-users {
+    max-width: 100%;
     overflow-y: auto;
+    scrollbar-gutter: stable;
+    width: 100%;
 }
 
 a {
@@ -161,6 +164,12 @@ a.tp-primary:focus, a.tp-primary:hover, a.tp-primary:active,
 .tp-menu-group .tp-menu-item {
     padding: 0.5rem 0 0 calc(2rem + var(--tp-menu-head-padding) * 2);
     color: rgba(var(--bs-emphasis-color-rgb), .6)
+}
+
+.tp-menu-group .tp-menu-item-with-badge {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding-right: var(--tp-menu-head-padding);
 }
 
 .tp-menu-item:hover, .tp-menu-item:focus, .tp-menu-item:active, .tp-menu-item.tp-menu-active {
@@ -409,6 +418,7 @@ hr.hr-m {
 
 #bs-override .btn {
     font-weight: var(--tp-font-weight-h);
+    border-radius: 0.55rem;
 }
 
 #bs-override .form-select, #bs-override .form-control {
@@ -1087,7 +1097,57 @@ input[readonly].readonly-field {
     background-color: var(--trustpoint-ci);
 }
 
-/* active (no-onboarding) — green */
+/* no onboarding — green */
+.tp-status-badge.tp-status-no-onboarding {
+    color: #198754;
+    border-color: #198754;
+    background-color: #e8f5ee;
+}
+.tp-status-badge.tp-status-no-onboarding .tp-status-dot {
+    background-color: #198754;
+}
+
+/* none — neutral */
+.tp-status-badge.tp-status-none {
+    color: #848484;
+    border-color: #d0d5dd;
+    background-color: #f5f6f7;
+}
+.tp-status-badge.tp-status-none .tp-status-dot {
+    background-color: #d0d5dd;
+}
+
+/* valid — blue filled */
+.tp-status-badge.tp-status-valid {
+    color: var(--trustpoint-ci);
+    border-color: var(--trustpoint-ci);
+    background-color: #e8effa;
+}
+.tp-status-badge.tp-status-valid .tp-status-dot {
+    background-color: var(--trustpoint-ci);
+}
+
+/* expiring — red/pink */
+.tp-status-badge.tp-status-expiring {
+    color: #b42318;
+    border-color: #ffb3b3;
+    background-color: #fff1f1;
+}
+.tp-status-badge.tp-status-expiring .tp-status-dot {
+    background-color: #dc3545;
+}
+
+/* expired — grey */
+.tp-status-badge.tp-status-expired {
+    color: #6c757d;
+    border-color: #adb5bd;
+    background-color: #f1f3f5;
+}
+.tp-status-badge.tp-status-expired .tp-status-dot {
+    background-color: #adb5bd;
+}
+
+/* active application certificates — green */
 .tp-status-badge.tp-status-active {
     color: #198754;
     border-color: #198754;
@@ -1105,4 +1165,103 @@ input[readonly].readonly-field {
 }
 .tp-status-badge.tp-status-unconfigured .tp-status-dot {
     background-color: #ffc107;
+}
+
+/* Simplified view specific styles */
+.simplified-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
+}
+
+.simplified-header {
+    background-color: var(--bs-body-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.simplified-content {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.simplified-bottom-nav {
+    background-color: var(--bs-tertiary-bg);
+    border-top: 1px solid var(--bs-border-color);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+.simplified-bottom-nav a,
+.simplified-bottom-nav button {
+    color: var(--bs-body-color);
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    transition: color 0.2s;
+}
+
+.simplified-bottom-nav a:hover,
+.simplified-bottom-nav button:hover {
+    color: var(--bs-primary);
+}
+
+.domain-card-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 1200px) {
+    .domain-card-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+.domain-section {
+    margin-bottom: 3rem;
+}
+
+.ca-info-card {
+    background-color: var(--bs-secondary-bg);
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+}
+
+.stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: var(--bs-tertiary-bg);
+    border-radius: 0.375rem;
+    margin: 0.25rem;
+}
+
+.notification-item {
+    transition: background-color 0.2s;
+}
+
+.notification-item:hover {
+    background-color: var(--bs-tertiary-bg);
 }
