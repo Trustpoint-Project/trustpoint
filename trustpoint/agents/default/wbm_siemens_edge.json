@@ -1,0 +1,95 @@
+{
+    "type": "agent_profile",
+    "name": "Siemens Industrial Edge Device",
+    "profile": {
+        "metadata": {
+            "agent_type": "1-to-n",
+            "version": "1.0",
+            "description": "WBM workflow for updating the HTTPS certificate on a Siemens Industrial Edge Device via its Web-Based Management interface."
+        },
+        "device": {
+            "vendor": "Siemens",
+            "device_family": "Industrial Edge Device",
+            "firmware": "1.0"
+        },
+        "certificate_request": {
+            "certificate_profile": "default",
+            "url": "{{ endpoint }}",
+            "path": "{{ path }}"
+        },
+        "steps": [
+            {
+                "type": "goto",
+                "url": "{{ endpoint }}"
+            },
+            {
+                "type": "fill",
+                "selector": "#username",
+                "value": "{{ username }}"
+            },
+            {
+                "type": "fill",
+                "selector": "#password",
+                "value": "{{ password }}"
+            },
+            {
+                "type": "click",
+                "selector": "#login-button"
+            },
+            {
+                "type": "waitFor",
+                "selector": ".dashboard",
+                "timeout_ms": 5000
+            },
+            {
+                "type": "click",
+                "selector": "a[href*='settings'], a[href*='Settings']"
+            },
+            {
+                "type": "waitFor",
+                "selector": "a[href*='system'], a[href*='System']",
+                "timeout_ms": 3000
+            },
+            {
+                "type": "click",
+                "selector": "a[href*='system'], a[href*='System']"
+            },
+            {
+                "type": "waitFor",
+                "selector": "button:has-text('Import Edge Device Certificate'), input[type='file']",
+                "timeout_ms": 3000
+            },
+            {
+                "type": "click",
+                "selector": "button:has-text('Import Edge Device Certificate')"
+            },
+            {
+                "type": "waitFor",
+                "selector": "input[type='file'][accept*='crt'], input[type='file'][accept*='certificate']",
+                "timeout_ms": 3000
+            },
+            {
+                "type": "upload",
+                "selector": "input[type='file'][accept*='crt'], input[type='file'][accept*='certificate']",
+                "file": "{{ certificate_path }}"
+            },
+            {
+                "type": "upload",
+                "selector": "input[type='file'][accept*='key']",
+                "file": "{{ private_key_path }}"
+            },
+            {
+                "type": "click",
+                "selector": "button:has-text('Import'), button[type='submit']"
+            },
+            {
+                "type": "waitFor",
+                "selector": ".success-message, .notification-success",
+                "timeout_ms": 10000
+            },
+            {
+                "type": "screenshot"
+            }
+        ]
+    }
+}
