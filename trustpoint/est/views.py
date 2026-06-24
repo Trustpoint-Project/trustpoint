@@ -13,9 +13,10 @@ from request.operation_processor.general import OperationProcessor
 if TYPE_CHECKING:
     from pki.models.credential import CredentialModel
 
-from pki.models.domain import DomainModel
+from trustpoint_core.serializer import CertificateCollectionSerializer
+
 from pki.models.ca_rollover import CaRolloverState
-from pki.serializer import CertificateListSerializer
+from pki.models.domain import DomainModel
 from pki.services.ca_rollover import CaRolloverService
 from request.authentication import EstAuthentication
 from request.authorization import EstAuthorization
@@ -271,8 +272,8 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
                     new_ca_credential = active_rollover.new_issuing_ca.credential.get_credential_serializer()
                     new_chain = new_ca_credential.get_full_chain_as_serializer()
 
-                    combined_certs = old_chain.get_certificates() + new_chain.get_certificates()
-                    combined_chain = CertificateListSerializer(combined_certs)
+                    combined_certs = old_chain.as_crypto() + new_chain.as_crypto()
+                    combined_chain = CertificateCollectionSerializer(combined_certs)
                     pkcs7_certs = combined_chain.as_pkcs7_der()
                 else:
                     pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()

@@ -17,7 +17,10 @@
                     <h2>{% trans 'Start CA Rollover' %}</h2>
                     <hr class="hr-m">
                     <p>
-                        {% trans 'You are about to start the CA rollover. Once started, new certificates will be issued by the new CA.' %}
+                        {% trans 'You are about to transition the CA rollover from PLANNED to PREPARATION phase.' %}
+                    </p>
+                    <p>
+                        {% trans 'In the PREPARATION phase the truststore of the new (rollover) and current CA will be distributed.' %}
                     </p>
                     <div class="tp-kvp-list">
                         <div>

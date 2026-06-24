@@ -530,7 +530,6 @@ class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormVie
         return _('Certificate content defined. Please proceed to request the certificate via EST.')
 
 
-
 class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
     """Mixin for CMP RA configuration views."""
 
@@ -549,7 +548,6 @@ class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
             actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
-
 
 
 class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddRequestCmpForm]):
@@ -604,7 +602,6 @@ class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
             actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
-
 
 
 class RemoteRaAddRequestEstView(RemoteRaAddRequestEstMixin, FormView[IssuingCaAddRequestEstForm]):
@@ -1602,6 +1599,15 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
         del kwargs
 
         issuing_ca = self.get_object()
+
+        if not issuing_ca.is_active:
+            messages.error(
+                request,
+                _('Cannot generate CRL for Issuing CA %s: CA is deactivated.')
+                % issuing_ca.unique_name
+            )
+            return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
+
         if issuing_ca.issue_crl(crl_validity_hours=int(issuing_ca.crl_validity_hours)):
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:

@@ -325,7 +325,8 @@
                                             </a>
                                         {% else %}
                                             <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
-                                                class="btn btn-sm btn-primary me-2">
+                                                class="btn btn-sm btn-primary me-2{% if not issuing_ca.is_active %} disabled{% endif %}"
+                                                {% if not issuing_ca.is_active %}aria-disabled="true" tabindex="-1"{% endif %}>
                                                 {% trans 'Generate CRL' %}
                                             </a>
                                         {% endif %}
