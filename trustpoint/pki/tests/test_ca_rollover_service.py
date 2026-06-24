@@ -21,7 +21,7 @@ class TestCaRolloverServicePlan:
         form = MagicMock()
         form.is_valid.return_value = True
         form.cleaned_data = {
-            'overlap_end': None,
+            'transition_scheduled_at': None,
             'notes': 'Test rollover',
         }
         form.new_issuing_ca = second_issuing_ca_model
@@ -59,7 +59,7 @@ class TestCaRolloverServicePlan:
         )
 
         form = MagicMock()
-        form.cleaned_data = {'overlap_end': None, 'notes': ''}
+        form.cleaned_data = {'transition_scheduled_at': None, 'notes': ''}
 
         with pytest.raises(CaRolloverError, match='already has an active rollover'):
             CaRolloverService.plan_rollover(
@@ -83,7 +83,7 @@ class TestCaRolloverServicePlan:
         rollover.complete()
 
         form = MagicMock()
-        form.cleaned_data = {'overlap_end': None, 'notes': ''}
+        form.cleaned_data = {'transition_scheduled_at': None, 'notes': ''}
 
         with pytest.raises(CaRolloverError, match='has already been rolled over'):
             CaRolloverService.plan_rollover(

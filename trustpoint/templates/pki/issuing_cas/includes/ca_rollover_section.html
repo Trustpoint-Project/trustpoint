@@ -61,10 +61,10 @@
                     <div>{{ active_rollover.started_at|local_datetime }}</div>
                 </div>
                 {% endif %}
-                {% if active_rollover.overlap_end %}
+                {% if active_rollover.transition_scheduled_at %}
                 <div>
-                    <div>{% trans 'Overlap Ends' %}</div>
-                    <div>{{ active_rollover.overlap_end|local_datetime }}</div>
+                    <div>{% trans 'Scheduled Transition Time' %}</div>
+                    <div>{{ active_rollover.transition_scheduled_at|local_datetime }}</div>
                 </div>
                 {% endif %}
                 {% if active_rollover.initiated_by %}

@@ -31,7 +31,7 @@ class Migration(migrations.Migration):
                 ('planned_at', models.DateTimeField(auto_now_add=True, verbose_name='Planned At')),
                 ('started_at', models.DateTimeField(blank=True, null=True, verbose_name='Started At')),
                 ('completed_at', models.DateTimeField(blank=True, null=True, verbose_name='Completed At')),
-                ('overlap_end', models.DateTimeField(blank=True, help_text='When the old CA should stop being served in CA cert chains.', null=True, verbose_name='Overlap End')),
+                ('transition_scheduled_at', models.DateTimeField(blank=True, help_text='When the rollover should automatically move from Preparation to Transition phase.', null=True, verbose_name='Scheduled Transition Time')),
                 ('notes', models.TextField(blank=True, default='', verbose_name='Notes')),
                 ('initiated_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL, verbose_name='Initiated By')),
                 ('new_issuing_ca', models.ForeignKey(blank=True, help_text='The replacement Issuing CA. Null until the new CA is ready.', null=True, on_delete=django.db.models.deletion.PROTECT, related_name='rollovers_as_new', to='pki.camodel', verbose_name='New Issuing CA')),

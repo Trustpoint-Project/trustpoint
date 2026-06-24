@@ -47,10 +47,10 @@
                             <div>{% trans 'Started At' %}</div>
                             <div>{{ rollover.started_at|local_datetime }}</div>
                         </div>
-                        {% if rollover.overlap_end %}
+                        {% if rollover.transition_scheduled_at %}
                         <div>
-                            <div>{% trans 'Overlap Ends' %}</div>
-                            <div>{{ rollover.overlap_end|local_datetime }}</div>
+                            <div>{% trans 'Scheduled Transition Time' %}</div>
+                            <div>{{ rollover.transition_scheduled_at|local_datetime }}</div>
                         </div>
                         {% endif %}
                         {% if rollover.initiated_by %}

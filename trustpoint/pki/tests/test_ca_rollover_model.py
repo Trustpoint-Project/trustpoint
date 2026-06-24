@@ -115,23 +115,24 @@ class TestCaRolloverModelStates:
         _rollover.complete()
         assert _rollover.is_active is False
 
-    def test_overlap_has_ended_no_date(self, _rollover):
-        """Test overlap_has_ended when no overlap_end is set."""
-        assert _rollover.overlap_has_ended is False
+    def test_should_transition_no_date(self, _rollover):
+        """Test should_transition when no transition_scheduled_at is set."""
+        assert _rollover.should_transition is False
 
-    def test_overlap_has_ended_future(self, _rollover):
-        """Test overlap_has_ended when overlap_end is in the future."""
+    def test_should_transition_future(self, _rollover):
+        """Test should_transition when transition_scheduled_at is in the future."""
         from datetime import timedelta
-        _rollover.overlap_end = timezone.now() + timedelta(days=30)
+        _rollover.transition_scheduled_at = timezone.now() + timedelta(days=30)
         _rollover.save()
-        assert _rollover.overlap_has_ended is False
+        assert _rollover.should_transition is False
 
-    def test_overlap_has_ended_past(self, _rollover):
-        """Test overlap_has_ended when overlap_end is in the past."""
+    def test_should_transition_past(self, _rollover):
+        """Test should_transition when transition_scheduled_at is in the past."""
         from datetime import timedelta
-        _rollover.overlap_end = timezone.now() - timedelta(days=1)
+        _rollover.state = CaRolloverState.PREPARATION
+        _rollover.transition_scheduled_at = timezone.now() - timedelta(days=1)
         _rollover.save()
-        assert _rollover.overlap_has_ended is True
+        assert _rollover.should_transition is True
 
     def test_str_representation(self, _rollover):
         """Test string representation includes both CAs and state."""

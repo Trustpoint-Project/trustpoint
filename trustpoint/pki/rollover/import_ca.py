@@ -56,10 +56,10 @@ class ImportCaRolloverForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
         required=False,
     )
 
-    overlap_end = forms.DateTimeField(
+    transition_scheduled_at = forms.DateTimeField(
         required=False,
-        label=_('Overlap End Date'),
-        help_text=_('Optional. When the old CA should stop being served in certificate chains.'),
+        label=_('Scheduled Transition Time'),
+        help_text=_('Optional. When the rollover should automatically move from Preparation to Transition phase.'),
         widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
     )
 

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import ClassVar
 
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_q.models import Schedule  # type: ignore[import-untyped]
+from django_q.tasks import schedule  # type: ignore[import-untyped]
 
 from trustpoint.logger import LoggerMixin
 
@@ -69,12 +72,11 @@ class CaRolloverModel(LoggerMixin, models.Model):
     started_at = models.DateTimeField(null=True, blank=True, verbose_name=_('Started At'))
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name=_('Completed At'))
 
-    # TODO (FHK): This is a future functionality we should support  # noqa: FIX002
-    overlap_end = models.DateTimeField(
+    transition_scheduled_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name=_('Overlap End'),
-        help_text=_('When the old CA should stop being served in CA cert chains.'),
+        verbose_name=_('Scheduled Transition Time'),
+        help_text=_('When the rollover should automatically move from Preparation to Transition phase.'),
     )
 
     initiated_by = models.ForeignKey(
@@ -117,11 +119,13 @@ class CaRolloverModel(LoggerMixin, models.Model):
         )
 
     @property
-    def overlap_has_ended(self) -> bool:
-        """Return True if the overlap period has passed."""
-        if self.overlap_end is None:
+    def should_transition(self) -> bool:
+        """Return True if the rollover is in PREPARATION and the scheduled transition time has passed."""
+        if self.state != CaRolloverState.PREPARATION:
             return False
-        return timezone.now() >= self.overlap_end
+        if self.transition_scheduled_at is None:
+            return False
+        return timezone.now() >= self.transition_scheduled_at
 
     def start(self) -> None:
         """Transition from PLANNED to PREPARATION.
@@ -171,3 +175,40 @@ class CaRolloverModel(LoggerMixin, models.Model):
             raise ValueError(msg)
         self.state = CaRolloverState.CANCELLED
         self.save(update_fields=['state'])
+
+    def schedule_transition_check(self) -> None:
+        """Schedule a task to check if this rollover should transition from PREPARATION to TRANSITION.
+
+        Creates a scheduled task in Django-Q2 that will execute at the transition_scheduled_at time.
+        If no transition time is set, schedules a periodic check instead.
+        """
+        if self.state != CaRolloverState.PREPARATION:
+            self.logger.debug('Rollover %s is not in PREPARATION state, skipping scheduling', self.id)
+            return
+
+        base_name = f'rollover_transition_check_{self.id}'
+        Schedule.objects.filter(name__startswith=base_name).delete()
+
+        if self.transition_scheduled_at:
+            schedule(
+                'pki.tasks.check_rollover_transition',
+                self.id,
+                schedule_type='O',
+                next_run=self.transition_scheduled_at,
+                name=f'{base_name}_{self.transition_scheduled_at.timestamp()}'
+            )
+            self.logger.info(
+                'Scheduled automatic transition check for rollover %s at %s',
+                self.id,
+                self.transition_scheduled_at
+            )
+        else:
+            check_time = timezone.now() + timedelta(minutes=5)
+            schedule(
+                'pki.tasks.check_rollover_transition',
+                self.id,
+                schedule_type='O',
+                next_run=check_time,
+                name=f'{base_name}_{check_time.timestamp()}'
+            )
+            self.logger.info('Scheduled periodic transition check for rollover %s', self.id)

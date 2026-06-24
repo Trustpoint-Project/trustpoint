@@ -92,7 +92,9 @@ class CaRolloverService:
         strategy = CaRolloverService.get_strategy(strategy_type)
         new_ca = strategy.create_new_ca(form, old_ca)
 
-        overlap_end = form.cleaned_data.get('overlap_end') if hasattr(form, 'cleaned_data') else None
+        transition_scheduled_at = (
+            form.cleaned_data.get('transition_scheduled_at') if hasattr(form, 'cleaned_data') else None
+        )
         notes = form.cleaned_data.get('notes', '') if hasattr(form, 'cleaned_data') else ''
 
         initial_state = CaRolloverState.PLANNED if new_ca else CaRolloverState.AWAITING_NEW_CA
@@ -102,7 +104,7 @@ class CaRolloverService:
             new_issuing_ca=new_ca,
             state=initial_state,
             strategy_type=strategy_type,
-            overlap_end=overlap_end,
+            transition_scheduled_at=transition_scheduled_at,
             initiated_by=initiated_by,
             notes=notes,
         )
@@ -134,6 +136,9 @@ class CaRolloverService:
             raise CaRolloverError(str(exc)) from exc
 
         strategy.on_start(rollover)
+
+        rollover.schedule_transition_check()
+
         logger.info('Rollover %s started.', rollover.pk)
 
     @staticmethod
