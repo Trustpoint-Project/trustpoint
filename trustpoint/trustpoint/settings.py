@@ -83,6 +83,7 @@ PUBLIC_PATHS = [
     '/crl',
     '/setup-wizard',
     '/devices/browser',
+    '/prometheus/',
 ]
 
 
@@ -264,8 +265,8 @@ TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_flag(
 )
 
 
-# Settomg for email backend
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+# Setting for email backend
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
 # Default: console (safe for dev/showcases)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -361,6 +362,7 @@ INSTALLED_APPS = [
     'crypto.apps.CryptoConfig',
     'management.apps.ManagementConfig',
     'trustpoint_core',
+    'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -388,6 +390,7 @@ if TRUSTPOINT_IS_OPERATIONAL and TRUSTPOINT_PHASE_CONFIGURED:
     MIGRATION_MODULES['setup_wizard'] = None
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
@@ -399,6 +402,7 @@ MIDDLEWARE = [
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 if TRUSTPOINT_IS_BOOTSTRAP:
@@ -414,8 +418,9 @@ TEMPLATE_CONTEXT_PROCESSORS = [
     'django.contrib.auth.context_processors.auth',
     'django.contrib.messages.context_processors.messages',
     'trustpoint.settings.app_version',
-    'trustpoint.views.context_processors.trustpoint_runtime_banner',
     'management.context_processors.notification_alerts',
+    'management.context_processors.ui_config',
+    'workflows2.context_processors.waiting_counts',
 ]
 
 if TRUSTPOINT_IS_BOOTSTRAP:

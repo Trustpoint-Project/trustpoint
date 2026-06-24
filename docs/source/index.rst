@@ -48,6 +48,7 @@ Welcome to Trustpoint's documentation!
    :caption: 🌟 Features
 
    features/mdns
+   Workflow Engine <features/workflows>
 
 
 .. toctree::

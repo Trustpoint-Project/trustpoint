@@ -1,8 +1,8 @@
 import { parseDocument } from 'yaml';
 import { analyzeWorkflowVariableAvailability } from '../document/variable_availability.js';
 
-const END_TARGETS = new Set(['$end', '$reject']);
-const TERMINAL_TYPES = new Set(['stop', 'succeed', 'fail', 'reject']);
+export const TRIGGER_NODE_ID = '__trigger__';
+export const APPLY_NODE_ID = '__apply__';
 
 function deepClone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -62,6 +62,27 @@ function normalizeFlowEdge(item) {
   };
 }
 
+function buildTriggerApplyEdge() {
+  return {
+    from: TRIGGER_NODE_ID,
+    to: APPLY_NODE_ID,
+    on: null,
+    label: 'apply',
+    is_helper_edge: true,
+  };
+}
+
+function buildApplyStartEdge(start) {
+  return {
+    from: APPLY_NODE_ID,
+    to: start,
+    on: null,
+    label: 'start',
+    is_start_edge: true,
+    is_helper_edge: true,
+  };
+}
+
 function extractStepOutcomes(stepObj) {
   if (!stepObj || typeof stepObj !== 'object') {
     return [];
@@ -81,6 +102,7 @@ function extractStepOutcomes(stepObj) {
     return uniqStrings([
       stepObj.approved_outcome,
       stepObj.rejected_outcome,
+      stepObj.timeout_outcome,
     ]);
   }
 
@@ -106,12 +128,74 @@ function buildNodes(stepsObj, edges) {
       title,
       produces_outcome: producesOutcome,
       outcomes,
-      is_terminal: TERMINAL_TYPES.has(type) || !hasOutgoing.has(stepId),
+      is_terminal: !hasOutgoing.has(stepId),
       is_unreachable: false,
       is_virtual: false,
       step_data: deepClone(stepObj),
     };
   });
+}
+
+function normalizeTriggerSources(rootObj) {
+  const sources =
+    rootObj?.trigger?.sources && typeof rootObj.trigger.sources === 'object' && !Array.isArray(rootObj.trigger.sources)
+      ? rootObj.trigger.sources
+      : {};
+
+  return {
+    trustpoint: Boolean(sources.trustpoint),
+    ca_ids: Array.isArray(sources.ca_ids) ? sources.ca_ids.filter((value) => Number.isInteger(value)) : [],
+    domain_ids: Array.isArray(sources.domain_ids) ? sources.domain_ids.filter((value) => Number.isInteger(value)) : [],
+    device_ids: Array.isArray(sources.device_ids)
+      ? sources.device_ids.filter((value) => typeof value === 'string' && value.trim()).map((value) => value.trim())
+      : [],
+  };
+}
+
+function buildTriggerNode(rootObj) {
+  const triggerKey = typeof rootObj?.trigger?.on === 'string' ? rootObj.trigger.on.trim() : '';
+  const sources = normalizeTriggerSources(rootObj);
+  const explicitCount = sources.ca_ids.length + sources.domain_ids.length + sources.device_ids.length;
+  const scopeSummary = sources.trustpoint
+    ? 'All sources'
+    : `${explicitCount} scoped source${explicitCount === 1 ? '' : 's'}`;
+
+  return {
+    id: TRIGGER_NODE_ID,
+    type: 'trigger',
+    title: triggerKey || 'Trigger',
+    produces_outcome: false,
+    outcomes: [],
+    is_terminal: false,
+    is_unreachable: false,
+    is_virtual: true,
+    is_trigger: true,
+    trigger_key: triggerKey || null,
+    trigger_sources: sources,
+    scope_summary: scopeSummary,
+  };
+}
+
+function buildApplyNode(rootObj) {
+  const rules = Array.isArray(rootObj?.apply) ? rootObj.apply : [];
+  const ruleCount = rules.length;
+
+  return {
+    id: APPLY_NODE_ID,
+    type: 'apply',
+    title: 'Apply rules',
+    produces_outcome: false,
+    outcomes: [],
+    is_terminal: false,
+    is_unreachable: false,
+    is_virtual: true,
+    is_apply: true,
+    apply_rules: deepClone(rules),
+    apply_count: ruleCount,
+    scope_summary: ruleCount
+      ? `${ruleCount} precondition${ruleCount === 1 ? '' : 's'}`
+      : 'No preconditions',
+  };
 }
 
 function warnOnMissingOutcomeMappings(issues, stepsObj, edges) {
@@ -210,9 +294,12 @@ export function parseDraftWorkflowGraph(yamlText) {
         name: typeof rootObj.name === 'string' ? rootObj.name : 'Workflow',
         enabled: rootObj.enabled !== false,
         trigger_key: typeof rootObj?.trigger?.on === 'string' ? rootObj.trigger.on : null,
+        trigger_sources: normalizeTriggerSources(rootObj),
+        trigger_node_id: TRIGGER_NODE_ID,
+        apply_node_id: APPLY_NODE_ID,
         start: null,
-        nodes: [],
-        edges: [],
+        nodes: [buildTriggerNode(rootObj), buildApplyNode(rootObj)],
+        edges: [buildTriggerApplyEdge()],
         raw_steps: {},
         raw_flow: [],
       },
@@ -258,7 +345,7 @@ export function parseDraftWorkflowGraph(yamlText) {
       pushIssue(issues, 'warning', `Flow source "${edge.from}" does not exist.`);
     }
 
-    if (!Object.prototype.hasOwnProperty.call(stepsObj, edge.to) && !END_TARGETS.has(edge.to)) {
+    if (!Object.prototype.hasOwnProperty.call(stepsObj, edge.to)) {
       pushIssue(issues, 'warning', `Flow target "${edge.to}" does not exist.`);
     }
 
@@ -294,15 +381,22 @@ export function parseDraftWorkflowGraph(yamlText) {
     node.available_var_names = stepAvailability?.availableVarNames || [];
     node.produced_var_names = stepAvailability?.producedVarNames || [];
   }
+  const helperEdges = hasValidStart
+    ? [buildTriggerApplyEdge(), buildApplyStartEdge(start)]
+    : [buildTriggerApplyEdge()];
+  const graphEdges = [...helperEdges, ...edges];
 
   return {
     graph: {
       name: typeof rootObj.name === 'string' ? rootObj.name : 'Workflow',
       enabled: rootObj.enabled !== false,
       trigger_key: typeof rootObj?.trigger?.on === 'string' ? rootObj.trigger.on : null,
+      trigger_sources: normalizeTriggerSources(rootObj),
+      trigger_node_id: TRIGGER_NODE_ID,
+      apply_node_id: APPLY_NODE_ID,
       start,
-      nodes,
-      edges,
+      nodes: [buildTriggerNode(rootObj), buildApplyNode(rootObj), ...nodes],
+      edges: graphEdges,
       raw_steps: deepClone(stepsObj),
       raw_flow: deepClone(flowList),
     },

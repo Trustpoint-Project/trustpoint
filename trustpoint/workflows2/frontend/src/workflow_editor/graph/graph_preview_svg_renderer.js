@@ -22,21 +22,6 @@ function edgePath(from, to) {
   };
 }
 
-function implicitEndPath(from, layout) {
-  const x1 = from.x + from.w;
-  const y1 = from.y + from.h / 2;
-  const x2 = Math.min(layout.width - 18, x1 + 54);
-  const dx = Math.max(26, (x2 - x1) / 2);
-
-  return {
-    path: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y1}, ${x2} ${y1}`,
-    labelX: (x1 + x2) / 2,
-    labelY: y1 - 8,
-    terminalX: Math.min(layout.width - 34, x2 - 2),
-    terminalY: y1 - 8,
-  };
-}
-
 function renderConnectionPreview(connectPreview) {
   if (!connectPreview) {
     return '';
@@ -88,47 +73,20 @@ export function renderGraphSvg(
         return '';
       }
 
-      if (!to && edge.to === '$end') {
-        const { path, labelX, labelY, terminalX, terminalY } = implicitEndPath(from, layout);
-        const selected = edge.id === selectedEdgeId;
-
-        return `
-          <g class="wf2-graph-edge ${selected ? 'is-selected' : ''}" data-edge-id="${escapeHtml(edge.id)}">
-            <path
-              d="${path}"
-              fill="none"
-              stroke="${selected ? 'var(--wf2-graph-accent)' : 'var(--wf2-graph-edge-color)'}"
-              stroke-width="${selected ? '3' : '2'}"
-              marker-end="url(#${selected ? 'wf2-arrow-selected' : 'wf2-arrow'})"
-            ></path>
-            ${
-              edge.on
-                ? `
-                  <text
-                    x="${labelX}"
-                    y="${labelY}"
-                    class="wf2-graph-edge-label"
-                    data-edge-label-id="${escapeHtml(edge.id)}"
-                  >
-                    ${escapeHtml(edge.on)}
-                  </text>
-                `
-                : ''
-            }
-            <text x="${terminalX}" y="${terminalY}" class="wf2-graph-edge-label">END</text>
-          </g>
-        `;
-      }
-
       if (!to) {
         return '';
       }
 
       const { path, labelX, labelY } = edgePath(from, to);
-      const selected = edge.id === selectedEdgeId;
+      const selectable = !(edge.is_helper_edge || edge.is_start_edge);
+      const selected = selectable && edge.id === selectedEdgeId;
+      const edgeLabel = edge.label || (edge.is_start_edge ? 'start' : edge.on);
 
       return `
-        <g class="wf2-graph-edge ${selected ? 'is-selected' : ''}" data-edge-id="${escapeHtml(edge.id)}">
+        <g
+          class="wf2-graph-edge ${edge.is_helper_edge || edge.is_start_edge ? 'is-start-edge' : ''} ${selected ? 'is-selected' : ''}"
+          ${selectable ? `data-edge-id="${escapeHtml(edge.id)}"` : ''}
+        >
           <path
             d="${path}"
             fill="none"
@@ -137,15 +95,15 @@ export function renderGraphSvg(
             marker-end="url(#${selected ? 'wf2-arrow-selected' : 'wf2-arrow'})"
           ></path>
           ${
-            edge.on
+            edgeLabel
               ? `
                 <text
                   x="${labelX}"
                   y="${labelY}"
                   class="wf2-graph-edge-label"
-                  data-edge-label-id="${escapeHtml(edge.id)}"
+                  ${selectable ? `data-edge-label-id="${escapeHtml(edge.id)}"` : ''}
                 >
-                  ${escapeHtml(edge.on)}
+                  ${escapeHtml(edgeLabel)}
                 </text>
               `
               : ''
@@ -165,17 +123,26 @@ export function renderGraphSvg(
       const selected = node.id === selectedNodeId;
       const dragging = node.id === dragNodeId;
       const unreachable = !!node.is_unreachable;
-      const fill = node.is_virtual
+      const fill = node.is_trigger
+        ? 'var(--wf2-accent-soft)'
+        : node.is_apply
+        ? 'var(--wf2-graph-virtual-fill)'
+        : node.is_virtual
         ? 'var(--wf2-graph-virtual-fill)'
         : unreachable
           ? 'var(--wf2-graph-unreachable-fill)'
           : 'var(--wf2-graph-node-fill)';
       const stroke = selected
         ? 'var(--wf2-graph-accent)'
+        : node.is_trigger || node.is_apply
+          ? 'var(--wf2-graph-accent)'
         : unreachable
           ? 'var(--wf2-graph-warning)'
           : 'var(--wf2-graph-node-stroke)';
-      const dash = node.is_virtual ? '6 4' : (unreachable ? '8 4' : 'none');
+      const dash = node.is_trigger || node.is_apply ? 'none' : (node.is_virtual ? '6 4' : (unreachable ? '8 4' : 'none'));
+      const title = node.is_trigger ? (node.title || 'Trigger') : (node.title || node.id);
+      const metaLine = node.is_trigger ? 'trigger' : (node.is_apply ? 'preconditions' : node.id);
+      const detailLine = node.is_trigger || node.is_apply ? (node.scope_summary || '') : (node.type || '');
 
       return `
         <g
@@ -196,19 +163,27 @@ export function renderGraphSvg(
           ></rect>
 
           <text x="${pos.x + 14}" y="${pos.y + 24}" class="wf2-graph-node-title">
-            ${escapeHtml(truncate(node.title || node.id, 28))}
+            ${escapeHtml(truncate(title, 28))}
           </text>
 
           <text x="${pos.x + 14}" y="${pos.y + 45}" class="wf2-graph-node-meta">
-            ${escapeHtml(node.id)}
+            ${escapeHtml(truncate(metaLine, 28))}
           </text>
 
           <text x="${pos.x + 14}" y="${pos.y + 62}" class="wf2-graph-node-meta">
-            ${escapeHtml(node.type || '')}
+            ${escapeHtml(truncate(detailLine, 28))}
           </text>
 
           ${
-            graph.start === node.id
+            node.is_trigger
+              ? `<text x="${pos.x + pos.w - 48}" y="${pos.y + 20}" class="wf2-graph-badge">EVENT</text>`
+              : node.is_apply
+                ? `<text x="${pos.x + pos.w - 48}" y="${pos.y + 20}" class="wf2-graph-badge">APPLY</text>`
+              : ''
+          }
+
+          ${
+            graph.start === node.id && !node.is_trigger
               ? `<text x="${pos.x + pos.w - 44}" y="${pos.y + 20}" class="wf2-graph-badge">START</text>`
               : ''
           }
@@ -220,7 +195,7 @@ export function renderGraphSvg(
           }
 
           ${
-            !node.is_virtual
+            (!node.is_virtual || node.is_trigger || node.is_apply)
               ? `
                 <circle
                   class="wf2-graph-output-handle"
