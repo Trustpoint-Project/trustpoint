@@ -79,6 +79,7 @@ class TestCaRolloverServicePlan:
             strategy_type=CaRolloverStrategyType.IMPORT_CA,
         )
         rollover.start()
+        rollover.transition_to_transition()
         rollover.complete()
 
         form = MagicMock()
@@ -141,6 +142,7 @@ class TestCaRolloverServiceFinalize:
             strategy_type=CaRolloverStrategyType.IMPORT_CA,
         )
         rollover.start()
+        rollover.transition_to_transition()
 
         CaRolloverService.finalize_rollover(rollover)
         rollover.refresh_from_db()
@@ -169,6 +171,7 @@ class TestCaRolloverServiceFinalize:
             strategy_type=CaRolloverStrategyType.IMPORT_CA,
         )
         rollover.start()
+        rollover.transition_to_transition()
 
         CaRolloverService.finalize_rollover(rollover)
 
@@ -219,6 +222,7 @@ class TestCaRolloverServiceCancel:
             strategy_type=CaRolloverStrategyType.IMPORT_CA,
         )
         rollover.start()
+        rollover.transition_to_transition()
         rollover.complete()
 
         with pytest.raises(CaRolloverError):
@@ -252,6 +256,7 @@ class TestCaRolloverServiceQueries:
             strategy_type=CaRolloverStrategyType.IMPORT_CA,
         )
         rollover.start()
+        rollover.transition_to_transition()
         rollover.complete()
 
         assert CaRolloverService.get_active_rollover(issuing_ca_model) is None
@@ -265,6 +270,7 @@ class TestCaRolloverServiceQueries:
             strategy_type=CaRolloverStrategyType.IMPORT_CA,
         )
         rollover.start()
+        rollover.transition_to_transition()
         rollover.complete()
 
         history = CaRolloverService.get_rollover_history(issuing_ca_model)
@@ -282,6 +288,7 @@ class TestCaRolloverServiceQueries:
             strategy_type=CaRolloverStrategyType.IMPORT_CA,
         )
         rollover.start()
+        rollover.transition_to_transition()
         rollover.complete()
 
         assert CaRolloverService.has_completed_rollover(issuing_ca_model) is True

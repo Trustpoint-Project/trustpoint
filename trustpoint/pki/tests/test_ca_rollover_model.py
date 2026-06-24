@@ -109,6 +109,9 @@ class TestCaRolloverModelStates:
         _rollover.start()
         assert _rollover.is_active is True
 
+        _rollover.transition_to_transition()
+        assert _rollover.is_active is True
+
         _rollover.complete()
         assert _rollover.is_active is False
 
@@ -170,6 +173,7 @@ class TestCaRolloverModelConstraints:
             strategy_type=CaRolloverStrategyType.IMPORT_CA,
         )
         rollover.start()
+        rollover.transition_to_transition()
         rollover.complete()
 
         # DB constraint does not block this; the service layer does.
