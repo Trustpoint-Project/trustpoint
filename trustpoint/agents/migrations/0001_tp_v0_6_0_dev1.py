@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('devices', '0003_tp_v0_5_0'),
+        ('devices', '0004_tp_v0_6_0_dev1'),
     ]
 
     operations = [
