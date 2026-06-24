@@ -242,7 +242,7 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         return pki_message
 
     @staticmethod
-    def _build_certificate_chain_with_rollover(
+    def build_certificate_chain_with_rollover(
         issuer_credential: CredentialModel,
         context: BaseRequestContext,
     ) -> list[x509.Certificate]:
@@ -292,7 +292,7 @@ class CmpInitializationResponder(CmpMessageResponder):
         ip_extra_certs = univ.SequenceOf()
 
         if context:
-            certificate_chain = CmpMessageResponder._build_certificate_chain_with_rollover(
+            certificate_chain = CmpMessageResponder.build_certificate_chain_with_rollover(
                 issuer_credential, context
             )
         else:
@@ -433,7 +433,7 @@ class CmpCertificationResponder(CmpMessageResponder):
         cp_extra_certs = univ.SequenceOf()
 
         if context:
-            certificate_chain = CmpMessageResponder._build_certificate_chain_with_rollover(
+            certificate_chain = CmpMessageResponder.build_certificate_chain_with_rollover(
                 issuer_credential, context
             )
         else:
@@ -768,7 +768,7 @@ class CmpRevocationResponder(CmpMessageResponder):
         rp_extra_certs = univ.SequenceOf()
 
         if context:
-            certificate_chain = CmpMessageResponder._build_certificate_chain_with_rollover(
+            certificate_chain = CmpMessageResponder.build_certificate_chain_with_rollover(
                 issuer_credential, context
             )
         else:

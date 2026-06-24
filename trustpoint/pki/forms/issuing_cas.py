@@ -883,6 +883,8 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
     def clean(self) -> dict[str, Any]:
         """Validate that the CA is active."""
         cleaned_data = super().clean()
+        if cleaned_data is None:
+            cleaned_data = {}
 
         if self.instance and self.instance.pk and not self.instance.is_active:
             raise ValidationError(

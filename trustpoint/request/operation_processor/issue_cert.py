@@ -170,7 +170,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             actor=context.actor,
         )
 
-    def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
+    def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0912, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
         """Process the certificate issuance operation."""
         if not isinstance(context, BaseCertificateRequestContext):
             exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
