@@ -175,13 +175,21 @@ def _execute_renewal_job(params: PollParams, job: dict[str, Any], cert_pem_urlen
 
     log.info('[job %d] Renewing "%s" via %s', profile_id, cert_profile, enroll_url)
 
-    key_path_new: str = params.local_storage.get('private_key_path', f'{cert_profile}-key.pem')
-    csr_path: str = params.local_storage.get('csr_path', f'{cert_profile}-csr.pem')
+    key_path_new: str = f'{cert_profile}-key.pem'
+    csr_path: str = f'{cert_profile}-csr.pem'
+    cert_path_new: str = f'{cert_profile}-certificate.pem'
+    chain_path_new: str = f'{cert_profile}-chain.pem'
+
+    renewal_storage = {
+        'certificate_path': cert_path_new,
+        'certificate_chain_path': chain_path_new,
+    }
+
     renewal_path = tempfile.mktemp(suffix=f'-job{profile_id}.json')  # noqa: S306
     body_path = tempfile.mktemp(suffix='-csr-body.json')  # noqa: S306
     try:
         generate_key(key_path_new)
-        generate_csr(key_path_new, csr_path, common_name='Trustpoint-Domain-Credential')
+        generate_csr(key_path_new, csr_path, common_name=f'Trustpoint-{cert_profile}')
         csr_pem = Path(csr_path).read_text(encoding='utf-8')
         Path(body_path).write_text(json.dumps({'csr': csr_pem}), encoding='utf-8')
         _run([
@@ -191,7 +199,13 @@ def _execute_renewal_job(params: PollParams, job: dict[str, Any], cert_pem_urlen
             '-o', renewal_path,
             enroll_url,
         ])
-        save_credentials(renewal_path, params.local_storage)
+        save_credentials(renewal_path, renewal_storage)
+
+        if cert_profile == 'domain_credential':
+            params.cert_path = cert_path_new
+            params.key_path = key_path_new
+            log.info('[job %d] Updated polling credentials to use renewed domain_credential', profile_id)
+
     except Exception:
         log.exception('[job %d] Renewal failed', profile_id)
         return _JobResult(profile_id, success=False, error_message=f'Renewal failed (job {profile_id})')
@@ -249,7 +263,7 @@ def _fetch_jobs(params: PollParams, cert_pem_urlencoded: str) -> dict[str, Any]:
         Path(jobs_json_path).unlink(missing_ok=True)
 
 
-def _poll_once(params: PollParams, cert_pem_urlencoded: str) -> int:
+def _poll_once(params: PollParams, cert_pem_urlencoded: str) -> tuple[int, bool]:
     """Perform one poll cycle: fetch jobs, execute each, acknowledge results."""
     result_url = f'{params.base_url}/api/agents/jobs/result/'
 
@@ -258,11 +272,14 @@ def _poll_once(params: PollParams, cert_pem_urlencoded: str) -> int:
     jobs: list[dict[str, Any]] = jobs_response.get('jobs', [])
     log.info('[poll] %d pending job(s), next poll in %ds', len(jobs), poll_interval)
 
+    cert_was_renewed = False
     for job in jobs:
         job_result = _execute_renewal_job(params, job, cert_pem_urlencoded)
         _acknowledge_job(params, result_url, job_result, cert_pem_urlencoded)
+        if job_result.success:
+            cert_was_renewed = True
 
-    return poll_interval
+    return poll_interval, cert_was_renewed
 
 
 def poll_loop(params: PollParams) -> None:
@@ -272,13 +289,17 @@ def poll_loop(params: PollParams) -> None:
         try:
             cert_pem = Path(params.cert_path).read_text(encoding='utf-8')
             cert_pem_urlencoded = urllib.parse.quote(cert_pem)
-            poll_interval = _poll_once(params, cert_pem_urlencoded)
+            poll_interval, cert_was_renewed = _poll_once(params, cert_pem_urlencoded)
+
+            if cert_was_renewed:
+                log.info('[poll] Domain credential was renewed; next poll will use the new certificate')
+
         except KeyboardInterrupt:
             log.info('\nPolling stopped by user.')
             return
         except Exception:
             log.exception('Poll cycle failed')
-            poll_interval = 60  # back-off on error
+            poll_interval = 60
 
         log.info('[poll] Sleeping %ds until next poll ...', poll_interval)
         time.sleep(poll_interval)
