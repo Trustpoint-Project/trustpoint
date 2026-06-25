@@ -54,17 +54,52 @@ def generate_key(key_path: str) -> None:
     _run(['openssl', 'genrsa', '-out', key_path, '2048'])
 
 
-def generate_csr(key_path: str, csr_path: str, common_name: str) -> None:
-    """Generate a PKCS#10 CSR signed with the key at *key_path*."""
-    log.info('\n[2/3] Generating CSR (CN=%s) -> %s', common_name, csr_path)
+def generate_csr(
+    key_path: str,
+    csr_path: str,
+    common_name: str | None = None,
+    subject: str | None = None,
+    subject_alt_name: str | None = None,
+) -> None:
+    """Generate a PKCS#10 CSR signed with the key at *key_path*.
+
+    Args:
+        key_path: Path to the private key file.
+        csr_path: Path where the CSR will be written.
+        common_name: Simple CN value (used if subject is not provided).
+        subject: Full OpenSSL-style subject DN, e.g., "/C=DE/ST=Berlin/O=Example/CN=www.example.com".
+        subject_alt_name: OpenSSL-style SAN extension, e.g., "DNS:www.example.com,IP:192.0.2.10".
+    """
+    subject_dn = subject or f'/CN={common_name or "Trustpoint-Agent"}'
+    log.info('\n[2/3] Generating CSR (subject=%s) -> %s', subject_dn, csr_path)
     Path(csr_path).parent.mkdir(parents=True, exist_ok=True)
-    _run([
+
+    cmd = [
         'openssl', 'req',
         '-new',
         '-key', key_path,
         '-out', csr_path,
-        '-subj', f'/CN={common_name}',
-    ])
+        '-subj', subject_dn,
+    ]
+
+    if subject_alt_name:
+        # Create a temporary config file with SAN extension
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.cnf', delete=False) as tmp:
+            tmp.write('[req]\n')
+            tmp.write('distinguished_name = req_distinguished_name\n')
+            tmp.write('req_extensions = v3_req\n')
+            tmp.write('[req_distinguished_name]\n')
+            tmp.write('[v3_req]\n')
+            tmp.write(f'subjectAltName = {subject_alt_name}\n')
+            config_file = tmp.name
+
+        try:
+            cmd.extend(['-config', config_file])
+            _run(cmd)
+        finally:
+            Path(config_file).unlink(missing_ok=True)
+    else:
+        _run(cmd)
 
 @dataclass
 class EnrollmentParams:
@@ -173,6 +208,10 @@ def _execute_renewal_job(params: PollParams, job: dict[str, Any], cert_pem_urlen
     cert_profile: str = cert_req.get('certificate_profile', 'domain_credential')
     enroll_url: str = params.base_url.rstrip('/') + cert_req.get('path', '')
 
+    # Extract subject and SAN if provided by Trustpoint
+    subject: str | None = cert_req.get('subject')
+    subject_alt_name: str | None = cert_req.get('subject_alt_name')
+
     log.info('[job %d] Renewing "%s" via %s', profile_id, cert_profile, enroll_url)
 
     key_path_new: str = f'{cert_profile}-key.pem'
@@ -189,7 +228,13 @@ def _execute_renewal_job(params: PollParams, job: dict[str, Any], cert_pem_urlen
     body_path = tempfile.mktemp(suffix='-csr-body.json')  # noqa: S306
     try:
         generate_key(key_path_new)
-        generate_csr(key_path_new, csr_path, common_name=f'Trustpoint-{cert_profile}')
+        generate_csr(
+            key_path_new,
+            csr_path,
+            common_name=f'Trustpoint-{cert_profile}',
+            subject=subject,
+            subject_alt_name=subject_alt_name,
+        )
         csr_pem = Path(csr_path).read_text(encoding='utf-8')
         Path(body_path).write_text(json.dumps({'csr': csr_pem}), encoding='utf-8')
         _run([

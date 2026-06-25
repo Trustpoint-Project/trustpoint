@@ -110,8 +110,18 @@ def _resolve_enrollment_url(agent: TrustpointAgent, cert_profile: str) -> str | 
     return f'/rest/{domain.unique_name}/{cert_profile}/enroll/'
 
 
-def _build_resolved_profile(agent: TrustpointAgent, raw_profile: dict[str, Any]) -> dict[str, Any]:
-    """Return a deep copy of *raw_profile* with ``certificate_request.path`` resolved."""
+def _build_resolved_profile(
+    agent: TrustpointAgent,
+    raw_profile: dict[str, Any],
+    assigned_profile: AgentAssignedProfile,
+) -> dict[str, Any]:
+    """Return a deep copy of *raw_profile* with placeholders resolved.
+
+    Resolves:
+    - ``certificate_request.path`` → enrollment endpoint path
+    - ``certificate_request.subject`` → subject DN from assigned_profile
+    - ``certificate_request.subject_alt_name`` → SAN extension from assigned_profile
+    """
     profile = copy.deepcopy(raw_profile)
     cert_req: dict[str, Any] = profile.get('certificate_request', {})
     cert_profile: str = cert_req.get('certificate_profile', 'domain_credential')
@@ -119,7 +129,24 @@ def _build_resolved_profile(agent: TrustpointAgent, raw_profile: dict[str, Any])
     enrollment_path = _resolve_enrollment_url(agent, cert_profile)
     if enrollment_path is not None:
         cert_req['path'] = enrollment_path
-        profile['certificate_request'] = cert_req
+
+    # Only set subject if it's defined in the assigned profile
+    # Remove placeholder or set actual value
+    if assigned_profile.subject:
+        cert_req['subject'] = assigned_profile.subject
+    else:
+        cert_req.pop('subject', None)
+
+    # Only set subject_alt_name if it's defined in the assigned profile
+    # Remove placeholder or set actual value
+    if assigned_profile.subject_alt_name:
+        cert_req['subject_alt_name'] = assigned_profile.subject_alt_name
+    else:
+        cert_req.pop('subject_alt_name', None)
+
+    profile['certificate_request'] = cert_req
+
+    return profile
 
     return profile
 
@@ -245,7 +272,7 @@ class AgentJobsView(LoggerMixin, APIView):
                     due_at.isoformat(),
                 )
                 resolved_profile = _build_resolved_profile(
-                    agent, profile.workflow_definition.profile
+                    agent, profile.workflow_definition.profile, profile
                 )
                 pending_jobs.append({
                     'profile_id': profile.pk,

@@ -52,6 +52,8 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('renewal_threshold_days', models.PositiveIntegerField(default=30, help_text='Trustpoint will trigger certificate renewal when the currently issued certificate expires within this many days.', verbose_name='Renewal Threshold (days)')),
+                ('subject', models.CharField(blank=True, help_text='OpenSSL-style subject DN for the CSR, e.g., "/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com". If empty, the agent will use a default subject.', max_length=500, verbose_name='Subject')),
+                ('subject_alt_name', models.CharField(blank=True, help_text='OpenSSL-style SAN extension, e.g., "DNS:www.example.com,DNS:example.com,DNS:api.example.com,IP:192.0.2.10". If empty, no SAN extension will be added.', max_length=1000, verbose_name='Subject Alternative Name')),
                 ('last_certificate_update', models.DateTimeField(blank=True, help_text='Timestamp of the most recent successful certificate issuance for this profile.', null=True, verbose_name='Last Certificate Update')),
                 ('next_certificate_update_scheduled', models.DateTimeField(blank=True, help_text='Manually scheduled next renewal trigger time. Set to a past datetime to force immediate renewal, or a future datetime to delay it. Cleared automatically after the next successful certificate update.', null=True, verbose_name='Next Certificate Update')),
                 ('enabled', models.BooleanField(default=True, help_text='Disabled assignments are skipped during renewal scheduling.', verbose_name='Enabled')),

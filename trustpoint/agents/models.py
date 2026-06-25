@@ -247,6 +247,26 @@ class AgentAssignedProfile(models.Model):
             'issued certificate expires within this many days.'
         ),
     )
+    subject = models.CharField(
+        verbose_name=_('Subject'),
+        max_length=500,
+        blank=True,
+        help_text=_(
+            'OpenSSL-style subject DN for the CSR, e.g., '
+            '"/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com". '
+            'If empty, the agent will use a default subject.'
+        ),
+    )
+    subject_alt_name = models.CharField(
+        verbose_name=_('Subject Alternative Name'),
+        max_length=1000,
+        blank=True,
+        help_text=_(
+            'OpenSSL-style SAN extension, e.g., '
+            '"DNS:www.example.com,DNS:example.com,DNS:api.example.com,IP:192.0.2.10". '
+            'If empty, no SAN extension will be added.'
+        ),
+    )
     last_certificate_update = models.DateTimeField(
         verbose_name=_('Last Certificate Update'),
         null=True,

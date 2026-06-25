@@ -15,7 +15,9 @@
         "certificate_request": {
             "certificate_profile": "default",
             "url": "{{ endpoint }}",
-            "path": "{{ path }}"
+            "path": "{{ path }}",
+            "subject": "{{ subject }}",
+            "subject_alt_name": "{{ subject_alt_name }}"
         },
         "steps": [
             {

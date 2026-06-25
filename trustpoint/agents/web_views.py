@@ -404,7 +404,21 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
         """Meta options."""
 
         model = AgentAssignedProfile
-        fields = ('workflow_definition', 'renewal_threshold_days')
+        fields = ('workflow_definition', 'renewal_threshold_days', 'subject', 'subject_alt_name')
+        widgets = {
+            'subject': forms.TextInput(attrs={
+                'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
+                'class': 'form-control',
+            }),
+            'subject_alt_name': forms.TextInput(attrs={
+                'placeholder': 'DNS:www.example.com,DNS:example.com,IP:192.0.2.10',
+                'class': 'form-control',
+            }),
+        }
+        help_texts = {
+            'subject': 'OpenSSL-style subject DN. Leave empty to use default.',
+            'subject_alt_name': 'OpenSSL-style SAN extension. Leave empty for no SAN.',
+        }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Restrict the workflow queryset to active definitions."""

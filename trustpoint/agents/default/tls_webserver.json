@@ -23,7 +23,9 @@
     "certificate_request": {
       "certificate_profile": "tls_server",
       "url": "{{ endpoint }}",
-      "path": "{{ path }}"
+      "path": "{{ path }}",
+      "subject": "{{ subject }}",
+      "subject_alt_name": "{{ subject_alt_name }}"
     }
   }
 }

@@ -46,6 +46,21 @@ class AgentAssignedProfileAdmin(admin.ModelAdmin[AgentAssignedProfile]):
     list_filter = ('enabled',)
     search_fields = ('agent__name', 'workflow_definition__name')
     readonly_fields = ('last_certificate_update', 'created_at', 'updated_at')
+    fieldsets = (
+        (None, {
+            'fields': ('agent', 'workflow_definition', 'enabled'),
+        }),
+        ('Certificate Settings', {
+            'fields': ('subject', 'subject_alt_name'),
+        }),
+        ('Renewal Settings', {
+            'fields': ('renewal_threshold_days', 'last_certificate_update', 'next_certificate_update_scheduled'),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
     actions: list[str] = ['force_renewal']  # noqa: RUF012
 
     @admin.action(description='Force renewal on next check-in (set scheduled time to now)')

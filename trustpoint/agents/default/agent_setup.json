@@ -24,7 +24,9 @@
     "certificate_request": {
       "certificate_profile": "domain_credential",
       "url": "{{ endpoint }}",
-      "path": "{{ path }}"
+      "path": "{{ path }}",
+      "subject": "{{ subject }}",
+      "subject_alt_name": "{{ subject_alt_name }}"
     },
     "onboarding": {
       "device": "{{ device }}",
