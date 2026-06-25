@@ -7,7 +7,6 @@ import urllib.parse
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import serializers, status
@@ -23,10 +22,6 @@ from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
-
-def _fingerprint_from_cert(cert: x509.Certificate) -> str:
-    """Return the lower-case hex SHA-256 fingerprint of *cert*."""
-    return cert.fingerprint(hashes.SHA256()).hex()
 
 
 def _parse_client_cert(request: Request) -> x509.Certificate | None:
@@ -44,26 +39,58 @@ def _parse_client_cert(request: Request) -> x509.Certificate | None:
 
 
 class AgentCertificateAuthentication(BaseAuthentication):
-    """Authenticate an agent via its mTLS client certificate."""
+    """Authenticate an agent via its mTLS client certificate (domain credential)."""
 
     def authenticate(self, request: Request) -> tuple[TrustpointAgent, None] | None:
-        """Return ``(agent, None)`` or raise :class:`~rest_framework.exceptions.AuthenticationFailed`."""
+        """Return ``(agent, None)`` or raise :class:`~rest_framework.exceptions.AuthenticationFailed`.
+
+        The agent authenticates using its domain credential certificate issued during onboarding.
+        The certificate is matched against IssuedCredentialModel to find the associated device,
+        then the TrustpointAgent is looked up via the device relationship.
+        """
         cert = _parse_client_cert(request)
         if cert is None:
             return None
 
-        fingerprint = _fingerprint_from_cert(cert)
+        try:
+            from pki.models import IssuedCredentialModel  # noqa: PLC0415
 
-        agent: TrustpointAgent | None = (
-            TrustpointAgent.objects.select_related('device__domain')
-            .filter(certificate_fingerprint=fingerprint, is_active=True)
-            .first()
-        )
-        if agent is None:
-            msg = 'No active agent found for the provided client certificate.'
-            raise AuthenticationFailed(msg)
+            # Find the issued credential for this certificate
+            issued_credential = IssuedCredentialModel.get_credential_for_certificate(cert)
 
-        return (agent, None)
+            # Verify it's a valid domain credential
+            is_valid, reason = issued_credential.is_valid_domain_credential()
+            if not is_valid:
+                self._raise_auth_failed(f'Invalid domain credential: {reason}')
+
+            # Find the agent associated with this device
+            device = issued_credential.device
+            if device is None:
+                self._raise_auth_failed('No device associated with the client certificate.')
+
+            agent: TrustpointAgent | None = (
+                TrustpointAgent.objects.select_related('device__domain')
+                .filter(device=device, is_active=True)
+                .first()
+            )
+            if agent is None:
+                self._raise_auth_failed('No active agent found for the device associated with the client certificate.')
+
+        except IssuedCredentialModel.DoesNotExist as exc:
+            msg = 'Client certificate not found in issued credentials.'
+            raise AuthenticationFailed(msg) from exc
+        except AuthenticationFailed:
+            raise
+        except Exception as exc:
+            msg = f'Certificate authentication failed: {exc}'
+            raise AuthenticationFailed(msg) from exc
+        else:
+            return (agent, None)
+
+    @staticmethod
+    def _raise_auth_failed(msg: str) -> None:
+        """Raise an AuthenticationFailed exception with the given message."""
+        raise AuthenticationFailed(msg)
 
     def authenticate_header(self, request: Request) -> str:  # noqa: ARG002
         """Return the ``WWW-Authenticate`` challenge value for 401 responses."""

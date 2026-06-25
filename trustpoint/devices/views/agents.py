@@ -7,7 +7,6 @@ from typing import Any
 from django.db.models import QuerySet
 from django.http import HttpResponse
 from django.urls import reverse_lazy
-from django.utils import timezone
 from django.views.generic.base import TemplateView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
@@ -127,11 +126,12 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
         """Save the form as an AGENT_ONE_TO_N device."""
         self.object = form.save(device_type=DeviceModel.DeviceType.AGENT_ONE_TO_N)
         agent_uuid = uuid.uuid4().hex.upper()
+        agent_os_path = form.cleaned_data.get('agent_os_path', '/etc/trustpoint')
         TrustpointAgent.objects.create(
             name=self.object.common_name,
             agent_id=agent_uuid,
-            certificate_fingerprint=agent_uuid,
             device=self.object,
+            os_path=agent_os_path,
         )
 
         _allowed_chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -156,8 +156,8 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
         managed_agent = TrustpointAgent.objects.create(
             name=f'{self.object.common_name} (self)',
             agent_id=managed_device_uuid,
-            certificate_fingerprint=managed_device_uuid,
             device=managed_device,
+            os_path=agent_os_path,
         )
 
         default_wf = AgentWorkflowDefinition.objects.filter(
@@ -169,7 +169,6 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
                 workflow_definition=default_wf,
                 defaults={
                     'renewal_threshold_days': 30,
-                    'next_certificate_update_scheduled': timezone.now(),
                 },
             )
 
@@ -201,11 +200,12 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
         """Save the form as an AGENT_ONE_TO_ONE device."""
         self.object = form.save(device_type=DeviceModel.DeviceType.AGENT_ONE_TO_ONE)
         agent_uuid = uuid.uuid4().hex.upper()
+        agent_os_path = form.cleaned_data.get('agent_os_path', '/etc/trustpoint')
         agent = TrustpointAgent.objects.create(
             name=self.object.common_name,
             agent_id=agent_uuid,
-            certificate_fingerprint=agent_uuid,
             device=self.object,
+            os_path=agent_os_path,
         )
 
         default_wf = AgentWorkflowDefinition.objects.filter(
@@ -217,7 +217,6 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
                 workflow_definition=default_wf,
                 defaults={
                     'renewal_threshold_days': 30,
-                    'next_certificate_update_scheduled': timezone.now(),
                 },
             )
 

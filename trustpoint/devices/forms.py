@@ -620,6 +620,18 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
         widget=forms.MultipleHiddenInput(),
     )
 
+    # Agent-specific field for OS path where certificates will be stored
+    agent_os_path = forms.CharField(
+        max_length=255,
+        required=True,
+        label=_('Agent OS Path'),
+        help_text=_(
+            'The path where the agent will store certificates and keys '
+            '(e.g., /etc/trustpoint or C:\\trustpoint)'
+        ),
+        initial='/etc/trustpoint',
+    )
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the AgentOnboardingCreateForm with fixed EST-only fields."""
         super().__init__(*args, **kwargs)
@@ -635,6 +647,7 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
             Field('common_name'),
             Field('serial_number'),
             Field('domain'),
+            Field('agent_os_path'),
             HTML(
                 '<div class="alert alert-info mt-3" role="alert">'
                 + str(_('Onboarding protocol: REST - Username & Password (fixed). PKI protocol: REST (fixed).'))

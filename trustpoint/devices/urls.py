@@ -244,6 +244,11 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_agent_setup_profile_download',
     ),
     path(
+        'certificate-lifecycle-management/<int:pk>/agent/setup-profile/download-script/',
+        devices_help_views.AgentSetupScriptDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_agent_setup_script_download',
+    ),
+    path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/',
         views.DeviceOnboardingIssueNewApplicationCredentialView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_application_credential',

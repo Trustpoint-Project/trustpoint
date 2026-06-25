@@ -2175,10 +2175,21 @@ class AgentSetupProfileStrategy(HelpPageStrategy):
         host_ip = host_base.split('://')[-1].split(':')[0]
         download_url_with_ip = f'{download_url}?host_ip={host_ip}'
 
+        script_download_url = reverse(
+            'devices:devices_agent_setup_script_download',
+            kwargs={'pk': device.pk},
+        )
+
         download_btn = format_html(
             '<a class="btn btn-primary w-100" href="{}">{}</a>',
             download_url_with_ip,
             _non_lazy('Download agent_setup.json'),
+        )
+
+        script_download_btn = format_html(
+            '<a class="btn btn-primary w-100" href="{}">{}</a>',
+            script_download_url,
+            _non_lazy('Download agent_setup.py'),
         )
 
         summary = HelpSection(
@@ -2203,6 +2214,16 @@ class AgentSetupProfileStrategy(HelpPageStrategy):
                     _non_lazy('Download pre-filled Agent Setup Profile'),
                     download_btn,
                     ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Download Agent Setup Script'),
+                    script_download_btn,
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Usage'),
+                    'python agent_setup.py --profile agent_setup.json',
+                    ValueRenderType.CODE,
                 ),
             ],
         )
@@ -2234,6 +2255,13 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         device: DeviceModel = self.get_object()
         if not device.domain:
             raise Http404(_('No domain is configured for this device.'))
+
+        # Get the TrustpointAgent associated with this device
+        from agents.models import TrustpointAgent  # noqa: PLC0415
+        agent = TrustpointAgent.objects.filter(device=device).first()
+        if not agent:
+            raise Http404(_('No agent found for this device.'))
+
         est_password = _agent_get_est_password(device)
 
         tls = ActiveTrustpointTlsServerCredentialModel.objects.first()
@@ -2245,8 +2273,8 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         tls_cert_pem: str = root_cert_model.get_certificate_serializer().as_pem().decode('utf-8')
 
         host_ip = request.GET.get('host_ip', '127.0.0.1')
-        port = request.META.get('SERVER_PORT', '443')
-        host_base = f'https://{host_ip}:{port}'
+        # Always use port 443 for agent profiles, even if dev server runs on 8000
+        host_base = f'https://{host_ip}:443'
         domain_name: str = device.domain.unique_name
         enroll_path = f'/rest/{domain_name}/domain_credential/enroll/'
 
@@ -2255,11 +2283,29 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
             raw: dict[str, Any] = json.load(fh)
 
         profile = raw['profile']
+
+        # Get os_path from agent
+        os_path = agent.os_path
+        cert_profile = profile['certificate_request']['certificate_profile']
+
+        # Resolve local_storage placeholders
+        profile['local_storage']['os_path'] = os_path
+        profile['local_storage']['certificate_path'] = f'{os_path}/{cert_profile}-certificate.pem'
+        profile['local_storage']['certificate_chain_path'] = f'{os_path}/{cert_profile}-full-chain.pem'
+        profile['local_storage']['csr_path'] = f'{os_path}/{cert_profile}-csr.pem'
+        profile['local_storage']['private_key_path'] = f'{os_path}/{cert_profile}-key.pem'
+        profile['local_storage']['crl_path'] = f'{os_path}/{cert_profile}-crl.pem'
+        profile['local_storage']['tls_cert_path'] = f'{os_path}/trustpoint-tls.pem'
+
+        # Resolve onboarding placeholders
         profile['onboarding']['device'] = device.common_name
         profile['onboarding']['secret'] = est_password
         profile['onboarding']['tls_cert_pem'] = tls_cert_pem
+
+        # Resolve certificate_request placeholders
         profile['certificate_request']['url'] = host_base
         profile['certificate_request']['path'] = enroll_path
+        profile['certificate_request']['certificate_profile'] = cert_profile
 
         filled_bytes = json.dumps(raw, indent=2).encode('utf-8')
 
@@ -2269,4 +2315,30 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
             as_attachment=True,
             filename='agent_setup.json',
             content_type='application/json',
+        )
+
+
+class AgentSetupScriptDownloadView(PageContextMixin, DetailView[DeviceModel]):
+    """Serve the agent_setup.py script as a file download."""
+
+    http_method_names = ('get',)
+    model = DeviceModel
+    context_object_name = 'device'
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Return the agent_setup.py script as a file download."""
+        del request, args, kwargs
+        script_path = Path(__file__).parent.parent / 'agents' / 'examples' / 'agent_setup.py'
+
+        with script_path.open(mode='rb') as fh:
+            script_bytes = fh.read()
+
+        import io  # noqa: PLC0415
+        return FileResponse(  # type: ignore[return-value]
+            io.BytesIO(script_bytes),
+            as_attachment=True,
+            filename='agent_setup.py',
+            content_type='text/x-python',
         )

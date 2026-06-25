@@ -78,16 +78,6 @@ class TrustpointAgent(models.Model):
         ),
     )
 
-    certificate_fingerprint = models.CharField(
-        verbose_name=_('Certificate Fingerprint (SHA-256)'),
-        max_length=64,
-        unique=True,
-        help_text=_(
-            "SHA-256 fingerprint of the agent's mTLS client certificate. "
-            'Revoke the cert to decommission the agent at the TLS layer.'
-        ),
-    )
-
     capabilities = models.JSONField(
         verbose_name=_('Capabilities'),
         default=list,
@@ -114,6 +104,16 @@ class TrustpointAgent(models.Model):
             'How often this agent should call the check-in endpoint. '
             'Returned in every check-in response so the agent self-configures. '
             'Lower values increase responsiveness; higher values reduce server load.'
+        ),
+    )
+    os_path = models.CharField(
+        verbose_name=_('OS Path'),
+        max_length=255,
+        default='/etc/trustpoint',
+        blank=False,
+        help_text=_(
+            'The operating system path where the agent will store certificates and keys. '
+            'Example: /etc/trustpoint or C:\\trustpoint'
         ),
     )
     last_seen_at = models.DateTimeField(
