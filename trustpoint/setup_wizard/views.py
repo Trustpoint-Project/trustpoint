@@ -1197,6 +1197,7 @@ class FreshInstallFormBaseView[FormT: BaseForm](LoginRequiredMixin, LoggerMixin,
         context['is_last'] = self.is_last
         context['back_url'] = self.back_url
         context['body_heading'] = self.body_heading
+        context['is_summary_step'] = self.step_state == SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY
 
         config_model = SetupWizardConfigModel.get_singleton()
         current_state = config_model.get_current_step()

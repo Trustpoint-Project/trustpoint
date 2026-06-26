@@ -57,7 +57,7 @@
             <h1 class="tp-setup-form-heading">{% trans 'Setup Wizard' %}</h1>
         </div>
 
-    <form method="POST" enctype="multipart/form-data" class="text-start"{% if form.storage_selection %} data-summary-submit-form{% endif %}>
+    <form method="POST" enctype="multipart/form-data" class="text-start"{% if is_summary_step %} data-summary-submit-form{% endif %} id="setup-form">
         {% csrf_token %}
         <div class="card tp-card-setup-wizard tp-card-setup-steps text-center">
             <div class="card-header">
@@ -96,7 +96,7 @@
                 </div>
             </div>
         </div>
-        <div class="card tp-card-setup-wizard tp-card-setup-content text-center"{% if form.storage_selection %} data-summary-submit-card{% endif %}>
+        <div class="card tp-card-setup-wizard tp-card-setup-content text-center"{% if is_summary_step %} data-summary-submit-card{% endif %}>
             <div class="card-body tp-wizard-body">
                 <h2 class="tp-wizard-heading">{{ body_heading }}</h2>
                 {% if wizard_notice %}
@@ -111,7 +111,7 @@
                         </div>
                     {% endif %}
 
-                    {% if form.storage_selection %}
+                    {% if is_summary_step %}
                         <div class="tp-summary-list">
                             <div class="tp-summary-item">
                                 <div class="tp-summary-label">{{ form.operational_admin.label }}</div>
@@ -542,7 +542,7 @@
                 </div>
             </div>
         </div>
-        {% if form.storage_selection %}
+        {% if is_summary_step %}
             <div class="tp-summary-loading-state" data-summary-loading-state hidden aria-live="polite" aria-busy="true">
                 <div class="card tp-card-setup-wizard tp-summary-loading-card">
                     <div class="card-body">
@@ -577,7 +577,7 @@
         </script>
     {% endif %}
 
-    {% if form.storage_selection %}
+    {% if is_summary_step %}
         <script>
             (() => {
                 const form = document.querySelector('[data-summary-submit-form]');
@@ -591,6 +591,35 @@
                 form.addEventListener('submit', () => {
                     card.hidden = true;
                     loadingState.hidden = false;
+                });
+            })();
+        </script>
+    {% else %}
+        <script>
+            (() => {
+                const form = document.querySelector('#setup-form');
+                const applyBtn = document.querySelector('.tp-setup-form-submit');
+
+                if (!form || !applyBtn) {
+                    return;
+                }
+
+                form.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.keyCode === 13) {
+                        const target = event.target;
+
+                        if (!(target instanceof Element) ||
+                            target.matches('textarea, button, input[type="submit"], input[type="button"], a')) {
+                            return; // Keep native behavior for explicit action controls and textareas
+                        }
+
+                        event.preventDefault();
+                        if (typeof form.requestSubmit === 'function') {
+                            form.requestSubmit(applyBtn);
+                        } else {
+                            applyBtn.click();
+                        }
+                    }
                 });
             })();
         </script>
