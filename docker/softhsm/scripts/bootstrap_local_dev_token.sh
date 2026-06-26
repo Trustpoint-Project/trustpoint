@@ -36,7 +36,7 @@ random_secret() {
 
 ensure_dirs() {
   mkdir -p "${HSM_CONFIG_DIR}" "${HSM_TOKEN_DIR}"
-  safe_chmod 0750 "${HSM_CONFIG_DIR}"
+  safe_chmod 0755 "${HSM_CONFIG_DIR}"
   safe_chmod 0700 "${HSM_TOKEN_DIR}"
 }
 
@@ -93,7 +93,9 @@ TRUSTPOINT_LOCAL_HSM_PROFILE_NAME=${PROFILE_NAME}
 TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE=${TRUSTPOINT_USER_PIN_FILE}
 TRUSTPOINT_LOCAL_HSM_PROXY_SOCKET=${PROXY_SOCKET}
 EOF
-  safe_chmod 0600 "${METADATA_FILE}"
+  # Metadata contains only non-secret selector information. Keep it readable by
+  # host-side helper scripts even when the PIN files remain private.
+  safe_chmod 0644 "${METADATA_FILE}"
 }
 
 main() {

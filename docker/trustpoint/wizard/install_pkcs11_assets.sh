@@ -35,8 +35,14 @@ case "${1:-}" in
         ;;
 esac
 
+use_installed_pin=0
+if [ "${1:-}" = "--use-installed-pin" ]; then
+    use_installed_pin=1
+    shift
+fi
+
 if [ "$#" -ne 1 ] && [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
-    log ERROR "Expected staged PIN, staged module plus PIN, or staged module plus PIN plus provider config."
+    log ERROR "Expected staged PIN, staged module plus PIN, staged module plus PIN plus provider config, or --use-installed-pin."
     exit 1
 fi
 
@@ -46,7 +52,10 @@ staged_config=""
 install_module=0
 install_config=0
 
-if [ "$#" -ge 2 ]; then
+if [ "$use_installed_pin" -eq 1 ]; then
+    staged_module="$(readlink -f "$1" 2>/dev/null || true)"
+    install_module=1
+elif [ "$#" -ge 2 ]; then
     staged_module="$(readlink -f "$1" 2>/dev/null || true)"
     staged_pin="$(readlink -f "$2" 2>/dev/null || true)"
     install_module=1
@@ -54,9 +63,17 @@ else
     staged_pin="$(readlink -f "$1" 2>/dev/null || true)"
 fi
 
-if [ "$#" -eq 3 ]; then
+if [ "$use_installed_pin" -eq 1 ] && [ "$#" -eq 2 ]; then
+    staged_config="$(readlink -f "$2" 2>/dev/null || true)"
+    install_config=1
+elif [ "$#" -eq 3 ]; then
     staged_config="$(readlink -f "$3" 2>/dev/null || true)"
     install_config=1
+fi
+
+if [ "$use_installed_pin" -eq 1 ] && [ "$#" -ne 1 ] && [ "$#" -ne 2 ]; then
+    log ERROR "Expected --use-installed-pin with staged module and optional staged provider config."
+    exit 1
 fi
 
 if [ "$install_module" -eq 1 ]; then
@@ -89,17 +106,24 @@ if [ "$install_config" -eq 1 ]; then
     fi
 fi
 
-case "$staged_pin" in
-    "${STAGING_ROOT}"/*) ;;
-    *)
-        log ERROR "Refusing to install non-staged PKCS#11 PIN path."
+if [ "$use_installed_pin" -eq 1 ]; then
+    if [ ! -f "$PIN_FILE_PATH" ]; then
+        log ERROR "Existing protected PKCS#11 user PIN file is missing: $PIN_FILE_PATH"
         exit 3
-        ;;
-esac
+    fi
+else
+    case "$staged_pin" in
+        "${STAGING_ROOT}"/*) ;;
+        *)
+            log ERROR "Refusing to install non-staged PKCS#11 PIN path."
+            exit 3
+            ;;
+    esac
 
-if [ ! -f "$staged_pin" ]; then
-    log ERROR "Staged PKCS#11 PIN file is missing: $staged_pin"
-    exit 3
+    if [ ! -f "$staged_pin" ]; then
+        log ERROR "Staged PKCS#11 PIN file is missing: $staged_pin"
+        exit 3
+    fi
 fi
 
 log INFO "Installing PKCS#11 assets into the protected HSM area."
@@ -113,9 +137,11 @@ if [ "$install_module" -eq 1 ]; then
     fi
 fi
 
-if ! install -o root -g www-data -m 0640 "$staged_pin" "$PIN_FILE_PATH"; then
-    log ERROR "Failed to install PKCS#11 user PIN file into $PIN_FILE_PATH"
-    exit 5
+if [ "$use_installed_pin" -eq 0 ]; then
+    if ! install -o root -g www-data -m 0640 "$staged_pin" "$PIN_FILE_PATH"; then
+        log ERROR "Failed to install PKCS#11 user PIN file into $PIN_FILE_PATH"
+        exit 5
+    fi
 fi
 
 if [ "$install_config" -eq 1 ]; then
@@ -136,7 +162,9 @@ if [ "$install_module" -eq 1 ]; then
     rm -f "$tmp_module_path_file"
 fi
 
-rm -f "$staged_pin"
+if [ "$use_installed_pin" -eq 0 ]; then
+    rm -f "$staged_pin"
+fi
 if [ "$install_module" -eq 1 ]; then
     rm -f "$staged_module"
 fi

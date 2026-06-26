@@ -59,7 +59,7 @@ SOFTHSM_MODULE_PATH="$(resolve_softhsm_module)" || die "Could not locate libsoft
 
 mkdir -p "${HSM_CONFIG_DIR}" "${HSM_TOKEN_DIR}" "${SOCKET_DIR}"
 
-safe_chmod 0750 "${HSM_CONFIG_DIR}"
+safe_chmod 0755 "${HSM_CONFIG_DIR}"
 safe_chmod 0700 "${HSM_TOKEN_DIR}"
 safe_chmod 0755 "${SOCKET_DIR}"
 

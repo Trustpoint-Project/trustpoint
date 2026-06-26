@@ -1971,8 +1971,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
     ) -> bool:
         """Return whether the built-in local PKCS#11 proxy can be used."""
         return (
-            staged_pin is not None
-            and local_dev_pkcs11_handoff_available()
+            local_dev_pkcs11_handoff_available()
             and local_dev_module.is_file()
             and configured_module_path == local_dev_module
             and configured_module_path.is_file()
@@ -1986,7 +1985,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         configured_module_path: Path,
     ) -> bool:
         """Return whether the wizard should keep an already installed module in place."""
-        return staged_module is None and staged_pin is not None and configured_module_path.is_file()
+        return staged_module is None and configured_module_path.is_file()
 
     @staticmethod
     def _discard_redundant_local_proxy_module(
@@ -2006,9 +2005,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         staged_module: Path | None,
         staged_pin: Path | None,
         uses_existing_installed_module: bool,
+        uses_existing_installed_pin: bool,
     ) -> None:
         """Validate the staged PKCS#11 assets before installing them."""
-        if staged_pin is None:
+        if staged_pin is None and not uses_existing_installed_pin:
             err_msg = 'The staged PKCS#11 setup files are incomplete. Enter the PIN again.'
             raise DjangoValidationError(err_msg)
 
@@ -2020,16 +2020,31 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
     def _build_pkcs11_install_args(
         *,
         staged_module: Path | None,
-        staged_pin: Path,
+        staged_pin: Path | None,
         staged_config: Path | None,
         uses_existing_installed_module: bool,
+        uses_existing_installed_pin: bool,
     ) -> tuple[str, ...]:
         """Build arguments for the PKCS#11 asset install helper."""
         if uses_existing_installed_module:
+            if staged_config is not None:
+                err_msg = 'The staged PKCS#11 setup files are incomplete. Upload the library and enter the PIN again.'
+                raise DjangoValidationError(err_msg)
+            if staged_pin is None:
+                return ()
             return (str(staged_pin),)
 
         if staged_module is None:
             err_msg = 'The staged PKCS#11 setup files are incomplete. Upload the library and enter the PIN again.'
+            raise DjangoValidationError(err_msg)
+
+        if uses_existing_installed_pin:
+            if staged_config is not None:
+                return ('--use-installed-pin', str(staged_module), str(staged_config))
+            return ('--use-installed-pin', str(staged_module))
+
+        if staged_pin is None:
+            err_msg = 'The staged PKCS#11 setup files are incomplete. Enter the PIN again.'
             raise DjangoValidationError(err_msg)
 
         if staged_config is not None:
@@ -2064,9 +2079,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         cls,
         *,
         staged_module: Path | None,
-        staged_pin: Path,
+        staged_pin: Path | None,
         staged_config: Path | None,
         uses_existing_installed_module: bool,
+        uses_existing_installed_pin: bool,
     ) -> None:
         """Run the PKCS#11 asset install helper script."""
         install_args = cls._build_pkcs11_install_args(
@@ -2074,7 +2090,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             staged_pin=staged_pin,
             staged_config=staged_config,
             uses_existing_installed_module=uses_existing_installed_module,
+            uses_existing_installed_pin=uses_existing_installed_pin,
         )
+        if not install_args:
+            return
 
         try:
             execute_shell_script(INSTALL_PKCS11_ASSETS, *install_args)
@@ -2089,11 +2108,12 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         *,
         config_model: SetupWizardConfigModel,
         staged_module: Path | None,
-        staged_pin: Path,
+        staged_pin: Path | None,
         staged_config: Path | None,
     ) -> None:
         """Persist final PKCS#11 asset locations after successful installation."""
-        cleanup_wizard_pkcs11_staged_path(staged_pin)
+        if staged_pin is not None:
+            cleanup_wizard_pkcs11_staged_path(staged_pin)
 
         if staged_module is not None:
             cleanup_wizard_pkcs11_staged_path(staged_module)
@@ -2140,13 +2160,15 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             staged_pin=staged_pin,
             configured_module_path=configured_module_path,
         )
+        uses_existing_installed_pin = staged_pin is None and _path_exists(FINAL_WIZARD_PKCS11_PIN_PATH)
 
         cls._validate_staged_pkcs11_assets(
             staged_module=staged_module,
             staged_pin=staged_pin,
             uses_existing_installed_module=uses_existing_installed_module,
+            uses_existing_installed_pin=uses_existing_installed_pin,
         )
-        if staged_pin is None:
+        if staged_pin is None and not uses_existing_installed_pin:
             return
 
         cls._run_pkcs11_asset_install_script(
@@ -2154,6 +2176,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             staged_pin=staged_pin,
             staged_config=staged_config,
             uses_existing_installed_module=uses_existing_installed_module,
+            uses_existing_installed_pin=uses_existing_installed_pin,
         )
         cls._persist_installed_pkcs11_assets(
             config_model=config_model,

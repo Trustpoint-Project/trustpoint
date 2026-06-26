@@ -238,8 +238,7 @@ class OperationalBootstrapApplier:
             return configured_module_value, (self.fresh_install['pkcs11_auth_source_ref'] or '').strip(), configured_config_value
 
         uses_builtin_local_proxy = (
-            staged_pin is not None
-            and local_dev_pkcs11_handoff_available()
+            local_dev_pkcs11_handoff_available()
             and local_dev_module.is_file()
             and configured_module_path == local_dev_module
             and configured_module_exists
@@ -249,15 +248,34 @@ class OperationalBootstrapApplier:
             cleanup_wizard_pkcs11_staged_path(staged_module)
             staged_module = None
 
-        if staged_pin is None:
+        uses_existing_installed_module = staged_module is None and configured_module_exists
+        uses_existing_installed_pin = staged_pin is None and FINAL_WIZARD_PKCS11_PIN_PATH.exists()
+
+        if staged_pin is None and not uses_existing_installed_pin:
             raise DjangoValidationError('The staged PKCS#11 setup files are incomplete. Enter the PIN again.')
-        if staged_module is None and not uses_builtin_local_proxy:
+        if staged_module is None and not uses_builtin_local_proxy and not uses_existing_installed_module:
+            raise DjangoValidationError(
+                'The staged PKCS#11 setup files are incomplete. Upload the library and enter the PIN again.'
+            )
+        if staged_config is not None and staged_pin is None and staged_module is None:
             raise DjangoValidationError(
                 'The staged PKCS#11 setup files are incomplete. Upload the library and enter the PIN again.'
             )
 
         try:
-            if uses_builtin_local_proxy:
+            if staged_module is None and staged_pin is None:
+                pass
+            elif staged_pin is None:
+                if staged_config is not None:
+                    self.execute_shell_script(
+                        INSTALL_PKCS11_ASSETS,
+                        '--use-installed-pin',
+                        str(staged_module),
+                        str(staged_config),
+                    )
+                else:
+                    self.execute_shell_script(INSTALL_PKCS11_ASSETS, '--use-installed-pin', str(staged_module))
+            elif uses_builtin_local_proxy:
                 self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_pin))
             elif staged_config is not None:
                 self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin), str(staged_config))
@@ -275,7 +293,8 @@ class OperationalBootstrapApplier:
                 logger.exception('PKCS#11 install script failed: %s', script_error_detail)
             raise DjangoValidationError(err_msg) from exc
 
-        cleanup_wizard_pkcs11_staged_path(staged_pin)
+        if staged_pin is not None:
+            cleanup_wizard_pkcs11_staged_path(staged_pin)
         if staged_module is not None:
             cleanup_wizard_pkcs11_staged_path(staged_module)
             configured_module_value = str(FINAL_WIZARD_PKCS11_MODULE_PATH)

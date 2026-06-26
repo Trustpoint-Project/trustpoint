@@ -480,7 +480,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         self.initial['fresh_install_pkcs11_slot_id'] = self.instance.fresh_install_pkcs11_slot_id
         self.initial['pkcs11_config_env_var'] = self.instance.fresh_install_pkcs11_config_env_var
         self.staged_pkcs11_module_name = self._staged_pkcs11_module_name()
-        self.has_staged_pkcs11_pin = self._existing_pkcs11_pin_file() is not None
+        self.has_staged_pkcs11_pin = (
+            existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_auth_source_ref) is not None
+        )
+        self.has_existing_pkcs11_pin = self._existing_pkcs11_pin_file() is not None
         self.staged_pkcs11_config_name = self._staged_pkcs11_config_name()
 
     def refresh_pkcs11_state(self) -> None:
@@ -664,7 +667,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
                 'pkcs11_module_upload',
                 gettext_lazy('Upload a PKCS#11 library.'),
             )
-        if not user_pin and (existing_pin is None or existing_module is None):
+        if not user_pin and existing_pin is None:
             self.add_error(
                 'pkcs11_user_pin',
                 gettext_lazy('Enter the PKCS#11 user PIN.'),

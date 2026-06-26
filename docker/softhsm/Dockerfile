@@ -19,8 +19,10 @@ WORKDIR /opt/trustpoint-softhsm
 COPY docker/softhsm/ /opt/trustpoint-softhsm/
 
 RUN chmod +x /opt/trustpoint-softhsm/entrypoint.sh /opt/trustpoint-softhsm/scripts/bootstrap_local_dev_token.sh && \
-    install -d -m 0750 /var/lib/trustpoint/hsm/config && \
-    install -d -m 0700 /var/lib/trustpoint/hsm/tokens
+    install -d -o 33 -g 33 -m 0755 /var/lib/trustpoint/hsm/config && \
+    install -d -o 33 -g 33 -m 0700 /var/lib/trustpoint/hsm/tokens
+
+USER 33:33
 
 EXPOSE 5657
 
