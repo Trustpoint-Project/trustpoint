@@ -25,6 +25,7 @@ urlpatterns = [
         AgentWorkflowDefinitionBulkDeleteConfirmView.as_view(),
         name='profiles-delete_confirm',
     ),
+
     # Managed devices for 1-to-n agents
     path(
         '<int:agent_id>/targets/',
@@ -41,6 +42,7 @@ urlpatterns = [
         AgentManagedDeviceDeleteView.as_view(),
         name='targets-delete_confirm',
     ),
+
     # Assigned profiles for 1-to-1 agents
     path(
         '<int:agent_id>/assigned-profiles/',

@@ -43,12 +43,7 @@ class AgentCertificateAuthentication(BaseAuthentication):
     """Authenticate an agent via its mTLS client certificate (domain credential)."""
 
     def authenticate(self, request: Request) -> tuple[TrustpointAgent, None] | None:
-        """Return ``(agent, None)`` or raise :class:`~rest_framework.exceptions.AuthenticationFailed`.
-
-        The agent authenticates using its domain credential certificate issued during onboarding.
-        The certificate is matched against IssuedCredentialModel to find the associated device,
-        then the TrustpointAgent is looked up via the device relationship.
-        """
+        """The agent authenticates using its domain credential certificate issued during onboarding."""
         cert = _parse_client_cert(request)
         if cert is None:
             return None
@@ -56,15 +51,12 @@ class AgentCertificateAuthentication(BaseAuthentication):
         try:
             from pki.models import IssuedCredentialModel  # noqa: PLC0415
 
-            # Find the issued credential for this certificate
             issued_credential = IssuedCredentialModel.get_credential_for_certificate(cert)
 
-            # Verify it's a valid domain credential
             is_valid, reason = issued_credential.is_valid_domain_credential()
             if not is_valid:
                 self._raise_auth_failed(f'Invalid domain credential: {reason}')
 
-            # Find the agent associated with this device
             device = issued_credential.device
             if device is None:
                 self._raise_auth_failed('No device associated with the client certificate.')
@@ -144,14 +136,12 @@ def _build_resolved_profile(
     else:
         cert_req.pop('subject_alt_name', None)
 
-    # Add public key algorithm information from domain's issuing CA
     public_key_info = None
     if agent.device and agent.device.domain:
         public_key_info = agent.device.domain.public_key_info
 
     if public_key_info:
         cert_req['public_key_algorithm_oid'] = str(public_key_info.public_key_algorithm_oid.dotted_string)
-        # Set key_parameter to either key_size (RSA) or curve name (ECC)
         if public_key_info.key_size:
             cert_req['key_parameter'] = str(public_key_info.key_size)
         elif public_key_info.named_curve:
@@ -159,7 +149,6 @@ def _build_resolved_profile(
         else:
             cert_req.pop('key_parameter', None)
     else:
-        # Remove placeholders if no public_key_info available
         for key in ('public_key_algorithm_oid', 'key_parameter'):
             cert_req.pop(key, None)
 
@@ -266,7 +255,6 @@ class AgentJobsView(LoggerMixin, APIView):
         """Return pending renewal jobs for the authenticated agent."""
         agent: TrustpointAgent = request.user  # type: ignore[assignment]
 
-        # Update liveness timestamp.
         TrustpointAgent.objects.filter(pk=agent.pk).update(last_seen_at=timezone.now())
 
         now = timezone.now()

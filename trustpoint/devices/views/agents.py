@@ -30,7 +30,6 @@ from onboarding.models import NoOnboardingConfigModel
 from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
-    DEVICES_PAGE_DEVICES_SUBCATEGORY,
     PageContextMixin,
 )
 
@@ -44,8 +43,8 @@ class AgentTableView(AbstractDeviceTableView):
 
     @property
     def device_revoke_url_name(self) -> str:
-        """Returns the URL name for the device revoke action, using the devices subcategory."""
-        return f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_revoke'
+        """Returns the URL name for the device revoke action, using the agents subcategory."""
+        return f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}_device_revoke'
 
     @property
     def device_delete_url_name(self) -> str:

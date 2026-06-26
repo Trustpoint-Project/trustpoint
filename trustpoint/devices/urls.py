@@ -461,7 +461,12 @@ urlpatterns = [
     re_path(
         r'^opc-ua-gds-push/revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
         views.DeviceBulkRevokeView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_revoke',
+        name='opc_ua_gds_push_device_revoke',
+    ),
+    re_path(
+        r'^agents/revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.DeviceBulkRevokeView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_device_revoke',
     ),
     re_path(
         r'^delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',

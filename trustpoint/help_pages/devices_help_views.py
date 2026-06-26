@@ -48,6 +48,7 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from trustpoint.page_context import (
+    DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
@@ -2236,8 +2237,16 @@ class AgentSetupProfileStrategy(HelpPageStrategy):
 class AgentDomainCredentialHelpView(BaseHelpView):
     """Help view for agent domain credential issuance via the agent_setup.json profile."""
 
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
     strategy = AgentSetupProfileStrategy()
+
+    @override
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Override to use the correct CLM URL for agents."""
+        context = super().get_context_data(**kwargs)
+        # Agents use the devices CLM URL, not an agents-specific one
+        context['clm_url'] = f'{self.page_category}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management'
+        return context
 
 
 class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
@@ -2256,7 +2265,6 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         if not device.domain:
             raise Http404(_('No domain is configured for this device.'))
 
-        # Get the TrustpointAgent associated with this device
         from agents.models import TrustpointAgent  # noqa: PLC0415
         agent = TrustpointAgent.objects.filter(device=device).first()
         if not agent:
@@ -2273,7 +2281,6 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         tls_cert_pem: str = root_cert_model.get_certificate_serializer().as_pem().decode('utf-8')
 
         host_ip = request.GET.get('host_ip', '127.0.0.1')
-        # Always use port 443 for agent profiles, even if dev server runs on 8000
         host_base = f'https://{host_ip}:443'
         domain_name: str = device.domain.unique_name
         enroll_path = f'/rest/{domain_name}/domain_credential/enroll/'
@@ -2283,12 +2290,9 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
             raw: dict[str, Any] = json.load(fh)
 
         profile = raw['profile']
-
-        # Get os_path from agent
         os_path = agent.os_path
         cert_profile = profile['certificate_request']['certificate_profile']
 
-        # Resolve local_storage placeholders
         profile['local_storage']['os_path'] = os_path
         profile['local_storage']['certificate_path'] = f'{os_path}/{cert_profile}-certificate.pem'
         profile['local_storage']['certificate_chain_path'] = f'{os_path}/{cert_profile}-full-chain.pem'
@@ -2297,18 +2301,14 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         profile['local_storage']['crl_path'] = f'{os_path}/{cert_profile}-crl.pem'
         profile['local_storage']['tls_cert_path'] = f'{os_path}/trustpoint-tls.pem'
 
-        # Resolve onboarding placeholders
         profile['onboarding']['device'] = device.common_name
         profile['onboarding']['secret'] = est_password
         profile['onboarding']['tls_cert_pem'] = tls_cert_pem
 
-        # Resolve certificate_request placeholders
         profile['certificate_request']['url'] = host_base
         profile['certificate_request']['path'] = enroll_path
         profile['certificate_request']['certificate_profile'] = cert_profile
 
-        # Remove optional placeholders (subject, subject_alt_name, public_key_algorithm_oid, key_parameter)
-        # These will be set by assigned profiles during renewal jobs, not during initial setup
         cert_req = profile['certificate_request']
         for optional_field in ('subject', 'subject_alt_name', 'public_key_algorithm_oid', 'key_parameter'):
             cert_req.pop(optional_field, None)
