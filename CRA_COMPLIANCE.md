@@ -2,7 +2,7 @@
   <img src=".github-assets/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
 </p>
 
-<h1 align="center">🛡️ Trustpoint — CRA Conformity Assessment</h1>
+<h1 align="center">Trustpoint — CRA Conformity Assessment</h1>
 
 <p align="center">
   <strong>EU Cyber Resilience Act Self-Assessment</strong><br>
