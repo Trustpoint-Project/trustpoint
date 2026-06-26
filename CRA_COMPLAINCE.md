@@ -22,7 +22,7 @@
 
 ---
 
-## 🎯 **Purpose Statement**
+## **Purpose Statement**
 
 **Trustpoint** is an open-source trust anchor software designed to solve the critical challenge of digital identity management in industrial and OT environments. As a security-critical infrastructure component managing PKI and certificate lifecycle operations, Trustpoint's commitment to CRA compliance demonstrates our dedication to cybersecurity excellence and transparency.
 
@@ -32,7 +32,7 @@ Our open-source approach ensures complete transparency in our security practices
 
 ---
 
-## � **Purpose & Scope**
+## **Purpose & Scope**
 
 This CRA conformity assessment documents Trustpoint's compliance with the EU Cyber Resilience Act (Regulation (EU) 2024/2847). It provides comprehensive technical documentation supporting Annex I essential cybersecurity requirements and Annex V technical documentation obligations.
 
@@ -47,38 +47,32 @@ This CRA conformity assessment documents Trustpoint's compliance with the EU Cyb
 
 | Field | Value |
 |-------|-------|
-| 📦 Product | Trustpoint Trust Anchor Software |
-| 🏷️ Version Tag | 0.6.0.dev1 (Beta - Technology Preview) |
-| 🔗 Repository | https://github.com/Trustpoint-Project/trustpoint |
-| 📧 Security Contact | trustpoint@campus-schwarzwald.de |
-| 🎯 Purpose (1–2 lines) | Open-source trust anchor software for managing digital identities, PKI infrastructure, and certificate lifecycle operations in industrial and OT environments |
-| 🏪 Market | Open Source (Non-commercial) |
+| Product | Trustpoint Trust Anchor Software |
+| Version Tag | 0.6.0.dev1 (Beta - Technology Preview) |
+| Repository | https://github.com/Trustpoint-Project/trustpoint |
+| Security Contact | trustpoint@campus-schwarzwald.de |
+| Purpose (1–2 lines) | Open-source trust anchor software for managing digital identities, PKI infrastructure, and certificate lifecycle operations in industrial and OT environments |
+| Market | Open Source (Non-commercial) |
 
-### 🏪 Market Category:
-[![OSS](https://img.shields.io/badge/Market-Open_Source-lightgreen?style=flat-square&logo=github&logoColor=white)](#project-identification)
+### Market Category: [![OSS](https://img.shields.io/badge/Market-Open_Source-lightgreen?style=flat-square&logo=github&logoColor=white)](#project-identification)
 
-### 🛡️ Confidentiality Level:
-[![High](https://img.shields.io/badge/C-High-blue?style=flat-square)](#project-identification)
+### Confidentiality Level: [![High](https://img.shields.io/badge/C-High-blue?style=flat-square)](#project-identification)
 
 **Justification:** Trustpoint manages cryptographic keys, certificates, and trust relationships for critical industrial infrastructure. Configuration and operational data require high confidentiality protection.
 
-### ✅ Integrity Level:
-[![Critical](https://img.shields.io/badge/I-Critical-red?style=flat-square)](#project-identification)
+### Integrity Level: [![Critical](https://img.shields.io/badge/I-Critical-red?style=flat-square)](#project-identification)
 
 **Justification:** As a trust anchor managing PKI infrastructure, any integrity compromise could affect the security of all dependent systems and devices. Integrity is paramount.
 
-### ⏱️ Availability Level:
-[![High](https://img.shields.io/badge/A-High-orange?style=flat-square)](#project-identification)
+### Availability Level: [![High](https://img.shields.io/badge/A-High-orange?style=flat-square)](#project-identification)
 
 **Justification:** Certificate operations, device onboarding, and renewal processes require high availability to prevent disruption of industrial operations.
 
-### 🕐 Recovery Time Objective:
-[![High](https://img.shields.io/badge/RTO-High_(1--4hrs)-yellow?style=flat-square)](#project-identification)
+### Recovery Time Objective: [![High](https://img.shields.io/badge/RTO-High_(1--4hrs)-yellow?style=flat-square)](#project-identification)
 
 **Justification:** Critical certificate operations should be restored within 1-4 hours to minimize impact on industrial environments.
 
-### 🔄 Recovery Point Objective:
-[![Minimal](https://img.shields.io/badge/RPO-Minimal_(15--60min)-yellow?style=flat-square)](#project-identification)
+### Recovery Point Objective: [![Minimal](https://img.shields.io/badge/RPO-Minimal_(15--60min)-yellow?style=flat-square)](#project-identification)
 
 **Justification:** Certificate and configuration data changes should be recoverable with minimal loss to ensure consistency of trust infrastructure.
 
@@ -88,16 +82,13 @@ This CRA conformity assessment documents Trustpoint's compliance with the EU Cyb
 
 *Supports CRA Article 6 - Scope and Article 7 - Product Classification Assessment*
 
-### 🏢 CRA Applicability:
-[![Non-commercial OSS](https://img.shields.io/badge/Applicability-Non--commercial_OSS-lightgreen?style=flat-square&logo=github&logoColor=white)](#cra-scope--classification)
+### CRA Applicability: [![Non-commercial OSS](https://img.shields.io/badge/Applicability-Non--commercial_OSS-lightgreen?style=flat-square&logo=github&logoColor=white)](#cra-scope--classification)
 
-### 🌐 Distribution Method:
-[![Community](https://img.shields.io/badge/Distribution-Community-green?style=flat-square&logo=users&logoColor=white)](#cra-scope--classification)
+### Distribution Method: [![Community](https://img.shields.io/badge/Distribution-Community-green?style=flat-square&logo=users&logoColor=white)](#cra-scope--classification)
 
-### 📋 CRA Classification:
-[![Standard](https://img.shields.io/badge/CRA-Standard-green?style=flat-square&logo=clipboard-check&logoColor=white)](#cra-scope--classification)
+### CRA Classification: [![Standard](https://img.shields.io/badge/CRA-Standard-green?style=flat-square&logo=clipboard-check&logoColor=white)](#cra-scope--classification)
 
-**📝 CRA Scope Justification:** 
+**CRA Scope Justification:** 
 
 Trustpoint is a non-commercial open-source software project distributed through GitHub and Docker Hub under MIT license. As PKI/certificate management software for industrial environments, it falls under CRA scope as a product with digital elements providing security functions.
 
@@ -107,7 +98,7 @@ Trustpoint is a non-commercial open-source software project distributed through 
 - Does not perform functions specific to critical infrastructure products (e.g., industrial firewalls, SCADA gateways)
 - Self-assessment approach is appropriate per CRA Article 24
 
-**🔍 Classification Impact:**
+**Classification Impact:**
 - **Standard:** Self-assessment documentation (this assessment)
 - **Evidence:** GitHub releases with test reports, security scans, and documentation
 - **Conformity:** EU Declaration of Conformity based on self-assessment
@@ -118,24 +109,26 @@ Trustpoint is a non-commercial open-source software project distributed through 
 
 *Supports CRA Annex V § 2 - Technical Documentation Requirements*
 
-| 🏗️ CRA Technical Area | 📝 Implementation Summary | 📋 Evidence Location |
-|----------------------|-------------------------|---------------------|
-| 🎨 **Product Architecture** *(Annex V § 2.1)* | Django-based web application with PostgreSQL backend, supporting EST, CMP, AOKI, and OPC UA GDS Push protocols | Repository `/docs/` and README.md |
-| 📦 **SBOM & Components** *(Annex I § 1.1)* | Python dependencies managed via uv, complete dependency enumeration in pyproject.toml | `pyproject.toml`, `uv.lock` |
-| 🔐 **Cybersecurity Controls** *(Annex I § 1.2)* | Django authentication, JWT tokens, PKCS#11 HSM support, TLS/mTLS for all protocols | Repository `SECURITY.md` + source code documentation |
-| 🛡️ **Supply Chain Security** *(Annex I § 1.3)* | GitHub Actions CI/CD, automated testing, dependency scanning via Dependabot | GitHub Actions workflows in `.github/workflows/` |
-| 🔄 **Update Mechanism** *(Annex I § 1.4)* | Docker-based deployment with version tags, GitHub releases | Docker Hub + GitHub Releases |
-| 📊 **Security Monitoring** *(Annex I § 1.5)* | Django logging framework, audit trails for certificate operations | Application logs and audit implementation |
-| 🏷️ **Data Protection** *(Annex I § 2.1)* | Database encryption support, secure key storage via PKCS#11, backup functionality | Django security features + PKCS#11 integration |
-| 📚 **User Guidance** *(Annex I § 2.2)* | Comprehensive documentation on ReadTheDocs | https://trustpoint.readthedocs.io |
-| 🔍 **Vulnerability Disclosure** *(Annex I § 2.3)* | GitHub Security Advisories, coordinated vulnerability disclosure process | Repository `SECURITY.md` |
+| CRA Technical Area | ✅ Status | 📝 Implementation Summary | 📋 Evidence (Direct Links) |
+|----------------------|-----------|-------------------------|---------------------------|
+| **Product Architecture** *(Annex V § 2.1)* | ✅ Implemented | Django-based web application with PostgreSQL backend, high-level data & trust boundaries documented | [docs/](./docs/) · [README.md](./README.md) · Architecture documentation |
+| **SBOM & Components** *(Annex I § 1.1)* | ✅ Implemented | Complete dependency enumeration via uv lock file | [pyproject.toml](./pyproject.toml) · [uv.lock](./uv.lock) |
+| **Cybersecurity Controls** *(Annex I § 1.2)* | ✅ Implemented | Django authentication, PKCS#11 HSM support, TLS/mTLS enforcement | [SECURITY.md](./SECURITY.md) · Security implementation in source |
+| **Supply Chain Security** *(Annex I § 1.3)* | ✅ Implemented | GitHub Actions CI/CD, automated testing, Dependabot scanning | [.github/workflows/](./.github/workflows/) · Dependabot configuration |
+| **Update Mechanism** *(Annex I § 1.4)* | ✅ Implemented | Docker-based deployment with version tags, GitHub releases, rollback capability | [Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) · [GitHub Releases](https://github.com/Trustpoint-Project/trustpoint/releases) |
+| **Security Monitoring** *(Annex I § 1.5)* | 🔄 Partial | Django logging framework, audit trails for certificate operations; Prometheus telemtry data | Application logs · Monitoring implementation |
+| **Data Protection** *(Annex I § 2.1)* | ✅ Implemented | Database encryption support, PKCS#11 secure key storage, backup functionality, minimal personal data | Django security features · PKCS#11 integration · Backup system |
+| **User Guidance** *(Annex I § 2.2)* | ✅ Implemented | Comprehensive security configuration and deployment documentation | [ReadTheDocs](https://trustpoint.readthedocs.io) |
+| **Vulnerability Disclosure** *(Annex I § 2.3)* | ✅ Implemented | Coordinated vulnerability disclosure via GitHub Security Advisories | [SECURITY.md](./SECURITY.md) |
 
-**📋 Key Security Features:**
-- **� HSM Integration:** PKCS#11 support for hardware security module key storage
-- **🔐 Protocol Security:** TLS/mTLS enforcement for EST, CMP, and OPC UA GDS Push
-- **�️ Authentication:** Multiple authentication mechanisms (certificates, passwords, shared secrets, IDevID)
-- **� Certificate Lifecycle:** Complete lifecycle management including issuance, renewal, revocation
-- **� Industrial Focus:** Purpose-built for OT environments with 20+ year device lifecycles
+**Key Security Features:**
+- **HSM Integration:** PKCS#11 support for hardware security module key storage
+- **Protocol Security:** TLS/mTLS enforcement for EST (RFC 7030), CMP (RFC 9483), AOKI, and OPC UA GDS Push
+- **Authentication:** Multiple authentication mechanisms (X.509 certificates, passwords, shared secrets, IDevID)
+- **Certificate Lifecycle:** Complete lifecycle management including issuance, renewal, revocation, and automated rotation
+- **Industrial Focus:** Purpose-built for OT environments with 20+ year device lifecycles
+- **Containerized Deployment:** Docker-based deployment for consistency and security
+- **Quality Assurance:** 80%+ test coverage with pytest, mypy type checking, ruff linting
 
 ---
 
@@ -143,7 +136,7 @@ Trustpoint is a non-commercial open-source software project distributed through 
 
 *Supports CRA Annex V § 3 - Risk Assessment Documentation*
 
-| 🚨 **CRA Risk Category** | 🎯 Asset | 📊 Likelihood | 💥 Impact (C/I/A) | 🛡️ CRA Control Implementation | ⚖️ Residual | 📋 Evidence |
+| **CRA Risk Category** | Asset | Likelihood | Impact (C/I/A) | CRA Control Implementation | Residual | Evidence |
 |--------------------------|----------|---------------|------------------|------------------------------|-------------|-------------|
 | **Supply Chain Attack** *(Art. 11)* | Build pipeline | M | H/H/M | GitHub Actions, Dependabot, dependency pinning in uv.lock | L | CI/CD workflows, dependency scanning |
 | **Unauthorized Access** *(Art. 11)* | Certificate operations | M | H/H/H | Django authentication, JWT, role-based access control | L | Authentication implementation |
@@ -158,12 +151,12 @@ Trustpoint is a non-commercial open-source software project distributed through 
 
 **✅ Risk Acceptance:** Trustpoint Project Maintainers - 2026-06-26
 
-**📋 Key Risk Mitigations:**
-- **� HSM Integration:** Optional PKCS#11 support reduces key compromise risk
-- **🧪 Automated Testing:** 80%+ code coverage ensures reliability (pytest, mypy, ruff)
-- **📦 Dependency Management:** uv lock file ensures reproducible, validated builds
-- **🔍 Continuous Scanning:** Dependabot and security workflows identify vulnerabilities early
-- **📚 Documentation:** Comprehensive ReadTheDocs guides support secure deployment
+**Key Risk Mitigations:**
+- **HSM Integration:** Optional PKCS#11 support reduces key compromise risk
+- **Automated Testing:** 80%+ code coverage ensures reliability (pytest, mypy, ruff)
+- **Dependency Management:** uv lock file ensures reproducible, validated builds
+- **Continuous Scanning:** Dependabot and security workflows identify vulnerabilities early
+- **Documentation:** Comprehensive ReadTheDocs guides support secure deployment
 
 ---
 
@@ -173,26 +166,26 @@ Trustpoint is a non-commercial open-source software project distributed through 
 
 | 📋 **CRA Annex I Requirement** | ✅ Status | 📋 Implementation Evidence |
 |--------------------------------|-----------|---------------------------|
-| **🛡️ § 1.1 - Secure by Design** | [x] | Minimal attack surface: Django framework with security middleware, input validation, parameterized queries |
-| **🔒 § 1.2 - Secure by Default** | [x] | Default configurations enforce TLS, require authentication, disable debug mode in production |
-| **🏷️ § 2.1 - Personal Data Protection** | [x] | Minimal personal data collection, Django privacy features, configurable data retention |
-| **🔍 § 2.2 - Vulnerability Disclosure** | [x] | Public VDP via `SECURITY.md` with GitHub Security Advisories, 5-day response commitment |
-| **📦 § 2.3 - Software Bill of Materials** | [x] | Complete SBOM via `pyproject.toml` and `uv.lock`, automated dependency tracking |
-| **🔐 § 2.4 - Secure Updates** | [x] | Docker image versioning, GitHub releases, backward-compatible update path |
-| **📊 § 2.5 - Security Monitoring** | [x] | Django logging framework, audit trails for certificate operations, configurable log levels |
-| **📚 § 2.6 - Security Documentation** | [x] | Comprehensive security guidance at https://trustpoint.readthedocs.io |
+| **§ 1.1 - Secure by Design** | [x] | Minimal attack surface: Django framework with security middleware, input validation, parameterized queries |
+| **§ 1.2 - Secure by Default** | [x] | Default configurations enforce TLS, require authentication, disable debug mode in production |
+| **§ 2.1 - Personal Data Protection** | [x] | Minimal personal data collection, Django privacy features, configurable data retention |
+| **§ 2.2 - Vulnerability Disclosure** | [x] | Public VDP via `SECURITY.md` with GitHub Security Advisories, 5-day response commitment |
+| **§ 2.3 - Software Bill of Materials** | [x] | Complete SBOM via `pyproject.toml` and `uv.lock`, automated dependency tracking |
+| **§ 2.4 - Secure Updates** | [x] | Docker image versioning, GitHub releases, backward-compatible update path |
+| **§ 2.5 - Security Monitoring** | [x] | Django logging framework, audit trails for certificate operations, configurable log levels |
+| **§ 2.6 - Security Documentation** | [x] | Comprehensive security guidance at https://trustpoint.readthedocs.io |
 
-**🎯 CRA Self-Assessment Status:** REQUIREMENTS_DOCUMENTED
+**CRA Self-Assessment Status:** REQUIREMENTS_DOCUMENTED
 
-**🔍 Security Reporting Process:**
+**🔍Security Reporting Process:**
 
 Trustpoint implements standardized security reporting via `SECURITY.md`:
 
-- **📧 Private Reporting:** GitHub Security Advisories for confidential disclosure
-- **⏱️ Response Timeline:** 5 business days acknowledgment, timely validation and resolution
-- **🏆 Recognition Program:** Public acknowledgment unless anonymity requested  
-- **🔄 Security Updates:** Maintained for current stable version
-- **📋 Vulnerability Scope:** Authentication bypass, injection attacks, cryptographic weaknesses, key management issues, protocol implementation flaws
+- **Private Reporting:** GitHub Security Advisories for confidential disclosure
+- **⏱Response Timeline:** 5 business days acknowledgment, timely validation and resolution
+- **Recognition Program:** Public acknowledgment unless anonymity requested  
+- **Security Updates:** Maintained for current stable version
+- **Vulnerability Scope:** Authentication bypass, injection attacks, cryptographic weaknesses, key management issues, protocol implementation flaws
 
 **Contact:** trustpoint@campus-schwarzwald.de
 
@@ -202,42 +195,42 @@ Trustpoint implements standardized security reporting via `SECURITY.md`:
 
 *Supports CRA Article 19 - Conformity Assessment Documentation*
 
-### 📊 **Quality & Security Automation Status:**
+### **Quality & Security Automation Status:**
 
-| 🧪 Control | 🎯 Requirement | ✅ Implementation | 📋 Evidence |
+| Control | Requirement | Implementation | Evidence |
 |-------------|---------------|------------------|-------------|
-| 🧪 Unit Testing | ≥80% line coverage | ✅ Implemented | Pytest with codecov.io reporting |
-| 🔍 Type Checking | Complete type coverage | ✅ Implemented | MyPy with strict configuration |
-| 🎨 Code Quality | Linting and formatting | ✅ Implemented | Ruff for linting and formatting |
-| 📦 Dependency Scanning | Automated vulnerability detection | ✅ Implemented | Dependabot integration |
-| 🔒 Security Best Practices | Industry standards compliance | ✅ In Progress | OpenSSF Best Practices (passing) |
-| 📦 SBOM | Dependency enumeration | ✅ Implemented | pyproject.toml + uv.lock |
-| � CI/CD Pipeline | Automated testing and validation | ✅ Implemented | GitHub Actions workflows |
-| � Container Security | Secure Docker deployment | ✅ Implemented | Docker Hub automated builds |
+| Unit Testing | ≥80% line coverage | 🔄 In Progress (69% current) | Pytest with codecov.io reporting |
+| Type Checking | Complete type coverage | ✅ Implemented | MyPy with strict configuration |
+| Code Quality | Linting and formatting | ✅ Implemented | Ruff for linting and formatting |
+| Dependency Scanning | Automated vulnerability detection | ✅ Implemented | Dependabot integration |
+| Security Best Practices | Industry standards compliance | ✅ In Progress | OpenSSF Best Practices (passing) |
+| SBOM | Dependency enumeration | ✅ Implemented | pyproject.toml + uv.lock |
+| CI/CD Pipeline | Automated testing and validation | ✅ Implemented | GitHub Actions workflows |
+| Container Security | Secure Docker deployment | ✅ Implemented | Docker Hub automated builds |
 
-### 🎖️ **Security & Compliance Badges:**
+### **Security & Compliance Badges:**
 
-**🔍 Quality & Testing:**
+**Quality & Testing:**
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11535/badge)](https://www.bestpractices.dev/projects/11535)
 [![Pytest Status](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml)
 [![codecov](https://codecov.io/gh/Trustpoint-Project/trustpoint/graph/badge.svg?token=0N31L1QWPE)](https://codecov.io/gh/Trustpoint-Project/trustpoint)
 
-**🏆 Code Quality:**
+**Code Quality:**
 [![MyPy](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml)
 [![Ruff Status](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml)
 
-**⚖️ License:**
+**License:**
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**🔗 Project Resources:**
-- **📚 Documentation:** https://trustpoint.readthedocs.io
-- **� Docker Hub:** https://hub.docker.com/r/trustpointproject/trustpoint
-- **💬 Discussions:** https://github.com/orgs/Trustpoint-Project/discussions
-- **🔐 Security Policy:** https://github.com/Trustpoint-Project/trustpoint/blob/main/SECURITY.md
+**Project Resources:**
+- **Documentation:** https://trustpoint.readthedocs.io
+- **Docker Hub:** https://hub.docker.com/r/trustpointproject/trustpoint
+- **Discussions:** https://github.com/orgs/Trustpoint-Project/discussions
+- **Security Policy:** https://github.com/Trustpoint-Project/trustpoint/blob/main/SECURITY.md
 
 ### � Evidence Availability:
 
-**� Current Evidence Status:**
+**Current Evidence Status:**
 - ✅ Automated test suite with coverage reporting
 - ✅ Static type checking with MyPy
 - ✅ Code quality validation with Ruff
@@ -248,66 +241,54 @@ Trustpoint implements standardized security reporting via `SECURITY.md`:
 - 🔄 Release attestations (to be implemented)
 - 🔄 SLSA provenance (to be implemented)
 
-# Check SLSA attestations
-gh attestation list --repo Hack23/{{REPO_NAME}}
-
-# Validate security scorecard
-curl -s https://api.securityscorecards.dev/projects/github.com/Hack23/{{REPO_NAME}} | jq '.score'
-
-# Verify FOSSA compliance
-curl -s https://app.fossa.io/api/projects/git%2Bgithub.com%2FHack23%2F{{REPO_NAME}}/issues | jq '.issues | length'
-```
-
----
 
 ## 7️⃣ **Post-Market Surveillance**
 
 *Supports CRA Article 23 - Obligations of Economic Operators*
 
-| 📡 **CRA Monitoring Obligation** | 🔧 Implementation | ⏱️ Frequency | 🎯 Action Trigger | 📋 Evidence |
+| **CRA Monitoring Obligation** | Implementation | Frequency | Action Trigger | Evidence |
 |----------------------------------|-------------------|-------------|------------------|-------------|
-| **🔍 Vulnerability Monitoring** *(Art. 23.1)* | CVE feeds + GitHub Security Advisories + Dependabot | Continuous | Auto-create security issues | Dependabot alerts |
-| **🚨 Incident Reporting** *(Art. 23.2)* | GitHub issue tracking, security advisory process | As needed | Security incident creation | Security advisories |
-| **📊 Security Posture Tracking** *(Art. 23.3)* | OpenSSF Best Practices scorecard | Continuous | Score decline investigation | Badge monitoring |
-| **🔄 Update Distribution** *(Art. 23.4)* | GitHub releases + Docker Hub | As needed | Critical vulnerability patches | Release history |
+| **Vulnerability Monitoring** *(Art. 23.1)* | CVE feeds + GitHub Security Advisories + Dependabot | Continuous | Auto-create security issues | Dependabot alerts |
+| **Incident Reporting** *(Art. 23.2)* | GitHub issue tracking, security advisory process | As needed | Security incident creation | Security advisories |
+| **Security Posture Tracking** *(Art. 23.3)* | OpenSSF Best Practices scorecard | Continuous | Score decline investigation | Badge monitoring |
+| **Update Distribution** *(Art. 23.4)* | GitHub releases + Docker Hub | As needed | Critical vulnerability patches | Release history |
 
-**📋 CRA Reporting Readiness:** 
+**CRA Reporting Readiness:** 
 
 Trustpoint maintains security monitoring and incident response capabilities:
 
-- **� Continuous Monitoring:** GitHub Dependabot scans dependencies daily
-- **� Issue Tracking:** Security issues tracked via GitHub Security Advisories
-- **📊 Quality Metrics:** OpenSSF Best Practices badge tracks security posture
-- **🔄 Update Process:** Docker-based deployment enables rapid security updates
-- **📧 Contact:** trustpoint@campus-schwarzwald.de for security coordination
+- **Continuous Monitoring:** GitHub Dependabot scans dependencies daily
+- **Issue Tracking:** Security issues tracked via GitHub Security Advisories
+- **Quality Metrics:** OpenSSF Best Practices badge tracks security posture
+- **Update Process:** Docker-based deployment enables rapid security updates
+- **Contact:** trustpoint@campus-schwarzwald.de for security coordination
 
-**🔗 Monitoring Resources:**
+**Monitoring Resources:**
 - **GitHub Security:** https://github.com/Trustpoint-Project/trustpoint/security
 - **CI/CD Status:** https://github.com/Trustpoint-Project/trustpoint/actions
 - **Best Practices:** https://www.bestpractices.dev/projects/11535
 
----
 
 ## 8️⃣ **EU Declaration of Conformity**
 
 *Supports CRA Article 28 - EU Declaration of Conformity*
 
-> **📝 To be completed when placing product on EU market (post-beta)**
+> **To be completed when placing product on EU market (post-beta)**
 
-**🏢 Manufacturer:** Trustpoint Project  
-**📦 Product:** Trustpoint Trust Anchor Software v0.6.0.dev1  
-**📋 CRA Classification:** Standard (Non-commercial Open Source Software)  
-**🔍 Assessment:** Self-assessment documentation per CRA Article 24  
-**📊 Standards Referenced:** 
+**Manufacturer:** Trustpoint Project  
+**Product:** Trustpoint Trust Anchor Software v0.6.0.dev1  
+**CRA Classification:** Standard (Non-commercial Open Source Software)  
+**Assessment:** Self-assessment documentation per CRA Article 24  
+**Standards Referenced:** 
 - RFC 7030 (EST)
 - RFC 9483 (CMP)
 - OPC UA GDS Push Specification
 - Django Security Best Practices
 - OWASP Application Security Verification Standard (ASVS)
 
-**📅 Declaration Status:** Pre-market (Technology Preview/Beta)
+**Declaration Status:** Pre-market (Technology Preview/Beta)
 
-**📂 Technical Documentation:** This CRA assessment + GitHub repository documentation
+**Technical Documentation:** This CRA assessment + GitHub repository documentation
 
 ---
 
@@ -315,7 +296,7 @@ Trustpoint maintains security monitoring and incident response capabilities:
 
 *Supports CRA Article 16 - Quality Management System Documentation*
 
-### 📊 **CRA Self-Assessment Summary**
+### **CRA Self-Assessment Summary**
 
 **Overall CRA Documentation Status:** IN_PROGRESS
 
@@ -336,63 +317,63 @@ Trustpoint maintains security monitoring and incident response capabilities:
 
 ### ✅ **Formal Approval**
 
-| 👤 **Role** | 📝 **Name** | 📅 **Date** | ✍️ **Assessment Attestation** |
+| **Role** | **Name** | **Date** | **Assessment Attestation** |
 |------------|-------------|-------------|-------------------------------|
-| 🔒 **CRA Security Assessment** | Trustpoint Maintainers | 2026-06-26 | Essential requirements documented and assessed |
-| 🎯 **Product Responsibility** | Trustpoint Project | 2026-06-26 | Technical documentation complete and structured |
-| ⚖️ **Compliance Review** | Trustpoint Project | 2026-06-26 | CRA self-assessment framework established |
+| **CRA Security Assessment** | Trustpoint Maintainers | 2026-06-26 | Essential requirements documented and assessed |
+| **Product Responsibility** | Trustpoint Project | 2026-06-26 | Technical documentation complete and structured |
+| **Compliance Review** | Trustpoint Project | 2026-06-26 | CRA self-assessment framework established |
 
-**📊 CRA Assessment Status:** SELF_ASSESSMENT_DOCUMENTED (Beta Phase)
+**CRA Assessment Status:** SELF_ASSESSMENT_DOCUMENTED (Beta Phase)
 
 ---
 
-## 🎨 **CRA Assessment Maintenance**
+## **CRA Assessment Maintenance**
 
-### **📋 Update Triggers** 
+### **Update Triggers** 
 *Per CRA Article 15 - Substantial Modification*
 
 This CRA assessment will be updated when changes constitute "substantial modification" under CRA:
 
-1. **🏗️ Security Architecture Changes:** New authentication methods, protocols, or cryptographic implementations
-2. **🛡️ Essential Requirement Impact:** Changes affecting CRA Annex I compliance
-3. **📦 Major Dependencies:** New core dependencies with security implications (e.g., new protocols, frameworks)
-4. **🔍 Risk Profile Changes:** New threat models or vulnerability classes
-5. **⚖️ Regulatory Updates:** CRA implementing acts or guidance affecting PKI/certificate management software
-6. **🚀 Release Milestones:** Major version releases (e.g., beta to v1.0)
+1. **Security Architecture Changes:** New authentication methods, protocols, or cryptographic implementations
+2. **Essential Requirement Impact:** Changes affecting CRA Annex I compliance
+3. **Major Dependencies:** New core dependencies with security implications (e.g., new protocols, frameworks)
+4. **Risk Profile Changes:** New threat models or vulnerability classes
+5. **Regulatory Updates:** CRA implementing acts or guidance affecting PKI/certificate management software
+6. **Release Milestones:** Major version releases (e.g., beta to v1.0)
 
-**🎯 Maintenance Principle:** Assessment stability preferred - routine dependency updates and minor features do not require CRA assessment updates unless they impact security architecture.
+**Maintenance Principle:** Assessment stability preferred - routine dependency updates and minor features do not require CRA assessment updates unless they impact security architecture.
 
-### **🔗 Current Assessment Status**
+### **Current Assessment Status**
 
-**🏷️ Product Version:** 0.6.0.dev1 (Beta - Technology Preview)  
-**📦 CRA Documentation:** This assessment + [GitHub Repository](https://github.com/Trustpoint-Project/trustpoint)  
-**🛡️ Security Resources:** [SECURITY.md](https://github.com/Trustpoint-Project/trustpoint/blob/main/SECURITY.md)  
-**📊 Assessment Status:** ![CRA Status](https://img.shields.io/badge/CRA_Self_Assessment-In_Progress-yellow)
+**Product Version:** 0.6.0.dev1 (Beta - Technology Preview)  
+**CRA Documentation:** This assessment + [GitHub Repository](https://github.com/Trustpoint-Project/trustpoint)  
+**Security Resources:** [SECURITY.md](https://github.com/Trustpoint-Project/trustpoint/blob/main/SECURITY.md)  
+**Assessment Status:** ![CRA Status](https://img.shields.io/badge/CRA_Self_Assessment-In_Progress-yellow)
 
 ---
 
-## 📚 **Related Documents & Resources**
+## **Related Documents & Resources**
 
-### 🎯 **Project Documentation**
-- **📚 ReadTheDocs:** https://trustpoint.readthedocs.io - Comprehensive user and deployment documentation
-- **🔐 Security Policy:** [SECURITY.md](./SECURITY.md) - Vulnerability disclosure and security practices
-- **📜 License:** [LICENSE](./LICENSE) - MIT License
-- **🤝 Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
+### **Project Documentation**
+- **ReadTheDocs:** https://trustpoint.readthedocs.io - Comprehensive user and deployment documentation
+- **Security Policy:** [SECURITY.md](./SECURITY.md) - Vulnerability disclosure and security practices
+- **License:** [LICENSE](./LICENSE) - MIT License
+- **Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
 
-### 🔗 **Technical Standards & Specifications**
+### **Technical Standards & Specifications**
 - **RFC 7030:** EST (Enrollment over Secure Transport)
 - **RFC 9483:** CMP (Certificate Management Protocol)
 - **OPC UA GDS Push:** OPC Foundation GDS Push Specification v1.05
 - **Django Security:** Django Framework Security Best Practices
 - **OWASP ASVS:** Application Security Verification Standard
 
-### 🏛️ **Regulatory Framework**
+### **Regulatory Framework**
 - **EU CRA:** Cyber Resilience Act (Regulation (EU) 2024/2847)
 - **CRA Annex I:** Essential Cybersecurity Requirements
 - **CRA Annex V:** Technical Documentation Requirements
 - **CRA Article 24:** Self-Assessment Procedures
 
-### 🛡️ **Security & Quality Resources**
+### **Security & Quality Resources**
 - **OpenSSF Best Practices:** https://www.bestpractices.dev/projects/11535
 - **GitHub Security:** https://github.com/Trustpoint-Project/trustpoint/security
 - **CI/CD Pipelines:** https://github.com/Trustpoint-Project/trustpoint/actions
@@ -400,9 +381,9 @@ This CRA assessment will be updated when changes constitute "substantial modific
 
 ---
 
-## 📋 **CRA Regulatory Alignment**
+## **CRA Regulatory Alignment**
 
-### **🔐 CRA Article Cross-References**
+### **CRA Article Cross-References**
 - **Article 6:** Scope determination → Section 2 (CRA Classification)
 - **Article 11:** Essential cybersecurity requirements → Section 5 (Requirements Assessment)  
 - **Article 19:** Conformity assessment → Section 6 (Evidence Documentation)
@@ -412,7 +393,7 @@ This CRA assessment will be updated when changes constitute "substantial modific
 - **Annex I:** Technical requirements → Section 5 (Requirements self-assessment mapping)
 - **Annex V:** Technical documentation → Complete template structure
 
-### **🎯 Open Source Software Considerations**
+### **Open Source Software Considerations**
 
 **CRA OSS Steward Model:**
 Trustpoint operates under the CRA's open-source software provisions:
@@ -430,11 +411,11 @@ Trustpoint operates under the CRA's open-source software provisions:
 
 ---
 
-**📋 Document Control:**  
-**✅ Approved by:** Trustpoint Project Maintainers  
-**📤 Distribution:** Public  
-**🏷️ Classification:** Public Documentation  
-**📅 Effective Date:** 2026-06-26  
-**⏰ Next Review:** 2026-09-26  
-**📊 Status:** Beta/Technology Preview
+**Document Control:**  
+**Approved by:** Trustpoint Project Maintainers  
+**Distribution:** Public  
+**Classification:** Public Documentation  
+**Effective Date:** 2026-06-26  
+**Next Review:** 2026-09-26  
+**Status:** Beta/Technology Preview
 
