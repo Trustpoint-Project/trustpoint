@@ -27,6 +27,22 @@
                 {{ form.host_ip }}
               </div>
             </form>
+
+            <div class="row g-2 align-items-end mb-2">
+              <div class="col-auto ms-1">
+                <label for="platformSelector" class="form-label">
+                  {% trans 'Platform' %}
+                </label>
+              </div>
+              <div class="col-auto ms-1">
+                <select id="platformSelector" class="form-select form-select-sm">
+                  <option value="linux">{% trans 'Linux / OpenSSL' %}</option>
+                  <option value="windows">{% trans 'Windows (certutil & certreq)' %}</option>
+                  <option value="all">{% trans 'Linux & Windows' %}</option>
+                </select>
+              </div>
+            </div>
+
             <hr>
             {% for section in help_page.sections %}
                 <div{% if section.css_id %} id="{{ section.css_id }}"{% endif %}{% if section.css_class %} class="{{ section.css_class }}"{% endif %}{% if section.hidden %} hidden{% endif %}>
@@ -85,6 +101,39 @@
             </div>
         </div>
     </div>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        var selector = document.getElementById('platformSelector');
+        if (!selector) {
+          return;
+        }
 
+        function updateVisibility() {
+          var value = selector.value;
+
+          var linuxElems = document.querySelectorAll('.platform-linux');
+          var windowsElems = document.querySelectorAll('.platform-windows');
+
+          linuxElems.forEach(function (el) {
+            if (value === 'windows') {
+              el.style.display = 'none';
+            } else {
+              el.style.display = '';
+            }
+          });
+
+          windowsElems.forEach(function (el) {
+            if (value === 'linux') {
+              el.style.display = 'none';
+            } else {
+              el.style.display = '';
+            }
+          });
+        }
+
+        selector.addEventListener('change', updateVisibility);
+        updateVisibility();
+      });
+    </script>
 
 {% endblock content %}
