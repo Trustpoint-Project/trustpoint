@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
+from django.views import View
 from django.views.generic import FormView, ListView, UpdateView
 
 from agents.models import AgentAssignedProfile, AgentWorkflowDefinition, TrustpointAgent
@@ -430,6 +431,30 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
             field.queryset = AgentWorkflowDefinition.objects.filter(is_active=True).order_by('name')
 
 
+class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
+    """Form for editing an AgentAssignedProfile (excludes workflow_definition)."""
+
+    class Meta:
+        """Meta options."""
+
+        model = AgentAssignedProfile
+        fields = ('renewal_threshold_days', 'subject', 'subject_alt_name', 'enabled')
+        widgets = {
+            'subject': forms.TextInput(attrs={
+                'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
+                'class': 'form-control',
+            }),
+            'subject_alt_name': forms.TextInput(attrs={
+                'placeholder': 'DNS:www.example.com,DNS:example.com,IP:192.0.2.10',
+                'class': 'form-control',
+            }),
+        }
+        help_texts = {
+            'subject': 'OpenSSL-style subject DN. Leave empty to use default.',
+            'subject_alt_name': 'OpenSSL-style SAN extension. Leave empty for no SAN.',
+        }
+
+
 class AgentAssignedProfileTableView(PageContextMixin, LoggerMixin, ListView[AgentAssignedProfile]):
     """List all workflow profiles assigned to a specific 1-to-1 agent."""
 
@@ -498,6 +523,45 @@ class AgentAssignedProfileCreateView(PageContextMixin, LoggerMixin, FormView[Age
         return HttpResponseRedirect(self.get_success_url())
 
 
+class AgentAssignedProfileEditView(
+    PageContextMixin, LoggerMixin, UpdateView[AgentAssignedProfile, AgentAssignedProfileEditForm]
+):
+    """Edit an existing AgentAssignedProfile (renewal_threshold_days, subject, subject_alt_name)."""
+
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
+    template_name = 'agents/assigned_profiles/edit.html'
+    form_class = AgentAssignedProfileEditForm
+    model = AgentAssignedProfile
+    context_object_name = 'assignment'
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
+
+    def get_queryset(self) -> QuerySet[AgentAssignedProfile]:
+        """Restrict to profiles belonging to the specified agent."""
+        return AgentAssignedProfile.objects.filter(agent_id=self.kwargs['agent_id'])
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the parent agent to the template context."""
+        context = super().get_context_data(**kwargs)
+        context['agent'] = get_object_or_404(TrustpointAgent, pk=self.kwargs['agent_id'])
+        return context
+
+    def get_success_url(self) -> str:
+        """Redirect to the assigned-profiles list after saving."""
+        return str(
+            reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']})
+        )
+
+    def form_valid(self, form: AgentAssignedProfileForm) -> HttpResponse:
+        """Save the changes and show a success message."""
+        assignment: AgentAssignedProfile = form.save()
+        messages.success(
+            self.request,
+            f"Profile assignment '{assignment.workflow_definition.name}' updated successfully.",
+        )
+        return HttpResponseRedirect(self.get_success_url())
+
+
 class AgentAssignedProfileDeleteView(PageContextMixin, BulkDeleteView):
     """Confirm and execute bulk deletion of AgentAssignedProfile records."""
 
@@ -541,3 +605,33 @@ class AgentAssignedProfileDeleteView(PageContextMixin, BulkDeleteView):
         response = super().form_valid(form)
         messages.success(self.request, f'Successfully removed {deleted_count} profile assignment(s).')
         return response
+
+
+class AgentAssignedProfileForceUpdateView(PageContextMixin, LoggerMixin, View):
+    """Force an immediate certificate update by setting next_certificate_update_scheduled to now."""
+
+    http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
+
+    def post(self, request: HttpRequest, agent_id: int, pk: int) -> HttpResponse:
+        """Set next_certificate_update_scheduled to now and redirect back to list."""
+        from django.utils import timezone  # noqa: PLC0415
+
+        assignment = get_object_or_404(
+            AgentAssignedProfile,
+            pk=pk,
+            agent_id=agent_id,
+        )
+
+        assignment.next_certificate_update_scheduled = timezone.now()
+        assignment.save(update_fields=['next_certificate_update_scheduled'])
+
+        messages.success(
+            request,
+            f"Certificate update scheduled immediately for '{assignment.workflow_definition.name}'.",
+        )
+
+        return HttpResponseRedirect(
+            reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': agent_id})
+        )

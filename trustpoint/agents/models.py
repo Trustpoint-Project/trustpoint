@@ -81,6 +81,7 @@ class TrustpointAgent(models.Model):
     capabilities = models.JSONField(
         verbose_name=_('Capabilities'),
         default=list,
+        blank=True,
         help_text=_(
             'List of job types this agent supports, e.g. ["wbm_cert_push"]. '
             'Used for display and validation; does not restrict API access at runtime.'
@@ -103,7 +104,6 @@ class TrustpointAgent(models.Model):
         help_text=_(
             'How often this agent should call the check-in endpoint. '
             'Returned in every check-in response so the agent self-configures. '
-            'Lower values increase responsiveness; higher values reduce server load.'
         ),
     )
     os_path = models.CharField(

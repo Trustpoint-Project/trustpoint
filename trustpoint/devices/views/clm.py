@@ -16,6 +16,7 @@ from django.utils.translation import gettext_lazy
 from django.views.generic.detail import DetailView
 
 from devices.forms import (
+    ClmAgentDeviceForm,
     ClmDeviceModelNoOnboardingForm,
     ClmDeviceModelOnboardingForm,
     ClmDeviceModelOpcUaGdsPushOnboardingForm,
@@ -307,6 +308,13 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             else ''
         )
 
+        # Add agent information if this is an agent device
+        if is_agent_device:
+            from agents.models import TrustpointAgent  # noqa: PLC0415
+
+            agent = TrustpointAgent.objects.filter(device=self.object).first()
+            context['agent'] = agent
+
         context['device_form'] = self.get_device_form()
         if self.object.onboarding_config:
             context['onboarding_form'] = self.get_onboarding_form()
@@ -332,6 +340,36 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             'pki_protocol_est': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST),
             'pki_protocol_rest': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.REST),
         }
+
+    def get_agent_initial(self) -> dict[str, Any]:
+        """Gets the initial values for agent devices.
+
+        Returns:
+            Initial values for agent devices.
+        """
+        if not self.object.onboarding_config:
+            err_msg = gettext_lazy('The device does not have onboarding configured.')
+            raise ValueError(err_msg)
+
+        from agents.models import TrustpointAgent  # noqa: PLC0415
+
+        agent = TrustpointAgent.objects.filter(device=self.object).first()
+
+        initial = {
+            'common_name': self.object.common_name,
+            'serial_number': self.object.serial_number,
+            'domain': self.object.domain,
+            'onboarding_protocol': self.object.onboarding_config.onboarding_protocol,
+            'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
+            'poll_interval_seconds': 300,
+            'os_path': '/etc/trustpoint',
+        }
+
+        if agent:
+            initial['poll_interval_seconds'] = agent.poll_interval_seconds
+            initial['os_path'] = agent.os_path
+
+        return initial
 
     def get_no_onboarding_initial(self) -> dict[str, Any]:
         """Gets the initial values for no onboarding.
@@ -364,7 +402,25 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         Returns:
             The onboarding form.
         """
+        # Check if this is an agent device
+        _agent_device_types = (
+            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+            DeviceModel.DeviceType.AGENT_ONE_TO_N,
+        )
+        if self.object.device_type in _agent_device_types:
+            return ClmAgentDeviceForm(initial=self.get_agent_initial(), instance=self.object)
+
         return ClmDeviceModelOnboardingForm(initial=self.get_onboarding_initial(), instance=self.object)
+
+    def get_agent_form(self) -> ClmAgentDeviceForm:
+        """Gets the form for agent devices.
+
+        Returns:
+            The agent device form.
+        """
+        if self.request.method == 'POST':
+            return ClmAgentDeviceForm(self.request.POST, instance=self.object)
+        return ClmAgentDeviceForm(initial=self.get_agent_initial(), instance=self.object)
 
     def get_no_onboarding_form(self) -> ClmDeviceModelNoOnboardingForm:
         """Gets the form for no onboarding.
@@ -445,11 +501,23 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         """
         self.object = self.get_object()
 
-        form: ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm
+        _agent_device_types = (
+            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+            DeviceModel.DeviceType.AGENT_ONE_TO_N,
+        )
+
+        form: ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm | ClmAgentDeviceForm
         if self.object.onboarding_config:
-            form = ClmDeviceModelOnboardingForm(request.POST, instance=self.object)
-            if form.is_valid():
-                form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+            if self.object.device_type in _agent_device_types:
+                # Agent device
+                form = ClmAgentDeviceForm(request.POST, instance=self.object)
+                if form.is_valid():
+                    form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+            else:
+                # Regular onboarding device
+                form = ClmDeviceModelOnboardingForm(request.POST, instance=self.object)
+                if form.is_valid():
+                    form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
         else:
             form = ClmDeviceModelNoOnboardingForm(request.POST, instance=self.object)
             if form.is_valid():

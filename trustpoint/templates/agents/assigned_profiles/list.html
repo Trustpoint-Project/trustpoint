@@ -1,5 +1,6 @@
 {% extends "trustpoint/base.html" %}
 {% load i18n %}
+{% load internationalization_tags %}
 
 {% block content %}
 <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
@@ -19,8 +20,10 @@
                     <th id="checkbox-column"><input type="checkbox"/></th>
                     <th>{% trans "Agent Profile" %}</th>
                     <th>{% trans "Renewal Threshold (days)" %}</th>
-                    <th>{% trans "Last Certificate Update" %}</th>
+                    <th>{% trans "Last Update" %}</th>
+                    <th>{% trans "Next Update" %}</th>
                     <th>{% trans "Enabled" %}</th>
+                    <th>{% trans "Actions" %}</th>
                 </tr>
             </thead>
             <tbody>
@@ -38,9 +41,16 @@
                         <td>{{ assignment.renewal_threshold_days }}</td>
                         <td>
                             {% if assignment.last_certificate_update %}
-                                {{ assignment.last_certificate_update }}
+                                {{ assignment.last_certificate_update|local_datetime }}
                             {% else %}
                                 <span class="text-muted">{% trans "Never" %}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if assignment.next_certificate_update_scheduled %}
+                                {{ assignment.next_certificate_update_scheduled|local_datetime }}
+                            {% else %}
+                                <span class="text-muted">{% trans "Not scheduled" %}</span>
                             {% endif %}
                         </td>
                         <td>
@@ -50,10 +60,25 @@
                                 <span class="badge bg-secondary">{% trans "Disabled" %}</span>
                             {% endif %}
                         </td>
+                        <td>
+                            <a href="{% url 'agents:assigned-profiles-edit' agent_id=agent.pk pk=assignment.pk %}"
+                               class="btn btn-sm btn-primary me-1"
+                               title="{% trans 'Configure' %}">
+                                {% trans "Configure" %}
+                            </a>
+                            <form method="post" action="{% url 'agents:assigned-profiles-force-update' agent_id=agent.pk pk=assignment.pk %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" 
+                                        class="btn btn-sm btn-primary" 
+                                        title="{% trans 'Force immediate certificate update' %}">
+                                    {% trans "Force Update" %}
+                                </button>
+                            </form>
+                        </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="5" class="middle">
+                        <td colspan="7" class="middle">
                             {% trans "No profiles have been assigned to this agent yet." %}
                         </td>
                     </tr>

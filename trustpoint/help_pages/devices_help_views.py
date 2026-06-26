@@ -2189,7 +2189,7 @@ class AgentSetupProfileStrategy(HelpPageStrategy):
         script_download_btn = format_html(
             '<a class="btn btn-primary w-100" href="{}">{}</a>',
             script_download_url,
-            _non_lazy('Download agent_setup.py'),
+            _non_lazy('Download agent.py'),
         )
 
         summary = HelpSection(
@@ -2222,7 +2222,7 @@ class AgentSetupProfileStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Usage'),
-                    'python agent_setup.py --profile agent_setup.json',
+                    'python agent.py --profile agent_setup.json',
                     ValueRenderType.CODE,
                 ),
             ],
@@ -2307,6 +2307,12 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         profile['certificate_request']['path'] = enroll_path
         profile['certificate_request']['certificate_profile'] = cert_profile
 
+        # Remove optional placeholders (subject, subject_alt_name, public_key_algorithm_oid, key_parameter)
+        # These will be set by assigned profiles during renewal jobs, not during initial setup
+        cert_req = profile['certificate_request']
+        for optional_field in ('subject', 'subject_alt_name', 'public_key_algorithm_oid', 'key_parameter'):
+            cert_req.pop(optional_field, None)
+
         filled_bytes = json.dumps(raw, indent=2).encode('utf-8')
 
         import io  # noqa: PLC0415
@@ -2319,7 +2325,7 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
 
 
 class AgentSetupScriptDownloadView(PageContextMixin, DetailView[DeviceModel]):
-    """Serve the agent_setup.py script as a file download."""
+    """Serve the agent.py script as a file download."""
 
     http_method_names = ('get',)
     model = DeviceModel
@@ -2328,9 +2334,9 @@ class AgentSetupScriptDownloadView(PageContextMixin, DetailView[DeviceModel]):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     def get(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Return the agent_setup.py script as a file download."""
+        """Return the agent.py script as a file download."""
         del request, args, kwargs
-        script_path = Path(__file__).parent.parent / 'agents' / 'examples' / 'agent_setup.py'
+        script_path = Path(__file__).parent.parent / 'agents' / 'examples' / 'agent.py'
 
         with script_path.open(mode='rb') as fh:
             script_bytes = fh.read()
@@ -2339,6 +2345,6 @@ class AgentSetupScriptDownloadView(PageContextMixin, DetailView[DeviceModel]):
         return FileResponse(  # type: ignore[return-value]
             io.BytesIO(script_bytes),
             as_attachment=True,
-            filename='agent_setup.py',
+            filename='agent.py',
             content_type='text/x-python',
         )

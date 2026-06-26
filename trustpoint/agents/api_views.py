@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import urllib.parse
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
@@ -121,6 +122,9 @@ def _build_resolved_profile(
     - ``certificate_request.path`` → enrollment endpoint path
     - ``certificate_request.subject`` → subject DN from assigned_profile
     - ``certificate_request.subject_alt_name`` → SAN extension from assigned_profile
+    - ``certificate_request.public_key_algorithm_oid`` → OID from domain's issuing CA
+    - ``certificate_request.key_size`` → RSA key size (if RSA)
+    - ``certificate_request.named_curve`` → ECC curve name (if ECC)
     """
     profile = copy.deepcopy(raw_profile)
     cert_req: dict[str, Any] = profile.get('certificate_request', {})
@@ -130,24 +134,36 @@ def _build_resolved_profile(
     if enrollment_path is not None:
         cert_req['path'] = enrollment_path
 
-    # Only set subject if it's defined in the assigned profile
-    # Remove placeholder or set actual value
-    if assigned_profile.subject:
+    if assigned_profile.subject and assigned_profile.subject.strip():
         cert_req['subject'] = assigned_profile.subject
     else:
         cert_req.pop('subject', None)
 
-    # Only set subject_alt_name if it's defined in the assigned profile
-    # Remove placeholder or set actual value
-    if assigned_profile.subject_alt_name:
+    if assigned_profile.subject_alt_name and assigned_profile.subject_alt_name.strip():
         cert_req['subject_alt_name'] = assigned_profile.subject_alt_name
     else:
         cert_req.pop('subject_alt_name', None)
 
+    # Add public key algorithm information from domain's issuing CA
+    public_key_info = None
+    if agent.device and agent.device.domain:
+        public_key_info = agent.device.domain.public_key_info
+
+    if public_key_info:
+        cert_req['public_key_algorithm_oid'] = str(public_key_info.public_key_algorithm_oid.dotted_string)
+        # Set key_parameter to either key_size (RSA) or curve name (ECC)
+        if public_key_info.key_size:
+            cert_req['key_parameter'] = str(public_key_info.key_size)
+        elif public_key_info.named_curve:
+            cert_req['key_parameter'] = public_key_info.named_curve.name
+        else:
+            cert_req.pop('key_parameter', None)
+    else:
+        # Remove placeholders if no public_key_info available
+        for key in ('public_key_algorithm_oid', 'key_parameter'):
+            cert_req.pop(key, None)
+
     profile['certificate_request'] = cert_req
-
-    return profile
-
     return profile
 
 class IsAuthenticatedAgent(BasePermission):
@@ -421,14 +437,17 @@ class AgentJobResultView(LoggerMixin, APIView):
         if success:
             now = timezone.now()
             profile.last_certificate_update = now
-            profile.next_certificate_update_scheduled = None
+            # Calculate next update based on renewal threshold
+            next_update = now + timedelta(days=profile.renewal_threshold_days)
+            profile.next_certificate_update_scheduled = next_update
             profile.save(update_fields=['last_certificate_update', 'next_certificate_update_scheduled'])
             self.logger.info(
-                'Agent %s: profile %d (%s) completed successfully at %s',
+                'Agent %s: profile %d (%s) completed successfully at %s, next update: %s',
                 agent.agent_id,
                 profile_id,
                 profile.workflow_definition.name,
                 now.isoformat(),
+                next_update.isoformat(),
             )
         else:
             self.logger.warning(

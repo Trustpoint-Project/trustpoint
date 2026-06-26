@@ -2,11 +2,13 @@
 
 import secrets
 import uuid
+from datetime import timedelta
 from typing import Any
 
 from django.db.models import QuerySet
 from django.http import HttpResponse
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic.base import TemplateView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
@@ -169,6 +171,7 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
                 workflow_definition=default_wf,
                 defaults={
                     'renewal_threshold_days': 30,
+                    'next_certificate_update_scheduled': timezone.now() + timedelta(days=30),
                 },
             )
 
@@ -217,6 +220,7 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
                 workflow_definition=default_wf,
                 defaults={
                     'renewal_threshold_days': 30,
+                    'next_certificate_update_scheduled': timezone.now() + timedelta(days=30),
                 },
             )
 

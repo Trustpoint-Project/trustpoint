@@ -4,6 +4,8 @@ from django.urls import path, re_path
 from agents.web_views import (
     AgentAssignedProfileCreateView,
     AgentAssignedProfileDeleteView,
+    AgentAssignedProfileEditView,
+    AgentAssignedProfileForceUpdateView,
     AgentAssignedProfileTableView,
     AgentManagedDeviceCreateView,
     AgentManagedDeviceDeleteView,
@@ -49,6 +51,16 @@ urlpatterns = [
         '<int:agent_id>/assigned-profiles/create/',
         AgentAssignedProfileCreateView.as_view(),
         name='assigned-profiles-create',
+    ),
+    path(
+        '<int:agent_id>/assigned-profiles/<int:pk>/edit/',
+        AgentAssignedProfileEditView.as_view(),
+        name='assigned-profiles-edit',
+    ),
+    path(
+        '<int:agent_id>/assigned-profiles/<int:pk>/force-update/',
+        AgentAssignedProfileForceUpdateView.as_view(),
+        name='assigned-profiles-force-update',
     ),
     re_path(
         r'^(?P<agent_id>[0-9]+)/assigned-profiles/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',

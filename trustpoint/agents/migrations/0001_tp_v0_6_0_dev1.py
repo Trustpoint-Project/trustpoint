@@ -35,7 +35,7 @@ class Migration(migrations.Migration):
                 ('capabilities', models.JSONField(default=list, help_text='List of job types this agent supports, e.g. ["wbm_cert_push"]. Used for display and validation; does not restrict API access at runtime.', verbose_name='Capabilities')),
                 ('cell_location', models.CharField(blank=True, help_text="Free-text description of the production cell, e.g. 'Building 3 / Cell A'.", max_length=200, verbose_name='Cell Location')),
                 ('is_active', models.BooleanField(default=True, help_text='Inactive agents are rejected by the API even if their certificate is still valid.', verbose_name='Active')),
-                ('poll_interval_seconds', models.PositiveIntegerField(default=300, help_text='How often this agent should call the check-in endpoint. Returned in every check-in response so the agent self-configures. Lower values increase responsiveness; higher values reduce server load.', verbose_name='Poll Interval (seconds)')),
+                ('poll_interval_seconds', models.PositiveIntegerField(default=300, help_text='How often this agent should call the check-in endpoint. Returned in every check-in response so the agent self-configures.', verbose_name='Poll Interval (seconds)')),
                 ('os_path', models.CharField(default='/etc/trustpoint', help_text='The operating system path where the agent will store certificates and keys. Example: /etc/trustpoint or C:\\trustpoint', max_length=255, verbose_name='OS Path')),
                 ('last_seen_at', models.DateTimeField(blank=True, help_text='Updated on every authenticated API call. Use for liveness monitoring.', null=True, verbose_name='Last Seen')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
