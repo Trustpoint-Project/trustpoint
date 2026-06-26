@@ -65,6 +65,16 @@ class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceMode
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
 
+    @property
+    def device_revoke_url_name(self) -> str:
+        """Returns the URL name for the device revoke action."""
+        return f'{self.page_category}:{self.page_name}_device_revoke'
+
+    @property
+    def device_delete_url_name(self) -> str:
+        """Returns the URL name for the device delete action."""
+        return f'{self.page_category}:{self.page_name}_device_delete'
+
     def get_export_config(self) -> ExportConfig:
         """Return the CSV export configuration for the device table."""
         return ExportConfig.from_model(
@@ -188,8 +198,8 @@ class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceMode
             device.application_certificate_status = self._get_application_certificate_status(device)
         context['create_url'] = f'{self.page_category}:{self.page_name}_create'
         context['new_onboarding_url'] = f'{self.page_category}:{self.page_name}_new_onboarding'
-        context['device_revoke_url'] = reverse(f'{self.page_category}:{self.page_name}_device_revoke')
-        context['device_delete_url'] = reverse(f'{self.page_category}:{self.page_name}_device_delete')
+        context['device_revoke_url'] = reverse(self.device_revoke_url_name)
+        context['device_delete_url'] = reverse(self.device_delete_url_name)
 
         return context
 
@@ -302,6 +312,12 @@ class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceMode
         """
         if record.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
             clm_url = reverse('devices:opc_ua_gds_push_certificate_lifecycle_management', kwargs={'pk': record.pk})
+        elif record.device_type in (
+            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+            DeviceModel.DeviceType.AGENT_ONE_TO_N,
+            DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
+        ):
+            clm_url = reverse('devices:devices_certificate_lifecycle_management', kwargs={'pk': record.pk})
         else:
             clm_url = reverse(
                 f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': record.pk}
@@ -494,13 +510,21 @@ class DeviceTableView(AbstractDeviceTableView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to include all device types (Generic, OPC UA GDS Push) and filtered by UI filters.
+        """Filter queryset to include generic, OPC UA GDS Push, and 1-to-1 agent devices.
+
+        1-to-1 agents are shown here because the agent IS the device.
+        1-to-n agents and their managed devices are shown only on the Agents page.
 
         Returns:
-            Returns a queryset of all DeviceModels (excluding OPC UA GDS), filtered by UI filters.
+            Returns a queryset of DeviceModels, excluding OPC_UA_GDS, AGENT_ONE_TO_N,
+            and AGENT_MANAGED_DEVICE types, filtered by UI filters.
         """
-        base_qs = self.get_base_queryset().exclude(
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS
+        base_qs = super(ListView, self).get_queryset().exclude(
+            device_type__in=[
+                DeviceModel.DeviceType.OPC_UA_GDS,
+                DeviceModel.DeviceType.AGENT_ONE_TO_N,
+                DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
+            ]
         )
         queryset = self.apply_filters(base_qs)
         ordering = self.get_ordering()

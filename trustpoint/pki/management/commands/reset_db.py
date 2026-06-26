@@ -86,6 +86,8 @@ class Command(BaseCommand):
             KeyStorageConfig.get_or_create_default()
             # Add default certificate profiles
             call_command('create_default_cert_profiles')
+            # Add default agent workflow definitions
+            call_command('create_default_workflow_definitions')
         else:
             KeyStorageConfig.get_or_create_default()
 

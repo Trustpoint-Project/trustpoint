@@ -566,6 +566,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
                 key_storage_config.storage_type = KeyStorageConfig.StorageType.SOFTWARE
                 key_storage_config.save(update_fields=['storage_type'])
                 call_command('create_default_cert_profiles')
+                call_command('create_default_workflow_definitions')
                 if config_model.inject_demo_data:
                     call_command('add_domains_and_devices')
                 call_command('execute_all_notifications')

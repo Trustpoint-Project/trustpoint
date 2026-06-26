@@ -57,6 +57,7 @@ ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS = [
     (OnboardingProtocol.AOKI.value, OnboardingProtocol.AOKI.label),
     (OnboardingProtocol.BRSKI.value, OnboardingProtocol.BRSKI.label),
     (OnboardingProtocol.OPC_GDS_PUSH.value, OnboardingProtocol.OPC_GDS_PUSH.label),
+    (OnboardingProtocol.AGENT.value, OnboardingProtocol.AGENT.label),
 ]
 
 
@@ -596,6 +597,67 @@ class OnboardingCreateForm(forms.Form):
         return device_model
 
 
+class AgentOnboardingCreateForm(OnboardingCreateForm):
+    """Specialised onboarding form for agent devices.
+
+    The onboarding protocol is fixed to EST - Username & Password and the PKI
+    protocol is fixed to REST.  Both values are submitted as hidden fields so
+    form.save() can read them via cleaned_data without exposing the choices to
+    the user.
+    """
+
+    onboarding_protocol = forms.ChoiceField(
+        choices=[(OnboardingProtocol.REST_USERNAME_PASSWORD.value, OnboardingProtocol.REST_USERNAME_PASSWORD.label)],
+        initial=OnboardingProtocol.REST_USERNAME_PASSWORD,
+        label=_('Onboarding Protocol'),
+        widget=forms.HiddenInput(),
+    )
+
+    # REST is the only allowed PKI protocol for agents — submitted as hidden input.
+    onboarding_pki_protocols = forms.MultipleChoiceField(
+        choices=[(OnboardingPkiProtocol.REST, OnboardingPkiProtocol.REST.label)],
+        initial=[OnboardingPkiProtocol.REST],
+        widget=forms.MultipleHiddenInput(),
+    )
+
+    # Agent-specific field for OS path where certificates will be stored
+    agent_os_path = forms.CharField(
+        max_length=255,
+        required=True,
+        label=_('Agent OS Path'),
+        help_text=_(
+            'The path where the agent will store certificates and keys '
+            '(e.g., /etc/trustpoint or C:\\trustpoint)'
+        ),
+        initial='/etc/trustpoint',
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the AgentOnboardingCreateForm with fixed EST-only fields."""
+        super().__init__(*args, **kwargs)
+
+        # Ensure hidden fields carry the correct pre-selected values.
+        self.initial['onboarding_protocol'] = str(OnboardingProtocol.REST_USERNAME_PASSWORD.value)
+        self.initial['onboarding_pki_protocols'] = [str(OnboardingPkiProtocol.REST.value)]
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            HTML('<h2>General</h2><hr>'),
+            Field('common_name'),
+            Field('serial_number'),
+            Field('domain'),
+            Field('agent_os_path'),
+            HTML(
+                '<div class="alert alert-info mt-3" role="alert">'
+                + str(_('Onboarding protocol: REST - Username & Password (fixed). PKI protocol: REST (fixed).'))
+                + '</div>'
+            ),
+            Field('onboarding_protocol'),
+            Field('onboarding_pki_protocols'),
+        )
+
+
 class OpcUaGdsPushCreateForm(forms.Form):
     """Form for OPC UA GDS Push device creation with onboarding."""
 
@@ -791,6 +853,7 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             if onboarding_protocol_selected in (
                 OnboardingProtocol.EST_USERNAME_PASSWORD,
                 OnboardingProtocol.REST_USERNAME_PASSWORD,
+                OnboardingProtocol.AGENT,
             ):
                 self.instance.onboarding_config.cmp_shared_secret = ''
                 if not self.instance.onboarding_config.est_password:
@@ -1075,3 +1138,115 @@ class OpcUaGdsPushTruststoreAssociationForm(forms.Form):
             self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
             self.instance.onboarding_config.full_clean()
             self.instance.onboarding_config.save()
+
+
+class ClmAgentDeviceForm(forms.Form):
+    """CLM form for agent devices (1-to-1 and 1-to-n agents)."""
+
+    common_name = forms.CharField(max_length=100, validators=[UniqueNameValidator()])
+    serial_number = forms.CharField(max_length=100, required=False)
+    domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
+    domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
+
+    onboarding_protocol = forms.TypedChoiceField(
+        choices=ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS,
+        label='Onboarding Protocol',
+        coerce=int,
+        widget=forms.Select(attrs={'disabled': 'disabled'}),
+        required=False,
+    )
+    onboarding_status = forms.CharField(
+        label='Onboarding Status',
+        widget=forms.TextInput(attrs={'readonly': 'readonly', 'class': 'readonly-field form-control'}),
+    )
+
+    # Agent-specific fields
+    poll_interval_seconds = forms.IntegerField(
+        label=_('Poll Interval (seconds)'),
+        min_value=1,
+        initial=300,
+        help_text=_(
+            'How often the agent should check in with the server.'
+        ),
+    )
+    os_path = forms.CharField(
+        max_length=255,
+        label=_('OS Path'),
+        initial='/etc/trustpoint',
+        help_text=_(
+            'The operating system path where the agent stores certificates and keys.'
+        ),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the form."""
+        self.instance: DeviceModel = kwargs.pop('instance')
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            Field('common_name'),
+            Field('serial_number'),
+            Field('domain'),
+            HTML('<h2>Device Onboarding Configuration</h2><hr>'),
+            Field('onboarding_protocol'),
+            Field('onboarding_status'),
+            HTML('<h2>Agent Configuration</h2><hr>'),
+            Field('poll_interval_seconds'),
+            Field('os_path'),
+            HTML('<hr>'),
+            Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
+        )
+
+        super().__init__(*args, **kwargs)
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
+        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
+
+    def save(self, onboarding_protocol: OnboardingProtocol) -> None:
+        """Saves the changes to DB including agent-specific fields."""
+        if not self.instance.onboarding_config:
+            err_msg = _('Expected DeviceModel that is configured to use onboarding.')
+            raise forms.ValidationError(err_msg)
+
+        with transaction.atomic():
+            self.instance.common_name = self.cleaned_data['common_name']
+            self.instance.serial_number = self.cleaned_data['serial_number']
+            self.instance.domain = self.cleaned_data['domain']
+
+            # Set REST as the only protocol for agents
+            self.instance.onboarding_config.onboarding_protocol = onboarding_protocol
+            self.instance.onboarding_config.clear_pki_protocols()
+            self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.REST)
+
+            # Set password if not already set
+            if not self.instance.onboarding_config.est_password:
+                self.instance.onboarding_config.est_password = _get_secret()
+
+            self.instance.onboarding_config.full_clean()
+            self.instance.onboarding_config.save()
+            self.instance.full_clean()
+            self.instance.save()
+
+            # Update TrustpointAgent fields if this device has an agent
+            from agents.models import TrustpointAgent  # noqa: PLC0415
+
+            agent = TrustpointAgent.objects.filter(device=self.instance).first()
+            if agent:
+                agent.poll_interval_seconds = self.cleaned_data['poll_interval_seconds']
+                agent.os_path = self.cleaned_data['os_path']
+                # Ensure capabilities is set to avoid validation error
+                if agent.capabilities is None:
+                    agent.capabilities = []
+                agent.full_clean()
+                agent.save()

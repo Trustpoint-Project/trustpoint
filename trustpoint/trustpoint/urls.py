@@ -87,12 +87,16 @@ urlpatterns += [
     path('', base.IndexView.as_view()),
     path('workflows2/', include('workflows2.urls', namespace='workflows2')),
 
+    # Web UI Routes
+    path('agents/', include('agents.urls', namespace='agents')),
+
     # API URLs
     path('api/', include('devices.api_urls')),
     path('api/', include('pki.api_urls')),
     path('api/', include('signer.api_urls')),
     path('api/', include('management.api_urls')),
     path('api/', include('rest_pki.api_urls')),
+    path('api/', include('agents.api_urls')),
     path('api/', include('workflows2.api_urls')),
 
     # JWT endpoints
