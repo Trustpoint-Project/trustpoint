@@ -12,6 +12,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand, call_command
 
 from management.models import AppVersion, KeyStorageConfig
+from management.models.organization import OrganizationModel
 
 if TYPE_CHECKING:
     from django.core.management.base import CommandParser
@@ -90,13 +91,19 @@ class Command(BaseCommand):
         else:
             KeyStorageConfig.get_or_create_default()
 
+        # Create organization
+        call_command('create_organization')
+        org = OrganizationModel.objects.get(pk=1)
+
         # Create superuser if needed
         if not options.get('no_user'):
             self.stdout.write('Creating superuser...')
-            call_command('createsuperuser', interactive=False, username='admin', email='')
-            user = get_user_model().objects.get(username='admin')
-            user.set_password('testing321')
-            user.save()
+            user = get_user_model()
+            user.objects.create_superuser(
+                username="admin",
+                password="testing321",
+                organization=org,
+            )
             self.stdout.write('Superuser created:')
             self.stdout.write('  Username: admin')
             self.stdout.write('  Password: testing321')

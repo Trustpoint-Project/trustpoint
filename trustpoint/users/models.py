@@ -125,6 +125,13 @@ class TrustpointUser(AbstractUser):
         verbose_name=_('role'),
     )
 
+    organization = models.ForeignKey(
+        'management.OrganizationModel',
+        on_delete=models.PROTECT,
+        related_name='org_users',
+        verbose_name=_('organization')
+    )
+
     objects = TrustpointUserManager()  # type: ignore[misc]
 
     def __str__(self) -> str:

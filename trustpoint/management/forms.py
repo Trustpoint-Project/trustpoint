@@ -1215,7 +1215,7 @@ class OrganizationForm(forms.Form):
     locality = forms.CharField(max_length=255, label='Locality/City (L)', required=False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initializes the CreateDeviceForm."""
+        """Initializes the OrganizationForm."""
         super().__init__(*args, **kwargs)
 
         self.helper = FormHelper()

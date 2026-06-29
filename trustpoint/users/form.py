@@ -7,6 +7,8 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import Group, Permission
 from django.utils.translation import gettext_lazy as _
 
+from management.models.organization import OrganizationModel
+
 from .models import GroupProfile, TrustpointUser
 
 
@@ -47,6 +49,18 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
+
+    def save(self, *, commit: bool = True) -> TrustpointUser:
+        """Save new Trustpoint user."""
+        user = super().save(commit=False)
+
+        # attach organization here
+        user.organization = OrganizationModel.objects.get(pk=1)
+
+        if commit:
+            user.save()
+
+        return user
 
 
 class TrustpointUserRoleForm(forms.ModelForm[TrustpointUser]):
