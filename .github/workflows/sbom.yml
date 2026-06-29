@@ -18,38 +18,32 @@ jobs:
       contents: read
 
     steps:
-    - name: Checkout Trustpoint repo
-      uses: actions/checkout@v7
+      - name: Checkout Trustpoint repo
+        uses: actions/checkout@v7
 
-    - name: Install Syft
-      run: |
-        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.42.1
-    
-    - name: Build Trustpoint Docker image
-      run: docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
-    
-    - name: Generate CycloneDX SBOM
-      run: syft trustpoint:latest -o cyclonedx-json=sbom_cyclonedx.json
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin v1.42.1
+          syft version
 
-    - name: Generate SPDX SBOM
-      run: syft trustpoint:latest -o spdx-json=sbom_spdx.json
+      - name: Build Trustpoint Docker image
+        run: |
+          docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
 
-    - name: Check if CycloneDX SBOM file exists
-      run: |
-        ls -lh sbom_cyclonedx.json
+      - name: Generate SBOMs
+        run: |
+          mkdir -p sbom
+          syft docker:trustpoint:latest -o cyclonedx-json=sbom/sbom_cyclonedx.json
+          syft docker:trustpoint:latest -o spdx-json=sbom/sbom_spdx.json
+          ls -lah sbom
+          test -s sbom/sbom_cyclonedx.json
+          test -s sbom/sbom_spdx.json
 
-    - name: Check if SPDX SBOM file exists
-      run: |
-        ls -lh sbom_spdx.json
-
-    - name: Upload CycloneDX SBOM
-      uses: actions/upload-artifact@v7
-      with:
-        name: sbom-cyclonedx
-        path: sbom_cyclonedx.json
-
-    - name: Upload SPDX SBOM
-      uses: actions/upload-artifact@v7
-      with:
-        name: sbom-spdx
-        path: sbom_spdx.json
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: trustpoint-sbom
+          path: sbom/*.json
+          if-no-files-found: error
+          retention-days: 30
