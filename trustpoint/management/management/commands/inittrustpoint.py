@@ -5,7 +5,7 @@ from pathlib import Path
 
 from django.conf import settings as django_settings
 from django.core.management import call_command
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandParser
 from django.utils.translation import gettext as _
 
@@ -78,7 +78,7 @@ class Command(BaseCommand):
         if options.get('admin'):
             self.stdout.write('Creating superuser...')
             call_command('createsuperuser', interactive=False, username='admin', email='')
-            user = User.objects.get(username='admin')
+            user = get_user_model().objects.get(username='admin')
             user.set_password('testing321')
             user.save()
             self.stdout.write('Superuser created:')
