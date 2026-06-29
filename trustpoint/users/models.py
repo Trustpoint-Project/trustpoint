@@ -5,12 +5,15 @@ Defines a ``Role`` enum whose values are human-readable group names
 is a foreign key to ``django.contrib.auth.models.Group``.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.apps import apps
 from django.contrib.auth.models import AbstractUser, Group, UserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+if TYPE_CHECKING:
+    from management.models.organization import OrganizationModel
 
 
 class Role(models.TextChoices):
@@ -63,10 +66,11 @@ class GroupProfile(models.Model):
 class TrustpointUserManager(UserManager['TrustpointUser']):
     """Custom manager that handles the required ``role`` field for ``createsuperuser``."""
 
-    def _get_default_org(self):
+    def _get_default_org(self) -> 'OrganizationModel':
         """Create default organization."""
-        org = apps.get_model('management', 'OrganizationModel')
-        return org.objects.get_or_create(pk=1, name='trustpoint', organization='trustpoint')
+        org_model = cast('type[OrganizationModel]', apps.get_model('management', 'OrganizationModel'))
+        org, _created = org_model.objects.get_or_create(pk=1, name='trustpoint', organization='trustpoint')
+        return org
 
     def create_superuser(
         self,
