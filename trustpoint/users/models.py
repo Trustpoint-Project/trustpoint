@@ -7,6 +7,7 @@ is a foreign key to ``django.contrib.auth.models.Group``.
 
 from typing import Any
 
+from django.apps import apps
 from django.contrib.auth.models import AbstractUser, Group, UserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -62,6 +63,11 @@ class GroupProfile(models.Model):
 class TrustpointUserManager(UserManager['TrustpointUser']):
     """Custom manager that handles the required ``role`` field for ``createsuperuser``."""
 
+    def _get_default_org(self):
+        """Create default organization."""
+        org = apps.get_model('management', 'OrganizationModel')
+        return org.objects.get_or_create(pk=1, name='trustpoint', organization='trustpoint')
+
     def create_superuser(
         self,
         username: str,
@@ -83,6 +89,7 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
             admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN.value)
             extra_fields['role'] = admin_group
+        extra_fields.setdefault('organization', self._get_default_org())
         return super().create_superuser(username, email, password, **extra_fields)
 
     def create_user(
@@ -106,6 +113,7 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
             default_group, _ = Group.objects.get_or_create(name=Role.DEFAULT.value)
             extra_fields['role'] = default_group
+        extra_fields.setdefault('organization', self._get_default_org())
         return super().create_user(username, email, password, **extra_fields)
 
 
