@@ -1,3 +1,4 @@
+```yaml
 name: Generate and Publish SBOMs
 
 on:
@@ -13,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: sbom-pages
+  group: gh-pages
   cancel-in-progress: false
 
 jobs:
@@ -22,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout Trustpoint repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Install Syft
         run: |
@@ -33,19 +34,6 @@ jobs:
       - name: Build Trustpoint Docker image
         run: |
           docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
-
-      - name: Generate SBOMs
-        run: |
-          mkdir -p generated-sbom
-
-          syft docker:trustpoint:latest \
-            -o cyclonedx-json=generated-sbom/trustpoint.cyclonedx.json
-
-          syft docker:trustpoint:latest \
-            -o spdx-json=generated-sbom/trustpoint.spdx.json
-
-          test -s generated-sbom/trustpoint.cyclonedx.json
-          test -s generated-sbom/trustpoint.spdx.json
 
       - name: Determine SBOM version
         id: sbom_version
@@ -58,36 +46,35 @@ jobs:
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout gh-pages branch
-        uses: actions/checkout@v7
-        with:
-          ref: gh-pages
-          path: gh-pages
-
-      - name: Copy SBOMs into gh-pages
+      - name: Generate SBOMs for GitHub Pages
         run: |
           VERSION="${{ steps.sbom_version.outputs.version }}"
 
-          mkdir -p gh-pages/sbom/latest
-          mkdir -p "gh-pages/sbom/${VERSION}"
+          mkdir -p public/sbom/latest
+          mkdir -p "public/sbom/${VERSION}"
 
-          cp generated-sbom/trustpoint.cyclonedx.json \
-            gh-pages/sbom/latest/trustpoint.cyclonedx.json
+          syft docker:trustpoint:latest \
+            -o cyclonedx-json=public/sbom/latest/trustpoint.cyclonedx.json
 
-          cp generated-sbom/trustpoint.spdx.json \
-            gh-pages/sbom/latest/trustpoint.spdx.json
+          syft docker:trustpoint:latest \
+            -o spdx-json=public/sbom/latest/trustpoint.spdx.json
 
-          cp generated-sbom/trustpoint.cyclonedx.json \
-            "gh-pages/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
+          cp public/sbom/latest/trustpoint.cyclonedx.json \
+            "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
 
-          cp generated-sbom/trustpoint.spdx.json \
-            "gh-pages/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
+          cp public/sbom/latest/trustpoint.spdx.json \
+            "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
 
-      - name: Update SBOM index page
+          test -s public/sbom/latest/trustpoint.cyclonedx.json
+          test -s public/sbom/latest/trustpoint.spdx.json
+          test -s "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
+          test -s "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
+
+      - name: Create SBOM index page
         run: |
           VERSION="${{ steps.sbom_version.outputs.version }}"
 
-          cat > gh-pages/sbom/index.html <<EOF
+          cat > public/index.html <<EOF
           <!doctype html>
           <html lang="en">
           <head>
@@ -97,35 +84,29 @@ jobs:
           <body>
             <h1>Trustpoint Software Bill of Materials</h1>
 
+            <p>These SBOMs are generated from the Trustpoint Docker image using Syft.</p>
+
             <h2>Latest</h2>
             <ul>
-              <li><a href="latest/trustpoint.cyclonedx.json">CycloneDX JSON</a></li>
-              <li><a href="latest/trustpoint.spdx.json">SPDX JSON</a></li>
+              <li><a href="sbom/latest/trustpoint.cyclonedx.json">CycloneDX JSON</a></li>
+              <li><a href="sbom/latest/trustpoint.spdx.json">SPDX JSON</a></li>
             </ul>
 
             <h2>${VERSION}</h2>
             <ul>
-              <li><a href="${VERSION}/trustpoint-${VERSION}.cyclonedx.json">CycloneDX JSON</a></li>
-              <li><a href="${VERSION}/trustpoint-${VERSION}.spdx.json">SPDX JSON</a></li>
+              <li><a href="sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json">CycloneDX JSON</a></li>
+              <li><a href="sbom/${VERSION}/trustpoint-${VERSION}.spdx.json">SPDX JSON</a></li>
             </ul>
-
-            <p>These SBOMs are generated from the Trustpoint Docker image using Syft.</p>
           </body>
           </html>
           EOF
 
-      - name: Commit and push SBOMs to gh-pages
-        working-directory: gh-pages
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add sbom
-
-          if git diff --cached --quiet; then
-            echo "No SBOM changes to commit"
-            exit 0
-          fi
-
-          git commit -m "Publish SBOMs for ${{ steps.sbom_version.outputs.version }}"
-          git push
+      - name: Publish SBOMs to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: public
+          keep_files: false
+          allow_empty_commit: true
+```
