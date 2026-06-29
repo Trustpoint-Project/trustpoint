@@ -111,12 +111,12 @@ Trustpoint is a non-commercial open-source software project distributed through 
 
 | CRA Technical Area | ✅ Status | 📝 Implementation Summary | 📋 Evidence (Direct Links) |
 |----------------------|-----------|-------------------------|---------------------------|
-| **Product Architecture** *(Annex V § 2.1)* | ✅ Implemented | Django-based web application with PostgreSQL backend, high-level data & trust boundaries documented | [docs/](./docs/) · [README.md](./README.md) · Architecture documentation |
+| **Product Architecture** *(Annex V § 2.1)* | ✅ Implemented | Django-based web application with PostgreSQL backend, high-level data & trust boundaries documented | [docs](https://trustpoint.readthedocs.io/en/latest/) · [README.md](./README.md) · Architecture documentation |
 | **SBOM & Components** *(Annex I § 1.1)* | ✅ Implemented | CycloneDX and SPDX SBOMS, Complete dependency enumeration via uv lock file | [pyproject.toml](./pyproject.toml) · [uv.lock](./uv.lock) · [SBOMs](https://trustpoint-project.github.io/trustpoint/) |
 | **Cybersecurity Controls** *(Annex I § 1.2)* | ✅ Implemented | Django authentication, PKCS#11 HSM support, TLS/mTLS enforcement | [SECURITY.md](./SECURITY.md) · Security implementation in source |
-| **Supply Chain Security** *(Annex I § 1.3)* | ✅ Implemented | GitHub Actions CI/CD, automated testing, Dependabot scanning | [.github/workflows/](./.github/workflows/) · Dependabot configuration |
+| **Supply Chain Security** *(Annex I § 1.3)* | ✅ Implemented | GitHub Actions CI/CD, automated testing, Dependabot scanning | [.github/workflows/](./.github/workflows/) · [Dependabot](https://github.com/Trustpoint-Project/trustpoint/security/dependabot) configuration |
 | **Update Mechanism** *(Annex I § 1.4)* | ✅ Implemented | Docker-based deployment with version tags, GitHub releases, rollback capability | [Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) · [GitHub Releases](https://github.com/Trustpoint-Project/trustpoint/releases) |
-| **Security Monitoring** *(Annex I § 1.5)* | 🔄 Partial | Django logging framework, audit trails for certificate operations; Prometheus telemtry data | Application logs · Monitoring implementation |
+| **Security Monitoring** *(Annex I § 1.5)* | 🔄 Partial | Django logging framework, audit trails for certificate operations; Prometheus telemetry data | Application logs · Monitoring implementation |
 | **Data Protection** *(Annex I § 2.1)* | ✅ Implemented | Database encryption support, PKCS#11 secure key storage, backup functionality, minimal personal data | Django security features · PKCS#11 integration · Backup system |
 | **User Guidance** *(Annex I § 2.2)* | ✅ Implemented | Comprehensive security configuration and deployment documentation | [ReadTheDocs](https://trustpoint.readthedocs.io) |
 | **Vulnerability Disclosure** *(Annex I § 2.3)* | ✅ Implemented | Coordinated vulnerability disclosure via GitHub Security Advisories | [SECURITY.md](./SECURITY.md) |
@@ -138,11 +138,11 @@ Trustpoint is a non-commercial open-source software project distributed through 
 
 | **CRA Risk Category** | Asset | Likelihood | Impact (C/I/A) | CRA Control Implementation | Residual | Evidence |
 |--------------------------|----------|---------------|------------------|------------------------------|-------------|-------------|
-| **Supply Chain Attack** *(Art. 11)* | Build pipeline | M | H/H/M | GitHub Actions, Dependabot, dependency pinning in uv.lock | L | CI/CD workflows, dependency scanning |
-| **Unauthorized Access** *(Art. 11)* | Certificate operations | M | H/H/H | Django authentication, JWT, role-based access control | L | Authentication implementation |
+| **Supply Chain Attack** *(Art. 11)* | Build pipeline | M | H/H/M | GitHub Actions, [Dependabot](https://github.com/Trustpoint-Project/trustpoint/security/dependabot), dependency pinning in uv.lock | L | CI/CD workflows, dependency scanning |
+| **Unauthorized Access** *(Art. 11)* | Certificate operations | M | H/H/H | Django authentication, role-based access control | L | Authentication implementation |
 | **Key Compromise** *(Art. 11)* | Private keys | L | H/H/H | PKCS#11 HSM support, encrypted key storage | L | HSM integration code |
 | **Certificate Forgery** *(Art. 11)* | CA infrastructure | L | H/H/H | Secure CA key management, HSM support, access controls | L | CA security architecture |
-| **Component Vulnerability** *(Art. 11)* | Dependencies | M | M/H/M | Automated dependency scanning, timely updates, test coverage | L | Dependabot alerts, test reports |
+| **Component Vulnerability** *(Art. 11)* | Dependencies | M | M/H/M | Automated dependency scanning, timely updates, test coverage | L | [Dependabot](https://github.com/Trustpoint-Project/trustpoint/security/dependabot) alerts, test reports |
 | **Protocol Weakness** *(Art. 11)* | EST/CMP/AOKI/GDS | L | M/H/M | Standards-compliant implementation, TLS enforcement | M | Protocol documentation |
 | **Data Breach** *(Art. 11)* | Certificate database | M | H/H/M | Database encryption, access controls, backup encryption | L | Django security configuration |
 | **Service Disruption** *(Art. 11)* | Certificate services | M | L/M/H | Database backup, Docker deployment, health monitoring | M | Backup and monitoring features |
@@ -155,7 +155,7 @@ Trustpoint is a non-commercial open-source software project distributed through 
 - **HSM Integration:** Optional PKCS#11 support reduces key compromise risk
 - **Automated Testing:** 80%+ code coverage ensures reliability (pytest, mypy, ruff)
 - **Dependency Management:** uv lock file ensures reproducible, validated builds
-- **Continuous Scanning:** Dependabot and security workflows identify vulnerabilities early
+- **Continuous Scanning:** [Dependabot](https://github.com/Trustpoint-Project/trustpoint/security/dependabot) and security workflows identify vulnerabilities early
 - **Documentation:** Comprehensive ReadTheDocs guides support secure deployment
 
 ---
@@ -171,8 +171,8 @@ Trustpoint is a non-commercial open-source software project distributed through 
 | **§ 2.1 - Personal Data Protection** | [x] | Minimal personal data collection, Django privacy features, configurable data retention |
 | **§ 2.2 - Vulnerability Disclosure** | [x] | Public VDP via `SECURITY.md` with GitHub Security Advisories, 5-day response commitment |
 | **§ 2.3 - Software Bill of Materials** | [x] | [SBOM Portal](https://trustpoint-project.github.io/trustpoint/) |
-| **§ 2.4 - Secure Updates** | [x] | Docker image versioning, GitHub releases, backward-compatible update path |
-| **§ 2.5 - Security Monitoring** | [x] | Django logging framework, audit trails for certificate operations, configurable log levels |
+| **§ 2.4 - Secure Updates** | [x] | Docker image versioning, [GitHub releases](https://github.com/Trustpoint-Project/trustpoint/releases), backward-compatible update path |
+| **§ 2.5 - Security Monitoring** | [x] | Django logging framework, audit trails for certificate operations, configurable log levels, [Prometheus](https://prometheus.io) telemetry |
 | **§ 2.6 - Security Documentation** | [x] | Comprehensive security guidance at https://trustpoint.readthedocs.io |
 
 **CRA Self-Assessment Status:** REQUIREMENTS_DOCUMENTED
@@ -199,14 +199,14 @@ Trustpoint implements standardized security reporting via `SECURITY.md`:
 
 | Control | Requirement | Implementation | Evidence |
 |-------------|---------------|------------------|-------------|
-| Unit Testing | ≥80% line coverage | 🔄 In Progress (69% current) | Pytest with codecov.io reporting |
-| Type Checking | Complete type coverage | ✅ Implemented | MyPy with strict configuration |
-| Code Quality | Linting and formatting | ✅ Implemented | Ruff for linting and formatting |
-| Dependency Scanning | Automated vulnerability detection | ✅ Implemented | Dependabot integration |
-| Security Best Practices | Industry standards compliance | ✅ In Progress | OpenSSF Best Practices (passing) |
+| Unit Testing | ≥80% line coverage | 🔄 In Progress (69% current) | [Pytest](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml) with [codecov.io](https://app.codecov.io/gh/Trustpoint-Project/trustpoint) reporting |
+| Type Checking | Complete type coverage | ✅ Implemented | [MyPy](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml) with strict configuration |
+| Code Quality | Linting and formatting | ✅ Implemented | [Ruff](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml) for linting and formatting |
+| Dependency Scanning | Automated vulnerability detection | ✅ Implemented | [Dependabot](https://github.com/Trustpoint-Project/trustpoint/security/dependabot) integration |
+| Security Best Practices | Industry standards compliance | ✅ In Progress | [OpenSSF Best Practices](https://www.bestpractices.dev/de/projects/11535/baseline-3) (passing) |
 | SBOM | CycloneDX & SPDX formats | ✅ Implemented | [SBOM Portal](https://trustpoint-project.github.io/trustpoint/) |
-| CI/CD Pipeline | Automated testing and validation | ✅ Implemented | GitHub Actions workflows |
-| Container Security | Secure Docker deployment | ✅ Implemented | Docker Hub automated builds |
+| CI/CD Pipeline | Automated testing and validation | ✅ Implemented | [GitHub Actions](https://github.com/Trustpoint-Project/trustpoint/actions) workflows |
+| Container Security | Secure Docker deployment | ✅ Implemented | [Docker Hub automated builds](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-manual.yml) |
 
 ### **Security & Compliance Badges:**
 
@@ -235,7 +235,7 @@ Trustpoint implements standardized security reporting via `SECURITY.md`:
 - ✅ Automated test suite with coverage reporting
 - ✅ Static type checking with MyPy
 - ✅ Code quality validation with Ruff
-- ✅ Dependency vulnerability scanning via Dependabot
+- ✅ Dependency vulnerability scanning via [Dependabot](https://github.com/Trustpoint-Project/trustpoint/security/dependabot)
 - ✅ CI/CD pipeline verification via GitHub Actions
 - ✅ OpenSSF Best Practices compliance (passing level)
 - ✅ SBOM generation (CycloneDX & SPDX) published at [SBOM Portal](https://trustpoint-project.github.io/trustpoint/)
@@ -249,16 +249,16 @@ Trustpoint implements standardized security reporting via `SECURITY.md`:
 
 | **CRA Monitoring Obligation** | Implementation | Frequency | Action Trigger | Evidence |
 |----------------------------------|-------------------|-------------|------------------|-------------|
-| **Vulnerability Monitoring** *(Art. 23.1)* | CVE feeds + GitHub Security Advisories + Dependabot | Continuous | Auto-create security issues | Dependabot alerts |
+| **Vulnerability Monitoring** *(Art. 23.1)* | CVE feeds + GitHub Security Advisories + Dependabot +  [ZAP Baseline Scan](./.github/workflows/zap.yml) + [CodeQL](https://github.com/Trustpoint-Project/trustpoint/security/code-scanning) + [Secret scanning](https://github.com/Trustpoint-Project/trustpoint/security/secret-scanning) | Continuous | Auto-create security issues | Dependabot alerts |
 | **Incident Reporting** *(Art. 23.2)* | GitHub issue tracking, security advisory process | As needed | Security incident creation | Security advisories |
 | **Security Posture Tracking** *(Art. 23.3)* | OpenSSF Best Practices scorecard | Continuous | Score decline investigation | Badge monitoring |
-| **Update Distribution** *(Art. 23.4)* | GitHub releases + Docker Hub | As needed | Critical vulnerability patches | Release history |
+| **Update Distribution** *(Art. 23.4)* | [GitHub releases](https://github.com/Trustpoint-Project/trustpoint/releases) + [Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) | As needed | Critical vulnerability patches | Release history |
 
 **CRA Reporting Readiness:** 
 
 Trustpoint maintains security monitoring and incident response capabilities:
 
-- **Continuous Monitoring:** GitHub Dependabot scans dependencies daily
+- **Continuous Monitoring:** GitHub [Dependabot](https://github.com/Trustpoint-Project/trustpoint/security/dependabot) scans dependencies daily
 - **Issue Tracking:** Security issues tracked via GitHub Security Advisories
 - **Quality Metrics:** OpenSSF Best Practices badge tracks security posture
 - **Update Process:** Docker-based deployment enables rapid security updates
@@ -359,6 +359,7 @@ This CRA assessment will be updated when changes constitute "substantial modific
 - **Security Policy:** [SECURITY.md](./SECURITY.md) - Vulnerability disclosure and security practices
 - **License:** [LICENSE](./LICENSE) - MIT License
 - **Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
+- **Authors**: [AUTHORS.md](./AUTHORS.md) - Contributing authors
 
 ### **Technical Standards & Specifications**
 - **RFC 7030:** EST (Enrollment over Secure Transport)
@@ -409,13 +410,4 @@ Trustpoint operates under the CRA's open-source software provisions:
 - Community security practices align with essential cybersecurity requirements
 - GitHub-based development provides audit trails and provenance
 
----
-
-**Document Control:**  
-**Approved by:** Trustpoint Project Maintainers  
-**Distribution:** Public  
-**Classification:** Public Documentation  
-**Effective Date:** 2026-06-26  
-**Next Review:** 2026-09-26  
-**Status:** Beta/Technology Preview
 
