@@ -24,7 +24,8 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class Workflow2DefinitionListView(UserPermissionRequiredMixin, PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
+class Workflow2DefinitionListView(
+    UserPermissionRequiredMixin, PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
     """Show saved Workflow 2 definitions."""
 
     page_category = 'workflows2'

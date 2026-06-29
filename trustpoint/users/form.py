@@ -50,11 +50,10 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
         for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
 
-    def save(self, *, commit: bool = True) -> TrustpointUser:
+    def save(self, *, commit: bool = True) -> TrustpointUser:  # type: ignore[override]
         """Save new Trustpoint user."""
         user = super().save(commit=False)
 
-        # attach organization here
         user.organization = OrganizationModel.objects.get(pk=1)
 
         if commit:

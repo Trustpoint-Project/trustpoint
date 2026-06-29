@@ -16,6 +16,7 @@ from management.models.notifications import (
     WeakECCCurve,
     WeakSignatureAlgorithm,
 )
+from management.models.organization import OrganizationModel
 from management.models.pkcs11 import PKCS11Token
 from management.models.prometheus import PrometheusConfig
 from management.models.security import SecurityConfig
@@ -34,6 +35,7 @@ __all__ = [
     'NotificationMessageModel',
     'NotificationModel',
     'NotificationStatus',
+    'OrganizationModel',
     'PKCS11Token',
     'PrometheusConfig',
     'SecurityConfig',
