@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout Trustpoint repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Syft
         run: |
