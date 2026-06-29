@@ -95,6 +95,8 @@ class Command(BaseCommand):
         """Create a notification for a CRL.
 
         Skips notification creation if one already exists for the given event.
+        If the CRL's CA is associated with domains, creates a separate notification for each domain.
+        Otherwise, creates a single notification without domain association.
 
         Args:
             crl: The CRL model instance.
@@ -103,8 +105,7 @@ class Command(BaseCommand):
             message_type: The notification message type enum value.
             new_status: The NEW status instance to attach.
         """
-        if NotificationModel.objects.filter(event=event).exists():
-            return
+        from pki.models import DomainModel  # noqa: PLC0415
 
         ca_name = crl.ca.unique_name if crl.ca else 'Unknown CA'
         next_update_str = crl.next_update.strftime('%Y-%m-%d %H:%M:%S') if crl.next_update else 'N/A'
@@ -114,13 +115,31 @@ class Command(BaseCommand):
             'next_update': next_update_str,
         }
 
-        notification = NotificationModel.objects.create(
-            issuing_ca=crl.ca,
-            created_at=timezone.now(),
-            notification_source=NotificationModel.NotificationSource.ISSUING_CA,
-            notification_type=notification_type,
-            message_type=message_type,
-            event=event,
-            message_data=message_data,
-        )
-        notification.statuses.add(new_status)
+        domains_using_ca = DomainModel.objects.filter(issuing_ca=crl.ca) if crl.ca else DomainModel.objects.none()
+
+        if domains_using_ca.exists():
+            for domain in domains_using_ca:
+                if not NotificationModel.objects.filter(event=event, issuing_ca=crl.ca, domain=domain).exists():
+                    notification = NotificationModel.objects.create(
+                        domain=domain,
+                        issuing_ca=crl.ca,
+                        created_at=timezone.now(),
+                        notification_source=NotificationModel.NotificationSource.ISSUING_CA,
+                        notification_type=notification_type,
+                        message_type=message_type,
+                        event=event,
+                        message_data=message_data,
+                    )
+                    notification.statuses.add(new_status)
+        else:
+            if not NotificationModel.objects.filter(event=event, issuing_ca=crl.ca, domain__isnull=True).exists():
+                notification = NotificationModel.objects.create(
+                    issuing_ca=crl.ca,
+                    created_at=timezone.now(),
+                    notification_source=NotificationModel.NotificationSource.ISSUING_CA,
+                    notification_type=notification_type,
+                    message_type=message_type,
+                    event=event,
+                    message_data=message_data,
+                )
+                notification.statuses.add(new_status)

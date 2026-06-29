@@ -37,7 +37,7 @@ class Command(BaseCommand):
         failed_enrollment_requests = EnrollmentRequest.objects.filter(
             aggregated_state__in=[State.FAILED, State.REJECTED],
             device__isnull=False,
-        ).select_related('device')
+        ).select_related('device', 'device__domain')
 
         for enrollment_request in failed_enrollment_requests:
             device = enrollment_request.device
@@ -51,6 +51,7 @@ class Command(BaseCommand):
                 message_data = {'device': device_name}
 
                 notification = NotificationModel.objects.create(
+                    domain=device.domain,
                     device=device,
                     created_at=timezone.now(),
                     notification_source=NotificationModel.NotificationSource.DEVICE,

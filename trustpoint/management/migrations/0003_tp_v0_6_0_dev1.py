@@ -33,6 +33,14 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
+            name='UIConfig',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('view_mode', models.CharField(choices=[('standard', 'Standard View'), ('simplified', 'Simplified View')], default='standard', help_text='Choose between standard sidebar navigation or simplified domain-centric view', max_length=10, verbose_name='View Mode')),
+                ('last_updated', models.DateTimeField(auto_now=True)),
+            ],
+        ),
+        migrations.CreateModel(
             name='SmtpEmailConfig',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),

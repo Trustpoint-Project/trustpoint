@@ -36,7 +36,7 @@ dependencies = [
     "python-pkcs11>=0.8.1",
     "trustpoint-core==0.3.1",
     "types-paramiko>=3.5.0.20250516",
-    "zeroconf>=0.149,<0.150",
+    "zeroconf>=0.150,<0.151",
     "asyncua>=1.1.5",
     "django-q2>=1.9.0",
     "drf-yasg>=1.21.15",

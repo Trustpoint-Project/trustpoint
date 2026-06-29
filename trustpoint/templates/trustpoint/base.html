@@ -23,7 +23,7 @@
                     <svg id="menu-icon-back" class="bi bi-size100 d-none" fill="currentColor" role="img" aria-label="Hide Menu">
                         <use href="{% static 'img/icons.svg' %}#icon-x"></use></svg>
                 </div>
-                <a class="navbar-brand tp-primary" href="{% url 'home:dashboard' %}">
+                <a class="navbar-brand tp-primary" href="{% url 'home:index' %}">
                     <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" id="tp-logo" class="light-only">
                     <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only">
                 </a>
@@ -52,7 +52,7 @@
                 </div>
             {% endif %}
             <div class="tp-menu-group">
-                <a href="{% url 'home:dashboard' %}" class="tp-menu-head {% if page_name == 'dashboard' %}tp-menu-active{% endif %}">
+                <a href="{% url 'home:index' %}" class="tp-menu-head {% if page_name == 'dashboard' or page_name == 'simplified_overview' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
                         <use href="{% static 'img/icons.svg' %}#icon-home"></use></svg>
                     {% translate "Dashboard" %}
