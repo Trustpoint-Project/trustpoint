@@ -1970,6 +1970,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         configured_module_path: Path,
     ) -> bool:
         """Return whether the built-in local PKCS#11 proxy can be used."""
+        del staged_pin
         return (
             local_dev_pkcs11_handoff_available()
             and local_dev_module.is_file()
@@ -1985,6 +1986,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         configured_module_path: Path,
     ) -> bool:
         """Return whether the wizard should keep an already installed module in place."""
+        del staged_pin
         return staged_module is None and configured_module_path.is_file()
 
     @staticmethod
