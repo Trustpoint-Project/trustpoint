@@ -16,234 +16,192 @@
   <a href="#"><img src="https://img.shields.io/badge/Review-Quarterly-orange?style=for-the-badge" alt="Review Cycle"/></a>
 </p>
 
-**📋 Document Owner:** Trustpoint Project Maintainers | **📄 Version:** 1.0 | **📅 Last Updated:** 2026-06-26 (UTC)  
+**📋 Document Owner:** Trustpoint Project Maintainers | **📄 Version:** 1.0 | **📅 Last Updated:** 2026-06-26  
 **🔄 Review Cycle:** Quarterly | **⏰ Next Review:** 2026-09-26
 
 ---
 
-## **Purpose Statement**
+## **Purpose**
 
-This risk register documents all identified risks affecting Trustpoint's operation as a trust anchor and PKI management platform for industrial environments. Risk assessments support CRA (Cyber Resilience Act) compliance and align with Trustpoint's commitment to security excellence in OT/industrial certificate management.
-
----
-
-## **Risk Assessment Methodology**
-
-Risks are assessed using a **Likelihood × Impact** matrix with the following scales:
-
-### **Likelihood Scale:**
-- **H (High):** Likely to occur within 12 months
-- **M (Medium):** May occur within 1-2 years
-- **L (Low):** Unlikely to occur within 2+ years
-
-### **Impact Scale (C/I/A):**
-Impact assessed across three dimensions:
-- **C (Confidentiality):** Impact on data/configuration confidentiality
-- **I (Integrity):** Impact on system/data integrity
-- **A (Availability):** Impact on service availability
-
-**Impact Levels:** H (High), M (Medium), L (Low)
-
-### **Residual Risk:**
-After applying controls, risks are classified as:
-- **Critical:** Requires immediate action
-- **High:** Priority mitigation needed
-- **Medium:** Monitored and managed
-- **Low:** Accepted with documentation
+Risk register documenting all identified risks for Trustpoint's PKI management platform, supporting CRA compliance and security excellence.
 
 ---
 
-## **Risk Summary Dashboard**
+## **Methodology**
+
+**Likelihood:** H (≤12mo) · M (1-2yr) · L (>2yr)  
+**Impact (C/I/A):** H (High) · M (Medium) · L (Low)  
+**Residual Risk:** Critical · High · Medium · Low
+
+---
+
+## **Risk Summary**
 
 **Next Review:** 2026-09-26
 
-### **Executive Risk Summary**
-
-| **Risk Portfolio Overview** | **Value** | **Target** |
-|---------------------------|-----------|------------|
-| **Total Active Risks** | 8 | 8 |
-| **Critical Risks** | 0 | 0 |
-| **High Risks** | 0 | 0 |
-| **Medium Risks** | 5 | 3 |
-| **Low Risks** | 3 | 5 |
+| Portfolio Overview | Current | Target |
+|-------------------|---------|--------|
+| Total Risks | 8 | 8 |
+| Critical | 0 | 0 |
+| High | 0 | 0 |
+| Medium | 5 | 3 |
+| Low | 3 | 5 |
 
 ---
 
-## **Active Risk Register**
+## **Active Risks**
 
 ### **R-TP-001: Supply Chain Attack**
 
-| **Field** | **Value** |
-|-----------|-----------|
-| **Risk ID** | R-TP-001 |
+| Field | Value |
+|-------|-------|
 | **Category** | Supply Chain Security (CRA Art. 11) |
 | **Asset** | Build pipeline |
-| **Description** | Compromise of build pipeline or dependencies could inject malicious code into Trustpoint releases, affecting all deployments |
-| **Likelihood** | M (Medium) |
-| **Impact (C/I/A)** | H/H/M (High Confidentiality, High Integrity, Medium Availability) |
-| **Inherent Risk** | High |
-| **Controls** | • GitHub Actions CI/CD with restricted permissions<br/>• Dependabot automated vulnerability scanning<br/>• Dependency pinning via uv.lock<br/>• Two-person review for critical changes<br/>• SBOM generation (planned automation) |
-| **Residual Risk** | L (Low) |
-| **Evidence** | [.github/workflows/](./.github/workflows/) · Dependabot alerts · uv.lock |
-| **Owner** | Trustpoint Maintainers |
-| **Review Date** | 2026-09-26 |
+| **Description** | Pipeline/dependency compromise enabling malicious code injection |
+| **Likelihood** | M |
+| **Impact** | H/H/M |
+| **Inherent** | High |
+| **Controls** | GitHub Actions (restricted) · Dependabot · uv.lock pinning · 2-person review · SBOM |
+| **Residual** | **L** |
+| **Evidence** | [workflows](./.github/workflows/) · Dependabot · uv.lock |
+| **Review** | 2026-09-26 |
 
 ---
 
 ### **R-TP-002: Unauthorized Access**
 
-| **Field** | **Value** |
-|-----------|-----------|
-| **Risk ID** | R-TP-002 |
+| Field | Value |
+|-------|-------|
 | **Category** | Access Control (CRA Art. 11) |
 | **Asset** | Certificate operations |
-| **Description** | Unauthorized access to certificate management functions could enable certificate forgery or unauthorized issuance |
-| **Likelihood** | M (Medium) |
-| **Impact (C/I/A)** | H/H/H (High across all dimensions) |
-| **Inherent Risk** | Critical |
-| **Controls** | • Django authentication framework<br/>• JWT token-based API authentication<br/>• Role-based access control (RBAC)<br/>• Multi-factor authentication support<br/>• Comprehensive audit logging |
-| **Residual Risk** | L (Low) |
-| **Evidence** | Django security implementation · Authentication logs |
-| **Owner** | Trustpoint Maintainers |
-| **Review Date** | 2026-09-26 |
+| **Description** | Unauthorized certificate management enabling forgery/issuance |
+| **Likelihood** | M |
+| **Impact** | H/H/H |
+| **Inherent** | Critical |
+| **Controls** | Django auth · JWT tokens · RBAC · MFA support · Audit logs |
+| **Residual** | **L** |
+| **Evidence** | Django security · Auth logs |
+| **Review** | 2026-09-26 |
 
 ---
 
 ### **R-TP-003: Private Key Compromise**
 
-| **Field** | **Value** |
-|-----------|-----------|
-| **Risk ID** | R-TP-003 |
+| Field | Value |
+|-------|-------|
 | **Category** | Cryptographic Security (CRA Art. 11) |
 | **Asset** | CA private keys |
-| **Description** | Compromise of CA private keys would enable attackers to forge certificates, undermining entire trust infrastructure |
-| **Likelihood** | L (Low) |
-| **Impact (C/I/A)** | H/H/H (Catastrophic across all dimensions) |
-| **Inherent Risk** | Critical |
-| **Controls** | • PKCS#11 HSM support for key storage<br/>• Encrypted key storage for software keys<br/>• Access controls limiting key access<br/>• Key lifecycle management<br/>• Separation of duties for key operations |
-| **Residual Risk** | L (Low) |
-| **Evidence** | PKCS#11 integration · HSM configuration · Key management procedures |
-| **Owner** | Trustpoint Maintainers |
-| **Review Date** | 2026-09-26 |
+| **Description** | CA key compromise enabling certificate forgery |
+| **Likelihood** | L |
+| **Impact** | H/H/H |
+| **Inherent** | Critical |
+| **Controls** | PKCS#11 HSM · Encrypted storage · Access controls · Key lifecycle · Separation of duties |
+| **Residual** | **L** |
+| **Evidence** | PKCS#11 integration · HSM config · Key procedures |
+| **Review** | 2026-09-26 |
 
 ---
 
 ### **R-TP-004: Certificate Forgery**
 
-| **Field** | **Value** |
-|-----------|-----------|
-| **Risk ID** | R-TP-004 |
+| Field | Value |
+|-------|-------|
 | **Category** | PKI Infrastructure (CRA Art. 11) |
 | **Asset** | CA infrastructure |
-| **Description** | Weaknesses in certificate issuance controls could enable unauthorized certificate creation |
-| **Likelihood** | L (Low) |
-| **Impact (C/I/A)** | H/H/H (High across all dimensions) |
-| **Inherent Risk** | Critical |
-| **Controls** | • Secure CA key management (see R-TP-003)<br/>• Certificate request validation<br/>• Access controls for issuance operations<br/>• Comprehensive audit trails<br/>• Certificate policy enforcement |
-| **Residual Risk** | L (Low) |
-| **Evidence** | CA security architecture · Certificate issuance procedures |
-| **Owner** | Trustpoint Maintainers |
-| **Review Date** | 2026-09-26 |
+| **Description** | Weak issuance controls enabling unauthorized certificates |
+| **Likelihood** | L |
+| **Impact** | H/H/H |
+| **Inherent** | Critical |
+| **Controls** | Secure CA keys (R-TP-003) · Request validation · Access controls · Audit trails · Policy enforcement |
+| **Residual** | **L** |
+| **Evidence** | CA architecture · Issuance procedures |
+| **Review** | 2026-09-26 |
 
 ---
 
 ### **R-TP-005: Component Vulnerabilities**
 
-| **Field** | **Value** |
-|-----------|-----------|
-| **Risk ID** | R-TP-005 |
+| Field | Value |
+|-------|-------|
 | **Category** | Software Security (CRA Art. 11) |
 | **Asset** | Python dependencies |
-| **Description** | Vulnerabilities in third-party dependencies (Django, cryptography libraries, etc.) could compromise Trustpoint security |
-| **Likelihood** | M (Medium) |
-| **Impact (C/I/A)** | M/H/M (Medium Confidentiality, High Integrity, Medium Availability) |
-| **Inherent Risk** | High |
-| **Controls** | • Automated Dependabot scanning (daily)<br/>• Regular dependency updates<br/>• 69% test coverage (target 80%+)<br/>• MyPy type checking<br/>• Ruff linting<br/>• Security-focused code review |
-| **Residual Risk** | L (Low) |
-| **Evidence** | Dependabot alerts · Test reports · CI/CD workflows |
-| **Owner** | Trustpoint Maintainers |
-| **Review Date** | 2026-09-26 |
+| **Description** | Third-party vulnerabilities (Django, crypto libs) compromising security |
+| **Likelihood** | M |
+| **Impact** | M/H/M |
+| **Inherent** | High |
+| **Controls** | Dependabot (daily) · Regular updates · 69% tests (→80%) · MyPy · Ruff · Security reviews |
+| **Residual** | **L** |
+| **Evidence** | Dependabot · Test reports · CI/CD |
+| **Review** | 2026-09-26 |
 
 ---
 
-### **R-TP-006: Protocol Implementation Weaknesses**
+### **R-TP-006: Protocol Weaknesses**
 
-| **Field** | **Value** |
-|-----------|-----------|
-| **Risk ID** | R-TP-006 |
+| Field | Value |
+|-------|-------|
 | **Category** | Protocol Security (CRA Art. 11) |
-| **Asset** | EST/CMP/AOKI/OPC UA GDS Push implementations |
-| **Description** | Implementation flaws in certificate enrollment protocols could enable man-in-the-middle attacks or protocol downgrade |
-| **Likelihood** | L (Low) |
-| **Impact (C/I/A)** | M/H/M (Medium Confidentiality, High Integrity, Medium Availability) |
-| **Inherent Risk** | Medium |
-| **Controls** | • Standards-compliant implementations (RFC 7030, RFC 9483)<br/>• Mandatory TLS/mTLS enforcement<br/>• Protocol security testing<br/>• Regular security reviews<br/>• Cryptographic best practices |
-| **Residual Risk** | M (Medium) |
-| **Evidence** | Protocol documentation · TLS configuration · Security testing results |
-| **Owner** | Trustpoint Maintainers |
-| **Review Date** | 2026-09-26 |
+| **Asset** | EST/CMP/AOKI/GDS |
+| **Description** | Protocol flaws enabling MITM or downgrade attacks |
+| **Likelihood** | L |
+| **Impact** | M/H/M |
+| **Inherent** | Medium |
+| **Controls** | RFC compliance (7030, 9483) · Mandatory TLS/mTLS · Protocol tests · Security reviews · Crypto best practices |
+| **Residual** | **M** |
+| **Evidence** | Protocol docs · TLS config · Security tests |
+| **Review** | 2026-09-26 |
 
 ---
 
 ### **R-TP-007: Data Breach**
 
-| **Field** | **Value** |
-|-----------|-----------|
-| **Risk ID** | R-TP-007 |
+| Field | Value |
+|-------|-------|
 | **Category** | Data Protection (CRA Art. 11) |
 | **Asset** | Certificate database |
-| **Description** | Unauthorized access to certificate database could expose certificate metadata and configuration data |
-| **Likelihood** | M (Medium) |
-| **Impact (C/I/A)** | H/H/M (High Confidentiality, High Integrity, Medium Availability) |
-| **Inherent Risk** | High |
-| **Controls** | • Database encryption support (configurable)<br/>• Access controls and RBAC<br/>• Network segmentation<br/>• Encrypted backups<br/>• Audit logging<br/>• Minimal personal data collection |
-| **Residual Risk** | L (Low) |
-| **Evidence** | Django security configuration · Database encryption · Backup procedures |
-| **Owner** | Trustpoint Maintainers |
-| **Review Date** | 2026-09-26 |
+| **Description** | Unauthorized DB access exposing certificate metadata/config |
+| **Likelihood** | M |
+| **Impact** | H/H/M |
+| **Inherent** | High |
+| **Controls** | DB encryption · RBAC · Network segmentation · Encrypted backups · Audit logs · Minimal PII |
+| **Residual** | **L** |
+| **Evidence** | Django security · DB encryption · Backup procedures |
+| **Review** | 2026-09-26 |
 
 ---
 
 ### **R-TP-008: Service Disruption**
 
-| **Field** | **Value** |
-|-----------|-----------|
-| **Risk ID** | R-TP-008 |
+| Field | Value |
+|-------|-------|
 | **Category** | Availability (CRA Art. 11) |
 | **Asset** | Certificate services |
-| **Description** | Service outages could prevent certificate issuance, renewal, or revocation, disrupting industrial operations |
-| **Likelihood** | M (Medium) |
-| **Impact (C/I/A)** | L/M/H (Low Confidentiality, Medium Integrity, High Availability) |
-| **Inherent Risk** | Medium |
-| **Controls** | • Database backup functionality (django-dbbackup)<br/>• Docker-based deployment for portability<br/>• Health monitoring endpoints<br/>• Prometheus telemetry integration<br/>• Recovery Time Objective: 1-4 hours<br/>• Recovery Point Objective: 15-60 minutes |
-| **Residual Risk** | M (Medium) |
-| **Evidence** | Backup configuration · Docker deployment · Monitoring implementation |
-| **Owner** | Trustpoint Maintainers |
-| **Review Date** | 2026-09-26 |
+| **Description** | Outages preventing issuance/renewal/revocation |
+| **Likelihood** | M |
+| **Impact** | L/M/H |
+| **Inherent** | Medium |
+| **Controls** | django-dbbackup · Docker deployment · Health endpoints · Prometheus · RTO: 1-4h · RPO: 15-60min |
+| **Residual** | **M** |
+| **Evidence** | Backup config · Docker · Monitoring |
+| **Review** | 2026-09-26 |
 
 ---
 
-## **Risk Treatment Summary**
+## **Risk Treatment**
 
-### **Mitigated Risks (Residual: Low)**
-- R-TP-001: Supply Chain Attack
-- R-TP-002: Unauthorized Access
-- R-TP-003: Private Key Compromise
-- R-TP-004: Certificate Forgery
-- R-TP-005: Component Vulnerabilities
-- R-TP-007: Data Breach
+**Mitigated (Low):** R-TP-001, R-TP-002, R-TP-003, R-TP-004, R-TP-005, R-TP-007
 
-### **Accepted Risks (Residual: Medium)**
-- R-TP-006: Protocol Implementation Weaknesses — Accepted with ongoing security reviews
-- R-TP-008: Service Disruption — Accepted with RTO/RPO targets and backup procedures
+**Accepted (Medium):**
+- R-TP-006: Protocol security (ongoing reviews)
+- R-TP-008: Service disruption (RTO/RPO targets)
 
 ---
 
-## **Risk Monitoring Schedule**
+## **Monitoring Schedule**
 
-| **Risk Level** | **Review Frequency** | **Monitoring Method** |
-|---------------|---------------------|----------------------|
-| **Critical** | Weekly | N/A (no critical residual risks) |
-| **High** | Bi-weekly | N/A (no high residual risks) |
-| **Medium** | Monthly | Maintainer review, automated monitoring |
-| **Low** | Quarterly | Standard review cycle |
+| Level | Frequency | Method |
+|-------|-----------|--------|
+| Critical | Weekly | N/A |
+| High | Bi-weekly | N/A |
+| Medium | Monthly | Maintainer review, automated monitoring |
+| Low | Quarterly | Standard review cycle |
