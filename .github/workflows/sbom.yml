@@ -1,4 +1,3 @@
-```yaml
 name: Generate and Publish SBOMs
 
 on:
@@ -109,4 +108,3 @@ jobs:
           publish_dir: public
           keep_files: false
           allow_empty_commit: true
-```
