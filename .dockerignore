@@ -15,6 +15,11 @@
 **/md-report.md
 docs/build/
 workflow2Folder/
+.tp_wizard/
+.env.tp_wizard
+.env.tp_wizard.*
+sftpgo-data/
+var/
 # Exclude sensitive files
 **/hsm_so_pin.txt
 **/hsm_pin.txt

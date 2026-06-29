@@ -135,6 +135,7 @@ start_app(){
     --network-alias trustpoint.local \
     -p "${APP_HTTP_HOST}:80" \
     -p "${APP_HTTPS_HOST}:443" \
+    -v "${wizard_env_target}:/var/www/html/trustpoint/.env:ro" \
     "${env_file_arg[@]}" \
     -e "POSTGRES_DB=$APP_DB_NAME" \
     -e "DATABASE_USER=$APP_DB_USER" \
