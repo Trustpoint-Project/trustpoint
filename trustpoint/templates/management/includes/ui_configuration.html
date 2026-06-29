@@ -1,0 +1,25 @@
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">{% trans "User Interface Settings" %}</h5>
+    </div>
+
+    <div class="card-body pt-4 pb-4">
+    <p class="text-muted mb-4">{% trans "Configure the appearance and navigation of the Trustpoint interface" %}</p>
+        
+    <form method="POST" action="{% url 'management:settings-ui' %}" id="ui_configuration">
+      {% csrf_token %}
+      {{ form|crispy }}
+    </form>
+  </div>
+
+  <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary" type="submit" form="ui_configuration">
+                {% trans "Save" %}
+            </button>
+        </div>
+    </div>
+</div>

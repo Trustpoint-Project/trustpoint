@@ -63,7 +63,7 @@ class WorkerTests(TestCase):
 
         self.assertEqual(stats.claimed, 1)
         self.assertEqual(job.status, Workflow2Job.STATUS_DONE)
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
 
     def test_worker_skips_terminal_instance(self) -> None:
         ir = compile_workflow_yaml(YAML_OK)
@@ -79,7 +79,7 @@ class WorkerTests(TestCase):
         ex = WorkflowExecutor()
         runtime = WorkflowRuntimeService(executor=ex)
         inst = runtime.create_instance(definition=d, event={"device": {"common_name": "dev1"}})
-        inst.status = Workflow2Instance.STATUS_SUCCEEDED
+        inst.status = Workflow2Instance.STATUS_FINISHED
         inst.save(update_fields=["status", "updated_at"])
 
         job = Workflow2Job.objects.create(

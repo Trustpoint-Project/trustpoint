@@ -75,7 +75,6 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
         """Render the create form with a starter workflow."""
         form = Workflow2DefinitionForm(
             initial={
-                'name': 'New workflow',
                 'enabled': True,
                 'yaml_text': self.default_yaml,
             }
@@ -112,7 +111,6 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
 
         svc = WorkflowDefinitionService()
         obj, res = svc.create_definition(
-            name=form.cleaned_data['name'],
             enabled=bool(form.cleaned_data['enabled']),
             yaml_text=form.cleaned_data['yaml_text'],
         )
@@ -140,7 +138,7 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
                     **self.get_context_data(),
                     'form': form,
                     'definition': None,
-                    'compile_error': 'Workflow save succeeded without returning a definition.',
+                    'compile_error': 'Workflow save completed without returning a definition.',
                     'ir_json': None,
                 },
             )
@@ -160,7 +158,6 @@ class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
         obj = get_object_or_404(Workflow2Definition, pk=pk)
         form = Workflow2DefinitionForm(
             initial={
-                'name': obj.name,
                 'enabled': obj.enabled,
                 'yaml_text': obj.yaml_text,
             }
@@ -201,7 +198,6 @@ class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
         svc = WorkflowDefinitionService()
         updated, res = svc.update_definition(
             definition=obj,
-            name=form.cleaned_data['name'],
             enabled=bool(form.cleaned_data['enabled']),
             yaml_text=form.cleaned_data['yaml_text'],
         )
@@ -229,7 +225,7 @@ class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
                     **self.get_context_data(),
                     'form': form,
                     'definition': obj,
-                    'compile_error': 'Workflow update succeeded without returning a definition.',
+                    'compile_error': 'Workflow update completed without returning a definition.',
                     'ir_json': obj.ir_json,
                 },
             )

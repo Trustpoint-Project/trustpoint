@@ -47,7 +47,7 @@ class PersistenceTests(TestCase):
         inst = runtime.run_instance(inst)
         inst.refresh_from_db()
 
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(inst.current_step, '')
         self.assertEqual(inst.run_count, 1)
 
