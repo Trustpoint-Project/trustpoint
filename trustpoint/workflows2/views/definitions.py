@@ -34,7 +34,7 @@ class Workflow2DefinitionListView(
     template_name = 'workflows2/definition_list.html'
     context_object_name = 'definitions'
     paginate_by = 50
-    permission_required = 'users.manage_workflow'
+    permission_required = ''
     raise_exception = True
 
     def get_queryset(self) -> QuerySet[Workflow2Definition]:
