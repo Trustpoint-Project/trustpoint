@@ -112,7 +112,7 @@ Trustpoint is a non-commercial open-source software project distributed through 
 | CRA Technical Area | ✅ Status | 📝 Implementation Summary | 📋 Evidence (Direct Links) |
 |----------------------|-----------|-------------------------|---------------------------|
 | **Product Architecture** *(Annex V § 2.1)* | ✅ Implemented | Django-based web application with PostgreSQL backend, high-level data & trust boundaries documented | [docs/](./docs/) · [README.md](./README.md) · Architecture documentation |
-| **SBOM & Components** *(Annex I § 1.1)* | ✅ Implemented | Complete dependency enumeration via uv lock file | [pyproject.toml](./pyproject.toml) · [uv.lock](./uv.lock) |
+| **SBOM & Components** *(Annex I § 1.1)* | ✅ Implemented | CycloneDX and SPDX SBOMS, Complete dependency enumeration via uv lock file | [pyproject.toml](./pyproject.toml) · [uv.lock](./uv.lock) · [SBOMs](https://trustpoint-project.github.io/trustpoint/) |
 | **Cybersecurity Controls** *(Annex I § 1.2)* | ✅ Implemented | Django authentication, PKCS#11 HSM support, TLS/mTLS enforcement | [SECURITY.md](./SECURITY.md) · Security implementation in source |
 | **Supply Chain Security** *(Annex I § 1.3)* | ✅ Implemented | GitHub Actions CI/CD, automated testing, Dependabot scanning | [.github/workflows/](./.github/workflows/) · Dependabot configuration |
 | **Update Mechanism** *(Annex I § 1.4)* | ✅ Implemented | Docker-based deployment with version tags, GitHub releases, rollback capability | [Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) · [GitHub Releases](https://github.com/Trustpoint-Project/trustpoint/releases) |
@@ -170,7 +170,7 @@ Trustpoint is a non-commercial open-source software project distributed through 
 | **§ 1.2 - Secure by Default** | [x] | Default configurations enforce TLS, require authentication, disable debug mode in production |
 | **§ 2.1 - Personal Data Protection** | [x] | Minimal personal data collection, Django privacy features, configurable data retention |
 | **§ 2.2 - Vulnerability Disclosure** | [x] | Public VDP via `SECURITY.md` with GitHub Security Advisories, 5-day response commitment |
-| **§ 2.3 - Software Bill of Materials** | [x] | Complete SBOM via `pyproject.toml` and `uv.lock`, automated dependency tracking |
+| **§ 2.3 - Software Bill of Materials** | [x] | [SBOM Portal](https://trustpoint-project.github.io/trustpoint/) |
 | **§ 2.4 - Secure Updates** | [x] | Docker image versioning, GitHub releases, backward-compatible update path |
 | **§ 2.5 - Security Monitoring** | [x] | Django logging framework, audit trails for certificate operations, configurable log levels |
 | **§ 2.6 - Security Documentation** | [x] | Comprehensive security guidance at https://trustpoint.readthedocs.io |
@@ -182,7 +182,7 @@ Trustpoint is a non-commercial open-source software project distributed through 
 Trustpoint implements standardized security reporting via `SECURITY.md`:
 
 - **Private Reporting:** GitHub Security Advisories for confidential disclosure
-- **⏱Response Timeline:** 5 business days acknowledgment, timely validation and resolution
+- **Response Timeline:** 5 business days acknowledgment, timely validation and resolution
 - **Recognition Program:** Public acknowledgment unless anonymity requested  
 - **Security Updates:** Maintained for current stable version
 - **Vulnerability Scope:** Authentication bypass, injection attacks, cryptographic weaknesses, key management issues, protocol implementation flaws
@@ -204,7 +204,7 @@ Trustpoint implements standardized security reporting via `SECURITY.md`:
 | Code Quality | Linting and formatting | ✅ Implemented | Ruff for linting and formatting |
 | Dependency Scanning | Automated vulnerability detection | ✅ Implemented | Dependabot integration |
 | Security Best Practices | Industry standards compliance | ✅ In Progress | OpenSSF Best Practices (passing) |
-| SBOM | Dependency enumeration | ✅ Implemented | pyproject.toml + uv.lock |
+| SBOM | CycloneDX & SPDX formats | ✅ Implemented | [SBOM Portal](https://trustpoint-project.github.io/trustpoint/) |
 | CI/CD Pipeline | Automated testing and validation | ✅ Implemented | GitHub Actions workflows |
 | Container Security | Secure Docker deployment | ✅ Implemented | Docker Hub automated builds |
 
@@ -224,11 +224,12 @@ Trustpoint implements standardized security reporting via `SECURITY.md`:
 
 **Project Resources:**
 - **Documentation:** https://trustpoint.readthedocs.io
+- **SBOM Portal:** https://trustpoint-project.github.io/trustpoint/ (CycloneDX & SPDX formats)
 - **Docker Hub:** https://hub.docker.com/r/trustpointproject/trustpoint
 - **Discussions:** https://github.com/orgs/Trustpoint-Project/discussions
 - **Security Policy:** https://github.com/Trustpoint-Project/trustpoint/blob/main/SECURITY.md
 
-### � Evidence Availability:
+### 📋 Evidence Availability:
 
 **Current Evidence Status:**
 - ✅ Automated test suite with coverage reporting
@@ -237,7 +238,7 @@ Trustpoint implements standardized security reporting via `SECURITY.md`:
 - ✅ Dependency vulnerability scanning via Dependabot
 - ✅ CI/CD pipeline verification via GitHub Actions
 - ✅ OpenSSF Best Practices compliance (passing level)
-- 🔄 SBOM generation (manual via uv export)
+- ✅ SBOM generation (CycloneDX & SPDX) published at [SBOM Portal](https://trustpoint-project.github.io/trustpoint/)
 - 🔄 Release attestations (to be implemented)
 - 🔄 SLSA provenance (to be implemented)
 
@@ -306,7 +307,6 @@ Trustpoint maintains security monitoring and incident response capabilities:
 - ✅ Article 11 security measures documented
 - ✅ Article 23 post-market surveillance procedures documented
 - 🔄 Release attestations (to be implemented)
-- 🔄 Formal SBOM generation (to be automated)
 - 🔄 Production-ready status (currently beta)
 
 **Outstanding Items:**
