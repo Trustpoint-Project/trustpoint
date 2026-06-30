@@ -12,12 +12,11 @@ from trustpoint_core.serializer import (
     PrivateKeyReference,
 )
 
+from crypto.runtime import configured_private_key_location
 from pki.forms.issuing_cas import (
     IssuingCaImportMixin,
     get_ca_type_from_config,
 )
-from crypto.runtime import configured_private_key_location
-
 from pki.models import CaModel
 from pki.models.ca_rollover import CaRolloverStrategyType
 from pki.rollover.base import RolloverStrategy
