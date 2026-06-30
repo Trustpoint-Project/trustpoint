@@ -23,8 +23,7 @@ from .ca import CaModel
 from .credential import (CredentialAlreadyExistsError,
                          CredentialModel,
                          CertificateChainOrderModel,
-                         OwnerCredentialModel,
-                         PKCS11Key)
+                         OwnerCredentialModel)
 from .domain import DomainModel, DomainAllowedCertificateProfileModel
 from .devid_registration import DevIdRegistration
 from .cert_profile import CertificateProfileModel
@@ -50,7 +49,6 @@ __all__ = [
     'GeneralNameIpAddress',
     'IssuedCredentialModel',
     'OwnerCredentialModel',
-    'PKCS11Key',
     'RemoteIssuedCredentialModel',
     'RevokedCertificateModel',
     'TruststoreModel',

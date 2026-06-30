@@ -9,17 +9,19 @@ from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeyLocation,
-    PrivateKeyReference,
     PrivateKeySerializer,
 )
 
-from management.models import KeyStorageConfig
+from crypto.application.capabilities import get_active_backend_capability_report
+from crypto.application.service import TrustpointCryptoBackend
+from crypto.domain.algorithms import EllipticCurveName
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.models import CryptoManagedKeyModel
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.authorization import PkiSecurityAuthorization
@@ -35,34 +37,14 @@ from util.validation import ValidationError as UtilValidationError
 from util.validation import validate_remote_ca_connection
 
 
-def get_private_key_location_from_config() -> PrivateKeyLocation:
-    """Determine the appropriate PrivateKeyLocation based on KeyStorageConfig."""
-    try:
-        storage_config = KeyStorageConfig.get_config()
-        if storage_config.storage_type in [
-            KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
-        ]:
-            return PrivateKeyLocation.HSM_PROVIDED
-    except KeyStorageConfig.DoesNotExist:
-        pass
-
-    return PrivateKeyLocation.SOFTWARE
-
-
 def get_ca_type_from_config() -> CaModel.CaTypeChoice:
-    """Determine the appropriate CA type based on KeyStorageConfig."""
-    try:
-        storage_config = KeyStorageConfig.get_config()
-        if storage_config.storage_type in [
-            KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
-        ]:
-            return CaModel.CaTypeChoice.LOCAL_PKCS11
-    except KeyStorageConfig.DoesNotExist:
-        pass
+    """Return the local managed-CA type used for newly created Trustpoint-managed CAs.
 
-    return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+    The enum name is legacy. In the new architecture we no longer derive backend
+    placement from the CA type, so locally managed CAs use one stable local type
+    until the model can be renamed in a later migration.
+    """
+    return CaModel.CaTypeChoice.LOCAL_PKCS11
 
 
 class IssuingCaImportMixin:
@@ -198,18 +180,16 @@ class IssuingCaImportMixin:
         return cert, pk
 
     def _prepare_credential_serializer(
-        self, credential_serializer: CredentialSerializer, unique_name: str | None, pk: Any
+        self, credential_serializer: CredentialSerializer, _unique_name: str | None, _pk: Any
     ) -> None:
-        """Prepares the credential serializer with private key reference."""
+        """Reject legacy serializer-level private-key placement."""
         if credential_serializer.private_key is None:
             self._raise_validation_error('Private key is missing from credential serializer.')
 
-        private_key_location = get_private_key_location_from_config()
-        credential_serializer.private_key_reference = (
-            PrivateKeyReference.from_private_key(
-                private_key=pk,
-                key_label=unique_name,
-                location=private_key_location
+        raise ValidationError(
+            _(
+                'Importing private-key-backed issuing CAs is disabled. '
+                'Generate the CA key through the configured crypto backend instead.'
             )
         )
 
@@ -320,26 +300,25 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
         return pkcs12_raw, pkcs12_password
 
     def _parse_and_prepare_credential(
-        self, pkcs12_raw: bytes, pkcs12_password: bytes | None, unique_name: str | None
+        self, pkcs12_raw: bytes, pkcs12_password: bytes | None, _unique_name: str | None
     ) -> CredentialSerializer:
         """Parses the PKCS#12 file and prepares the credential serializer."""
         try:
             credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
             if credential_serializer.private_key is None:
                 self._raise_validation_error('Private key is missing from credential serializer.')
-            private_key_location = get_private_key_location_from_config()
-            credential_serializer.private_key_reference = (
-                PrivateKeyReference.from_private_key(
-                    private_key=credential_serializer.private_key,
-                    key_label=unique_name,
-                    location=private_key_location
-                )
-            )
+        except ValidationError:
+            raise
         except Exception as exception:
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
 
-        return credential_serializer
+        raise ValidationError(
+            _(
+                'Importing private-key-backed issuing CAs is disabled. '
+                'Generate the CA key through the configured crypto backend instead.'
+            )
+        )
 
     def _validate_ca_certificate_from_serializer(self, credential_serializer: CredentialSerializer) -> x509.Certificate:
         """Validates that the certificate is a CA certificate."""
@@ -560,6 +539,15 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
 class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
 
+    KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ('RSA-2048', 'RSA 2048'),
+        ('RSA-3072', 'RSA 3072'),
+        ('RSA-4096', 'RSA 4096'),
+        ('ECC-SECP256R1', 'ECC SECP256R1'),
+        ('ECC-SECP384R1', 'ECC SECP384R1'),
+        ('ECC-SECP521R1', 'ECC SECP521R1'),
+    ]
+
     class Meta:
         """Meta class for IssuingCaAddRequestMixin."""
         model = CaModel
@@ -569,19 +557,42 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
 
     key_type = forms.ChoiceField(
         label=_('Key Type'),
-        choices=[
-            ('RSA-2048', 'RSA 2048'),
-            ('RSA-3072', 'RSA 3072'),
-            ('RSA-4096', 'RSA 4096'),
-            ('ECC-SECP256R1', 'ECC SECP256R1'),
-            ('ECC-SECP384R1', 'ECC SECP384R1'),
-            ('ECC-SECP521R1', 'ECC SECP521R1'),
-            ('ECC-SECP256K1', 'ECC SECP256K1'),
-        ],
+        choices=KEY_TYPE_CHOICES,
         initial='RSA-2048',
         required=True,
         help_text=_('Select the cryptographic key type and parameters'),
     )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize backend-capability-aware key choices."""
+        super().__init__(*args, **kwargs)
+        supported_choices = self._supported_key_type_choices()
+        key_type_field = cast('forms.ChoiceField', self.fields['key_type'])
+        if supported_choices:
+            key_type_field.choices = supported_choices
+            if key_type_field.initial not in {choice[0] for choice in supported_choices}:
+                key_type_field.initial = supported_choices[0][0]
+        else:
+            key_type_field.choices = [('', _('No supported backend algorithms available'))]
+            key_type_field.widget.attrs['disabled'] = 'disabled'
+
+    @classmethod
+    def _key_spec_for_key_type(cls, key_type: str) -> KeySpec:
+        """Map the form key type to a backend key spec."""
+        if key_type.startswith('RSA-'):
+            return RsaKeySpec(key_size=int(key_type.split('-')[1]))
+        curve_name = key_type.split('-')[1]
+        return EcKeySpec(curve=EllipticCurveName(curve_name.lower()))
+
+    @classmethod
+    def _supported_key_type_choices(cls) -> list[tuple[str, str]]:
+        """Return key type choices supported by the active backend."""
+        report = get_active_backend_capability_report()
+        return [
+            (value, label)
+            for value, label in cls.KEY_TYPE_CHOICES
+            if report.supports_key_spec(cls._key_spec_for_key_type(value))
+        ]
 
     def clean(self) -> dict[str, Any]:
         """Validate the form data."""
@@ -589,6 +600,13 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         remote_host = cleaned_data.get('remote_host')
         remote_port = cleaned_data.get('remote_port')
         remote_path = cleaned_data.get('remote_path')
+        key_type = cleaned_data.get('key_type')
+
+        supported_key_types = {value for value, _label in self._supported_key_type_choices()}
+        if not supported_key_types:
+            self.add_error('key_type', _('The active crypto backend cannot generate any supported issuing-CA key.'))
+        elif key_type not in supported_key_types:
+            self.add_error('key_type', _('The active crypto backend does not support this issuing-CA key type.'))
 
         if remote_host and remote_path:
             try:
@@ -602,30 +620,18 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     def _create_credential(self) -> CredentialModel:
         """Create and return a temporary credential for the CA."""
         key_type = self.cleaned_data['key_type']
-        if key_type.startswith('RSA-'):
-            rsa_key_size = int(key_type.split('-')[1])
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA,
-                key_size=rsa_key_size
-            )
-        else:
-            curve_name = key_type.split('-')[1]
-            named_curve = NamedCurve[curve_name.upper()]
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC,
-                named_curve=named_curve
-            )
+        key_spec = self._key_spec_for_key_type(key_type)
 
-        private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
-
-
-        cred_serializer = CredentialSerializer(
-            private_key=private_key,
-            additional_certificates=[]
+        key_ref = TrustpointCryptoBackend().generate_managed_key(
+            alias=self.cleaned_data['unique_name'],
+            key_spec=key_spec,
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
         )
-
-        return CredentialModel.save_credential_serializer(
-            cred_serializer, CredentialModel.CredentialTypeChoice.ISSUING_CA
+        return CredentialModel.save_managed_private_key_credential(
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            managed_key=CryptoManagedKeyModel.objects.get(pk=key_ref.id),
         )
 
     def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]

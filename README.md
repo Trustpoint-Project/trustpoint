@@ -159,3 +159,13 @@ We are also providing the Trustpoint as a docker-container. Please see
 [Trustpoint on Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) or follow the
 instructions in our [Trustpoint Documentation](https://trustpoint.readthedocs.io/en/latest/) to build the
 container yourself.
+
+### Local PKCS#11 Dev
+
+The local/dev PKCS#11 path now uses a dedicated SoftHSM container plus the PKCS#11 proxy client
+library inside the Trustpoint app container. ``tp_wizard.sh`` can start that separate SoftHSM
+service, provision the local token state under ``./var/hsm``, and create the active local/dev
+provider profile for the new generic PKCS#11 backend.
+
+See ``docs/source/development/pkcs11_local_dev.rst`` for the local filesystem layout, exact
+Django-shell smoke commands, and the live PKCS#11 pytest integration test command.
