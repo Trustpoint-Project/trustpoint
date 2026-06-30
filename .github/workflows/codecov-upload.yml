@@ -14,7 +14,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6  # Ensures the repository code is available.
+        uses: actions/checkout@v7  # Ensures the repository code is available.
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.

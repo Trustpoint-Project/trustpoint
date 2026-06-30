@@ -8,6 +8,7 @@ from django.core.management.base import CommandError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from management.models import UIConfig
 from pki.models import CertificateModel, CertificateProfileModel, CaModel, IssuedCredentialModel
 
 from ..views import (
@@ -26,9 +27,25 @@ class IndexViewTests(TestCase):
         self.factory = RequestFactory()
 
     def test_index_redirects_to_dashboard(self) -> None:
-        """Test that IndexView redirects to dashboard."""
+        """Test that IndexView redirects to dashboard in standard mode."""
+        ui_config = UIConfig.get_current()
+        ui_config.view_mode = UIConfig.ViewModeChoices.STANDARD
+        ui_config.save()
+
         view = IndexView()
-        assert view.pattern_name == 'home:dashboard'
+        redirect_url = view.get_redirect_url()
+        assert redirect_url == reverse('home:dashboard')
+        assert view.permanent is False
+
+    def test_index_redirects_to_simplified_overview(self) -> None:
+        """Test that IndexView redirects to simplified overview in simplified mode."""
+        ui_config = UIConfig.get_current()
+        ui_config.view_mode = UIConfig.ViewModeChoices.SIMPLIFIED
+        ui_config.save()
+
+        view = IndexView()
+        redirect_url = view.get_redirect_url()
+        assert redirect_url == reverse('home:simplified_overview')
         assert view.permanent is False
 
 

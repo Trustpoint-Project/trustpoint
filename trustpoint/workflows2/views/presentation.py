@@ -34,9 +34,9 @@ def status_badge_class(status: str | None) -> str:
     """Map a workflow status to the Bootstrap badge class used in templates."""
     value = (status or '').strip().lower()
     badge_by_group = {
-        'text-bg-success': {'ok', 'success', 'succeeded', 'done', 'completed', 'approved'},
-        'text-bg-danger': {'failed', 'error', 'rejected'},
-        'text-bg-warning': {'awaiting', 'paused', 'pending', 'expired'},
+        'text-bg-success': {'ok', 'success', 'finished', 'done', 'completed', 'approved'},
+        'text-bg-danger': {'error', 'rejected', 'timed_out'},
+        'text-bg-warning': {'awaiting', 'paused', 'pending', 'expired', 'timed out'},
         'text-bg-primary': {'running'},
         'text-bg-secondary': {'queued'},
         'text-bg-dark': {'cancelled', 'canceled'},

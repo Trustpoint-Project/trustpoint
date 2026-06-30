@@ -10,7 +10,33 @@ import {
 
 export async function createConnection(state, callbacks, fromNodeId, toNodeId) {
   const fromNode = findNode(state.normalizedGraph, fromNodeId);
-  if (!fromNode || fromNode.is_virtual) {
+  const toNode = findNode(state.normalizedGraph, toNodeId);
+  if (!fromNode || !toNode) {
+    callbacks?.onIssue?.({
+      level: 'warning',
+      message: 'Cannot create connection because one of the selected nodes is no longer available.',
+    });
+    return;
+  }
+
+  if (fromNode.is_trigger || fromNode.is_apply) {
+    if (toNode.is_virtual) {
+      callbacks?.onIssue?.({
+        level: 'warning',
+        message: 'Event and apply nodes can only connect to real workflow steps.',
+      });
+      return;
+    }
+
+    await callbacks.onSetStart(toNodeId);
+    return;
+  }
+
+  if (fromNode.is_virtual) {
+    callbacks?.onIssue?.({
+      level: 'warning',
+      message: 'Virtual targets cannot start new connections.',
+    });
     return;
   }
 
@@ -40,6 +66,15 @@ export async function createConnection(state, callbacks, fromNodeId, toNodeId) {
 
 export async function deleteCurrentSelection(state, callbacks) {
   if (state.selectedEdgeId) {
+    const selectedEdge = (state.normalizedGraph?.edges || []).find((edge) => edge.id === state.selectedEdgeId);
+    if (selectedEdge?.is_helper_edge || selectedEdge?.is_start_edge) {
+      callbacks?.onIssue?.({
+        level: 'warning',
+        message: 'The event/apply/start helper path is derived from YAML and cannot be deleted directly.',
+      });
+      return false;
+    }
+
     const { fromStep, outcome, toStep } = parseEdgeId(state.selectedEdgeId);
     await callbacks.onDeleteEdge(fromStep, toStep, outcome);
     state.selectedEdgeId = null;
@@ -48,6 +83,15 @@ export async function deleteCurrentSelection(state, callbacks) {
   }
 
   if (state.selectedNodeId) {
+    const selectedNode = findNode(state.normalizedGraph, state.selectedNodeId);
+    if (selectedNode?.is_virtual) {
+      callbacks?.onIssue?.({
+        level: 'warning',
+        message: 'Virtual graph nodes are derived from YAML and cannot be deleted.',
+      });
+      return false;
+    }
+
     const confirmed = window.confirm(
       `Delete step "${state.selectedNodeId}"?\n\nOutgoing edges will be removed. Incoming edges that targeted this step will be removed as well.`,
     );

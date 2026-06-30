@@ -59,6 +59,8 @@ LOCAL_HSM_CONTAINER_TOKEN_DIR="${LOCAL_HSM_CONTAINER_ROOT}/tokens"
 LOCAL_HSM_TOKEN_LABEL="Trustpoint-SoftHSM"
 LOCAL_HSM_PROFILE_NAME="local-dev-softhsm"
 LOCAL_HSM_METADATA_FILE="${LOCAL_HSM_CONFIG_DIR}/local-dev-token.env"
+LOCAL_HSM_RUNTIME_UID=33
+LOCAL_HSM_RUNTIME_GID=33
 
 # Timeouts
 READINESS_TIMEOUT=90
@@ -161,13 +163,26 @@ print_container_status_row(){
   printf "%-20s %-10s %-10s %s\n" "$n" "$(container_state "$n")" "$(container_health "$n")" "$(container_image "$n")"
 }
 
-fix_bind_mount_owner(){
-  local dir="$1"
-  [[ -d "$dir" ]] || return 0
+prepare_local_hsm_bind_mount(){
+  local uid="$1"
+  local gid="$2"
+
+  mkdir -p "$LOCAL_HSM_CONFIG_DIR" "$LOCAL_HSM_LIB_DIR" "$LOCAL_HSM_TOKEN_DIR"
+
+  [[ -d "$LOCAL_HSM_ROOT" ]] || return 0
   docker run --rm \
-    -v "${dir}:/target" \
+    -v "${LOCAL_HSM_ROOT}:/target" \
     debian:trixie-slim \
-    bash -lc "chown -R $(id -u):$(id -g) /target"
+    bash -lc "
+      set -e
+      mkdir -p /target/config /target/lib /target/tokens
+      chown -R ${uid}:${gid} /target
+      chmod 0755 /target /target/config /target/lib
+      chmod 0700 /target/tokens
+      find /target/config -maxdepth 1 -type f -name '*.env' -exec chmod 0644 {} +
+      find /target/config -maxdepth 1 -type f \\( -name '*pin*.txt' -o -name '*PIN*.txt' \\) -exec chmod 0600 {} +
+      find /target/config -maxdepth 1 -type f ! -name '*.env' ! -name '*pin*.txt' ! -name '*PIN*.txt' -exec chmod 0640 {} +
+    "
 }
 
 purge_bind_mount_dir(){
@@ -537,14 +552,11 @@ step_local_hsm(){
 prepare_local_hsm_root(){
   $EN_LOCAL_HSM || return 0
 
-  mkdir -p "$LOCAL_HSM_CONFIG_DIR" "$LOCAL_HSM_LIB_DIR" "$LOCAL_HSM_TOKEN_DIR"
-
-  # Normalize ownership so a non-root SoftHSM container can reuse files
-  # created by older root-based runs without requiring host sudo.
-  fix_bind_mount_owner "$LOCAL_HSM_ROOT"
-
-  chmod 750 "$LOCAL_HSM_ROOT" "$LOCAL_HSM_CONFIG_DIR" "$LOCAL_HSM_LIB_DIR" 2>/dev/null || true
-  chmod 700 "$LOCAL_HSM_TOKEN_DIR" 2>/dev/null || true
+  # The local SoftHSM volume is owned by the same uid/gid used by Trustpoint's
+  # www-data runtime. The SoftHSM container runs as this identity from startup,
+  # so restart safety is a property of the topology rather than an entrypoint
+  # repair step.
+  prepare_local_hsm_bind_mount "$LOCAL_HSM_RUNTIME_UID" "$LOCAL_HSM_RUNTIME_GID"
 }
 
 local_hsm_value(){
@@ -557,8 +569,15 @@ local_hsm_value(){
 local_hsm_user_pin(){
   local pin_file="${LOCAL_HSM_CONFIG_DIR}/user-pin.txt"
 
-  [[ -f "$pin_file" ]] || return 0
-  tr -d '\r\n' < "$pin_file"
+  if [[ -r "$pin_file" ]]; then
+    tr -d '\r\n' < "$pin_file"
+    return 0
+  fi
+
+  if exists "$SOFTHSM_NAME"; then
+    docker exec "$SOFTHSM_NAME" sh -c \
+      "tr -d '\\r\\n' < '${LOCAL_HSM_CONTAINER_CONFIG_DIR}/user-pin.txt'" 2>/dev/null || true
+  fi
 }
 
 print_local_hsm_wizard_handoff(){
@@ -828,7 +847,7 @@ start_softhsm(){
 
   log "Starting separate SoftHSM PKCS#11 proxy server container..."
   docker run -d --name "$name" --network "$NET" \
-    --user "$(id -u):$(id -g)" \
+    --user "${LOCAL_HSM_RUNTIME_UID}:${LOCAL_HSM_RUNTIME_GID}" \
     -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}" \
     -v "${LOCAL_HSM_TOKEN_DIR}:${LOCAL_HSM_CONTAINER_TOKEN_DIR}" \
     -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}" \

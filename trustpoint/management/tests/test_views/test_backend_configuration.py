@@ -103,7 +103,7 @@ class BackendConfigurationViewTest(TestCase):
         )
         pkcs11_config = CryptoProviderPkcs11ConfigModel.objects.create(
             profile=profile,
-            module_path='/opt/vendor/libpkcs11.so',
+            module_path='/opt/provider/libpkcs11.so',
             token_label='',
             token_serial='serial-1',  # noqa: S106
             slot_id=1,
@@ -126,7 +126,7 @@ class BackendConfigurationViewTest(TestCase):
         )
         CryptoProviderPkcs11ConfigModel.objects.create(
             profile=profile,
-            module_path='/opt/vendor/libpkcs11.so',
+            module_path='/opt/provider/libpkcs11.so',
             token_label='token',  # noqa: S106
             auth_source=Pkcs11AuthSource.FILE,
             auth_source_ref='/var/lib/trustpoint/pin',

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from crypto.domain.specs import KeySpec
 
 
-def _hash_algorithm_name(algorithm: HashAlgorithm | utils.Prehashed) -> HashAlgorithmName:
+def _hash_algorithm_name(algorithm: HashAlgorithm | utils.Prehashed | utils.NoDigestInfo) -> HashAlgorithmName:
     """Map cryptography hash algorithm objects to the backend contract."""
     hash_algorithm = cast('HashAlgorithm', getattr(algorithm, '_algorithm', algorithm))
     name = hash_algorithm.name.lower()
@@ -55,7 +55,7 @@ class ManagedRSAPrivateKey(rsa.RSAPrivateKey):
         self,
         data: bytes | bytearray | memoryview,
         padding_algorithm: padding.AsymmetricPadding,
-        algorithm: HashAlgorithm | utils.Prehashed,
+        algorithm: HashAlgorithm | utils.Prehashed | utils.NoDigestInfo,
     ) -> bytes:
         """Sign data through the configured backend."""
         if not isinstance(padding_algorithm, padding.PKCS1v15):
@@ -114,6 +114,10 @@ class ManagedRSAPrivateKey(rsa.RSAPrivateKey):
 
     def __copy__(self) -> ManagedRSAPrivateKey:
         """Return this immutable facade when copied by cryptography callers."""
+        return self
+
+    def __deepcopy__(self, memo: dict[Any, Any]) -> ManagedRSAPrivateKey:
+        """Return this immutable facade when deep-copied by cryptography callers."""
         return self
 
 
@@ -202,6 +206,10 @@ class ManagedECPrivateKey(ec.EllipticCurvePrivateKey):
 
     def __copy__(self) -> ManagedECPrivateKey:
         """Return this immutable facade when copied by cryptography callers."""
+        return self
+
+    def __deepcopy__(self, memo: dict[Any, Any]) -> ManagedECPrivateKey:
+        """Return this immutable facade when deep-copied by cryptography callers."""
         return self
 
 

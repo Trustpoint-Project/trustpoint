@@ -9,7 +9,9 @@
         <h1>{% trans 'Domains' %}</h1>
     </div>
 
-    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
+    {% include 'pki/domains/table_filter.html' with table_url='pki:domains' %}
+
+    <div class="card-body text-start pt-0" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
         <table class="table">
             <thead>
             <tr>

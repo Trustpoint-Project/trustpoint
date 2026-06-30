@@ -35,7 +35,7 @@ jobs:
           /usr/lib/postgresql/18/bin/pg_restore --version
       
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Build and start PostgreSQL
         run: |

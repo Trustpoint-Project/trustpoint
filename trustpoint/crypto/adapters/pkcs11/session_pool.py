@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class Pkcs11SessionPool(LoggerMixin):
     """Thread-safe pool for reusable PKCS#11 sessions.
 
-    This pool is intentionally generic and does not encode vendor-specific
+    This pool is intentionally generic and does not encode provider-specific
     behavior. It does, however, tolerate the common PKCS#11 behavior where
     login state is token-global and opening a second session with a PIN raises
     UserAlreadyLoggedIn.

@@ -7,53 +7,64 @@
 {% endblock head %}
 {% block content %}
 
-<div class="container-fluid py-3">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+<div class="container-fluid py-3 wf2-list-page">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 wf2-list-header">
     <div>
-      <h1 class="h4 mb-0">{% trans "Workflow Runs" %}</h1>
-      <div class="text-muted small">{% trans "Trigger executions and their resulting workflow instances." %}</div>
+      <h1 class="h4 mb-0 wf2-list-title">{% trans "Workflow Runs" %}</h1>
+      <div class="small wf2-list-subtitle">{% trans "Trigger executions and their resulting workflow instances." %}</div>
     </div>
   </div>
 
   <div class="row g-3 mb-3">
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Visible runs" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_total }}</div>
+          <div class="wf2-metric-label">{% trans "Visible runs" %}</div>
+          <div class="wf2-metric-value">{{ summary_total }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Active" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_active }}</div>
+          <div class="wf2-metric-label">{% trans "Active" %}</div>
+          <div class="wf2-metric-value">{{ summary_active }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Awaiting" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_awaiting }}</div>
+          <div class="wf2-metric-label">{% trans "Awaiting" %}</div>
+          <div class="wf2-metric-value">{{ summary_awaiting }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Completed" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_completed }}</div>
+          <div class="wf2-metric-label">{% trans "Completed" %}</div>
+          <div class="wf2-metric-value">{{ summary_completed }}</div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="card mb-3">
+  <div class="card mb-3 wf2-filter-card">
     <div class="card-body">
       <form method="get" class="row g-3 align-items-end">
-        <div class="col-12 col-lg-3">
+        <div class="col-12 col-xl-5">
+          <label class="form-label">{% trans "Search" %}</label>
+          <input
+            class="form-control"
+            type="search"
+            name="q"
+            value="{{ query }}"
+            placeholder="{% trans 'Device, workflow, event, CA, domain, run ID...' %}"
+          >
+        </div>
+
+        <div class="col-6 col-xl-3">
           <label class="form-label">{% trans "Status" %}</label>
           <select name="status" class="form-select">
             <option value="">{% trans "All" %}</option>
@@ -63,7 +74,17 @@
           </select>
         </div>
 
-        <div class="col-12 col-lg-6">
+        <div class="col-6 col-xl-3">
+          <label class="form-label">{% trans "Request lock" %}</label>
+          <select name="idempotency" class="form-select">
+            <option value="" {% if not idempotency %}selected{% endif %}>{% trans "All" %}</option>
+            <option value="locked" {% if idempotency == "locked" %}selected{% endif %}>{% trans "Locked" %}</option>
+            <option value="released" {% if idempotency == "released" %}selected{% endif %}>{% trans "Released" %}</option>
+            <option value="manual" {% if idempotency == "manual" %}selected{% endif %}>{% trans "Released manually" %}</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-xl-8">
           <label class="form-label">{% trans "Trigger" %}</label>
           <details class="border rounded p-2">
             <summary class="d-flex align-items-center justify-content-between gap-2 wf2-details-summary">
@@ -93,14 +114,18 @@
           </details>
         </div>
 
-        <div class="col-12 col-lg-3">
+        <div class="col-12 col-xl-2">
           <button class="btn btn-primary w-100" type="submit">{% trans "Apply filters" %}</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card wf2-table-card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="wf2-table-title">{% trans "Runs" %}</div>
+      <div class="small text-muted">{{ summary_total }} {% trans "visible" %}</div>
+    </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead>
@@ -108,19 +133,20 @@
             <th>{% trans "State" %}</th>
             <th>{% trans "Run ID" %}</th>
             <th>
-              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}{% for trigger in selected_triggers %}trigger_on={{ trigger|urlencode }}&{% endfor %}sort={% if sort == 'trigger' %}trigger_desc{% else %}trigger{% endif %}">
+              <a class="link-body-emphasis text-decoration-none" href="?{% if query_without_sort %}{{ query_without_sort }}&{% endif %}sort={% if sort == 'trigger' %}trigger_desc{% else %}trigger{% endif %}">
                 {% trans "Trigger" %}
               </a>
             </th>
             <th>{% trans "Source" %}</th>
             <th>{% trans "Instances" %}</th>
+            <th>{% trans "Request lock" %}</th>
             <th>
-              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}{% for trigger in selected_triggers %}trigger_on={{ trigger|urlencode }}&{% endfor %}sort={% if sort == 'updated' %}updated_asc{% else %}updated{% endif %}">
+              <a class="link-body-emphasis text-decoration-none" href="?{% if query_without_sort %}{{ query_without_sort }}&{% endif %}sort={% if sort == 'updated' %}updated_asc{% else %}updated{% endif %}">
                 {% trans "Updated" %}
               </a>
             </th>
             <th>
-              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}{% for trigger in selected_triggers %}trigger_on={{ trigger|urlencode }}&{% endfor %}sort={% if sort == 'created' %}created_asc{% else %}created{% endif %}">
+              <a class="link-body-emphasis text-decoration-none" href="?{% if query_without_sort %}{{ query_without_sort }}&{% endif %}sort={% if sort == 'created' %}created_asc{% else %}created{% endif %}">
                 {% trans "Created" %}
               </a>
             </th>
@@ -148,6 +174,9 @@
                   <div class="text-muted small">{% trans "No instances were created." %}</div>
                 {% endif %}
               </td>
+              <td>
+                <span class="badge {{ row.idempotency_badge }}">{{ row.idempotency_label }}</span>
+              </td>
               <td>{{ row.run.updated_at|date:"Y-m-d H:i" }}</td>
               <td>{{ row.run.created_at|date:"Y-m-d H:i" }}</td>
               <td class="text-end">
@@ -158,7 +187,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="8" class="text-center text-muted py-4">{% trans "No runs found." %}</td>
+              <td colspan="9" class="wf2-empty-row">{% trans "No runs found." %}</td>
             </tr>
           {% endfor %}
         </tbody>

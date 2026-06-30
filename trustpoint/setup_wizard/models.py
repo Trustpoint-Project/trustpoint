@@ -352,13 +352,17 @@ class SetupWizardConfigModel(models.Model):
     fresh_install_pkcs11_config_path = models.TextField(
         blank=True,
         default='',
-        help_text='Optional vendor PKCS#11 configuration file staged during the fresh-install wizard.',
+        help_text='Optional provider PKCS#11 configuration file staged during the fresh-install wizard.',
     )
     fresh_install_pkcs11_config_env_var = models.CharField(
         max_length=128,
         blank=True,
         default='',
-        help_text='Environment variable that points the PKCS#11 library to the vendor configuration file.',
+        help_text='Environment variable that points the PKCS#11 library to the provider configuration file.',
+    )
+    fresh_install_pkcs11_enforce_app_secret_protection = models.BooleanField(
+        default=True,
+        help_text='Require the PKCS#11 backend to protect the application-secret DEK during fresh install.',
     )
 
     inject_demo_data = models.BooleanField(null=False, blank=False, help_text='Inject demo data.', default=True)

@@ -981,6 +981,17 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         """
         return self
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> 'Pkcs11RSAPrivateKey':
+        """Return the same instance since deep copying is not supported for PKCS#11 keys.
+
+        Args:
+            memo: Deep copy memo dictionary.
+
+        Returns:
+            Pkcs11RSAPrivateKey: The current instance.
+        """
+        return self
+
 
 class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
     """PKCS#11-backed Elliptic Curve (EC) private key implementation.
@@ -1490,3 +1501,15 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             Pkcs11ECPrivateKey: The current instance.
         """
         return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> 'Pkcs11ECPrivateKey':
+        """Return the same instance since deep copying is not supported for PKCS#11 keys.
+
+        Args:
+            memo: Deep copy memo dictionary.
+
+        Returns:
+            Pkcs11ECPrivateKey: The current instance.
+        """
+        return self
+

@@ -5,9 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import re
 import secrets
-import socket
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -374,32 +372,23 @@ class Pkcs11Backend(LoggerMixin):
                 raise ProviderUnavailableError(msg) from full_scan_error
 
     def _log_runtime_diagnostics(self, level: int = logging.DEBUG) -> None:
-        """Log non-secret runtime facts useful for diagnosing vendor PKCS#11 load failures."""
+        """Log non-secret runtime facts useful for diagnosing PKCS#11 module load failures."""
         if not self.logger.isEnabledFor(level):
             return
 
         module_path = self._profile.module_path
         module_exists = Path(module_path).is_file()
         module_readable = os.access(module_path, os.R_OK)
-        config_env = self._known_vendor_config_env()
-        config_path = os.getenv(config_env, '').strip() if config_env is not None else ''
-        config_exists = bool(config_path and Path(config_path).is_file())
-        config_readable = bool(config_path and os.access(config_path, os.R_OK))
-        tcp_targets = self._probe_utimaco_config_targets(config_path) if config_readable else []
+        provider_config_envs = self._provider_config_envs()
 
         self.logger.log(
             level,
             'PKCS#11 runtime diagnostics: module_path=%r module_exists=%s module_readable=%s '
-            'vendor_config_env=%r vendor_config_path=%r vendor_config_exists=%s vendor_config_readable=%s '
-            'tcp_targets=%s uid=%s gid=%s',
+            'provider_config_envs=%s uid=%s gid=%s',
             module_path,
             module_exists,
             module_readable,
-            config_env,
-            config_path,
-            config_exists,
-            config_readable,
-            tcp_targets,
+            provider_config_envs,
             os.geteuid(),
             os.getegid(),
         )
@@ -413,36 +402,46 @@ class Pkcs11Backend(LoggerMixin):
         return type(error).__name__
 
     @staticmethod
-    def _known_vendor_config_env() -> str | None:
-        """Return the configured known vendor PKCS#11 config env var, if any."""
-        for env_name in ('CS_PKCS11_R3_CFG', 'CHRYSTOKI_CONF', 'ET_HSM_NETCLIENT_SERVERLIST'):
-            if os.getenv(env_name, '').strip():
-                return env_name
-        return 'CS_PKCS11_R3_CFG'
+    def _provider_config_envs() -> list[dict[str, object]]:
+        """Return non-secret diagnostics for provider config env vars.
 
-    @staticmethod
-    def _probe_utimaco_config_targets(config_path: str) -> list[str]:
-        """Return non-secret TCP reachability diagnostics for Utimaco Device entries."""
+        PKCS#11 itself does not define a standard provider-config environment
+        variable. During setup, Trustpoint exports the operator-provided env var
+        name to the installed config file. For diagnostics we report only env
+        vars that point at readable files under Trustpoint's HSM config area.
+        """
+        hsm_config_dir = os.getenv('TRUSTPOINT_HSM_CONFIG_DIR', '/var/lib/trustpoint/hsm/config')
         try:
-            config_text = Path(config_path).read_text(encoding='utf-8', errors='ignore')
+            config_root = Path(hsm_config_dir).resolve()
         except OSError:
             return []
 
-        diagnostics: list[str] = []
-        for match in re.finditer(r'^\s*Device\s*=\s*(?P<port>\d+)@(?P<host>[^\s#;]+)', config_text, re.MULTILINE):
-            host = match.group('host')
-            port = int(match.group('port'))
-            diagnostics.append(Pkcs11Backend._probe_tcp_target(host=host, port=port))
-        return diagnostics
-
-    @staticmethod
-    def _probe_tcp_target(*, host: str, port: int) -> str:
-        """Return a concise TCP reachability result for a configured HSM endpoint."""
-        try:
-            with socket.create_connection((host, port), timeout=2.0):
-                return f'{host}:{port}=reachable'
-        except OSError as exc:
-            return f'{host}:{port}=unreachable({type(exc).__name__})'
+        diagnostics: list[dict[str, object]] = []
+        for env_name, raw_path in os.environ.items():
+            normalized_env_name = env_name.upper()
+            if not any(marker in normalized_env_name for marker in ('CONFIG', 'CFG', 'CONF')):
+                continue
+            config_path = raw_path.strip()
+            if not config_path:
+                continue
+            path = Path(config_path)
+            if not path.is_absolute():
+                continue
+            try:
+                resolved_path = path.resolve()
+            except OSError:
+                continue
+            if config_root not in resolved_path.parents:
+                continue
+            diagnostics.append(
+                {
+                    'env': env_name,
+                    'path': str(resolved_path),
+                    'exists': resolved_path.is_file(),
+                    'readable': os.access(resolved_path, os.R_OK),
+                }
+            )
+        return sorted(diagnostics, key=lambda item: str(item['env']))
 
     def _candidates_from_slots(self, slots: list[Slot]) -> list[TokenCandidate]:
         """Return slot/token pairs for slots that currently expose a token."""

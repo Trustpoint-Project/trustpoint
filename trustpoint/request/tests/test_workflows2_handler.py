@@ -21,7 +21,7 @@ def _create_rejected_request_run(*, trigger_on: str) -> Workflow2Run:
         trigger_on=trigger_on,
         event_json={'x': 1},
         source_json={'trustpoint': True},
-        status=Workflow2Run.STATUS_SUCCEEDED,
+        status=Workflow2Run.STATUS_FINISHED,
         finalized=True,
     )
     definition = Workflow2Definition.objects.create(
@@ -37,7 +37,7 @@ def _create_rejected_request_run(*, trigger_on: str) -> Workflow2Run:
         definition=definition,
         event_json={'x': 1},
         vars_json={},
-        status=Workflow2Instance.STATUS_SUCCEEDED,
+        status=Workflow2Instance.STATUS_FINISHED,
     )
     Workflow2Approval.objects.create(
         instance=instance,
@@ -153,7 +153,7 @@ def test_workflows2_handler_marks_est_gate_applied_on_success(test_csr_fixture) 
     )
 
     run = Mock()
-    run.status = Workflow2Run.STATUS_SUCCEEDED
+    run.status = Workflow2Run.STATUS_FINISHED
     outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
@@ -226,7 +226,7 @@ def test_workflows2_handler_emits_est_simplereenroll_from_request_context(test_c
     )
 
     run = Mock()
-    run.status = Workflow2Run.STATUS_SUCCEEDED
+    run.status = Workflow2Run.STATUS_FINISHED
     outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
@@ -266,7 +266,7 @@ def test_workflows2_handler_emits_rest_enroll_from_request_context(test_csr_fixt
     )
 
     run = Mock()
-    run.status = Workflow2Run.STATUS_SUCCEEDED
+    run.status = Workflow2Run.STATUS_FINISHED
     outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
@@ -310,7 +310,7 @@ def test_workflows2_handler_emits_cmp_initialization_from_request_context() -> N
     )
 
     run = Mock()
-    run.status = Workflow2Run.STATUS_SUCCEEDED
+    run.status = Workflow2Run.STATUS_FINISHED
     outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
@@ -362,7 +362,7 @@ def test_workflows2_handler_cmp_idempotency_uses_cmp_body_not_transaction_id() -
     )
 
     run = Mock()
-    run.status = Workflow2Run.STATUS_SUCCEEDED
+    run.status = Workflow2Run.STATUS_FINISHED
     outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
@@ -406,7 +406,7 @@ def test_workflows2_handler_emits_cmp_certification_from_request_context() -> No
     )
 
     run = Mock()
-    run.status = Workflow2Run.STATUS_SUCCEEDED
+    run.status = Workflow2Run.STATUS_FINISHED
     outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
@@ -440,7 +440,7 @@ def test_workflows2_handler_emits_device_created_from_request_context() -> None:
     )
 
     run = Mock()
-    run.status = Workflow2Run.STATUS_SUCCEEDED
+    run.status = Workflow2Run.STATUS_FINISHED
     outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
@@ -490,7 +490,7 @@ def test_workflows2_handler_emits_device_updated_from_request_context() -> None:
     )
 
     run = Mock()
-    run.status = Workflow2Run.STATUS_SUCCEEDED
+    run.status = Workflow2Run.STATUS_FINISHED
     outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
@@ -532,7 +532,7 @@ def test_workflows2_handler_emits_device_deleted_from_request_context() -> None:
     )
 
     run = Mock()
-    run.status = Workflow2Run.STATUS_SUCCEEDED
+    run.status = Workflow2Run.STATUS_FINISHED
     outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:

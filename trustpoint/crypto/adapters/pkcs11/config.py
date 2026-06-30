@@ -53,7 +53,7 @@ class Pkcs11TokenSelector:
         """Return whether a discovered slot/token matches this selector.
 
         Selector priority is explicit: slot id first, then serial, then label.
-        This keeps a stale vendor slot id from making a still-identifiable token
+        This keeps a stale slot id from making a still-identifiable token
         unreachable after a restart or proxy-layer change.
         """
         normalized_label = _normalize_pkcs11_text(token_label)
