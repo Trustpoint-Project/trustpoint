@@ -9,21 +9,25 @@ services:
     ports:
       - "${TP_HTTP_PORT:-80}:80"
       - "${TP_HTTPS_PORT:-443}:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:
+      TRUSTPOINT_PHASE: "${TRUSTPOINT_PHASE:-auto}"
       POSTGRES_DB: "${POSTGRES_DB:-trustpoint_db}"
       DATABASE_USER: "${DATABASE_USER:-admin}"
       DATABASE_PASSWORD: "${DATABASE_PASSWORD:-testing321}"
       DATABASE_HOST: "${DATABASE_HOST:-postgres}"
       DATABASE_PORT: "${DATABASE_PORT:-5432}"
+      TP_URLS: ${TP_URLS}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsk --max-time 5 https://localhost/ > /dev/null"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 90s
-    
+
   trustpoint-worker:
     build:
       context: .
@@ -36,6 +40,7 @@ services:
     env_file:
       - .env
     environment:
+      TRUSTPOINT_PHASE: "${TRUSTPOINT_PHASE:-auto}"
       POSTGRES_DB: "${POSTGRES_DB:-trustpoint_db}"
       DATABASE_USER: "${DATABASE_USER:-admin}"
       DATABASE_PASSWORD: "${DATABASE_PASSWORD:-testing321}"
@@ -68,3 +73,7 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  default:
+    name: trustpoint-net

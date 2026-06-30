@@ -186,11 +186,6 @@ class TestOpcUaGdsPushCreateChooseOnboardingView:
 
     def test_opcua_gds_push_create_choose_onboarding_get(self, admin_client: Client) -> None:
         """Test GET request to OPC UA GDS Push create choose onboarding view."""
-        from management.models import KeyStorageConfig
-
-        # Ensure SOFTWARE storage is configured
-        KeyStorageConfig.get_or_create_default()
-
         url = reverse('devices:opc_ua_gds_push_create_redirect')
         response = admin_client.get(url, follow=True)
 
@@ -374,9 +369,6 @@ class TestOpcUaGdsPushCreateOnboardingView:
 
     def test_opcua_gds_push_create_onboarding_get(self, admin_client: Client) -> None:
         """Test GET request to OPC UA GDS Push create onboarding view."""
-        from management.models import KeyStorageConfig
-        KeyStorageConfig.get_or_create_default()
-
         url = reverse('devices:opc_ua_gds_push_create_onboarding_redirect')
         response = admin_client.get(url, follow=True)
 
@@ -389,9 +381,6 @@ class TestOpcUaGdsPushCreateOnboardingView:
         domain_instance: dict[str, Any]
     ) -> None:
         """Test that OPC UA GDS Push view creates OPC UA GDS Push device with onboarding."""
-        from management.models import KeyStorageConfig
-        KeyStorageConfig.get_or_create_default()
-
         domain = domain_instance['domain']
 
         post_data = {

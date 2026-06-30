@@ -53,7 +53,7 @@ INVALID_YAML = """\
 schema: trustpoint.workflow.v2
 name: Bad
 workflow:
-  start: 
+  start:
 """
 
 
