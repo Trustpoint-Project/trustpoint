@@ -76,7 +76,6 @@ AES Key Operations
 **Encryption/Decryption Operations**:
 - DEK protection with standard PKCS#11 AES key wrap/unwrap mechanisms when available
 - Fallback DEK protection with AES-CBC-PAD or AES-CBC C_Encrypt/C_Decrypt
-- Last-resort DEK protection with AES-ECB C_Encrypt/C_Decrypt for providers that expose no key-wrap or CBC mechanism
 
 General HSM Operations
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -168,16 +167,36 @@ Fresh-install wizard behavior
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Selecting the PKCS#11 crypto backend in the setup wizard configures managed
-signing keys on the PKCS#11 token. Application-secret encryption is configured
-with Trustpoint's software app-secret backend by default. This keeps setup
-compatible with tokens that expose signing/key-generation mechanisms but do not
-expose AES key-wrap or AES encryption mechanisms.
+signing keys on the PKCS#11 token. By default, Trustpoint also requires the
+token to protect the application-secret DEK. Setup is refused when the token can
+authenticate and generate signing keys but cannot protect and recover the DEK
+with supported PKCS#11 AES flows.
 
-Operators can enable the setup policy option to require PKCS#11 protection for
-application secrets. When enabled, Trustpoint refuses setup unless the token can
-protect and recover the application-secret DEK with supported PKCS#11 AES flows.
-The DEK is recovered through the HSM-backed KEK at startup and then cached
-in-process; per-field encryption still uses local AES-256-GCM.
+Operators can disable this policy in the wizard when the token should only
+manage signing keys. In that mode, application secrets use Trustpoint's software
+app-secret backend for compatibility with signing-only tokens.
+
+When PKCS#11 application-secret protection is enabled, the DEK is recovered
+through the HSM-backed KEK at startup and then cached in-process. Per-field
+encryption still uses local AES-256-GCM.
+
+Protected imported keys
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Trustpoint normally generates signing authority keys through the configured
+crypto backend. Existing private-key credentials can be imported only when the
+operator explicitly enables protected imports:
+
+.. code-block:: bash
+
+   TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS=true
+
+Protected imported keys require both the PKCS#11 crypto backend and PKCS#11
+application-secret protection. The imported private key is encrypted with the
+application-secret DEK and stored in the Trustpoint database as a managed-key
+binding. It is not imported into the HSM token. Trustpoint accesses it only
+through the crypto backend service API, so PKI code uses the same managed-key
+interface for generated and protected imported keys.
 
 Docker Integration
 ------------------

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from unittest.mock import patch
 
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from django.test import override_settings
 
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
 from crypto.adapters.pkcs11.bindings import (
     Pkcs11ManagedKeyBinding,
     Pkcs11ManagedKeyVerification,
@@ -20,6 +24,7 @@ from crypto.models import (
     BackendKind,
     CryptoManagedKeyModel,
     CryptoManagedKeyPkcs11BindingModel,
+    CryptoManagedKeyProtectedImportBindingModel,
     CryptoProviderPkcs11ConfigModel,
     CryptoProviderProfileModel,
     ManagedKeyStatus,
@@ -204,6 +209,58 @@ def test_sign_routes_through_persisted_pkcs11_binding() -> None:
     assert binding.provider_label == 'signer/rsa'
     assert payload == b'payload'
     assert request.signature_algorithm is SignRequest.rsa_pkcs1v15_sha256().signature_algorithm
+
+
+@pytest.mark.django_db
+@override_settings(TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS=True)
+def test_imported_private_key_is_stored_as_protected_binding_and_signs_locally() -> None:
+    """Imported private keys are protected by app-secret storage and routed through the backend API."""
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+    AppSecretBackendModel.objects.update_or_create(
+        singleton_id=AppSecretBackendModel.SINGLETON_ID,
+        defaults={'backend_kind': AppSecretBackendKind.PKCS11},
+    )
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    adapter = FakeAdapter(
+        public_key=private_key.public_key(),
+        generated_binding=Pkcs11ManagedKeyBinding(
+            key_id=b'\x10\x20',
+            algorithm=KeyAlgorithm.RSA,
+        ),
+    )
+    backend = _backend_with_adapter(adapter)
+
+    with (
+        patch('crypto.application.service.get_app_secret_service') as mock_get_app_secret_service,
+        patch('crypto.application.protected_import.encrypt_app_secret', side_effect=lambda value: value),
+        patch('crypto.application.protected_import.decrypt_app_secret', side_effect=lambda value: value),
+    ):
+        mock_get_app_secret_service.return_value.ensure_backend_ready.return_value = None
+        key_ref = backend.import_managed_private_key(
+            alias='imported/issuing-ca',
+            private_key=private_key,
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
+        )
+
+        signature = backend.sign(
+            key=key_ref,
+            data=b'payload',
+            request=SignRequest.rsa_pkcs1v15_sha256(),
+        )
+        resolved_public_key = backend.get_public_key(key_ref)
+
+    managed_key = CryptoManagedKeyModel.objects.get(pk=key_ref.id)
+    binding = CryptoManagedKeyProtectedImportBindingModel.objects.get(managed_key=managed_key)
+
+    assert managed_key.provider_profile_id == profile.pk
+    assert managed_key.alias == 'imported/issuing-ca'
+    assert resolved_public_key.public_numbers() == private_key.public_key().public_numbers()
+    assert binding.key_handle
+    assert binding.encrypted_private_key_pkcs8_der_b64
+    assert adapter.sign_calls == []
+    private_key.public_key().verify(signature, b'payload', padding.PKCS1v15(), hashes.SHA256())
 
 
 @pytest.mark.django_db
