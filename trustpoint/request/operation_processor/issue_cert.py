@@ -13,7 +13,9 @@ from devices.issuer import CredentialSaver
 from management.models import TlsSettings
 from management.models.audit_log import AuditLog
 from pki.models import CaModel, IssuedCredentialModel
+from pki.models.ca_rollover import CaRolloverState
 from pki.models.credential import CredentialModel
+from pki.services.ca_rollover import CaRolloverService
 from pki.util.keys import is_supported_public_key
 from request.clients.est_client import EstClient
 from request.request_context import (
@@ -118,7 +120,7 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
 
         return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, profile_display_name)
 
-class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
+class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
     """Operation processor for issuing certificates via a local CA."""
 
     def _get_crl_distribution_point_url(self, context: BaseRequestContext, ca_id: int) -> str:
@@ -194,7 +196,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             actor=context.actor,
         )
 
-    def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
+    def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0912, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
         """Process the certificate issuance operation."""
         if not isinstance(context, BaseCertificateRequestContext):
             exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
@@ -214,6 +216,17 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
 
         cert_req = context.cert_requested
         ca = context.domain.get_issuing_ca_or_value_error()
+
+        active_rollover = CaRolloverService.get_active_rollover(ca)
+        if (active_rollover
+            and active_rollover.state == CaRolloverState.TRANSITION
+            and active_rollover.new_issuing_ca
+            and active_rollover.new_issuing_ca.credential):
+            ca = active_rollover.new_issuing_ca
+            self.logger.info(
+                'Using new CA for certificate signing (rollover in TRANSITION state)'
+            )
+
         public_key = cert_req._public_key if isinstance(cert_req, x509.CertificateBuilder) else cert_req.public_key()  # noqa: SLF001
 
         if not is_supported_public_key(public_key):
