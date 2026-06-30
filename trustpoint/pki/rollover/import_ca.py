@@ -15,8 +15,9 @@ from trustpoint_core.serializer import (
 from pki.forms.issuing_cas import (
     IssuingCaImportMixin,
     get_ca_type_from_config,
-    get_private_key_location_from_config,
 )
+from crypto.runtime import configured_private_key_location
+
 from pki.models import CaModel
 from pki.models.ca_rollover import CaRolloverStrategyType
 from pki.rollover.base import RolloverStrategy
@@ -114,7 +115,7 @@ class ImportCaRolloverForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
         self._validate_ca_certificate(cert_crypto)
         self._check_duplicate_issuing_ca(cert_crypto)
 
-        private_key_location = get_private_key_location_from_config()
+        private_key_location = configured_private_key_location()
         credential_serializer.private_key_reference = PrivateKeyReference.from_private_key(
             private_key=pk,
             key_label=unique_name,
