@@ -86,7 +86,7 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
         for extension in csr.extensions:
             csr_builder = csr_builder.add_extension(extension.value, extension.critical)
 
-        private_key = signing_credential.get_private_key_serializer().as_crypto()
+        private_key = signing_credential.get_private_key()
         self._signed_csr = csr_builder.sign(private_key=private_key, algorithm=hash_algorithm)
 
         if signing_credential.certificate:

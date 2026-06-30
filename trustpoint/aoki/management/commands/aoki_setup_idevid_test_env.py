@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.ed448 import Ed448PrivateKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
@@ -114,8 +114,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             )
             return CaModel.objects.get(unique_name=ISSUING_CA_UNIQUE_NAME)
 
-        root_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        issuing_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        root_key = self.create_backend_rsa_private_key(alias=f'{ISSUING_CA_UNIQUE_NAME}-root', key_size=2048)
+        issuing_key = self.create_backend_rsa_private_key(alias=ISSUING_CA_UNIQUE_NAME, key_size=2048)
 
         root_cn = f'{ISSUING_CA_UNIQUE_NAME} Root CA'
         root_cert, _ = self.create_root_ca(
