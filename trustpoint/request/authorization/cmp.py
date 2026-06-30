@@ -4,7 +4,7 @@ from typing import Never
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
 from cmp.models import CmpTransactionModel
-from cmp.util import PKIFailureInfo
+from cmp.util import PKI_STATUS_REJECTION, PKIFailureInfo
 from pki.models import IssuedCredentialModel
 from request.cmp_transaction_state import CmpTransactionState
 from request.request_context import (
@@ -147,9 +147,7 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
         if not isinstance(context, CmpCertConfRequestContext):
             return
 
-        # PKIStatus value 2 means "rejection" per RFC 4210 Section 5.2.3.
-        pki_status_rejection = 2
-        if context.cert_conf_status != pki_status_rejection:
+        if context.cert_conf_status != PKI_STATUS_REJECTION:
             self.logger.debug('certConf: status is accepted (or absent) — no credential lookup required.')
             return
 

@@ -290,37 +290,30 @@ class CmpRevocationStrategy(HelpPageStrategy):
 
         sections = [summary]
 
-        for i, profile in enumerate(help_context.allowed_app_profiles):
-            name = profile.alias or profile.certificate_profile.unique_name
-            title = profile.certificate_profile.display_name or name
-
-            try:
-                cmd = CmpSharedSecretCommandBuilder.get_dynamic_cert_revoke_command(
-                    host=f'{base}/{operation}',
-                    cred_number=cred,
-                )
-            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
-                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
-                err_sect = HelpSection(
-                    _non_lazy(f'Revoke Request for a {title} Certificate'),
-                    [
-                        HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
-                    ],
-                    css_id=name,
-                    hidden=(i > 0),
-                )
-                sections.append(err_sect)
-                continue
-
-            sect = _build_section(
-                _non_lazy(f'Revoke Request for a {title} Certificate'),
-                name,
-                cmd,
-                hidden=(i > 0),
+        try:
+            cmd = CmpSharedSecretCommandBuilder.get_app_cert_self_revoke_command(
+                host=f'{base}/{operation}',
+                cred_number=cred,
             )
-            sections.append(sect)
+        except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
+            err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
+            err_sect = HelpSection(
+                _non_lazy('Revocation Request for an application cCertificate'),
+                [
+                    HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
+                ],
+                css_id='error',
+            )
+            sections.append(err_sect)
 
-        return sections, _non_lazy('Help - Revoke CMP Domain Credential Certificate')
+        sect = _build_section(
+            _non_lazy('Revocation Request for an application Certificate'),
+            'rr',
+            cmd,
+        )
+        sections.append(sect)
+
+        return sections, _non_lazy('Help - Revoke CMP Application Credential Certificate')
 
 
 class DeviceNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
@@ -331,7 +324,7 @@ class DeviceNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
 
 
 class DeviceCmpRevokeHelpView(BaseHelpView):
-    """Help view for the case of revocation of Cmp Credential for generic device abstractions."""
+    """Help view for the case of revocation of CMP Application Credential for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     strategy = CmpRevocationStrategy()
