@@ -15,7 +15,6 @@ from management.models import AppVersion
 from management.util.output_wrapper import CommandOutputWrapper
 from management.util.startup_context import StartupContextBuilder
 from management.util.startup_strategies import CompletedRuntimeStartupStrategy
-from management.util.startup_strategies import StartupStrategySelector
 from setup_wizard.models import SetupWizardCompletedModel
 
 

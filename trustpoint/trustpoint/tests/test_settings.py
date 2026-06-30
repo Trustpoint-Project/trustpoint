@@ -99,26 +99,6 @@ def test_tls_dns_names_derives_allowed_hosts_and_csrf_origins(monkeypatch):
     assert 'https://example.org:8443' in settings.CSRF_TRUSTED_ORIGINS
 
 
-def test_tp_urls_supports_ipv6_hosts(monkeypatch):
-    """Ensure IPv6 TP_URLS entries are parsed without treating address segments as ports."""
-    monkeypatch.setenv('TP_URLS', '[2001:db8::1]:8443, 2001:db8::2, https://2001:db8::3')
-
-    importlib.reload(settings)
-
-    assert '[2001:db8::1]' in settings.ALLOWED_HOSTS
-    assert '[2001:db8::2]' in settings.ALLOWED_HOSTS
-    assert '[2001:db8::3]' in settings.ALLOWED_HOSTS
-    assert 'https://[2001:db8::1]:8443' in settings.CSRF_TRUSTED_ORIGINS
-    assert 'https://[2001:db8::2]' in settings.CSRF_TRUSTED_ORIGINS
-    assert 'https://[2001:db8::3]' in settings.CSRF_TRUSTED_ORIGINS
-
-
-def test_tp_urls_deduplicates_hosts_and_origins(monkeypatch):
-    """Ensure repeated TP_URLS values do not create duplicate entries."""
-    monkeypatch.setenv(
-        'TP_URLS',
-        ' https://dup.local:9443,https://dup.local:9443 , dup.local:9443 ',
-    )
 def test_tls_dns_names_adds_wildcard_for_local_domains(monkeypatch):
     """Ensure .local domains get wildcard subdomain entries in ALLOWED_HOSTS."""
     monkeypatch.setenv('TP_TLS_DNS_NAMES', 'trustpoint.local, other.local')

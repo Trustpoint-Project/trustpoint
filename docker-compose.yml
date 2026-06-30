@@ -20,7 +20,6 @@ services:
       DATABASE_PASSWORD: "${DATABASE_PASSWORD:-testing321}"
       DATABASE_HOST: "${DATABASE_HOST:-postgres}"
       DATABASE_PORT: "${DATABASE_PORT:-5432}"
-      TP_URLS: ${TP_URLS}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsk --max-time 5 https://localhost/ > /dev/null"]
       interval: 30s

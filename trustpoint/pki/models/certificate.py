@@ -369,7 +369,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
             models.Index(fields=['subject_public_bytes'],
                          name='pki_cert_subj_pub_bytes_idx'),
             models.Index(fields=['issuer_public_bytes', 'issuer_id'],
-                         name='pki_cert_iss_pub_bytes_isid_idx'),
+                         name='pki_cert_iss_pub_bytes_idx'),
         ]
 
     # ------------------------------------------ Magic and default methods -------------------------------------------

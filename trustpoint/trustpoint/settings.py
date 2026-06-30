@@ -15,7 +15,6 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ClassVar
-from urllib.parse import ParseResult, urlparse
 
 import django_stubs_ext
 from django.utils.translation import gettext_lazy as _
@@ -168,57 +167,89 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
 
-raw_urls = os.getenv('TP_URLS', '')
+# Parse TLS certificate addresses/names for Django's ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS
+_tls_ipv4_raw = os.getenv('TP_TLS_IPV4_ADDRESSES', '').strip()
+_tls_ipv6_raw = os.getenv('TP_TLS_IPV6_ADDRESSES', '').strip()
+_tls_dns_raw = os.getenv('TP_TLS_DNS_NAMES', '').strip()
+_http_port = int(os.getenv('TP_HTTP_PORT', '80'))
+_https_port = int(os.getenv('TP_HTTPS_PORT', '443'))
 
+# Parse comma-separated lists
+_tls_ipv4_addrs = [addr.strip() for addr in _tls_ipv4_raw.split(',') if addr.strip()]
+_tls_ipv6_addrs = [addr.strip() for addr in _tls_ipv6_raw.split(',') if addr.strip()]
+_tls_dns_names = [name.strip() for name in _tls_dns_raw.split(',') if name.strip()]
 
-def _parse_tp_url(raw_url: str) -> ParseResult:
-    """Parse TP_URLS entries while accepting bracketless IPv6 literals without ports."""
-    if raw_url.startswith(('http://', 'https://')):
-        parsed = urlparse(raw_url)
-        if parsed.netloc.count(':') > 1 and not parsed.netloc.startswith('['):
-            return parsed._replace(netloc=f'[{parsed.netloc}]')
-        return parsed
-    if raw_url.count(':') > 1 and not raw_url.startswith('['):
-        return urlparse(f'https://[{raw_url}]')
-    return urlparse(f'https://{raw_url}')
+# Add IPv4 addresses
+for ipv4 in _tls_ipv4_addrs:
+    if ipv4 not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ipv4)
+    # Add CSRF origins with non-default ports
+    if _http_port != 80:
+        _http_origin = f'http://{ipv4}:{_http_port}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    else:
+        _http_origin = f'http://{ipv4}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    if _https_port != 443:
+        _https_origin = f'https://{ipv4}:{_https_port}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
+    else:
+        _https_origin = f'https://{ipv4}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
 
+# Add IPv6 addresses
+for ipv6 in _tls_ipv6_addrs:
+    # ALLOWED_HOSTS uses plain IPv6 without brackets
+    if ipv6 not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ipv6)
+    # CSRF origins use bracketed IPv6
+    if _http_port != 80:
+        _http_origin = f'http://[{ipv6}]:{_http_port}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    else:
+        _http_origin = f'http://[{ipv6}]'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    if _https_port != 443:
+        _https_origin = f'https://[{ipv6}]:{_https_port}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
+    else:
+        _https_origin = f'https://[{ipv6}]'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
 
-def _allowed_host_from_parsed_url(parsed: ParseResult) -> str | None:
-    """Return the ALLOWED_HOSTS entry for a parsed TP_URLS value."""
-    hostname = parsed.hostname
-    if hostname is None:
-        return None
-    if ':' in hostname and not hostname.startswith('['):
-        return f'[{hostname}]'
-    return hostname
-
-
-if raw_urls:
-    # Split by comma and clean up whitespace
-    url_list = [url.strip() for url in raw_urls.split(',') if url.strip()]
-
-    for url in url_list:
-        # Ensure scheme is present (fallback to https)
-        parsed = _parse_tp_url(url)
-
-        host_with_port = parsed.netloc
-
-        # 1. Extract just host/IP for ALLOWED_HOSTS (strip port)
-        host_only = _allowed_host_from_parsed_url(parsed)
-        if host_only is None:
-            continue
-        if host_only not in ALLOWED_HOSTS:
-            ALLOWED_HOSTS.append(host_only)
-
-            # If mDNS domain, trust subdomains too
-            if host_only.endswith('.local') and f'.{host_only}' not in ALLOWED_HOSTS:
-                ALLOWED_HOSTS.append(f'.{host_only}')
-
-        # 2. Extract the exact origin (scheme + host + port) for CSRF
-        # e.g., "https://trustpoint.local:8443" or "http://10.10.0.2"
-        exact_origin = f'{parsed.scheme}://{host_with_port}'
-        if exact_origin not in CSRF_TRUSTED_ORIGINS:
-            CSRF_TRUSTED_ORIGINS.append(exact_origin)
+# Add DNS names
+for dns_name in _tls_dns_names:
+    if dns_name not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(dns_name)
+    # Add wildcard subdomain for .local domains
+    if dns_name.endswith('.local'):
+        _wildcard = f'.{dns_name}'
+        if _wildcard not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_wildcard)
+    # Add CSRF origins
+    if _http_port != 80:
+        _http_origin = f'http://{dns_name}:{_http_port}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    else:
+        _http_origin = f'http://{dns_name}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    if _https_port != 443:
+        _https_origin = f'https://{dns_name}:{_https_port}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
+    else:
+        _https_origin = f'https://{dns_name}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
 
 
 # Basic SMTP backend
@@ -253,6 +284,33 @@ def _env_flag(name: str, *, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _env_bool(name: str, *, default: bool) -> bool:
+    """Parse boolean environment variable with fallback to default for blank values."""
+    value = os.getenv(name)
+    if value is None or value.strip() == '':
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _env_value(name: str, default: str, *, file_var: str | None = None) -> str:
+    """Read environment value with optional Docker secret file fallback."""
+    # Direct env var takes precedence
+    direct_value = os.getenv(name)
+    if direct_value is not None:
+        return direct_value
+    
+    # Try Docker secret file if specified
+    if file_var:
+        secret_file_path = os.getenv(file_var)
+        if secret_file_path:
+            try:
+                return Path(secret_file_path).read_text().strip()
+            except (FileNotFoundError, PermissionError, OSError):
+                pass
+    
+    return default
 
 
 TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_flag(
