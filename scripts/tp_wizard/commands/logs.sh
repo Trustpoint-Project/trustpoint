@@ -3,6 +3,7 @@ logs_selected(){
   $ONLY_DB && target="postgres"
   $ONLY_MAIL && target="mailpit"
   $ONLY_SFTP && target="sftpgo"
+  $ONLY_HSM && target="$SOFTHSM_NAME"
   $ONLY_WF2_WORKER && target="$WF2_WORKER_NAME"
   $ONLY_PROMETHEUS && target="prometheus"
   $ONLY_GRAFANA && target="grafana"

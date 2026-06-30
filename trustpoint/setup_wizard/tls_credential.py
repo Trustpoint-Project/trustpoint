@@ -1,14 +1,17 @@
-"""Logic for generating and importing staged TLS server credentials."""
+"""Logic for generating, parsing, and staging TLS server credentials during setup."""
 
 from __future__ import annotations
 
 import datetime
+import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.x509.oid import NameOID
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -21,35 +24,142 @@ from pki.util.x509 import CertificateVerifier
 if TYPE_CHECKING:
     import ipaddress
 
-    from pki.models import CredentialModel
-
 ONE_DAY = datetime.timedelta(days=1)
 MIN_CERTIFICATE_CHAIN_LENGTH = 2
+IPV4_VERSION = 4
+
+TLS_STAGING_DIRECTORY_MODE = 0o700
+TLS_STAGING_FILE_MODE = 0o600
+TLS_STAGING_ROOT = Path('/tmp/trustpoint-wizard/tls')  # noqa: S108
+TLS_PRIVATE_KEY_FILE = TLS_STAGING_ROOT / 'tls-private-key.pem'
+TLS_CERTIFICATE_FILE = TLS_STAGING_ROOT / 'tls-certificate.pem'
+TLS_CHAIN_FILE = TLS_STAGING_ROOT / 'tls-chain.pem'
 
 
-def extract_staged_tls_sans(tls_credential: CredentialModel | None) -> tuple[list[str], list[str], list[str]]:
-    """Extract SAN values from a staged TLS credential."""
-    if tls_credential is None or tls_credential.certificate is None:
+def _ensure_tls_staging_root() -> None:
+    """Create the TLS staging directory with private permissions."""
+    TLS_STAGING_ROOT.mkdir(mode=TLS_STAGING_DIRECTORY_MODE, parents=True, exist_ok=True)
+    TLS_STAGING_ROOT.chmod(TLS_STAGING_DIRECTORY_MODE)
+
+
+def _write_staged_tls_file(path: Path, content: bytes) -> None:
+    """Write a staged TLS file with private permissions."""
+    path.write_bytes(content)
+    path.chmod(TLS_STAGING_FILE_MODE)
+
+
+def clear_staged_tls_credential() -> None:
+    """Remove the staged TLS credential from wizard-local temporary storage."""
+    if TLS_STAGING_ROOT.exists():
+        shutil.rmtree(TLS_STAGING_ROOT, ignore_errors=True)
+
+
+def stage_tls_credential(credential_serializer: CredentialSerializer) -> None:
+    """Persist the staged TLS credential to the wizard-local temporary storage."""
+    private_key_serializer = credential_serializer.get_private_key_serializer()
+    certificate_serializer = credential_serializer.get_certificate_serializer()
+    if private_key_serializer is None or certificate_serializer is None:
+        err_msg = 'The staged TLS credential is missing the private key or certificate.'
+        raise ValueError(err_msg)
+
+    _ensure_tls_staging_root()
+    _write_staged_tls_file(TLS_PRIVATE_KEY_FILE, private_key_serializer.as_pkcs8_pem())
+    _write_staged_tls_file(TLS_CERTIFICATE_FILE, certificate_serializer.as_pem())
+
+    additional_certificates = list(credential_serializer.additional_certificates or [])
+    if additional_certificates:
+        _write_staged_tls_file(TLS_CHAIN_FILE, CertificateCollectionSerializer(additional_certificates).as_pem())
+    elif TLS_CHAIN_FILE.exists():
+        TLS_CHAIN_FILE.unlink()
+
+
+def load_staged_tls_credential() -> CredentialSerializer | None:
+    """Load the staged TLS credential from temporary wizard storage."""
+    if not TLS_PRIVATE_KEY_FILE.exists() or not TLS_CERTIFICATE_FILE.exists():
+        return None
+
+    private_key_serializer = PrivateKeySerializer.from_pem(TLS_PRIVATE_KEY_FILE.read_bytes(), None)
+    certificate_serializer = CertificateSerializer.from_pem(TLS_CERTIFICATE_FILE.read_bytes())
+
+    additional_certificates: list[x509.Certificate] = []
+    if TLS_CHAIN_FILE.exists():
+        chain_bytes = TLS_CHAIN_FILE.read_bytes()
+        if chain_bytes.strip():
+            additional_certificates = list(CertificateCollectionSerializer.from_pem(chain_bytes).as_crypto())
+
+    return CredentialSerializer(
+        private_key=private_key_serializer.as_crypto(),
+        certificate=certificate_serializer.as_crypto(),
+        additional_certificates=additional_certificates,
+    )
+
+
+def staged_tls_common_name() -> str | None:
+    """Return the common name from the staged TLS certificate, if available."""
+    credential = load_staged_tls_credential()
+    if credential is None or credential.certificate is None:
+        return None
+    attributes = credential.certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    if not attributes:
+        return None
+
+    common_name = attributes[0].value
+    if isinstance(common_name, bytes):
+        return common_name.decode('utf-8')
+    return common_name
+
+
+def extract_staged_tls_sans() -> tuple[list[str], list[str], list[str]]:
+    """Extract SAN values from the staged TLS credential."""
+    credential = load_staged_tls_credential()
+    if credential is None or credential.certificate is None:
         return [], [], []
 
-    certificate = tls_credential.certificate
-    san_extension = certificate.subject_alternative_name_extension
-    if san_extension is None:
+    try:
+        san_extension = credential.certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
         return [], [], []
 
-    general_names = san_extension.subject_alt_name
-    if general_names is None:
-        return [], [], []
+    ipv4_addresses: list[str] = []
+    ipv6_addresses: list[str] = []
+    dns_names: list[str] = []
 
-    ip_address_model = general_names.ip_addresses.model
-    ipv4_addresses = [
-        entry.value for entry in general_names.ip_addresses.filter(ip_type=ip_address_model.IpType.IPV4_ADDRESS)
-    ]
-    ipv6_addresses = [
-        entry.value for entry in general_names.ip_addresses.filter(ip_type=ip_address_model.IpType.IPV6_ADDRESS)
-    ]
-    dns_names = [entry.value for entry in general_names.dns_names.all()]
+    for name in san_extension:
+        if isinstance(name, x509.IPAddress):
+            if name.value.version == IPV4_VERSION:
+                ipv4_addresses.append(str(name.value))
+            else:
+                ipv6_addresses.append(str(name.value))
+        elif isinstance(name, x509.DNSName):
+            dns_names.append(name.value)
+
     return ipv4_addresses, ipv6_addresses, dns_names
+
+
+def get_staged_root_ca_certificate_serializer() -> CertificateSerializer | None:
+    """Return the staged TLS root CA serializer, or the self-signed end-entity when applicable."""
+    credential = load_staged_tls_credential()
+    if credential is None or credential.certificate is None:
+        return None
+
+    additional_certificates = list(credential.additional_certificates or [])
+    if additional_certificates:
+        root_candidate = additional_certificates[-1]
+        if _is_ca_certificate(root_candidate):
+            return CertificateSerializer(root_candidate)
+
+    if credential.certificate.subject == credential.certificate.issuer:
+        return CertificateSerializer(credential.certificate)
+    return None
+
+
+def _is_ca_certificate(certificate: x509.Certificate) -> bool:
+    """Return whether the certificate is marked as a CA certificate."""
+    try:
+        basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+    except x509.ExtensionNotFound:
+        return False
+    return basic_constraints.ca
 
 
 class TlsServerCredentialGenerator:
@@ -167,11 +277,7 @@ class TlsServerCredentialFileParser:
     @staticmethod
     def _is_ca_certificate(certificate: x509.Certificate) -> bool:
         """Return whether the certificate is marked as a CA certificate."""
-        try:
-            basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
-        except x509.ExtensionNotFound:
-            return False
-        return basic_constraints.ca
+        return _is_ca_certificate(certificate)
 
     @classmethod
     def _is_tls_server_certificate(cls, certificate: x509.Certificate) -> bool:

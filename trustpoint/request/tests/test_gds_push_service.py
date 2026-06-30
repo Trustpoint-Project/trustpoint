@@ -1,6 +1,7 @@
 """Tests for GDS Push service."""
 
 import datetime
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -12,27 +13,34 @@ from cryptography.x509.oid import ObjectIdentifier
 
 from devices.models import DeviceModel
 from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
-from pki.models import TruststoreModel
+from pki.models import CaModel, TruststoreModel
 from pki.models.truststore import TruststoreOrderModel
+from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 from request.gds_push.gds_push_service import GdsPushError, GdsPushService
 
 
 @pytest.fixture
-def mock_ca_with_crl():
+def mock_ca_with_crl(settings: Any) -> CaModel:
     """Create a mock CA with CRL."""
-    # Ensure crypto storage config exists for encrypted fields
-    from management.models import KeyStorageConfig
-    KeyStorageConfig.get_or_create_default()
-    
-    root_ca, root_key = CertificateGenerator.create_root_ca('Test Root CA')
-    issuing_ca, issuing_key = CertificateGenerator.create_issuing_ca(root_key, 'Test Root CA', 'Test Issuing CA')
+    settings.DEVELOPMENT_ENV = True
+    settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
+    settings.TRUSTPOINT_IS_OPERATIONAL = True
+    settings.DOCKER_CONTAINER = False
+
+    root_ca, root_key = create_managed_root_ca('Test Root CA')
+    issuing_ca, issuing_key = create_managed_issuing_ca(
+        issuer_private_key=root_key,
+        issuer_cn='Test Root CA',
+        subject_cn='Test Issuing CA',
+    )
 
     ca_model = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=issuing_ca,
         private_key=issuing_key,
         chain=[root_ca],
-        unique_name='test_gds_ca'
+        unique_name='test_gds_ca',
+        ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11,
     )
 
     # Issue a CRL for the CA
@@ -1108,4 +1116,3 @@ class TestGdsPushServiceAdditionalCoverage:
 
         with pytest.raises(GdsPushError, match='has no onboarding config'):
             service._get_server_truststore()
-

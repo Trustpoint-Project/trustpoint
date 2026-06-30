@@ -30,12 +30,14 @@ await_readiness(){
   fi
 
   await_sftpgo_ready
+  await_softhsm_ready
   await_monitoring_ready
 }
 
 runtime_after_start(){
   $NOWAIT || await_readiness
   $NOWAIT || provision_sftpgo_backup_user
+  $NOWAIT || provision_local_hsm
   $NOWAIT || verify_mailpit_delivery
   $NOWAIT || wait_tls_fingerprint || true
   final_summary
@@ -45,12 +47,14 @@ runtime_start_enabled(){
   ensure_network
   sync_env_file
   resolve_app_image
+  resolve_softhsm_image
 
   $DB_INTERNAL && ensure_volumes
 
   start_postgres
   start_mailpit
   start_sftpgo
+  start_softhsm
 
   $EN_WF2_WORKER || stop_one "$WF2_WORKER_NAME"
 
@@ -73,10 +77,12 @@ runtime_start_selected(){
   $ONLY_WF2_WORKER && EN_WF2_WORKER=true
   $ONLY_PROMETHEUS && EN_PROMETHEUS=true
   $ONLY_GRAFANA && EN_GRAFANA=true
+  $ONLY_HSM && EN_LOCAL_HSM=true
 
   ensure_network
   sync_env_file
   resolve_app_image
+  resolve_softhsm_image
 
   $ONLY_DB && {
     ensure_volumes
@@ -86,6 +92,7 @@ runtime_start_selected(){
   $ONLY_MAIL && start_mailpit
 
   $ONLY_SFTP && start_sftpgo
+  $ONLY_HSM && start_softhsm
 
   $EN_WF2_WORKER || {
     $ONLY_APP && stop_one "$WF2_WORKER_NAME"

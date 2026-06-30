@@ -280,9 +280,7 @@ class TestEstCaCsrSignProcessor:
         key = _make_ec_key()
         cred = Mock()
         cred.certificate = None  # skip hash-from-cert branch
-        mock_serializer = Mock()
-        mock_serializer.as_crypto.return_value = key
-        cred.get_private_key_serializer.return_value = mock_serializer
+        cred.get_private_key.return_value = key
 
         ctx = self._make_context()
         ctx.issuer_credential = cred
@@ -313,9 +311,7 @@ class TestEstDeviceCsrSignProcessor:
         key = _make_ec_key()
         cred = Mock()
         cred.certificate = None
-        mock_serializer = Mock()
-        mock_serializer.as_crypto.return_value = key
-        cred.get_private_key_serializer.return_value = mock_serializer
+        cred.get_private_key.return_value = key
 
         ctx = EstCertificateRequestContext()
         ctx.cert_requested = _make_ec_csr()

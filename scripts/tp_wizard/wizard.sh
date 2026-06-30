@@ -9,6 +9,7 @@ wizard(){
   step_trustpoint_runtime_env
   mailpit_prompt_config
   sftpgo_prompt_config
+  step_local_hsm
   step_workflows2_worker
   monitoring_prompt_config
   show_plan

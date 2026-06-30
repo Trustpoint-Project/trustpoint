@@ -47,6 +47,7 @@ _tp_enabled_services(){
   $DB_INTERNAL && services+=(postgres)
   $EN_MAILPIT && services+=(mailpit)
   $EN_SFTPGO && services+=(sftpgo)
+  $EN_LOCAL_HSM && services+=(softhsm)
   $EN_WF2_WORKER && services+=(worker)
   $EN_PROMETHEUS && services+=(prometheus)
   $EN_GRAFANA && services+=(grafana)
@@ -132,6 +133,7 @@ _tp_runtime_rows(){
   _tp_runtime_row postgres 'postgres' "$(_tp_live_postgres_url)"
   _tp_runtime_row mailpit 'mailpit' "$(_tp_container_url mailpit 8025/tcp http)"
   _tp_runtime_row sftpgo 'sftpgo' "$(_tp_live_sftpgo_urls)"
+  _tp_runtime_row "$SOFTHSM_NAME" 'softhsm' '-'
   _tp_runtime_row "$WF2_WORKER_NAME" 'worker' '-'
   _tp_runtime_row prometheus 'prometheus' "$(_tp_container_url prometheus 9090/tcp http)"
   _tp_runtime_row grafana 'grafana' "$(_tp_container_url grafana 3000/tcp http)"
@@ -151,6 +153,7 @@ show_plan(){
 
   $EN_MAILPIT && _tp_kv 'mailpit' "http://localhost:${MAILPIT_UI_PORT} (smtp ${MAILPIT_SMTP_PORT})"
   $EN_SFTPGO && _tp_kv 'sftpgo' "http://localhost:${SFTPGO_WEB_PORT}/web/admin, sftp ${SFTPGO_SFTP_PORT}"
+  $EN_LOCAL_HSM && _tp_kv 'softhsm' "tcp://${SOFTHSM_NAME}:5657 (${LOCAL_HSM_TOKEN_LABEL})"
   $EN_PROMETHEUS && _tp_kv 'prometheus' "http://localhost:${PROMETHEUS_PORT} -> ${TRUSTPOINT_METRICS_SCHEME_VALUE}://${TRUSTPOINT_METRICS_TARGET_VALUE}${TRUSTPOINT_METRICS_PATH_VALUE}"
   $EN_GRAFANA && _tp_kv 'grafana' "http://localhost:${GRAFANA_PORT} (${GRAFANA_ADMIN_USER} / $(mask "$GRAFANA_ADMIN_PASS"))"
   $EN_WF2_WORKER && _tp_kv 'worker' "$WF2_WORKER_NAME"
@@ -203,6 +206,12 @@ final_summary(){
 
   if $EN_PROMETHEUS; then
     _tp_kv 'metrics' "${TRUSTPOINT_METRICS_SCHEME_VALUE}://${TRUSTPOINT_METRICS_TARGET_VALUE}${TRUSTPOINT_METRICS_PATH_VALUE}"
+  fi
+  if $EN_LOCAL_HSM; then
+    local token_serial
+    token_serial="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
+    _tp_kv 'softhsm' "tcp://${SOFTHSM_NAME}:5657"
+    [[ -n "$token_serial" ]] && _tp_kv 'hsm token' "${LOCAL_HSM_TOKEN_LABEL} (${token_serial})"
   fi
   if $EN_GRAFANA; then
     _tp_kv 'grafana admin' "${GRAFANA_ADMIN_USER} / $(mask "$GRAFANA_ADMIN_PASS")"

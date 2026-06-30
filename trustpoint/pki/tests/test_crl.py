@@ -14,6 +14,8 @@ from django.core.exceptions import ValidationError
 from django.test import Client
 from django.urls import reverse
 from pki.models import CrlModel
+from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
+from pki.util.x509 import CertificateGenerator
 from rest_framework.test import APIClient
 
 User = get_user_model()
@@ -492,21 +494,18 @@ def test_crl_model_create_from_pem_wrong_issuer(issuing_ca_instance: dict[str, A
     issuing_ca = issuing_ca_instance['issuing_ca']
     issuing_ca.issue_crl()
 
-    # Create another CA with different subject
-    from pki.util.x509 import CertificateGenerator
-    from pki.models import CaModel
-
-    # Create a different root CA
-    root_cert, root_key = CertificateGenerator.create_root_ca('Different Root CA')
-    other_cert, other_key = CertificateGenerator.create_issuing_ca(
-        root_key, 'Different Root CA', 'Other Issuing CA'
+    root_cert, root_key = create_managed_root_ca('Different Root CA')
+    other_cert, other_key = create_managed_issuing_ca(
+        issuer_private_key=root_key,
+        issuer_cn='Different Root CA',
+        subject_cn='Other Issuing CA',
     )
 
     # Save the other CA
     from pki.models.ca import CaModel
     other_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=other_cert, private_key=other_key, chain=[root_cert],
-        unique_name='other-ca-test', ca_type=CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+        unique_name='other-ca-test', ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11
     )
 
     with pytest.raises(ValidationError, match='The CRL issuer does not match the CA subject'):

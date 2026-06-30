@@ -2,25 +2,22 @@
 
 from __future__ import annotations
 
-
 from pathlib import Path
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from pki.models import CertificateModel, CredentialModel
-from devices.models import DeviceModel
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import models
+
+from crypto.models import CryptoManagedKeyModel
+from devices.models import DeviceModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
-from pki.models import CaModel, DomainModel
+from pki.models import CaModel, CertificateModel, CredentialModel, DomainModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TruststoreModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
-from trustpoint_core.oid import KeyPairGenerator, PublicKeyAlgorithmOid, PublicKeyInfo
-from trustpoint_core.serializer import CredentialSerializer
-
 
 from .base_commands import CertificateCreationCommandMixin
 
@@ -32,21 +29,13 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
 
     def _create_temp_credential(self) -> CredentialModel:
         """Create and return a temporary credential for the remote CA."""
-        # Use RSA-2048 as in the form's default
-        public_key_info = PublicKeyInfo(
-            public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA,
-            key_size=2048
+        private_key = self.create_backend_rsa_private_key(
+            alias='ca-issuer-temp-credential',
+            key_size=2048,
         )
-
-        private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
-
-        cred_serializer = CredentialSerializer(
-            private_key=private_key,
-            additional_certificates=[]
-        )
-
-        return CredentialModel.save_credential_serializer(
-            cred_serializer, CredentialModel.CredentialTypeChoice.ISSUING_CA
+        return CredentialModel.save_managed_private_key_credential(
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            managed_key=CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id),
         )
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
@@ -68,8 +57,14 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             self.log_and_stdout('Issuing CA "Intermediate-CA RSA-2048-SHA256 - CA Issuer" already exists.')
             issuing_ca = CaModel.objects.get(unique_name='Intermediate-CA RSA-2048-SHA256 - CA Issuer')
         else:
-            rsa_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-            rsa_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            rsa_root_ca_key = self.create_backend_rsa_private_key(
+                alias='root-ca-rsa-2048-sha256-ca-issuer',
+                key_size=2048,
+            )
+            rsa_issuing_ca_key = self.create_backend_rsa_private_key(
+                alias='intermediate-ca-rsa-2048-sha256-ca-issuer',
+                key_size=2048,
+            )
             rsa_root, _ = self.create_root_ca(
                 'Root-CA RSA-2048-SHA256 - CA Issuer', private_key=rsa_root_ca_key, hash_algorithm=hashes.SHA256()
             )
@@ -183,11 +178,10 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                 if created:
                     truststore.certificates.add(tls_cert, through_defaults={'order': 0})
                     self.log_and_stdout('Created TLS truststore.')
-                else:
-                    if not truststore.certificates.filter(pk=tls_cert.pk).exists():
-                        max_order = truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
-                        truststore.certificates.add(tls_cert, through_defaults={'order': max_order + 1})
-                        self.log_and_stdout('Updated TLS truststore.')
+                elif not truststore.certificates.filter(pk=tls_cert.pk).exists():
+                    max_order = truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
+                    truststore.certificates.add(tls_cert, through_defaults={'order': max_order + 1})
+                    self.log_and_stdout('Updated TLS truststore.')
 
                 remote_ca_est.no_onboarding_config.trust_store = truststore
                 remote_ca_est.no_onboarding_config.save()
@@ -226,11 +220,10 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             if created:
                 truststore.certificates.add(tls_cert, through_defaults={'order': 0})
                 self.log_and_stdout('Created TLS truststore.')
-            else:
-                if not truststore.certificates.filter(pk=tls_cert.pk).exists():
-                    max_order = truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
-                    truststore.certificates.add(tls_cert, through_defaults={'order': max_order + 1})
-                    self.log_and_stdout('Updated TLS truststore.')
+            elif not truststore.certificates.filter(pk=tls_cert.pk).exists():
+                max_order = truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
+                truststore.certificates.add(tls_cert, through_defaults={'order': max_order + 1})
+                self.log_and_stdout('Updated TLS truststore.')
 
             est_device.no_onboarding_config.trust_store = truststore
             est_device.no_onboarding_config.save()
@@ -265,11 +258,10 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                     if created:
                         cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': 0})
                         self.log_and_stdout('Created CMP CA truststore.')
-                    else:
-                        if not cmp_truststore.certificates.filter(pk=ca_issuer_cert.pk).exists():
-                            max_order = cmp_truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
-                            cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': max_order + 1})
-                            self.log_and_stdout('Updated CMP CA truststore.')
+                    elif not cmp_truststore.certificates.filter(pk=ca_issuer_cert.pk).exists():
+                        max_order = cmp_truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
+                        cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': max_order + 1})
+                        self.log_and_stdout('Updated CMP CA truststore.')
 
                     remote_ca_cmp.no_onboarding_config.trust_store = cmp_truststore
                     remote_ca_cmp.no_onboarding_config.save()
@@ -289,11 +281,10 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             if created:
                 cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': 0})
                 self.log_and_stdout('Created CMP CA truststore.')
-            else:
-                if not cmp_truststore.certificates.filter(pk=ca_issuer_cert.pk).exists():
-                    max_order = cmp_truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
-                    cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': max_order + 1})
-                    self.log_and_stdout('Updated CMP CA truststore.')
+            elif not cmp_truststore.certificates.filter(pk=ca_issuer_cert.pk).exists():
+                max_order = cmp_truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
+                cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': max_order + 1})
+                self.log_and_stdout('Updated CMP CA truststore.')
 
             cmp_device.no_onboarding_config.trust_store = cmp_truststore
             cmp_device.no_onboarding_config.save()

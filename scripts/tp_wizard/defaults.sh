@@ -20,8 +20,10 @@ fi
 
 # trustpoint image handling
 TP_DOCKERFILE="docker/trustpoint/Dockerfile"
+HSM_DOCKERFILE="docker/softhsm/Dockerfile"
 TP_REPO="trustpointproject/trustpoint"
 APP_IMAGE="${TP_REPO}:latest"   # overridden to trustpoint:local when BUILD_LOCAL=true
+SOFTHSM_IMAGE="trustpoint:softhsm-local"
 BUILD_LOCAL=false
 
 # Fixed images
@@ -31,6 +33,7 @@ SFTPGO_IMAGE="drakkan/sftpgo:2.6.x-slim"
 PROMETHEUS_IMAGE="prom/prometheus:latest"
 GRAFANA_IMAGE="grafana/grafana:latest"
 WF2_WORKER_NAME="trustpoint-worker"
+SOFTHSM_NAME="softhsm"
 
 # trustpoint host ports. These names match docker-compose.yml.
 APP_HTTP_HOST="${TP_HTTP_PORT:-80}"
@@ -85,6 +88,20 @@ DEF_WF2_WORKER_LEASE=30
 DEF_WF2_WORKER_BATCH=10
 DEF_WF2_WORKER_SLEEP=1
 MAILPIT_PROBE_TIMEOUT=20
+
+# Local/dev SoftHSM defaults
+LOCAL_HSM_ROOT="${PWD}/var/hsm"
+LOCAL_HSM_CONFIG_DIR="${LOCAL_HSM_ROOT}/config"
+LOCAL_HSM_LIB_DIR="${LOCAL_HSM_ROOT}/lib"
+LOCAL_HSM_TOKEN_DIR="${LOCAL_HSM_ROOT}/tokens"
+LOCAL_HSM_CONTAINER_ROOT="/var/lib/trustpoint/hsm"
+LOCAL_HSM_CONTAINER_CONFIG_DIR="${LOCAL_HSM_CONTAINER_ROOT}/config"
+LOCAL_HSM_CONTAINER_TOKEN_DIR="${LOCAL_HSM_CONTAINER_ROOT}/tokens"
+LOCAL_HSM_TOKEN_LABEL="${TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL:-Trustpoint-SoftHSM}"
+LOCAL_HSM_PROFILE_NAME="${TRUSTPOINT_LOCAL_HSM_PROFILE_NAME:-local-dev-softhsm}"
+LOCAL_HSM_METADATA_FILE="${LOCAL_HSM_CONFIG_DIR}/local-dev-token.env"
+LOCAL_HSM_RUNTIME_UID="${LOCAL_HSM_RUNTIME_UID:-33}"
+LOCAL_HSM_RUNTIME_GID="${LOCAL_HSM_RUNTIME_GID:-33}"
 
 # Monitoring defaults
 DEF_PROMETHEUS_PORT=9090

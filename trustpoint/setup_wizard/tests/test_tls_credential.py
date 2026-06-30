@@ -2,12 +2,19 @@
 
 import datetime
 import ipaddress
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
-from setup_wizard.tls_credential import TlsServerCredentialGenerator
+from setup_wizard.tls_credential import (
+    TlsServerCredentialGenerator,
+    extract_staged_tls_sans,
+    load_staged_tls_credential,
+    stage_tls_credential,
+)
 
 
 class TestTlsServerCredentialGenerator:
@@ -412,3 +419,41 @@ class TestTlsServerCredentialGenerator:
         assert san is not None
         # SAN should be empty but present
         assert len(list(san.value)) == 0
+
+    def test_stage_and_load_tls_credential(self):
+        """Test staging helpers keep the TLS credential out of the database."""
+        generator = TlsServerCredentialGenerator(
+            ipv4_addresses=[ipaddress.IPv4Address('127.0.0.1')],
+            ipv6_addresses=[],
+            domain_names=['localhost'],
+        )
+        credential = generator.generate_tls_server_credential()
+
+        with TemporaryDirectory() as temp_dir:
+            from setup_wizard import tls_credential as tls_module
+
+            original_root = tls_module.TLS_STAGING_ROOT
+            original_private_key_file = tls_module.TLS_PRIVATE_KEY_FILE
+            original_certificate_file = tls_module.TLS_CERTIFICATE_FILE
+            original_chain_file = tls_module.TLS_CHAIN_FILE
+
+            try:
+                tls_module.TLS_STAGING_ROOT = Path(temp_dir)
+                tls_module.TLS_PRIVATE_KEY_FILE = tls_module.TLS_STAGING_ROOT / 'tls-private-key.pem'
+                tls_module.TLS_CERTIFICATE_FILE = tls_module.TLS_STAGING_ROOT / 'tls-certificate.pem'
+                tls_module.TLS_CHAIN_FILE = tls_module.TLS_STAGING_ROOT / 'tls-chain.pem'
+
+                stage_tls_credential(credential)
+                loaded = load_staged_tls_credential()
+                ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans()
+            finally:
+                tls_module.TLS_STAGING_ROOT = original_root
+                tls_module.TLS_PRIVATE_KEY_FILE = original_private_key_file
+                tls_module.TLS_CERTIFICATE_FILE = original_certificate_file
+                tls_module.TLS_CHAIN_FILE = original_chain_file
+
+        assert loaded is not None
+        assert loaded.certificate is not None
+        assert ipv4_addresses == ['127.0.0.1']
+        assert ipv6_addresses == []
+        assert dns_names == ['localhost']

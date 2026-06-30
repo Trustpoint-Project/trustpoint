@@ -2,7 +2,7 @@
 
 `tp_wizard.sh` is the developer-facing setup helper for the local trustpoint Docker stack.
 
-It can run the interactive setup wizard or manage selected runtime services: trustpoint, PostgreSQL, Mailpit, SFTPGo, the optional workflows2 worker, Prometheus, and Grafana.
+It can run the interactive setup wizard or manage selected runtime services: trustpoint, PostgreSQL, Mailpit, SFTPGo, local/dev SoftHSM, the optional workflows2 worker, Prometheus, and Grafana.
 
 ## Commands
 
@@ -11,9 +11,9 @@ Run from the repository root:
 ```bash
 ./tp_wizard.sh
 ./tp_wizard.sh demo [light|full] [--skip-setup|--no-skip-setup] [--nowait]
-./tp_wizard.sh up [trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring] [--skip-setup|--no-skip-setup] [--nowait]
-./tp_wizard.sh down [trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring]
-./tp_wizard.sh logs [trustpoint|db|mail|sftp|worker|prometheus|grafana]
+./tp_wizard.sh up [trustpoint|db|mail|sftp|hsm|worker|prometheus|grafana|monitoring] [--skip-setup|--no-skip-setup] [--nowait]
+./tp_wizard.sh down [trustpoint|db|mail|sftp|hsm|worker|prometheus|grafana|monitoring]
+./tp_wizard.sh logs [trustpoint|db|mail|sftp|hsm|worker|prometheus|grafana]
 ./tp_wizard.sh status
 ./tp_wizard.sh nuke
 ```
@@ -22,7 +22,7 @@ Demo presets:
 
 ```text
 ./tp_wizard.sh demo light  = trustpoint + PostgreSQL
-./tp_wizard.sh demo        = trustpoint + PostgreSQL + Mailpit + SFTPGo + workflows2 worker
+./tp_wizard.sh demo        = trustpoint + PostgreSQL + Mailpit + SFTPGo + SoftHSM + workflows2 worker
 ./tp_wizard.sh demo full   = demo + Prometheus + Grafana
 ```
 

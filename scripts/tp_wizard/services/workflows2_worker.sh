@@ -70,8 +70,18 @@ EOF2
 start_workflows2_worker(){
   $EN_WF2_WORKER || return 0
   local name="$WF2_WORKER_NAME"
+  local hsm_env=()
+  local hsm_mounts=()
   stop_one "$name"
   prepare_workflows2_worker_folder
+  if $EN_LOCAL_HSM; then
+    mapfile -d '' -t hsm_env < <(local_hsm_env_args)
+    mapfile -d '' -t hsm_mounts < <(local_hsm_mount_args)
+  fi
   log "Starting dedicated workflows2 worker..."
-  docker run -d --name "$name" --network "$NET"     --env-file "$WF2_WORKER_ENV_FILE"     "$APP_IMAGE" >/dev/null
+  docker run -d --name "$name" --network "$NET" \
+    "${hsm_mounts[@]}" \
+    --env-file "$WF2_WORKER_ENV_FILE" \
+    "${hsm_env[@]}" \
+    "$APP_IMAGE" >/dev/null
 }

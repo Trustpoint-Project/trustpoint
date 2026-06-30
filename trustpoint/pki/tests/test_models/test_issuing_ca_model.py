@@ -11,14 +11,15 @@ from django.db.models import ProtectedError
 from django.utils import timezone
 from trustpoint_core import oid
 
+from pki.models import CaModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.truststore import TruststoreModel
-from pki.models import CaModel
+from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 
 COMMON_NAME = 'Root CA'
 UNIQUE_NAME = COMMON_NAME.replace(' ', '_').lower()
-CA_TYPE = CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+CA_TYPE = CaModel.CaTypeChoice.LOCAL_PKCS11
 
 
 def test_attributes_and_properties(issuing_ca_instance: dict[str, Any]) -> None:
@@ -121,14 +122,8 @@ def test_issuing_ca_delete(issuing_ca_instance: dict[str, Any], domain_instance:
 @pytest.mark.django_db
 def test_chain_truststore_creation_on_new_issuing_ca() -> None:
     """Test that a chain truststore is automatically created when creating a new issuing CA."""
-    from trustpoint_core.serializer import CredentialSerializer
-    from management.models import KeyStorageConfig
-
-    # Ensure crypto storage config exists
-    KeyStorageConfig.get_or_create_default()
-
     # Create a root CA first
-    root_cert, root_priv_key = CertificateGenerator.create_root_ca(cn='Root CA')
+    root_cert, root_priv_key = create_managed_root_ca(cn='Root CA')
     root_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=root_cert,
         private_key=root_priv_key,
@@ -138,24 +133,20 @@ def test_chain_truststore_creation_on_new_issuing_ca() -> None:
     )
 
     # Create an intermediate CA that should get a chain truststore
-    int_cert, int_priv_key = CertificateGenerator.create_issuing_ca(
+    int_cert, int_priv_key = create_managed_issuing_ca(
         issuer_private_key=root_priv_key,
         issuer_cn='Root CA',
         subject_cn='Intermediate CA'
     )
 
-    credential_serializer = CredentialSerializer(
-        certificate=int_cert,
-        private_key=int_priv_key,
-        additional_certificates=[root_cert]
-    )
-
     # Create the intermediate CA - this should automatically create a chain truststore
-    intermediate_ca = CaModel.create_new_issuing_ca(
-        credential_serializer=credential_serializer,
+    intermediate_ca = CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=int_cert,
+        private_key=int_priv_key,
+        chain=[root_cert],
         ca_type=CaModel.CaTypeChoice.AUTOGEN,
         unique_name='intermediate_ca',
-        parent_ca=root_ca
+        parent_ca=root_ca,
     )
 
     # Check that the chain truststore was created
@@ -179,24 +170,16 @@ def test_chain_truststore_creation_on_new_issuing_ca() -> None:
 @pytest.mark.django_db
 def test_chain_truststore_single_ca() -> None:
     """Test that a chain truststore is created even for a single root CA."""
-    from trustpoint_core.serializer import CredentialSerializer
-    from management.models import KeyStorageConfig
-
-    # Ensure crypto storage config exists
-    KeyStorageConfig.get_or_create_default()
-
     # Create a root CA
-    root_cert, root_priv_key = CertificateGenerator.create_root_ca(cn='Single Root CA')
-    credential_serializer = CredentialSerializer(
-        certificate=root_cert,
-        private_key=root_priv_key
-    )
+    root_cert, root_priv_key = create_managed_root_ca(cn='Single Root CA')
 
     # Create the root CA - this should create a chain truststore with just itself
-    root_ca = CaModel.create_new_issuing_ca(
-        credential_serializer=credential_serializer,
+    root_ca = CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=root_cert,
+        private_key=root_priv_key,
+        chain=[],
         ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
-        unique_name='single_root_ca'
+        unique_name='single_root_ca',
     )
 
     # Check that the chain truststore was created
@@ -216,14 +199,8 @@ def test_chain_truststore_single_ca() -> None:
 @pytest.mark.django_db
 def test_chain_truststore_three_level_hierarchy() -> None:
     """Test that chain truststore contains all certificates in a three-level hierarchy."""
-    from trustpoint_core.serializer import CredentialSerializer
-    from management.models import KeyStorageConfig
-
-    # Ensure crypto storage config exists
-    KeyStorageConfig.get_or_create_default()
-
     # Create root CA
-    root_cert, root_priv_key = CertificateGenerator.create_root_ca(cn='Root CA')
+    root_cert, root_priv_key = create_managed_root_ca(cn='Root CA')
     root_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=root_cert,
         private_key=root_priv_key,
@@ -233,7 +210,7 @@ def test_chain_truststore_three_level_hierarchy() -> None:
     )
 
     # Create intermediate CA
-    int_cert, int_priv_key = CertificateGenerator.create_issuing_ca(
+    int_cert, int_priv_key = create_managed_issuing_ca(
         issuer_private_key=root_priv_key,
         issuer_cn='Root CA',
         subject_cn='Intermediate CA'
@@ -248,23 +225,19 @@ def test_chain_truststore_three_level_hierarchy() -> None:
     )
 
     # Create sub-intermediate CA
-    sub_int_cert, sub_int_priv_key = CertificateGenerator.create_issuing_ca(
+    sub_int_cert, sub_int_priv_key = create_managed_issuing_ca(
         issuer_private_key=int_priv_key,
         issuer_cn='Intermediate CA',
         subject_cn='Sub Intermediate CA'
     )
-    
-    credential_serializer = CredentialSerializer(
-        certificate=sub_int_cert,
-        private_key=sub_int_priv_key,
-        additional_certificates=[root_cert, int_cert]
-    )
 
-    sub_int_ca = CaModel.create_new_issuing_ca(
-        credential_serializer=credential_serializer,
+    sub_int_ca = CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=sub_int_cert,
+        private_key=sub_int_priv_key,
+        chain=[root_cert, int_cert],
         ca_type=CaModel.CaTypeChoice.AUTOGEN,
         unique_name='sub_intermediate_ca',
-        parent_ca=int_ca
+        parent_ca=int_ca,
     )
 
     # Verify the chain truststore
@@ -284,13 +257,8 @@ def test_chain_truststore_three_level_hierarchy() -> None:
 @pytest.mark.django_db
 def test_chain_truststore_ordering() -> None:
     """Test that certificates in chain truststore are ordered correctly (root to leaf)."""
-    from trustpoint_core.serializer import CredentialSerializer
-    from management.models import KeyStorageConfig
-
-    KeyStorageConfig.get_or_create_default()
-
     # Create two-level hierarchy
-    root_cert, root_priv_key = CertificateGenerator.create_root_ca(cn='Root CA')
+    root_cert, root_priv_key = create_managed_root_ca(cn='Root CA')
     root_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=root_cert,
         private_key=root_priv_key,
@@ -299,23 +267,19 @@ def test_chain_truststore_ordering() -> None:
         ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT
     )
 
-    int_cert, int_priv_key = CertificateGenerator.create_issuing_ca(
+    int_cert, int_priv_key = create_managed_issuing_ca(
         issuer_private_key=root_priv_key,
         issuer_cn='Root CA',
         subject_cn='Intermediate CA'
     )
 
-    credential_serializer = CredentialSerializer(
-        certificate=int_cert,
+    intermediate_ca = CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=int_cert,
         private_key=int_priv_key,
-        additional_certificates=[root_cert]
-    )
-
-    intermediate_ca = CaModel.create_new_issuing_ca(
-        credential_serializer=credential_serializer,
+        chain=[root_cert],
         ca_type=CaModel.CaTypeChoice.AUTOGEN,
         unique_name='intermediate_ca',
-        parent_ca=root_ca
+        parent_ca=root_ca,
     )
 
     # Verify ordering

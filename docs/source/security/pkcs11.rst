@@ -15,14 +15,14 @@ SoftHSM
 **Primary Support**: SoftHSM2 is the default and fully supported HSM implementation.
 
 - **Library Path**: ``/usr/lib/softhsm/libsofthsm2.so``
-- **Use Case**: Development, testing, and small-scale production deployments
+- **Use Case**: Development and CI validation. Use a production-grade HSM for production deployments.
 
 Physical HSM
 ~~~~~~~~~~~~
 
-**Future Support**: Physical HSM devices are planned for production environments.
+**Standards-Based Support**: Physical HSM devices are supported through their PKCS#11 module when they expose the mechanisms Trustpoint requires.
 
-- **Status**: Interface defined but not fully implemented
+- **Status**: Provider-specific configuration files are treated as opaque input and passed to the uploaded module through an operator-provided environment variable.
 - **Use Case**: High-security production deployments
 
 Supported Cryptographic Operations
@@ -37,26 +37,19 @@ RSA Key Operations
 - Keys marked as non-extractable for security
 
 **Signing Operations**:
-- RSA-PSS padding support
 - PKCS#1 v1.5 padding support
 - Supported hash algorithms: SHA-256, SHA-384, SHA-512, SHA-224
 - Pre-hashed data signing capability
 
-**Encryption/Decryption Operations**:
-- RSA-OAEP padding support for encryption/decryption
-- PKCS#1 v1.5 padding support
-- Public key extraction for certificate generation
-
-**Key Import**:
-- Import existing RSA private keys from cryptography library to HSM
-- Keys stored as non-extractable in HSM
+**Public Key Handling**:
+- Public key extraction for certificate generation and key verification
 
 EC (Elliptic Curve) Key Operations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Key Generation**:
 - EC key pair generation within HSM
-- Supported curves: P-256, P-384, P-521, secp256k1
+- Supported curves: P-256, P-384, P-521
 - Curve parameter validation
 
 **Signing Operations**:
@@ -69,9 +62,8 @@ EC (Elliptic Curve) Key Operations
 **Key Management**:
 - Named curve support via OID mapping
 - Public key point extraction
-- Key import from cryptography library to HSM
 - Keys marked as non-extractable (EXTRACTABLE=False)
-- Encryption/decryption not supported (EC is for signing only)
+- EC is used for signing, not encryption/decryption
 
 AES Key Operations
 ~~~~~~~~~~~~~~~~~~
@@ -82,10 +74,9 @@ AES Key Operations
 - Primary use for KEK storage
 
 **Encryption/Decryption Operations**:
-- AES-ECB encryption for DEK wrapping
-- DEK wrapping and unwrapping operations
-- Note: AES Key Wrap (RFC 3394) not supported by SoftHSM2
-- 8-byte random IV prepended to encrypted data for format consistency
+- DEK protection with standard PKCS#11 AES key wrap/unwrap mechanisms when available
+- Fallback DEK protection with AES-CBC-PAD or AES-CBC C_Encrypt/C_Decrypt
+- Last-resort DEK protection with AES-ECB C_Encrypt/C_Decrypt for providers that expose no key-wrap or CBC mechanism
 
 General HSM Operations
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -170,9 +161,23 @@ Key Components
 
 **Key Management**:
 - KEK stored in HSM, marked as non-extractable (SENSITIVE=True, EXTRACTABLE=False)
-- DEK wrapped by KEK using AES-ECB, cached at startup
+- DEK protected by the KEK using PKCS#11 AES key wrap or AES encryption and cached in-process
 - Database fields encrypted with AES-256-GCM
-- Token-specific cache keys: ``trustpoint-dek-chache-{token_label}``
+
+Fresh-install wizard behavior
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Selecting the PKCS#11 crypto backend in the setup wizard configures managed
+signing keys on the PKCS#11 token. Application-secret encryption is configured
+with Trustpoint's software app-secret backend by default. This keeps setup
+compatible with tokens that expose signing/key-generation mechanisms but do not
+expose AES key-wrap or AES encryption mechanisms.
+
+Operators can enable the setup policy option to require PKCS#11 protection for
+application secrets. When enabled, Trustpoint refuses setup unless the token can
+protect and recover the application-secret DEK with supported PKCS#11 AES flows.
+The DEK is recovered through the HSM-backed KEK at startup and then cached
+in-process; per-field encryption still uses local AES-256-GCM.
 
 Docker Integration
 ------------------

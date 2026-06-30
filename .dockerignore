@@ -20,6 +20,11 @@ workflow2Folder/
 .env.tp_wizard.*
 sftpgo-data/
 var/
+temp.txt
+*.so
+*.so.*
+*.sqlite3
+*.db
 # Exclude sensitive files
 **/hsm_so_pin.txt
 **/hsm_pin.txt

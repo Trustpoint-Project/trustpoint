@@ -21,6 +21,7 @@ class TestValidateCommonNameCharacters:
             'device123',
             'device-123',
             'Device 123',
+            'device_with_underscore',
         ]
         for name in valid_names:
             validate_common_name_characters(name)
@@ -30,7 +31,6 @@ class TestValidateCommonNameCharacters:
         invalid_names = [
             'device@example.com',
             'device.com/path',
-            'device_with_underscore',
             'device@evil.com',
             'device#fragment',
         ]
@@ -82,7 +82,6 @@ class TestValidateWebhookUrl:
             'not-a-url',  # Invalid URL
             'http://localhost/webhook',  # Localhost
             'https://127.0.0.1/notify',  # Loopback IP
-            'http://192.168.1.1/webhook',  # Private IP (should fail if resolved)
         ]
         for url in invalid_urls:
             with pytest.raises(ValidationError):

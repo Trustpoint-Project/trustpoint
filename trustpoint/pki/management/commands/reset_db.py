@@ -11,7 +11,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import BaseCommand, call_command
 
-from management.models import AppVersion, KeyStorageConfig
+from management.models import AppVersion
 
 if TYPE_CHECKING:
     from django.core.management.base import CommandParser
@@ -82,12 +82,8 @@ class Command(BaseCommand):
         if engine == ENGINE_SQLITE:
             self.stdout.write('Adding default models for development server...')
             AppVersion.objects.get_or_create(version=settings.APP_VERSION)
-            # Ensure crypto storage config exists for encrypted fields
-            KeyStorageConfig.get_or_create_default()
             # Add default certificate profiles
             call_command('create_default_cert_profiles')
-        else:
-            KeyStorageConfig.get_or_create_default()
 
         # Create superuser if needed
         if not options.get('no_user'):

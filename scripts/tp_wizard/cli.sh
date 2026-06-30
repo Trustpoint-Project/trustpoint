@@ -4,16 +4,16 @@ Commands:
   (no command)       Run interactive wizard
 
   demo [light|full] [--skip-setup|--no-skip-setup] [--nowait]
-  up [trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring] [--skip-setup|--no-skip-setup] [--nowait]
-  down [trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring]
-  logs [trustpoint|db|mail|sftp|worker|prometheus|grafana]
+  up [trustpoint|db|mail|sftp|hsm|worker|prometheus|grafana|monitoring] [--skip-setup|--no-skip-setup] [--nowait]
+  down [trustpoint|db|mail|sftp|hsm|worker|prometheus|grafana|monitoring]
+  logs [trustpoint|db|mail|sftp|hsm|worker|prometheus|grafana]
   status
   nuke
   help
 
 Demo presets:
   demo light         trustpoint + PostgreSQL
-  demo               trustpoint + PostgreSQL + Mailpit + SFTPGo + workflows2 worker
+  demo               trustpoint + PostgreSQL + Mailpit + SFTPGo + SoftHSM + workflows2 worker
   demo full          demo + Prometheus + Grafana
 
 Notes:
@@ -38,6 +38,7 @@ map_demo_preset_to_flags(){
       ONLY_DB=true
       ONLY_MAIL=true
       ONLY_SFTP=true
+      ONLY_HSM=true
       ONLY_WF2_WORKER=true
       ;;
     full)
@@ -46,6 +47,7 @@ map_demo_preset_to_flags(){
       ONLY_DB=true
       ONLY_MAIL=true
       ONLY_SFTP=true
+      ONLY_HSM=true
       ONLY_WF2_WORKER=true
       ONLY_PROMETHEUS=true
       ONLY_GRAFANA=true
@@ -62,6 +64,7 @@ map_only_to_flags(){
     db) ONLY_DB=true ;;
     mail) ONLY_MAIL=true ;;
     sftp) ONLY_SFTP=true ;;
+    hsm|softhsm) ONLY_HSM=true ;;
     worker) ONLY_WF2_WORKER=true ;;
     prometheus|prom) ONLY_PROMETHEUS=true ;;
     grafana) ONLY_GRAFANA=true ;;
@@ -69,7 +72,7 @@ map_only_to_flags(){
     demo|light|full|demo-light|demo-full)
       die "Demo presets are not valid for 'up'. Use './tp_wizard.sh demo [light|full]' instead."
       ;;
-    *) die "Unknown target: $1 (use trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring)" ;;
+    *) die "Unknown target: $1 (use trustpoint|db|mail|sftp|hsm|worker|prometheus|grafana|monitoring)" ;;
   esac
 }
 
@@ -94,7 +97,7 @@ set_targets_from_args(){
   local any=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      trustpoint|app|db|mail|sftp|worker|prometheus|prom|grafana|monitoring|metrics)
+      trustpoint|app|db|mail|sftp|hsm|softhsm|worker|prometheus|prom|grafana|monitoring|metrics)
         map_only_to_flags "$1"
         any=true
         shift

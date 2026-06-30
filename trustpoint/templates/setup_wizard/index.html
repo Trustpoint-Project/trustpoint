@@ -36,10 +36,17 @@
         <div class="tp-setup-wizard-header">
             <h1 class="tp-setup-wizard-heading">{% trans "Welcome to Trustpoint !" %}</h1>
         </div>
+        {% if continue_url %}
+            <div class="text-center mb-4">
+                <a href="{{ continue_url }}" class="btn tp-setup-form-submit">
+                    {% blocktrans with flow=continue_flow %}Continue {{ flow }}{% endblocktrans %}
+                </a>
+            </div>
+        {% endif %}
         <div class="row g-4 tp-setup-wizard-grid justify-content-center">
             <!-- Setup from Scratch Option -->
-            <div class="col-5">
-                <a href="{% url 'setup_wizard:create_super_user' %}" class="card h-100 tp-setup-option-card">
+            <div class="col-4">
+                <a href="{% url 'setup_wizard:fresh_install_admin_user' %}" class="card h-100 tp-setup-option-card">
                     <div class="card-body tp-setup-option-body">
                         <div class="tp-setup-option-copy">
                             <div class="tp-setup-option-figure rocket-icon" aria-hidden="true">
@@ -57,7 +64,7 @@
             </div>
 
             <!-- Restore from Backup Option -->
-            <div class="col-5">
+            <div class="col-4">
                 <a href="{% url 'setup_wizard:restore_backup' %}" class="card h-100 tp-setup-option-card">
                     <div class="card-body tp-setup-option-body">
                         <div class="tp-setup-option-copy">
@@ -69,6 +76,25 @@
                             <h5 class="tp-setup-option-title">{% trans 'Restore from Backup' %}</h5>
                             <p class="tp-setup-option-text">
                             {% trans 'Restore Trustpoint configuration from a previous backup' %}
+                            </p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Connect to Existing Instance Option -->
+            <div class="col-4">
+                <a href="{% url 'setup_wizard:connect_existing' %}" class="card h-100 tp-setup-option-card">
+                    <div class="card-body tp-setup-option-body">
+                        <div class="tp-setup-option-copy">
+                            <div class="tp-setup-option-figure" aria-hidden="true">
+                                <svg class="bi" fill="currentColor" viewBox="0 0 16 16">
+                                    <use href="{% static 'img/icons.svg' %}#icon-boxes"></use>
+                                </svg>
+                            </div>
+                            <h5 class="tp-setup-option-title">{% trans 'Connect to Existing Instance Data' %}</h5>
+                            <p class="tp-setup-option-text">
+                            {% trans 'Attach this container to an existing Trustpoint database and backend' %}
                             </p>
                         </div>
                     </div>

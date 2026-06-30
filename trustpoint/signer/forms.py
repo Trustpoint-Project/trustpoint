@@ -1,6 +1,6 @@
 """Contains Logic for Form on Add/Edit Signer Page."""
 
-from typing import Any, NoReturn, cast
+from typing import Any, ClassVar, NoReturn, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -16,7 +16,10 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import KeyStorageConfig
+from crypto.application.capabilities import get_active_backend_capability_report
+from crypto.domain.algorithms import EllipticCurveName
+from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.runtime import configured_private_key_location
 from pki.models.certificate import CertificateModel
 from signer.models import SignerModel
 from trustpoint.logger import LoggerMixin
@@ -24,18 +27,8 @@ from util.field import UniqueNameValidator, get_certificate_name
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
-    """Determine the appropriate PrivateKeyLocation based on KeyStorageConfig."""
-    try:
-        storage_config = KeyStorageConfig.get_config()
-        if storage_config.storage_type in [
-            KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
-        ]:
-            return PrivateKeyLocation.HSM_PROVIDED
-    except KeyStorageConfig.DoesNotExist:
-        pass
-
-    return PrivateKeyLocation.SOFTWARE
+    """Determine the private-key location used by legacy signer imports."""
+    return configured_private_key_location()
 
 
 class SignerAddMethodSelectForm(forms.Form):
@@ -44,11 +37,94 @@ class SignerAddMethodSelectForm(forms.Form):
     method_select = forms.ChoiceField(
         label=_('Select Method'),
         choices=[
+            ('generate', _('Generate new Signer with configured crypto backend')),
             ('local_file_import', _('Import a new Signer from file')),
         ],
-        initial='local_file_import',
+        initial='generate',
         required=True,
     )
+
+
+class SignerGenerateForm(LoggerMixin, forms.Form):
+    """Form for generating a backend-managed signer."""
+
+    KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ('rsa_2048', _('RSA 2048')),
+        ('rsa_3072', _('RSA 3072')),
+        ('rsa_4096', _('RSA 4096')),
+        ('ec_secp256r1', _('EC SECP256R1')),
+        ('ec_secp384r1', _('EC SECP384R1')),
+    ]
+
+    unique_name = forms.CharField(
+        max_length=256,
+        label=_('Unique Name'),
+        widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
+        required=True,
+        validators=[UniqueNameValidator()],
+    )
+    key_type = forms.ChoiceField(label=_('Key Type'), choices=KEY_TYPE_CHOICES, required=True)
+
+    created_signer: SignerModel
+
+    @staticmethod
+    def _key_spec_for_key_type(key_type: str) -> KeySpec:
+        """Map form key choices to backend key specs."""
+        if key_type == 'rsa_2048':
+            return RsaKeySpec(key_size=2048)
+        if key_type == 'rsa_3072':
+            return RsaKeySpec(key_size=3072)
+        if key_type == 'rsa_4096':
+            return RsaKeySpec(key_size=4096)
+        if key_type == 'ec_secp256r1':
+            return EcKeySpec(curve=EllipticCurveName.SECP256R1)
+        if key_type == 'ec_secp384r1':
+            return EcKeySpec(curve=EllipticCurveName.SECP384R1)
+        msg = f'Unsupported signer key type {key_type!r}.'
+        raise ValueError(msg)
+
+    @classmethod
+    def supported_key_type_choices(cls) -> list[tuple[str, str]]:
+        """Return signer key choices supported by the active backend."""
+        report = get_active_backend_capability_report()
+        return [
+            (value, label)
+            for value, label in cls.KEY_TYPE_CHOICES
+            if report.supports_key_spec(cls._key_spec_for_key_type(value))
+        ]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form with backend-supported key choices."""
+        super().__init__(*args, **kwargs)
+        cast('forms.ChoiceField', self.fields['key_type']).choices = self.supported_key_type_choices()
+
+    def clean_unique_name(self) -> str:
+        """Validate unique signer names."""
+        unique_name = cast('str', self.cleaned_data['unique_name']).strip()
+        if SignerModel.objects.filter(unique_name=unique_name).exists():
+            error_message = _('Unique name is already taken. Choose another one.')
+            raise ValidationError(error_message)
+        return unique_name
+
+    def clean(self) -> dict[str, Any]:
+        """Validate backend key support."""
+        cleaned_data = cast('dict[str, Any]', super().clean())
+        key_type = cleaned_data.get('key_type')
+        supported_key_types = {value for value, _label in self.supported_key_type_choices()}
+        if not supported_key_types:
+            self.add_error('key_type', _('The active crypto backend cannot generate any supported signer key.'))
+        elif key_type not in supported_key_types:
+            self.add_error('key_type', _('The active crypto backend does not support this signer key type.'))
+        return cleaned_data
+
+    def save(self) -> SignerModel:
+        """Generate and persist the backend-managed signer."""
+        self.created_signer = SignerModel.create_backend_managed_signer(
+            unique_name=self.cleaned_data['unique_name'],
+            key_spec=self._key_spec_for_key_type(self.cleaned_data['key_type']),
+        )
+        return self.created_signer
+
 
 class SignerAddFileTypeSelectForm(forms.Form):
     """Form for selecting the file type when importing a Signer."""

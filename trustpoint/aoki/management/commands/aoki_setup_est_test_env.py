@@ -18,15 +18,15 @@ from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
+
 from devices.models import DeviceModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
+from pki.management.commands.base_commands import CertificateCreationCommandMixin
 from pki.models import CaModel, CertificateModel, DomainModel
 from pki.models.credential import OwnerCredentialModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from pki.management.commands.base_commands import CertificateCreationCommandMixin
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
 
@@ -102,7 +102,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         self.log_and_stdout(f'    path:       {REMOTE_PATH}')
         self.log_and_stdout(f'    key type:   {KEY_TYPE}')
         self.log_and_stdout(f'    username:   {DEVICE_COMMON_NAME}')
-        self.log_and_stdout(f'    password:   [redacted]')
+        self.log_and_stdout('    password:   [redacted]')
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -117,8 +117,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             self.log_and_stdout(f'Issuing CA "{CA_UNIQUE_NAME}" already exists, skipping creation.')
             return CaModel.objects.get(unique_name=CA_UNIQUE_NAME)
 
-        root_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        issuing_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        root_key = self.create_backend_rsa_private_key(alias=f'{CA_UNIQUE_NAME}-root', key_size=2048)
+        issuing_key = self.create_backend_rsa_private_key(alias=CA_UNIQUE_NAME, key_size=2048)
 
         root_cert, _ = self.create_root_ca(
             f'{CA_UNIQUE_NAME} - Root',

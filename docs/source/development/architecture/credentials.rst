@@ -2,6 +2,12 @@
 Credentials - Architecture
 ==========================
 
+.. note::
+
+   This document describes the current credential-centric architecture.
+   For the planned crypto redesign and phased replacement plan, see
+   :doc:`./crypto_redesign` and :doc:`./crypto_implementation_plan`.
+
 Overview
 --------
 
@@ -199,5 +205,4 @@ The ``PKCS11Key`` model stores references:
        created_at: DateTimeField
 
 For request pipeline details and component architecture, see :doc:`../workflow`.
-
 

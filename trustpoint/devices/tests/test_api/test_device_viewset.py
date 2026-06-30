@@ -16,7 +16,6 @@ from rest_framework.test import APIClient
 from django.contrib.auth.base_user import AbstractBaseUser
 
 from devices.models import DeviceModel
-from management.models import KeyStorageConfig
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 
 
@@ -43,7 +42,6 @@ def authenticated_client(api_client: APIClient, user: AbstractBaseUser) -> APICl
 @pytest.fixture
 def no_onboarding_config() -> NoOnboardingConfigModel:
     """Create a minimal NoOnboardingConfigModel with MANUAL protocol."""
-    KeyStorageConfig.get_or_create_default()
     config = NoOnboardingConfigModel()
     config.set_pki_protocols([NoOnboardingPkiProtocol.MANUAL])
     config.full_clean()

@@ -55,14 +55,14 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """
 
         KEYLESS = -1, _('Keyless CA')
-        AUTOGEN_ROOT = 0, _('Auto-Generated Root') # Trustpoint = CA
-        AUTOGEN = 1, _('Auto-Generated') # Trustpoint = CA
-        LOCAL_UNPROTECTED = 2, _('Local-Unprotected') # Trustpoint = CA
-        LOCAL_PKCS11 = 3, _('Local-PKCS11') # Trustpoint = CA
-        REMOTE_EST_RA = 4, _('Remote-EST-RA') # Trustpoint = RA
-        REMOTE_CMP_RA = 5, _('Remote-CMP-RA') # Trustpoint = RA
-        REMOTE_ISSUING_EST = 6, _('Remote-Issuing-EST') # Trustpoint = CA
-        REMOTE_ISSUING_CMP = 7, _('Remote-Issuing-CMP') # Trustpoint = CA
+        AUTOGEN_ROOT = 0, _('Auto-Generated Root')  # Trustpoint = CA
+        AUTOGEN = 1, _('Auto-Generated')  # Trustpoint = CA
+        LOCAL_UNPROTECTED = 2, _('Local-Legacy Software')  # Legacy local software-managed CA type
+        LOCAL_PKCS11 = 3, _('Local-Managed Backend')  # Current local Trustpoint-managed CA type
+        REMOTE_EST_RA = 4, _('Remote-EST-RA')  # Trustpoint = RA
+        REMOTE_CMP_RA = 5, _('Remote-CMP-RA')  # Trustpoint = RA
+        REMOTE_ISSUING_EST = 6, _('Remote-Issuing-EST')  # Trustpoint = CA
+        REMOTE_ISSUING_CMP = 7, _('Remote-Issuing-CMP')  # Trustpoint = CA
 
 
     unique_name = models.CharField(

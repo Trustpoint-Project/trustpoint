@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from django.core.exceptions import ValidationError
 
@@ -69,13 +71,15 @@ class TestSetupWizardCompletedModelClassMethod:
     """Tests for SetupWizardCompletedModel.setup_wizard_completed class method."""
 
     @pytest.mark.django_db
-    def test_returns_false_when_no_row(self) -> None:
+    def test_returns_false_when_no_row(self, settings: Any) -> None:
         """Returns False when the singleton row does not exist."""
+        settings.TRUSTPOINT_IS_OPERATIONAL = False
         assert SetupWizardCompletedModel.setup_wizard_completed() is False
 
     @pytest.mark.django_db
-    def test_returns_false_when_timestamp_is_null(self) -> None:
+    def test_returns_false_when_timestamp_is_null(self, settings: Any) -> None:
         """Returns False when the row exists but setup_completed_at is None."""
+        settings.TRUSTPOINT_IS_OPERATIONAL = False
         SetupWizardCompletedModel.objects.create(
             singleton_id=SetupWizardCompletedModel.SINGLETON_ID,
             setup_completed_at=None,
@@ -245,10 +249,10 @@ class TestSetupWizardConfigModelGetCurrentStep:
     """Tests for SetupWizardConfigModel.get_current_step."""
 
     @pytest.mark.django_db
-    def test_default_step_is_crypto_storage(self) -> None:
-        """Default step is CRYPTO_STORAGE."""
+    def test_default_step_is_admin_user(self) -> None:
+        """Default step is ADMIN_USER."""
         step = SetupWizardConfigModel.get_current_step()
-        assert step == SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE
+        assert step == SetupWizardConfigModel.FreshInstallCurrentStep.ADMIN_USER
 
 
 class TestSetupWizardConfigModelIsStepSubmitted:
@@ -273,7 +277,10 @@ class TestSetupWizardConfigModelMarkStepSubmitted:
     def test_marks_correct_field_for_each_step(self) -> None:
         """mark_step_submitted sets the right Boolean field for every step."""
         step_to_field = {
+            SetupWizardConfigModel.FreshInstallCurrentStep.ADMIN_USER: 'fresh_install_admin_user_submitted',
+            SetupWizardConfigModel.FreshInstallCurrentStep.DATABASE: 'fresh_install_database_submitted',
             SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE: 'fresh_install_crypto_storage_submitted',
+            SetupWizardConfigModel.FreshInstallCurrentStep.BACKEND_CONFIG: 'fresh_install_backend_config_submitted',
             SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA: 'fresh_install_demo_data_submitted',
             SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG: 'fresh_install_tls_config_submitted',
             SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY: 'fresh_install_summary_submitted',

@@ -109,6 +109,6 @@ def generate_crl_with_revoked_certs(
         err_msg = f'CRL: Hash algo must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
         raise TypeError(err_msg)
 
-    priv_k = issuing_ca.credential.get_private_key_serializer().as_crypto()
+    priv_k = issuing_ca.credential.get_private_key()
 
     return crl_builder.sign(private_key=priv_k, algorithm=hash_algorithm)

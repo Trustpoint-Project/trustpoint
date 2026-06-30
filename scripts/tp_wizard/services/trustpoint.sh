@@ -109,8 +109,17 @@ start_app(){
   fi
 
   local smtp_env=()
+  local hsm_env=()
+  local hsm_mounts=()
   if $EN_MAILPIT; then
     smtp_env+=( -e "EMAIL_HOST=mailpit" -e "EMAIL_PORT=1025" -e "EMAIL_USE_TLS=0" -e "EMAIL_USE_SSL=0" -e "DEFAULT_FROM_EMAIL=no-reply@trustpoint.local" )
+  fi
+
+  if $EN_LOCAL_HSM; then
+    mapfile -d '' -t hsm_env < <(local_hsm_env_args)
+    mapfile -d '' -t hsm_mounts < <(local_hsm_mount_args)
+  elif [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+    warn "Local/dev HSM metadata exists, but Trustpoint is being started without local SoftHSM proxy settings."
   fi
 
   local skip_env=() skip_key
@@ -136,6 +145,7 @@ start_app(){
     -p "${APP_HTTP_HOST}:80" \
     -p "${APP_HTTPS_HOST}:443" \
     -v "${wizard_env_target}:/var/www/html/trustpoint/.env:ro" \
+    "${hsm_mounts[@]}" \
     "${env_file_arg[@]}" \
     -e "POSTGRES_DB=$APP_DB_NAME" \
     -e "DATABASE_USER=$APP_DB_USER" \
@@ -149,6 +159,7 @@ start_app(){
     -e "TP_TLS_IPV6_ADDRESSES=$TP_TLS_IPV6_ADDRESSES_VALUE" \
     "${skip_env[@]}" \
     "${smtp_env[@]}" \
+    "${hsm_env[@]}" \
     "$APP_IMAGE" >/dev/null
 }
 

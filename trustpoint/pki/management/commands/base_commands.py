@@ -4,12 +4,13 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import (
     BestAvailableEncryption,
     Encoding,
@@ -18,6 +19,15 @@ from cryptography.hazmat.primitives.serialization import (
     pkcs12,
 )
 from cryptography.x509.oid import NameOID
+
+from crypto.application.capabilities import normalize_curve_name
+from crypto.application.private_keys import (
+    ManagedECPrivateKey,
+    ManagedRSAPrivateKey,
+    generate_managed_signing_private_key,
+)
+from crypto.domain.algorithms import EllipticCurveName
+from crypto.domain.specs import EcKeySpec, RsaKeySpec
 from pki.models import CertificateModel
 from pki.util.x509 import CertificateGenerator
 
@@ -27,6 +37,44 @@ if TYPE_CHECKING:
 
 class CertificateCreationCommandMixin(CertificateGenerator):
     """Mixin for management commands that create certificates."""
+
+    @staticmethod
+    def _managed_key_alias(label: str) -> str:
+        """Return a unique backend-key alias for generated command data."""
+        return f'{label}-{uuid.uuid4().hex[:12]}'
+
+    @classmethod
+    def create_backend_rsa_private_key(cls, *, alias: str, key_size: int = 2048) -> ManagedRSAPrivateKey:
+        """Generate an RSA signing key through the configured crypto backend."""
+        private_key = generate_managed_signing_private_key(
+            alias=cls._managed_key_alias(alias),
+            key_spec=RsaKeySpec(key_size=key_size),
+        )
+        if not isinstance(private_key, ManagedRSAPrivateKey):
+            msg = f'Backend returned a non-RSA key for RSA alias {alias!r}.'
+            raise TypeError(msg)
+        return private_key
+
+    @classmethod
+    def create_backend_ec_private_key(
+        cls,
+        *,
+        alias: str,
+        curve: ec.EllipticCurve | EllipticCurveName,
+    ) -> ManagedECPrivateKey:
+        """Generate an EC signing key through the configured crypto backend."""
+        curve_name = curve if isinstance(curve, EllipticCurveName) else normalize_curve_name(curve)
+        if curve_name is None:
+            msg = f'Unsupported backend EC curve {getattr(curve, "name", curve)!r}.'
+            raise ValueError(msg)
+        private_key = generate_managed_signing_private_key(
+            alias=cls._managed_key_alias(alias),
+            key_spec=EcKeySpec(curve=curve_name),
+        )
+        if not isinstance(private_key, ManagedECPrivateKey):
+            msg = f'Backend returned a non-EC key for EC alias {alias!r}.'
+            raise TypeError(msg)
+        return private_key
 
     @classmethod
     def store_issuing_ca(

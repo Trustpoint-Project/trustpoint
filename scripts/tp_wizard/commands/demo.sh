@@ -45,6 +45,7 @@ demo_apply_defaults(){
   APP_DB_PASS="$DB_PASS"
   APP_DB_HOST="$DEF_DB_HOST_INTERNAL"
   APP_DB_PORT=5432
+  EN_LOCAL_HSM=$ONLY_HSM
 
   # Demo mode should run the current checkout by default.
   # Set TP_WIZARD_DEMO_PULL=true to pull an image instead.
