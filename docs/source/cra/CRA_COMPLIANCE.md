@@ -3,7 +3,7 @@
 </p>
 
 {.text-center}
-# Trustpoint — CRA Conformity Assessment
+# CRA Conformity Assessment
 
 <p align="center">
   <strong>EU Cyber Resilience Act Self-Assessment</strong><br>

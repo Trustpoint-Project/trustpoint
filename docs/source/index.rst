@@ -44,7 +44,7 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: 🔒 EU Cyber Resilience Act
+   :caption: EU Cyber Resilience Act
 
    cra/CRA_COMPLIANCE
    cra/THREAT_MODEL
@@ -57,6 +57,21 @@ Welcome to Trustpoint's documentation!
    :caption: Features
 
    features/pki/index
+   features/pki/cas_ras
+   features/pki/add_cas
+   features/pki/add_ras
+
+   features/pki/certificate_profiles
+   features/pki/crl_management
+   features/pki/crls
+   features/pki/domains
+
+   features/management/index
+   features/management/audit_logs
+   features/management/backups
+   features/management/tls_settings
+
+
    features/mdns
    Workflow Engine <features/workflows>
 

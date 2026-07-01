@@ -1,13 +1,8 @@
-.. _features-pki:
-
-===
-PKI
-===
+# PKI
 
 Trustpoint provides comprehensive Public Key Infrastructure (PKI) management capabilities to help you manage certificates, certificate authorities, and related cryptographic operations.
 
-Overview
-========
+## Overview
 
 The PKI features in Trustpoint enable you to:
 
@@ -18,7 +13,12 @@ The PKI features in Trustpoint enable you to:
 - Define certificate profiles
 - Manage trust chains
 
-.. toctree::
-   :maxdepth: 2
+## Certificate Authority Management
 
-   crl_management
+Trustpoint allows you to create and manage both root and issuing certificate authorities. You can configure CA properties, key algorithms, and certificate templates through the web interface.
+
+```{toctree}
+:maxdepth: 2
+
+crl_management
+```
