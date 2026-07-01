@@ -25,41 +25,23 @@ jobs:
           run_migrations: true  # Enable database migrations.
 
       - name: Run Pytest and create reports
-        id: pytest
-        continue-on-error: true  # Allows workflow to continue even if tests fail.
         run: |
           mkdir -p reports
           uv run pytest \
           --md-report-flavor github \
-          --md-report \
+          --md-report-color never \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
           trustpoint/ 
 
-      - name: Create report for failed tests
-        if: steps.pytest.outcome == 'failure'
-        run: |
-          echo "## ❌ Test Failures Detected" > pr-comment.md
-          echo "" >> pr-comment.md
-          cat "md-report.md" >> pr-comment.md
-
-      - name: Create report for successful tests
-        if: steps.pytest.outcome == 'success'
-        run: |
-          echo "## ✅ All Tests Passed Successfully" > pr-comment.md
-          echo "" >> pr-comment.md
-          echo "All tests executed successfully. No issues detected." >> pr-comment.md
-
-      - name: Display Summary in GitHub Actions
+      - name: Display Summary in GitHub Actions even if tests fail
         if: always()  # Ensures this step runs even if pytest fails.
         run: |
-          if [ -f "pr-comment.md" ]; then
-            echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            cat "pr-comment.md" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "</details>" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat "md-report.md" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Test Reports even if tests fail
         uses: actions/upload-artifact@v7  # Uploads reports for review.
@@ -74,8 +56,4 @@ jobs:
         with:
           header: test-report
           recreate: true  # Replaces previous test reports to keep PR comments clean.
-          path: pr-comment.md  # Posts the custom report in the PR.
-
-      - name: Fail workflow if tests failed
-        if: steps.pytest.outcome == 'failure'
-        run: exit 1  # Ensures the workflow fails if tests failed.
+          path: md-report.md  # Posts the markdown test report in the PR.
