@@ -22,6 +22,12 @@ class Migration(migrations.Migration):
             name='target_content_type',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.contenttype', verbose_name='Target Content Type'),
         ),
+        migrations.DeleteModel(
+            name='KeyStorageConfig',
+        ),
+        migrations.DeleteModel(
+            name='PKCS11Token',
+        ),
         migrations.AddIndex(
             model_name='auditlog',
             index=models.Index(fields=['target_content_type', 'target_object_id'], name='audit_log_target_idx'),

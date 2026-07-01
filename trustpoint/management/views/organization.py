@@ -59,7 +59,7 @@ class OrganizationView(OrganizationContextMixin, FormView[forms.Form]):
 
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.ORGANIZATION_CHANGED,
+            operation_type=AuditLog.OperationType.ORGANIZATION_UPDATED,
             target=self.object,
             target_display=f'Organization: {self.object.name}',
             actor=actor,
