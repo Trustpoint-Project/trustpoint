@@ -55,7 +55,7 @@ class Migration(migrations.Migration):
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],
             options={
-                'indexes': [models.Index(fields=['trigger_on', 'created_at'], name='workflows2__trigger_aff43b_idx'), models.Index(fields=['status'], name='workflows2__status_0963f7_idx'), models.Index(fields=['finalized'], name='workflows2__finaliz_bd923f_idx'), models.Index(fields=['idempotency_key'], name='workflows2__idempot_b0391d_idx'), models.Index(fields=['idempotency_released_key'], name='workflows2__idempo_55c573_idx'), models.Index(fields=['idempotency_release_mode'], name='workflows2__idempo_25f08e_idx')],
+                'indexes': [models.Index(fields=['trigger_on', 'created_at'], name='workflows2__trigger_aff43b_idx'), models.Index(fields=['status'], name='workflows2__status_0963f7_idx'), models.Index(fields=['finalized'], name='workflows2__finaliz_bd923f_idx'), models.Index(fields=['idempotency_key'], name='workflows2__idempot_b0391d_idx'), models.Index(fields=['idempotency_released_key'], name='workflows2__idempot_9da664_idx'), models.Index(fields=['idempotency_release_mode'], name='workflows2__idempot_c4fa92_idx')],
                 'constraints': [models.UniqueConstraint(condition=models.Q(('idempotency_key', ''), _negated=True), fields=('trigger_on', 'idempotency_key'), name='wf2_run_on_idem_uniq')],
             },
         ),

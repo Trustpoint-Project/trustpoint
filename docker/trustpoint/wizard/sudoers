@@ -1,4 +1,5 @@
 Defaults        env_reset
+Defaults        env_keep += "TP_* TRUSTPOINT_* DJANGO_SETTINGS_MODULE"
 Defaults        mail_badpass
 Defaults        secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 

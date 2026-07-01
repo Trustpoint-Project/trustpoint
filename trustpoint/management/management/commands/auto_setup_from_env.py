@@ -12,8 +12,19 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import DatabaseError, transaction
 from django.db.models import ProtectedError
 
-from management.models import KeyStorageConfig
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
+from appsecrets.models import (
+    AppSecretBackendKind,
+    AppSecretBackendModel,
+    AppSecretSoftwareConfigModel,
+)
+from appsecrets.service import clear_app_secret_cache, get_app_secret_service
+from crypto.models import (
+    BackendKind,
+    CryptoProviderProfileModel,
+    CryptoProviderSoftwareConfigModel,
+    SoftwareKeyEncryptionSource,
+)
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.models import SetupWizardCompletedModel
@@ -64,15 +75,43 @@ class Command(BaseCommand):
             raise CommandError(err_msg) from e
 
     def _configure_storage(self) -> None:
-        """Configure cryptographic storage (currently only SOFTWARE supported)."""
-        self.stdout.write('Configuring crypto storage...')
+        """Configure cryptographic storage backends (crypto + app-secret)."""
+        self.stdout.write('Configuring crypto backends...')
         try:
-            key_storage_config = KeyStorageConfig.get_or_create_default()
-            key_storage_config.storage_type = KeyStorageConfig.StorageType.SOFTWARE
-            key_storage_config.save(update_fields=['storage_type'])
-            self.stdout.write(self.style.SUCCESS('Crypto storage configured'))
+            profile, created = CryptoProviderProfileModel.objects.get_or_create(
+                backend_kind=BackendKind.SOFTWARE,
+                defaults={
+                    'active': True,
+                    'name': 'trustpoint-software-auto-setup',
+                },
+            )
+            if not created:
+                profile.active = True
+                profile.save()
+
+            software_config, _ = CryptoProviderSoftwareConfigModel.objects.get_or_create(
+                profile=profile,
+                defaults={
+                    'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
+                    'encryption_source_ref': '',
+                    'allow_exportable_private_keys': False,
+                },
+            )
+            software_config.save()
+
+            backend = AppSecretBackendModel.get_singleton()
+            backend.backend_kind = AppSecretBackendKind.SOFTWARE
+            backend.save()
+
+            app_secret_config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
+            app_secret_config.save()
+
+            clear_app_secret_cache()
+            get_app_secret_service().ensure_backend_ready()
+
+            self.stdout.write(self.style.SUCCESS('Crypto backends configured'))
         except Exception as e:
-            err_msg = f'Failed to configure storage: {e}'
+            err_msg = f'Failed to configure backends: {e}'
             raise CommandError(err_msg) from e
 
     def _parse_csv_list(self, value: str | None) -> list[str]:
@@ -150,7 +189,19 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.WARNING('=== Trustpoint Auto-Setup from Environment Variables ==='))
 
-        if SetupWizardCompletedModel.setup_wizard_completed():
+        # Check actual database state, not the operational-mode shortcut
+        # SetupWizardCompletedModel.setup_wizard_completed() returns True in operational mode
+        # even if setup hasn't actually run
+        try:
+            setup_completed = SetupWizardCompletedModel.objects.filter(
+                pk=SetupWizardCompletedModel.SINGLETON_ID,
+                setup_completed_at__isnull=False,
+            ).exists()
+        except Exception:  # noqa: BLE001
+            # Table doesn't exist yet (migrations not run or setup_wizard app not migrated)
+            setup_completed = False
+
+        if setup_completed:
             self.stdout.write(self.style.WARNING('Setup wizard already completed, skipping auto-setup'))
             return
 
@@ -198,7 +249,25 @@ class Command(BaseCommand):
                 credential_model = self._generate_tls_credential(tls_ipv4, tls_ipv6, tls_dns)
                 self._apply_tls_credential(credential_model)
 
-                SetupWizardCompletedModel.mark_setup_complete_once()
+                # Mark setup as complete
+                # Note: setup_wizard migrations are disabled in operational mode,
+                # so we need to ensure the table exists first
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    # Create table if it doesn't exist (PostgreSQL syntax)
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS setup_wizard_setupwizardcompletedmodel (
+                            singleton_id SMALLINT PRIMARY KEY DEFAULT 1,
+                            setup_completed_at TIMESTAMPTZ
+                        )
+                    """)
+                    #  Insert or update the completion record
+                    cursor.execute("""
+                        INSERT INTO setup_wizard_setupwizardcompletedmodel (singleton_id, setup_completed_at)
+                        VALUES (1, NOW())
+                        ON CONFLICT (singleton_id) DO NOTHING
+                    """)
+
                 self.stdout.write(self.style.SUCCESS('Setup marked as complete'))
 
             self.stdout.write(self.style.SUCCESS('=== Auto-setup completed successfully ==='))

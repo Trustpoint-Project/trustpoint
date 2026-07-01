@@ -174,6 +174,9 @@ _tls_dns_raw = os.getenv('TP_TLS_DNS_NAMES', '').strip()
 _http_port = int(os.getenv('TP_HTTP_PORT', '80'))
 _https_port = int(os.getenv('TP_HTTPS_PORT', '443'))
 
+TP_HTTP_PORT = str(_http_port)
+TP_HTTPS_PORT = str(_https_port)
+
 # Parse comma-separated lists
 _tls_ipv4_addrs = [addr.strip() for addr in _tls_ipv4_raw.split(',') if addr.strip()]
 _tls_ipv6_addrs = [addr.strip() for addr in _tls_ipv6_raw.split(',') if addr.strip()]
