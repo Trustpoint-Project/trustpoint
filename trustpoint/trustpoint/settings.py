@@ -182,12 +182,15 @@ _tls_ipv4_addrs = [addr.strip() for addr in _tls_ipv4_raw.split(',') if addr.str
 _tls_ipv6_addrs = [addr.strip() for addr in _tls_ipv6_raw.split(',') if addr.strip()]
 _tls_dns_names = [name.strip() for name in _tls_dns_raw.split(',') if name.strip()]
 
+def_http_port = 80
+def_https_port = 443
+
 # Add IPv4 addresses
 for ipv4 in _tls_ipv4_addrs:
     if ipv4 not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(ipv4)
     # Add CSRF origins with non-default ports
-    if _http_port != 80:
+    if _http_port != def_http_port:
         _http_origin = f'http://{ipv4}:{_http_port}'
         if _http_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_http_origin)
@@ -195,7 +198,7 @@ for ipv4 in _tls_ipv4_addrs:
         _http_origin = f'http://{ipv4}'
         if _http_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_http_origin)
-    if _https_port != 443:
+    if _https_port != def_https_port:
         _https_origin = f'https://{ipv4}:{_https_port}'
         if _https_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_https_origin)
@@ -210,7 +213,7 @@ for ipv6 in _tls_ipv6_addrs:
     if ipv6 not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(ipv6)
     # CSRF origins use bracketed IPv6
-    if _http_port != 80:
+    if _http_port != def_http_port:
         _http_origin = f'http://[{ipv6}]:{_http_port}'
         if _http_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_http_origin)
@@ -218,7 +221,7 @@ for ipv6 in _tls_ipv6_addrs:
         _http_origin = f'http://[{ipv6}]'
         if _http_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_http_origin)
-    if _https_port != 443:
+    if _https_port != def_https_port:
         _https_origin = f'https://[{ipv6}]:{_https_port}'
         if _https_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_https_origin)
@@ -237,7 +240,7 @@ for dns_name in _tls_dns_names:
         if _wildcard not in ALLOWED_HOSTS:
             ALLOWED_HOSTS.append(_wildcard)
     # Add CSRF origins
-    if _http_port != 80:
+    if _http_port != def_http_port:
         _http_origin = f'http://{dns_name}:{_http_port}'
         if _http_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_http_origin)
@@ -245,7 +248,7 @@ for dns_name in _tls_dns_names:
         _http_origin = f'http://{dns_name}'
         if _http_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_http_origin)
-    if _https_port != 443:
+    if _https_port != def_https_port:
         _https_origin = f'https://{dns_name}:{_https_port}'
         if _https_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_https_origin)
@@ -303,7 +306,7 @@ def _env_value(name: str, default: str, *, file_var: str | None = None) -> str:
     direct_value = os.getenv(name)
     if direct_value is not None:
         return direct_value
-    
+
     # Try Docker secret file if specified
     if file_var:
         secret_file_path = os.getenv(file_var)
@@ -312,7 +315,7 @@ def _env_value(name: str, default: str, *, file_var: str | None = None) -> str:
                 return Path(secret_file_path).read_text().strip()
             except (FileNotFoundError, PermissionError, OSError):
                 pass
-    
+
     return default
 
 
