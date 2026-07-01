@@ -17,7 +17,7 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: 🚀 Getting Started
+   :caption: Getting Started
 
    getting_started/introduction
    getting_started/quickstart_setup
@@ -28,8 +28,8 @@ Welcome to Trustpoint's documentation!
 
 
 .. toctree::
-   :maxdepth: 2
-   :caption: 📟 Devices
+   :maxdepth: 3
+   :caption: Devices
 
    devices/onboarding
    devices/aoki
@@ -37,23 +37,24 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: 🔒 Security
+   :caption: Security
 
    security/pkcs11
    security/db_encryption
 
 
 .. toctree::
-   :maxdepth: 2
-   :caption: 🌟 Features
+   :maxdepth: 3
+   :caption: Features
 
+   features/pki/index
    features/mdns
    Workflow Engine <features/workflows>
 
 
 .. toctree::
    :maxdepth: 2
-   :caption: 📍 Indices and Tables
+   :caption: Indices and Tables
 
    indices_and_tables/glossary
    indices_and_tables/issued_certificates
@@ -61,7 +62,7 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: 🔎 Testing
+   :caption: Testing
 
    testing/test_plan
    testing/ci_cd
@@ -70,7 +71,7 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: 🧑‍💻 Development
+   :caption: Development
 
    development/development
    development/architecture/credentials
