@@ -27,7 +27,7 @@ jobs:
       - name: Run Pytest and create reports
         run: |
           mkdir -p reports
-          uv run pytest --emoji \
+          uv run pytest \
           --md-report-flavor github \
           --md-report \
           --html=reports/pytest-report.html \
