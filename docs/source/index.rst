@@ -47,9 +47,9 @@ Welcome to Trustpoint's documentation!
    :caption: 🔒 EU Cyber Resilience Act
 
    cra/CRA_COMPLIANCE
-   cra/CONTROLS
-   cra/RISK_REGISTER
    cra/THREAT_MODEL
+   cra/RISK_REGISTER
+   cra/CONTROLS
 
 
 .. toctree::

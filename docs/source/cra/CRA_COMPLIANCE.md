@@ -13,12 +13,12 @@
 <p align="center">
   <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
   <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Version"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Effective-2026--06--26-success?style=for-the-badge" alt="Effective Date"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Effective-2026--07--01-success?style=for-the-badge" alt="Effective Date"/></a>
   <a href="#"><img src="https://img.shields.io/badge/Review-Quarterly-orange?style=for-the-badge" alt="Review Cycle"/></a>
   <a href="#"><img src="https://img.shields.io/badge/Status-In_Progress-yellow?style=for-the-badge" alt="Status"/></a>
 </p>
 
-**📋 Document Owner:** Trustpoint Project Maintainers | **📄 Version:** 1.0 | **📅 Last Updated:** 2026-06-30 (UTC)  
+**📋 Document Owner:** Trustpoint Project Maintainers | **📄 Version:** 1.0 | **📅 Last Updated:** 2026-07-01 (UTC)  
 **🔄 Review Cycle:** Quarterly | **⏰ Next Review:** 2026-09-26
 
 ---
