@@ -30,7 +30,9 @@ class RestUsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
         password = context.rest_password
 
         try:
-            device = DeviceModel.objects.select_related().filter(
+            device = DeviceModel.objects.select_related(
+                'onboarding_config', 'no_onboarding_config'
+            ).filter(
                 common_name=username
             ).first()
 

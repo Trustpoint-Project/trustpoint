@@ -37,6 +37,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Setup .env file
+        run: cp .env.example .env
+
       - name: Build and start PostgreSQL
         run: |
           docker build -t trustpointproject/postgres:latest -f docker/db/Dockerfile .

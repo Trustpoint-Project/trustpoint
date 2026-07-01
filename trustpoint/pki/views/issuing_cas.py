@@ -1402,28 +1402,22 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
     def _find_existing_ca_for_certificate(self, cert: x509.Certificate) -> CaModel | None:
         """Find an existing CA that has the given certificate."""
-        # TODO(FHK): comparing the subject public bytes is not sufficient  # noqa: FIX002
-        for existing_ca in CaModel.objects.filter(certificate__isnull=False):
-            try:
-                ca_cert = existing_ca.get_certificate()
-                if ca_cert and (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
-                    ca_cert.issuer.public_bytes() == cert.issuer.public_bytes()):
-                    return existing_ca
-            except (AttributeError, ValueError) as e:
-                self.logger.debug('Error checking existing keyless CA certificate: %s', e)
-                continue
+        # TODO(FHK): subject+issuer byte equality is not sufficient for  # noqa: FIX002
 
-        for existing_ca in CaModel.objects.filter(credential__isnull=False):
-            try:
-                ca_cert = existing_ca.get_certificate()
-                if ca_cert and (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
-                    ca_cert.issuer.public_bytes() == cert.issuer.public_bytes()):
-                    return existing_ca
-            except (AttributeError, ValueError) as e:
-                self.logger.debug('Error checking existing issuing CA certificate: %s', e)
-                continue
+        subject_bytes = cert.subject.public_bytes().hex().upper()
+        issuer_bytes = cert.issuer.public_bytes().hex().upper()
 
-        return None
+        keyless_match = CaModel.objects.filter(
+            certificate__subject_public_bytes=subject_bytes,
+            certificate__issuer_public_bytes=issuer_bytes,
+        ).first()
+        if keyless_match:
+            return keyless_match
+
+        return CaModel.objects.filter(
+            credential__certificate__subject_public_bytes=subject_bytes,
+            credential__certificate__issuer_public_bytes=issuer_bytes,
+        ).first()
 
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):

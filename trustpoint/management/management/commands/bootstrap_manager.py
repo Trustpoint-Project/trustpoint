@@ -6,6 +6,7 @@ import io
 import logging
 import os
 import secrets
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -40,6 +41,7 @@ class Command(BaseCommand):
         output.write('Preparing bootstrap database schema...')
         self._prepare_bootstrap_database()
         self._create_bootstrap_login(output)
+        self._trigger_auto_setup_if_requested(output)
 
         completed_row, _ = SetupWizardCompletedModel.objects.get_or_create(
             singleton_id=SetupWizardCompletedModel.SINGLETON_ID
@@ -161,6 +163,65 @@ class Command(BaseCommand):
         if update_fields:
             config.save(update_fields=update_fields)
             output.write('Seeded operational database defaults from container environment.')
+
+    @staticmethod
+    def _trigger_auto_setup_if_requested(output: CommandOutputWrapper) -> None:
+        """Check if TP_AUTO_SETUP is enabled and trigger operational switch if needed."""
+        auto_setup = os.getenv('TP_AUTO_SETUP', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+        if not auto_setup:
+            return
+
+        if SetupWizardCompletedModel.setup_wizard_completed():
+            output.write(output.warning('TP_AUTO_SETUP is enabled but setup already completed, skipping'))
+            return
+
+        output.write(output.warning('TP_AUTO_SETUP is enabled, preparing automatic operational switch...'))
+
+        # Create operational.env from environment variables
+        config = SetupWizardConfigModel.get_singleton()
+        operational_env_path = os.getenv(
+            'TRUSTPOINT_OPERATIONAL_ENV_FILE',
+            '/var/lib/trustpoint/bootstrap/operational.env',
+        )
+        operational_ready_path = os.getenv(
+            'TRUSTPOINT_OPERATIONAL_READY_FILE',
+            '/var/lib/trustpoint/bootstrap/operational.ready',
+        )
+
+        env_content = f"""# Auto-generated operational environment from TP_AUTO_SETUP
+DATABASE_HOST={config.operational_db_host or os.getenv('DATABASE_HOST', 'postgres')}
+DATABASE_PORT={config.operational_db_port or os.getenv('DATABASE_PORT', '5432')}
+POSTGRES_DB={config.operational_db_name or os.getenv('POSTGRES_DB', 'trustpoint_db')}
+DATABASE_USER={config.operational_db_user or os.getenv('DATABASE_USER', 'admin')}
+DATABASE_PASSWORD={config.operational_db_password or os.getenv('DATABASE_PASSWORD', '')}
+"""
+
+        try:
+            env_file = Path(operational_env_path)
+            env_file.parent.mkdir(parents=True, exist_ok=True)
+            env_file.write_text(env_content)
+            output.write(f'Created operational environment file: {operational_env_path}')
+
+            # Create operational.ready marker
+            ready_file = Path(operational_ready_path)
+            ready_file.parent.mkdir(parents=True, exist_ok=True)
+            ready_file.write_text('auto-setup-requested\n')
+            output.write(f'Created operational ready marker: {operational_ready_path}')
+
+            # Create a marker file to trigger auto-setup during operational switch
+            auto_setup_marker = Path('/var/lib/trustpoint/bootstrap/auto-setup.marker')
+            auto_setup_marker.write_text('TP_AUTO_SETUP=true\n')
+            output.write('Created auto-setup marker for operational phase')
+
+            output.write(output.warning('Auto-setup configuration complete'))
+            output.write(output.warning('Container will automatically switch to operational phase on next restart'))
+            output.write(output.warning('Auto-setup will run automatically during the switch'))
+
+        except OSError as e:
+            error_msg = f'Failed to create operational environment files: {e}'
+            output.write(output.error(error_msg))
+            raise CommandError(error_msg) from e
 
     @staticmethod
     def _parse_version(version_str: str) -> Version:
