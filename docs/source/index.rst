@@ -42,6 +42,15 @@ Welcome to Trustpoint's documentation!
    security/pkcs11
    security/db_encryption
 
+.. toctree::
+   :maxdepth: 2
+   :caption: 🔒 EU Cyber Resilience Act
+
+   cra/CRA_COMPLIANCE
+   cra/THREAT_MODEL
+   cra/RISK_REGISTER
+   cra/CONTROLS
+
 
 .. toctree::
    :maxdepth: 2
@@ -74,6 +83,9 @@ Welcome to Trustpoint's documentation!
 
    development/development
    development/architecture/credentials
+   development/architecture/backup_restore
+   development/architecture/crypto_redesign
+   development/architecture/crypto_implementation_plan
    development/auto_restore
    development/sbom
    development/pipeline

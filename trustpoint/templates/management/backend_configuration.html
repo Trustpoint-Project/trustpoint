@@ -1,0 +1,388 @@
+{% extends 'trustpoint/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block content %}
+<div class="tp-settings-layout tp-backend-configuration">
+    <div class="tp-backend-page-header d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">{% trans "Crypto Backend Configuration" %}</h2>
+            <p class="text-muted mb-0">
+                {% trans 'Configured backend state, usable key algorithms, and provider probe details.' %}
+            </p>
+        </div>
+        {% if crypto_profile %}
+            <form method="post" class="m-0">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reprobe">
+                <button type="submit" class="btn btn-primary">
+                    {% trans 'Refresh Probe' %}
+                </button>
+            </form>
+        {% endif %}
+    </div>
+
+    {% if not crypto_profile %}
+        <div class="alert alert-warning d-flex align-items-center gap-2">
+            <svg class="bi flex-shrink-0" width="20" height="20" fill="currentColor">
+                <use href="{% static 'img/icons.svg' %}#icon-warning"></use>
+            </svg>
+            <div>{% trans 'No configured managed-crypto backend profile was found.' %}</div>
+        </div>
+    {% else %}
+        <div class="row g-4 mb-4">
+            <div class="col-xl-4 col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                            <div>
+                                <h5 class="mb-1">{% trans 'Managed Crypto' %}</h5>
+                                <div class="text-muted small">{% trans 'Active backend profile' %}</div>
+                            </div>
+                            <span class="badge text-bg-{{ capability_badge }}">{{ capability_label }}</span>
+                        </div>
+
+                        <ul class="tp-kvp-list mb-0">
+                            <li>
+                                <div>{% trans 'Profile' %}</div>
+                                <div>{{ crypto_profile.name }}</div>
+                            </li>
+                            <li>
+                                <div>{% trans 'Backend' %}</div>
+                                <div>{{ crypto_profile.get_backend_kind_display }}</div>
+                            </li>
+                            <li>
+                                <div>{% trans 'Probe Status' %}</div>
+                                <div>{{ crypto_profile.get_last_probe_status_display }}</div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4 col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="mb-1">{% trans 'Capability Policy' %}</h5>
+                        <div class="text-muted small mb-3">{% trans 'Operational availability' %}</div>
+
+                        <p class="mb-3">{{ capability_message }}</p>
+
+                        {% if capability_diagnostics %}
+                            <ul class="text-muted ps-3 mb-0">
+                                {% for diagnostic in capability_diagnostics %}
+                                    <li>{{ diagnostic }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <div class="text-muted small">
+                                {% trans 'Use these capabilities to decide which algorithms Trustpoint may offer in operational forms.' %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="mb-1">{% trans 'Application Secrets' %}</h5>
+                        <div class="text-muted small mb-3">{% trans 'Secret storage backend' %}</div>
+
+                        {% if app_secret_backend %}
+                            <ul class="tp-kvp-list mb-0">
+                                <li>
+                                    <div>{% trans 'Backend' %}</div>
+                                    <div>{{ app_secret_backend.get_backend_kind_display }}</div>
+                                </li>
+                            </ul>
+                        {% else %}
+                            <div class="alert alert-warning mb-0">
+                                {% trans 'No configured application-secret backend was found.' %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-lg-7">
+                <div class="card h-100">
+                    <div class="card-header d-flex align-items-center justify-content-between gap-3">
+                        <h5 class="mb-0">{% trans 'Supported CA Key Algorithms' %}</h5>
+                        {% if supported_key_capabilities %}
+                            <span class="badge text-bg-secondary">{{ supported_key_capabilities|length }}</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="card-body">
+                        {% if supported_key_capabilities %}
+                            <div class="accordion accordion-flush border rounded overflow-hidden">
+                                {% for capability in supported_key_capabilities %}
+                                    <div class="accordion-item">
+                                        <h3 class="accordion-header">
+                                            <button
+                                                type="button"
+                                                class="accordion-button py-2 px-3 bg-body-tertiary text-body {% if not forloop.first %}collapsed{% endif %}"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#ca-key-capability-{{ forloop.counter }}"
+                                                aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}"
+                                                aria-controls="ca-key-capability-{{ forloop.counter }}"
+                                            >
+                                                <span class="fw-semibold">{{ capability.family }}</span>
+                                                <span class="badge rounded-pill text-bg-success ms-3">{% trans 'Available' %}</span>
+                                            </button>
+                                        </h3>
+
+                                        <div
+                                            id="ca-key-capability-{{ forloop.counter }}"
+                                            class="accordion-collapse collapse{% if forloop.first %} show{% endif %}"
+                                        >
+                                            <div class="accordion-body px-3 py-2">
+                                                <div class="text-muted small mb-1">{% trans 'Allowed values' %}</div>
+                                                <div class="font-monospace small text-break">{{ capability.values }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning mb-0">
+                                {% trans 'No usable CA key algorithms are currently available from the active backend.' %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card h-100">
+                    <div class="card-header d-flex align-items-center justify-content-between gap-3">
+                        <h5 class="mb-0">{% trans 'AutoGenPKI Choices' %}</h5>
+                        {% if supported_auto_gen_pki_algorithms %}
+                            <span class="badge text-bg-secondary">{{ supported_auto_gen_pki_algorithms|length }}</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="card-body">
+                        {% if supported_auto_gen_pki_algorithms %}
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for algorithm in supported_auto_gen_pki_algorithms %}
+                                    <span class="badge rounded-pill text-bg-success">{{ algorithm.label }}</span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning mb-0">
+                                {% trans 'Auto-generated PKI cannot be enabled until the active backend supports at least one allowed key algorithm.' %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if is_pkcs11_backend and pkcs11_config %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">{% trans 'PKCS#11 Provider Details' %}</h5>
+                </div>
+
+                <div class="card-body">
+                    <ul class="tp-kvp-list mb-0">
+                        <li>
+                            <div>{% trans 'Module Path' %}</div>
+                            <div><code class="p-0">{{ pkcs11_config.module_path }}</code></div>
+                        </li>
+                        <li>
+                            <div>{% trans 'Token Label' %}</div>
+                            <div>{{ pkcs11_config.token_label|default:"-" }}</div>
+                        </li>
+                        <li>
+                            <div>{% trans 'Token Serial' %}</div>
+                            <div>{{ pkcs11_token_serial_display }}</div>
+                        </li>
+                        <li>
+                            <div>{% trans 'Slot ID' %}</div>
+                            <div>{{ pkcs11_slot_id_display }}</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            {% if pkcs11_capability_payload %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% trans 'PKCS#11 Probe Details' %}</h5>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="accordion accordion-flush border rounded overflow-hidden mb-4">
+                            <div class="accordion-item">
+                                <h3 class="accordion-header">
+                                    <button
+                                        type="button"
+                                        class="accordion-button py-2 px-3 bg-body-tertiary text-body"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#pkcs11-derived-features"
+                                        aria-expanded="true"
+                                        aria-controls="pkcs11-derived-features"
+                                    >
+                                        <span class="fw-semibold">{% trans 'Derived Features' %}</span>
+                                        <span class="badge text-bg-secondary ms-3">{{ pkcs11_derived_features|length }}</span>
+                                    </button>
+                                </h3>
+
+                                <div id="pkcs11-derived-features" class="accordion-collapse collapse show">
+                                    <div class="accordion-body px-3 py-3">
+                                        {% if pkcs11_derived_features %}
+                                            <ul class="tp-kvp-list mb-0">
+                                                {% for feature_name, feature_enabled in pkcs11_derived_features %}
+                                                    <li>
+                                                        <div><code class="p-0">{{ feature_name }}</code></div>
+                                                        <div>{{ feature_enabled|yesno:"yes,no" }}</div>
+                                                    </li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <div class="text-muted">{% trans 'No derived features were recorded.' %}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                            <div>
+                                <h5 class="mb-1">{% trans 'Mechanisms' %}</h5>
+                                <div class="text-muted small">
+                                    {% trans 'Grouped by mechanism name for easier scanning.' %}
+                                </div>
+                            </div>
+                            {% if pkcs11_mechanisms %}
+                                <span class="badge text-bg-secondary">{{ pkcs11_mechanisms|length }}</span>
+                            {% endif %}
+                        </div>
+
+                        {% if pkcs11_mechanism_groups %}
+                            <div class="accordion accordion-flush border rounded overflow-hidden">
+                                {% for group in pkcs11_mechanism_groups %}
+                                    <div class="accordion-item">
+                                        <h3 class="accordion-header">
+                                            <button
+                                                type="button"
+                                                class="accordion-button py-2 px-3 bg-body-tertiary text-body {% if not group.expanded %}collapsed{% endif %}"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#pkcs11-mechanisms-{{ group.id }}"
+                                                aria-expanded="{% if group.expanded %}true{% else %}false{% endif %}"
+                                                aria-controls="pkcs11-mechanisms-{{ group.id }}"
+                                            >
+                                                <span class="fw-semibold">{{ group.title }}</span>
+                                                <span class="badge text-bg-secondary ms-3">{{ group.mechanisms|length }}</span>
+                                            </button>
+                                        </h3>
+
+                                        <div id="pkcs11-mechanisms-{{ group.id }}" class="accordion-collapse collapse{% if group.expanded %} show{% endif %}">
+                                            <div class="table-responsive border-top">
+                                                <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
+                                                    <colgroup>
+                                                        <col class="tp-mechanism-col-name">
+                                                        <col class="tp-mechanism-col-code">
+                                                        {% if group.has_key_size_ranges %}
+                                                            <col class="tp-mechanism-col-size">
+                                                        {% endif %}
+                                                        <col class="tp-mechanism-col-flags">
+                                                    </colgroup>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>{% trans 'Name' %}</th>
+                                                            <th class="text-end">{% trans 'Code' %}</th>
+                                                            {% if group.has_key_size_ranges %}
+                                                                <th>{% trans 'Key Size' %}</th>
+                                                            {% endif %}
+                                                            <th>{% trans 'Flags' %}</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for mechanism in group.mechanisms %}
+                                                            <tr>
+                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
+                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
+                                                                {% if group.has_key_size_ranges %}
+                                                                    <td class="text-nowrap">{{ mechanism.key_size_range|default:"-" }}</td>
+                                                                {% endif %}
+                                                                <td>
+                                                                    {% if mechanism.flags %}
+                                                                        <div class="d-flex flex-wrap gap-1">
+                                                                            {% for flag in mechanism.flags %}
+                                                                                <span class="badge rounded-pill text-bg-light border text-body">{{ flag }}</span>
+                                                                            {% endfor %}
+                                                                        </div>
+                                                                    {% else %}
+                                                                        <span class="text-muted">-</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning mb-0">
+                                {% trans 'No mechanisms were recorded.' %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        {% elif is_software_backend and software_config %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">{% trans 'Software Backend Details' %}</h5>
+                </div>
+
+                <div class="card-body">
+                    <div class="alert alert-warning mb-4">
+                        <strong>{% trans "Demo backend." %}</strong>
+                        {% trans "The active software backend is suitable for demos, development, and automated tests only. It is not intended for production Trustpoint deployments." %}
+                    </div>
+
+                    <ul class="tp-kvp-list mb-0">
+                        <li>
+                            <div>{% trans 'Encryption Source' %}</div>
+                            <div>{{ software_config.get_encryption_source_display }}</div>
+                        </li>
+                        <li>
+                            <div>{% trans 'Encryption Source Ref' %}</div>
+                            <div>{{ software_config.encryption_source_ref|default:"-" }}</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        {% elif is_rest_backend and rest_config %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">{% trans 'REST Backend Details' %}</h5>
+                </div>
+
+                <div class="card-body">
+                    <ul class="tp-kvp-list mb-0">
+                        <li>
+                            <div>{% trans 'Base URL' %}</div>
+                            <div><code class="p-0">{{ rest_config.base_url }}</code></div>
+                        </li>
+                        <li>
+                            <div>{% trans 'Auth Type' %}</div>
+                            <div>{{ rest_config.get_auth_type_display }}</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock content %}

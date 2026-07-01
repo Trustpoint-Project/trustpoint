@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import resolve, reverse
 
-from management.views import IndexView, backup, logging, tls, key_storage
+from management.views import IndexView, backend_configuration, backup, logging, tls
 from management.views.user_management import UserTableView, UserCreateView, UserDeleteView, UserChangeRoleView
 from management.views.role_management import RoleTableView, RoleCreateView, RoleEditView, RoleDeleteView
 
@@ -146,14 +146,14 @@ class SettingsUrlsTestCase(TestCase):
         self.assertEqual(resolver.view_name, 'management:backup-delete-multiple')
         self.assertEqual(resolver.func.view_class, backup.BackupFilesDeleteMultipleView)
 
-    def test_key_storage_url(self):
-        """Test the key storage configuration URL."""
-        url = reverse('management:key_storage')
-        self.assertEqual(url, '/management/key_storage/')
+    def test_backend_configuration_url(self):
+        """Test the backend configuration URL."""
+        url = reverse('management:backend_configuration')
+        self.assertEqual(url, '/management/backend-configuration/')
 
         resolver = resolve(url)
-        self.assertEqual(resolver.view_name, 'management:key_storage')
-        self.assertEqual(resolver.func.view_class, key_storage.KeyStorageConfigView)
+        self.assertEqual(resolver.view_name, 'management:backend_configuration')
+        self.assertEqual(resolver.func.view_class, backend_configuration.BackendConfigurationView)
 
     def test_logging_regex_patterns(self):
         """Test that logging regex patterns work correctly."""
