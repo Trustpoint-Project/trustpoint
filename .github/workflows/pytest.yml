@@ -27,9 +27,9 @@ jobs:
       - name: Run Pytest and create reports
         run: |
           mkdir -p reports
-          uv run pytest \
+          uv run pytest --emoji \
           --md-report-flavor github \
-          --md-report-color never \
+          --md-report \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
           trustpoint/ 
