@@ -1,8 +1,9 @@
 <p align="center">
-  <img src=".github-assets/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
+  <img src="../_static/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
 </p>
 
-<h1 align="center">Trustpoint — CRA Conformity Assessment</h1>
+{.text-center}
+# Trustpoint — CRA Conformity Assessment
 
 <p align="center">
   <strong>EU Cyber Resilience Act Self-Assessment</strong><br>
@@ -33,7 +34,7 @@ The assessment is based on the following maintained artefacts:
 * [`THREAT_MODEL.md`](./THREAT_MODEL.md) — identified threats to Trustpoint assets and components
 * [`RISK_REGISTER.md`](./RISK_REGISTER.md) — evaluated cybersecurity risks and residual risk decisions
 * [`CONTROLS.md`](./CONTROLS.md) — implemented, in-progress, and planned security controls
-* [`SECURITY.md`](./SECURITY.md) — vulnerability disclosure and security contact process
+* [`SECURITY.md`][security] — vulnerability disclosure and security contact process
 
 ---
 
@@ -62,11 +63,12 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | 1. Threat Model | [`THREAT_MODEL.md`](./THREAT_MODEL.md) | Identifies threats to Trustpoint assets and affected components |
 | 2. Risk Register | [`RISK_REGISTER.md`](./RISK_REGISTER.md) | Groups threats into cybersecurity risks, evaluates inherent and residual risk |
 | 3. Controls | [`CONTROLS.md`](./CONTROLS.md) | Documents implemented, in-progress, and planned controls |
-| 4. Evidence | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) - [![Critical][badge-you-are-here]]() · [`SECURITY.md`](./SECURITY.md) · CI/CD artifacts · SBOM | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance |
+| 4. Evidence | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) - [![Critical][badge-you-are-here]]() · [`SECURITY.md`][security] · CI/CD artifacts · SBOM | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance |
 | 5. Review | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) · [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) | Ensures that threats, risks, controls, and evidence remain current over time |
 
 ---
 
+{id="project-identification"}
 ## 1️⃣ **Project Identification**
 
 *Supports CRA Article 31 and Annex VII § 1 - Product Description Requirements, including intended purpose and software versions affecting compliance.*
@@ -112,6 +114,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 
 ---
 
+{id="cra-scope--classification"}
 ## 2️⃣ **CRA Scope & Classification**
 
 *Supports CRA Article 2 - Scope, Article 7 - Important Products with Digital Elements, Article 8 - Critical Products with Digital Elements, and Annex III / Annex IV classification assessment.*
@@ -145,15 +148,15 @@ This section follows the legal content requirements of CRA Article 31 and Annex 
 
 | CRA Annex VII Item | Status | Trustpoint Evidence / Gap | Primary Evidence |
 | ------------------ | ------ | ------------------------- | ---------------- |
-| **1(a) General product description and intended purpose** | ✅ | Product purpose, scope, PKI / certificate lifecycle functionality, and operating context are documented. | Section 1 · [README](./README.md) · [ReadTheDocs][readthedocs] |
+| **1(a) General product description and intended purpose** | ✅ | Product purpose, scope, PKI / certificate lifecycle functionality, and operating context are documented. | Section 1 · [README][readme] · [ReadTheDocs][readthedocs] |
 | **1(b) Software versions affecting compliance** | 🔄 | Current beta version is identified; v1.0 must define which software versions are covered by the conformity assessment and support period. | Section 1 · [Releases][releases] |
 | **1(c) Hardware photographs / layout** | N/A | Trustpoint is software; no hardware product documentation is applicable. | N/A |
-| **1(d) User information and instructions from Annex II** | 🔄 | Documentation exists, but Annex II-specific user information should be checked before v1.0, including secure installation, operation, update, support-period, vulnerability contact, and decommissioning guidance. | [ReadTheDocs][readthedocs] · [`SECURITY.md`](./SECURITY.md) |
+| **1(d) User information and instructions from Annex II** | 🔄 | Documentation exists, but Annex II-specific user information should be checked before v1.0, including secure installation, operation, update, support-period, vulnerability contact, and decommissioning guidance. | [ReadTheDocs][readthedocs] · [`SECURITY.md`][security] |
 | **2(a) Design and development information, including system architecture** | ✅ / 🔄 | Components, system boundaries, CA/RA logic, enrollment, lifecycle, key handling, database, monitoring, and external integrations are documented; architecture evidence should be kept release-specific. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [ReadTheDocs][readthedocs] |
-| **2(b) Vulnerability handling processes, SBOM, CVD policy, contact address, secure update distribution** | ✅ / 🔄 | SBOM, security contact, and private disclosure process exist; supported-version policy, secure update process, release notes, and advisory workflow should be matured before v1.0. | [`SECURITY.md`](./SECURITY.md) · [SBOMs][sbom-portal] · [Releases][releases] |
+| **2(b) Vulnerability handling processes, SBOM, CVD policy, contact address, secure update distribution** | ✅ / 🔄 | SBOM, security contact, and private disclosure process exist; supported-version policy, secure update process, release notes, and advisory workflow should be matured before v1.0. | [`SECURITY.md`][security] · [SBOMs][sbom-portal] · [Releases][releases] |
 | **2(c) Production, monitoring, and validation processes** | ✅ / 🔄 | CI/CD, tests, type checking, linting, dependency scanning, OpenSSF, Docker builds, and release workflow evidence are available; release attestations remain planned. | [GitHub Actions][actions] · [OpenSSF][openssf] · [Docker builds][docker-builds] |
 | **3 Cybersecurity risk assessment and Annex I applicability** | ✅ | Threat model, risk register, control mapping, inherent / residual risk, and treatment decisions are documented. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) |
-| **4 Support-period determination information** | 🔄 | RTO/RPO and security maintenance are documented, but the formal support period and rationale under Article 13(8) must be defined before placing on the market. | Section 9 · [`SECURITY.md`](./SECURITY.md) |
+| **4 Support-period determination information** | 🔄 | RTO/RPO and security maintenance are documented, but the formal support period and rationale under Article 13(8) must be defined before placing on the market. | Section 9 · [`SECURITY.md`][security] |
 | **5 Harmonised standards, common specifications, certification schemes, or alternative technical specifications** | 🔄 | Relevant standards are listed; formal harmonised-standard applicability and any alternative solution rationale must be completed when standards are available / selected. | Section 8 · Related Documents |
 | **6 Test reports verifying product and vulnerability-handling conformity with Annex I Parts I and II** | ✅ / 🔄 | Automated test, type-checking, lint, security review, dependency scan, and CI evidence exist; specific Annex I conformity test reports should be generated for v1.0. | [Pytest][pytest] · [codecov][codecov] · [MyPy][mypy] · [Ruff][ruff] |
 | **7 EU Declaration of Conformity** | 🔄 | Deferred until the product is placed on the EU market after technology-preview / beta phase. | Section 8 |
@@ -164,7 +167,7 @@ This section follows the legal content requirements of CRA Article 31 and Annex 
 | TR-03183-1 Area | Status | Trustpoint Documentation / Implementation | Evidence |
 | --------------- | ------ | ----------------------------------------- | -------- |
 | **Assessment scope** | ✅ | Scope covers Trustpoint server software, web application, API, CA/RA logic, enrollment services, certificate lifecycle management, key handling, database, configuration, monitoring, and release process. Out-of-scope items are explicitly listed. | This document · [`THREAT_MODEL.md`](./THREAT_MODEL.md) |
-| **Product description and intended purpose** | ✅ | Trustpoint is documented as an open-source trust anchor and certificate lifecycle management platform for industrial and OT environments. Intended functionality includes digital identity management, PKI operation, CA/RA workflows, enrollment, renewal, revocation, and trust anchor management. | Section 1 · [README](./README.md) · [ReadTheDocs][readthedocs] |
+| **Product description and intended purpose** | ✅ | Trustpoint is documented as an open-source trust anchor and certificate lifecycle management platform for industrial and OT environments. Intended functionality includes digital identity management, PKI operation, CA/RA workflows, enrollment, renewal, revocation, and trust anchor management. | Section 1 · [README][readme] · [ReadTheDocs][readthedocs] |
 | **Reasonably foreseeable use and misuse** | ✅ / 🔄 | Foreseeable OT deployment conditions and misuse cases are reflected in the threat model, including weak/default credentials, exposed administrative interfaces, Brownfield onboarding ambiguity, delayed updates in segmented or air-gapped environments, and misconfiguration due to limited PKI expertise. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · TM-TP-002 · TM-TP-015 · TM-TP-021 · TM-TP-025 · TM-TP-026 |
 | **System / component boundaries** | ✅ | Product components are identified and used consistently across the risk chain: web application, API layer, authentication and authorization, CA/RA logic, policy/profile management, enrollment services, lifecycle management, key and secret management, database, audit logging, deployment, monitoring, CI/CD, and external PKI / relying-party integrations. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · Component Overview C-01-C-14 |
 | **Asset identification** | ✅ | Security-relevant assets are identified before risk evaluation, including CA private keys, RA credentials, trust anchors, certificate profiles, device identity data, issued certificates, revocation data, administrative accounts, configuration/secrets, database contents, audit logs, backups, dependencies, source code, release artifacts, and documentation. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · Asset Overview A-01-A-15 |
@@ -174,8 +177,8 @@ This section follows the legal content requirements of CRA Article 31 and Annex 
 | **Risk evaluation** | ✅ | Residual risks are evaluated and summarized in a portfolio view. Current residual risk is Low for six risks and Medium for three risks; no residual Critical or High risks are currently recorded. | [`RISK_REGISTER.md`](./RISK_REGISTER.md) · Risk Summary · Section 4 of this document |
 | **Risk treatment decision** | ✅ / 🔄 | Risks are treated through implemented, in-progress, and planned controls. Medium residual risks are explicitly accepted / under treatment for protocol weaknesses, service disruption, and vulnerability handling maturity. | [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) |
 | **Control selection and mapping** | ✅ / 🔄 | 25 controls are documented and mapped to the 9 risks. Controls cover authentication, authorization, auditability, session handling, key protection, cryptographic defaults, certificate lifecycle, device identity verification, revocation, deployment configuration, TLS, secret management, backup/recovery, monitoring, sensitive-data logging, dependency management, CI, review, SBOM, release integrity, vulnerability disclosure, triage, security updates, and supported versions. | [`CONTROLS.md`](./CONTROLS.md) · Control-to-Risk Mapping · Section 6 of this document |
-| **Implementation evidence** | ✅ / 🔄 | Evidence is linked through project documentation, source repository artefacts, CI/CD workflows, SBOM portal, GitHub Security Advisories, release notes, Docker Hub, and maintained security documentation. | [`SECURITY.md`](./SECURITY.md) · [SBOMs][sbom-portal] · [GitHub Actions][actions] · [Releases][releases] · [Docker Hub][dockerhub] |
-| **Vulnerability handling evidence** | ✅ / 🔄 | Vulnerability reporting is private via GitHub Security Advisories. Reports are acknowledged within 5 business days, triaged by maintainers, and handled through security updates and release notes. Process maturation remains part of pre-v1.0 work. | [`SECURITY.md`](./SECURITY.md) · C-TP-022 · C-TP-023 · C-TP-024 · C-TP-025 |
+| **Implementation evidence** | ✅ / 🔄 | Evidence is linked through project documentation, source repository artefacts, CI/CD workflows, SBOM portal, GitHub Security Advisories, release notes, Docker Hub, and maintained security documentation. | [`SECURITY.md`][security] · [SBOMs][sbom-portal] · [GitHub Actions][actions] · [Releases][releases] · [Docker Hub][dockerhub] |
+| **Vulnerability handling evidence** | ✅ / 🔄 | Vulnerability reporting is private via GitHub Security Advisories. Reports are acknowledged within 5 business days, triaged by maintainers, and handled through security updates and release notes. Process maturation remains part of pre-v1.0 work. | [`SECURITY.md`][security] · C-TP-022 · C-TP-023 · C-TP-024 · C-TP-025 |
 | **Review and maintenance** | ✅ | Threats, risks, controls, and CRA evidence are reviewed quarterly and on major releases, architecture changes, security incidents, new protocols/deployment models, and CRA/BSI guidance updates. | This document · [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) |
 
 
@@ -295,7 +298,7 @@ The following items should remain visible in the technical documentation until t
 | Secure deployment | 4 | ✅ / 🔄 | Docker configuration, deployment documentation, TLS guidance, backup configuration, recovery documentation |
 | Logging and monitoring | 2 | ✅ / 🔄 | Audit log implementation, application logs, monitoring and metrics configuration |
 | Supply chain security | 5 | ✅ / 🔄 | Dependabot, `uv.lock`, GitHub Actions, maintainer review, SBOM generation, release artifacts |
-| Vulnerability handling | 4 | ✅ / 🔄 | [`SECURITY.md`](./SECURITY.md), GitHub Security Advisories, triage process, release notes, supported versions policy |
+| Vulnerability handling | 4 | ✅ / 🔄 | [`SECURITY.md`][security], GitHub Security Advisories, triage process, release notes, supported versions policy |
 | **Total Controls** | **25** | **Initial Version / In Progress** | **Control catalogue maintained in [`CONTROLS.md`](./CONTROLS.md)** |
 
 ### Quality & Security Automation Status
@@ -311,7 +314,7 @@ The following items should remain visible in the technical documentation until t
 | CI/CD | Automated testing and checks | ✅ | [GitHub Actions][actions] |
 | Container Security | Secure deployment and image build process | ✅ / 🔄 | [Docker builds][docker-builds] |
 | Release Integrity | Verifiable release artifacts | 🔄 | Release process · planned attestations |
-| Vulnerability Handling | Private disclosure, triage, release communication | ✅ / 🔄 | [`SECURITY.md`](./SECURITY.md) · GitHub advisories |
+| Vulnerability Handling | Private disclosure, triage, release communication | ✅ / 🔄 | [`SECURITY.md`][security] · GitHub advisories |
 
 **Badges:**
 
@@ -339,7 +342,7 @@ The following items should remain visible in the technical documentation until t
 | Obligation | Implementation | Frequency | Trigger | Evidence |
 | ---------- | -------------- | --------- | ------- | -------- |
 | **Vulnerability Monitoring** | CVE feeds, GitHub Security Advisories, Dependabot, CodeQL, secret scanning, maintainer review | Continuous | Dependency alert, security advisory, reported vulnerability | Dependabot alerts · GitHub Security |
-| **Vulnerability Intake** | Private reporting through GitHub Security Advisories, security contact, required report content | As needed | External or internal vulnerability report | [`SECURITY.md`](./SECURITY.md) |
+| **Vulnerability Intake** | Private reporting through GitHub Security Advisories, security contact, required report content | As needed | External or internal vulnerability report | [`SECURITY.md`][security] |
 | **Vulnerability Triage** | Maintainer review, severity and impact assessment, affected version analysis, fix planning | As needed | New vulnerability report or alert | GitHub advisories · issue tracking |
 | **Security Update Process** | Fix development, tests, release notes, release artifacts, communication | As needed | Validated vulnerability requiring a fix | Release history · release notes |
 | **Incident Reporting** | GitHub tracking and advisory process | As needed | Security incident | Security advisories |
@@ -420,7 +423,7 @@ The following items should remain visible in the technical documentation until t
 
 ## **Related Documents**
 
-**Project:** [ReadTheDocs][readthedocs] · [SECURITY.md](./SECURITY.md) · [LICENSE](./LICENSE) · [CONTRIBUTING.md](./CONTRIBUTING.md) · [AUTHORS.md](./AUTHORS.md)
+**Project:** [ReadTheDocs][readthedocs] · [SECURITY.md][security] · [LICENSE][license] · [CONTRIBUTING.md][contributing] · [AUTHORS.md][authors]
 
 **CRA Evidence Chain:** [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) · [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md)
 
@@ -439,12 +442,15 @@ The following items should remain visible in the technical documentation until t
 [dockerhub]: https://hub.docker.com/r/trustpointproject/trustpoint
 [releases]: https://github.com/Trustpoint-Project/trustpoint/releases
 [dependabot]: https://github.com/Trustpoint-Project/trustpoint/security/dependabot
-[security]: https://github.com/Trustpoint-Project/trustpoint/security
+[security]: https://github.com/Trustpoint-Project/trustpoint/blob/main/SECURITY.md
+[readme]: https://github.com/Trustpoint-Project/trustpoint/blob/main/README.md
+[authors]: https://github.com/Trustpoint-Project/trustpoint/blob/main/AUTHORS.md
 [actions]: https://github.com/Trustpoint-Project/trustpoint/actions
 [pytest]: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml
 [mypy]: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml
 [ruff]: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml
 [codecov]: https://codecov.io/gh/Trustpoint-Project/trustpoint
+[contributing]: https://github.com/Trustpoint-Project/trustpoint/blob/main/CONTRIBUTING.md
 [openssf]: https://www.bestpractices.dev/projects/11535
 [docker-builds]: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-manual.yml
 [license]: https://opensource.org/licenses/MIT

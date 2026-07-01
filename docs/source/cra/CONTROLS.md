@@ -1,8 +1,9 @@
 <p align="center">
-  <img src=".github-assets/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
+  <img src="../_static/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
 </p>
 
-<h1 align="center">Trustpoint — Security Controls</h1>
+{.text-center}
+# Trustpoint — Security Controls
 
 <p align="center">
   <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
@@ -38,7 +39,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | 1. Threat Model  | [`THREAT_MODEL.md`](./THREAT_MODEL.md)                                                                             | Identifies threats to Trustpoint                                  |
 | 2. Risk Register | [`RISK_REGISTER.md`](./RISK_REGISTER.md)                                                                                   | Groups threats into cybersecurity risks
 | 3. Controls      | [`CONTROLS.md`](./CONTROLS.md)    -  [![Critical][badge-you-are-here]]()                                                                                                 | Documents implemented and planned controls                               |
-| 4. Evidence      | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) · [`SECURITY.md`](./SECURITY.md) · CI/CD artifacts · SBOM                           | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance       |
+| 4. Evidence      | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) · [`SECURITY.md`][security] · CI/CD artifacts · SBOM                           | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance       |
 | 5. Review        | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) · [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) | Ensures that threats, risks, controls, and evidence remain current over time       
 
 ---
@@ -339,7 +340,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | **Related Risks**  | R-TP-001                                                                                   |
 | **Description**    | Release artifacts should be protected against tampering and should be verifiable by users. |
 | **Implementation** | Release checks · Tagged releases · Checksums / signing planned                             |
-| **Status**         | ![Implemented][badge-implemented]  ![In Progress][badge-in-progress]                                                                      |
+| **Status**         | ![Implemented][badge-implemented]  ![In Progress][badge-in-progress]                       |
 | **Evidence**       | GitHub releases · Release workflow · Future attestations                                   |
 
 ---
@@ -352,7 +353,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | **Related Risks**  | R-TP-005 · R-TP-009                                                                           |
 | **Description**    | Security vulnerabilities can be reported privately and handled through a coordinated process. |
 | **Implementation** | `SECURITY.md` · Security contact · GitHub Security Advisories                                 |
-| **Status**         | ![Implemented][badge-implemented]                                                                   |
+| **Status**         | ![Implemented][badge-implemented]                                                             |
 | **Evidence**       | `SECURITY.md` · GitHub Security Advisory configuration                                        |
 
 ---
@@ -365,7 +366,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | **Related Risks**  | R-TP-005 · R-TP-009                                                                           |
 | **Description**    | Reported vulnerabilities are reviewed, classified, prioritized, and assigned for remediation. |
 | **Implementation** | Maintainer triage · Severity classification · Issue/advisory workflow                         |
-| **Status**         | ![Implemented][badge-implemented]  ![In Progress][badge-in-progress]                                                                                 |
+| **Status**         | ![Implemented][badge-implemented]  ![In Progress][badge-in-progress]                          |
 | **Evidence**       | Security advisories · Issue history · Release notes                                           |
 
 ---
@@ -378,7 +379,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | **Related Risks**  | R-TP-005 · R-TP-008 · R-TP-009                                                       |
 | **Description**    | Security fixes are developed, reviewed, tested, released, and communicated to users. |
 | **Implementation** | Security branches · Release notes · Advisory publication                             |
-| **Status**         | ![Implemented][badge-implemented]  ![In Progress][badge-in-progress]                                                                           |
+| **Status**         | ![Implemented][badge-implemented]  ![In Progress][badge-in-progress]                 |
 | **Evidence**       | Release notes · Advisories · GitHub releases                                         |
 
 ---
@@ -391,7 +392,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | **Related Risks**  | R-TP-008 · R-TP-009                                                                |
 | **Description**    | Trustpoint should define which versions receive security updates and for how long. |
 | **Implementation** | Support policy before production release                                           |
-| **Status**         | ![Planned][badge-planned]                                                                            |
+| **Status**         | ![Planned][badge-planned]                                                          |
 | **Evidence**       | Future `SUPPORT.md` · Release policy                                               |
 
 ---
@@ -424,6 +425,8 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | C-OI-006 | Add security test coverage mapping                         | Medium   | Before v1.0 |
 | C-OI-007 | Add control-to-CRA-requirement mapping                     | Medium   | Before v1.0 |
 
+<!-- Reference Links -->
+[security]: https://github.com/Trustpoint-Project/trustpoint/blob/main/SECURITY.md
 
 [badge-you-are-here]: https://img.shields.io/badge/You%20are%20here-blue?style=flat-square
 [badge-implemented]: https://img.shields.io/badge/Implemented-success?style=flat-square

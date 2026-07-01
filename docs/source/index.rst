@@ -42,6 +42,15 @@ Welcome to Trustpoint's documentation!
    security/pkcs11
    security/db_encryption
 
+.. toctree::
+   :maxdepth: 2
+   :caption: 🔒 EU Cyber Resilience Act
+
+   cra/CRA_COMPLIANCE
+   cra/CONTROLS
+   cra/RISK_REGISTER
+   cra/THREAT_MODEL
+
 
 .. toctree::
    :maxdepth: 2

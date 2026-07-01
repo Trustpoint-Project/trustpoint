@@ -1,8 +1,9 @@
 <p align="center">
-  <img src=".github-assets/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
+  <img src="../_static/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
 </p>
 
-<h1 align="center">Trustpoint — Risk Register</h1>
+{.text-center}
+# Trustpoint — Risk Register
 
 <p align="center">
   <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
@@ -37,7 +38,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | 1. Threat Model  | [`THREAT_MODEL.md`](./THREAT_MODEL.md)                                                                                         | Identifies threats to Trustpoint                                  |
 | 2. Risk Register | [`RISK_REGISTER.md`](./RISK_REGISTER.md)  -  [![Critical][badge-you-are-here]]()                                                                                   | Groups threats into cybersecurity risks
 | 3. Controls      | [`CONTROLS.md`](./CONTROLS.md)                                                                                        | Documents implemented and planned controls                               |
-| 4. Evidence      | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) · [`SECURITY.md`](./SECURITY.md) · CI/CD artifacts · SBOM                           | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance       |
+| 4. Evidence      | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) · [`SECURITY.md`][security] · CI/CD artifacts · SBOM                           | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance       |
 | 5. Review        | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) · [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) | Ensures that threats, risks, controls, and evidence remain current over time                                          |
 
 ---
@@ -105,7 +106,7 @@ Each risk references one or more `TM-TP-xxx` threat IDs. This provides traceabil
 | **Inherent**        | High                                                                                |
 | **Controls**        | GitHub Actions (restricted) · Dependabot · uv.lock pinning · 2-person review · SBOM |
 | **Residual**        | **L**                                                                               |
-| **Evidence**        | [workflows](./.github/workflows/) · Dependabot · uv.lock                            |
+| **Evidence**        | [workflows][workflows] · Dependabot · uv.lock                            |
 | **Review**          | 2026-09-26                                                                          |
 
 ---
@@ -265,5 +266,8 @@ Each risk references one or more `TM-TP-xxx` threat IDs. This provides traceabil
 * R-TP-009: Vulnerability handling (process maturation before v1.0)
 
 
+<!-- Reference Links -->
+[security]: https://github.com/Trustpoint-Project/trustpoint/blob/main/SECURITY.md
+[workflows]: https://github.com/Trustpoint-Project/trustpoint/tree/main/.github/workflows
 
 [badge-you-are-here]: https://img.shields.io/badge/You%20are%20here-blue?style=flat-square

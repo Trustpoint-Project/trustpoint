@@ -1,10 +1,9 @@
 <p align="center">
-  <img src=".github-assets/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
+  <img src="../_static/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
 </p>
 
-<h1 align="center">Trustpoint — Threat Model</h1>
-
-
+{.text-center}
+# Trustpoint — Threat Model
 
 <p align="center">
   <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
@@ -39,7 +38,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | 1. Threat Model  | [`THREAT_MODEL.md`](./THREAT_MODEL.md)   -  [![Critical][badge-you-are-here]]()                                                                                         | Identifies threats to Trustpoint                                  |
 | 2. Risk Register | [`RISK_REGISTER.md`](./RISK_REGISTER.md)                                                                                   | Groups threats into cybersecurity risks
 | 3. Controls      | [`CONTROLS.md`](./CONTROLS.md)                                                                                     | Documents implemented and planned controls                               |
-| 4. Evidence      | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) · [`SECURITY.md`](./SECURITY.md) · CI/CD artifacts · SBOM                           | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance       |
+| 4. Evidence      | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) · [`SECURITY.md`][security] · CI/CD artifacts · SBOM                           | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance       |
 | 5. Review        | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) · [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) | Ensures that threats, risks, controls, and evidence remain current over time        
 
 ---
@@ -468,10 +467,14 @@ This output serves as input for:
 
 * [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md)
 * [`RISK_REGISTER.md`](./RISK_REGISTER.md)
-* [`SECURITY.md`](./SECURITY.md)
-* [`README.md`](./README.md)
+* [`SECURITY.md`][security]
+* [`README.md`][readme]
 * [Trustpoint documentation](https://trustpoint.readthedocs.io)
 * [BSI TR-03183-1](https://www.bsi.bund.de/SharedDocs/Downloads/EN/BSI/Publications/TechGuidelines/TR03183/BSI-TR-03183-1_v0_10_0.pdf?__blob=publicationFile&v=1)
 * EU Cyber Resilience Act
+
+<!-- Reference Links -->
+[security]: https://github.com/Trustpoint-Project/trustpoint/blob/main/SECURITY.md
+[readme]: https://github.com/Trustpoint-Project/trustpoint/blob/main/README.md
 
 [badge-you-are-here]: https://img.shields.io/badge/You%20are%20here-blue?style=flat-square
