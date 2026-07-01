@@ -14,8 +14,10 @@ SoftHSM
 
 **Primary Support**: SoftHSM2 is the default and fully supported HSM implementation.
 
-- **Library Path**: ``/usr/lib/softhsm/libsofthsm2.so``
+- **Library Path**: ``/usr/lib/libsofthsm2.so`` in the Trustpoint container, which points to the packaged SoftHSM module.
 - **Use Case**: Development and CI validation. Use a production-grade HSM for production deployments.
+
+The local ``tp_wizard.sh`` SoftHSM setup mounts the SoftHSM token directory into the Trustpoint container and uses the SoftHSM PKCS#11 module directly. This is intentional: the direct module exposes the AES key-wrap and AES-CBC mechanisms required for HSM-backed application-secret protection.
 
 Physical HSM
 ~~~~~~~~~~~~
@@ -72,6 +74,11 @@ AES Key Operations
 - AES key generation in HSM
 - Supported key lengths: 128, 192, 256 bits
 - Primary use for KEK storage
+
+**Application Secret Protection**:
+- HSM-backed application-secret protection is the default for PKCS#11 fresh installs.
+- Trustpoint stores database secrets encrypted with an application-secret DEK.
+- When PKCS#11 app-secret protection is enabled, that DEK is protected by a non-exportable AES KEK on the token.
 
 **Encryption/Decryption Operations**:
 - DEK protection with standard PKCS#11 AES key wrap/unwrap mechanisms when available
@@ -185,11 +192,8 @@ Protected imported keys
 
 Trustpoint normally generates signing authority keys through the configured
 crypto backend. Existing private-key credentials can be imported only when the
-operator explicitly enables protected imports:
-
-.. code-block:: bash
-
-   TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS=true
+operator explicitly enables **Allow imported private keys** under
+**Management > Settings > Security**.
 
 Protected imported keys require both the PKCS#11 crypto backend and PKCS#11
 application-secret protection. The imported private key is encrypted with the

@@ -11,6 +11,10 @@ RUN apt-get update && \
         softhsm2 && \
     rm -rf /var/lib/apt/lists/*
 
+RUN softhsm_lib="$(ldconfig -p | awk '/libsofthsm2\.so/ {print $NF; exit}')" && \
+    if [ -z "${softhsm_lib}" ]; then softhsm_lib="/usr/lib/softhsm/libsofthsm2.so"; fi && \
+    ln -sf "${softhsm_lib}" /usr/lib/libsofthsm2.so
+
 ENV TRUSTPOINT_HSM_ROOT=/var/lib/trustpoint/hsm \
     SOFTHSM2_CONF=/var/lib/trustpoint/hsm/config/softhsm2.conf \
     PKCS11_PROXY_SOCKET=tcp://softhsm:5657

@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 import secrets
+import socket
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -49,6 +51,10 @@ if TYPE_CHECKING:
 
 type LibraryLoader = Callable[[str], Any]
 type TokenCandidate = tuple['Slot', 'Token']
+
+_TCP_HOST_PORT_RE = re.compile(r'(?<![/\w.-])(?P<host>[A-Za-z0-9_.-]+):(?P<port>\d{1,5})(?!\d)')
+_TCP_PORT_AT_HOST_RE = re.compile(r'(?<!\d)(?P<port>\d{1,5})@(?P<host>[A-Za-z0-9_.-]+)')
+_TCP_MAX_PORT = 65535
 
 
 class Pkcs11Backend(LoggerMixin):
@@ -439,9 +445,51 @@ class Pkcs11Backend(LoggerMixin):
                     'path': str(resolved_path),
                     'exists': resolved_path.is_file(),
                     'readable': os.access(resolved_path, os.R_OK),
+                    'tcp_targets': Pkcs11Backend._tcp_target_diagnostics(resolved_path),
                 }
             )
         return sorted(diagnostics, key=lambda item: str(item['env']))
+
+    @staticmethod
+    def _tcp_target_diagnostics(config_path: Path) -> list[str]:
+        """Return non-secret reachability diagnostics for TCP targets found in a provider config."""
+        if not config_path.is_file() or not os.access(config_path, os.R_OK):
+            return []
+        try:
+            config_text = config_path.read_text(encoding='utf-8', errors='ignore')
+        except OSError:
+            return []
+
+        diagnostics: list[str] = []
+        for host, port in Pkcs11Backend._extract_tcp_targets(config_text)[:10]:
+            diagnostics.append(Pkcs11Backend._tcp_target_status(host, port))
+        return diagnostics
+
+    @staticmethod
+    def _extract_tcp_targets(config_text: str) -> list[tuple[str, int]]:
+        """Extract generic TCP endpoints from provider config text."""
+        targets: set[tuple[str, int]] = set()
+        for pattern in (_TCP_PORT_AT_HOST_RE, _TCP_HOST_PORT_RE):
+            for match in pattern.finditer(config_text):
+                host = match.group('host').strip()
+                port_text = match.group('port')
+                try:
+                    port = int(port_text)
+                except ValueError:
+                    continue
+                if host and 0 < port <= _TCP_MAX_PORT:
+                    targets.add((host, port))
+        return sorted(targets)
+
+    @staticmethod
+    def _tcp_target_status(host: str, port: int) -> str:
+        """Return whether a TCP endpoint is reachable from the current process."""
+        endpoint = f'{host}:{port}'
+        try:
+            with socket.create_connection((host, port), timeout=1.0):
+                return f'{endpoint}=reachable'
+        except OSError as exc:
+            return f'{endpoint}=unreachable:{type(exc).__name__}'
 
     def _candidates_from_slots(self, slots: list[Slot]) -> list[TokenCandidate]:
         """Return slot/token pairs for slots that currently expose a token."""

@@ -127,7 +127,7 @@ Crypto Managed-Key Fields
 
 - ``encrypted_private_key_pkcs8_der_b64`` - PKCS#8 DER material for protected imported keys, encrypted before it is stored
 
-Protected imported keys are only available when ``TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS=true`` and the instance uses both a PKCS#11 crypto backend and PKCS#11-backed application-secret protection. They are not imported into the HSM token.
+Protected imported keys are only available when **Allow imported private keys** is enabled under **Management > Settings > Security** and the instance uses both a PKCS#11 crypto backend and PKCS#11-backed application-secret protection. They are not imported into the HSM token.
 
 UML Sequence Diagram
 --------------------

@@ -6,7 +6,6 @@ import secrets
 from time import perf_counter
 from typing import TYPE_CHECKING, cast
 
-from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError
 
@@ -424,10 +423,13 @@ class TrustpointCryptoBackend(LoggerMixin):
     @staticmethod
     def _validate_protected_import_policy(profile: CryptoProviderProfileModel) -> None:
         """Require explicit policy and PKCS#11 app-secret protection before importing private keys."""
-        if not getattr(settings, 'TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS', False):
+        from management.models import SecurityConfig  # noqa: PLC0415
+
+        security_config = SecurityConfig.objects.filter(pk=1).first() or SecurityConfig.objects.order_by('pk').first()
+        if security_config is None or not security_config.allow_imported_private_keys:
             msg = (
-                'Protected imported keys are disabled. Set TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS=true '
-                'to allow private-key imports.'
+                'Imported private keys are disabled. Enable "Allow imported private keys" in '
+                'Management > Settings > Security to allow private-key imports.'
             )
             raise ProviderConfigurationError(msg)
 

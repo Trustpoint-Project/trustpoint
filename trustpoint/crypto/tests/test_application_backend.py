@@ -8,7 +8,6 @@ from unittest.mock import patch
 import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
-from django.test import override_settings
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
 from crypto.adapters.pkcs11.bindings import (
@@ -17,6 +16,7 @@ from crypto.adapters.pkcs11.bindings import (
 )
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.errors import ProviderConfigurationError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import RsaKeySpec, SignRequest
@@ -30,7 +30,7 @@ from crypto.models import (
     ManagedKeyStatus,
     Pkcs11AuthSource,
 )
-from management.models import AuditLog, LoggingConfig
+from management.models import AuditLog, LoggingConfig, SecurityConfig
 
 
 @dataclass
@@ -212,9 +212,12 @@ def test_sign_routes_through_persisted_pkcs11_binding() -> None:
 
 
 @pytest.mark.django_db
-@override_settings(TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS=True)
 def test_imported_private_key_is_stored_as_protected_binding_and_signs_locally() -> None:
     """Imported private keys are protected by app-secret storage and routed through the backend API."""
+    SecurityConfig.objects.update_or_create(
+        pk=1,
+        defaults={'allow_imported_private_keys': True},
+    )
     profile = _create_pkcs11_profile(name='provider-1', active=True)
     AppSecretBackendModel.objects.update_or_create(
         singleton_id=AppSecretBackendModel.SINGLETON_ID,
@@ -261,6 +264,34 @@ def test_imported_private_key_is_stored_as_protected_binding_and_signs_locally()
     assert binding.encrypted_private_key_pkcs8_der_b64
     assert adapter.sign_calls == []
     private_key.public_key().verify(signature, b'payload', padding.PKCS1v15(), hashes.SHA256())
+
+
+@pytest.mark.django_db
+def test_imported_private_key_requires_security_setting() -> None:
+    """Private-key imports fail closed unless the Security setting explicitly allows them."""
+    _create_pkcs11_profile(name='provider-1', active=True)
+    AppSecretBackendModel.objects.update_or_create(
+        singleton_id=AppSecretBackendModel.SINGLETON_ID,
+        defaults={'backend_kind': AppSecretBackendKind.PKCS11},
+    )
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    adapter = FakeAdapter(
+        public_key=private_key.public_key(),
+        generated_binding=Pkcs11ManagedKeyBinding(
+            key_id=b'\x10\x20',
+            algorithm=KeyAlgorithm.RSA,
+        ),
+    )
+    backend = _backend_with_adapter(adapter)
+
+    with pytest.raises(ProviderConfigurationError, match='Imported private keys are disabled'):
+        backend.import_managed_private_key(
+            alias='imported/issuing-ca',
+            private_key=private_key,
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
+        )
 
 
 @pytest.mark.django_db

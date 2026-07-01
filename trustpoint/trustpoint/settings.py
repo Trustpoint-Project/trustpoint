@@ -263,10 +263,6 @@ TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_flag(
         and TRUSTPOINT_OPERATIONAL_DATABASE == 'sqlite'
     ),
 )
-TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS = _env_flag(
-    'TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS',
-    default=False,
-)
 
 
 # Setting for email backend

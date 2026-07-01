@@ -176,11 +176,8 @@ Django-shell smoke commands, and the live PKCS#11 pytest integration test comman
 ### Protected Imported Keys
 
 Trustpoint normally generates signing authority keys through the configured crypto backend. For
-deployments that must also import existing private-key credentials, enable protected imports with:
-
-```shell
-TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS=true
-```
+deployments that must also import existing private-key credentials, enable **Allow imported private
+keys** under **Management > Settings > Security**.
 
 Protected imported keys require a PKCS#11 crypto backend and PKCS#11-backed application-secret
 protection. The imported key is stored encrypted in the Trustpoint database and is exposed to the

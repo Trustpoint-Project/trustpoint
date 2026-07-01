@@ -64,15 +64,15 @@ Trustpoint can be configured to operate in different modes in relation to the Is
         - In **PKI > Certificate Authorities > Add new CA**
         - Select **Import a new Issuing CA from file**
         - You can import an Issuing CA from a file by importing a PKCS#12 file or by importing the key and certificate separately
-        - Private-key imports are only available when **Protected imported keys** are enabled by the instance configuration
+    - Private-key imports are only available when **Allow imported private keys** is enabled in the Security settings
     - **Use Case:** Issuing certificates in air-gapped environments or when you already have a CA certificate available
 
    .. note::
 
-      Protected imported keys are disabled by default. Enable
-      ``TRUSTPOINT_ALLOW_PROTECTED_IMPORTED_KEYS=true`` only when importing
-      existing private-key credentials is part of the deployment policy. The
-      feature requires a PKCS#11 crypto backend and PKCS#11-backed
+      Imported private keys are disabled by default. Enable **Allow imported
+      private keys** under **Management > Settings > Security** only when
+      importing existing private-key credentials is part of the deployment
+      policy. The feature requires a PKCS#11 crypto backend and PKCS#11-backed
       application-secret protection. Imported key material is encrypted in the
       Trustpoint database and is not injected into the HSM token.
 

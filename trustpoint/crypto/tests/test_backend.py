@@ -314,6 +314,20 @@ def test_token_resolution_retries_full_scan_when_token_present_scan_fails() -> N
     assert token.open_calls == 1
 
 
+def test_runtime_diagnostics_extract_tcp_targets_from_provider_config() -> None:
+    """Provider diagnostics should recognize common PKCS#11 TCP target config formats."""
+    config_text = """
+    [CryptoServer]
+    Device = 3301@host.docker.internal
+    Backup = hsm.example.test:3001
+    """
+
+    assert Pkcs11Backend._extract_tcp_targets(config_text) == [  # noqa: SLF001
+        ('host.docker.internal', 3301),
+        ('hsm.example.test', 3001),
+    ]
+
+
 def test_generate_managed_rsa_key_uses_pkcs11_keygen() -> None:
     """The backend should drive RSA key generation through the adapter core."""
     session = FakeSession()

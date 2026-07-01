@@ -7,15 +7,14 @@ ENV PYTHONUNBUFFERED=1 \
     UV_NO_CACHE=1 \
     UV_FROZEN=1 \
     TRUSTPOINT_HSM_ROOT=/var/lib/trustpoint/hsm \
-    PKCS11_PROXY_SOCKET=tcp://softhsm:5657
+    SOFTHSM2_CONF=/var/lib/trustpoint/hsm/config/softhsm2.conf
 
 # Make port 80 and 443 available outside this container.
 # Port 80 will be redirected to 443 using TLS through NGINX.
 EXPOSE 80 443
 
 # Update apt repositories and install required runtime dependencies.
-# This includes the PKCS#11 proxy client library used by Trustpoint to
-# connect to the separate SoftHSM proxy server container during local/dev use.
+# This includes the SoftHSM module used by Trustpoint's local/dev HSM setup.
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
@@ -31,15 +30,19 @@ RUN apt-get update && \
         cmake \
         libssl-dev \
         libseccomp-dev \
+        softhsm2 \
         libpkcs11-proxy0 \
         curl \
         ca-certificates \
         gnupg && \
     rm -rf /var/lib/apt/lists/*
 
-# Create a stable path for the PKCS#11 proxy client library so provider-profile
-# bootstrap and local/dev configuration can rely on one predictable module path.
-RUN proxy_lib="$(ldconfig -p | awk '/libpkcs11-proxy\.so/ {print $NF; exit}')" && \
+# Create stable PKCS#11 module paths so provider-profile bootstrap and
+# local/dev configuration can rely on predictable values.
+RUN softhsm_lib="$(ldconfig -p | awk '/libsofthsm2\.so/ {print $NF; exit}')" && \
+    if [ -z "${softhsm_lib}" ]; then softhsm_lib="/usr/lib/softhsm/libsofthsm2.so"; fi && \
+    ln -sf "${softhsm_lib}" /usr/lib/libsofthsm2.so && \
+    proxy_lib="$(ldconfig -p | awk '/libpkcs11-proxy\.so/ {print $NF; exit}')" && \
     if [ -n "${proxy_lib}" ]; then ln -sf "${proxy_lib}" /usr/lib/libpkcs11-proxy.so; fi
 
 # Install PostgreSQL 18 client.
@@ -84,8 +87,8 @@ RUN uv sync --no-dev --group docs --group docker --python-preference only-system
 USER root
 
 # Prepare Trustpoint runtime directories.
-# For the PKCS#11 proxy-based local/dev setup, Trustpoint only needs the HSM
-# config directory mounted read-only; token state stays isolated in the SoftHSM container.
+# For the local/dev setup, Trustpoint uses the SoftHSM PKCS#11 module directly
+# against the mounted token directory.
 RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
              /var/www/html/trustpoint/trustpoint/collected_static \
              /var/www/html/trustpoint/docker/trustpoint/nginx/tls \
