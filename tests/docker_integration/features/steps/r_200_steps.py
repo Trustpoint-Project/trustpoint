@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
+import shutil
 import subprocess
 import time
 from typing import Any
@@ -53,10 +55,19 @@ def find_link_url(html_content: str, link_text: str) -> str | None:
     return None
 
 
+def _docker_command() -> str:
+    """Return the absolute Docker executable path for subprocess calls."""
+    docker = shutil.which('docker')
+    if docker is None:
+        msg = 'Docker executable not found on PATH.'
+        raise AssertionError(msg)
+    return docker
+
+
 def _extract_bootstrap_credentials() -> tuple[str, str]:
     """Read the generated bootstrap login from the Docker container logs."""
-    result = subprocess.run(  # noqa: S603
-        ['docker', 'logs', 'trustpoint'],
+    result = subprocess.run(  # noqa: S603 - fixed docker command without shell interpolation.
+        [_docker_command(), 'logs', 'trustpoint'],
         capture_output=True,
         check=False,
         text=True,
@@ -74,7 +85,7 @@ def _is_login_page(response: requests.Response) -> bool:
     """Return whether a response is the login page."""
     url = response.url.lower()
     content = response.text.lower()
-    return 'login' in url or 'name="username"' in content and 'name="password"' in content
+    return 'login' in url or ('name="username"' in content and 'name="password"' in content)
 
 
 def _login(context: runner.Context, username: str, password: str) -> None:
@@ -331,6 +342,32 @@ def step_submit_database_form(context: runner.Context) -> None:
     context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
     assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
         f'Database form submission failed: {context.response.status_code}'
+
+
+@when('the user submits the SoftHSM backend form')
+def step_submit_softhsm_backend_form(context: runner.Context) -> None:
+    """Submit the PKCS#11 backend form using the CI SoftHSM token."""
+    csrf_token = extract_csrf_token(context.response.text)
+    current_url = context.response.url
+    user_pin = os.environ.get('TRUSTPOINT_TEST_SOFTHSM_PIN')
+    if not user_pin:
+        msg = 'TRUSTPOINT_TEST_SOFTHSM_PIN is required for the SoftHSM integration scenario.'
+        raise AssertionError(msg)
+
+    form_data = {
+        'csrfmiddlewaretoken': csrf_token,
+        'fresh_install_pkcs11_token_label': os.environ.get(
+            'TRUSTPOINT_TEST_SOFTHSM_TOKEN_LABEL',
+            'Trustpoint-SoftHSM',
+        ),
+        'fresh_install_pkcs11_slot_id': '',
+        'pkcs11_user_pin': user_pin,
+        'pkcs11_config_env_var': '',
+    }
+    context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
+    assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
+        f'SoftHSM backend form submission failed: {context.response.status_code}'
+    check_for_errors(context.response.text, context.response.url)
 
 
 @then('the wizard should be at the backend config step')
