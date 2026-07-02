@@ -47,7 +47,7 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Apply Bootstrap form-control class to every field widget."""
         super().__init__(*args, **kwargs)
-        organization_field = cast('forms.ModelChoiceField', self.fields['organization'])
+        organization_field = cast('forms.ModelChoiceField[OrganizationModel]', self.fields['organization'])
         organization_field.required = False
         organization_field.queryset = OrganizationModel.objects.all()
         organization_field.empty_label = _('No organization')
@@ -67,7 +67,7 @@ class TrustpointUserRoleForm(forms.ModelForm[TrustpointUser]):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Apply Bootstrap form-control class to role and organization widgets."""
         super().__init__(*args, **kwargs)
-        organization_field = cast('forms.ModelChoiceField', self.fields['organization'])
+        organization_field = cast('forms.ModelChoiceField[OrganizationModel]', self.fields['organization'])
         organization_field.required = False
         organization_field.queryset = OrganizationModel.objects.all()
         organization_field.empty_label = _('No organization')
