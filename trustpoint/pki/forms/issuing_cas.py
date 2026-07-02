@@ -6,6 +6,7 @@ from typing import Any, ClassVar, NoReturn, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -37,6 +38,8 @@ from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
 from util.validation import ValidationError as UtilValidationError
 from util.validation import validate_remote_ca_connection
+
+MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
 
 
 def get_ca_type_from_config() -> CaModel.CaTypeChoice:
@@ -184,6 +187,8 @@ class IssuingCaImportMixin:
         private_key = credential_serializer.private_key
         if private_key is None:
             self._raise_validation_error('Private key is missing from credential serializer.')
+        if not isinstance(private_key, (rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)):
+            self._raise_validation_error('Only RSA and elliptic-curve CA private keys can be imported.')
 
         key_ref = TrustpointCryptoBackend().import_managed_private_key(
             alias=unique_name,
@@ -321,6 +326,8 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
         pkcs12_file = cleaned_data.get('pkcs12_file')
         if pkcs12_file is None:
             self._raise_validation_error('PKCS#12 file is required.')
+        if getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
+            self._raise_validation_error('PKCS#12 file is too large, max. 256 kiB.')
 
         try:
             pkcs12_raw = pkcs12_file.read()

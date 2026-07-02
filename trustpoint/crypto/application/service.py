@@ -248,11 +248,19 @@ class TrustpointCryptoBackend(LoggerMixin):
         try:
             binding = self._managed_key_repository.build_backend_binding(managed_key)
             if isinstance(binding, ProtectedImportManagedKeyBinding):
-                verification = self._protected_import_operations.verify_managed_key(binding)
+                protected_import_verification = self._protected_import_operations.verify_managed_key(binding)
+                verification_status = protected_import_verification.status
+                resolved_public_key_fingerprint_sha256 = (
+                    protected_import_verification.resolved_public_key_fingerprint_sha256
+                )
             else:
                 adapter = self._build_adapter(managed_key.provider_profile)
                 try:
-                    verification = adapter.verify_managed_key(binding)
+                    adapter_verification = adapter.verify_managed_key(binding)
+                    verification_status = adapter_verification.status
+                    resolved_public_key_fingerprint_sha256 = (
+                        adapter_verification.resolved_public_key_fingerprint_sha256
+                    )
                 finally:
                     adapter.close()
         except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
@@ -269,9 +277,9 @@ class TrustpointCryptoBackend(LoggerMixin):
             )
             raise
 
-        if verification.status is ManagedKeyVerificationStatus.PRESENT:
+        if verification_status is ManagedKeyVerificationStatus.PRESENT:
             self._managed_key_repository.mark_verification_success(managed_key=managed_key)
-        elif verification.status is ManagedKeyVerificationStatus.MISSING:
+        elif verification_status is ManagedKeyVerificationStatus.MISSING:
             self._managed_key_repository.mark_missing(
                 managed_key=managed_key,
                 error_summary='Managed key binding is missing from the provider.',
@@ -290,13 +298,13 @@ class TrustpointCryptoBackend(LoggerMixin):
             status='success',
             profile=managed_key.provider_profile,
             managed_key=managed_key,
-            details={'verification_status': verification.status.value},
+            details={'verification_status': verification_status.value},
         )
 
         return ManagedKeyVerification(
             key=app_ref,
-            status=verification.status,
-            resolved_public_key_fingerprint_sha256=verification.resolved_public_key_fingerprint_sha256,
+            status=verification_status,
+            resolved_public_key_fingerprint_sha256=resolved_public_key_fingerprint_sha256,
         )
 
     def get_public_key(self, key: ManagedKeyRef) -> SupportedPublicKey:

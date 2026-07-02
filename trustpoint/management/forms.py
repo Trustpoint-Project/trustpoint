@@ -45,6 +45,8 @@ from trustpoint.logger import LoggerMixin
 if TYPE_CHECKING:
     from typing import ClassVar
 
+MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+
 
 class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
     """Security configuration model form."""
@@ -586,6 +588,8 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         pkcs12_file = cleaned_data.get('pkcs12_file')
         if pkcs12_file is None:
             self._raise_validation_error('No PKCS#12 file was uploaded.')
+        if getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
+            self._raise_validation_error('PKCS#12 file is too large, max. 256 kiB.')
 
         try:
             pkcs12_raw = pkcs12_file.read()

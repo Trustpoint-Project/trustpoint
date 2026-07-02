@@ -32,6 +32,7 @@ FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs
 MIN_TCP_PORT = 1
 MAX_TCP_PORT = 65535
 ELF_MAGIC = b'\x7fELF'
+MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
 
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
@@ -1003,8 +1004,11 @@ class FreshInstallTlsConfigForm(forms.Form):
                 raise forms.ValidationError(err_msg)
 
         elif tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.PKCS12:
-            if not cleaned_data.get('pkcs12_file'):
+            pkcs12_file = cleaned_data.get('pkcs12_file')
+            if not pkcs12_file:
                 self.add_error('pkcs12_file', gettext_lazy('A PKCS#12 file is required.'))
+            elif getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
+                self.add_error('pkcs12_file', gettext_lazy('PKCS#12 file is too large, max. 256 kiB.'))
 
         elif tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.SEPARATE_FILES:
             if not cleaned_data.get('tls_server_certificate'):
