@@ -1174,8 +1174,8 @@ class UIConfigForm(forms.Form):
         )
 
 
-class OrganizationForm(forms.Form):
-    """Form for organization."""
+class OrganizationForm(forms.ModelForm[OrganizationModel]):
+    """Form for creating and updating organizations."""
 
     name = forms.CharField(max_length=100, required=False)
     organization = forms.CharField(max_length=255, label='Organization (O)')
@@ -1202,40 +1202,24 @@ class OrganizationForm(forms.Form):
             Field('locality'),
         )
 
-        # Prefill with first organization if one exists
-        organization, _ = OrganizationModel.objects.get_or_create(pk=1)
+    class Meta:
+        """Metadata for the organization form."""
 
-        if organization:
-            self.fields['name'].initial = organization.name
-            self.fields['organization'].initial = organization.organization
-            self.fields['organization_unit'].initial = organization.organization_unit
-            self.fields['country'].initial = organization.country
-            self.fields['state'].initial = organization.state
-            self.fields['locality'].initial = organization.locality
+        model = OrganizationModel
+        fields: ClassVar[tuple[str, ...]] = (
+            'name',
+            'organization',
+            'organization_unit',
+            'country',
+            'state',
+            'locality',
+        )
 
-    def save(self) -> OrganizationModel:
-        """Stores the form as organization model object in the db.
-
-        Returns:
-            _description_
-        """
-        name = self.cleaned_data['name']
-        org = self.cleaned_data['organization']
-        org_unit = self.cleaned_data['organization_unit']
-        country = self.cleaned_data['country']
-        state = self.cleaned_data['state']
-        locality = self.cleaned_data['locality']
-
-        org_model = OrganizationModel.objects.get(pk=1)
-
-        org_model.name = name or org
-        org_model.organization = org
-        org_model.organization_unit = org_unit
-        org_model.country = country
-        org_model.state = state
-        org_model.locality = locality
-
-        org_model.full_clean()
-        org_model.save()
-
-        return org_model
+    def clean(self) -> dict[str, Any]:
+        """Normalize data before saving."""
+        cleaned: dict[str, Any] = super().clean() or {}
+        name = str(cleaned.get('name') or '').strip()
+        organization = str(cleaned.get('organization') or '').strip()
+        cleaned['name'] = name or organization
+        cleaned['organization'] = organization
+        return cleaned

@@ -34,46 +34,41 @@ class TrustpointSuperUserCreationForm(UserCreationForm[TrustpointUser]):
 class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
     """Form for creating a new TrustpointUser with an explicit role selection.
 
-    The ``role`` field is rendered as a dropdown listing every available
-    ``Group`` instance.
+    The ``role`` and optional ``organization`` fields are rendered as
+    dropdowns listing every available Group / Organization.
     """
 
     class Meta(UserCreationForm.Meta):
         """Metaclass extending the standard UserCreationForm with the role field."""
 
         model = TrustpointUser
-        fields = (*UserCreationForm.Meta.fields, 'role')
+        fields = (*UserCreationForm.Meta.fields, 'role', 'organization')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Apply Bootstrap form-control class to every field widget."""
         super().__init__(*args, **kwargs)
+        self.fields['organization'].required = False
+        self.fields['organization'].queryset = OrganizationModel.objects.all()
+        self.fields['organization'].empty_label = _('No organization')
         for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
 
-    def save(self, *, commit: bool = True) -> TrustpointUser:  # type: ignore[override]
-        """Save new Trustpoint user."""
-        user = super().save(commit=False)
-
-        user.organization = OrganizationModel.objects.get(pk=1)
-
-        if commit:
-            user.save()
-
-        return user
-
 
 class TrustpointUserRoleForm(forms.ModelForm[TrustpointUser]):
-    """Minimal form for changing a user's role only."""
+    """Form for changing a user's role and optional organization."""
 
     class Meta:
-        """Metaclass limiting the form to the role field."""
+        """Metaclass limiting the form to role and organization fields."""
 
         model = TrustpointUser
-        fields: ClassVar = ['role']
+        fields: ClassVar = ['role', 'organization']
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Apply Bootstrap form-control class to the role widget."""
+        """Apply Bootstrap form-control class to role and organization widgets."""
         super().__init__(*args, **kwargs)
+        self.fields['organization'].required = False
+        self.fields['organization'].queryset = OrganizationModel.objects.all()
+        self.fields['organization'].empty_label = _('No organization')
         for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
 

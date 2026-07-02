@@ -5,6 +5,12 @@ from django.test import TestCase
 from django.urls import resolve, reverse
 
 from management.views import IndexView, backend_configuration, backup, logging, tls
+from management.views.organization import (
+    OrganizationCreateView,
+    OrganizationDeleteView,
+    OrganizationEditView,
+    OrganizationTableView,
+)
 from management.views.user_management import UserTableView, UserCreateView, UserDeleteView, UserChangeRoleView
 from management.views.role_management import RoleTableView, RoleCreateView, RoleEditView, RoleDeleteView
 
@@ -227,3 +233,25 @@ class RoleManagementUrlsTestCase(TestCase):
         url = reverse('management:delete_role', kwargs={'pk': 1})
         self.assertEqual(url, '/management/role_management/1/delete/')
         self.assertEqual(resolve(url).func.view_class, RoleDeleteView)
+
+
+class OrganizationManagementUrlsTestCase(TestCase):
+    def test_organization_management_url(self):
+        url = reverse('management:organization')
+        self.assertEqual(url, '/management/organization/')
+        self.assertEqual(resolve(url).func.view_class, OrganizationTableView)
+
+    def test_organization_add_url(self):
+        url = reverse('management:add_organization')
+        self.assertEqual(url, '/management/organization/add/')
+        self.assertEqual(resolve(url).func.view_class, OrganizationCreateView)
+
+    def test_organization_edit_url(self):
+        url = reverse('management:edit_organization', kwargs={'pk': 1})
+        self.assertEqual(url, '/management/organization/1/edit/')
+        self.assertEqual(resolve(url).func.view_class, OrganizationEditView)
+
+    def test_organization_delete_url(self):
+        url = reverse('management:delete_organization', kwargs={'pk': 1})
+        self.assertEqual(url, '/management/organization/1/delete/')
+        self.assertEqual(resolve(url).func.view_class, OrganizationDeleteView)

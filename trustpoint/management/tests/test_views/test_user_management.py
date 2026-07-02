@@ -6,6 +6,7 @@ from django.contrib.messages import get_messages
 from django.test import Client, TestCase
 from django.urls import reverse
 
+from management.models.organization import OrganizationModel
 from users.models import GroupProfile
 
 User = get_user_model()
@@ -104,6 +105,21 @@ class UserCreateViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(User.objects.filter(username='existing').count(), 1)
 
+    def test_create_user_with_organization_success(self) -> None:
+        """A valid POST can assign an organization during user creation."""
+        plain_group = _create_plain_group()
+        org = OrganizationModel.objects.create(name='Example Org', organization='Example Org', country='DE')
+        response = self.client.post(self.url, {
+            'username': 'newuser2',
+            'password1': 'StrongPass123!',
+            'password2': 'StrongPass123!',
+            'role': plain_group.pk,
+            'organization': org.pk,
+        })
+        self.assertEqual(response.status_code, 302)
+        created = User.objects.get(username='newuser2')
+        self.assertEqual(created.organization_id, org.pk)
+
 
 class UserDeleteViewTest(TestCase):
     """Tests for the user deletion view."""
@@ -165,3 +181,12 @@ class UserChangeRoleViewTest(TestCase):
         self.assertTrue(self.admin_user.is_superuser)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('admin' in str(m).lower() for m in messages))
+
+    def test_change_role_can_update_organization(self) -> None:
+        """Changing role form can also assign an organization."""
+        org = OrganizationModel.objects.create(name='Assigned Org', organization='Assigned Org', country='DE')
+        url = reverse('management:change_role', kwargs={'pk': self.other_user.pk})
+        response = self.client.post(url, {'role': self.plain_group.pk, 'organization': org.pk})
+        self.assertEqual(response.status_code, 302)
+        self.other_user.refresh_from_db()
+        self.assertEqual(self.other_user.organization_id, org.pk)

@@ -115,5 +115,8 @@ urlpatterns = [
     # Audit log
     path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
     # Organization
-    path('organization/', organization.OrganizationView.as_view(), name='organization')
+    path('organization/', organization.OrganizationTableView.as_view(), name='organization'),
+    path('organization/add/', organization.OrganizationCreateView.as_view(), name='add_organization'),
+    path('organization/<int:pk>/edit/', organization.OrganizationEditView.as_view(), name='edit_organization'),
+    path('organization/<int:pk>/delete/', organization.OrganizationDeleteView.as_view(), name='delete_organization'),
 ]
