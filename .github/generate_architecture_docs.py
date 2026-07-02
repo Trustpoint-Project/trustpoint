@@ -1,7 +1,16 @@
-"""Generate Trustpoint architecture documentation automatically."""
+"""Generate Trustpoint architecture documentation automatically.
+
+This script is intended for development use only with trusted inputs.
+Security warnings S603/S607 are suppressed as subprocess calls use hardcoded commands.
+SLF001 warnings are suppressed as we need to access Django model metadata.
+"""
+# ruff: noqa: S603, S607, SLF001, INP001
+
+from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -13,34 +22,34 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 TRUSTPOINT_DIR = PROJECT_ROOT / 'trustpoint'
 sys.path.insert(0, str(TRUSTPOINT_DIR))
 
-import os
-
-import django
-
-# Setup Django
+# Setup Django - must be done before Django imports
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'trustpoint.settings')
+
+import contextlib  # noqa: E402
+
+import django  # noqa: E402
+
 django.setup()
 
-from django.apps import apps as django_apps
-from django.conf import settings
-from django.urls import get_resolver
+from django.apps import apps as django_apps  # noqa: E402
+from django.conf import settings  # noqa: E402
+from django.urls import get_resolver  # noqa: E402
 
 
 def get_installed_apps() -> list[str]:
     """Get list of Trustpoint apps (exclude Django contrib and third-party)."""
     trustpoint_apps = []
     for app in settings.INSTALLED_APPS:
-        if not app.startswith(('django.', 'rest_framework', 'drf_', 'crispy', 'dbbackup', 'django_')):
-            if app != 'trustpoint_core':  # External dependency
-                app_label = app.split('.')[0]
-                trustpoint_apps.append(app_label)
+        if not app.startswith(('django.', 'rest_framework', 'drf_', 'crispy', 'dbbackup', 'django_')) and app != 'trustpoint_core':  # External dependency  # noqa: E501
+            app_label = app.split('.')[0]
+            trustpoint_apps.append(app_label)
     return trustpoint_apps
 
 
 def analyze_models() -> dict[str, Any]:
     """Analyze Django models and their relationships."""
     model_data = {}
-    
+
     trustpoint_apps = get_installed_apps()
 
     for app_config in django_apps.get_app_configs():
@@ -59,7 +68,7 @@ def analyze_models() -> dict[str, Any]:
                 }
 
                 if hasattr(field, 'related_model') and field.related_model:
-                    field_info['related_to'] = f"{field.related_model._meta.app_label}.{field.related_model.__name__}"
+                    field_info['related_to'] = f'{field.related_model._meta.app_label}.{field.related_model.__name__}'
 
                 fields.append(field_info)
 
@@ -77,24 +86,24 @@ def analyze_models() -> dict[str, Any]:
 
 def analyze_urls() -> dict[str, Any]:
     """Analyze URL patterns and their views."""
-    url_data = {}
+    url_data: dict[str, Any] = {}
     resolver = get_resolver()
 
-    def _extract_patterns(patterns, prefix=''):
+    def _extract_patterns(patterns: Any, prefix: str = '') -> list[dict[str, Any]]:
         """Recursively extract URL patterns."""
-        routes = []
+        routes: list[dict[str, Any]] = []
         for pattern in patterns:
             if hasattr(pattern, 'url_patterns'):
                 new_prefix = prefix + str(pattern.pattern)
                 routes.extend(_extract_patterns(pattern.url_patterns, new_prefix))
             else:
-                route_info = {
+                route_info: dict[str, Any] = {
                     'pattern': prefix + str(pattern.pattern),
                 }
                 if hasattr(pattern, 'callback'):
                     callback = pattern.callback
                     if callback:
-                        route_info['view'] = f"{callback.__module__}.{callback.__name__}"
+                        route_info['view'] = f'{callback.__module__}.{callback.__name__}'
                 if hasattr(pattern, 'name') and pattern.name:
                     route_info['name'] = pattern.name
                 routes.append(route_info)
@@ -106,10 +115,8 @@ def analyze_urls() -> dict[str, Any]:
 
 def generate_app_dependency_rst(output_dir: Path) -> None:
     """Generate RST file with application dependency graph using pydeps."""
-    print("Generating application dependency graph...")
-
     svg_path = output_dir / 'app_dependencies.svg'
-    try:
+    with contextlib.suppress(subprocess.CalledProcessError):
         subprocess.run(
             [
                 'uv',
@@ -127,9 +134,6 @@ def generate_app_dependency_rst(output_dir: Path) -> None:
             capture_output=True,
             text=True,
         )
-    except subprocess.CalledProcessError as e:
-        print(f"Warning: pydeps failed: {e}")
-        print(f"stderr: {e.stderr}")
         # Continue anyway
 
     rst_content = """Application Dependencies
@@ -154,30 +158,27 @@ Key Applications
 
     for app in get_installed_apps():
         app_name = app.split('.')[-1] if '.' in app else app
-        rst_content += f"- **{app_name}**: "
+        rst_content += f'- **{app_name}**: '
 
         try:
             app_config = django_apps.get_app_config(app_name)
             if hasattr(app_config, '__doc__') and app_config.__doc__:
                 rst_content += app_config.__doc__.split('\n')[0]
             else:
-                rst_content += f"{app_name.title()} application"
+                rst_content += f'{app_name.title()} application'
         except LookupError:
-            rst_content += f"{app_name.title()} application"
+            rst_content += f'{app_name.title()} application'
 
         rst_content += '\n'
 
     (output_dir / 'app_dependencies.rst').write_text(rst_content)
-    print(f"✓ Generated {output_dir / 'app_dependencies.rst'}")
 
 
-def generate_model_diagram_rst(output_dir: Path, model_data: dict) -> None:
+def generate_model_diagram_rst(output_dir: Path, model_data: dict[str, Any]) -> None:
     """Generate RST file with Django model diagrams using django-extensions."""
-    print("Generating model relationship diagram...")
-
     dot_path = output_dir / 'model_relationships.dot'
     svg_path = output_dir / 'model_relationships.svg'
-    
+
     try:
         subprocess.run(
             [
@@ -197,22 +198,17 @@ def generate_model_diagram_rst(output_dir: Path, model_data: dict) -> None:
             capture_output=True,
             text=True,
         )
-        
-        try:
+
+        with contextlib.suppress(subprocess.CalledProcessError, FileNotFoundError):
             subprocess.run(
                 ['dot', '-Tsvg', str(dot_path), '-o', str(svg_path)],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            print(f"✓ Generated SVG diagram at {svg_path}")
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            print("Note: graphviz 'dot' command not found. SVG not generated.")
-            print(f"DOT file available at: {dot_path}")
-            
-    except subprocess.CalledProcessError as e:
-        print(f"Warning: graph_models failed: {e}")
-        print(f"stderr: {e.stderr}")
+
+    except subprocess.CalledProcessError:
+        pass
 
     rst_content = """Model Relationships
 ===================
@@ -227,7 +223,7 @@ This diagram shows all Django models and their relationships across the Trustpoi
     # Check if SVG was generated
     svg_path = output_dir / 'model_relationships.svg'
     dot_path = output_dir / 'model_relationships.dot'
-    
+
     if svg_path.exists():
         rst_content += """.. image:: model_relationships.svg
    :alt: Complete Model Relationship Diagram
@@ -237,18 +233,18 @@ This diagram shows all Django models and their relationships across the Trustpoi
 """
     elif dot_path.exists():
         rst_content += f""".. note::
-   
+
    Model diagram is available as a DOT file. To generate SVG, install graphviz and run:
-   
+
    .. code-block:: bash
-   
+
       dot -Tsvg {dot_path.name} -o model_relationships.svg
 
 """
     else:
         rst_content += """.. note::
-   
-   Model diagram generation requires django-extensions. 
+
+   Model diagram generation requires django-extensions.
    Run the architecture generator to create diagrams.
 
 """
@@ -269,11 +265,11 @@ Model Index by Application
     # Add model index
     for app_name, models in sorted(model_data.items()):
         app_display = app_name.split('.')[-1]
-        rst_content += f"\n{app_display}\n"
-        rst_content += "^" * len(app_display) + "\n\n"
+        rst_content += f'\n{app_display}\n'
+        rst_content += '^' * len(app_display) + '\n\n'
 
         for model_name, model_info in sorted(models.items()):
-            rst_content += f"**{model_name}**\n\n"
+            rst_content += f'**{model_name}**\n\n'
             rst_content += f"   *{model_info['verbose_name']}*\n\n"
             rst_content += f"   Database table: ``{model_info['table_name']}``\n\n"
 
@@ -282,19 +278,16 @@ Model Index by Application
                 f for f in model_info['fields'] if 'related_to' in f
             ]
             if relationships:
-                rst_content += "   Relationships:\n\n"
+                rst_content += '   Relationships:\n\n'
                 for rel in relationships:
                     rst_content += f"   - ``{rel['name']}`` ({rel['type']}) → {rel['related_to']}\n"
-                rst_content += "\n"
+                rst_content += '\n'
 
     (output_dir / 'model_relationships.rst').write_text(rst_content)
-    print(f"✓ Generated {output_dir / 'model_relationships.rst'}")
 
 
-def generate_url_routing_rst(output_dir: Path, url_data: dict) -> None:
+def generate_url_routing_rst(output_dir: Path, url_data: dict[str, Any]) -> None:
     """Generate RST file documenting URL routing."""
-    print("Generating URL routing documentation...")
-
     rst_content = """URL Routing Map
 ===============
 
@@ -306,7 +299,7 @@ URL Patterns by App
 """
 
     # Group routes by app
-    routes_by_app: dict[str, list] = {}
+    routes_by_app: dict[str, list[dict[str, Any]]] = {}
     for route in url_data['routes']:
         pattern = route['pattern']
         # Try to extract app from pattern or view
@@ -332,35 +325,32 @@ URL Patterns by App
         routes = routes_by_app[app_name]
         app_display = app_name.replace('_', ' ').title()
 
-        rst_content += f"\n{app_display}\n"
-        rst_content += "^" * len(app_display) + "\n\n"
+        rst_content += f'\n{app_display}\n'
+        rst_content += '^' * len(app_display) + '\n\n'
 
-        rst_content += ".. list-table::\n"
-        rst_content += "   :header-rows: 1\n"
-        rst_content += "   :widths: 40 30 30\n\n"
-        rst_content += "   * - URL Pattern\n"
-        rst_content += "     - View\n"
-        rst_content += "     - Name\n"
+        rst_content += '.. list-table::\n'
+        rst_content += '   :header-rows: 1\n'
+        rst_content += '   :widths: 40 30 30\n\n'
+        rst_content += '   * - URL Pattern\n'
+        rst_content += '     - View\n'
+        rst_content += '     - Name\n'
 
         for route in sorted(routes, key=lambda x: x['pattern']):
             pattern = route['pattern'].replace('|', r'\|')
             view = route.get('view', '').rsplit('.', 1)[-1] if 'view' in route else '-'
             name = route.get('name', '-')
 
-            rst_content += f"   * - ``{pattern}``\n"
-            rst_content += f"     - ``{view}``\n"
-            rst_content += f"     - ``{name}``\n"
+            rst_content += f'   * - ``{pattern}``\n'
+            rst_content += f'     - ``{view}``\n'
+            rst_content += f'     - ``{name}``\n'
 
-        rst_content += "\n"
+        rst_content += '\n'
 
     (output_dir / 'url_routing.rst').write_text(rst_content)
-    print(f"✓ Generated {output_dir / 'url_routing.rst'}")
 
 
-def generate_app_overview_rst(output_dir: Path, model_data: dict, url_data: dict) -> None:
+def generate_app_overview_rst(output_dir: Path, model_data: dict[str, Any], url_data: dict[str, Any]) -> None:
     """Generate overview RST file."""
-    print("Generating application overview...")
-
     apps = get_installed_apps()
 
     rst_content = """Application Overview
@@ -386,9 +376,9 @@ Statistics
     total_models = sum(len(models) for models in model_data.values())
     total_routes = len(url_data['routes'])
 
-    rst_content += f"- **Applications**: {len(apps)}\n"
-    rst_content += f"- **Models**: {total_models}\n"
-    rst_content += f"- **URL Routes**: {total_routes}\n\n"
+    rst_content += f'- **Applications**: {len(apps)}\n'
+    rst_content += f'- **Models**: {total_models}\n'
+    rst_content += f'- **URL Routes**: {total_routes}\n\n'
 
     rst_content += """
 Applications
@@ -400,19 +390,18 @@ Applications
         app_name = app.split('.')[-1] if '.' in app else app
         model_count = len(model_data.get(app, {}))
 
-        rst_content += f"**{app_name}**\n\n"
+        rst_content += f'**{app_name}**\n\n'
 
         try:
             app_config = django_apps.get_app_config(app_name)
-            rst_content += f"   - Models: {model_count}\n"
-            rst_content += f"   - Path: ``{app_config.path}``\n"
+            rst_content += f'   - Models: {model_count}\n'
+            rst_content += f'   - Path: ``{app_config.path}``\n'
         except LookupError:
             pass
 
-        rst_content += "\n"
+        rst_content += '\n'
 
     (output_dir / 'index.rst').write_text(rst_content)
-    print(f"✓ Generated {output_dir / 'index.rst'}")
 
 
 def main() -> None:
@@ -431,18 +420,11 @@ def main() -> None:
     output_dir: Path = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("="* 60)
-    print("Trustpoint Architecture Documentation Generator")
-    print("="* 60)
 
-    print("\nAnalyzing project structure...")
     model_data = analyze_models()
     url_data = analyze_urls()
 
-    print(f"Found {len(model_data)} apps with models")
-    print(f"Found {len(url_data['routes'])} URL routes")
 
-    print("\nGenerating documentation files...")
     generate_app_overview_rst(output_dir, model_data, url_data)
     generate_app_dependency_rst(output_dir)
     generate_model_diagram_rst(output_dir, model_data)
@@ -459,12 +441,7 @@ def main() -> None:
             f,
             indent=2,
         )
-    print(f"✓ Saved raw data to {json_path}")
 
-    print("\n" + "="* 60)
-    print("Architecture documentation generated successfully!")
-    print(f"Output directory: {output_dir}")
-    print("="* 60)
 
 
 if __name__ == '__main__':
