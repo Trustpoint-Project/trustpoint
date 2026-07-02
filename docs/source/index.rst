@@ -83,6 +83,7 @@ Welcome to Trustpoint's documentation!
    :caption: Development
 
    development/index
+   development/architecture/generated/index
    development/architecture/credentials
    development/architecture/backup_restore
    development/architecture/crypto_redesign
