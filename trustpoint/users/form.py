@@ -1,6 +1,6 @@
 """Forms for creating and updating Trustpoint users and managing groups."""
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
@@ -47,9 +47,10 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Apply Bootstrap form-control class to every field widget."""
         super().__init__(*args, **kwargs)
-        self.fields['organization'].required = False
-        self.fields['organization'].queryset = OrganizationModel.objects.all()
-        self.fields['organization'].empty_label = _('No organization')
+        organization_field = cast('forms.ModelChoiceField', self.fields['organization'])
+        organization_field.required = False
+        organization_field.queryset = OrganizationModel.objects.all()
+        organization_field.empty_label = _('No organization')
         for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
 
@@ -66,9 +67,10 @@ class TrustpointUserRoleForm(forms.ModelForm[TrustpointUser]):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Apply Bootstrap form-control class to role and organization widgets."""
         super().__init__(*args, **kwargs)
-        self.fields['organization'].required = False
-        self.fields['organization'].queryset = OrganizationModel.objects.all()
-        self.fields['organization'].empty_label = _('No organization')
+        organization_field = cast('forms.ModelChoiceField', self.fields['organization'])
+        organization_field.required = False
+        organization_field.queryset = OrganizationModel.objects.all()
+        organization_field.empty_label = _('No organization')
         for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
 

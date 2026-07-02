@@ -53,6 +53,8 @@ class OrganizationCreateView(
     def form_valid(self, form: BaseModelForm[OrganizationModel]) -> HttpResponse:
         """Save the new organization, write audit log, and show a success message."""
         response = super().form_valid(form)
+        if not self.object:
+            return response
 
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
