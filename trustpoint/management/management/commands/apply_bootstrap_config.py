@@ -12,6 +12,7 @@ from typing import Any
 from cryptography.hazmat.primitives import hashes
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand, CommandParser
@@ -42,6 +43,7 @@ from setup_wizard.models import SetupWizardConfigModel
 from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
 from setup_wizard.pkcs11_staging import cleanup_wizard_pkcs11_staged_path, existing_wizard_pkcs11_staged_file
 from setup_wizard.tls_credential import clear_staged_tls_credential, load_staged_tls_credential
+from users.models import Role
 
 logger = logging.getLogger(__name__)
 
@@ -445,13 +447,18 @@ class OperationalBootstrapApplier:
         if not password_hash:
             raise DjangoValidationError('The operational admin password hash is missing.')
 
+        admin_group = Group.objects.get(name=Role.ADMIN.value)
         user_model = get_user_model()
-        user, _ = user_model.objects.get_or_create(username=username)
+        user, _ = user_model.objects.get_or_create(
+            username=username,
+            defaults={
+                'email': '',
+                'role': admin_group,
+            }
+        )
         user.email = admin_payload.get('email') or ''
         user.password = password_hash
         user.is_active = True
-        user.is_staff = True
-        user.is_superuser = True
         user.save()
 
     def apply(self) -> None:
@@ -464,6 +471,7 @@ class OperationalBootstrapApplier:
             call_command('add_domains_and_devices')
         call_command('execute_all_notifications')
         self._apply_staged_tls_credential()
+        call_command('create_admin_group')
         self._create_operational_admin()
 
 

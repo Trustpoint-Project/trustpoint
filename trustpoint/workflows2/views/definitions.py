@@ -12,6 +12,7 @@ from django.views import View
 from django.views.generic import ListView
 
 from trustpoint.page_context import PageContextMixin
+from trustpoint.views.base import UserPermissionRequiredMixin
 from workflows2.forms import Workflow2DefinitionForm
 from workflows2.models import Workflow2Definition
 from workflows2.services.definitions import WorkflowDefinitionService
@@ -23,7 +24,8 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class Workflow2DefinitionListView(PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
+class Workflow2DefinitionListView(
+    UserPermissionRequiredMixin, PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
     """Show saved Workflow 2 definitions."""
 
     page_category = 'workflows2'
@@ -32,6 +34,8 @@ class Workflow2DefinitionListView(PageContextMixin, LoginRequiredMixin, ListView
     template_name = 'workflows2/definition_list.html'
     context_object_name = 'definitions'
     paginate_by = 50
+    permission_required = ''
+    raise_exception = True
 
     def get_queryset(self) -> QuerySet[Workflow2Definition]:
         """Return definitions ordered by newest first."""

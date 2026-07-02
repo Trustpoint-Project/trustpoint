@@ -1,11 +1,20 @@
 """Tests for settings app URL configuration."""
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import resolve, reverse
 
 from management.views import IndexView, backend_configuration, backup, logging, tls
+from management.views.organization import (
+    OrganizationCreateView,
+    OrganizationDeleteView,
+    OrganizationEditView,
+    OrganizationTableView,
+)
+from management.views.user_management import UserTableView, UserCreateView, UserDeleteView, UserChangeRoleView
+from management.views.role_management import RoleTableView, RoleCreateView, RoleEditView, RoleDeleteView
 
+User = get_user_model()
 
 class SettingsUrlsTestCase(TestCase):
     def setUp(self):
@@ -180,3 +189,69 @@ class SettingsUrlsTestCase(TestCase):
         # but we can also test it explicitly
         from management.urls import app_name
         self.assertEqual(app_name, 'management')
+
+
+class UserManagementUrlsTestCase(TestCase):
+    def test_user_management_url(self):
+        url = reverse('management:user_management')
+        self.assertEqual(url, '/management/user_management/')
+        self.assertEqual(resolve(url).func.view_class, UserTableView)
+
+    def test_user_add_url(self):
+        url = reverse('management:add_user')
+        self.assertEqual(url, '/management/user_management/add_user/')
+        self.assertEqual(resolve(url).func.view_class, UserCreateView)
+
+    def test_user_delete_url(self):
+        url = reverse('management:delete_user', kwargs={'pk': 1})
+        self.assertEqual(url, '/management/user_management/1/delete/')
+        self.assertEqual(resolve(url).func.view_class, UserDeleteView)
+
+    def test_user_change_role_url(self):
+        url = reverse('management:change_role', kwargs={'pk': 1})
+        self.assertEqual(url, '/management/user_management/1/change_role/')
+        self.assertEqual(resolve(url).func.view_class, UserChangeRoleView)
+
+
+class RoleManagementUrlsTestCase(TestCase):
+    def test_role_management_url(self):
+        url = reverse('management:role_management')
+        self.assertEqual(url, '/management/role_management/')
+        self.assertEqual(resolve(url).func.view_class, RoleTableView)
+
+    def test_role_add_url(self):
+        url = reverse('management:add_role')
+        self.assertEqual(url, '/management/role_management/add/')
+        self.assertEqual(resolve(url).func.view_class, RoleCreateView)
+
+    def test_role_edit_url(self):
+        url = reverse('management:edit_role', kwargs={'pk': 1})
+        self.assertEqual(url, '/management/role_management/1/edit/')
+        self.assertEqual(resolve(url).func.view_class, RoleEditView)
+
+    def test_role_delete_url(self):
+        url = reverse('management:delete_role', kwargs={'pk': 1})
+        self.assertEqual(url, '/management/role_management/1/delete/')
+        self.assertEqual(resolve(url).func.view_class, RoleDeleteView)
+
+
+class OrganizationManagementUrlsTestCase(TestCase):
+    def test_organization_management_url(self):
+        url = reverse('management:organization')
+        self.assertEqual(url, '/management/organization/')
+        self.assertEqual(resolve(url).func.view_class, OrganizationTableView)
+
+    def test_organization_add_url(self):
+        url = reverse('management:add_organization')
+        self.assertEqual(url, '/management/organization/add/')
+        self.assertEqual(resolve(url).func.view_class, OrganizationCreateView)
+
+    def test_organization_edit_url(self):
+        url = reverse('management:edit_organization', kwargs={'pk': 1})
+        self.assertEqual(url, '/management/organization/1/edit/')
+        self.assertEqual(resolve(url).func.view_class, OrganizationEditView)
+
+    def test_organization_delete_url(self):
+        url = reverse('management:delete_organization', kwargs={'pk': 1})
+        self.assertEqual(url, '/management/organization/1/delete/')
+        self.assertEqual(resolve(url).func.view_class, OrganizationDeleteView)
