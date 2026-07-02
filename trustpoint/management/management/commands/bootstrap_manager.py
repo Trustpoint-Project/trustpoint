@@ -7,8 +7,10 @@ import logging
 import os
 import secrets
 
+from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand
 from django.db import connection
@@ -18,6 +20,7 @@ from management.util.output_wrapper import CommandOutputWrapper
 from management.util.startup_strategies import BootstrapTlsMaterialStrategy, StartupContext, WizardState
 from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
 from setup_wizard.tls_credential import load_staged_tls_credential
+from users.models import Role
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +72,7 @@ class Command(BaseCommand):
     @staticmethod
     def _prepare_bootstrap_database() -> None:
         """Prepare only the schema needed by the bootstrap web surface."""
-        for app_label in ('contenttypes', 'auth', 'sessions'):
+        for app_label in ('contenttypes', 'auth', 'sessions', 'users'):
             call_command('migrate', app_label, interactive=False, verbosity=0)
 
         existing_tables = set(connection.introspection.table_names())
@@ -99,18 +102,17 @@ class Command(BaseCommand):
         """Create or rotate the temporary bootstrap login and log the password."""
         username = getattr(settings, 'TRUSTPOINT_BOOTSTRAP_USERNAME', 'admin')
         password = secrets.token_urlsafe(8)
+        admin_group = Command._ensure_admin_group()
         user_model = get_user_model()
         user, _created = user_model.objects.get_or_create(
             username=username,
             defaults={
                 'email': '',
-                'is_staff': True,
-                'is_superuser': True,
+                'role': admin_group,
             },
         )
+
         user.is_active = True
-        user.is_staff = True
-        user.is_superuser = True
         user.set_password(password)
         user.save()
 
@@ -122,6 +124,12 @@ class Command(BaseCommand):
         for message in messages:
             logger.warning(message)
             output.write(message)
+
+    @staticmethod
+    def _ensure_admin_group() -> Group:
+        """Ensure the protected Admin role and profile exist."""
+        call_command('create_admin_group', verbosity=0)
+        return Group.objects.get(name=Role.ADMIN.value)
 
     @staticmethod
     def _seed_operational_database_defaults(config: SetupWizardConfigModel, output: CommandOutputWrapper) -> None:

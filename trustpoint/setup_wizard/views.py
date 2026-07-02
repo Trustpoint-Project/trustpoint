@@ -21,9 +21,8 @@ import psycopg
 from cryptography.hazmat.primitives import hashes
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import get_user_model, logout
+from django.contrib.auth import logout
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import CommandError, call_command
 from django.db import DatabaseError, transaction
@@ -110,8 +109,6 @@ from setup_wizard.tls_credential import (
     stage_tls_credential,
 )
 from trustpoint.logger import LoggerMixin
-from users.form import TrustpointSuperUserCreationForm
-from users.models import Role
 
 from .forms import (
     EmptyForm,

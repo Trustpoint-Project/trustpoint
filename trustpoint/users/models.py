@@ -139,7 +139,9 @@ class TrustpointUser(AbstractUser):
 
     organization = models.ForeignKey(
         'management.OrganizationModel',
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='org_users',
         verbose_name=_('organization')
     )
