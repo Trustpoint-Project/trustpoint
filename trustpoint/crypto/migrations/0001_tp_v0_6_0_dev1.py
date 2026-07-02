@@ -128,6 +128,19 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
+            name='CryptoManagedKeyProtectedImportBindingModel',
+            fields=[
+                ('managed_key', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='protected_import_binding', serialize=False, to='crypto.cryptomanagedkeymodel')),
+                ('key_handle', models.CharField(max_length=128)),
+                ('encrypted_private_key_pkcs8_der_b64', models.TextField()),
+                ('encryption_metadata', models.JSONField(default=dict)),
+                ('provider_profile', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='protected_import_key_bindings', to='crypto.cryptoproviderprofilemodel')),
+            ],
+            options={
+                'db_table': 'crypto_managed_key_protected_import_binding',
+            },
+        ),
+        migrations.CreateModel(
             name='CryptoManagedKeyRestBindingModel',
             fields=[
                 ('managed_key', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='rest_binding', serialize=False, to='crypto.cryptomanagedkeymodel')),
@@ -226,6 +239,14 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='cryptomanagedkeypkcs11bindingmodel',
             constraint=models.UniqueConstraint(fields=('provider_profile', 'key_id_hex'), name='crypto_pkcs11_binding_unique_profile_key_id'),
+        ),
+        migrations.AddIndex(
+            model_name='cryptomanagedkeyprotectedimportbindingmodel',
+            index=models.Index(fields=['provider_profile', 'key_handle'], name='crypto_mana_provide_9dbcd7_idx'),
+        ),
+        migrations.AddConstraint(
+            model_name='cryptomanagedkeyprotectedimportbindingmodel',
+            constraint=models.UniqueConstraint(fields=('provider_profile', 'key_handle'), name='crypto_protected_import_unique_profile_key_handle'),
         ),
         migrations.AddIndex(
             model_name='cryptomanagedkeyrestbindingmodel',

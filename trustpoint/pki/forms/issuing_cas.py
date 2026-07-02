@@ -6,8 +6,10 @@ from typing import Any, ClassVar, NoReturn, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -19,6 +21,7 @@ from trustpoint_core.serializer import (
 from crypto.application.capabilities import get_active_backend_capability_report
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import EllipticCurveName
+from crypto.domain.errors import CryptoError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
@@ -35,6 +38,8 @@ from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
 from util.validation import ValidationError as UtilValidationError
 from util.validation import validate_remote_ca_connection
+
+MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
 
 
 def get_ca_type_from_config() -> CaModel.CaTypeChoice:
@@ -131,7 +136,7 @@ class IssuingCaImportMixin:
         self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer,
         chain: list[x509.Certificate] | None = None,
     ) -> CaModel:
-        """Finalizes the creation of the Issuing CA after validation."""
+        """Finalizes the creation of an imported Issuing CA after validation."""
         if not unique_name:
             unique_name = get_certificate_name(cert)
 
@@ -141,11 +146,14 @@ class IssuingCaImportMixin:
         self._verify_ca_cert_with_chain(cert, chain or [])
 
         try:
-            issuing_ca = CaModel.create_new_issuing_ca(
-                credential_serializer=credential_serializer,
-                ca_type=get_ca_type_from_config(),
+            issuing_ca = self._create_protected_import_issuing_ca(
                 unique_name=unique_name,
+                cert=cert,
+                credential_serializer=credential_serializer,
+                chain=chain or [],
             )
+        except CryptoError as exception:
+            self._raise_validation_error(str(exception))
         except ValidationError:
             raise
         except Exception:  # noqa: BLE001
@@ -160,6 +168,53 @@ class IssuingCaImportMixin:
         PkiSecurityAuthorization().check(issuing_ca)
         issuing_ca.save(update_fields=['no_onboarding_config'])
 
+        return issuing_ca
+
+    @transaction.atomic
+    def _create_protected_import_issuing_ca(
+        self,
+        *,
+        unique_name: str,
+        cert: x509.Certificate,
+        credential_serializer: CredentialSerializer,
+        chain: list[x509.Certificate],
+    ) -> CaModel:
+        """Create an issuing CA whose imported key is managed by the crypto backend."""
+        ca_type = get_ca_type_from_config()
+        CaModel._validate_ca_certificate(cert)  # noqa: SLF001
+        CaModel._validate_ca_type(ca_type)  # noqa: SLF001
+
+        private_key = credential_serializer.private_key
+        if private_key is None:
+            self._raise_validation_error('Private key is missing from credential serializer.')
+        if not isinstance(private_key, (rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)):
+            self._raise_validation_error('Only RSA and elliptic-curve CA private keys can be imported.')
+
+        key_ref = TrustpointCryptoBackend().import_managed_private_key(
+            alias=unique_name,
+            private_key=private_key,
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
+        )
+        managed_key = CryptoManagedKeyModel.objects.get(pk=key_ref.id)
+        credential_model = CredentialModel.save_managed_key_credential(
+            certificate=cert,
+            certificate_chain=chain,
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            managed_key=managed_key,
+        )
+
+        issuing_ca = CaModel(
+            unique_name=unique_name,
+            credential=credential_model,
+            ca_type=ca_type,
+        )
+        issuing_ca.save()
+
+        truststore = CaModel._create_chain_truststore(issuing_ca)  # noqa: SLF001
+        issuing_ca.chain_truststore = truststore
+        issuing_ca.save(update_fields=['chain_truststore'])
         return issuing_ca
 
     def _validate_credential_components(
@@ -182,16 +237,9 @@ class IssuingCaImportMixin:
     def _prepare_credential_serializer(
         self, credential_serializer: CredentialSerializer, _unique_name: str | None, _pk: Any
     ) -> None:
-        """Reject legacy serializer-level private-key placement."""
+        """Validate the serializer before the key is imported through the crypto backend."""
         if credential_serializer.private_key is None:
             self._raise_validation_error('Private key is missing from credential serializer.')
-
-        raise ValidationError(
-            _(
-                'Importing private-key-backed issuing CAs is disabled. '
-                'Generate the CA key through the configured crypto backend instead.'
-            )
-        )
 
 
 class IssuingCaAddMethodSelectForm(forms.Form):
@@ -278,6 +326,8 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
         pkcs12_file = cleaned_data.get('pkcs12_file')
         if pkcs12_file is None:
             self._raise_validation_error('PKCS#12 file is required.')
+        if getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
+            self._raise_validation_error('PKCS#12 file is too large, max. 256 kiB.')
 
         try:
             pkcs12_raw = pkcs12_file.read()
@@ -313,12 +363,7 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
 
-        raise ValidationError(
-            _(
-                'Importing private-key-backed issuing CAs is disabled. '
-                'Generate the CA key through the configured crypto backend instead.'
-            )
-        )
+        return credential_serializer
 
     def _validate_ca_certificate_from_serializer(self, credential_serializer: CredentialSerializer) -> x509.Certificate:
         """Validates that the certificate is a CA certificate."""

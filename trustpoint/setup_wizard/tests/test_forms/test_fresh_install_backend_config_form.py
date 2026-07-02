@@ -66,6 +66,16 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
 
         self.assertTrue(form['fresh_install_pkcs11_enforce_app_secret_protection'].value())
 
+    def test_pkcs11_app_secret_protection_is_enabled_for_local_dev_handoff(self) -> None:
+        """Local development PKCS#11 handoff still requires HSM app-secret protection by default."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+
+        with patch('setup_wizard.forms.local_dev_pkcs11_handoff_available', return_value=True):
+            form = FreshInstallBackendConfigModelForm(instance=config_model)
+
+        assert form['fresh_install_pkcs11_enforce_app_secret_protection'].value()
+
     def test_pkcs11_form_requires_module_upload_and_user_pin(self) -> None:
         config_model = SetupWizardConfigModel.get_singleton()
         config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage

@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
+from crypto.adapters.protected_import.bindings import ProtectedImportManagedKeyBinding
 from crypto.adapters.rest.bindings import RestManagedKeyBinding
 from crypto.adapters.rest.capabilities import RestCapabilities
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
@@ -24,6 +25,7 @@ from crypto.models import (
     BackendKind,
     CryptoManagedKeyModel,
     CryptoManagedKeyPkcs11BindingModel,
+    CryptoManagedKeyProtectedImportBindingModel,
     CryptoManagedKeyRestBindingModel,
     CryptoManagedKeySoftwareBindingModel,
     CryptoProviderCapabilityPkcs11DetailModel,
@@ -42,7 +44,9 @@ if TYPE_CHECKING:
     from crypto.domain.refs import ManagedKeyRef
 
 ProviderCapabilities = Pkcs11Capabilities | SoftwareCapabilities | RestCapabilities
-ManagedKeyBinding = Pkcs11ManagedKeyBinding | SoftwareManagedKeyBinding | RestManagedKeyBinding
+ManagedKeyBinding = (
+    Pkcs11ManagedKeyBinding | SoftwareManagedKeyBinding | RestManagedKeyBinding | ProtectedImportManagedKeyBinding
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,6 +361,22 @@ class CryptoManagedKeyRepository:
         algorithm = KeyAlgorithm(managed_key.algorithm)
         signing_execution_mode = SigningExecutionMode(managed_key.signing_execution_mode)
 
+        try:
+            protected_import_binding = managed_key.protected_import_binding
+        except CryptoManagedKeyProtectedImportBindingModel.DoesNotExist:
+            protected_import_binding = None
+
+        if protected_import_binding is not None:
+            return ProtectedImportManagedKeyBinding(
+                key_handle=protected_import_binding.key_handle,
+                algorithm=algorithm,
+                encrypted_private_key_pkcs8_der_b64=protected_import_binding.encrypted_private_key_pkcs8_der_b64,
+                encryption_metadata=protected_import_binding.encryption_metadata,
+                public_key_fingerprint_sha256=managed_key.public_key_fingerprint_sha256,
+                signing_execution_mode=signing_execution_mode,
+                provider_label=_optional_domain_text(managed_key.provider_label),
+            )
+
         if managed_key.provider_profile.backend_kind == BackendKind.PKCS11:
             pkcs11_binding = managed_key.pkcs11_binding
             return Pkcs11ManagedKeyBinding(
@@ -420,6 +440,8 @@ class CryptoManagedKeyRepository:
         """Validate that a binding instance matches the owning backend kind."""
         if profile.backend_kind == BackendKind.PKCS11 and isinstance(binding, Pkcs11ManagedKeyBinding):
             return
+        if profile.backend_kind == BackendKind.PKCS11 and isinstance(binding, ProtectedImportManagedKeyBinding):
+            return
         if profile.backend_kind == BackendKind.SOFTWARE and isinstance(binding, SoftwareManagedKeyBinding):
             return
         if profile.backend_kind == BackendKind.REST and isinstance(binding, RestManagedKeyBinding):
@@ -447,6 +469,18 @@ class CryptoManagedKeyRepository:
             )
             pkcs11_model.full_clean()
             _save_untyped_model(pkcs11_model)
+            return
+
+        if profile.backend_kind == BackendKind.PKCS11 and isinstance(binding, ProtectedImportManagedKeyBinding):
+            protected_import_model = CryptoManagedKeyProtectedImportBindingModel(
+                managed_key=managed_key,
+                provider_profile=profile,
+                key_handle=binding.key_handle,
+                encrypted_private_key_pkcs8_der_b64=binding.encrypted_private_key_pkcs8_der_b64,
+                encryption_metadata=binding.encryption_metadata,
+            )
+            protected_import_model.full_clean()
+            _save_untyped_model(protected_import_model)
             return
 
         if profile.backend_kind == BackendKind.SOFTWARE and isinstance(binding, SoftwareManagedKeyBinding):

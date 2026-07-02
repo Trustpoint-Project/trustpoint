@@ -1963,13 +1963,13 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         return local_dev_module
 
     @staticmethod
-    def _uses_builtin_local_pkcs11_proxy(
+    def _uses_builtin_local_pkcs11_handoff(
         *,
         staged_pin: Path | None,
         local_dev_module: Path,
         configured_module_path: Path,
     ) -> bool:
-        """Return whether the built-in local PKCS#11 proxy can be used."""
+        """Return whether the built-in local PKCS#11 handoff can be used."""
         del staged_pin
         return (
             local_dev_pkcs11_handoff_available()
@@ -1990,13 +1990,13 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         return staged_module is None and configured_module_path.is_file()
 
     @staticmethod
-    def _discard_redundant_local_proxy_module(
+    def _discard_redundant_local_handoff_module(
         staged_module: Path | None,
         *,
-        uses_builtin_local_proxy: bool,
+        uses_builtin_local_handoff: bool,
     ) -> Path | None:
-        """Discard an uploaded module when the local proxy module is already available."""
-        if uses_builtin_local_proxy and staged_module is not None:
+        """Discard an uploaded module when the local development module is already available."""
+        if uses_builtin_local_handoff and staged_module is not None:
             cleanup_wizard_pkcs11_staged_path(staged_module)
             return None
         return staged_module
@@ -2148,16 +2148,16 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
         local_dev_module = cls._ensure_local_dev_pkcs11_module(config_model)
         configured_module_path = Path((config_model.fresh_install_pkcs11_module_path or '').strip())
-        uses_builtin_local_proxy = cls._uses_builtin_local_pkcs11_proxy(
+        uses_builtin_local_handoff = cls._uses_builtin_local_pkcs11_handoff(
             staged_pin=staged_pin,
             local_dev_module=local_dev_module,
             configured_module_path=configured_module_path,
         )
-        staged_module = cls._discard_redundant_local_proxy_module(
+        staged_module = cls._discard_redundant_local_handoff_module(
             staged_module,
-            uses_builtin_local_proxy=uses_builtin_local_proxy,
+            uses_builtin_local_handoff=uses_builtin_local_handoff,
         )
-        uses_existing_installed_module = uses_builtin_local_proxy or cls._uses_existing_installed_pkcs11_module(
+        uses_existing_installed_module = uses_builtin_local_handoff or cls._uses_existing_installed_pkcs11_module(
             staged_module=staged_module,
             staged_pin=staged_pin,
             configured_module_path=configured_module_path,
