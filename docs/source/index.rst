@@ -90,7 +90,7 @@ Welcome to Trustpoint's documentation!
    development/auto_restore
    development/sbom
    development/pipeline
-   release-checklist
+   development/release-checklist
    development/rest_api
    development/testing/test_plan
    development/testing/ci_cd
