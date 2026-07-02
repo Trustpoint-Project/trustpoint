@@ -82,7 +82,7 @@ Welcome to Trustpoint's documentation!
    :maxdepth: 3
    :caption: Development
 
-   development/development
+   development/index
    development/architecture/credentials
    development/architecture/backup_restore
    development/architecture/crypto_redesign
