@@ -32,6 +32,7 @@ services:
       TRUSTPOINT_LOCAL_HSM_PROFILE_NAME: local-dev-softhsm
       TRUSTPOINT_LOCAL_HSM_MODULE_PATH: /usr/lib/libsofthsm2.so
       TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE: /var/lib/trustpoint/hsm/config/user-pin.txt
+      TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR: SOFTHSM2_CONF
       TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF: /var/lib/trustpoint/hsm/config/softhsm2.conf
     secrets:
       - db_user

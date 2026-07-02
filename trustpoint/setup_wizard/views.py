@@ -93,7 +93,13 @@ from setup_wizard.operational_handoff import (
     run_operational_handoff,
     run_operational_runtime_switch,
 )
-from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
+from setup_wizard.pkcs11_local_dev import (
+    local_dev_pkcs11_config_available,
+    local_dev_pkcs11_config_env_var,
+    local_dev_pkcs11_config_path,
+    local_dev_pkcs11_handoff_available,
+    local_dev_pkcs11_module_path,
+)
 from setup_wizard.pkcs11_staging import (
     cleanup_wizard_pkcs11_staged_path,
     existing_wizard_pkcs11_staged_file,
@@ -610,6 +616,31 @@ def stage_uploaded_pkcs11_config(uploaded_config: Any) -> str:
     return str(staged_path)
 
 
+def _persist_local_dev_pkcs11_config_if_available(
+    form: FreshInstallBackendConfigModelForm,
+    update_fields: list[str],
+    *,
+    current_staged_config: Path | None,
+    current_config_path: str,
+    current_config_exists: bool,
+) -> None:
+    """Persist the local-dev PKCS#11 provider config when tp_wizard exposed one."""
+    if current_staged_config is not None or not local_dev_pkcs11_config_available():
+        return
+
+    local_dev_config = str(local_dev_pkcs11_config_path())
+    if current_config_path and current_config_path != local_dev_config and current_config_exists:
+        return
+
+    cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
+    form.instance.fresh_install_pkcs11_config_path = local_dev_config
+    update_fields.append('fresh_install_pkcs11_config_path')
+    if not form.instance.fresh_install_pkcs11_config_env_var:
+        form.instance.fresh_install_pkcs11_config_env_var = local_dev_pkcs11_config_env_var()
+        if 'fresh_install_pkcs11_config_env_var' not in update_fields:
+            update_fields.append('fresh_install_pkcs11_config_env_var')
+
+
 def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelForm) -> None:
     """Persist staged PKCS#11 wizard inputs without advancing the wizard."""
     if form.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
@@ -655,10 +686,21 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
         update_fields.append('fresh_install_pkcs11_auth_source_ref')
 
     uploaded_config = form.cleaned_data.get('pkcs11_config_upload')
+    current_staged_config = existing_wizard_pkcs11_staged_file(form.instance.fresh_install_pkcs11_config_path)
+    current_config_path = (form.instance.fresh_install_pkcs11_config_path or '').strip()
+    current_config_exists = bool(current_config_path and Path(current_config_path).is_file())
     if uploaded_config is not None:
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
         form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
         update_fields.append('fresh_install_pkcs11_config_path')
+    else:
+        _persist_local_dev_pkcs11_config_if_available(
+            form,
+            update_fields,
+            current_staged_config=current_staged_config,
+            current_config_path=current_config_path,
+            current_config_exists=current_config_exists,
+        )
 
     if (
         form.instance.fresh_install_pkcs11_token_label != previous_token_label
@@ -804,6 +846,20 @@ def apply_pkcs11_probe_fallbacks(config_model: SetupWizardConfigModel) -> tuple[
         config_file = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
         config_model.fresh_install_pkcs11_config_path = config_file
         fallback_update_fields.append('fresh_install_pkcs11_config_path')
+    elif (not config_file or not _path_exists(Path(config_file))) and local_dev_pkcs11_config_available():
+        config_file = str(local_dev_pkcs11_config_path())
+        config_model.fresh_install_pkcs11_config_path = config_file
+        fallback_update_fields.append('fresh_install_pkcs11_config_path')
+        if not config_env_var:
+            config_env_var = local_dev_pkcs11_config_env_var()
+            config_model.fresh_install_pkcs11_config_env_var = config_env_var
+            fallback_update_fields.append('fresh_install_pkcs11_config_env_var')
+    elif config_file and not config_env_var and local_dev_pkcs11_config_available():
+        local_dev_config = str(local_dev_pkcs11_config_path())
+        if config_file == local_dev_config:
+            config_env_var = local_dev_pkcs11_config_env_var()
+            config_model.fresh_install_pkcs11_config_env_var = config_env_var
+            fallback_update_fields.append('fresh_install_pkcs11_config_env_var')
 
     if config_file and config_env_var:
         os.environ[config_env_var] = config_file

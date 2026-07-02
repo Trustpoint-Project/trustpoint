@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 
+from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_config_path
+
 if TYPE_CHECKING:
     from setup_wizard.models import SetupWizardConfigModel
 
@@ -39,6 +41,7 @@ PASSTHROUGH_OPERATIONAL_ENV_KEYS = (
     'TRUSTPOINT_LOCAL_HSM_PROFILE_NAME',
     'TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE',
     'TRUSTPOINT_LOCAL_HSM_PROXY_SOCKET',
+    'TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR',
     'TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF',
     'EMAIL_HOST',
     'EMAIL_PORT',
@@ -115,7 +118,11 @@ def build_operational_environment(config_model: SetupWizardConfigModel) -> dict[
     pkcs11_config_env_var = (config_model.fresh_install_pkcs11_config_env_var or '').strip()
     pkcs11_config_path = (config_model.fresh_install_pkcs11_config_path or '').strip()
     if pkcs11_config_env_var and pkcs11_config_path:
-        env_values[pkcs11_config_env_var] = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
+        configured_config_path = Path(pkcs11_config_path)
+        if configured_config_path == local_dev_pkcs11_config_path():
+            env_values[pkcs11_config_env_var] = str(configured_config_path)
+        else:
+            env_values[pkcs11_config_env_var] = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
     return env_values
 
 
