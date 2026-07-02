@@ -118,3 +118,21 @@ exclude_patterns = [
 # -- HTML output options ----------------------------------------------------
 html_theme = 'furo'  # Modern, responsive theme
 html_static_path = ['_static']  # Directory for static assets
+
+# Furo theme options for better sidebar navigation
+html_theme_options = {
+    'navigation_with_keys': True,
+    'sidebar_hide_name': False,
+}
+
+# Control sidebar depth - shows all levels defined in toctrees
+html_sidebars = {
+    '**': [
+        'sidebar/scroll-start.html',
+        'sidebar/brand.html',
+        'sidebar/search.html',
+        'sidebar/navigation.html',
+        'sidebar/ethical-ads.html',
+        'sidebar/scroll-end.html',
+    ]
+}

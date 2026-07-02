@@ -12,7 +12,7 @@ Supported HSM Types
 SoftHSM
 ~~~~~~~
 
-**Primary Support**: SoftHSM2 is the default and fully supported HSM implementation.
+**Primary Support**: SoftHSM2 is the default.
 
 - **Library Path**: ``/usr/lib/softhsm/libsofthsm2.so``
 - **Use Case**: Development and CI validation. Use a production-grade HSM for production deployments.
