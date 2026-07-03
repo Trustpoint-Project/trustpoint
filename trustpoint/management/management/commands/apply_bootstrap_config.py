@@ -73,7 +73,7 @@ class OperationalBootstrapApplier:
             raise ValueError(err_msg)
 
         completed_process = subprocess.run(
-            ['sudo', str(script_path), *list(args)],
+            ['/usr/bin/sudo', str(script_path), *list(args)],
             capture_output=True,
             text=True,
             check=False,
