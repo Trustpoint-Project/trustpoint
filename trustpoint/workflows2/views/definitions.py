@@ -24,8 +24,15 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
+class WF2DefPermReqMixin(UserPermissionRequiredMixin):
+    """Mixin requiring the user to have the 'users.manage_workflow' permission."""
+
+    permission_required = 'users.manage_workflow'
+    raise_exception = True
+
+
 class Workflow2DefinitionListView(
-    UserPermissionRequiredMixin, PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
+    WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
     """Show saved Workflow 2 definitions."""
 
     page_category = 'workflows2'
@@ -34,15 +41,13 @@ class Workflow2DefinitionListView(
     template_name = 'workflows2/definition_list.html'
     context_object_name = 'definitions'
     paginate_by = 50
-    permission_required = ''
-    raise_exception = True
 
     def get_queryset(self) -> QuerySet[Workflow2Definition]:
         """Return definitions ordered by newest first."""
         return Workflow2Definition.objects.order_by('-created_at')
 
 
-class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2DefinitionCreateView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Create a new Workflow 2 definition from YAML."""
 
     page_category = 'workflows2'
@@ -147,7 +152,7 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
         return redirect('workflows2:definitions_edit', pk=obj.id)
 
 
-class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2DefinitionEditView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Edit an existing Workflow 2 definition."""
 
     page_category = 'workflows2'
