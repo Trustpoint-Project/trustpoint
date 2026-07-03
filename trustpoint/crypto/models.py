@@ -576,8 +576,10 @@ class CryptoManagedKeyProtectedImportBindingModel(models.Model):
 
     def clean(self) -> None:
         """Validate the protected imported-key binding shape."""
-        if self.provider_profile.backend_kind != BackendKind.PKCS11:
-            raise ValidationError({'provider_profile': 'Protected imported keys require a PKCS#11 provider profile.'})
+        if self.provider_profile.backend_kind not in {BackendKind.PKCS11, BackendKind.SOFTWARE}:
+            raise ValidationError(
+                {'provider_profile': 'Protected imported keys require a software or PKCS#11 provider profile.'}
+            )
         if self.managed_key.provider_profile_id != self.provider_profile_id:
             raise ValidationError(
                 {'provider_profile': 'Binding provider_profile must match managed_key.provider_profile.'}

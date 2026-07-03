@@ -430,7 +430,7 @@ class TrustpointCryptoBackend(LoggerMixin):
 
     @staticmethod
     def _validate_protected_import_policy(profile: CryptoProviderProfileModel) -> None:
-        """Require explicit policy and PKCS#11 app-secret protection before importing private keys."""
+        """Require explicit policy and app-secret protection before importing private keys."""
         from management.models import SecurityConfig  # noqa: PLC0415
 
         security_config = SecurityConfig.objects.filter(pk=1).first() or SecurityConfig.objects.order_by('pk').first()
@@ -441,13 +441,13 @@ class TrustpointCryptoBackend(LoggerMixin):
             )
             raise ProviderConfigurationError(msg)
 
-        if profile.backend_kind != BackendKind.PKCS11:
-            msg = 'Protected imported keys require an active PKCS#11 crypto backend.'
+        if profile.backend_kind not in {BackendKind.PKCS11, BackendKind.SOFTWARE}:
+            msg = 'Imported private keys require an active software or PKCS#11 crypto backend.'
             raise ProviderConfigurationError(msg)
 
         app_secret_backend = AppSecretBackendModel.get_singleton()
-        if app_secret_backend.backend_kind != AppSecretBackendKind.PKCS11:
-            msg = 'Protected imported keys require PKCS#11-backed application-secret protection.'
+        if app_secret_backend.backend_kind not in {AppSecretBackendKind.PKCS11, AppSecretBackendKind.SOFTWARE}:
+            msg = 'Imported private keys require configured application-secret protection.'
             raise ProviderConfigurationError(msg)
 
         get_app_secret_service().ensure_backend_ready()

@@ -442,6 +442,8 @@ class CryptoManagedKeyRepository:
             return
         if profile.backend_kind == BackendKind.PKCS11 and isinstance(binding, ProtectedImportManagedKeyBinding):
             return
+        if profile.backend_kind == BackendKind.SOFTWARE and isinstance(binding, ProtectedImportManagedKeyBinding):
+            return
         if profile.backend_kind == BackendKind.SOFTWARE and isinstance(binding, SoftwareManagedKeyBinding):
             return
         if profile.backend_kind == BackendKind.REST and isinstance(binding, RestManagedKeyBinding):
@@ -472,6 +474,18 @@ class CryptoManagedKeyRepository:
             return
 
         if profile.backend_kind == BackendKind.PKCS11 and isinstance(binding, ProtectedImportManagedKeyBinding):
+            protected_import_model = CryptoManagedKeyProtectedImportBindingModel(
+                managed_key=managed_key,
+                provider_profile=profile,
+                key_handle=binding.key_handle,
+                encrypted_private_key_pkcs8_der_b64=binding.encrypted_private_key_pkcs8_der_b64,
+                encryption_metadata=binding.encryption_metadata,
+            )
+            protected_import_model.full_clean()
+            _save_untyped_model(protected_import_model)
+            return
+
+        if profile.backend_kind == BackendKind.SOFTWARE and isinstance(binding, ProtectedImportManagedKeyBinding):
             protected_import_model = CryptoManagedKeyProtectedImportBindingModel(
                 managed_key=managed_key,
                 provider_profile=profile,

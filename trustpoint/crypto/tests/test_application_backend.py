@@ -27,8 +27,10 @@ from crypto.models import (
     CryptoManagedKeyProtectedImportBindingModel,
     CryptoProviderPkcs11ConfigModel,
     CryptoProviderProfileModel,
+    CryptoProviderSoftwareConfigModel,
     ManagedKeyStatus,
     Pkcs11AuthSource,
+    SoftwareKeyEncryptionSource,
 )
 from management.models import AuditLog, LoggingConfig, SecurityConfig
 
@@ -117,6 +119,22 @@ def _create_pkcs11_profile(*, name: str, active: bool = True) -> CryptoProviderP
         max_sessions=4,
         borrow_timeout_seconds=2.0,
         rw_sessions=True,
+    )
+    return profile
+
+
+def _create_software_profile(*, name: str, active: bool = True) -> CryptoProviderProfileModel:
+    """Create a generic provider profile plus software config."""
+    profile = CryptoProviderProfileModel.objects.create(
+        name=name,
+        backend_kind=BackendKind.SOFTWARE,
+        active=active,
+    )
+    CryptoProviderSoftwareConfigModel.objects.create(
+        profile=profile,
+        encryption_source=SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
+        encryption_source_ref='',
+        allow_exportable_private_keys=False,
     )
     return profile
 
@@ -262,6 +280,58 @@ def test_imported_private_key_is_stored_as_protected_binding_and_signs_locally()
     assert resolved_public_key.public_numbers() == private_key.public_key().public_numbers()
     assert binding.key_handle
     assert binding.encrypted_private_key_pkcs8_der_b64
+    assert adapter.sign_calls == []
+    private_key.public_key().verify(signature, b'payload', padding.PKCS1v15(), hashes.SHA256())
+
+
+@pytest.mark.django_db
+def test_imported_private_key_is_supported_with_software_backend() -> None:
+    """Software-backed instances may import private keys when the explicit security policy allows it."""
+    SecurityConfig.objects.update_or_create(
+        pk=1,
+        defaults={'allow_imported_private_keys': True},
+    )
+    profile = _create_software_profile(name='software-provider', active=True)
+    AppSecretBackendModel.objects.update_or_create(
+        singleton_id=AppSecretBackendModel.SINGLETON_ID,
+        defaults={'backend_kind': AppSecretBackendKind.SOFTWARE},
+    )
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    adapter = FakeAdapter(
+        public_key=private_key.public_key(),
+        generated_binding=Pkcs11ManagedKeyBinding(
+            key_id=b'\x10\x20',
+            algorithm=KeyAlgorithm.RSA,
+        ),
+    )
+    backend = _backend_with_adapter(adapter)
+
+    with (
+        patch('crypto.application.service.get_app_secret_service') as mock_get_app_secret_service,
+        patch('crypto.application.protected_import.encrypt_app_secret', side_effect=lambda value: value),
+        patch('crypto.application.protected_import.decrypt_app_secret', side_effect=lambda value: value),
+    ):
+        mock_get_app_secret_service.return_value.ensure_backend_ready.return_value = None
+        key_ref = backend.import_managed_private_key(
+            alias='imported/software-ca',
+            private_key=private_key,
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
+        )
+
+        signature = backend.sign(
+            key=key_ref,
+            data=b'payload',
+            request=SignRequest.rsa_pkcs1v15_sha256(),
+        )
+
+    managed_key = CryptoManagedKeyModel.objects.get(pk=key_ref.id)
+    binding = CryptoManagedKeyProtectedImportBindingModel.objects.get(managed_key=managed_key)
+
+    assert managed_key.provider_profile_id == profile.pk
+    assert managed_key.alias == 'imported/software-ca'
+    assert binding.provider_profile_id == profile.pk
     assert adapter.sign_calls == []
     private_key.public_key().verify(signature, b'payload', padding.PKCS1v15(), hashes.SHA256())
 
