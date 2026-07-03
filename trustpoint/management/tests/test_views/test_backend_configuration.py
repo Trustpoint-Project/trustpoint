@@ -25,8 +25,6 @@ from crypto.models import (
 from management.views.backend_configuration import BackendConfigurationPkcs11AssetDownloadView, BackendConfigurationView
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from django.contrib.sessions.backends.base import SessionBase
 
 
