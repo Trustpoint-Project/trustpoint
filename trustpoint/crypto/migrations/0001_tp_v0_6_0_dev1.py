@@ -186,6 +186,8 @@ class Migration(migrations.Migration):
             fields=[
                 ('profile', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='pkcs11_config', serialize=False, to='crypto.cryptoproviderprofilemodel')),
                 ('module_path', models.TextField()),
+                ('provider_config_env_var', models.CharField(blank=True, default='', max_length=128)),
+                ('provider_config_path', models.TextField(blank=True, default='')),
                 ('token_label', models.CharField(blank=True, default='', max_length=128)),
                 ('token_serial', models.CharField(blank=True, default='', max_length=128)),
                 ('slot_id', models.PositiveIntegerField(blank=True, null=True)),

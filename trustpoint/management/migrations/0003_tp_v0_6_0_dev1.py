@@ -87,6 +87,11 @@ class Migration(migrations.Migration):
             name='crl_expiry_warning_days',
             field=models.PositiveIntegerField(default=7, help_text="Number of days before a CRL's expiration to trigger a 'CRL Expiring' warning."),
         ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='allow_imported_private_keys',
+            field=models.BooleanField(default=False, help_text='Allow existing private-key credentials to be imported. Imported keys require PKCS#11-backed application-secret protection and are stored encrypted in the database.'),
+        ),
         migrations.AlterField(
             model_name='notificationmodel',
             name='message_type',
