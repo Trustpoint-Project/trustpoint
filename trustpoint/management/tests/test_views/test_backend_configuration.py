@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 import pytest
 from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.test import RequestFactory, TestCase
 from django.views.generic import TemplateView
 
