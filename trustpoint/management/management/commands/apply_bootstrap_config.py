@@ -62,16 +62,30 @@ class OperationalBootstrapApplier:
         self.fresh_install = payload['fresh_install']
 
     @staticmethod
-    def execute_shell_script(script: Path, *args: str) -> None:
+    def execute_shell_script(script_path: Path, *args: str) -> None:
         """Execute a privileged wizard helper script."""
-        script_path = Path(script).resolve()
-        if not script_path.exists():
-            raise FileNotFoundError(f'Script not found: {script_path}')
-        if not script_path.is_file():
-            raise ValueError(f'The script path {script_path} is not a valid file.')
+        if not script_path.is_absolute():
+            err_msg = f'Script path must be absolute: {script_path}'
+            raise ValueError(err_msg)
 
-        completed_process = subprocess.run(
-            ['sudo', str(script_path), *list(args)],
+        script_path = script_path.resolve(strict=True)
+
+        # just to be sure that this method does not execute arbitrary scripts
+        allowed_scripts = {
+            INSTALL_PKCS11_ASSETS.resolve(strict=True),
+            UPDATE_TLS_NGINX.resolve(strict=True),
+        }
+        if script_path not in allowed_scripts:
+            err_msg = f'script not allowed: {script_path}'
+            raise FileNotFoundError(err_msg)
+        if not script_path.is_file():
+            err_msg = f'The script path {script_path} is not a valid file.'
+            raise ValueError(err_msg)
+
+        # S603: the executable is restricted to the allowlist above. Arguments are
+        # passed without a shell and validated by the selected helper script.
+        completed_process = subprocess.run(  # noqa: S603
+            ['/usr/bin/sudo', str(script_path), *list(args)],
             capture_output=True,
             text=True,
             check=False,
@@ -85,11 +99,7 @@ class OperationalBootstrapApplier:
     @staticmethod
     def _load_existing_backend_profile(backend_kind: BackendKind) -> CryptoProviderProfileModel | None:
         """Return an existing profile for the given backend kind when one already exists."""
-        return (
-            CryptoProviderProfileModel.objects.filter(backend_kind=backend_kind)
-            .order_by('-active', 'id')
-            .first()
-        )
+        return CryptoProviderProfileModel.objects.filter(backend_kind=backend_kind).order_by('-active', 'id').first()
 
     @classmethod
     def _ensure_backend_kind_matches_instance(cls, backend_kind: BackendKind) -> None:
@@ -235,7 +245,11 @@ class OperationalBootstrapApplier:
             configured_module_exists = configured_module_path.is_file()
 
         if staged_module is None and staged_pin is None and staged_config is None:
-            return configured_module_value, (self.fresh_install['pkcs11_auth_source_ref'] or '').strip(), configured_config_value
+            return (
+                configured_module_value,
+                (self.fresh_install['pkcs11_auth_source_ref'] or '').strip(),
+                configured_config_value,
+            )
 
         uses_builtin_local_proxy = (
             local_dev_pkcs11_handoff_available()
@@ -252,15 +266,18 @@ class OperationalBootstrapApplier:
         uses_existing_installed_pin = staged_pin is None and FINAL_WIZARD_PKCS11_PIN_PATH.exists()
 
         if staged_pin is None and not uses_existing_installed_pin:
-            raise DjangoValidationError('The staged PKCS#11 setup files are incomplete. Enter the PIN again.')
+            err_msg = 'The staged PKCS#11 setup files are incomplete. Enter the PIN again.'
+            raise DjangoValidationError(err_msg)
         if staged_module is None and not uses_builtin_local_proxy and not uses_existing_installed_module:
-            raise DjangoValidationError(
+            err_msg = (
                 'The staged PKCS#11 setup files are incomplete. Upload the library and enter the PIN again.'
             )
+            raise DjangoValidationError(err_msg)
         if staged_config is not None and staged_pin is None and staged_module is None:
-            raise DjangoValidationError(
+            err_msg = (
                 'The staged PKCS#11 setup files are incomplete. Upload the library and enter the PIN again.'
             )
+            raise DjangoValidationError(err_msg)
 
         try:
             if staged_module is None and staged_pin is None:
@@ -278,7 +295,9 @@ class OperationalBootstrapApplier:
             elif uses_builtin_local_proxy:
                 self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_pin))
             elif staged_config is not None:
-                self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin), str(staged_config))
+                self.execute_shell_script(
+                    INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin), str(staged_config)
+                )
             else:
                 self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin))
         except subprocess.CalledProcessError as exc:
@@ -321,20 +340,25 @@ class OperationalBootstrapApplier:
             auth_source_ref = str(fallback_pin_path)
 
         if not module_path.exists():
-            raise DjangoValidationError(f'The PKCS#11 module path does not exist: {module_path}')
+            err_msg = f'The PKCS#11 module path does not exist: {module_path}'
+            raise DjangoValidationError(err_msg)
         if token_label is None and slot_id is None:
-            raise DjangoValidationError('No PKCS#11 token selector is configured for the setup wizard.')
+            err_msg = 'No PKCS#11 token selector is configured for the setup wizard.'
+            raise DjangoValidationError(err_msg)
         if not auth_source_ref:
-            raise DjangoValidationError('No PKCS#11 user PIN source reference is configured for the setup wizard.')
+            err_msg = 'No PKCS#11 user PIN source reference is configured for the setup wizard.'
+            raise DjangoValidationError(err_msg)
         if not Path(auth_source_ref).exists():
-            raise DjangoValidationError(f'The PKCS#11 user PIN file does not exist: {auth_source_ref}')
+            err_msg = f'The PKCS#11 user PIN file does not exist: {auth_source_ref}'
+            raise DjangoValidationError(err_msg)
 
         config_env_var = (self.fresh_install.get('pkcs11_config_env_var') or '').strip()
         config_path_value = (config_path_value or '').strip()
         if config_path_value and not config_env_var:
-            raise DjangoValidationError(
+            err_msg = (
                 'A PKCS#11 provider config file is configured, but no provider config environment variable is set.'
             )
+            raise DjangoValidationError(err_msg)
         if config_env_var and config_path_value:
             config_path = Path(config_path_value)
             if config_path.exists():
@@ -374,7 +398,8 @@ class OperationalBootstrapApplier:
         if crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             self._configure_pkcs11_backend()
             return
-        raise DjangoValidationError(f'Unsupported crypto storage selection {crypto_storage!r}.')
+        err_msg = f'Unsupported crypto storage selection {crypto_storage!r}.'
+        raise DjangoValidationError(err_msg)
 
     @staticmethod
     def _probe_and_record_crypto_capabilities() -> None:
@@ -382,7 +407,8 @@ class OperationalBootstrapApplier:
         report = BackendCapabilityService().refresh_and_record_active_report()
         if not report.available:
             diagnostics = '; '.join(report.diagnostics) or 'no usable capabilities reported'
-            raise DjangoValidationError(f'The configured crypto backend is not usable: {diagnostics}')
+            err_msg = f'The configured crypto backend is not usable: {diagnostics}'
+            raise DjangoValidationError(err_msg)
 
     def _configure_app_secret_backend(self) -> None:
         """Configure the operational app-secret backend."""
@@ -396,7 +422,8 @@ class OperationalBootstrapApplier:
                 return
             self._configure_software_app_secret_backend()
             return
-        raise DjangoValidationError(f'Unsupported crypto storage selection {crypto_storage!r}.')
+        err_msg = f'Unsupported crypto storage selection {crypto_storage!r}.'
+        raise DjangoValidationError(err_msg)
 
     @staticmethod
     def _write_pem_files(credential_model: CredentialModel) -> None:
@@ -418,7 +445,8 @@ class OperationalBootstrapApplier:
         """Promote the staged TLS credential to active operational state."""
         staged_tls_serializer = load_staged_tls_credential()
         if staged_tls_serializer is None:
-            raise DjangoValidationError('No staged TLS Server Credential found.')
+            err_msg = 'No staged TLS Server Credential found.'
+            raise DjangoValidationError(err_msg)
 
         staged_tls_credential = CredentialModel.save_credential_serializer(
             credential_serializer=staged_tls_serializer,
@@ -441,9 +469,11 @@ class OperationalBootstrapApplier:
         username = (admin_payload['username'] or '').strip()
         password_hash = (admin_payload['password_hash'] or '').strip()
         if not username:
-            raise DjangoValidationError('The operational admin username is missing.')
+            err_msg = 'The operational admin username is missing.'
+            raise DjangoValidationError(err_msg)
         if not password_hash:
-            raise DjangoValidationError('The operational admin password hash is missing.')
+            err_msg = 'The operational admin password hash is missing.'
+            raise DjangoValidationError(err_msg)
 
         user_model = get_user_model()
         user, _ = user_model.objects.get_or_create(username=username)
@@ -460,6 +490,7 @@ class OperationalBootstrapApplier:
         self._probe_and_record_crypto_capabilities()
         self._configure_app_secret_backend()
         call_command('create_default_cert_profiles')
+        call_command('create_management_ca')
         if self.fresh_install['inject_demo_data']:
             call_command('add_domains_and_devices')
         call_command('execute_all_notifications')
@@ -480,22 +511,26 @@ class Command(BaseCommand):
         """Entrypoint for the command."""
         del args
         if getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
-            raise CommandError('apply_bootstrap_config must run with TRUSTPOINT_PHASE=operational.')
+            err_msg = 'apply_bootstrap_config must run with TRUSTPOINT_PHASE=operational.'
+            raise CommandError(err_msg)
 
         config_path = Path(str(options['config']))
         try:
             payload = json.loads(config_path.read_text(encoding='utf-8'))
         except (OSError, json.JSONDecodeError) as exc:
-            raise CommandError(f'Could not read bootstrap apply payload: {exc}') from exc
+            err_msg = f'Could not read bootstrap apply payload: {exc}'
+            raise CommandError(err_msg) from exc
 
         try:
             with transaction.atomic():
                 OperationalBootstrapApplier(payload).apply()
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or exc.stdout or '').strip()
-            raise CommandError(detail or f'Wizard helper script failed with exit code {exc.returncode}.') from exc
+            err_msg = detail or f'Wizard helper script failed with exit code {exc.returncode}.'
+            raise CommandError(err_msg) from exc
         except DjangoValidationError as exc:
-            raise CommandError('; '.join(exc.messages)) from exc
+            err_msg = '; '.join(exc.messages)
+            raise CommandError(err_msg) from exc
         except (
             DatabaseError,
             FileNotFoundError,
@@ -505,6 +540,7 @@ class Command(BaseCommand):
             TypeError,
             ValueError,
         ) as exc:
-            raise CommandError(str(exc) or 'Error applying bootstrap configuration.') from exc
+            err_msg = str(exc) or 'Error applying bootstrap configuration.'
+            raise CommandError(err_msg) from exc
 
         self.stdout.write(self.style.SUCCESS('Bootstrap configuration applied to operational runtime.'))
