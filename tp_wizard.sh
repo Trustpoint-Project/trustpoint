@@ -736,14 +736,19 @@ configure_selected(){
       ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
     )
     $ASK_HSM_ON_UP && step_local_hsm
+
+    if ! $EN_LOCAL_HSM && ! $NO_AUTO_HSM && [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+      warn "Local/dev HSM metadata exists; starting SoftHSM and mounting its token store for Trustpoint."
+      EN_LOCAL_HSM=true
+    fi
   elif $ONLY_WF2_WORKER; then
     EN_WF2_WORKER=true
     configure_app_image_prompt
   fi
 
-  # Do not implicitly enable SoftHSM for selected-service starts.
-  # `up trustpoint` starts trustpoint and optionally asks for the worker.
-  # Start SoftHSM only when `hsm` is explicitly selected or via the full wizard.
+  # Start SoftHSM for selected-service starts only when explicitly requested
+  # or when local HSM metadata already exists and Trustpoint needs that token
+  # store mounted to reconnect to a demo-backed instance.
 
   if $ONLY_APP || $ONLY_WF2_WORKER; then
     if $DB_INTERNAL; then

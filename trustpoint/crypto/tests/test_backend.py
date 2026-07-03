@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from cryptography.hazmat.primitives.asymmetric import rsa, utils
 from pkcs11 import Attribute, Mechanism, NoSuchKey, ObjectClass
@@ -15,6 +15,9 @@ from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSele
 from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
 from crypto.domain.policies import KeyPolicy
 from crypto.domain.specs import EcKeySpec, RsaKeySpec, SignRequest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 RSA_2048_KEY_SIZE = 2048
 
@@ -326,6 +329,36 @@ def test_runtime_diagnostics_extract_tcp_targets_from_provider_config() -> None:
         ('host.docker.internal', 3301),
         ('hsm.example.test', 3001),
     ]
+
+
+def test_runtime_diagnostics_extract_soft_hsm_token_dir(tmp_path: Path) -> None:
+    """Provider diagnostics should report SoftHSM token-dir health without listing token files."""
+    token_dir = tmp_path / 'tokens'
+    token_dir.mkdir()
+    (token_dir / 'token-object').write_text('opaque token data', encoding='utf-8')
+    config_path = tmp_path / 'softhsm2.conf'
+    config_path.write_text(f'directories.tokendir = {token_dir}\n', encoding='utf-8')
+
+    assert Pkcs11Backend._token_dir_diagnostics(config_path) == {  # noqa: SLF001
+        'path': str(token_dir),
+        'exists': True,
+        'readable': True,
+        'has_entries': True,
+    }
+
+
+def test_runtime_diagnostics_reports_missing_soft_hsm_token_dir(tmp_path: Path) -> None:
+    """Provider diagnostics should make stale SoftHSM configs obvious."""
+    token_dir = tmp_path / 'missing-tokens'
+    config_path = tmp_path / 'softhsm2.conf'
+    config_path.write_text(f'directories.tokendir = {token_dir}\n', encoding='utf-8')
+
+    assert Pkcs11Backend._token_dir_diagnostics(config_path) == {  # noqa: SLF001
+        'path': str(token_dir),
+        'exists': False,
+        'readable': False,
+        'has_entries': False,
+    }
 
 
 def test_generate_managed_rsa_key_uses_pkcs11_keygen() -> None:

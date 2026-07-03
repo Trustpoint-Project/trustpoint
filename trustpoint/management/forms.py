@@ -920,6 +920,16 @@ class PKCS11ConfigForm(forms.Form):
         required=False,
         disabled=True,
     )
+    provider_config_env_var = forms.CharField(
+        label=_('Provider Config Environment Variable'),
+        required=False,
+        disabled=True,
+    )
+    provider_config_path = forms.CharField(
+        label=_('Provider Config Path'),
+        required=False,
+        disabled=True,
+    )
     auth_source_ref = forms.CharField(
         label=_('Authentication Source'),
         required=False,
@@ -936,6 +946,8 @@ class PKCS11ConfigForm(forms.Form):
         self.fields['token_label'].initial = config.token_label
         self.fields['slot_id'].initial = config.slot_id
         self.fields['module_path'].initial = config.module_path
+        self.fields['provider_config_env_var'].initial = config.provider_config_env_var
+        self.fields['provider_config_path'].initial = config.provider_config_path
         self.fields['auth_source_ref'].initial = config.auth_source_ref
 
     def save_token_config(self) -> NoReturn:

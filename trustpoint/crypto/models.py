@@ -154,6 +154,8 @@ class CryptoProviderPkcs11ConfigModel(models.Model):
     )
 
     module_path = models.TextField()
+    provider_config_env_var = models.CharField(max_length=128, blank=True, default='')
+    provider_config_path = models.TextField(blank=True, default='')
     token_label = models.CharField(max_length=128, blank=True, default='')
     token_serial = models.CharField(max_length=128, blank=True, default='')
     slot_id = models.PositiveIntegerField(null=True, blank=True)

@@ -92,6 +92,11 @@ urlpatterns = [
         backend_configuration.BackendConfigurationView.as_view(),
         name='backend_configuration',
     ),
+    path(
+        'backend-configuration/pkcs11-assets/<str:asset>/download/',
+        backend_configuration.BackendConfigurationPkcs11AssetDownloadView.as_view(),
+        name='backend_configuration_pkcs11_asset_download',
+    ),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
     path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
     path('notifications/', notifications.NotificationsListView.as_view(), name='notifications'),
