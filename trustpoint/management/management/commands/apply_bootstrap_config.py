@@ -62,17 +62,29 @@ class OperationalBootstrapApplier:
         self.fresh_install = payload['fresh_install']
 
     @staticmethod
-    def execute_shell_script(script: Path, *args: str) -> None:
+    def execute_shell_script(script_path: Path, *args: str) -> None:
         """Execute a privileged wizard helper script."""
-        script_path = Path(script).resolve()
-        if not script_path.exists():
-            err_msg = f'Script not found: {script_path}'
+        if not script_path.is_absolute():
+            err_msg = f'Script path must be absolute: {script_path}'
+            raise ValueError(err_msg)
+
+        script_path = script_path.resolve(strict=True)
+
+        # just to be sure that this method does not execute arbitrary scripts
+        allowed_scripts = {
+            INSTALL_PKCS11_ASSETS.resolve(strict=True),
+            UPDATE_TLS_NGINX.resolve(strict=True),
+        }
+        if script_path not in allowed_scripts:
+            err_msg = f'script not allowed: {script_path}'
             raise FileNotFoundError(err_msg)
         if not script_path.is_file():
             err_msg = f'The script path {script_path} is not a valid file.'
             raise ValueError(err_msg)
 
-        completed_process = subprocess.run(
+        # S603: the executable is restricted to the allowlist above. Arguments are
+        # passed without a shell and validated by the selected helper script.
+        completed_process = subprocess.run(  # noqa: S603
             ['/usr/bin/sudo', str(script_path), *list(args)],
             capture_output=True,
             text=True,
