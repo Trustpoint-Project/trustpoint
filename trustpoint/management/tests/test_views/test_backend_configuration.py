@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import pytest
 from django.contrib.messages import get_messages
@@ -23,10 +23,6 @@ from crypto.models import (
     SoftwareKeyEncryptionSource,
 )
 from management.views.backend_configuration import BackendConfigurationPkcs11AssetDownloadView, BackendConfigurationView
-
-if TYPE_CHECKING:
-    from django.contrib.sessions.backends.base import SessionBase
-
 
 class BackendConfigurationViewTest(TestCase):
     """Test suite for BackendConfigurationView."""
