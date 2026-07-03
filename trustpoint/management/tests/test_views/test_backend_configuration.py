@@ -2,12 +2,12 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import pytest
 from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.test import RequestFactory, TestCase
 from django.views.generic import TemplateView
 
@@ -23,12 +23,6 @@ from crypto.models import (
     SoftwareKeyEncryptionSource,
 )
 from management.views.backend_configuration import BackendConfigurationPkcs11AssetDownloadView, BackendConfigurationView
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from django.contrib.sessions.backends.base import SessionBase
-
 
 class BackendConfigurationViewTest(TestCase):
     """Test suite for BackendConfigurationView."""
