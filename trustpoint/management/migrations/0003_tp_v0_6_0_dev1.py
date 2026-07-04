@@ -33,14 +33,6 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
-            name='UIConfig',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('view_mode', models.CharField(choices=[('standard', 'Standard View'), ('simplified', 'Simplified View')], default='standard', help_text='Choose between standard sidebar navigation or simplified domain-centric view', max_length=10, verbose_name='View Mode')),
-                ('last_updated', models.DateTimeField(auto_now=True)),
-            ],
-        ),
-        migrations.CreateModel(
             name='SmtpEmailConfig',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
@@ -59,6 +51,14 @@ class Migration(migrations.Migration):
                 'verbose_name': 'SMTP Email Configuration',
                 'verbose_name_plural': 'SMTP Email Configuration',
             },
+        ),
+        migrations.CreateModel(
+            name='UIConfig',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('view_mode', models.CharField(choices=[('standard', 'Standard View'), ('simplified', 'Simplified View')], default='standard', help_text='Choose between standard sidebar navigation or simplified domain-centric view', max_length=10, verbose_name='View Mode')),
+                ('last_updated', models.DateTimeField(auto_now=True)),
+            ],
         ),
         migrations.CreateModel(
             name='WorkflowExecutionConfig',
@@ -87,6 +87,11 @@ class Migration(migrations.Migration):
             name='crl_expiry_warning_days',
             field=models.PositiveIntegerField(default=7, help_text="Number of days before a CRL's expiration to trigger a 'CRL Expiring' warning."),
         ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='allow_imported_private_keys',
+            field=models.BooleanField(default=False, help_text='Allow existing private-key credentials to be imported. Imported keys require PKCS#11-backed application-secret protection and are stored encrypted in the database.'),
+        ),
         migrations.AlterField(
             model_name='notificationmodel',
             name='message_type',
@@ -112,7 +117,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('timestamp', models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='Timestamp')),
-                ('operation_type', models.CharField(choices=[('CREDENTIAL_ISSUED', 'Credential Issued'), ('CREDENTIAL_RENEWED', 'Credential Renewed'), ('CREDENTIAL_REVOKED', 'Credential Revoked'), ('CREDENTIAL_DELETED', 'Credential Deleted'), ('MODEL_CREATED', 'Model Created'), ('MODEL_UPDATED', 'Model Updated'), ('MODEL_DELETED', 'Model Deleted'), ('SECURITY_CONFIG_CHANGED', 'Security Config Changed'), ('DEVICE_ADDED', 'Device Added'), ('DEVICE_DELETED', 'Device Deleted'), ('CA_CREATED', 'CA Created'), ('CA_DELETED', 'CA Deleted'), ('DOMAIN_CREATED', 'Domain Created'), ('DOMAIN_DELETED', 'Domain Deleted'), ('TLS_CERTIFICATE_CHANGED', 'TLS Certificate Changed'), ('TLS_CERTIFICATE_DELETED', 'TLS Certificate Deleted'), ('USER_CREATED', 'User Created'), ('SIGNER_DELETED', 'Signer Deleted'), ('SIGNER_ADDED', 'Signer Added'), ('HASH_SIGNED', 'Hash Signed'), ('CRYPTO_VERIFY_PROVIDER', 'Crypto: Verify Provider'), ('CRYPTO_GENERATE_MANAGED_KEY', 'Crypto: Generate Managed Key'), ('CRYPTO_VERIFY_MANAGED_KEY', 'Crypto: Verify Managed Key'), ('CRYPTO_GET_PUBLIC_KEY', 'Crypto: Get Public Key'), ('CRYPTO_SIGN', 'Crypto: Sign'), ('CRYPTO_DESTROY_MANAGED_KEY', 'Crypto: Destroy Managed Key')], db_index=True, max_length=32, verbose_name='Operation Type')),
+                ('operation_type', models.CharField(choices=[('CREDENTIAL_ISSUED', 'Credential Issued'), ('CREDENTIAL_RENEWED', 'Credential Renewed'), ('CREDENTIAL_REVOKED', 'Credential Revoked'), ('CREDENTIAL_DELETED', 'Credential Deleted'), ('MODEL_CREATED', 'Model Created'), ('MODEL_UPDATED', 'Model Updated'), ('MODEL_DELETED', 'Model Deleted'), ('SECURITY_CONFIG_CHANGED', 'Security Config Changed'), ('DEVICE_ADDED', 'Device Added'), ('DEVICE_DELETED', 'Device Deleted'), ('CA_CREATED', 'CA Created'), ('CA_DELETED', 'CA Deleted'), ('DOMAIN_CREATED', 'Domain Created'), ('DOMAIN_DELETED', 'Domain Deleted'), ('TLS_CERTIFICATE_CHANGED', 'TLS Certificate Changed'), ('TLS_CERTIFICATE_DELETED', 'TLS Certificate Deleted'), ('USER_CREATED', 'User Created'), ('SIGNER_DELETED', 'Signer Deleted'), ('SIGNER_ADDED', 'Signer Added'), ('HASH_SIGNED', 'Hash Signed'), ('CRYPTO_VERIFY_PROVIDER', 'Crypto: Verify Provider'), ('CRYPTO_GENERATE_MANAGED_KEY', 'Crypto: Generate Managed Key'), ('CRYPTO_IMPORT_MANAGED_KEY', 'Crypto: Import Managed Key'), ('CRYPTO_VERIFY_MANAGED_KEY', 'Crypto: Verify Managed Key'), ('CRYPTO_GET_PUBLIC_KEY', 'Crypto: Get Public Key'), ('CRYPTO_SIGN', 'Crypto: Sign'), ('CRYPTO_DESTROY_MANAGED_KEY', 'Crypto: Destroy Managed Key')], db_index=True, max_length=32, verbose_name='Operation Type')),
                 ('target_object_id', models.CharField(db_index=True, max_length=255, verbose_name='Target Object ID')),
                 ('target_display', models.CharField(help_text='Human-readable label of the affected object at the time of the action, e.g. "DevOwnerID: my-device". Preserved even if the target is later deleted.', max_length=255, verbose_name='Target Display')),
                 ('details', models.JSONField(blank=True, default=dict, help_text='Structured non-secret metadata captured for this audit entry.', verbose_name='Details')),

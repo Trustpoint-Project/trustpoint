@@ -9,7 +9,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
-from management.forms import TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
+
+from management.forms import MAX_PKCS12_UPLOAD_BYTES, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from pki.models import CredentialModel
 
 
@@ -114,6 +115,23 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
         }
         form = TlsAddFileImportPkcs12Form(data=form_data, files={})
         self.assertFalse(form.is_valid())
+
+    @patch('management.forms.CredentialSerializer.from_pkcs12_bytes')
+    def test_clean_with_oversized_pkcs12_file(self, mock_from_pkcs12):
+        """Oversized PKCS#12 uploads are rejected before parsing."""
+        pkcs12_file = SimpleUploadedFile(
+            'test.p12',
+            b'x' * (MAX_PKCS12_UPLOAD_BYTES + 1),
+            content_type='application/x-pkcs12',
+        )
+        form = TlsAddFileImportPkcs12Form(
+            data={'pkcs12_password': '', 'domain_name': 'localhost'},
+            files={'pkcs12_file': pkcs12_file},
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('PKCS#12 file is too large', str(form.errors))
+        mock_from_pkcs12.assert_not_called()
 
     @patch('management.forms.CredentialSerializer.from_pkcs12_bytes')
     def test_clean_with_invalid_pkcs12_file(self, mock_from_pkcs12):

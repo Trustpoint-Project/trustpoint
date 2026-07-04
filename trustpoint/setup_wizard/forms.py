@@ -16,7 +16,12 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy
 
 from .models import SetupWizardConfigModel
-from .pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
+from .pkcs11_local_dev import (
+    local_dev_pkcs11_config_env_var,
+    local_dev_pkcs11_config_path,
+    local_dev_pkcs11_handoff_available,
+    local_dev_pkcs11_module_path,
+)
 from .pkcs11_staging import existing_wizard_pkcs11_staged_file
 from .tls_credential import extract_staged_tls_sans, staged_tls_common_name
 
@@ -32,6 +37,7 @@ FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs
 MIN_TCP_PORT = 1
 MAX_TCP_PORT = 65535
 ELF_MAGIC = b'\x7fELF'
+MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
 
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
@@ -478,7 +484,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             self.instance.fresh_install_pkcs11_token_label or getattr(settings, 'HSM_DEFAULT_TOKEN_LABEL', '')
         )
         self.initial['fresh_install_pkcs11_slot_id'] = self.instance.fresh_install_pkcs11_slot_id
-        self.initial['pkcs11_config_env_var'] = self.instance.fresh_install_pkcs11_config_env_var
+        self.initial['pkcs11_config_env_var'] = (
+            self.instance.fresh_install_pkcs11_config_env_var
+            or (local_dev_pkcs11_config_env_var() if self._existing_local_dev_pkcs11_config_file() else '')
+        )
         self.staged_pkcs11_module_name = self._staged_pkcs11_module_name()
         self.has_staged_pkcs11_pin = (
             existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_auth_source_ref) is not None
@@ -496,7 +505,8 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             return None
 
         local_dev_module = local_dev_pkcs11_module_path()
-        if str(self.instance.fresh_install_pkcs11_module_path).strip() != str(local_dev_module):
+        configured_module = str(self.instance.fresh_install_pkcs11_module_path).strip()
+        if configured_module and configured_module != str(local_dev_module):
             return None
 
         return _safe_existing_file(local_dev_module)
@@ -517,6 +527,18 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
         return _safe_existing_file(FINAL_WIZARD_PKCS11_MODULE_PATH)
 
+    def _existing_local_dev_pkcs11_config_file(self) -> Path | None:
+        """Return the local development PKCS#11 provider config file when this wizard uses it."""
+        if not self.local_dev_pkcs11_handoff_available:
+            return None
+
+        local_dev_config = local_dev_pkcs11_config_path()
+        configured_config = str(self.instance.fresh_install_pkcs11_config_path).strip()
+        if configured_config and configured_config != str(local_dev_config):
+            return None
+
+        return _safe_existing_file(local_dev_config)
+
     def _existing_pkcs11_pin_file(self) -> Path | None:
         """Return the currently staged or installed PKCS#11 user PIN file for this wizard state."""
         staged_pin = existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_auth_source_ref)
@@ -534,6 +556,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         staged_config = existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_config_path)
         if staged_config is not None:
             return staged_config
+
+        local_dev_config = self._existing_local_dev_pkcs11_config_file()
+        if local_dev_config is not None:
+            return local_dev_config
 
         configured_config = _safe_existing_file_from_value(self.instance.fresh_install_pkcs11_config_path)
         if configured_config is not None:
@@ -1003,8 +1029,11 @@ class FreshInstallTlsConfigForm(forms.Form):
                 raise forms.ValidationError(err_msg)
 
         elif tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.PKCS12:
-            if not cleaned_data.get('pkcs12_file'):
+            pkcs12_file = cleaned_data.get('pkcs12_file')
+            if not pkcs12_file:
                 self.add_error('pkcs12_file', gettext_lazy('A PKCS#12 file is required.'))
+            elif getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
+                self.add_error('pkcs12_file', gettext_lazy('PKCS#12 file is too large, max. 256 kiB.'))
 
         elif tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.SEPARATE_FILES:
             if not cleaned_data.get('tls_server_certificate'):

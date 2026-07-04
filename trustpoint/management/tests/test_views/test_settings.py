@@ -221,12 +221,41 @@ class SecuritySettingsViewTest(TestCase):
     def test_form_invalid_shows_error_message(self):
         """Test form_invalid displays error message."""
         form = Mock(spec=SecurityConfigForm)
-        
-        with patch.object(self.view, 'render_to_response'):
+
+        with patch.object(self.view, 'render_to_response') as mock_render_to_response:
             self.view.form_invalid(form)
-        
+
+        context = mock_render_to_response.call_args.args[0]
+        self.assertEqual(context['security_form'], form)
+        self.assertIn('ui_form', context)
+        self.assertIn('workflow_execution_form', context)
+        self.assertIn('smtp_email_form', context)
+        self.assertIn('prometheus_form', context)
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('error' in str(msg).lower() for msg in messages_list))
+
+    def test_form_invalid_renders_full_settings_page(self):
+        """Test invalid security submissions render all settings tabs without crispy form crashes."""
+        form = SecurityConfigForm(
+            data={
+                'security_mode': SecurityConfig.SecurityModeChoices.HARDENED,
+                'auto_gen_pki': False,
+                'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
+                'rsa_minimum_key_size': 1024,
+                'max_cert_validity_days': 365,
+                'max_crl_validity_days': 90,
+                'allow_ca_issuance': True,
+                'allow_auto_gen_pki': False,
+                'allow_self_signed_ca': False,
+            },
+            instance=self.security_config,
+        )
+        self.assertFalse(form.is_valid())
+
+        response = self.view.form_invalid(form)
+        response.render()
+
+        self.assertEqual(response.status_code, 200)
 
     def test_inherits_from_form_view(self):
         """Test SecuritySettingsView inherits from FormView."""

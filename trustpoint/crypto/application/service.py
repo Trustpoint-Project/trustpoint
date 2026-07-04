@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import secrets
 from time import perf_counter
 from typing import TYPE_CHECKING, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError
 
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
+from appsecrets.service import get_app_secret_service
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
+from crypto.adapters.protected_import.bindings import ProtectedImportManagedKeyBinding
 from crypto.adapters.rest.bindings import RestManagedKeyBinding
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
 from crypto.application.audit import (
@@ -19,9 +23,15 @@ from crypto.application.audit import (
 )
 from crypto.application.backend_factory import BackendAdapterFactory, DefaultBackendAdapterFactory
 from crypto.application.capabilities import BackendCapabilityService
+from crypto.application.protected_import import (
+    ProtectedImportKeyOperations,
+    SupportedImportedPrivateKey,
+    encrypt_imported_private_key,
+    imported_key_algorithm,
+)
 from crypto.domain.errors import CryptoError, KeyNotFoundError, ProviderConfigurationError, UnsupportedKeySpecError
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
-from crypto.models import CryptoManagedKeyModel, CryptoProviderProfileModel
+from crypto.models import BackendKind, CryptoManagedKeyModel, CryptoProviderProfileModel
 from crypto.repositories import CryptoManagedKeyRepository, CryptoProviderProfileRepository, ManagedKeyBinding
 from trustpoint.logger import LoggerMixin
 
@@ -52,6 +62,7 @@ class TrustpointCryptoBackend(LoggerMixin):
             managed_key_repository or CryptoManagedKeyRepository()
         )
         self._adapter_factory: BackendAdapterFactory = adapter_factory or DefaultBackendAdapterFactory()
+        self._protected_import_operations = ProtectedImportKeyOperations()
 
     def verify_provider(self) -> None:
         """Validate that the configured instance backend can be loaded and used."""
@@ -155,16 +166,103 @@ class TrustpointCryptoBackend(LoggerMixin):
 
         return managed_key.to_managed_key_ref()
 
+    def import_managed_private_key(
+        self,
+        *,
+        alias: str,
+        private_key: SupportedImportedPrivateKey,
+        policy: KeyPolicy,
+    ) -> ManagedKeyRef:
+        """Import a private key as an encrypted managed key when policy allows protected imports."""
+        profile = self._get_configured_profile()
+        started_at = perf_counter()
+        algorithm = imported_key_algorithm(private_key)
+        public_key = private_key.public_key()
+        details = {
+            'alias': alias,
+            'key_storage': 'protected_import',
+            'key_type': algorithm.value,
+            **key_policy_audit_details(policy),
+        }
+        managed_key: CryptoManagedKeyModel | None = None
+
+        try:
+            self._validate_protected_import_policy(profile)
+            binding = ProtectedImportManagedKeyBinding(
+                key_handle=secrets.token_hex(16),
+                algorithm=algorithm,
+                encrypted_private_key_pkcs8_der_b64=encrypt_imported_private_key(private_key),
+                encryption_metadata={
+                    'format': 'pkcs8-der-b64',
+                    'protection': 'app-secret',
+                    'storage': 'protected-import',
+                },
+                public_key_fingerprint_sha256=self._managed_key_repository.public_key_fingerprint_sha256(public_key),
+                signing_execution_mode=policy.signing_execution_mode,
+                provider_label=alias,
+            )
+            managed_key = self._managed_key_repository.create_managed_key(
+                profile=profile,
+                alias=alias,
+                provider_label=alias,
+                binding=binding,
+                public_key=public_key,
+                policy=policy,
+            )
+        except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
+            audit_crypto_backend_operation(
+                operation='import_managed_private_key',
+                target=managed_key or profile,
+                target_display=(
+                    self._managed_key_target_display(managed_key)
+                    if managed_key is not None
+                    else self._profile_target_display(profile)
+                ),
+                started_at=started_at,
+                status='error',
+                profile=profile,
+                managed_key=managed_key,
+                details=details,
+                error=exc,
+            )
+            raise
+
+        audit_crypto_backend_operation(
+            operation='import_managed_private_key',
+            target=managed_key,
+            target_display=self._managed_key_target_display(managed_key),
+            started_at=started_at,
+            status='success',
+            profile=profile,
+            managed_key=managed_key,
+            details=details,
+        )
+        return managed_key.to_managed_key_ref()
+
     def verify_managed_key(self, key: ManagedKeyRef) -> ManagedKeyVerification:
         """Verify that a managed-key reference still resolves correctly."""
         managed_key = self._load_managed_key(key)
         app_ref = managed_key.to_managed_key_ref()
-        adapter = self._build_adapter(managed_key.provider_profile)
         started_at = perf_counter()
 
         try:
             binding = self._managed_key_repository.build_backend_binding(managed_key)
-            verification = adapter.verify_managed_key(binding)
+            if isinstance(binding, ProtectedImportManagedKeyBinding):
+                protected_import_verification = self._protected_import_operations.verify_managed_key(binding)
+                verification_status = protected_import_verification.status
+                resolved_public_key_fingerprint_sha256 = (
+                    protected_import_verification.resolved_public_key_fingerprint_sha256
+                )
+            else:
+                adapter = self._build_adapter(managed_key.provider_profile)
+                try:
+                    adapter_verification = adapter.verify_managed_key(binding)
+                    verification_status = adapter_verification.status
+                    resolved_public_key_fingerprint_sha256 = (
+                        adapter_verification.resolved_public_key_fingerprint_sha256
+                    )
+                finally:
+                    adapter.close()
         except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
             self._managed_key_repository.mark_error(managed_key=managed_key, error_summary=str(exc))
             audit_crypto_backend_operation(
@@ -178,12 +276,10 @@ class TrustpointCryptoBackend(LoggerMixin):
                 error=exc,
             )
             raise
-        finally:
-            adapter.close()
 
-        if verification.status is ManagedKeyVerificationStatus.PRESENT:
+        if verification_status is ManagedKeyVerificationStatus.PRESENT:
             self._managed_key_repository.mark_verification_success(managed_key=managed_key)
-        elif verification.status is ManagedKeyVerificationStatus.MISSING:
+        elif verification_status is ManagedKeyVerificationStatus.MISSING:
             self._managed_key_repository.mark_missing(
                 managed_key=managed_key,
                 error_summary='Managed key binding is missing from the provider.',
@@ -202,22 +298,29 @@ class TrustpointCryptoBackend(LoggerMixin):
             status='success',
             profile=managed_key.provider_profile,
             managed_key=managed_key,
-            details={'verification_status': verification.status.value},
+            details={'verification_status': verification_status.value},
         )
 
         return ManagedKeyVerification(
             key=app_ref,
-            status=verification.status,
-            resolved_public_key_fingerprint_sha256=verification.resolved_public_key_fingerprint_sha256,
+            status=verification_status,
+            resolved_public_key_fingerprint_sha256=resolved_public_key_fingerprint_sha256,
         )
 
     def get_public_key(self, key: ManagedKeyRef) -> SupportedPublicKey:
         """Load the public key for a managed key."""
         managed_key = self._load_managed_key(key)
-        adapter = self._build_adapter(managed_key.provider_profile)
         started_at = perf_counter()
         try:
-            public_key = adapter.get_public_key(self._managed_key_repository.build_backend_binding(managed_key))
+            binding = self._managed_key_repository.build_backend_binding(managed_key)
+            if isinstance(binding, ProtectedImportManagedKeyBinding):
+                public_key = self._protected_import_operations.get_public_key(binding)
+            else:
+                adapter = self._build_adapter(managed_key.provider_profile)
+                try:
+                    public_key = adapter.get_public_key(binding)
+                finally:
+                    adapter.close()
         except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
             audit_crypto_backend_operation(
                 operation='get_public_key',
@@ -241,21 +344,26 @@ class TrustpointCryptoBackend(LoggerMixin):
                 managed_key=managed_key,
             )
             return public_key
-        finally:
-            adapter.close()
 
     def sign(self, *, key: ManagedKeyRef, data: bytes, request: SignRequest) -> bytes:
         """Sign bytes with a managed key."""
         managed_key = self._load_managed_key(key)
-        adapter = self._build_adapter(managed_key.provider_profile)
         started_at = perf_counter()
         details = sign_request_audit_details(request, data_length=len(data))
         try:
-            signature = adapter.sign(
-                key=self._managed_key_repository.build_backend_binding(managed_key),
-                data=data,
-                request=request,
-            )
+            binding = self._managed_key_repository.build_backend_binding(managed_key)
+            if isinstance(binding, ProtectedImportManagedKeyBinding):
+                signature = self._protected_import_operations.sign(key=binding, data=data, request=request)
+            else:
+                adapter = self._build_adapter(managed_key.provider_profile)
+                try:
+                    signature = adapter.sign(
+                        key=binding,
+                        data=data,
+                        request=request,
+                    )
+                finally:
+                    adapter.close()
         except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
             audit_crypto_backend_operation(
                 operation='sign',
@@ -281,18 +389,21 @@ class TrustpointCryptoBackend(LoggerMixin):
                 details=details,
             )
             return signature
-        finally:
-            adapter.close()
 
     def destroy_managed_key(self, key: ManagedKeyRef) -> None:
         """Destroy an unreferenced managed key in the backend and remove its binding record."""
         managed_key = self._load_managed_key(key)
         profile = managed_key.provider_profile
         target_display = self._managed_key_target_display(managed_key)
-        adapter = self._build_adapter(managed_key.provider_profile)
         started_at = perf_counter()
         try:
-            adapter.destroy_managed_key(self._managed_key_repository.build_backend_binding(managed_key))
+            binding = self._managed_key_repository.build_backend_binding(managed_key)
+            if not isinstance(binding, ProtectedImportManagedKeyBinding):
+                adapter = self._build_adapter(managed_key.provider_profile)
+                try:
+                    adapter.destroy_managed_key(binding)
+                finally:
+                    adapter.close()
         except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
             audit_crypto_backend_operation(
                 operation='destroy_managed_key',
@@ -315,10 +426,31 @@ class TrustpointCryptoBackend(LoggerMixin):
                 profile=profile,
                 managed_key=managed_key,
             )
-        finally:
-            adapter.close()
-
         managed_key.delete()
+
+    @staticmethod
+    def _validate_protected_import_policy(profile: CryptoProviderProfileModel) -> None:
+        """Require explicit policy and app-secret protection before importing private keys."""
+        from management.models import SecurityConfig  # noqa: PLC0415
+
+        security_config = SecurityConfig.objects.filter(pk=1).first() or SecurityConfig.objects.order_by('pk').first()
+        if security_config is None or not security_config.allow_imported_private_keys:
+            msg = (
+                'Imported private keys are disabled. Enable "Allow imported private keys" in '
+                'Management > Settings > Security to allow private-key imports.'
+            )
+            raise ProviderConfigurationError(msg)
+
+        if profile.backend_kind not in {BackendKind.PKCS11, BackendKind.SOFTWARE}:
+            msg = 'Imported private keys require an active software or PKCS#11 crypto backend.'
+            raise ProviderConfigurationError(msg)
+
+        app_secret_backend = AppSecretBackendModel.get_singleton()
+        if app_secret_backend.backend_kind not in {AppSecretBackendKind.PKCS11, AppSecretBackendKind.SOFTWARE}:
+            msg = 'Imported private keys require configured application-secret protection.'
+            raise ProviderConfigurationError(msg)
+
+        get_app_secret_service().ensure_backend_ready()
 
     def _get_configured_profile(self) -> CryptoProviderProfileModel:
         """Return the configured instance backend profile or raise a configuration error."""
@@ -353,7 +485,15 @@ class TrustpointCryptoBackend(LoggerMixin):
     @staticmethod
     def _managed_key_binding_or_error(binding: object) -> ManagedKeyBinding:
         """Return a concrete managed-key binding or raise a configuration error."""
-        if isinstance(binding, (Pkcs11ManagedKeyBinding, SoftwareManagedKeyBinding, RestManagedKeyBinding)):
+        if isinstance(
+            binding,
+            (
+                Pkcs11ManagedKeyBinding,
+                SoftwareManagedKeyBinding,
+                RestManagedKeyBinding,
+                ProtectedImportManagedKeyBinding,
+            ),
+        ):
             return binding
 
         msg = f'Backend adapter returned unsupported managed-key binding type {type(binding).__name__}.'

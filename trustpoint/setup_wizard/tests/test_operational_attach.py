@@ -2,7 +2,7 @@
 
 # ruff: noqa: D103, S106, S107
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from appsecrets.service import AppSecretConfigurationError
 from crypto.domain.refs import ManagedKeyVerificationStatus
@@ -18,7 +18,11 @@ from setup_wizard.operational_attach import (
     OperationalStateSnapshot,
     OperationalTargetConfig,
 )
-from setup_wizard.views import app_secret_decryptability_checks, managed_key_backend_reconciliation_checks
+from setup_wizard.views import (
+    app_secret_decryptability_checks,
+    attach_backend_readiness_checks,
+    managed_key_backend_reconciliation_checks,
+)
 
 
 def _target(
@@ -234,6 +238,27 @@ def test_software_app_secret_decryptability_accepts_valid_dek() -> None:
 
     assert checks[0].code == 'appsecret.decryptability_ok'
     assert checks[0].severity == CompatibilitySeverity.INFO
+
+
+def test_pkcs11_attach_readiness_runs_basic_token_probe() -> None:
+    config_model = SetupWizardConfigModel(
+        crypto_storage=SetupWizardConfigModel.CryptoStorageType.HsmStorage,
+        fresh_install_pkcs11_token_label='Trustpoint-SoftHSM',
+        fresh_install_pkcs11_enforce_app_secret_protection=True,
+    )
+    capabilities = Mock()
+    capabilities.token.label = 'Trustpoint-SoftHSM'
+    capabilities.token.serial = 'serial'
+    capabilities.token.slot_id = 0
+
+    with patch('setup_wizard.views.probe_staged_pkcs11_config_isolated', return_value=capabilities) as probe:
+        checks = attach_backend_readiness_checks(config_model)
+
+    assert checks[0].code == 'backend.runtime_pkcs11_ok'
+    probe.assert_called_once_with(
+        config_model,
+        profile_name='setup-wizard-pkcs11-attach-readiness',
+    )
 
 
 def test_pkcs11_app_secret_decryptability_uses_staged_backend() -> None:

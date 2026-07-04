@@ -156,6 +156,7 @@ def _operation_type(operation: str) -> str:
     operation_types = {
         'verify_provider': AuditLog.OperationType.CRYPTO_VERIFY_PROVIDER,
         'generate_managed_key': AuditLog.OperationType.CRYPTO_GENERATE_MANAGED_KEY,
+        'import_managed_private_key': AuditLog.OperationType.CRYPTO_IMPORT_MANAGED_KEY,
         'verify_managed_key': AuditLog.OperationType.CRYPTO_VERIFY_MANAGED_KEY,
         'get_public_key': AuditLog.OperationType.CRYPTO_GET_PUBLIC_KEY,
         'sign': AuditLog.OperationType.CRYPTO_SIGN,
