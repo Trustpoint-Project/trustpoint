@@ -114,12 +114,6 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_est_username_password_help',
     ),
     path(
-        'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/'
-        'est-username-password/request-inf/<str:profile_name>/',
-        devices_help_views.EstUsernamePasswordRequestInfDownloadView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_est_username_password_request_inf_download',
-    ),
-    path(
         (
             'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
             '/no-onboarding/issue-application-credential/est-username-password/'

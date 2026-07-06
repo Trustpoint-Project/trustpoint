@@ -7,6 +7,7 @@ from typing import Any, override
 from django.http import Http404
 from django.urls import reverse
 from django.utils.html import format_html
+from django.conf import settings
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.detail import DetailView
@@ -55,7 +56,7 @@ class BaseHelpView(PageContextMixin, DetailView[DevIdRegistration]):
         if not domain:
             raise Http404(_('Failed to get domain from DevidRegistration.'))
 
-        host_base = f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
+        host_base = f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("HTTP_X_FORWARDED_PORT", settings.ADVERTISED_PORT)}'
 
         public_key_info = domain.public_key_info
         if not public_key_info:
@@ -261,7 +262,7 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[CaModel]):
         context = super().get_context_data(**kwargs)
         ca = self.object
 
-        host_base = f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
+        host_base = f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("HTTP_X_FORWARDED_PORT", settings.ADVERTISED_PORT)}'
         crl_endpoint = f'{host_base}/crl/{ca.pk}/'
 
         has_crl = bool(ca.crl_pem)
