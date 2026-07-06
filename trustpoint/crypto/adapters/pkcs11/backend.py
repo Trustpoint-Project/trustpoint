@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 import secrets
+import socket
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -49,6 +51,11 @@ if TYPE_CHECKING:
 
 type LibraryLoader = Callable[[str], Any]
 type TokenCandidate = tuple['Slot', 'Token']
+
+_TCP_HOST_PORT_RE = re.compile(r'(?<![/\w.-])(?P<host>[A-Za-z0-9_.-]+):(?P<port>\d{1,5})(?!\d)')
+_TCP_PORT_AT_HOST_RE = re.compile(r'(?<!\d)(?P<port>\d{1,5})@(?P<host>[A-Za-z0-9_.-]+)')
+_TOKEN_DIR_RE = re.compile(r'^\s*directories\.tokendir\s*=\s*(?P<path>.+?)\s*$', re.MULTILINE)
+_TCP_MAX_PORT = 65535
 
 
 class Pkcs11Backend(LoggerMixin):
@@ -278,7 +285,7 @@ class Pkcs11Backend(LoggerMixin):
 
         if self._library is None:
             try:
-                self._log_runtime_diagnostics()
+                self.log_runtime_diagnostics()
                 self._library = self._library_loader(self._profile.module_path)
             except OSError as exc:
                 msg = f'Failed to load PKCS#11 module at {self._profile.module_path!r}.'
@@ -356,7 +363,7 @@ class Pkcs11Backend(LoggerMixin):
         try:
             return self._candidates_from_slots(self._library.get_slots(token_present=True))
         except PKCS11Error as token_present_error:
-            self._log_runtime_diagnostics(logging.WARNING)
+            self.log_runtime_diagnostics(logging.WARNING)
             self.logger.warning(
                 'PKCS#11 library failed to enumerate token-present slots; retrying with a full slot scan: %s',
                 self._pkcs11_error_summary(token_present_error),
@@ -371,26 +378,39 @@ class Pkcs11Backend(LoggerMixin):
                 )
                 raise ProviderUnavailableError(msg) from full_scan_error
 
-    def _log_runtime_diagnostics(self, level: int = logging.DEBUG) -> None:
+    def _runtime_diagnostics(self) -> dict[str, object]:
+        """Return non-secret runtime facts useful for diagnosing PKCS#11 failures."""
+        module_path = self._profile.module_path
+        return {
+            'module_path': module_path,
+            'module_exists': Path(module_path).is_file(),
+            'module_readable': os.access(module_path, os.R_OK),
+            'provider_config_envs': self._provider_config_envs(),
+            'uid': os.geteuid(),
+            'gid': os.getegid(),
+        }
+
+    def diagnostic_summary(self) -> str:
+        """Return a compact non-secret diagnostics summary."""
+        return repr(self._runtime_diagnostics())
+
+    def log_runtime_diagnostics(self, level: int = logging.DEBUG) -> None:
         """Log non-secret runtime facts useful for diagnosing PKCS#11 module load failures."""
         if not self.logger.isEnabledFor(level):
             return
 
-        module_path = self._profile.module_path
-        module_exists = Path(module_path).is_file()
-        module_readable = os.access(module_path, os.R_OK)
-        provider_config_envs = self._provider_config_envs()
+        diagnostics = self._runtime_diagnostics()
 
         self.logger.log(
             level,
             'PKCS#11 runtime diagnostics: module_path=%r module_exists=%s module_readable=%s '
             'provider_config_envs=%s uid=%s gid=%s',
-            module_path,
-            module_exists,
-            module_readable,
-            provider_config_envs,
-            os.geteuid(),
-            os.getegid(),
+            diagnostics['module_path'],
+            diagnostics['module_exists'],
+            diagnostics['module_readable'],
+            diagnostics['provider_config_envs'],
+            diagnostics['uid'],
+            diagnostics['gid'],
         )
 
     @staticmethod
@@ -439,9 +459,87 @@ class Pkcs11Backend(LoggerMixin):
                     'path': str(resolved_path),
                     'exists': resolved_path.is_file(),
                     'readable': os.access(resolved_path, os.R_OK),
+                    'tcp_targets': Pkcs11Backend._tcp_target_diagnostics(resolved_path),
+                    'token_dir': Pkcs11Backend._token_dir_diagnostics(resolved_path),
                 }
             )
         return sorted(diagnostics, key=lambda item: str(item['env']))
+
+    @staticmethod
+    def _token_dir_diagnostics(config_path: Path) -> dict[str, object] | None:
+        """Return non-secret token-directory diagnostics for SoftHSM-style configs."""
+        if not config_path.is_file() or not os.access(config_path, os.R_OK):
+            return None
+        try:
+            config_text = config_path.read_text(encoding='utf-8', errors='ignore')
+        except OSError:
+            return None
+
+        match = _TOKEN_DIR_RE.search(config_text)
+        if match is None:
+            return None
+
+        raw_path = match.group('path').strip().strip('"\'')
+        if not raw_path:
+            return None
+
+        token_dir = Path(raw_path)
+        exists = token_dir.is_dir()
+        readable = os.access(token_dir, os.R_OK | os.X_OK)
+        has_entries = False
+        if exists and readable:
+            try:
+                has_entries = any(token_dir.iterdir())
+            except OSError:
+                readable = False
+
+        return {
+            'path': str(token_dir),
+            'exists': exists,
+            'readable': readable,
+            'has_entries': has_entries,
+        }
+
+    @staticmethod
+    def _tcp_target_diagnostics(config_path: Path) -> list[str]:
+        """Return non-secret reachability diagnostics for TCP targets found in a provider config."""
+        if not config_path.is_file() or not os.access(config_path, os.R_OK):
+            return []
+        try:
+            config_text = config_path.read_text(encoding='utf-8', errors='ignore')
+        except OSError:
+            return []
+
+        diagnostics: list[str] = []
+        for host, port in Pkcs11Backend._extract_tcp_targets(config_text)[:10]:
+            diagnostics.append(Pkcs11Backend._tcp_target_status(host, port))
+        return diagnostics
+
+    @staticmethod
+    def _extract_tcp_targets(config_text: str) -> list[tuple[str, int]]:
+        """Extract generic TCP endpoints from provider config text."""
+        targets: set[tuple[str, int]] = set()
+        for pattern in (_TCP_PORT_AT_HOST_RE, _TCP_HOST_PORT_RE):
+            for match in pattern.finditer(config_text):
+                host = match.group('host').strip()
+                port_text = match.group('port')
+                try:
+                    port = int(port_text)
+                except ValueError:
+                    continue
+                if host and 0 < port <= _TCP_MAX_PORT:
+                    targets.add((host, port))
+        return sorted(targets)
+
+    @staticmethod
+    def _tcp_target_status(host: str, port: int) -> str:
+        """Return whether a TCP endpoint is reachable from the current process."""
+        endpoint = f'{host}:{port}'
+        try:
+            with socket.create_connection((host, port), timeout=1.0):
+                return f'{endpoint}=reachable'
+        except OSError as exc:
+            return f'{endpoint}=unreachable:{type(exc).__name__}'
 
     def _candidates_from_slots(self, slots: list[Slot]) -> list[TokenCandidate]:
         """Return slot/token pairs for slots that currently expose a token."""

@@ -154,6 +154,8 @@ class CryptoProviderPkcs11ConfigModel(models.Model):
     )
 
     module_path = models.TextField()
+    provider_config_env_var = models.CharField(max_length=128, blank=True, default='')
+    provider_config_path = models.TextField(blank=True, default='')
     token_label = models.CharField(max_length=128, blank=True, default='')
     token_serial = models.CharField(max_length=128, blank=True, default='')
     slot_id = models.PositiveIntegerField(null=True, blank=True)
@@ -533,6 +535,60 @@ class CryptoManagedKeySoftwareBindingModel(models.Model):
         if not self.encrypted_private_key_pkcs8_der:
             raise ValidationError(
                 {'encrypted_private_key_pkcs8_der': 'Software binding must contain encrypted private key material.'}
+            )
+
+
+class CryptoManagedKeyProtectedImportBindingModel(models.Model):
+    """Encrypted DB binding for imported private keys protected by app-secret encryption."""
+
+    managed_key = models.OneToOneField(
+        CryptoManagedKeyModel,
+        primary_key=True,
+        on_delete=models.CASCADE,
+        related_name='protected_import_binding',
+    )
+    provider_profile = models.ForeignKey(
+        CryptoProviderProfileModel,
+        on_delete=models.PROTECT,
+        related_name='protected_import_key_bindings',
+    )
+    key_handle = models.CharField(max_length=128)
+    encrypted_private_key_pkcs8_der_b64 = models.TextField()
+    encryption_metadata = models.JSONField(default=dict)
+
+    class Meta:
+        """Database options for protected imported managed-key bindings."""
+
+        db_table = 'crypto_managed_key_protected_import_binding'
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=['provider_profile', 'key_handle']),
+        ]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['provider_profile', 'key_handle'],
+                name='crypto_protected_import_unique_profile_key_handle',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        """Return a readable protected imported-key binding label."""
+        return f'{self.managed_key.alias} protected imported-key binding'
+
+    def clean(self) -> None:
+        """Validate the protected imported-key binding shape."""
+        if self.provider_profile.backend_kind not in {BackendKind.PKCS11, BackendKind.SOFTWARE}:
+            raise ValidationError(
+                {'provider_profile': 'Protected imported keys require a software or PKCS#11 provider profile.'}
+            )
+        if self.managed_key.provider_profile_id != self.provider_profile_id:
+            raise ValidationError(
+                {'provider_profile': 'Binding provider_profile must match managed_key.provider_profile.'}
+            )
+        if not self.key_handle.strip():
+            raise ValidationError({'key_handle': 'Protected imported key_handle must not be empty.'})
+        if not self.encrypted_private_key_pkcs8_der_b64:
+            raise ValidationError(
+                {'encrypted_private_key_pkcs8_der_b64': 'Protected imported key material must not be empty.'}
             )
 
 

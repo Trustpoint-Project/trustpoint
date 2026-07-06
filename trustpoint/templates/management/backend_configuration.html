@@ -192,8 +192,40 @@
                     <ul class="tp-kvp-list mb-0">
                         <li>
                             <div>{% trans 'Module Path' %}</div>
-                            <div><code class="p-0">{{ pkcs11_config.module_path }}</code></div>
+                            <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                                <code class="p-0">{{ pkcs11_config.module_path }}</code>
+                                {% if pkcs11_module_download_available %}
+                                    <a
+                                        href="{% url 'management:backend_configuration_pkcs11_asset_download' 'module' %}"
+                                        class="btn btn-sm btn-outline-secondary"
+                                    >
+                                        {% trans 'Download' %}
+                                    </a>
+                                {% endif %}
+                            </div>
                         </li>
+                        {% if pkcs11_config.provider_config_path %}
+                            <li>
+                                <div>{% trans 'Provider Config' %}</div>
+                                <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                                    <code class="p-0">{{ pkcs11_config.provider_config_path }}</code>
+                                    {% if pkcs11_provider_config_download_available %}
+                                        <a
+                                            href="{% url 'management:backend_configuration_pkcs11_asset_download' 'provider-config' %}"
+                                            class="btn btn-sm btn-outline-secondary"
+                                        >
+                                            {% trans 'Download' %}
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        {% endif %}
+                        {% if pkcs11_config.provider_config_env_var %}
+                            <li>
+                                <div>{% trans 'Provider Config Env Var' %}</div>
+                                <div><code class="p-0">{{ pkcs11_config.provider_config_env_var }}</code></div>
+                            </li>
+                        {% endif %}
                         <li>
                             <div>{% trans 'Token Label' %}</div>
                             <div>{{ pkcs11_config.token_label|default:"-" }}</div>

@@ -177,6 +177,14 @@ class SecurityConfig(models.Model):
         help_text=_('Allow self-signed CAs to be imported with credentials.'),
     )
 
+    allow_imported_private_keys = models.BooleanField(
+        default=False,
+        help_text=_(
+            'Allow existing private-key credentials to be imported. Imported keys require '
+            'PKCS#11-backed application-secret protection and are stored encrypted in the database.'
+        ),
+    )
+
     # -- Protocol allow-lists (stored as JSON lists of integer values) -----
 
     permitted_no_onboarding_pki_protocols = models.JSONField(

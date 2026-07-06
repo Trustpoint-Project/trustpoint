@@ -32,7 +32,6 @@ AAD_CONTEXT: Final[bytes] = b'trustpoint-app-secrets-v1'
 PKCS11_CWRAP_DEK_PREFIX: Final[bytes] = b'tpsec:pkcs11:cwrap:v1:'
 PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-cbc-pad:v1:'
 PKCS11_ENCRYPTED_DEK_CBC_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-cbc:v1:'
-PKCS11_ENCRYPTED_DEK_ECB_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-ecb:v2:'
 APP_SECRET_KEK_BASE_TEMPLATE: Final[dict[pkcs11.Attribute, object]] = {
     pkcs11.Attribute.TOKEN: True,
     pkcs11.Attribute.PRIVATE: True,
@@ -83,7 +82,6 @@ APP_SECRET_DEK_WRAP_MECHANISMS: Final[tuple[pkcs11.Mechanism, ...]] = (
 APP_SECRET_DEK_ENCRYPT_MECHANISMS: Final[tuple[tuple[pkcs11.Mechanism, bytes], ...]] = (
     (pkcs11.Mechanism.AES_CBC_PAD, PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX),
     (pkcs11.Mechanism.AES_CBC, PKCS11_ENCRYPTED_DEK_CBC_PREFIX),
-    (pkcs11.Mechanism.AES_ECB, PKCS11_ENCRYPTED_DEK_ECB_PREFIX),
 )
 PKCS11_ATTEMPT_HEAD_LIMIT: Final[int] = 6
 PKCS11_ATTEMPT_TAIL_LIMIT: Final[int] = 4
@@ -747,13 +745,6 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                 prefix=PKCS11_ENCRYPTED_DEK_CBC_PREFIX,
                 mechanism=pkcs11.Mechanism.AES_CBC,
             )
-        if protected_dek.startswith(PKCS11_ENCRYPTED_DEK_ECB_PREFIX):
-            return self._decrypt_dek(
-                kek=kek,
-                protected_dek=protected_dek,
-                prefix=PKCS11_ENCRYPTED_DEK_ECB_PREFIX,
-                mechanism=pkcs11.Mechanism.AES_ECB,
-            )
         if not protected_dek.startswith(PKCS11_CWRAP_DEK_PREFIX):
             msg = 'Stored PKCS#11 app-secret DEK is not in a supported protected-DEK envelope format.'
             raise AppSecretConfigurationError(msg)
@@ -805,12 +796,9 @@ class Pkcs11AppSecretService(BaseAppSecretService):
     def _try_encrypt_dek(self, *, kek: _Pkcs11Kek, dek: bytes, attempt_errors: list[str]) -> bytes | None:
         """Try protecting raw DEK bytes with PKCS#11 C_Encrypt."""
         for mechanism, prefix in APP_SECRET_DEK_ENCRYPT_MECHANISMS:
-            iv = b'' if mechanism == pkcs11.Mechanism.AES_ECB else os.urandom(AES_BLOCK_BYTES)
+            iv = os.urandom(AES_BLOCK_BYTES)
             try:
-                if iv:
-                    ciphertext = bytes(kek.encrypt(dek, mechanism=mechanism, mechanism_param=iv))
-                else:
-                    ciphertext = bytes(kek.encrypt(dek, mechanism=mechanism))
+                ciphertext = bytes(kek.encrypt(dek, mechanism=mechanism, mechanism_param=iv))
             except (AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
                 attempt_errors.append(f'encrypt/{mechanism.name}: {self._format_pkcs11_attempt_error(exception)}')
                 continue
@@ -827,20 +815,13 @@ class Pkcs11AppSecretService(BaseAppSecretService):
     ) -> bytes:
         """Decrypt a DEK protected by PKCS#11 C_Encrypt."""
         payload = protected_dek[len(prefix) :]
-        if mechanism == pkcs11.Mechanism.AES_ECB:
-            iv = None
-            ciphertext = payload
-        elif len(payload) <= AES_BLOCK_BYTES:
+        if len(payload) <= AES_BLOCK_BYTES:
             msg = 'Stored PKCS#11 app-secret encrypted DEK payload is truncated.'
             raise AppSecretConfigurationError(msg)
-        else:
-            iv = payload[:AES_BLOCK_BYTES]
-            ciphertext = payload[AES_BLOCK_BYTES:]
+        iv = payload[:AES_BLOCK_BYTES]
+        ciphertext = payload[AES_BLOCK_BYTES:]
         try:
-            if iv is None:
-                dek = bytes(kek.decrypt(ciphertext, mechanism=mechanism))
-            else:
-                dek = bytes(kek.decrypt(ciphertext, mechanism=mechanism, mechanism_param=iv))
+            dek = bytes(kek.decrypt(ciphertext, mechanism=mechanism, mechanism_param=iv))
         except (AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
             msg = f'PKCS#11 app-secret KEK could not decrypt the DEK with {mechanism.name}.'
             raise AppSecretConfigurationError(msg) from exception

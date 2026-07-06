@@ -1,20 +1,28 @@
 """Read-only view of the configured crypto/app-secret backend state."""
 
 import io
+import mimetypes
+from pathlib import Path
 from typing import Any
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import CommandError, call_command
-from django.http import HttpRequest, HttpResponse
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.utils.translation import gettext_lazy as _
+from django.views import View
 from django.views.generic import TemplateView
 
 from appsecrets.models import AppSecretBackendModel
 from crypto.application.capabilities import BackendCapabilityReport, get_active_backend_capability_report
 from crypto.models import BackendKind, CryptoProviderProfileModel
 from pki.util.keys import supported_auto_gen_pki_key_algorithms
+
+PKCS11_ASSET_DOWNLOADS = {
+    'module': ('module_path', 'application/octet-stream'),
+    'provider-config': ('provider_config_path', 'text/plain'),
+}
 
 
 def _capability_status(report: BackendCapabilityReport | None) -> tuple[str, Any, Any]:
@@ -130,6 +138,55 @@ def _pkcs11_mechanism_groups(
     return groups
 
 
+def _path_is_downloadable(path_value: str | None) -> bool:
+    """Return whether the configured path points to a downloadable regular file."""
+    if not path_value:
+        return False
+    try:
+        return Path(path_value).is_file()
+    except OSError:
+        return False
+
+
+def _active_pkcs11_config() -> Any | None:
+    """Return the active PKCS#11 provider config, if one is configured."""
+    profile = (
+        CryptoProviderProfileModel.objects.filter(active=True, backend_kind=BackendKind.PKCS11)
+        .select_related('pkcs11_config')
+        .first()
+    )
+    return getattr(profile, 'pkcs11_config', None) if profile is not None else None
+
+
+class BackendConfigurationPkcs11AssetDownloadView(View):
+    """Download installed PKCS#11 provider files for the active backend."""
+
+    http_method_names = ('get',)
+
+    def get(self, _request: HttpRequest, asset: str) -> FileResponse:
+        """Return the selected PKCS#11 provider asset as an attachment."""
+        asset_config = PKCS11_ASSET_DOWNLOADS.get(asset)
+        if asset_config is None:
+            msg = 'Unknown PKCS#11 provider asset.'
+            raise Http404(msg)
+
+        field_name, default_content_type = asset_config
+        pkcs11_config = _active_pkcs11_config()
+        path_value = str(getattr(pkcs11_config, field_name, '') or '').strip()
+        if not _path_is_downloadable(path_value):
+            msg = 'PKCS#11 provider asset not found.'
+            raise Http404(msg)
+
+        asset_path = Path(path_value)
+        content_type = mimetypes.guess_type(asset_path.name)[0] or default_content_type
+        return FileResponse(
+            asset_path.open('rb'),
+            as_attachment=True,
+            filename=asset_path.name,
+            content_type=content_type,
+        )
+
+
 class BackendConfigurationView(TemplateView):
     """Display the configured managed-crypto and application-secret backends."""
 
@@ -224,6 +281,13 @@ class BackendConfigurationView(TemplateView):
             getattr(pkcs11_probe_detail, 'token_serial', None)
             or getattr(context['pkcs11_config'], 'token_serial', None)
             or '-'
+        )
+        pkcs11_config = context['pkcs11_config']
+        context['pkcs11_module_download_available'] = _path_is_downloadable(
+            getattr(pkcs11_config, 'module_path', None)
+        )
+        context['pkcs11_provider_config_download_available'] = _path_is_downloadable(
+            getattr(pkcs11_config, 'provider_config_path', None)
         )
         pkcs11_slot_id = (
             getattr(pkcs11_probe_detail, 'slot_id', None)
