@@ -56,3 +56,12 @@ The complete API specification is available in **OpenAPI (Swagger)** format:
 - **Swagger UI**: `https://<trustpoint-host>/api/schema/swagger-ui/`
 
 ---
+
+```{toctree}
+:maxdepth: 2
+
+est
+rest
+cmp
+rest_api
+```

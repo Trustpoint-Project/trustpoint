@@ -2,7 +2,7 @@
 
 Trustpoint provides a simplified REST API for certificate enrollment and re-enrollment operations. This is a JSON-based alternative to the standard EST and CMP protocols, designed for ease of integration.
 
-> **Note**: This is the **Certificate Enrollment API** (`/rest/`). For general Trustpoint administration and management, see the [Trustpoint Management API](rest_api.md) (`/api/`).
+> **Note**: This is the **Certificate Enrollment API** (`/rest/`). For general Trustpoint administration and management, see the [Trustpoint Management API](rest_api.rst) (`/api/`).
 
 ## Overview
 
@@ -58,7 +58,7 @@ Request a new certificate from Trustpoint.
 **Authentication:** Required (see [Authentication](#authentication))
 
 **Request Headers:**
-```http
+```yaml
 Content-Type: application/json
 Authorization: Basic <base64-credentials>
 ```
@@ -122,7 +122,7 @@ Re-enroll an existing certificate (renewal with the same or new key).
 **Authentication:** Mutual TLS required (client certificate authentication)
 
 **Request Headers:**
-```http
+```yaml
 Content-Type: application/json
 ```
 
@@ -185,7 +185,7 @@ The REST PKI API supports two authentication methods:
 Used for initial enrollment when no certificate exists.
 
 **Header:**
-```http
+```yaml
 Authorization: Basic <base64-encoded-credentials>
 ```
 

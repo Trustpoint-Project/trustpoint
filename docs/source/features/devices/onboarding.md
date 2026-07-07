@@ -172,7 +172,7 @@ Trustpoint is actively developing a zero-touch onboarding feature. This mechanis
 - Network infrastructure to support automated onboarding.
 
 The Trustpoint beta release contains zero touch onboarding functionality for demonstration purposes only,
-based on the [AOKI](aoki) protocol.
+based on the [AOKI](../aoki/index.md) protocol.
 This is a simple protocol that uses mDNS to discover the Trustpoint server and then uses a simple REST API for mutual trust establishment.
 Afterwards, the device can use a standard PKI protocol (CMP or EST) to request a domain credential (LDevID).
 Before the device can be onboarded, it must possess a valid IDevID (Initial device identifier per IEEE 802.1AR) certificate.

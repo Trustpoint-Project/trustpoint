@@ -33,11 +33,6 @@ Welcome to Trustpoint's documentation!
    :caption: Features
 
    features/apis/index
-   features/apis/est
-   features/apis/rest
-   features/apis/cmp
-   features/apis/rest_api
-
 
    features/aoki/index
    features/aoki/mdns
@@ -45,22 +40,8 @@ Welcome to Trustpoint's documentation!
    features/devices/onboarding
 
    features/pki/index
-   features/pki/cas_ras
-   features/pki/add_cas
-   features/pki/add_ras
-   features/pki/certificate_profiles
-   features/pki/crl_management
-   features/pki/crls
-   features/pki/domains
-   features/pki/issued_certificates
 
    features/management/index
-   features/management/settings
-   features/management/logging
-   features/management/audit_logs
-   features/management/tls_settings
-   features/management/backups
-   features/management/notifications
 
    features/security/db_encryption
    features/security/pkcs11

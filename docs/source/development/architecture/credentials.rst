@@ -36,7 +36,7 @@ The ``CredentialTypeChoice`` enum defines the purpose and restrictions of each c
    * - **ISSUED_CREDENTIAL**
      - Device credentials issued by Trustpoint (LDevID, application certificates)
    * - **DEV_OWNER_ID**
-     - Device Owner ID certificates (see :doc:`../../devices/aoki`)
+     - Device Owner ID certificates (see :doc:`../../features/aoki/index`)
    * - **SIGNER**
      - Signing authority for hash-and-sign operations
 

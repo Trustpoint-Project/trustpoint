@@ -21,4 +21,12 @@ Trustpoint allows you to create and manage both root and issuing certificate aut
 :maxdepth: 2
 
 crl_management
+cas_ras
+add_cas
+add_ras
+certificate_profiles
+crl_management
+crls
+domains
+issued_certificates
 ```

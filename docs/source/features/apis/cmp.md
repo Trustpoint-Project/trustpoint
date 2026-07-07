@@ -84,7 +84,7 @@ All CMP requests use the `POST` method.
 
 ### Headers
 
-```http
+```yaml
 Content-Type: application/pkixcmp
 Content-Length: <message-length>
 ```
@@ -97,7 +97,7 @@ The request body must contain a DER-encoded CMP PKIMessage structure as defined 
 
 ### Headers
 
-```http
+```yaml
 Content-Type: application/pkixcmp
 ```
 

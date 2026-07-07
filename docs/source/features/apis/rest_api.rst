@@ -94,6 +94,6 @@ The interactive documentation allows you to:
 Definition
 ----------
 
-.. openapi:: ../_static/trustpoint-openapi-swagger.yaml
+.. openapi:: ../../_static/trustpoint-openapi-swagger.yaml
    :group:
    :examples:

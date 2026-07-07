@@ -51,3 +51,14 @@ The **Crypto Backend** page contains settings for cryptographic operations. Use 
 ## Notifications
 
 The **Notifications** page controls notification behavior. Depending on the configured delivery channels, Trustpoint can use notifications to inform administrators about relevant system or PKI events
+
+```{toctree}
+:maxdepth: 2
+
+settings
+logging
+audit_logs
+tls_settings
+backups
+notifications
+```

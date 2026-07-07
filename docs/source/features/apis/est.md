@@ -75,7 +75,7 @@ Retrieves the CA certificate chain for the specified domain.
 **Authentication:** None required
 
 **Request Headers:**
-```http
+```yaml
 Accept: application/pkcs7-mime
 ```
 
@@ -112,7 +112,7 @@ Request a new certificate from Trustpoint.
 **Authentication:** Required (see [Authentication](#authentication))
 
 **Request Headers:**
-```http
+```yaml
 Content-Type: application/pkcs10
 Content-Transfer-Encoding: base64
 Authorization: Basic <base64-credentials>
@@ -171,7 +171,7 @@ Re-enroll an existing certificate (renewal with the same or new key).
 **Authentication:** Mutual TLS required (client certificate authentication)
 
 **Request Headers:**
-```http
+```yaml
 Content-Type: application/pkcs10
 Content-Transfer-Encoding: base64
 ```
@@ -211,7 +211,7 @@ Trustpoint supports multiple EST authentication methods:
 Used for initial enrollment when no certificate exists.
 
 **Header:**
-```http
+```yaml
 Authorization: Basic <base64-encoded-credentials>
 ```
 
@@ -368,7 +368,7 @@ Workflows allow automated or manual approval based on configurable policies.
 EST errors are returned as HTTP status codes with plain text error messages:
 
 **Example Error Response:**
-```http
+```yaml
 HTTP/1.1 401 Unauthorized
 Content-Type: text/plain
 
