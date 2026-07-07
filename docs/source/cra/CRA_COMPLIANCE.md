@@ -2,8 +2,9 @@
   <img src="../_static/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
 </p>
 
-{.text-center}
+<p align="center">
 # CRA Conformity Assessment
+</p>
 
 <p align="center">
   <strong>EU Cyber Resilience Act Self-Assessment</strong><br>
