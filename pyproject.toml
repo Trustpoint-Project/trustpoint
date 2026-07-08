@@ -77,6 +77,7 @@ docs = [
     "furo >= 2024.8.6",
     "pillow >= 11.2.1",
     "sphinxcontrib-openapi>=0.8.4",
+    "myst-parser[linkify]>=5.1.0",
 ]
 # Docker gunicorn
 docker = [

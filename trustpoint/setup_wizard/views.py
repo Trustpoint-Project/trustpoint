@@ -93,7 +93,13 @@ from setup_wizard.operational_handoff import (
     run_operational_handoff,
     run_operational_runtime_switch,
 )
-from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
+from setup_wizard.pkcs11_local_dev import (
+    local_dev_pkcs11_config_available,
+    local_dev_pkcs11_config_env_var,
+    local_dev_pkcs11_config_path,
+    local_dev_pkcs11_handoff_available,
+    local_dev_pkcs11_module_path,
+)
 from setup_wizard.pkcs11_staging import (
     cleanup_wizard_pkcs11_staged_path,
     existing_wizard_pkcs11_staged_file,
@@ -610,6 +616,31 @@ def stage_uploaded_pkcs11_config(uploaded_config: Any) -> str:
     return str(staged_path)
 
 
+def _persist_local_dev_pkcs11_config_if_available(
+    form: FreshInstallBackendConfigModelForm,
+    update_fields: list[str],
+    *,
+    current_staged_config: Path | None,
+    current_config_path: str,
+    current_config_exists: bool,
+) -> None:
+    """Persist the local-dev PKCS#11 provider config when tp_wizard exposed one."""
+    if current_staged_config is not None or not local_dev_pkcs11_config_available():
+        return
+
+    local_dev_config = str(local_dev_pkcs11_config_path())
+    if current_config_path and current_config_path != local_dev_config and current_config_exists:
+        return
+
+    cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
+    form.instance.fresh_install_pkcs11_config_path = local_dev_config
+    update_fields.append('fresh_install_pkcs11_config_path')
+    if not form.instance.fresh_install_pkcs11_config_env_var:
+        form.instance.fresh_install_pkcs11_config_env_var = local_dev_pkcs11_config_env_var()
+        if 'fresh_install_pkcs11_config_env_var' not in update_fields:
+            update_fields.append('fresh_install_pkcs11_config_env_var')
+
+
 def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelForm) -> None:
     """Persist staged PKCS#11 wizard inputs without advancing the wizard."""
     if form.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
@@ -655,10 +686,21 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
         update_fields.append('fresh_install_pkcs11_auth_source_ref')
 
     uploaded_config = form.cleaned_data.get('pkcs11_config_upload')
+    current_staged_config = existing_wizard_pkcs11_staged_file(form.instance.fresh_install_pkcs11_config_path)
+    current_config_path = (form.instance.fresh_install_pkcs11_config_path or '').strip()
+    current_config_exists = bool(current_config_path and Path(current_config_path).is_file())
     if uploaded_config is not None:
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
         form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
         update_fields.append('fresh_install_pkcs11_config_path')
+    else:
+        _persist_local_dev_pkcs11_config_if_available(
+            form,
+            update_fields,
+            current_staged_config=current_staged_config,
+            current_config_path=current_config_path,
+            current_config_exists=current_config_exists,
+        )
 
     if (
         form.instance.fresh_install_pkcs11_token_label != previous_token_label
@@ -730,29 +772,40 @@ def persist_valid_pkcs11_fields_from_invalid_form(
         form.instance.save(update_fields=update_fields)
 
 
-def run_staged_pkcs11_connection_test(
+def _stage_and_probe_pkcs11_connection(
+    form: FreshInstallBackendConfigModelForm,
+    *,
+    profile_name: str,
+) -> Pkcs11Capabilities:
+    """Install staged PKCS#11 assets and run the isolated token probe."""
+    FreshInstallSummaryView.install_staged_pkcs11_assets(form.instance)
+    form.refresh_pkcs11_state()
+    return probe_staged_pkcs11_config_isolated(form.instance, profile_name=profile_name)
+
+
+def _pkcs11_connection_test_error_response(
+    view: Any,
+    form: FreshInstallBackendConfigModelForm,
+    exception: Exception,
+) -> HttpResponse:
+    """Render a PKCS#11 connection-test failure on the current step."""
+    view.logger.exception('PKCS#11 setup-wizard connection test failed.')
+    if isinstance(exception, DjangoValidationError):
+        error_detail = '; '.join(exception.messages)
+    else:
+        error_detail = str(exception).strip() or type(exception).__name__
+    form.add_error(None, f'Could not connect to the configured PKCS#11 backend: {error_detail}')
+    return cast('HttpResponse', view.render_to_response(view.get_context_data(form=form)))
+
+
+def _pkcs11_connection_test_success_response(
     view: Any,
     form: FreshInstallBackendConfigModelForm,
     *,
+    capabilities: Pkcs11Capabilities,
     success_redirect_name: str,
 ) -> HttpResponse:
-    """Probe the staged PKCS#11 configuration and keep the user on this step."""
-    try:
-        FreshInstallSummaryView.install_staged_pkcs11_assets(form.instance)
-        form.refresh_pkcs11_state()
-        capabilities = probe_staged_pkcs11_config_isolated(
-            form.instance,
-            profile_name='setup-wizard-pkcs11-test',
-        )
-    except Exception as exception:
-        view.logger.exception('PKCS#11 setup-wizard connection test failed.')
-        if isinstance(exception, DjangoValidationError):
-            error_detail = '; '.join(exception.messages)
-        else:
-            error_detail = str(exception).strip() or type(exception).__name__
-        form.add_error(None, f'Could not connect to the configured PKCS#11 backend: {error_detail}')
-        return cast('HttpResponse', view.render_to_response(view.get_context_data(form=form)))
-
+    """Persist successful probe details and redirect back to the PKCS#11 step."""
     update_fields: list[str] = []
     if form.instance.fresh_install_pkcs11_module_path == str(FINAL_WIZARD_PKCS11_MODULE_PATH):
         update_fields.append('fresh_install_pkcs11_module_path')
@@ -781,6 +834,56 @@ def run_staged_pkcs11_connection_test(
     return redirect(success_redirect_name)
 
 
+def run_staged_pkcs11_connection_test(
+    view: Any,
+    form: FreshInstallBackendConfigModelForm,
+    *,
+    success_redirect_name: str,
+) -> HttpResponse:
+    """Probe staged PKCS#11 token connectivity and keep the user on this step."""
+    try:
+        capabilities = _stage_and_probe_pkcs11_connection(
+            form,
+            profile_name='setup-wizard-pkcs11-test',
+        )
+    except DjangoValidationError as exception:
+        return _pkcs11_connection_test_error_response(view, form, exception)
+
+    return _pkcs11_connection_test_success_response(
+        view,
+        form,
+        capabilities=capabilities,
+        success_redirect_name=success_redirect_name,
+    )
+
+
+def run_fresh_install_staged_pkcs11_connection_test(
+    view: Any,
+    form: FreshInstallBackendConfigModelForm,
+    *,
+    success_redirect_name: str,
+) -> HttpResponse:
+    """Probe staged PKCS#11 connectivity and fresh-install app-secret policy support."""
+    try:
+        capabilities = _stage_and_probe_pkcs11_connection(
+            form,
+            profile_name='setup-wizard-pkcs11-test',
+        )
+        validate_staged_pkcs11_app_secret_protection_if_required(
+            form.instance,
+            profile_name='setup-wizard-pkcs11-app-secret-test',
+        )
+    except DjangoValidationError as exception:
+        return _pkcs11_connection_test_error_response(view, form, exception)
+
+    return _pkcs11_connection_test_success_response(
+        view,
+        form,
+        capabilities=capabilities,
+        success_redirect_name=success_redirect_name,
+    )
+
+
 def apply_pkcs11_probe_fallbacks(config_model: SetupWizardConfigModel) -> tuple[str, str, list[str]]:
     """Apply runtime fallback PKCS#11 paths before probing a staged backend."""
     module_path = (config_model.fresh_install_pkcs11_module_path or '').strip()
@@ -804,6 +907,20 @@ def apply_pkcs11_probe_fallbacks(config_model: SetupWizardConfigModel) -> tuple[
         config_file = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
         config_model.fresh_install_pkcs11_config_path = config_file
         fallback_update_fields.append('fresh_install_pkcs11_config_path')
+    elif (not config_file or not _path_exists(Path(config_file))) and local_dev_pkcs11_config_available():
+        config_file = str(local_dev_pkcs11_config_path())
+        config_model.fresh_install_pkcs11_config_path = config_file
+        fallback_update_fields.append('fresh_install_pkcs11_config_path')
+        if not config_env_var:
+            config_env_var = local_dev_pkcs11_config_env_var()
+            config_model.fresh_install_pkcs11_config_env_var = config_env_var
+            fallback_update_fields.append('fresh_install_pkcs11_config_env_var')
+    elif config_file and not config_env_var and local_dev_pkcs11_config_available():
+        local_dev_config = str(local_dev_pkcs11_config_path())
+        if config_file == local_dev_config:
+            config_env_var = local_dev_pkcs11_config_env_var()
+            config_model.fresh_install_pkcs11_config_env_var = config_env_var
+            fallback_update_fields.append('fresh_install_pkcs11_config_env_var')
 
     if config_file and config_env_var:
         os.environ[config_env_var] = config_file
@@ -853,19 +970,16 @@ def build_pkcs11_probe_profile(
 
 def refresh_pkcs11_probe_capabilities(
     profile: Pkcs11ProviderProfile,
-    *,
-    require_app_secret_protection: bool,
 ) -> Any:
     """Authenticate and probe PKCS#11 capabilities for the given staged profile."""
     backend = Pkcs11Backend(profile=profile)
     try:
         backend.verify_authentication()
         capabilities = backend.probe_capabilities()
-        if require_app_secret_protection:
-            validate_pkcs11_app_secret_protection_support(profile)
     except Exception as exception:
+        backend.log_runtime_diagnostics(logging.WARNING)
         error_detail = str(exception).strip() or type(exception).__name__
-        err_msg = f'PKCS#11 probe failed: {error_detail}'
+        err_msg = f'PKCS#11 probe failed: {error_detail}. Diagnostics: {backend.diagnostic_summary()}'
         raise DjangoValidationError(err_msg) from exception
     else:
         return capabilities
@@ -898,6 +1012,34 @@ def validate_pkcs11_app_secret_protection_support(profile: Pkcs11ProviderProfile
     Pkcs11AppSecretService(app_secret_config).verify_temporary_dek_protection_support()
 
 
+def build_staged_pkcs11_probe_profile(
+    config_model: SetupWizardConfigModel,
+    *,
+    profile_name: str,
+) -> tuple[Pkcs11ProviderProfile, list[str]]:
+    """Build a PKCS#11 probe profile from staged wizard settings."""
+    module_path, pin_file, update_fields = apply_pkcs11_probe_fallbacks(config_model)
+    slot_id = config_model.fresh_install_pkcs11_slot_id
+    token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
+    token_serial = (config_model.fresh_install_pkcs11_token_serial or '').strip() or None
+
+    validate_pkcs11_probe_inputs(
+        module_path=module_path,
+        pin_file=pin_file,
+        token_label=token_label,
+        slot_id=slot_id,
+    )
+    return (
+        build_pkcs11_probe_profile(
+            profile_name=profile_name,
+            module_path=module_path,
+            pin_file=pin_file,
+            token_selector=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
+        ),
+        update_fields,
+    )
+
+
 def persist_pkcs11_probe_capabilities(
     config_model: SetupWizardConfigModel,
     capabilities: Any,
@@ -922,29 +1064,25 @@ def persist_pkcs11_probe_capabilities(
 
 def probe_staged_pkcs11_config(config_model: SetupWizardConfigModel, *, profile_name: str) -> Any:
     """Authenticate against the staged PKCS#11 backend and persist discovered selector details."""
-    module_path, pin_file, update_fields = apply_pkcs11_probe_fallbacks(config_model)
-    slot_id = config_model.fresh_install_pkcs11_slot_id
-    token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
-    token_serial = (config_model.fresh_install_pkcs11_token_serial or '').strip() or None
-
-    validate_pkcs11_probe_inputs(
-        module_path=module_path,
-        pin_file=pin_file,
-        token_label=token_label,
-        slot_id=slot_id,
-    )
-    profile = build_pkcs11_probe_profile(
-        profile_name=profile_name,
-        module_path=module_path,
-        pin_file=pin_file,
-        token_selector=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
-    )
-    capabilities = refresh_pkcs11_probe_capabilities(
-        profile,
-        require_app_secret_protection=config_model.fresh_install_pkcs11_enforce_app_secret_protection,
-    )
+    profile, update_fields = build_staged_pkcs11_probe_profile(config_model, profile_name=profile_name)
+    capabilities = refresh_pkcs11_probe_capabilities(profile)
     persist_pkcs11_probe_capabilities(config_model, capabilities, update_fields)
     return capabilities
+
+
+def validate_staged_pkcs11_app_secret_protection(
+    config_model: SetupWizardConfigModel,
+    *,
+    profile_name: str,
+) -> None:
+    """Verify staged PKCS#11 config can protect Trustpoint application secrets."""
+    profile, _update_fields = build_staged_pkcs11_probe_profile(config_model, profile_name=profile_name)
+    try:
+        validate_pkcs11_app_secret_protection_support(profile)
+    except Exception as exception:
+        error_detail = str(exception).strip() or type(exception).__name__
+        err_msg = f'PKCS#11 app-secret protection self-test failed: {error_detail}'
+        raise DjangoValidationError(err_msg) from exception
 
 
 def _format_pkcs11_probe_process_output(completed_process: subprocess.CompletedProcess[str]) -> str:
@@ -965,14 +1103,16 @@ def probe_staged_pkcs11_config_isolated(
     profile_name: str,
 ) -> Pkcs11Capabilities:
     """Run the staged PKCS#11 probe in a subprocess so native crashes cannot kill the web worker."""
+    command = [
+        sys.executable,
+        str(settings.BASE_DIR / 'manage.py'),
+        'probe_setup_wizard_pkcs11',
+        '--profile-name',
+        profile_name,
+    ]
+
     completed_process = subprocess.run(  # noqa: S603
-        [
-            sys.executable,
-            str(settings.BASE_DIR / 'manage.py'),
-            'probe_setup_wizard_pkcs11',
-            '--profile-name',
-            profile_name,
-        ],
+        command,
         cwd=str(settings.REPO_ROOT),
         env=os.environ.copy(),
         text=True,
@@ -1020,6 +1160,63 @@ def probe_staged_pkcs11_config_isolated(
 
     config_model.refresh_from_db()
     return capabilities
+
+
+def validate_staged_pkcs11_app_secret_protection_isolated(
+    config_model: SetupWizardConfigModel,
+    *,
+    profile_name: str,
+) -> None:
+    """Run the staged PKCS#11 app-secret protection self-test in an isolated subprocess."""
+    completed_process = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(settings.BASE_DIR / 'manage.py'),
+            'test_setup_wizard_pkcs11_app_secret',
+            '--profile-name',
+            profile_name,
+        ],
+        cwd=str(settings.REPO_ROOT),
+        env=os.environ.copy(),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed_process.returncode == 0:
+        config_model.refresh_from_db()
+        return
+
+    failure = (
+        f'signal {-completed_process.returncode}'
+        if completed_process.returncode < 0
+        else f'exit code {completed_process.returncode}'
+    )
+    output = _format_pkcs11_probe_process_output(completed_process)
+    logger.error(
+        'Isolated PKCS#11 app-secret self-test failed with %s. Captured output: %s',
+        failure,
+        output or 'no process output',
+    )
+    if completed_process.returncode < 0:
+        err_msg = (
+            f'PKCS#11 app-secret self-test process crashed with {failure}. '
+            'The PKCS#11 provider library terminated the self-test process.'
+        )
+    elif output:
+        err_msg = f'PKCS#11 app-secret self-test process failed with {failure}: {output}'
+    else:
+        err_msg = f'PKCS#11 app-secret self-test process failed with {failure}. Check the Trustpoint log for details.'
+    raise DjangoValidationError(err_msg)
+
+
+def validate_staged_pkcs11_app_secret_protection_if_required(
+    config_model: SetupWizardConfigModel,
+    *,
+    profile_name: str,
+) -> None:
+    """Run the isolated app-secret self-test when the staged policy requires it."""
+    if config_model.fresh_install_pkcs11_enforce_app_secret_protection:
+        validate_staged_pkcs11_app_secret_protection_isolated(config_model, profile_name=profile_name)
 
 
 def _path_exists(path: Path) -> bool:
@@ -1551,7 +1748,7 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
 
     def _test_pkcs11_connection(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
         """Probe the staged PKCS#11 configuration and keep the user on this step."""
-        return run_staged_pkcs11_connection_test(
+        return run_fresh_install_staged_pkcs11_connection_test(
             self,
             form,
             success_redirect_name='setup_wizard:fresh_install_backend_config',
@@ -1563,7 +1760,7 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
 
     def test_pkcs11_connection(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
         """Probe the staged PKCS#11 configuration."""
-        return run_staged_pkcs11_connection_test(
+        return run_fresh_install_staged_pkcs11_connection_test(
             self,
             form,
             success_redirect_name='setup_wizard:fresh_install_backend_config',
@@ -1963,13 +2160,13 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         return local_dev_module
 
     @staticmethod
-    def _uses_builtin_local_pkcs11_proxy(
+    def _uses_builtin_local_pkcs11_handoff(
         *,
         staged_pin: Path | None,
         local_dev_module: Path,
         configured_module_path: Path,
     ) -> bool:
-        """Return whether the built-in local PKCS#11 proxy can be used."""
+        """Return whether the built-in local PKCS#11 handoff can be used."""
         del staged_pin
         return (
             local_dev_pkcs11_handoff_available()
@@ -1990,13 +2187,13 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         return staged_module is None and configured_module_path.is_file()
 
     @staticmethod
-    def _discard_redundant_local_proxy_module(
+    def _discard_redundant_local_handoff_module(
         staged_module: Path | None,
         *,
-        uses_builtin_local_proxy: bool,
+        uses_builtin_local_handoff: bool,
     ) -> Path | None:
-        """Discard an uploaded module when the local proxy module is already available."""
-        if uses_builtin_local_proxy and staged_module is not None:
+        """Discard an uploaded module when the local development module is already available."""
+        if uses_builtin_local_handoff and staged_module is not None:
             cleanup_wizard_pkcs11_staged_path(staged_module)
             return None
         return staged_module
@@ -2148,16 +2345,16 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
         local_dev_module = cls._ensure_local_dev_pkcs11_module(config_model)
         configured_module_path = Path((config_model.fresh_install_pkcs11_module_path or '').strip())
-        uses_builtin_local_proxy = cls._uses_builtin_local_pkcs11_proxy(
+        uses_builtin_local_handoff = cls._uses_builtin_local_pkcs11_handoff(
             staged_pin=staged_pin,
             local_dev_module=local_dev_module,
             configured_module_path=configured_module_path,
         )
-        staged_module = cls._discard_redundant_local_proxy_module(
+        staged_module = cls._discard_redundant_local_handoff_module(
             staged_module,
-            uses_builtin_local_proxy=uses_builtin_local_proxy,
+            uses_builtin_local_handoff=uses_builtin_local_handoff,
         )
-        uses_existing_installed_module = uses_builtin_local_proxy or cls._uses_existing_installed_pkcs11_module(
+        uses_existing_installed_module = uses_builtin_local_handoff or cls._uses_existing_installed_pkcs11_module(
             staged_module=staged_module,
             staged_pin=staged_pin,
             configured_module_path=configured_module_path,
@@ -2349,6 +2546,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             probe_staged_pkcs11_config_isolated(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
+            validate_staged_pkcs11_app_secret_protection_if_required(
+                config_model,
+                profile_name='setup-wizard-pkcs11-pre-apply-app-secret',
+            )
 
         result = run_operational_handoff(config_model)
         config_model.mark_step_submitted(self.step_state)
@@ -2394,6 +2595,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             config_model = SetupWizardConfigModel.get_singleton()
             if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
                 probe_staged_pkcs11_config_isolated(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
+                validate_staged_pkcs11_app_secret_protection_if_required(
+                    config_model,
+                    profile_name='setup-wizard-pkcs11-pre-apply-app-secret',
+                )
             self._configure_instance_crypto_backend(config_model)
             self._configure_app_secret_backend(config_model)
             call_command('create_default_cert_profiles')

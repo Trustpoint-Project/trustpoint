@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from crypto.application.protected_import import SupportedImportedPrivateKey
     from crypto.domain.algorithms import SupportedPublicKey
     from crypto.domain.policies import KeyPolicy
     from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification
@@ -21,6 +22,15 @@ class CryptoBackend(Protocol):
 
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> ManagedKeyRef:
         """Generate and persist a new backend-managed key."""
+
+    def import_managed_private_key(
+        self,
+        *,
+        alias: str,
+        private_key: SupportedImportedPrivateKey,
+        policy: KeyPolicy,
+    ) -> ManagedKeyRef:
+        """Import and persist an encrypted managed private key when policy allows it."""
 
     def verify_managed_key(self, key: ManagedKeyRef) -> ManagedKeyVerification:
         """Verify that a managed-key reference still resolves to the expected key."""

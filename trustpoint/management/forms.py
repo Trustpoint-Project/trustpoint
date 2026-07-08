@@ -45,6 +45,8 @@ from trustpoint.logger import LoggerMixin
 if TYPE_CHECKING:
     from typing import ClassVar
 
+MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+
 
 class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
     """Security configuration model form."""
@@ -111,6 +113,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 Field('allow_ca_issuance', wrapper_class='form-check form-switch'),
                 Field('allow_auto_gen_pki', wrapper_class='form-check form-switch'),
                 Field('allow_self_signed_ca', wrapper_class='form-check form-switch'),
+                Field('allow_imported_private_keys', wrapper_class='form-check form-switch'),
                 'permitted_no_onboarding_pki_protocols',
                 'permitted_onboarding_protocols'
             ),
@@ -169,6 +172,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             'security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm',
             'rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days',
             'allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca',
+            'allow_imported_private_keys',
             'permitted_no_onboarding_pki_protocols',
             'permitted_onboarding_protocols'
         ]
@@ -584,6 +588,8 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         pkcs12_file = cleaned_data.get('pkcs12_file')
         if pkcs12_file is None:
             self._raise_validation_error('No PKCS#12 file was uploaded.')
+        if getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
+            self._raise_validation_error('PKCS#12 file is too large, max. 256 kiB.')
 
         try:
             pkcs12_raw = pkcs12_file.read()
@@ -914,6 +920,16 @@ class PKCS11ConfigForm(forms.Form):
         required=False,
         disabled=True,
     )
+    provider_config_env_var = forms.CharField(
+        label=_('Provider Config Environment Variable'),
+        required=False,
+        disabled=True,
+    )
+    provider_config_path = forms.CharField(
+        label=_('Provider Config Path'),
+        required=False,
+        disabled=True,
+    )
     auth_source_ref = forms.CharField(
         label=_('Authentication Source'),
         required=False,
@@ -930,6 +946,8 @@ class PKCS11ConfigForm(forms.Form):
         self.fields['token_label'].initial = config.token_label
         self.fields['slot_id'].initial = config.slot_id
         self.fields['module_path'].initial = config.module_path
+        self.fields['provider_config_env_var'].initial = config.provider_config_env_var
+        self.fields['provider_config_path'].initial = config.provider_config_path
         self.fields['auth_source_ref'].initial = config.auth_source_ref
 
     def save_token_config(self) -> NoReturn:
@@ -1171,4 +1189,3 @@ class UIConfigForm(forms.Form):
                 'view_mode': self.cleaned_data['view_mode'],
             }
         )
-

@@ -1,7 +1,13 @@
 """Test suite for backend configuration views."""
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import cast
+
+import pytest
 from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.http import Http404
 from django.test import RequestFactory, TestCase
 from django.views.generic import TemplateView
 
@@ -16,8 +22,7 @@ from crypto.models import (
     ProbeStatus,
     SoftwareKeyEncryptionSource,
 )
-from management.views.backend_configuration import BackendConfigurationView
-
+from management.views.backend_configuration import BackendConfigurationPkcs11AssetDownloadView, BackendConfigurationView
 
 class BackendConfigurationViewTest(TestCase):
     """Test suite for BackendConfigurationView."""
@@ -29,9 +34,9 @@ class BackendConfigurationViewTest(TestCase):
         self.view.request = self.factory.get('/key-storage/')
 
         # Enable message storage for the request
-        self.view.request.session = 'session'
+        self.view.request.session = cast('SessionBase', 'session')
         messages_storage = FallbackStorage(self.view.request)
-        self.view.request._messages = messages_storage  # noqa: SLF001
+        self.view.request._messages = messages_storage  # type: ignore[attr-defined]  # noqa: SLF001
 
     def test_template_name(self) -> None:
         """Test that the correct template is used."""
@@ -70,22 +75,31 @@ class BackendConfigurationViewTest(TestCase):
 
     def test_get_context_data_with_softhsm_config(self) -> None:
         """Test get_context_data with a PKCS#11 backend profile."""
-        profile = CryptoProviderProfileModel.objects.create(
-            name='pkcs11',
-            backend_kind=BackendKind.PKCS11,
-            active=True,
-        )
-        pkcs11_config = CryptoProviderPkcs11ConfigModel.objects.create(
-            profile=profile,
-            module_path='/usr/lib/libpkcs11-proxy.so',
-            token_label='test-token',  # noqa: S106
-            token_serial='',
-            slot_id=0,
-            auth_source=Pkcs11AuthSource.FILE,
-            auth_source_ref='/var/lib/trustpoint/pin',
-        )
+        with TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            module_path = temp_root / 'libpkcs11-proxy.so'
+            provider_config_path = temp_root / 'softhsm2.conf'
+            module_path.write_bytes(b'\x7fELFpkcs11-bytes')
+            provider_config_path.write_text('directories.tokendir = /tmp/tokens\n', encoding='utf-8')
 
-        context = self.view.get_context_data()
+            profile = CryptoProviderProfileModel.objects.create(
+                name='pkcs11',
+                backend_kind=BackendKind.PKCS11,
+                active=True,
+            )
+            pkcs11_config = CryptoProviderPkcs11ConfigModel.objects.create(
+                profile=profile,
+                module_path=str(module_path),
+                provider_config_env_var='SOFTHSM2_CONF',
+                provider_config_path=str(provider_config_path),
+                token_label='test-token',  # noqa: S106
+                token_serial='',
+                slot_id=0,
+                auth_source=Pkcs11AuthSource.FILE,
+                auth_source_ref='/var/lib/trustpoint/pin',
+            )
+
+            context = self.view.get_context_data()
 
         assert context['crypto_profile'] == profile
         assert context['pkcs11_config'] == pkcs11_config
@@ -93,6 +107,86 @@ class BackendConfigurationViewTest(TestCase):
         assert context['pkcs11_token_serial_display'] == '-'  # noqa: S105
         assert context['pkcs11_slot_id_display'] == 0
         assert context['capability_badge'] == 'warning'
+        assert context['pkcs11_module_download_available']
+        assert context['pkcs11_provider_config_download_available']
+
+    def test_pkcs11_module_download_streams_active_module(self) -> None:
+        """Test downloading the installed PKCS#11 module file."""
+        with TemporaryDirectory() as temp_dir:
+            module_path = Path(temp_dir) / 'libpkcs11-provider.so'
+            module_path.write_bytes(b'\x7fELFpkcs11-bytes')
+            profile = CryptoProviderProfileModel.objects.create(
+                name='pkcs11',
+                backend_kind=BackendKind.PKCS11,
+                active=True,
+            )
+            CryptoProviderPkcs11ConfigModel.objects.create(
+                profile=profile,
+                module_path=str(module_path),
+                token_label='test-token',  # noqa: S106
+                auth_source=Pkcs11AuthSource.FILE,
+                auth_source_ref='/var/lib/trustpoint/pin',
+            )
+
+            request = self.factory.get('/management/backend-configuration/pkcs11-assets/module/download/')
+            response = cast(
+                'FileResponse',
+                BackendConfigurationPkcs11AssetDownloadView.as_view()(request, asset='module'),
+            )
+            content = b''.join(cast('Iterable[bytes]', response.streaming_content))
+
+        assert content == b'\x7fELFpkcs11-bytes'
+        assert 'libpkcs11-provider.so' in response['Content-Disposition']
+
+    def test_pkcs11_provider_config_download_streams_active_config(self) -> None:
+        """Test downloading the installed PKCS#11 provider config file."""
+        with TemporaryDirectory() as temp_dir:
+            provider_config_path = Path(temp_dir) / 'softhsm2.conf'
+            provider_config_path.write_text('directories.tokendir = /tmp/tokens\n', encoding='utf-8')
+            profile = CryptoProviderProfileModel.objects.create(
+                name='pkcs11',
+                backend_kind=BackendKind.PKCS11,
+                active=True,
+            )
+            CryptoProviderPkcs11ConfigModel.objects.create(
+                profile=profile,
+                module_path='/usr/lib/libpkcs11-provider.so',
+                provider_config_env_var='SOFTHSM2_CONF',
+                provider_config_path=str(provider_config_path),
+                token_label='test-token',  # noqa: S106
+                auth_source=Pkcs11AuthSource.FILE,
+                auth_source_ref='/var/lib/trustpoint/pin',
+            )
+
+            request = self.factory.get('/management/backend-configuration/pkcs11-assets/provider-config/download/')
+            response = cast(
+                'FileResponse',
+                BackendConfigurationPkcs11AssetDownloadView.as_view()(request, asset='provider-config'),
+            )
+            content = b''.join(cast('Iterable[bytes]', response.streaming_content))
+
+        assert content == b'directories.tokendir = /tmp/tokens\n'
+        assert 'softhsm2.conf' in response['Content-Disposition']
+
+    def test_pkcs11_provider_config_download_404_when_missing(self) -> None:
+        """Test provider config downloads require a configured existing file."""
+        profile = CryptoProviderProfileModel.objects.create(
+            name='pkcs11',
+            backend_kind=BackendKind.PKCS11,
+            active=True,
+        )
+        CryptoProviderPkcs11ConfigModel.objects.create(
+            profile=profile,
+            module_path='/usr/lib/libpkcs11-provider.so',
+            token_label='test-token',  # noqa: S106
+            auth_source=Pkcs11AuthSource.FILE,
+            auth_source_ref='/var/lib/trustpoint/pin',
+        )
+
+        request = self.factory.get('/management/backend-configuration/pkcs11-assets/provider-config/download/')
+
+        with pytest.raises(Http404):
+            BackendConfigurationPkcs11AssetDownloadView.as_view()(request, asset='provider-config')
 
     def test_get_context_data_with_physical_hsm_config(self) -> None:
         """Test get_context_data displays configured token serial and slot."""

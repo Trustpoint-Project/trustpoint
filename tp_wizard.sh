@@ -70,6 +70,8 @@ LOCAL_HSM_TOKEN_DIR="${LOCAL_HSM_ROOT}/tokens"
 LOCAL_HSM_CONTAINER_ROOT="/var/lib/trustpoint/hsm"
 LOCAL_HSM_CONTAINER_CONFIG_DIR="${LOCAL_HSM_CONTAINER_ROOT}/config"
 LOCAL_HSM_CONTAINER_TOKEN_DIR="${LOCAL_HSM_CONTAINER_ROOT}/tokens"
+LOCAL_HSM_CONTAINER_MODULE_PATH="/usr/lib/libsofthsm2.so"
+LOCAL_HSM_CONTAINER_SOFTHSM2_CONF="${LOCAL_HSM_CONTAINER_CONFIG_DIR}/softhsm2.conf"
 LOCAL_HSM_TOKEN_LABEL="Trustpoint-SoftHSM"
 LOCAL_HSM_PROFILE_NAME="local-dev-softhsm"
 LOCAL_HSM_METADATA_FILE="${LOCAL_HSM_CONFIG_DIR}/local-dev-token.env"
@@ -99,6 +101,7 @@ die(){ err "$*"; exit 1; }
 have(){ command -v "$1" >/dev/null 2>&1; }
 
 # -------------------------- Docker helpers -----------------------------------
+
 exists(){ docker ps -a --format '{{.Names}}' | grep -Fxq "$1"; }
 running(){ docker ps --format '{{.Names}}' | grep -Fxq "$1"; }
 ensure_network(){ docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null; }
@@ -627,7 +630,7 @@ step_local_hsm(){
   $EN_APP || return 0
 
   EN_LOCAL_HSM=$(
-    ask_yes_no "Start a separate SoftHSM PKCS#11 proxy server container? (Demo only)" "y" && echo true || echo false
+    ask_yes_no "Start a separate SoftHSM container? (Demo only)" "y" && echo true || echo false
   )
 }
 
@@ -667,14 +670,14 @@ print_local_hsm_wizard_handoff(){
   local token_label
   local user_pin
 
-  module_path="/usr/lib/libpkcs11-proxy.so"
+  module_path="${LOCAL_HSM_CONTAINER_MODULE_PATH}"
   token_label="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL)"
   token_label="${token_label:-$LOCAL_HSM_TOKEN_LABEL}"
   user_pin="$(local_hsm_user_pin)"
 
   echo
   echo "Trustpoint setup wizard handoff:"
-  printf "  %-20s %s\n" "Local proxy client:" "${module_path}"
+  printf "  %-20s %s\n" "PKCS#11 module:" "${module_path}"
   printf "  %-20s %s\n" "Wizard token label:" "${token_label}"
   [[ -n "$user_pin" ]] && printf "  %-20s %s\n" "Wizard user PIN:" "${user_pin}"
 }
@@ -819,14 +822,19 @@ configure_selected(){
       ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
     )
     $ASK_HSM_ON_UP && step_local_hsm
+
+    if ! $EN_LOCAL_HSM && ! $NO_AUTO_HSM && [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+      warn "Local/dev HSM metadata exists; starting SoftHSM and mounting its token store for Trustpoint."
+      EN_LOCAL_HSM=true
+    fi
   elif $ONLY_WF2_WORKER; then
     EN_WF2_WORKER=true
     configure_app_image_prompt
   fi
 
-  # Do not implicitly enable SoftHSM for selected-service starts.
-  # `up trustpoint` starts trustpoint and optionally asks for the worker.
-  # Start SoftHSM only when `hsm` is explicitly selected or via the full wizard.
+  # Start SoftHSM for selected-service starts only when explicitly requested
+  # or when local HSM metadata already exists and Trustpoint needs that token
+  # store mounted to reconnect to a demo-backed instance.
 
   if $ONLY_APP || $ONLY_WF2_WORKER; then
     if $DB_INTERNAL; then
@@ -931,7 +939,7 @@ start_softhsm(){
   stop_one "$name"
   prepare_local_hsm_root
 
-  log "Starting separate SoftHSM PKCS#11 proxy server container..."
+  log "Starting separate SoftHSM container..."
   docker run -d --name "$name" --network "$NET" \
     --user "${LOCAL_HSM_RUNTIME_UID}:${LOCAL_HSM_RUNTIME_GID}" \
     -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}" \
@@ -987,7 +995,7 @@ start_app(){
   local hsm_mounts=()
 
   if ! $EN_LOCAL_HSM && [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
-    warn "Local/dev HSM metadata exists, but Trustpoint is being started without the local SoftHSM proxy settings."
+    warn "Local/dev HSM metadata exists, but Trustpoint is being started without the local SoftHSM settings."
     warn "Use './tp_wizard.sh up trustpoint hsm' or enable SoftHSM in the full wizard."
   fi
 
@@ -1006,22 +1014,26 @@ start_app(){
 
     hsm_mounts+=(
       -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}"
+      -v "${LOCAL_HSM_TOKEN_DIR}:${LOCAL_HSM_CONTAINER_TOKEN_DIR}"
       -v "${LOCAL_HSM_LIB_DIR}:${LOCAL_HSM_CONTAINER_ROOT}/lib"
     )
 
     hsm_env+=(
       -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}"
-      -e "PKCS11_PROXY_SOCKET=tcp://${SOFTHSM_NAME}:5657"
+      -e "SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
       -e "TRUSTPOINT_LOCAL_HSM_ENABLED=1"
       -e "TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL=${LOCAL_HSM_TOKEN_LABEL}"
       -e "TRUSTPOINT_LOCAL_HSM_PROFILE_NAME=${LOCAL_HSM_PROFILE_NAME}"
       -e "TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL=$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
-      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=/usr/lib/libpkcs11-proxy.so"
+      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=${LOCAL_HSM_CONTAINER_MODULE_PATH}"
       -e "TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE=${LOCAL_HSM_CONTAINER_ROOT}/config/user-pin.txt"
+      -e "TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR=SOFTHSM2_CONF"
+      -e "TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
     )
   fi
 
   docker run -d --name "$name" --network "$NET" \
+    --add-host "host.docker.internal:host-gateway" \
     -p "${DEF_TP_HTTP_PORT}:80" \
     -p "${DEF_TP_HTTPS_PORT}:443" \
     "${hsm_mounts[@]}" \
@@ -1069,18 +1081,21 @@ start_workflows2_worker(){
 
     hsm_mounts+=(
       -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}"
+      -v "${LOCAL_HSM_TOKEN_DIR}:${LOCAL_HSM_CONTAINER_TOKEN_DIR}"
       -v "${LOCAL_HSM_LIB_DIR}:${LOCAL_HSM_CONTAINER_ROOT}/lib"
     )
 
     env_args+=(
       -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}"
-      -e "PKCS11_PROXY_SOCKET=tcp://${SOFTHSM_NAME}:5657"
+      -e "SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
       -e "TRUSTPOINT_LOCAL_HSM_ENABLED=1"
       -e "TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL=${LOCAL_HSM_TOKEN_LABEL}"
       -e "TRUSTPOINT_LOCAL_HSM_PROFILE_NAME=${LOCAL_HSM_PROFILE_NAME}"
       -e "TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL=$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
-      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=/usr/lib/libpkcs11-proxy.so"
+      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=${LOCAL_HSM_CONTAINER_MODULE_PATH}"
       -e "TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE=${LOCAL_HSM_CONTAINER_ROOT}/config/user-pin.txt"
+      -e "TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR=SOFTHSM2_CONF"
+      -e "TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
     )
   fi
 
@@ -1094,6 +1109,7 @@ start_workflows2_worker(){
   fi
 
   docker run -d --name "$name" --network "$NET" \
+    --add-host "host.docker.internal:host-gateway" \
     "${hsm_mounts[@]}" \
     "${env_args[@]}" \
     "$APP_IMAGE" >/dev/null
@@ -1140,7 +1156,7 @@ provision_local_hsm(){
     ok "SoftHSM token '${LOCAL_HSM_TOKEN_LABEL}' is ready."
   fi
 
-  ok "Trustpoint PKCS#11 proxy client is expected at /usr/lib/libpkcs11-proxy.so."
+  ok "Trustpoint PKCS#11 module is expected at ${LOCAL_HSM_CONTAINER_MODULE_PATH}."
 }
 
 # -------------------------- Readiness & Provision -----------------------------
@@ -1152,18 +1168,18 @@ await_softhsm_ready(){
     return 0
   fi
 
-  echo "Waiting (<= ${READINESS_TIMEOUT}s) for SoftHSM PKCS#11 proxy in container ${SOFTHSM_NAME} ..."
+  echo "Waiting (<= ${READINESS_TIMEOUT}s) for SoftHSM service in container ${SOFTHSM_NAME} ..."
 
   local until=$(( $(date +%s) + READINESS_TIMEOUT ))
 
   while (( $(date +%s) < until )); do
     if ! running "$SOFTHSM_NAME"; then
       docker logs "$SOFTHSM_NAME" >&2 || true
-      die "SoftHSM container stopped before the proxy became ready."
+      die "SoftHSM container stopped before the service became ready."
     fi
 
     if docker exec "$SOFTHSM_NAME" bash -lc "nc -z 127.0.0.1 5657" >/dev/null 2>&1; then
-      ok "SoftHSM PKCS#11 proxy ready in ${SOFTHSM_NAME}"
+      ok "SoftHSM service ready in ${SOFTHSM_NAME}"
       return 0
     fi
 
@@ -1172,7 +1188,7 @@ await_softhsm_ready(){
   done
 
   echo
-  warn "SoftHSM PKCS#11 proxy not confirmed after ${READINESS_TIMEOUT}s"
+  warn "SoftHSM service not confirmed after ${READINESS_TIMEOUT}s"
 }
 
 await_sftpgo_ready(){
@@ -1567,7 +1583,7 @@ show_runtime_status(){
     if exists "$SOFTHSM_NAME" || [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
       [[ -f "$LOCAL_HSM_METADATA_FILE" ]] && {
         printf "%-22s %s\n" "SoftHSM serial:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
-        printf "%-22s %s\n" "PKCS#11 module:" "/usr/lib/libpkcs11-proxy.so"
+        printf "%-22s %s\n" "PKCS#11 module:" "${LOCAL_HSM_CONTAINER_MODULE_PATH}"
       }
     fi
   fi
@@ -1783,7 +1799,7 @@ final_summary(){
       profile_name="${profile_name:-$LOCAL_HSM_PROFILE_NAME}"
       user_pin="$(local_hsm_user_pin)"
 
-      summary_line "PKCS#11" "/usr/lib/libpkcs11-proxy.so"
+      summary_line "PKCS#11" "${LOCAL_HSM_CONTAINER_MODULE_PATH}"
       summary_line "HSM label" "$token_label"
       [[ -n "$token_serial" ]] && summary_line "HSM serial" "$token_serial"
       summary_line "HSM profile" "$profile_name"
@@ -1883,8 +1899,8 @@ map_only_to_flags(){
       ONLY_APP=true
       ONLY_DB=true
       ONLY_MAIL=true
+      ONLY_HSM=true
       ONLY_SFTP=true
-      NO_AUTO_HSM=true
       ;;
     trustpoint|app)
       ONLY_APP=true
