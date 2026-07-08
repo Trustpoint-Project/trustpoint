@@ -3,7 +3,7 @@
 </p>
 
 {.text-center}
-# Trustpoint — Threat Model
+# Threat Model
 
 <p align="center">
   <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>

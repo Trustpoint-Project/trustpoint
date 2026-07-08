@@ -15,6 +15,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Setup .env file
+        run: cp .env.example .env
+
       # Step: Run Docker Compose to start services.
       # Uses the hoverkraft-tech/compose-action to manage Docker Compose commands.
       # "compose-file": path to the docker-compose file.

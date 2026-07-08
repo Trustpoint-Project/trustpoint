@@ -9,9 +9,9 @@ from django import forms
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from pki.forms import (
-    CertProfileConfigForm,
     CertificateDownloadForm,
     CertificateIssuanceForm,
+    CertProfileConfigForm,
     DevIdAddMethodSelectForm,
     DevIdRegistrationForm,
     IssuingCaAddMethodSelectForm,
@@ -427,6 +427,25 @@ class TestIssuingCaAddFileImportPkcs12Form:
         from pki.forms import IssuingCaAddFileImportPkcs12Form
         form = IssuingCaAddFileImportPkcs12Form()
         assert form.fields['unique_name'].required is False
+
+    @pytest.mark.django_db
+    def test_oversized_pkcs12_file_is_rejected_before_parsing(self):
+        """Oversized CA PKCS#12 uploads are rejected before parser work."""
+        from pki.forms import IssuingCaAddFileImportPkcs12Form
+        from pki.forms.issuing_cas import MAX_PKCS12_UPLOAD_BYTES
+
+        pkcs12_file = SimpleUploadedFile(
+            'issuing-ca.p12',
+            b'x' * (MAX_PKCS12_UPLOAD_BYTES + 1),
+            content_type='application/x-pkcs12',
+        )
+        form = IssuingCaAddFileImportPkcs12Form(
+            data={'unique_name': 'oversized-ca', 'pkcs12_password': ''},
+            files={'pkcs12_file': pkcs12_file},
+        )
+
+        assert not form.is_valid()
+        assert 'PKCS#12 file is too large' in str(form.errors)
 
 
 @pytest.mark.django_db

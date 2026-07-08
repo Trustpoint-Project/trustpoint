@@ -6,6 +6,14 @@ set -euo pipefail
 PROJECT="trustpoint"
 NET="${PROJECT}-net"
 VOL_DB="${PROJECT}_postgres_data"
+ENV_FILE="${ENV_FILE:-${PWD}/.env}"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+fi
 
 # trustpoint image handling
 TP_DOCKERFILE="docker/trustpoint/Dockerfile"
@@ -22,16 +30,22 @@ SFTPGO_IMAGE="drakkan/sftpgo:2.6.x-slim"
 WF2_WORKER_NAME="trustpoint-worker"
 SOFTHSM_NAME="softhsm"
 
-# Fixed trustpoint ports
-APP_HTTP_HOST=80
-APP_HTTPS_HOST=443
+# Trustpoint ports
+DEF_TP_HTTP_PORT=80
+DEF_TP_HTTPS_PORT=443
 
 # PostgreSQL defaults
-DEF_DB_NAME="trustpoint_db"
-DEF_DB_USER="admin"
-DEF_DB_PASS="testing321"
-DEF_DB_PORT=5432
+DEF_DB_NAME="${POSTGRES_DB:-trustpoint_db}"
+DEF_DB_USER="${DATABASE_USER:-admin}"
+DEF_DB_PASS="${DATABASE_PASSWORD:-testing321}"
+DEF_DB_PORT="${DATABASE_PORT:-5432}"
+DEF_DB_HOST="${DATABASE_HOST:-postgres}"
 DEF_DB_HOST_INTERNAL="postgres"   # container name/hostname
+
+# Trustpoint TLS URLs (also used for allowed hosts and CSRF origins)
+DEF_TP_TLS_DNS_NAMES="${TP_TLS_DNS_NAMES:-trustpoint.local}"
+DEF_TP_TLS_IPV4_ADDRESSES="${TP_TLS_IPV4_ADDRESSES:-}"
+DEF_TP_TLS_IPV6_ADDRESSES="${TP_TLS_IPV6_ADDRESSES:-}"
 
 # Mailpit defaults
 DEF_MAILPIT_SMTP_PORT=1025
@@ -56,6 +70,8 @@ LOCAL_HSM_TOKEN_DIR="${LOCAL_HSM_ROOT}/tokens"
 LOCAL_HSM_CONTAINER_ROOT="/var/lib/trustpoint/hsm"
 LOCAL_HSM_CONTAINER_CONFIG_DIR="${LOCAL_HSM_CONTAINER_ROOT}/config"
 LOCAL_HSM_CONTAINER_TOKEN_DIR="${LOCAL_HSM_CONTAINER_ROOT}/tokens"
+LOCAL_HSM_CONTAINER_MODULE_PATH="/usr/lib/libsofthsm2.so"
+LOCAL_HSM_CONTAINER_SOFTHSM2_CONF="${LOCAL_HSM_CONTAINER_CONFIG_DIR}/softhsm2.conf"
 LOCAL_HSM_TOKEN_LABEL="Trustpoint-SoftHSM"
 LOCAL_HSM_PROFILE_NAME="local-dev-softhsm"
 LOCAL_HSM_METADATA_FILE="${LOCAL_HSM_CONFIG_DIR}/local-dev-token.env"
@@ -85,6 +101,7 @@ die(){ err "$*"; exit 1; }
 have(){ command -v "$1" >/dev/null 2>&1; }
 
 # -------------------------- Docker helpers -----------------------------------
+
 exists(){ docker ps -a --format '{{.Names}}' | grep -Fxq "$1"; }
 running(){ docker ps --format '{{.Names}}' | grep -Fxq "$1"; }
 ensure_network(){ docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null; }
@@ -372,6 +389,59 @@ mask(){
   printf '%s' "${s: -2}"
 }
 
+# -------------------------- .env helpers -------------------------------------
+upsert_env_var(){
+  local key="$1" value="$2" tmp
+  touch "$ENV_FILE"
+  tmp="$(mktemp)"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { done = 0 }
+    $0 ~ "^[[:space:]]*" key "=" {
+      if (!done) {
+        print key "=" value
+        done = 1
+      }
+      next
+    }
+    { print }
+    END {
+      if (!done) {
+        print key "=" value
+      }
+    }
+  ' "$ENV_FILE" > "$tmp"
+  mv "$tmp" "$ENV_FILE"
+}
+
+sync_env_file(){
+  local env_db_host env_db_port env_db_name env_db_user env_db_pass
+
+  if $EN_APP || $EN_WF2_WORKER || $ONLY_APP || $ONLY_WF2_WORKER; then
+    env_db_host="$APP_DB_HOST"
+    env_db_port="$APP_DB_PORT"
+    env_db_name="$APP_DB_NAME"
+    env_db_user="$APP_DB_USER"
+    env_db_pass="$APP_DB_PASS"
+  else
+    env_db_host="$DB_HOST"
+    env_db_port="$DB_PORT"
+    env_db_name="$DB_NAME"
+    env_db_user="$DB_USER"
+    env_db_pass="$DB_PASS"
+  fi
+
+  upsert_env_var "POSTGRES_DB" "$env_db_name"
+  upsert_env_var "DATABASE_USER" "$env_db_user"
+  upsert_env_var "DATABASE_PASSWORD" "$env_db_pass"
+  upsert_env_var "DATABASE_HOST" "$env_db_host"
+  upsert_env_var "DATABASE_PORT" "$env_db_port"
+  upsert_env_var "TP_TLS_DNS_NAMES" "$TP_TLS_DNS_NAMES_VALUE"
+  upsert_env_var "TP_TLS_IPV4_ADDRESSES" "$TP_TLS_IPV4_ADDRESSES_VALUE"
+  upsert_env_var "TP_TLS_IPV6_ADDRESSES" "$TP_TLS_IPV6_ADDRESSES_VALUE"
+  chmod 600 "$ENV_FILE" 2>/dev/null || true
+  ok "Updated ${ENV_FILE}"
+}
+
 # -------------------------- Wizard state -------------------------------------
 EN_APP=false
 EN_PG=false
@@ -381,7 +451,7 @@ EN_WF2_WORKER=false
 EN_LOCAL_HSM=false
 
 DB_INTERNAL=true
-DB_HOST="$DEF_DB_HOST_INTERNAL"   # default host when internal
+DB_HOST="$DEF_DB_HOST"
 DB_PORT="$DEF_DB_PORT"            # host-mapped port for convenience access
 DB_NAME="$DEF_DB_NAME"
 DB_USER="$DEF_DB_USER"
@@ -392,6 +462,9 @@ APP_DB_PORT="$DB_PORT"
 APP_DB_NAME="$DB_NAME"
 APP_DB_USER="$DB_USER"
 APP_DB_PASS="$DEF_DB_PASS"
+TP_TLS_DNS_NAMES_VALUE="$DEF_TP_TLS_DNS_NAMES"
+TP_TLS_IPV4_ADDRESSES_VALUE="$DEF_TP_TLS_IPV4_ADDRESSES"
+TP_TLS_IPV6_ADDRESSES_VALUE="$DEF_TP_TLS_IPV6_ADDRESSES"
 
 MAILPIT_SMTP_PORT="$DEF_MAILPIT_SMTP_PORT"
 MAILPIT_UI_PORT="$DEF_MAILPIT_UI_PORT"
@@ -459,7 +532,7 @@ step_postgres_config(){
     # Immediate check: host port must be free to publish
     DB_PORT="$(ask_free_port 'PostgreSQL host port (mapped)' "$DB_PORT")"
   else
-    DB_HOST="$(ask 'External DB host/IP' '127.0.0.1'; echo "$REPLY")"
+    DB_HOST="$(ask 'External DB host/IP' "$DB_HOST"; echo "$REPLY")"
     DB_PORT="$(ask_port 'External DB port' "$DB_PORT")"
     DB_NAME="$(ask_dbname 'External DB database name' "$DB_NAME")"
     DB_USER="$(ask_user 'External DB username' "$DB_USER")"
@@ -504,6 +577,18 @@ step_app_db_binding(){
   fi
 }
 
+step_trustpoint_tls_urls(){
+  $EN_APP || return 0
+  ask "Trustpoint TLS DNS names (comma-separated, no protocol)" "$TP_TLS_DNS_NAMES_VALUE"
+  TP_TLS_DNS_NAMES_VALUE="$REPLY"
+
+  ask "Trustpoint TLS IPv4 addresses (comma-separated, optional)" "$TP_TLS_IPV4_ADDRESSES_VALUE"
+  TP_TLS_IPV4_ADDRESSES_VALUE="$REPLY"
+
+  ask "Trustpoint TLS IPv6 addresses (comma-separated, optional)" "$TP_TLS_IPV6_ADDRESSES_VALUE"
+  TP_TLS_IPV6_ADDRESSES_VALUE="$REPLY"
+}
+
 step_helpers(){
   EN_MAILPIT=$(ask_yes_no "Enable Mailpit (demo SMTP inbox)?" "n" && echo true || echo false)
 
@@ -545,7 +630,7 @@ step_local_hsm(){
   $EN_APP || return 0
 
   EN_LOCAL_HSM=$(
-    ask_yes_no "Start a separate SoftHSM PKCS#11 proxy server container? (Demo only)" "y" && echo true || echo false
+    ask_yes_no "Start a separate SoftHSM container? (Demo only)" "y" && echo true || echo false
   )
 }
 
@@ -585,14 +670,14 @@ print_local_hsm_wizard_handoff(){
   local token_label
   local user_pin
 
-  module_path="/usr/lib/libpkcs11-proxy.so"
+  module_path="${LOCAL_HSM_CONTAINER_MODULE_PATH}"
   token_label="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL)"
   token_label="${token_label:-$LOCAL_HSM_TOKEN_LABEL}"
   user_pin="$(local_hsm_user_pin)"
 
   echo
   echo "Trustpoint setup wizard handoff:"
-  printf "  %-20s %s\n" "Local proxy client:" "${module_path}"
+  printf "  %-20s %s\n" "PKCS#11 module:" "${module_path}"
   printf "  %-20s %s\n" "Wizard token label:" "${token_label}"
   [[ -n "$user_pin" ]] && printf "  %-20s %s\n" "Wizard user PIN:" "${user_pin}"
 }
@@ -602,6 +687,7 @@ show_plan(){
   echo "==================== Configuration Summary (Planned) ===================="
   printf "%-22s %s\n" "Network:" "$NET"
   printf "%-22s %s\n" "DB Volume:" "$VOL_DB"
+  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
   echo
 
   printf "%-22s %s\n" "trustpoint enabled:" "$EN_APP"
@@ -631,6 +717,9 @@ show_plan(){
     printf "%-22s %s\n" "trustpoint DB name:" "$APP_DB_NAME"
     printf "%-22s %s\n" "trustpoint DB user:" "$APP_DB_USER"
     printf "%-22s %s\n" "trustpoint DB pass:" "$(mask "$APP_DB_PASS")"
+    printf "%-22s %s\n" "TLS DNS names:" "$TP_TLS_DNS_NAMES_VALUE"
+    printf "%-22s %s\n" "TLS IPv4 addresses:" "${TP_TLS_IPV4_ADDRESSES_VALUE:-(none)}"
+    printf "%-22s %s\n" "TLS IPv6 addresses:" "${TP_TLS_IPV6_ADDRESSES_VALUE:-(none)}"
   fi
 
   echo
@@ -733,14 +822,19 @@ configure_selected(){
       ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
     )
     $ASK_HSM_ON_UP && step_local_hsm
+
+    if ! $EN_LOCAL_HSM && ! $NO_AUTO_HSM && [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+      warn "Local/dev HSM metadata exists; starting SoftHSM and mounting its token store for Trustpoint."
+      EN_LOCAL_HSM=true
+    fi
   elif $ONLY_WF2_WORKER; then
     EN_WF2_WORKER=true
     configure_app_image_prompt
   fi
 
-  # Do not implicitly enable SoftHSM for selected-service starts.
-  # `up trustpoint` starts trustpoint and optionally asks for the worker.
-  # Start SoftHSM only when `hsm` is explicitly selected or via the full wizard.
+  # Start SoftHSM for selected-service starts only when explicitly requested
+  # or when local HSM metadata already exists and Trustpoint needs that token
+  # store mounted to reconnect to a demo-backed instance.
 
   if $ONLY_APP || $ONLY_WF2_WORKER; then
     if $DB_INTERNAL; then
@@ -845,7 +939,7 @@ start_softhsm(){
   stop_one "$name"
   prepare_local_hsm_root
 
-  log "Starting separate SoftHSM PKCS#11 proxy server container..."
+  log "Starting separate SoftHSM container..."
   docker run -d --name "$name" --network "$NET" \
     --user "${LOCAL_HSM_RUNTIME_UID}:${LOCAL_HSM_RUNTIME_GID}" \
     -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}" \
@@ -856,6 +950,21 @@ start_softhsm(){
     -e "TRUSTPOINT_LOCAL_HSM_AUTO_BOOTSTRAP=1" \
     "$SOFTHSM_IMAGE" >/dev/null
 
+POSTGRES_DB=${APP_DB_NAME}
+DATABASE_USER=${APP_DB_USER}
+DATABASE_PASSWORD=${APP_DB_PASS}
+DATABASE_HOST=${APP_DB_HOST}
+DATABASE_PORT=${APP_DB_PORT}
+TP_TLS_DNS_NAMES=${TP_TLS_DNS_NAMES_VALUE}
+TP_TLS_IPV4_ADDRESSES=${TP_TLS_IPV4_ADDRESSES_VALUE}
+TP_TLS_IPV6_ADDRESSES=${TP_TLS_IPV6_ADDRESSES_VALUE}
+TRUSTPOINT_SERVICE_ROLE=worker
+WORKFLOWS2_WORKER_ID=${WF2_WORKER_NAME}
+WORKFLOWS2_WORKER_LEASE=${WF2_WORKER_LEASE}
+WORKFLOWS2_WORKER_BATCH=${WF2_WORKER_BATCH}
+WORKFLOWS2_WORKER_SLEEP=${WF2_WORKER_SLEEP}
+DEFAULT_FROM_EMAIL=no-reply@trustpoint.local
+EOF2
   sleep 1
 
   if ! running "$name"; then
@@ -870,12 +979,12 @@ start_app(){
   local name="trustpoint"
   stop_one "$name"
 
-  if port_in_use "$APP_HTTP_HOST"; then
-    die "Host port ${APP_HTTP_HOST} is in use (trustpoint HTTP)."
+  if port_in_use "$DEF_TP_HTTP_PORT"; then
+    die "Host port ${DEF_TP_HTTP_PORT} is in use (trustpoint HTTP)."
   fi
 
-  if port_in_use "$APP_HTTPS_HOST"; then
-    die "Host port ${APP_HTTPS_HOST} is in use (trustpoint HTTPS)."
+  if port_in_use "$DEF_TP_HTTPS_PORT"; then
+    die "Host port ${DEF_TP_HTTPS_PORT} is in use (trustpoint HTTPS)."
   fi
 
   log "Starting trustpoint..."
@@ -885,7 +994,7 @@ start_app(){
   local hsm_mounts=()
 
   if ! $EN_LOCAL_HSM && [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
-    warn "Local/dev HSM metadata exists, but Trustpoint is being started without the local SoftHSM proxy settings."
+    warn "Local/dev HSM metadata exists, but Trustpoint is being started without the local SoftHSM settings."
     warn "Use './tp_wizard.sh up trustpoint hsm' or enable SoftHSM in the full wizard."
   fi
 
@@ -904,24 +1013,28 @@ start_app(){
 
     hsm_mounts+=(
       -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}"
+      -v "${LOCAL_HSM_TOKEN_DIR}:${LOCAL_HSM_CONTAINER_TOKEN_DIR}"
       -v "${LOCAL_HSM_LIB_DIR}:${LOCAL_HSM_CONTAINER_ROOT}/lib"
     )
 
     hsm_env+=(
       -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}"
-      -e "PKCS11_PROXY_SOCKET=tcp://${SOFTHSM_NAME}:5657"
+      -e "SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
       -e "TRUSTPOINT_LOCAL_HSM_ENABLED=1"
       -e "TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL=${LOCAL_HSM_TOKEN_LABEL}"
       -e "TRUSTPOINT_LOCAL_HSM_PROFILE_NAME=${LOCAL_HSM_PROFILE_NAME}"
       -e "TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL=$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
-      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=/usr/lib/libpkcs11-proxy.so"
+      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=${LOCAL_HSM_CONTAINER_MODULE_PATH}"
       -e "TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE=${LOCAL_HSM_CONTAINER_ROOT}/config/user-pin.txt"
+      -e "TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR=SOFTHSM2_CONF"
+      -e "TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
     )
   fi
 
   docker run -d --name "$name" --network "$NET" \
-    -p "${APP_HTTP_HOST}:80" \
-    -p "${APP_HTTPS_HOST}:443" \
+    --add-host "host.docker.internal:host-gateway" \
+    -p "${DEF_TP_HTTP_PORT}:80" \
+    -p "${DEF_TP_HTTPS_PORT}:443" \
     "${hsm_mounts[@]}" \
     -e "TRUSTPOINT_PHASE=auto" \
     -e "POSTGRES_DB=$APP_DB_NAME" \
@@ -929,7 +1042,10 @@ start_app(){
     -e "DATABASE_PASSWORD=$APP_DB_PASS" \
     -e "DATABASE_HOST=$APP_DB_HOST" \
     -e "DATABASE_PORT=$APP_DB_PORT" \
-    "${smtp_env[@]}" \
+    -e "TP_TLS_DNS_NAMES=$TP_TLS_DNS_NAMES_VALUE" \
+    -e "TP_TLS_IPV4_ADDRESSES=$TP_TLS_IPV4_ADDRESSES_VALUE" \
+    -e "TP_TLS_IPV6_ADDRESSES=$TP_TLS_IPV6_ADDRESSES_VALUE" \
+    ${smtp_env[@]+"${smtp_env[@]}"} \
     "${hsm_env[@]}" \
     "$APP_IMAGE" >/dev/null
 }
@@ -964,18 +1080,21 @@ start_workflows2_worker(){
 
     hsm_mounts+=(
       -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}"
+      -v "${LOCAL_HSM_TOKEN_DIR}:${LOCAL_HSM_CONTAINER_TOKEN_DIR}"
       -v "${LOCAL_HSM_LIB_DIR}:${LOCAL_HSM_CONTAINER_ROOT}/lib"
     )
 
     env_args+=(
       -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}"
-      -e "PKCS11_PROXY_SOCKET=tcp://${SOFTHSM_NAME}:5657"
+      -e "SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
       -e "TRUSTPOINT_LOCAL_HSM_ENABLED=1"
       -e "TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL=${LOCAL_HSM_TOKEN_LABEL}"
       -e "TRUSTPOINT_LOCAL_HSM_PROFILE_NAME=${LOCAL_HSM_PROFILE_NAME}"
       -e "TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL=$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
-      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=/usr/lib/libpkcs11-proxy.so"
+      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=${LOCAL_HSM_CONTAINER_MODULE_PATH}"
       -e "TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE=${LOCAL_HSM_CONTAINER_ROOT}/config/user-pin.txt"
+      -e "TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR=SOFTHSM2_CONF"
+      -e "TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
     )
   fi
 
@@ -989,6 +1108,7 @@ start_workflows2_worker(){
   fi
 
   docker run -d --name "$name" --network "$NET" \
+    --add-host "host.docker.internal:host-gateway" \
     "${hsm_mounts[@]}" \
     "${env_args[@]}" \
     "$APP_IMAGE" >/dev/null
@@ -1035,7 +1155,7 @@ provision_local_hsm(){
     ok "SoftHSM token '${LOCAL_HSM_TOKEN_LABEL}' is ready."
   fi
 
-  ok "Trustpoint PKCS#11 proxy client is expected at /usr/lib/libpkcs11-proxy.so."
+  ok "Trustpoint PKCS#11 module is expected at ${LOCAL_HSM_CONTAINER_MODULE_PATH}."
 }
 
 # -------------------------- Readiness & Provision -----------------------------
@@ -1047,18 +1167,18 @@ await_softhsm_ready(){
     return 0
   fi
 
-  echo "Waiting (<= ${READINESS_TIMEOUT}s) for SoftHSM PKCS#11 proxy in container ${SOFTHSM_NAME} ..."
+  echo "Waiting (<= ${READINESS_TIMEOUT}s) for SoftHSM service in container ${SOFTHSM_NAME} ..."
 
   local until=$(( $(date +%s) + READINESS_TIMEOUT ))
 
   while (( $(date +%s) < until )); do
     if ! running "$SOFTHSM_NAME"; then
       docker logs "$SOFTHSM_NAME" >&2 || true
-      die "SoftHSM container stopped before the proxy became ready."
+      die "SoftHSM container stopped before the service became ready."
     fi
 
     if docker exec "$SOFTHSM_NAME" bash -lc "nc -z 127.0.0.1 5657" >/dev/null 2>&1; then
-      ok "SoftHSM PKCS#11 proxy ready in ${SOFTHSM_NAME}"
+      ok "SoftHSM service ready in ${SOFTHSM_NAME}"
       return 0
     fi
 
@@ -1067,7 +1187,7 @@ await_softhsm_ready(){
   done
 
   echo
-  warn "SoftHSM PKCS#11 proxy not confirmed after ${READINESS_TIMEOUT}s"
+  warn "SoftHSM service not confirmed after ${READINESS_TIMEOUT}s"
 }
 
 await_sftpgo_ready(){
@@ -1121,13 +1241,13 @@ await_readiness(){
   await_softhsm_ready
 
   if $EN_APP; then
-    echo "Waiting (<= ${READINESS_TIMEOUT}s) for trustpoint HTTP on localhost:${APP_HTTP_HOST} ..."
+    echo "Waiting (<= ${READINESS_TIMEOUT}s) for trustpoint HTTP on localhost:${DEF_TP_HTTP_PORT} ..."
 
     local app_until=$(( $(date +%s) + READINESS_TIMEOUT ))
 
     while (( $(date +%s) < app_until )); do
-      if tcp_check 127.0.0.1 "$APP_HTTP_HOST" 1; then
-        ok "trustpoint reachable on :$APP_HTTP_HOST"
+      if tcp_check 127.0.0.1 "$DEF_TP_HTTP_PORT" 1; then
+        ok "trustpoint reachable on :$DEF_TP_HTTP_PORT"
         break
       fi
 
@@ -1433,8 +1553,7 @@ show_runtime_status(){
     local db_port
     local db_name
     local db_user
-    local db_pass
-
+    local db_pass tp_tls_dns_names tp_tls_ipv4_addresses tp_tls_ipv6_addresses
     http_port="$(container_host_port trustpoint 80/tcp)"
     https_port="$(container_host_port trustpoint 443/tcp)"
     db_host="$(container_env trustpoint DATABASE_HOST)"
@@ -1442,9 +1561,15 @@ show_runtime_status(){
     db_name="$(container_env trustpoint POSTGRES_DB)"
     db_user="$(container_env trustpoint DATABASE_USER)"
     db_pass="$(container_env trustpoint DATABASE_PASSWORD)"
+    tp_tls_dns_names="$(container_env trustpoint TP_TLS_DNS_NAMES)"
+    tp_tls_ipv4_addresses="$(container_env trustpoint TP_TLS_IPV4_ADDRESSES)"
+    tp_tls_ipv6_addresses="$(container_env trustpoint TP_TLS_IPV6_ADDRESSES)"
 
     [[ -n "$http_port" ]] && printf "%-22s %s\n" "trustpoint HTTP:" "http://localhost:${http_port}"
     [[ -n "$https_port" ]] && printf "%-22s %s\n" "trustpoint HTTPS:" "https://localhost:${https_port}"
+    [[ -n "$tp_tls_dns_names" ]] && printf "%-22s %s\n" "TLS DNS names:" "${tp_tls_dns_names}"
+    [[ -n "$tp_tls_ipv4_addresses" ]] && printf "%-22s %s\n" "TLS IPv4 addresses:" "${tp_tls_ipv4_addresses}"
+    [[ -n "$tp_tls_ipv6_addresses" ]] && printf "%-22s %s\n" "TLS IPv6 addresses:" "${tp_tls_ipv6_addresses}"
 
     print_bootstrap_login_from_logs
 
@@ -1457,7 +1582,7 @@ show_runtime_status(){
     if exists "$SOFTHSM_NAME" || [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
       [[ -f "$LOCAL_HSM_METADATA_FILE" ]] && {
         printf "%-22s %s\n" "SoftHSM serial:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
-        printf "%-22s %s\n" "PKCS#11 module:" "/usr/lib/libpkcs11-proxy.so"
+        printf "%-22s %s\n" "PKCS#11 module:" "${LOCAL_HSM_CONTAINER_MODULE_PATH}"
       }
     fi
   fi
@@ -1572,14 +1697,20 @@ final_summary(){
   bootstrap_login="$(summary_bootstrap_login || true)"
 
   echo
-  echo "============================== Summary =============================="
-  summary_line "Containers" "${containers:-none}"
-
+  echo "========================= Runtime Summary (Actual) ======================="
+  printf "%-22s %s\n" "Network:" "$NET"
+  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
+  printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo|trustpoint-worker)$' || true)"
   echo
   echo "Access"
   echo "---------------------------------------------------------------------"
 
   if $EN_APP; then
+    printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
+    printf "%-22s %s\n" "TLS DNS names:" "$TP_TLS_DNS_NAMES_VALUE"
+    printf "%-22s %s\n" "TLS IPv4 addresses:" "${TP_TLS_IPV4_ADDRESSES_VALUE:-(none)}"
+    printf "%-22s %s\n" "TLS IPv6 addresses:" "${TP_TLS_IPV6_ADDRESSES_VALUE:-(none)}"
+    printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings (default: auto)"
     if exists trustpoint; then
       http_port="$(container_host_port trustpoint 80/tcp)"
       https_port="$(container_host_port trustpoint 443/tcp)"
@@ -1667,7 +1798,7 @@ final_summary(){
       profile_name="${profile_name:-$LOCAL_HSM_PROFILE_NAME}"
       user_pin="$(local_hsm_user_pin)"
 
-      summary_line "PKCS#11" "/usr/lib/libpkcs11-proxy.so"
+      summary_line "PKCS#11" "${LOCAL_HSM_CONTAINER_MODULE_PATH}"
       summary_line "HSM label" "$token_label"
       [[ -n "$token_serial" ]] && summary_line "HSM serial" "$token_serial"
       summary_line "HSM profile" "$profile_name"
@@ -1712,12 +1843,14 @@ wizard(){
   step_enable_postgres
   step_postgres_config
   step_app_db_binding
+  step_trustpoint_tls_urls
   step_helpers
   step_workflows2_worker
   step_local_hsm
   show_plan
 
   ask_yes_no "Proceed with these settings?" "y" || { warn "Aborted by user."; exit 1; }
+  sync_env_file
 
   resolve_app_image
   resolve_softhsm_image
@@ -1765,8 +1898,8 @@ map_only_to_flags(){
       ONLY_APP=true
       ONLY_DB=true
       ONLY_MAIL=true
+      ONLY_HSM=true
       ONLY_SFTP=true
-      NO_AUTO_HSM=true
       ;;
     trustpoint|app)
       ONLY_APP=true
@@ -1829,6 +1962,7 @@ set_targets_from_args(){
 start_selected(){
   configure_selected
   ensure_network
+  sync_env_file
 
   resolve_app_image
   resolve_softhsm_image

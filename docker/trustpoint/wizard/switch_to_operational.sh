@@ -46,6 +46,9 @@ export HOME="$WWW_DATA_HOME"
 if [ -n "${PKCS11_PROXY_SOCKET:-}" ]; then
     log INFO "Using PKCS#11 proxy socket ${PKCS11_PROXY_SOCKET}"
 fi
+if [ -n "${SOFTHSM2_CONF:-}" ]; then
+    log INFO "Using SoftHSM config ${SOFTHSM2_CONF}"
+fi
 
 pid_file_alive() {
     local pid_file=$1
@@ -75,6 +78,23 @@ wait_for_postgres() {
         attempt=$((attempt + 1))
         sleep 1
     done
+}
+
+run_auto_setup_if_requested() {
+    local auto_setup_marker="/var/lib/trustpoint/bootstrap/auto-setup.marker"
+    if [ -f "$auto_setup_marker" ]; then
+        log INFO "Auto-setup marker detected, running auto-setup from environment..."
+        sudo -E -u www-data bash -c "cd '$APP_DIR' && \
+            set -a && [ -f '$OPERATIONAL_ENV_FILE' ] && . '$OPERATIONAL_ENV_FILE' && set +a && \
+            export TRUSTPOINT_PHASE='operational' && \
+            export DJANGO_SETTINGS_MODULE='trustpoint.settings' && \
+            uv run trustpoint/manage.py migrate && \
+            uv run trustpoint/manage.py auto_setup_from_env"
+        rm -f "$auto_setup_marker"
+        log INFO "Auto-setup completed and marker removed"
+        return 0
+    fi
+    return 1
 }
 
 run_startup_manager() {
@@ -203,7 +223,9 @@ schedule_bootstrap_gunicorn_shutdown() {
 }
 
 wait_for_postgres
-run_startup_manager
+if ! run_auto_setup_if_requested; then
+    run_startup_manager
+fi
 apply_operational_tls_files
 start_qcluster
 start_operational_gunicorn

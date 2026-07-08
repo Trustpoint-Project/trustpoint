@@ -33,7 +33,9 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
         password = context.est_password
 
         try:
-            device = DeviceModel.objects.select_related().filter(
+            device = DeviceModel.objects.select_related(
+                'onboarding_config', 'no_onboarding_config'
+            ).filter(
                 common_name=username
             ).first()
 
