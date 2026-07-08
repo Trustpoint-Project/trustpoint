@@ -28,6 +28,7 @@ from trustpoint.logger import LoggerMixin
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from cryptography import x509
     from django.core.files.uploadedfile import UploadedFile
     from django.utils.datastructures import MultiValueDict
 
@@ -138,9 +139,9 @@ class ImportCaRolloverForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
         self,
         *,
         unique_name: str | None,
-        cert,
+        cert: x509.Certificate,
         credential_serializer: CredentialSerializer,
-        chain: list,
+        chain: list[x509.Certificate],
     ) -> CaModel:
         """Create an issuing CA whose imported key is managed by the crypto backend."""
         ca_type = get_ca_type_from_config()
