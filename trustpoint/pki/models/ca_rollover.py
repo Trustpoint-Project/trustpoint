@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import ClassVar
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -80,7 +81,7 @@ class CaRolloverModel(LoggerMixin, models.Model):
     )
 
     initiated_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
