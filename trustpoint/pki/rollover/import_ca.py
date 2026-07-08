@@ -5,19 +5,21 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django import forms
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core.serializer import (
-    CredentialSerializer,
-    PrivateKeyReference,
-)
+from trustpoint_core.serializer import CredentialSerializer
 
-from crypto.runtime import configured_private_key_location
+from crypto.application.service import TrustpointCryptoBackend
+from crypto.domain.errors import ProviderConfigurationError
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.models import CryptoManagedKeyModel
 from pki.forms.issuing_cas import (
     IssuingCaImportMixin,
     get_ca_type_from_config,
 )
-from pki.models import CaModel
+from pki.models import CaModel, CredentialModel
 from pki.models.ca_rollover import CaRolloverStrategyType
 from pki.rollover.base import RolloverStrategy
 from pki.rollover.registry import rollover_registry
@@ -114,24 +116,72 @@ class ImportCaRolloverForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
         self._validate_ca_certificate(cert_crypto)
         self._check_duplicate_issuing_ca(cert_crypto)
 
-        private_key_location = configured_private_key_location()
-        credential_serializer.private_key_reference = PrivateKeyReference.from_private_key(
-            private_key=pk,
-            key_label=unique_name,
-            location=private_key_location,
-        )
-
         chain = list(credential_serializer.additional_certificates or [])
         self._verify_ca_cert_with_chain(cert_crypto, chain)
 
-        new_ca = CaModel.create_new_issuing_ca(
-            credential_serializer=credential_serializer,
-            ca_type=get_ca_type_from_config(),
-            unique_name=unique_name or None,
-        )
+        # Import the CA through the crypto backend instead of using PrivateKeyReference
+        try:
+            new_ca = self._create_protected_import_issuing_ca(
+                unique_name=unique_name or None,
+                cert=cert_crypto,
+                credential_serializer=credential_serializer,
+                chain=chain,
+            )
+        except ProviderConfigurationError as exc:
+            self._raise_validation_error(str(exc))
 
         self._new_issuing_ca = new_ca
         return cleaned_data
+
+    @transaction.atomic
+    def _create_protected_import_issuing_ca(
+        self,
+        *,
+        unique_name: str | None,
+        cert,
+        credential_serializer: CredentialSerializer,
+        chain: list,
+    ) -> CaModel:
+        """Create an issuing CA whose imported key is managed by the crypto backend."""
+        ca_type = get_ca_type_from_config()
+        CaModel._validate_ca_certificate(cert)  # noqa: SLF001
+        CaModel._validate_ca_type(ca_type)  # noqa: SLF001
+
+        if unique_name is None:
+            unique_name = CaModel._generate_unique_name(cert)  # noqa: SLF001
+
+        private_key = credential_serializer.private_key
+        if private_key is None:
+            self._raise_validation_error('Private key is missing from credential serializer.')
+        if not isinstance(private_key, (rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)):
+            self._raise_validation_error('Only RSA and elliptic-curve CA private keys can be imported.')
+
+        key_ref = TrustpointCryptoBackend().import_managed_private_key(
+            alias=unique_name,
+            private_key=private_key,
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
+        )
+        managed_key = CryptoManagedKeyModel.objects.get(pk=key_ref.id)
+        credential_model = CredentialModel.save_managed_key_credential(
+            certificate=cert,
+            certificate_chain=chain,
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            managed_key=managed_key,
+        )
+
+        issuing_ca = CaModel(
+            unique_name=unique_name,
+            credential=credential_model,
+            ca_type=ca_type,
+        )
+        issuing_ca.save()
+
+        truststore = CaModel._create_chain_truststore(issuing_ca)  # noqa: SLF001
+        issuing_ca.chain_truststore = truststore
+        issuing_ca.save(update_fields=['chain_truststore'])
+        return issuing_ca
 
     @property
     def new_issuing_ca(self) -> CaModel:

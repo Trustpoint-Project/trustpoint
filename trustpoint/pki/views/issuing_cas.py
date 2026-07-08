@@ -705,6 +705,15 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         """Handle POST request to update CRL cycle settings."""
         issuing_ca = self.get_object()
         self.object = issuing_ca
+
+        if not issuing_ca.is_active:
+            messages.error(
+                request,
+                _('Cannot update CRL settings for Issuing CA %s: CA is deactivated.')
+                % issuing_ca.unique_name
+            )
+            return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
+
         form = IssuingCaCrlCycleForm(request.POST, instance=issuing_ca)
 
         if form.is_valid():
