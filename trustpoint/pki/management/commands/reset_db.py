@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING
 
 import psycopg
 from django.conf import settings
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand, call_command
 
-from management.models import AppVersion, KeyStorageConfig
+from management.models import AppVersion
+from management.models.organization import OrganizationModel
 
 if TYPE_CHECKING:
     from django.core.management.base import CommandParser
@@ -77,27 +78,30 @@ class Command(BaseCommand):
             call_command('makemigrations', '--no-header', name=migration_name)
         self.stdout.write('Running migrate...')
         call_command('migrate')
+        call_command('create_admin_group')
 
         # Add default models for development server
         if engine == ENGINE_SQLITE:
             self.stdout.write('Adding default models for development server...')
             AppVersion.objects.get_or_create(version=settings.APP_VERSION)
-            # Ensure crypto storage config exists for encrypted fields
-            KeyStorageConfig.get_or_create_default()
             # Add default certificate profiles
             call_command('create_default_cert_profiles')
             # Add default agent workflow definitions
             call_command('create_default_workflow_definitions')
-        else:
-            KeyStorageConfig.get_or_create_default()
+
+        # Create organization
+        call_command('create_organization')
+        org = OrganizationModel.objects.get(pk=1)
 
         # Create superuser if needed
         if not options.get('no_user'):
             self.stdout.write('Creating superuser...')
-            call_command('createsuperuser', interactive=False, username='admin', email='')
-            user = User.objects.get(username='admin')
-            user.set_password('testing321')
-            user.save()
+            user = get_user_model()
+            user.objects.create_superuser(
+                username="admin",
+                password="testing321",
+                organization=org,
+            )
             self.stdout.write('Superuser created:')
             self.stdout.write('  Username: admin')
             self.stdout.write('  Password: testing321')

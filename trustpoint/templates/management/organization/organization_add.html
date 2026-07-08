@@ -1,0 +1,24 @@
+{% extends 'trustpoint/base.html' %}
+{% load crispy_forms_tags i18n %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">{% trans 'Create Organization' %}</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" id="organization-form">
+                    {% csrf_token %}
+                    {% crispy form %}
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{% url 'management:organization' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                        <button type="submit" class="btn btn-primary">{% trans 'Create Organization' %}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

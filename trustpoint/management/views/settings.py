@@ -724,32 +724,12 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
     def form_invalid(self, form: SecurityConfigForm) -> HttpResponse:
         """Handle invalid security form submission."""
         messages.error(self.request, _('Error saving the configuration'))
-        extra: dict[str, Any] = {'form': form}
-
-
         self.template_name = 'management/settings.html'
-        context = self.get_context_data(**extra)
-        context['active_tab'] = 'security'
+        settings_view = SettingsTabView()
+        settings_view.request = self.request
+        settings_view.setup(self.request)
+        context = settings_view.get_context_data(active_tab='security')
         context['security_form'] = form
-
-
-        internationalization_view = InternationalizationSettingsView()
-        internationalization_view.request = self.request
-        internationalization_view.setup(self.request)
-        context['internationalization_form'] = internationalization_view.get_form()
-
-        logging_view = LoggingSettingsView()
-        logging_view.request = self.request
-        logging_view.setup(self.request)
-        context['logging_form'] = logging_view.get_form()
-        context['loglevels'] = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-        context['current_loglevel'] = logging.getLevelName(logging.getLogger().getEffectiveLevel())
-
-        notification_view = NotificationSettingsView()
-        notification_view.request = self.request
-        notification_view.setup(self.request)
-        context['notification_form'] = notification_view.get_form()
-        context['notification_config'] = NotificationConfig.get()
 
         return self.render_to_response(context)
 
@@ -772,11 +752,14 @@ class LoggingSettingsView(SettingsFormViewMixin[LoggingConfigForm]):
         initial = super().get_initial()
         current_level_num = logging.getLogger().getEffectiveLevel()
         initial['loglevel'] = logging.getLevelName(current_level_num)
+        config = LoggingConfig.objects.first()
+        initial['crypto_backend_audit_enabled'] = bool(config and config.crypto_backend_audit_enabled)
         return initial
 
     def form_valid(self, form: LoggingConfigForm) -> HttpResponse:
         """Handle valid logging form submission."""
         level = form.cleaned_data['loglevel']
+        crypto_backend_audit_enabled = bool(form.cleaned_data.get('crypto_backend_audit_enabled'))
         self.logger.info('Changing log level to: %s', level)
 
         logger = logging.getLogger()
@@ -784,7 +767,10 @@ class LoggingSettingsView(SettingsFormViewMixin[LoggingConfigForm]):
 
         LoggingConfig.objects.update_or_create(
             id=1,
-            defaults={'log_level': level},
+            defaults={
+                'log_level': level,
+                'crypto_backend_audit_enabled': crypto_backend_audit_enabled,
+            },
         )
 
         self.logger.info('Log level successfully changed to: %s', level)

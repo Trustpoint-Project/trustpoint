@@ -4,6 +4,7 @@ from datetime import timedelta
 import json
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -97,10 +98,14 @@ workflow:
 
 class Workflow2HttpViewTests(TestCase):
     def setUp(self) -> None:
+        wf2_test_role, _created = Group.objects.get_or_create(name='wf2_test_role')
+        manage_workflow_perm = Permission.objects.get(codename='manage_workflow')
+        wf2_test_role.permissions.add(manage_workflow_perm)
         self.user = get_user_model().objects.create_user(
             username="workflow2-tester",
             password="testpass123",
         )
+        self.user.role = wf2_test_role
 
     def _store_definition(self) -> Workflow2Definition:
         ir = compile_workflow_yaml(GRAPH_YAML, compiler_version="test")

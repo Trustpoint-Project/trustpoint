@@ -1,13 +1,20 @@
-"""Tests for FreshInstallTlsConfigForm, HsmSetupForm, and BackupRestoreForm."""
+"""Tests for fresh-install setup-wizard forms."""
 
 from __future__ import annotations
-
-from io import BytesIO
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from setup_wizard.forms import BackupRestoreForm, FreshInstallTlsConfigForm, HsmSetupForm
+from setup_wizard.forms import (
+    MAX_PKCS12_UPLOAD_BYTES,
+    FreshInstallBackendConfigModelForm,
+    FreshInstallTlsConfigForm,
+    RestoreBackupImportForm,
+)
+from setup_wizard.models import SetupWizardConfigModel
+
+SLOT_ID = 3
+pytestmark = pytest.mark.django_db
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +231,24 @@ class TestFreshInstallTlsConfigFormClean:
         # The form is valid at the cross-field level; parsing happens in the view
         assert 'pkcs12_file' not in form.errors
 
+    def test_pkcs12_mode_with_oversized_file_adds_error(self) -> None:
+        """Oversized PKCS#12 files are rejected before the view reads them."""
+        pkcs12_file = SimpleUploadedFile(
+            'cert.p12',
+            b'x' * (MAX_PKCS12_UPLOAD_BYTES + 1),
+            content_type='application/x-pkcs12',
+        )
+        data = {
+            'tls_mode': 'pkcs12',
+            'ipv4_addresses': '',
+            'ipv6_addresses': '',
+            'domain_names': '',
+        }
+        form = FreshInstallTlsConfigForm(data=data, files={'pkcs12_file': pkcs12_file})
+
+        assert not form.is_valid()
+        assert 'pkcs12_file' in form.errors
+
     def test_separate_files_mode_without_cert_adds_error(self) -> None:
         """separate_files mode without TLS cert file adds an error."""
         key_file = SimpleUploadedFile('key.pem', b'key', content_type='application/octet-stream')
@@ -252,139 +277,195 @@ class TestFreshInstallTlsConfigFormClean:
 
 
 # ---------------------------------------------------------------------------
-# HsmSetupForm
+# FreshInstallBackendConfigModelForm
 # ---------------------------------------------------------------------------
 
 
-class TestHsmSetupFormInit:
-    """Tests for HsmSetupForm.__init__ type-specific defaults."""
+class TestFreshInstallBackendConfigModelForm:
+    """Tests for PKCS#11 backend configuration validation."""
 
-    def test_softhsm_defaults(self) -> None:
-        """softhsm type pre-fills module_path, slot, and label."""
-        form = HsmSetupForm(hsm_type='softhsm')
-        assert form.fields['module_path'].initial == '/usr/lib/libpkcs11-proxy.so'
-        assert form.fields['slot'].initial == 0
-        assert form.fields['label'].initial == 'Trustpoint-SoftHSM'
-        assert form.fields['hsm_type'].initial == 'softhsm'
+    @staticmethod
+    def _instance(
+        crypto_storage: SetupWizardConfigModel.CryptoStorageType = SetupWizardConfigModel.CryptoStorageType.HsmStorage,
+    ) -> SetupWizardConfigModel:
+        instance = SetupWizardConfigModel(crypto_storage=crypto_storage)
+        instance.fresh_install_pkcs11_token_label = ''
+        instance.fresh_install_pkcs11_module_path = ''
+        instance.fresh_install_pkcs11_auth_source_ref = ''
+        instance.fresh_install_pkcs11_config_path = ''
+        return instance
 
-    def test_physical_defaults(self) -> None:
-        """physical type leaves module_path blank and sets a label placeholder."""
-        form = HsmSetupForm(hsm_type='physical')
-        assert form.fields['module_path'].initial == ''
-        assert form.fields['label'].initial == 'Trustpoint-Physical-HSM'
-        assert form.fields['hsm_type'].initial == 'physical'
-
-
-class TestHsmSetupFormClean:
-    """Tests for HsmSetupForm.clean and field-level clean methods."""
-
-    def _form(self, hsm_type: str, extra: dict | None = None) -> HsmSetupForm:
+    def _form(
+        self,
+        extra: dict[str, object] | None = None,
+        files: dict[str, SimpleUploadedFile] | None = None,
+        *,
+        instance: SetupWizardConfigModel | None = None,
+    ) -> FreshInstallBackendConfigModelForm:
         data: dict = {
-            'hsm_type': hsm_type,
-            'module_path': '/usr/lib/libpkcs11-proxy.so',
-            'slot': '0',
-            'label': 'TestLabel',
+            'fresh_install_pkcs11_token_label': 'Trustpoint-SoftHSM',  # noqa: S105 - token label, not a password.
+            'fresh_install_pkcs11_slot_id': '',
+            'pkcs11_user_pin': '1234',
+            'pkcs11_config_env_var': '',
         }
         if extra:
             data.update(extra)
-        return HsmSetupForm(hsm_type=hsm_type, data=data)
+        return FreshInstallBackendConfigModelForm(data=data, files=files or {}, instance=instance or self._instance())
 
-    def test_softhsm_overrides_values(self) -> None:
-        """softhsm type forces module_path, slot, and label to fixed values."""
-        form = self._form('softhsm')
+    def test_software_backend_hides_pkcs11_fields(self) -> None:
+        """Software backend mode keeps PKCS#11 fields hidden and optional."""
+        form = self._form(instance=self._instance(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage))
         assert form.is_valid(), form.errors
-        assert form.cleaned_data['module_path'] == '/usr/lib/libpkcs11-proxy.so'
-        assert form.cleaned_data['slot'] == 0
-        assert form.cleaned_data['label'] == 'Trustpoint-SoftHSM'
+        assert form.cleaned_data['fresh_install_pkcs11_token_label'] == ''
+        assert form.cleaned_data['fresh_install_pkcs11_slot_id'] is None
 
-    def test_physical_type_raises_validation_error(self) -> None:
-        """physical HSM type raises a form-level ValidationError."""
-        form = self._form('physical')
+    def test_hsm_backend_requires_module_pin_and_selector(self) -> None:
+        """PKCS#11 mode requires a module, PIN, and at least one token selector."""
+        form = self._form(
+            {
+                'fresh_install_pkcs11_token_label': '',
+                'fresh_install_pkcs11_slot_id': '',
+                'pkcs11_user_pin': '',
+            }
+        )
         assert not form.is_valid()
-        assert any('not yet supported' in str(e) for e in form.non_field_errors())
+        assert 'pkcs11_module_upload' in form.errors
+        assert 'pkcs11_user_pin' in form.errors
+        assert 'fresh_install_pkcs11_token_label' in form.errors
 
-    def test_unknown_type_adds_field_error(self) -> None:
-        """Unknown HSM type adds an error to the hsm_type field."""
-        form = self._form('unknown_hsm')
+    def test_hsm_backend_accepts_valid_elf_module_and_label(self) -> None:
+        """PKCS#11 mode accepts a valid ELF shared library upload and token label."""
+        module_file = SimpleUploadedFile(
+            'libpkcs11.so',
+            b'\x7fELFdummy',
+            content_type='application/octet-stream',
+        )
+        form = self._form(files={'pkcs11_module_upload': module_file})
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data['fresh_install_pkcs11_token_label'] == 'Trustpoint-SoftHSM'  # noqa: S105
+
+    def test_hsm_backend_accepts_slot_only_selector(self) -> None:
+        """PKCS#11 mode can select a token by slot ID without a label."""
+        module_file = SimpleUploadedFile(
+            'libpkcs11.so',
+            b'\x7fELFdummy',
+            content_type='application/octet-stream',
+        )
+        form = self._form(
+            {
+                'fresh_install_pkcs11_token_label': '',
+                'fresh_install_pkcs11_slot_id': str(SLOT_ID),
+            },
+            files={'pkcs11_module_upload': module_file},
+        )
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data['fresh_install_pkcs11_slot_id'] == SLOT_ID
+
+    def test_provider_config_upload_requires_env_var(self) -> None:
+        """Uploading a provider config requires the provider-specific env var name."""
+        module_file = SimpleUploadedFile(
+            'libpkcs11.so',
+            b'\x7fELFdummy',
+            content_type='application/octet-stream',
+        )
+        config_file = SimpleUploadedFile('pkcs11-provider.cfg', b'[Global]\n')
+        form = self._form(
+            files={
+                'pkcs11_module_upload': module_file,
+                'pkcs11_config_upload': config_file,
+            }
+        )
         assert not form.is_valid()
-        assert 'hsm_type' in form.errors or form.non_field_errors()
+        assert 'pkcs11_config_env_var' in form.errors
+
+    def test_provider_config_upload_accepts_env_var(self) -> None:
+        """Uploading a provider config accepts an explicit provider-specific env var name."""
+        module_file = SimpleUploadedFile(
+            'libpkcs11.so',
+            b'\x7fELFdummy',
+            content_type='application/octet-stream',
+        )
+        config_file = SimpleUploadedFile('pkcs11-provider.cfg', b'[Global]\n')
+        form = self._form(
+            {'pkcs11_config_env_var': 'PKCS11_PROVIDER_CONFIG'},
+            files={
+                'pkcs11_module_upload': module_file,
+                'pkcs11_config_upload': config_file,
+            },
+        )
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data['pkcs11_config_env_var'] == 'PKCS11_PROVIDER_CONFIG'
 
 
 # ---------------------------------------------------------------------------
-# BackupRestoreForm
+# RestoreBackupImportForm
 # ---------------------------------------------------------------------------
 
 
-class TestBackupRestoreFormCleanBackupFile:
-    """Tests for BackupRestoreForm.clean_backup_file."""
+class TestRestoreBackupImportFormCleanBackupArchive:
+    """Tests for RestoreBackupImportForm.clean_backup_archive."""
 
-    def _make_form(self, filename: str, content: bytes = b'data', size: int | None = None) -> BackupRestoreForm:
+    def _make_form(self, filename: str, content: bytes = b'data') -> RestoreBackupImportForm:
         file_obj = SimpleUploadedFile(filename, content, content_type='application/octet-stream')
-        if size is not None:
-            file_obj.size = size
-        return BackupRestoreForm(data={}, files={'backup_file': file_obj})
+        return RestoreBackupImportForm(data={}, files={'backup_archive': file_obj})
 
     def test_valid_dump_extension(self) -> None:
         """Files with .dump extension pass validation."""
         form = self._make_form('backup.dump')
-        assert 'backup_file' not in form.errors
+        assert form.is_valid(), form.errors
 
-    def test_valid_gz_extension(self) -> None:
-        """Files with .gz extension pass validation."""
-        form = self._make_form('backup.gz')
-        assert 'backup_file' not in form.errors
+    def test_valid_dump_gz_extension(self) -> None:
+        """Files with .dump.gz extension pass validation."""
+        form = self._make_form('backup.dump.gz')
+        assert form.is_valid(), form.errors
 
-    def test_valid_sql_extension(self) -> None:
-        """Files with .sql extension pass validation."""
-        form = self._make_form('backup.sql')
-        assert 'backup_file' not in form.errors
+    def test_valid_gpg_extension(self) -> None:
+        """Encrypted dump variants pass validation."""
+        form = self._make_form('backup.dump.gz.gpg')
+        assert form.is_valid(), form.errors
 
-    def test_valid_zip_extension(self) -> None:
-        """Files with .zip extension pass validation."""
+    def test_valid_zip_bundle_extension(self) -> None:
+        """Trustpoint backup ZIP bundles pass validation."""
         form = self._make_form('backup.zip')
-        assert 'backup_file' not in form.errors
+        assert form.is_valid(), form.errors
 
     def test_invalid_extension_fails(self) -> None:
         """Files with disallowed extensions fail validation."""
         form = self._make_form('backup.txt')
         form.is_valid()
-        assert 'backup_file' in form.errors
-
-    def test_file_too_large_fails(self) -> None:
-        """Files exceeding 100 MB fail validation."""
-        form = self._make_form('backup.dump', size=101 * 1024 * 1024)
-        form.is_valid()
-        assert 'backup_file' in form.errors
+        assert 'backup_archive' in form.errors
 
     def test_missing_file_fails(self) -> None:
         """Submitting without a file fails validation."""
-        form = BackupRestoreForm(data={}, files={})
+        form = RestoreBackupImportForm(data={}, files={})
         form.is_valid()
-        assert 'backup_file' in form.errors
+        assert 'backup_archive' in form.errors
+
+    def test_missing_file_is_allowed_when_archive_already_staged(self) -> None:
+        """A previously staged archive allows continuing without uploading again."""
+        config_model = SetupWizardConfigModel(restore_backup_archive_original_name='backup.dump')
+        form = RestoreBackupImportForm(data={}, files={}, config_model=config_model)
+        assert form.is_valid(), form.errors
 
 
-class TestBackupRestoreFormCleanBackupPassword:
-    """Tests for BackupRestoreForm.clean_backup_password."""
+class TestRestoreBackupImportFormPassword:
+    """Tests for RestoreBackupImportForm backup password handling."""
 
-    def _make_form(self, password: str) -> BackupRestoreForm:
+    def _make_form(self, password: str) -> RestoreBackupImportForm:
         file_obj = SimpleUploadedFile('backup.dump', b'data')
-        return BackupRestoreForm(data={'backup_password': password}, files={'backup_file': file_obj})
+        return RestoreBackupImportForm(
+            data={'backup_archive_password': password},
+            files={'backup_archive': file_obj},
+        )
 
     def test_empty_password_is_allowed(self) -> None:
         """An empty backup password is allowed (not required)."""
         form = self._make_form('')
         assert form.is_valid(), form.errors
-        assert form.cleaned_data['backup_password'] == ''
+        assert form.cleaned_data['backup_archive_password'] == ''
 
     def test_valid_password_is_accepted(self) -> None:
-        """A valid password within length limit is accepted."""
+        """A backup password is accepted when provided."""
         form = self._make_form('valid-password')
         assert form.is_valid(), form.errors
-        assert form.cleaned_data['backup_password'] == 'valid-password'
-
-    def test_password_exceeding_max_length_fails(self) -> None:
-        """Password longer than MAX_PASSWORD_LENGTH raises a validation error."""
-        long_password = 'x' * (BackupRestoreForm.MAX_PASSWORD_LENGTH + 1)
-        form = self._make_form(long_password)
-        form.is_valid()
-        assert 'backup_password' in form.errors
+        assert form.cleaned_data['backup_archive_password'] == 'valid-password'  # noqa: S105 - test password value.

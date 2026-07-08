@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
 from django.core.management.base import BaseCommand
 
 from .base_commands import CertificateCreationCommandMixin
@@ -16,8 +15,14 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Adds a Root CA and an issuing CAs to the database."""
-        rsa2_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        rsa2_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        rsa2_root_ca_key = self.create_backend_rsa_private_key(
+            alias='root-ca-rsa-2048-sha256-test-fixture',
+            key_size=2048,
+        )
+        rsa2_issuing_ca_key = self.create_backend_rsa_private_key(
+            alias='issuing-ca-a-test-fixture',
+            key_size=2048,
+        )
         rsa2_root, _ = self.create_root_ca(
             'Root-CA RSA-2048-SHA256 - Test - Fixture', private_key=rsa2_root_ca_key, hash_algorithm=hashes.SHA256()
         )
@@ -34,4 +39,3 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             chain=[rsa2_root],
             unique_name='issuing-ca-a-test-fixture',
         )
-

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, override
 
 from cryptography import x509
+from django.conf import settings
 from django.contrib import messages
 from django.core.management import call_command
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
@@ -83,7 +84,8 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
         if not domain:
             raise Http404(_('No domain is configured for this device.'))
 
-        host_base = f'https://{host_ip}:{self.request.META.get("SERVER_PORT", "443")}'
+        https_port = settings.TP_HTTPS_PORT or '443'
+        host_base = f'https://{host_ip}:{https_port}' if https_port != '443' else f'https://{host_ip}'
         cred_count = IssuedCredentialModel.objects.filter(device=device).count()
 
         public_key_info = domain.public_key_info
@@ -1878,7 +1880,8 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
         except DomainModel.DoesNotExist as exc:
             raise Http404(_('No domains configured in the system.')) from exc
 
-        host_base = f'https://{host_ip}:{self.request.META.get("SERVER_PORT", "443")}'
+        https_port = settings.TP_HTTPS_PORT or '443'
+        host_base = f'https://{host_ip}:{https_port}' if https_port != '443' else f'https://{host_ip}'
 
         public_key_info = domain.public_key_info
         if not public_key_info:
@@ -1962,7 +1965,8 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
         except DomainModel.DoesNotExist as exc:
             raise Http404(_('No domains configured in the system.')) from exc
 
-        host_base = f'https://{host_ip}:{self.request.META.get("SERVER_PORT", "443")}'
+        https_port = settings.TP_HTTPS_PORT or '443'
+        host_base = f'https://{host_ip}:{https_port}' if https_port != '443' else f'https://{host_ip}'
 
         public_key_info = domain.public_key_info
         if not public_key_info:

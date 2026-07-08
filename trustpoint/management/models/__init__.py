@@ -5,7 +5,6 @@ from management.models.audit_log import AuditLog
 from management.models.backup import BackupOptions
 from management.models.email import SmtpEmailConfig
 from management.models.internationalization import InternationalizationConfig
-from management.models.key_storage import KeyStorageConfig
 from management.models.logging import LoggingConfig
 from management.models.notifications import (
     NotificationConfig,
@@ -16,7 +15,7 @@ from management.models.notifications import (
     WeakECCCurve,
     WeakSignatureAlgorithm,
 )
-from management.models.pkcs11 import PKCS11Token
+from management.models.organization import OrganizationModel
 from management.models.prometheus import PrometheusConfig
 from management.models.security import SecurityConfig
 from management.models.tls import TlsSettings
@@ -27,14 +26,13 @@ __all__ = [
     'AuditLog',
     'BackupOptions',
     'InternationalizationConfig',
-    'KeyStorageConfig',
     'LoggingConfig',
     'NotificationConfig',
     'NotificationMessage',
     'NotificationMessageModel',
     'NotificationModel',
     'NotificationStatus',
-    'PKCS11Token',
+    'OrganizationModel',
     'PrometheusConfig',
     'SecurityConfig',
     'SmtpEmailConfig',
