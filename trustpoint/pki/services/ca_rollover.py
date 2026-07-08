@@ -12,11 +12,11 @@ from pki.rollover.registry import rollover_registry
 
 if TYPE_CHECKING:
     from django import forms
-    from django.contrib.auth.models import User
     from django.db.models import QuerySet
 
     from pki.models import CaModel
     from pki.rollover.base import RolloverStrategy
+    from users.models import TrustpointUser
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class CaRolloverService:
         old_ca: CaModel,
         strategy_type: CaRolloverStrategyType,
         form: forms.Form,
-        initiated_by: User | None = None,
+        initiated_by: TrustpointUser | None = None,
     ) -> CaRolloverModel:
         """Plan and create a new CA rollover.
 
