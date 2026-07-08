@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
+from django.conf import settings
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
@@ -135,10 +136,9 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         request_meta = getattr(request, 'META', {}) if request else {}
         if not isinstance(request_meta, dict):
             request_meta = {}
-        port = request_meta.get('SERVER_PORT', '')
-        if port == '443': # CRL always served via HTTP
-            port = ''
-        port_str = f':{port}' if port else ''
+
+        http_port = settings.TP_HTTP_PORT or '80'
+        port_str = f':{http_port}' if http_port != '80' else ''
         return f'http://{TlsSettings.get_first_ipv4_address()}{port_str}/crl/{ca_id}'
 
     def _save_credential(

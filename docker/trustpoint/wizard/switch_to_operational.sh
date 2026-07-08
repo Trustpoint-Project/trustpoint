@@ -80,6 +80,23 @@ wait_for_postgres() {
     done
 }
 
+run_auto_setup_if_requested() {
+    local auto_setup_marker="/var/lib/trustpoint/bootstrap/auto-setup.marker"
+    if [ -f "$auto_setup_marker" ]; then
+        log INFO "Auto-setup marker detected, running auto-setup from environment..."
+        sudo -E -u www-data bash -c "cd '$APP_DIR' && \
+            set -a && [ -f '$OPERATIONAL_ENV_FILE' ] && . '$OPERATIONAL_ENV_FILE' && set +a && \
+            export TRUSTPOINT_PHASE='operational' && \
+            export DJANGO_SETTINGS_MODULE='trustpoint.settings' && \
+            uv run trustpoint/manage.py migrate && \
+            uv run trustpoint/manage.py auto_setup_from_env"
+        rm -f "$auto_setup_marker"
+        log INFO "Auto-setup completed and marker removed"
+        return 0
+    fi
+    return 1
+}
+
 run_startup_manager() {
     log INFO "Running operational startup manager"
     run_as_www_data "uv run trustpoint/manage.py startup_manager"
@@ -206,7 +223,9 @@ schedule_bootstrap_gunicorn_shutdown() {
 }
 
 wait_for_postgres
-run_startup_manager
+if ! run_auto_setup_if_requested; then
+    run_startup_manager
+fi
 apply_operational_tls_files
 start_qcluster
 start_operational_gunicorn

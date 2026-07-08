@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 from django.conf import settings as django_settings
 from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand
@@ -20,7 +23,21 @@ class Command(BaseCommand):
 
     def handle(self, **_options: dict[str, str]) -> None:
         """Entrypoint for the command."""
+        self._check_env_file_exists()
         self.manage_startup()
+
+    def _check_env_file_exists(self) -> None:
+        """Check if .env file exists, fail startup if it does not."""
+        env_file = Path('/var/www/html/trustpoint/.env')
+        if not env_file.exists():
+            self.stdout.write(
+                self.style.ERROR(
+                    'FATAL: No .env file found. Trustpoint requires a .env file to start.\n'
+                    'Please create /var/www/html/trustpoint/.env with the required configuration.\n'
+                    'See .env.example for reference.'
+                )
+            )
+            sys.exit(1)
 
     def manage_startup(self) -> None:
         """Ensure the operational DB schema is ready, then initialize runtime state."""

@@ -39,10 +39,11 @@ class BaseHelpViewTests(TestCase):
 
         self.view.object = mock_registration
         request = self.factory.get('/')
-        request.META['SERVER_PORT'] = '8443'
         self.view.request = request
 
-        context = self.view._make_context()
+        with patch('help_pages.pki_help_views.settings') as mock_settings:
+            mock_settings.TP_HTTPS_PORT = '8443'
+            context = self.view._make_context()
 
         assert context.domain == mock_domain
         assert context.domain_unique_name == 'test-domain'
@@ -99,10 +100,11 @@ class BaseHelpViewTests(TestCase):
         self.view.page_category = 'pki'
         self.view.page_name = 'domains'
         request = self.factory.get('/')
-        request.META['SERVER_PORT'] = '443'
         self.view.request = request
 
-        context = self.view.get_context_data()
+        with patch('help_pages.pki_help_views.settings') as mock_settings:
+            mock_settings.TP_HTTPS_PORT = '443'
+            context = self.view.get_context_data()
 
         assert 'help_page' in context
         assert context['help_page'].heading == 'Test Heading'
@@ -246,10 +248,11 @@ class CrlDownloadHelpViewTests(TestCase):
         self.view.page_category = 'pki'
         self.view.page_name = 'issuing_cas'
         request = self.factory.get('/')
-        request.META['SERVER_PORT'] = '443'
         self.view.request = request
 
-        context = self.view.get_context_data()
+        with patch('help_pages.pki_help_views.settings') as mock_settings:
+            mock_settings.TP_HTTPS_PORT = '443'
+            context = self.view.get_context_data()
 
         assert 'help_page' in context
         help_page = context['help_page']
@@ -283,10 +286,11 @@ class CrlDownloadHelpViewTests(TestCase):
         self.view.page_category = 'pki'
         self.view.page_name = 'issuing_cas'
         request = self.factory.get('/')
-        request.META['SERVER_PORT'] = '443'
         self.view.request = request
 
-        context = self.view.get_context_data()
+        with patch('help_pages.pki_help_views.settings') as mock_settings:
+            mock_settings.TP_HTTPS_PORT = '443'
+            context = self.view.get_context_data()
 
         help_page = context['help_page']
         status_section = help_page.sections[1]
@@ -314,10 +318,11 @@ class CrlDownloadHelpViewTests(TestCase):
         self.view.page_category = 'pki'
         self.view.page_name = 'issuing_cas'
         request = self.factory.get('/')
-        request.META['SERVER_PORT'] = '443'
         self.view.request = request
 
-        context = self.view.get_context_data()
+        with patch('help_pages.pki_help_views.settings') as mock_settings:
+            mock_settings.TP_HTTPS_PORT = '443'
+            context = self.view.get_context_data()
 
         help_page = context['help_page']
         download_section = help_page.sections[3]  # Download CRL section

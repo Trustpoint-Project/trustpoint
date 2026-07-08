@@ -12,7 +12,7 @@ Supported HSM Types
 SoftHSM
 ~~~~~~~
 
-**Primary Support**: SoftHSM2 is the default and fully supported HSM implementation.
+**Primary Support**: SoftHSM2 is the default.
 
 - **Library Path**: ``/usr/lib/libsofthsm2.so`` in the Trustpoint container, which points to the packaged SoftHSM module.
 - **Use Case**: Development and CI validation. Use a production-grade HSM for production deployments.
@@ -268,7 +268,7 @@ The Trustpoint container includes pre-configured SoftHSM support with token dire
        file: hsm_so_pin.txt
 
    environment:
-     POSTGRES_USER_FILE: /run/secrets/db_user
-     POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+     DATABASE_USER_FILE: /run/secrets/db_user
+     DATABASE_PASSWORD_FILE: /run/secrets/db_password
      HSM_PIN_FILE: /run/secrets/hsm_pin
      HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin

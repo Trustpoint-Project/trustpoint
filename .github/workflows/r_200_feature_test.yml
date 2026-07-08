@@ -19,6 +19,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+
+      - name: Setup .env file
+        run: cp .env.example .env
         
       # Build and start Docker containers with docker-compose
       - name: Build and start Docker containers
