@@ -18,6 +18,7 @@ from pki.models import OwnerCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models import RemoteIssuedCredentialModel
+from users.models import TrustpointUser
 
 
 @pytest.fixture(autouse=True)
@@ -28,7 +29,7 @@ def _enable_db(db: None) -> None:
 @pytest.fixture()
 def admin_user() -> User:
     """Create a superuser for view access."""
-    return User.objects.create_superuser(username='admin', email='admin@test.com', password='testpass123')
+    return TrustpointUser.objects.create_superuser(username='admin', email='admin@test.com', password='testpass123')
 
 
 @pytest.fixture()

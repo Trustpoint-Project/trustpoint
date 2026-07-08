@@ -10,12 +10,13 @@ from django.test import Client
 from django.urls import reverse
 
 from pki.models import CaModel
+from users.models import TrustpointUser
 
 
 @pytest.fixture
 def admin_user() -> User:
     """Create an admin user for testing."""
-    user = User.objects.create_superuser(
+    user = TrustpointUser.objects.create_superuser(
         username='admin',
         email='admin@test.com',
         password='testpass123'

@@ -1,0 +1,95 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    {% blocktranslate with name=object.name %}
+                        Edit Role "{{ name }}"
+                    {% endblocktranslate %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <form method="post" id="role-form">
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {# --- Name field (read-only for protected roles) --- #}
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+                        {% if is_protected %}
+                            <input type="text" class="form-control" value="{{ object.name }}" readonly>
+                            <input type="hidden" name="name" value="{{ object.name }}">
+                        {% else %}
+                            {{ form.name }}
+                        {% endif %}
+                        {% if form.name.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.name.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    {# --- Staff / Superuser checkboxes --- #}
+                    <div class="mb-3 form-check">
+                        {% if is_protected %}
+                            <input type="checkbox" class="form-check-input" {% if form.grants_staff.value %}checked{% endif %} disabled>
+                            <input type="hidden" name="grants_staff" value="{{ form.grants_staff.value|yesno:'on,' }}">
+                        {% else %}
+                            {{ form.grants_staff }}
+                        {% endif %}
+                        <label for="{{ form.grants_staff.id_for_label }}" class="form-check-label">{{ form.grants_staff.label }}</label>
+                        {% if form.grants_staff.help_text %}
+                            <div class="form-text">{{ form.grants_staff.help_text }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3 form-check">
+                        {% if is_protected %}
+                            <input type="checkbox" class="form-check-input" id="superuser-check" {% if form.grants_superuser.value %}checked{% endif %} disabled>
+                            <input type="hidden" name="grants_superuser" value="{{ form.grants_superuser.value|yesno:'on,' }}">
+                        {% else %}
+                            {{ form.grants_superuser }}
+                        {% endif %}
+                        <label for="{{ form.grants_superuser.id_for_label }}" class="form-check-label">{{ form.grants_superuser.label }}</label>
+                        {% if form.grants_superuser.help_text %}
+                            <div class="form-text">{{ form.grants_superuser.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    {# --- Permissions dual-listbox (hidden when superuser is checked) --- #}
+                    <div id="permissions-section">
+                        {% include 'management/includes/dual_listbox.html' %}
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{% url 'management:role_management' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
+                        <button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+                    </div>
+                </form>
+                <script>
+                (function () {
+                    const cb = document.getElementById('superuser-check') || document.getElementById('{{ form.grants_superuser.id_for_label }}');
+                    const section = document.getElementById('permissions-section');
+                    if (cb && section) {
+                        function toggle() { section.style.display = cb.checked ? 'none' : ''; }
+                        cb.addEventListener('change', toggle);
+                        toggle();
+                    }
+                })();
+                </script>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% load i18n %}
+<table class="table">
+    <thead>
+    <tr>
+        <th class="text-nowrap">{% trans 'Name' %}</th>
+        <th class="text-nowrap">{% trans 'Permissions' %}</th>
+        <th class="text-nowrap">{% trans 'Users' %}</th>
+        <th class="text-end">{% trans 'Actions' %}</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for group in groups %}
+    <tr>
+        <td>{{ group.name }}</td>
+        <td>{{ group.permissions.count }}</td>
+        <td>{{ group.trustpoint_users.count }}</td>
+
+        <td class="text-end">
+            {# Edit link #}
+            <a href="{% url 'management:edit_role' group.pk %}" class="btn btn-link text-body p-0 me-2" title="{% trans 'Edit' %}">
+                <i class="bi bi-pencil-square fs-5"></i>
+            </a>
+            {# Delete link — hidden for protected built-in roles #}
+            {% if group.name not in protected_group_names %}
+            <a href="{% url 'management:delete_role' group.pk %}" class="btn btn-link text-body p-0" title="{% trans 'Delete' %}">
+                <i class="bi bi-trash fs-5"></i>
+            </a>
+            {% endif %}
+        </td>
+    </tr>
+    {% empty %}
+    <tr>
+        <td colspan="4" class="middle">{% trans 'No roles have been added yet.' %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>

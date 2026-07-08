@@ -1,4 +1,15 @@
 """Test suite for the Backup views."""
+from unittest.mock import patch, MagicMock, Mock
+from django.test import TestCase, Client
+from django.urls import reverse
+from django.contrib.messages import get_messages
+from django.contrib.auth import get_user_model
+from django.core.management.base import CommandError
+from management.models import BackupOptions
+from management.views.backup import get_backup_file_data, create_db_backup
+from util.sftp import SftpError
+from pathlib import Path
+import tempfile
 import datetime
 import io
 import tarfile
@@ -17,6 +28,8 @@ from django.urls import reverse
 from management.models import BackupOptions
 from management.views.backup import BackupFileDownloadView, create_db_backup, get_backup_file_data
 from util.sftp import SftpError
+
+User = get_user_model()
 
 
 class GetBackupFileDataTest(TestCase):
