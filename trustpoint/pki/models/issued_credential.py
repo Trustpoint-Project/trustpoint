@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import hashes
@@ -86,10 +87,11 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         if domain is None or domain.issuing_ca is None:
             return
         ca = domain.issuing_ca
+        now = datetime.datetime.now(datetime.UTC)
         cert: CertificateModel
-        for cert in self.credential.certificates.all():
-            status = cert.certificate_status
-            if status in (CertificateModel.CertificateStatus.REVOKED, CertificateModel.CertificateStatus.EXPIRED):
+        for cert in self.credential.certificates.select_related('revoked_certificate').all():
+
+            if hasattr(cert, 'revoked_certificate') or cert.not_valid_after <= now:
                 continue
             RevokedCertificateModel.objects.create(
                 certificate=cert, revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION, ca=ca

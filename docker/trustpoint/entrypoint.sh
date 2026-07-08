@@ -202,6 +202,21 @@ fi
 if [ "$PHASE" = "bootstrap" ]; then
   echo "=== Starting Trustpoint BOOTSTRAP web role ==="
   run_as_www_data "uv run trustpoint/manage.py bootstrap_manager"
+  
+  # Check if auto-setup was requested and trigger operational switch immediately
+  AUTO_SETUP_MARKER="/var/lib/trustpoint/bootstrap/auto-setup.marker"
+  if [ -f "$AUTO_SETUP_MARKER" ]; then
+    echo "Auto-setup marker detected - triggering immediate switch to operational mode"
+    if [ -f "/etc/trustpoint/wizard/switch_to_operational.sh" ]; then
+      sudo /etc/trustpoint/wizard/switch_to_operational.sh "$OPERATIONAL_ENV_FILE"
+      echo "Operational mode activated - container will now serve operational runtime"
+      exit 0
+    else
+      echo "ERROR: switch_to_operational.sh not found, cannot auto-switch"
+      exit 1
+    fi
+  fi
+  
   configure_web_edge
   start_gunicorn
   trap "kill $GUNICORN_PID 2>/dev/null; exit 0" SIGTERM SIGINT
