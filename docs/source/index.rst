@@ -17,7 +17,7 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: 🚀 Getting Started
+   :caption: Getting Started
 
    getting_started/introduction
    getting_started/quickstart_setup
@@ -25,26 +25,33 @@ Welcome to Trustpoint's documentation!
    getting_started/usage_guide
    getting_started/community_support
    getting_started/faq
+   getting_started/glossary
+
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Features
+
+   features/apis/index
+
+   features/aoki/index
+   features/aoki/mdns
+
+   features/devices/onboarding
+
+   features/pki/index
+
+   features/management/index
+
+   features/security/db_encryption
+   features/security/pkcs11
+
+   features/workflows/index
 
 
 .. toctree::
    :maxdepth: 2
-   :caption: 📟 Devices
-
-   devices/onboarding
-   devices/aoki
-   devices/certificate_profiles
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 🔒 Security
-
-   security/pkcs11
-   security/db_encryption
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 🔒 EU Cyber Resilience Act
+   :caption: EU Cyber Resilience Act
 
    cra/CRA_COMPLIANCE
    cra/THREAT_MODEL
@@ -53,35 +60,11 @@ Welcome to Trustpoint's documentation!
 
 
 .. toctree::
-   :maxdepth: 2
-   :caption: 🌟 Features
+   :maxdepth: 3
+   :caption: Development
 
-   features/mdns
-   Workflow Engine <features/workflows>
-
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 📍 Indices and Tables
-
-   indices_and_tables/glossary
-   indices_and_tables/issued_certificates
-
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 🔎 Testing
-
-   testing/test_plan
-   testing/ci_cd
-   testing/test_report
-
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 🧑‍💻 Development
-
-   development/development
+   development/index
+   development/architecture/generated/index
    development/architecture/credentials
    development/architecture/backup_restore
    development/architecture/crypto_redesign
@@ -89,5 +72,8 @@ Welcome to Trustpoint's documentation!
    development/auto_restore
    development/sbom
    development/pipeline
-   release-checklist
+   development/release-checklist
    development/rest_api
+   development/testing/test_plan
+   development/testing/ci_cd
+   development/testing/test_report

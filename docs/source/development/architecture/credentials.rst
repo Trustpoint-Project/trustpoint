@@ -36,7 +36,7 @@ The ``CredentialTypeChoice`` enum defines the purpose and restrictions of each c
    * - **ISSUED_CREDENTIAL**
      - Device credentials issued by Trustpoint (LDevID, application certificates)
    * - **DEV_OWNER_ID**
-     - Device Owner ID certificates (see :doc:`../../devices/aoki`)
+     - Device Owner ID certificates (see :doc:`../../features/aoki/index`)
    * - **SIGNER**
      - Signing authority for hash-and-sign operations
 
@@ -180,29 +180,5 @@ CredentialModel provides validation methods:
    - Certificate must be OK status
 
 
-Private Key Storage Options
-----------------------------
 
-**Database Storage (Software Keys)**
-   - Private key stored as encrypted PEM in ``private_key`` field
-   - Fast, suitable for CA credentials
-   - Encrypted using Trustpoint's key encryption mechanism
-
-**HSM/PKCS#11 Storage**
-   - Private key stored in hardware security module (TPM, SoftHSM, etc.)
-   - ``pkcs11_private_key`` field references the ``PKCS11Key`` model
-   - Higher security for sensitive credentials
-   - Requires HSM configuration and PIN management
-
-The ``PKCS11Key`` model stores references:
-
-.. code-block:: python
-
-   class PKCS11Key(models.Model):
-       token_label: str  # HSM token identifier
-       key_label: str    # Key identifier within token
-       key_type: RSA | EC | AES
-       created_at: DateTimeField
-
-For request pipeline details and component architecture, see :doc:`../workflow`.
 
