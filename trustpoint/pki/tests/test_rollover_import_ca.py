@@ -230,8 +230,6 @@ class TestImportCaRolloverForm:
             files={'pkcs12_file': pkcs12_file}
         )
 
-        if not form.is_valid():
-            print(f"Form errors: {form.errors}")
         assert form.is_valid()
         assert hasattr(form, '_new_issuing_ca')
         assert form.new_issuing_ca is not None
