@@ -8,7 +8,7 @@ from zoneinfo import available_timezones
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Fieldset, Layout
+from crispy_forms.layout import HTML, Fieldset, Layout
 from cryptography.x509 import Certificate
 from django import forms
 from django.conf import settings
@@ -33,6 +33,7 @@ from management.models import (
     SmtpEmailConfig,
     UIConfig,
 )
+from management.models.organization import OrganizationModel
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
@@ -1189,3 +1190,54 @@ class UIConfigForm(forms.Form):
                 'view_mode': self.cleaned_data['view_mode'],
             }
         )
+
+
+class OrganizationForm(forms.ModelForm[OrganizationModel]):
+    """Form for creating and updating organizations."""
+
+    name = forms.CharField(max_length=100, required=False)
+    organization = forms.CharField(max_length=255, label='Organization (O)')
+    organization_unit = forms.CharField(max_length=255, label='Organization Unit (OU)', required=False)
+    country = forms.CharField(max_length=2, label='Country (C)', required=False)
+    state = forms.CharField(max_length=255, label='State/Province (ST)', required=False)
+    locality = forms.CharField(max_length=255, label='Locality/City (L)', required=False)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the OrganizationForm."""
+        super().__init__(*args, **kwargs)
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+
+        self.helper.layout = Layout(
+            HTML('<h2>General</h2><hr>'),
+            Field('name'),
+            HTML('<h2 class="mt-5">Certificate Attribute</h2><hr>'),
+            Field('organization'),
+            Field('organization_unit'),
+            Field('country'),
+            Field('state'),
+            Field('locality'),
+        )
+
+    class Meta:
+        """Metadata for the organization form."""
+
+        model = OrganizationModel
+        fields: ClassVar[tuple[str, ...]] = (
+            'name',
+            'organization',
+            'organization_unit',
+            'country',
+            'state',
+            'locality',
+        )
+
+    def clean(self) -> dict[str, Any]:
+        """Normalize data before saving."""
+        cleaned: dict[str, Any] = super().clean() or {}
+        name = str(cleaned.get('name') or '').strip()
+        organization = str(cleaned.get('organization') or '').strip()
+        cleaned['name'] = name or organization
+        cleaned['organization'] = organization
+        return cleaned

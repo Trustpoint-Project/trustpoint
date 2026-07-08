@@ -45,6 +45,7 @@ class AuditLog(models.Model):
         SIGNER_DELETED = 'SIGNER_DELETED', _('Signer Deleted')
         SIGNER_ADDED = 'SIGNER_ADDED', _('Signer Added')
         HASH_SIGNED = 'HASH_SIGNED', _('Hash Signed')
+        ORGANIZATION_UPDATED = 'ORGANIZATION_UPDATED', _('Organization Changed')
         CRYPTO_VERIFY_PROVIDER = 'CRYPTO_VERIFY_PROVIDER', _('Crypto: Verify Provider')
         CRYPTO_GENERATE_MANAGED_KEY = 'CRYPTO_GENERATE_MANAGED_KEY', _('Crypto: Generate Managed Key')
         CRYPTO_IMPORT_MANAGED_KEY = 'CRYPTO_IMPORT_MANAGED_KEY', _('Crypto: Import Managed Key')
