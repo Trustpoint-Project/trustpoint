@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone as dt_timezone
-from io import BytesIO
 from unittest.mock import Mock, patch
 
 import pytest
