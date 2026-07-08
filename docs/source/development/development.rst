@@ -270,9 +270,9 @@ Trustpoint uses behave to run BDD tests. The tests are located in the
 
    uv run manage.py behave
 
----------------------
+---------------------------
 Before committing checklist
----------------------
+---------------------------
 
 Before pushing your changes, ensure the following:
 

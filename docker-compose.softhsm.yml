@@ -15,6 +15,8 @@ services:
         condition: service_healthy
     volumes:
       - ./trustpoint/settings:/var/www/html/trustpoint/trustpoint/settings
+      - softhsm_config:/var/lib/trustpoint/hsm/config
+      - softhsm_tokens:/var/lib/trustpoint/hsm/tokens
     environment:
       POSTGRES_DB: "trustpoint_db"
       POSTGRES_USER_FILE: /run/secrets/db_user
@@ -23,6 +25,15 @@ services:
       DATABASE_PORT: "5432"
       HSM_PIN_FILE: /run/secrets/hsm_pin
       HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
+      TRUSTPOINT_HSM_ROOT: /var/lib/trustpoint/hsm
+      SOFTHSM2_CONF: /var/lib/trustpoint/hsm/config/softhsm2.conf
+      TRUSTPOINT_LOCAL_HSM_ENABLED: "1"
+      TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL: Trustpoint-SoftHSM
+      TRUSTPOINT_LOCAL_HSM_PROFILE_NAME: local-dev-softhsm
+      TRUSTPOINT_LOCAL_HSM_MODULE_PATH: /usr/lib/libsofthsm2.so
+      TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE: /var/lib/trustpoint/hsm/config/user-pin.txt
+      TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR: SOFTHSM2_CONF
+      TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF: /var/lib/trustpoint/hsm/config/softhsm2.conf
     secrets:
       - db_user
       - db_password
@@ -54,6 +65,9 @@ services:
     container_name: softhsm
     ports:
       - "5657:5657"
+    volumes:
+      - softhsm_config:/var/lib/trustpoint/hsm/config
+      - softhsm_tokens:/var/lib/trustpoint/hsm/tokens
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "5657"]
       interval: 10s
@@ -73,3 +87,5 @@ secrets:
 
 volumes:
   postgres_data:
+  softhsm_config:
+  softhsm_tokens:

@@ -42,8 +42,32 @@ extensions = [
     'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
     'sphinx.ext.viewcode',  # Adds links to highlighted source code
     'sphinxcontrib.plantuml',  # Enables PlantUML diagrams
-    'sphinxcontrib.openapi' #  Generate APIs docs
+    'sphinxcontrib.openapi',  # Generate APIs docs
+    'myst_parser',  # Supports Markdown files
 ]
+
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
+
+# -- Markdown configuration  ------------------------------------------------
+
+myst_enable_extensions = [
+    'strikethrough',   # Enables ~~strikethrough~~ syntax
+    'tasklist',        # Enables - [ ] and - [x] checkboxes
+    'linkify',         # Turns URLs (like [www.example.com](https://www.example.com)) into clickable links
+    'gfm_autolink',    # Replicates GitHub's advanced literal URL parsing rules
+    'alert',           # Enables GitHub-style blockquote callouts (> [!NOTE], > [!WARNING])
+    'attrs_block',     # Allows block-level attributes (e.g., {#id .class key=val} or {.text-center})
+]
+
+# Mirror GitHub Markdown behavior
+myst_strikethrough_single_tilde = True  # Allows single tilde (~strikethrough~) support
+myst_heading_anchors = 4                # Generates slug anchors for H1-H4 headers (e.g., #my-header)
+
+
+# -- Autodoc Configuration --------------------------------------------------
 
 if BUILD_AUTODOCS:
     autodoc_extensions = [

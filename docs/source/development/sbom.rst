@@ -19,19 +19,19 @@ These formats are widely adopted for secure software supply chain management and
 SBOM Access and Links
 ----------------------
 
-You can access the latest Trustpoint SBOMs here:
+You can access the latest `Trustpoint SBOMs <https://trustpoint-project.github.io/trustpoint/>`_ here:
 
 ^^^^^^^^^^
 SPDX SBOM
 ^^^^^^^^^^
 
-The SPDX-formatted SBOM is available in JSON format: `Download SPDX SBOM <https://github.com/Trustpoint-Project/trustpoint/blob/main/sbom_spdx.json>`_
+The SPDX-formatted SBOM is available in JSON format: `Download SPDX SBOM <https://trustpoint-project.github.io/trustpoint/sbom/latest/trustpoint.spdx.json>`_ (latest)
 
 ^^^^^^^^^^^^^^^
 CycloneDX SBOM
 ^^^^^^^^^^^^^^^
 
-The CycloneDX-formatted SBOM is available in JSON format: `Download CycloneDX SBOM <https://github.com/Trustpoint-Project/trustpoint/blob/main/sbom_cyclonedx.json>`_
+The CycloneDX-formatted SBOM is available in JSON format: `Download CycloneDX SBOM <https://trustpoint-project.github.io/trustpoint/sbom/latest/trustpoint.cyclonedx.json>`_ (latest)
 
 --------------------------------------
 SBOM Generation and CI Integration

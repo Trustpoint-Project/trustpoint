@@ -12,7 +12,6 @@ from appsecrets.service import (
     DEK_LENGTH_BYTES,
     PKCS11_CWRAP_DEK_PREFIX,
     PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX,
-    PKCS11_ENCRYPTED_DEK_ECB_PREFIX,
     AppSecretConfigurationError,
     Pkcs11AppSecretService,
 )
@@ -293,22 +292,18 @@ def test_pkcs11_app_secret_generate_protected_dek_falls_back_to_encrypt_when_wra
     assert isinstance(mechanism_param, bytes)
 
 
-def test_pkcs11_app_secret_generate_protected_dek_falls_back_to_ecb_for_limited_tokens() -> None:
-    """Tokens exposing only AES ECB can still protect the random app-secret DEK."""
+def test_pkcs11_app_secret_rejects_tokens_with_only_ecb_encryption() -> None:
+    """Tokens without key-wrap or CBC encryption cannot protect the app-secret DEK."""
     service = _service()
     kek = _FakeKek()
     kek.fail_wrap = True
     kek.fail_cbc_encrypt = True
 
-    dek, protected_dek = service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
+    with pytest.raises(AppSecretConfigurationError, match='standard PKCS#11 AES flows') as exc_info:
+        service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
 
-    assert dek == b'g' * 32
-    assert protected_dek.startswith(PKCS11_ENCRYPTED_DEK_ECB_PREFIX)
-    assert len(kek.encrypt_calls) == 1
-    plaintext, mechanism, mechanism_param = kek.encrypt_calls[0]
-    assert plaintext == dek
-    assert mechanism == pkcs11.Mechanism.AES_ECB
-    assert mechanism_param is None
+    assert 'AES_ECB' not in str(exc_info.value)
+    assert all(mechanism is not pkcs11.Mechanism.AES_ECB for _, mechanism, _ in kek.encrypt_calls)
 
 
 def test_pkcs11_app_secret_recover_dek_uses_key_unwrap_operation() -> None:
@@ -348,7 +343,7 @@ def test_pkcs11_app_secret_decrypts_encrypted_dek_envelope() -> None:
 
 
 def test_pkcs11_app_secret_rejects_ecb_encrypted_dek_envelope() -> None:
-    """Legacy AES ECB DEK envelopes are not accepted for app-secret DEK recovery."""
+    """AES ECB DEK envelopes are not accepted for app-secret DEK recovery."""
     service = _service()
     kek = _FakeKek()
 
@@ -359,24 +354,6 @@ def test_pkcs11_app_secret_rejects_ecb_encrypted_dek_envelope() -> None:
         )
 
     assert not kek.decrypt_calls
-
-
-def test_pkcs11_app_secret_decrypts_ecb_v2_encrypted_dek_envelope() -> None:
-    """Current AES ECB DEK envelopes are recovered without an IV."""
-    service = _service()
-    kek = _FakeKek()
-
-    dek = service._recover_dek(  # noqa: SLF001
-        kek=kek,
-        protected_dek=PKCS11_ENCRYPTED_DEK_ECB_PREFIX + b'encrypted:' + (b'd' * 32),
-    )
-
-    assert dek == b'd' * 32
-    assert len(kek.decrypt_calls) == 1
-    ciphertext, mechanism, mechanism_param = kek.decrypt_calls[0]
-    assert ciphertext == b'encrypted:' + (b'd' * 32)
-    assert mechanism == pkcs11.Mechanism.AES_ECB
-    assert mechanism_param is None
 
 
 def test_pkcs11_app_secret_protection_failure_reports_attempts() -> None:

@@ -6,6 +6,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from setup_wizard.forms import (
+    MAX_PKCS12_UPLOAD_BYTES,
     FreshInstallBackendConfigModelForm,
     FreshInstallTlsConfigForm,
     RestoreBackupImportForm,
@@ -229,6 +230,24 @@ class TestFreshInstallTlsConfigFormClean:
         form = FreshInstallTlsConfigForm(data=data, files={'pkcs12_file': pkcs12_file})
         # The form is valid at the cross-field level; parsing happens in the view
         assert 'pkcs12_file' not in form.errors
+
+    def test_pkcs12_mode_with_oversized_file_adds_error(self) -> None:
+        """Oversized PKCS#12 files are rejected before the view reads them."""
+        pkcs12_file = SimpleUploadedFile(
+            'cert.p12',
+            b'x' * (MAX_PKCS12_UPLOAD_BYTES + 1),
+            content_type='application/x-pkcs12',
+        )
+        data = {
+            'tls_mode': 'pkcs12',
+            'ipv4_addresses': '',
+            'ipv6_addresses': '',
+            'domain_names': '',
+        }
+        form = FreshInstallTlsConfigForm(data=data, files={'pkcs12_file': pkcs12_file})
+
+        assert not form.is_valid()
+        assert 'pkcs12_file' in form.errors
 
     def test_separate_files_mode_without_cert_adds_error(self) -> None:
         """separate_files mode without TLS cert file adds an error."""

@@ -47,6 +47,7 @@ class AuditLog(models.Model):
         HASH_SIGNED = 'HASH_SIGNED', _('Hash Signed')
         CRYPTO_VERIFY_PROVIDER = 'CRYPTO_VERIFY_PROVIDER', _('Crypto: Verify Provider')
         CRYPTO_GENERATE_MANAGED_KEY = 'CRYPTO_GENERATE_MANAGED_KEY', _('Crypto: Generate Managed Key')
+        CRYPTO_IMPORT_MANAGED_KEY = 'CRYPTO_IMPORT_MANAGED_KEY', _('Crypto: Import Managed Key')
         CRYPTO_VERIFY_MANAGED_KEY = 'CRYPTO_VERIFY_MANAGED_KEY', _('Crypto: Verify Managed Key')
         CRYPTO_GET_PUBLIC_KEY = 'CRYPTO_GET_PUBLIC_KEY', _('Crypto: Get Public Key')
         CRYPTO_SIGN = 'CRYPTO_SIGN', _('Crypto: Sign')

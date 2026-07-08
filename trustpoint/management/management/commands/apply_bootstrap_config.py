@@ -235,7 +235,11 @@ class OperationalBootstrapApplier:
             configured_module_exists = configured_module_path.is_file()
 
         if staged_module is None and staged_pin is None and staged_config is None:
-            return configured_module_value, (self.fresh_install['pkcs11_auth_source_ref'] or '').strip(), configured_config_value
+            return (
+                configured_module_value,
+                (self.fresh_install['pkcs11_auth_source_ref'] or '').strip(),
+                configured_config_value,
+            )
 
         uses_builtin_local_proxy = (
             local_dev_pkcs11_handoff_available()
@@ -278,7 +282,12 @@ class OperationalBootstrapApplier:
             elif uses_builtin_local_proxy:
                 self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_pin))
             elif staged_config is not None:
-                self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin), str(staged_config))
+                self.execute_shell_script(
+                    INSTALL_PKCS11_ASSETS,
+                    str(staged_module),
+                    str(staged_pin),
+                    str(staged_config),
+                )
             else:
                 self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin))
         except subprocess.CalledProcessError as exc:
@@ -346,6 +355,8 @@ class OperationalBootstrapApplier:
         )
         defaults = {
             'module_path': str(module_path),
+            'provider_config_env_var': config_env_var,
+            'provider_config_path': config_path_value,
             'token_label': token_label,
             'token_serial': self.fresh_install.get('pkcs11_token_serial') or None,
             'slot_id': slot_id,

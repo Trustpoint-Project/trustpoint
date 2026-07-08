@@ -152,9 +152,9 @@ Requirements:
 - Trustpoint-Client installed on the device (via `pip install trustpoint-client`).
 - A connection to communicate with Trustpoint services.
 
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 OPC UA GDS Push Onboarding
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OPC UA Global Discovery Server (GDS) Push is a standardized mechanism for distributing and updating certificates, trust anchors, and Certificate Revocation Lists (CRLs) to OPC UA servers.
 This method is particularly suited for industrial automation environments using OPC UA.

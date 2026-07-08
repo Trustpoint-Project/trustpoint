@@ -46,6 +46,9 @@ export HOME="$WWW_DATA_HOME"
 if [ -n "${PKCS11_PROXY_SOCKET:-}" ]; then
     log INFO "Using PKCS#11 proxy socket ${PKCS11_PROXY_SOCKET}"
 fi
+if [ -n "${SOFTHSM2_CONF:-}" ]; then
+    log INFO "Using SoftHSM config ${SOFTHSM2_CONF}"
+fi
 
 pid_file_alive() {
     local pid_file=$1
