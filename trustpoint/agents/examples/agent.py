@@ -69,7 +69,6 @@ if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
 LOG = logging.getLogger('trustpoint.agent')
-STOP_REQUESTED = False
 
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_INITIAL_BACKOFF_SECONDS = 2.0
@@ -85,6 +84,7 @@ class JsonFormatter(logging.Formatter):
     """Small JSON log formatter suitable for systemd/journald ingestion."""
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format a log record as JSON."""
         payload: dict[str, Any] = {
             'ts': self.formatTime(record, '%Y-%m-%dT%H:%M:%S%z'),
             'level': record.levelname,
@@ -97,6 +97,7 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure_logging(level: str, log_format: str) -> None:
+    """Configure logging with the specified level and format."""
     handler = logging.StreamHandler()
     if log_format == 'json':
         handler.setFormatter(JsonFormatter())
@@ -109,19 +110,26 @@ def configure_logging(level: str, log_format: str) -> None:
     root.setLevel(getattr(logging, level.upper(), logging.INFO))
 
 
+# Track shutdown signal to enable graceful termination
+_stop_requested = False
+
+
 def _handle_stop(signum: int, _frame: object) -> None:
-    global STOP_REQUESTED
-    STOP_REQUESTED = True
+    """Handle shutdown signals gracefully."""
+    global _stop_requested  # noqa: PLW0603
+    _stop_requested = True
     LOG.info('received shutdown signal', extra={'signal': signum})
     sd_notify('STOPPING=1')
 
 
 def install_signal_handlers() -> None:
+    """Install signal handlers for graceful shutdown."""
     signal.signal(signal.SIGTERM, _handle_stop)
     signal.signal(signal.SIGINT, _handle_stop)
 
 
 def fatal(message: str, exc: BaseException | None = None) -> NoReturn:
+    """Log a fatal error and exit."""
     if exc is not None:
         LOG.error('%s: %s', message, exc)
     else:
@@ -150,6 +158,8 @@ def sd_notify(message: str) -> None:
 
 @dataclass(slots=True)
 class LocalStorage:
+    """Local filesystem paths for agent credentials and certificates."""
+
     private_key_path: Path
     csr_path: Path
     tls_cert_path: Path
@@ -158,6 +168,7 @@ class LocalStorage:
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> LocalStorage:
+        """Create LocalStorage from a dictionary mapping."""
         return cls(
             private_key_path=Path(str(data.get('private_key_path', 'domain_credential-key.pem'))),
             csr_path=Path(str(data.get('csr_path', 'domain_credential-csr.pem'))),
@@ -169,6 +180,8 @@ class LocalStorage:
 
 @dataclass(slots=True)
 class AgentProfile:
+    """Agent configuration profile read from agent_setup.json."""
+
     device: str
     secret: str
     tls_cert_pem: str
@@ -184,12 +197,16 @@ class AgentProfile:
 
 @dataclass(slots=True)
 class EnrollmentResponse:
+    """Response from certificate enrollment endpoint."""
+
     certificate: str
     certificate_chain: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
 class JobResult:
+    """Result of executing a certificate renewal job."""
+
     profile_id: int
     success: bool
     error_message: str = ''
@@ -197,12 +214,16 @@ class JobResult:
 
 @dataclass(slots=True)
 class ActiveCredential:
+    """Currently active certificate and private key paths."""
+
     cert_path: Path
     key_path: Path
 
 
 @dataclass(slots=True)
 class PollParams:
+    """Parameters for polling Trustpoint for certificate renewal jobs."""
+
     base_url: str
     ca_cert_path: Path
     active_credential: ActiveCredential
@@ -214,6 +235,7 @@ class PollParams:
 
 
 def read_profile(profile_path: Path) -> AgentProfile:
+    """Read and parse agent profile from JSON file."""
     try:
         raw_profile = json.loads(profile_path.read_text(encoding='utf-8'))
     except FileNotFoundError as exc:
@@ -273,12 +295,14 @@ def _optional_str(value: Any) -> str | None:
 
 
 def join_url(base_url: str, path: str) -> str:
+    """Join base URL and path, ensuring single slash separator."""
     if not path.startswith('/'):
         path = '/' + path
     return base_url.rstrip('/') + path
 
 
 def ensure_parent(path: Path) -> None:
+    """Ensure parent directory exists."""
     parent = path.parent
     if parent and str(parent) != '.':
         parent.mkdir(parents=True, exist_ok=True)
@@ -313,6 +337,7 @@ def atomic_write_bytes(path: Path, data: bytes, mode: int) -> None:
 
 
 def atomic_write_text(path: Path, text: str, mode: int = 0o644) -> None:
+    """Write text atomically to path using a temp file."""
     atomic_write_bytes(path, text.encode('utf-8'), mode)
 
 
@@ -400,6 +425,7 @@ def generate_csr(
     subject: str | None = None,
     subject_alt_name: str | None = None,
 ) -> str:
+    """Generate a CSR from the private key and save to file."""
     LOG.info('generating CSR', extra={'path': str(csr_path), 'subject': subject or common_name})
     key = load_private_key(key_path)
     name = parse_subject(subject, common_name)
@@ -416,6 +442,7 @@ def generate_csr(
 
 
 def parse_subject(subject: str | None, common_name: str) -> x509.Name:
+    """Parse subject string into x509.Name."""
     if not subject:
         return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
 
@@ -458,6 +485,7 @@ def parse_subject(subject: str | None, common_name: str) -> x509.Name:
 
 
 def parse_subject_alt_name(subject_alt_name: str | None) -> x509.SubjectAlternativeName | None:
+    """Parse subject alternative name string into x509.SubjectAlternativeName."""
     if not subject_alt_name:
         return None
 
@@ -493,6 +521,7 @@ def make_session(
     timeout: int,
     cert_pair: tuple[str, str] | None = None,
 ) -> Session:
+    """Create a requests Session with CA verification and optional client certificate."""
     session = requests.Session()
     session.verify = str(ca_cert_path)
     if cert_pair is not None:
@@ -503,7 +532,7 @@ def make_session(
     return session
 
 
-def request_with_retries(
+def request_with_retries(  # noqa: PLR0913
     session: Session,
     method: str,
     url: str,
@@ -513,6 +542,7 @@ def request_with_retries(
     max_backoff: float,
     **kwargs: Any,
 ) -> Response:
+    """Make HTTP request with retry logic and exponential backoff."""
     timeout = kwargs.pop('timeout', getattr(session, 'trustpoint_timeout', DEFAULT_TIMEOUT_SECONDS))
     attempt = 0
     while True:
@@ -540,9 +570,15 @@ def request_with_retries(
         attempt += 1
 
 
+# HTTP status code constants
+HTTP_OK_MIN = 200
+HTTP_OK_MAX = 300
+
+
 def _backoff_delay(attempt: int, initial_backoff: float, max_backoff: float) -> float:
+    """Calculate exponential backoff delay with jitter (not for cryptographic use)."""
     base = min(max_backoff, initial_backoff * (2 ** attempt))
-    return float(base * random.uniform(0.5, 1.5))
+    return float(base * random.uniform(0.5, 1.5))  # noqa: S311
 
 
 def _retry_after_delay(response: Response) -> float | None:
@@ -556,7 +592,8 @@ def _retry_after_delay(response: Response) -> float | None:
 
 
 def require_success(response: Response, action: str) -> None:
-    if 200 <= response.status_code < 300:
+    """Verify HTTP response indicates success; raise AgentError otherwise."""
+    if HTTP_OK_MIN <= response.status_code < HTTP_OK_MAX:
         return
     body = response.text[:4000]
     msg = f'{action} failed: HTTP {response.status_code}: {body}'
@@ -564,6 +601,7 @@ def require_success(response: Response, action: str) -> None:
 
 
 def response_json_object(response: Response, action: str) -> dict[str, Any]:
+    """Extract and parse JSON object from response."""
     content_type = response.headers.get('Content-Type', '')
     if 'json' not in content_type.lower():
         LOG.warning('response Content-Type is not JSON', extra={'action': action, 'content_type': content_type})
@@ -579,6 +617,7 @@ def response_json_object(response: Response, action: str) -> dict[str, Any]:
 
 
 def parse_enrollment_response(data: Mapping[str, Any], action: str) -> EnrollmentResponse:
+    """Parse enrollment response data into EnrollmentResponse."""
     certificate = data.get('certificate')
     if not isinstance(certificate, str) or 'BEGIN CERTIFICATE' not in certificate:
         msg = f'{action} response missing valid PEM certificate'
@@ -600,6 +639,7 @@ def parse_enrollment_response(data: Mapping[str, Any], action: str) -> Enrollmen
 
 
 def save_credentials(response: EnrollmentResponse, cert_path: Path, chain_path: Path) -> None:
+    """Save certificate and certificate chain to files."""
     atomic_write_text(cert_path, _pem_join([response.certificate]), 0o644)
     LOG.info('certificate written', extra={'path': str(cert_path)})
 
@@ -613,6 +653,7 @@ def _pem_join(items: list[str]) -> str:
 
 
 def enroll_initial(profile: AgentProfile, args: argparse.Namespace) -> ActiveCredential:
+    """Perform initial enrollment to obtain domain credential."""
     storage = profile.local_storage
     atomic_write_text(storage.tls_cert_path, profile.tls_cert_pem, 0o644)
     LOG.info('Trustpoint TLS trust store written', extra={'path': str(storage.tls_cert_path)})
@@ -652,6 +693,7 @@ def enroll_initial(profile: AgentProfile, args: argparse.Namespace) -> ActiveCre
 
 
 def mtls_session(params: PollParams) -> Session:
+    """Create a session with mutual TLS using active credential."""
     return make_session(
         ca_cert_path=params.ca_cert_path,
         timeout=params.request_timeout,
@@ -660,11 +702,13 @@ def mtls_session(params: PollParams) -> Session:
 
 
 def cert_header_value(cert_path: Path) -> str:
+    """URL-encode certificate PEM for use in SSL-CLIENT-CERT header."""
     cert_pem = cert_path.read_text(encoding='utf-8')
     return urllib.parse.quote(cert_pem)
 
 
 def fetch_jobs(params: PollParams, session: Session, cert_pem_urlencoded: str) -> tuple[int, list[dict[str, Any]]]:
+    """Fetch certificate renewal jobs from Trustpoint."""
     jobs_url = join_url(params.base_url, '/api/agents/jobs/')
     LOG.info('fetching jobs', extra={'url': jobs_url})
     response = request_with_retries(
@@ -697,6 +741,7 @@ def fetch_jobs(params: PollParams, session: Session, cert_pem_urlencoded: str) -
 
 
 def deterministic_paths_for_job(params: PollParams, cert_profile: str) -> tuple[Path, Path, Path, Path]:
+    """Determine file paths for certificate renewal based on profile."""
     if cert_profile == 'domain_credential':
         return (
             params.local_storage.private_key_path,
@@ -724,6 +769,7 @@ def execute_renewal_job(
     job: Mapping[str, Any],
     cert_pem_urlencoded: str,
 ) -> JobResult:
+    """Execute a certificate renewal job."""
     profile_id_raw = job.get('profile_id')
     if not isinstance(profile_id_raw, int):
         return JobResult(profile_id=0, success=False, error_message='job.profile_id must be an integer')
@@ -812,10 +858,12 @@ def execute_renewal_job(
 
 
 def atomic_copy(src: Path, dst: Path, mode: int) -> None:
+    """Atomically copy file from src to dst with specified mode."""
     atomic_write_bytes(dst, src.read_bytes(), mode)
 
 
 def acknowledge_job(params: PollParams, session: Session, result: JobResult, cert_pem_urlencoded: str) -> None:
+    """Send job result acknowledgement to Trustpoint."""
     result_url = join_url(params.base_url, '/api/agents/jobs/result/')
     body = {
         'profile_id': result.profile_id,
@@ -841,6 +889,7 @@ def acknowledge_job(params: PollParams, session: Session, result: JobResult, cer
 
 
 def poll_once(params: PollParams) -> int:
+    """Execute one poll cycle: fetch jobs, execute renewals, and acknowledge results."""
     # Build one session and one SSL-CLIENT-CERT header per poll. If a domain
     # credential is renewed during this cycle, acknowledgement still uses the
     # credential that authenticated the poll; the next cycle uses the new files.
@@ -849,7 +898,7 @@ def poll_once(params: PollParams) -> int:
     poll_interval, jobs = fetch_jobs(params, session, cert_pem_urlencoded)
 
     for job in jobs:
-        if STOP_REQUESTED:
+        if _stop_requested:
             break
         result = execute_renewal_job(params, session, job, cert_pem_urlencoded)
         acknowledge_job(params, session, result, cert_pem_urlencoded)
@@ -857,11 +906,12 @@ def poll_once(params: PollParams) -> int:
     return poll_interval
 
 
-def poll_loop(params: PollParams, once: bool) -> None:
+def poll_loop(params: PollParams, *, once: bool = False) -> None:
+    """Run the polling loop to fetch and execute certificate renewal jobs."""
     LOG.info('entering polling loop', extra={'once': once})
     sd_notify('READY=1')
 
-    while not STOP_REQUESTED:
+    while not _stop_requested:
         try:
             poll_interval = poll_once(params)
             sd_notify('WATCHDOG=1')
@@ -877,8 +927,9 @@ def poll_loop(params: PollParams, once: bool) -> None:
 
 
 def sleep_interruptibly(seconds: int) -> None:
+    """Sleep with periodic checks for shutdown signal."""
     deadline = time.monotonic() + seconds
-    while not STOP_REQUESTED:
+    while not _stop_requested:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return
@@ -886,6 +937,7 @@ def sleep_interruptibly(seconds: int) -> None:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description='Bootstrap and run a hardened Trustpoint endpoint agent.')
     parser.add_argument('--profile', default='agent_setup.json', type=Path, help='Path to rendered agent_setup.json')
     parser.add_argument(
@@ -916,7 +968,21 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _handle_skip_onboarding(profile: AgentProfile) -> None:
+    """Handle skip-onboarding mode by validating existing credentials."""
+    atomic_write_text(profile.local_storage.tls_cert_path, profile.tls_cert_pem, 0o644)
+    active = ActiveCredential(
+        cert_path=profile.local_storage.certificate_path,
+        key_path=profile.local_storage.private_key_path,
+    )
+    if not active.cert_path.exists() or not active.key_path.exists():
+        msg = '--skip-onboarding requires existing certificate and private key files'
+        raise AgentError(msg)
+    LOG.info('skipping onboarding and using existing local credential')
+
+
 def main(argv: list[str] | None = None) -> int:
+    """Main entry point for the agent."""
     args = parse_args(argv or sys.argv[1:])
     configure_logging(args.log_level, args.log_format)
     install_signal_handlers()
@@ -925,15 +991,11 @@ def main(argv: list[str] | None = None) -> int:
         profile = read_profile(args.profile)
 
         if args.skip_onboarding:
-            atomic_write_text(profile.local_storage.tls_cert_path, profile.tls_cert_pem, 0o644)
+            _handle_skip_onboarding(profile)
             active = ActiveCredential(
                 cert_path=profile.local_storage.certificate_path,
                 key_path=profile.local_storage.private_key_path,
             )
-            if not active.cert_path.exists() or not active.key_path.exists():
-                msg = '--skip-onboarding requires existing certificate and private key files'
-                raise AgentError(msg)
-            LOG.info('skipping onboarding and using existing local credential')
         else:
             active = enroll_initial(profile, args)
 
@@ -948,13 +1010,13 @@ def main(argv: list[str] | None = None) -> int:
             max_backoff=args.max_backoff,
         )
         poll_loop(poll_params, once=args.once)
-        return 0
-
     except AgentError as exc:
         fatal('agent failed', exc)
     except KeyboardInterrupt:
         LOG.info('stopped by user')
         return 130
+    else:
+        return 0
 
 
 if __name__ == '__main__':
