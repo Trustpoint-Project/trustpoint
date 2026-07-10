@@ -343,7 +343,6 @@ class AgentManagedDeviceCreateView(PageContextMixin, LoggerMixin, FormView[Manag
         TrustpointAgent.objects.create(
             name=device.common_name,
             agent_id=device_uuid,
-            certificate_fingerprint=device_uuid,
             device=device,
         )
 
@@ -405,8 +404,8 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
         """Meta options."""
 
         model = AgentAssignedProfile
-        fields = ('workflow_definition', 'renewal_threshold_days', 'subject', 'subject_alt_name')
-        widgets = {
+        fields: ClassVar = ('workflow_definition', 'renewal_threshold_days', 'subject', 'subject_alt_name')
+        widgets: ClassVar = {
             'subject': forms.TextInput(attrs={
                 'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
                 'class': 'form-control',
@@ -416,7 +415,7 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
                 'class': 'form-control',
             }),
         }
-        help_texts = {
+        help_texts: ClassVar = {
             'subject': 'OpenSSL-style subject DN. Leave empty to use default.',
             'subject_alt_name': 'OpenSSL-style SAN extension. Leave empty for no SAN.',
         }
@@ -438,8 +437,8 @@ class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
         """Meta options."""
 
         model = AgentAssignedProfile
-        fields = ('renewal_threshold_days', 'subject', 'subject_alt_name', 'enabled')
-        widgets = {
+        fields: ClassVar = ('renewal_threshold_days', 'subject', 'subject_alt_name', 'enabled')
+        widgets: ClassVar = {
             'subject': forms.TextInput(attrs={
                 'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
                 'class': 'form-control',
@@ -449,7 +448,7 @@ class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
                 'class': 'form-control',
             }),
         }
-        help_texts = {
+        help_texts: ClassVar = {
             'subject': 'OpenSSL-style subject DN. Leave empty to use default.',
             'subject_alt_name': 'OpenSSL-style SAN extension. Leave empty for no SAN.',
         }
@@ -552,7 +551,7 @@ class AgentAssignedProfileEditView(
             reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']})
         )
 
-    def form_valid(self, form: AgentAssignedProfileForm) -> HttpResponse:
+    def form_valid(self, form: AgentAssignedProfileEditForm) -> HttpResponse:
         """Save the changes and show a success message."""
         assignment: AgentAssignedProfile = form.save()
         messages.success(

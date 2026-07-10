@@ -150,20 +150,20 @@ def sd_notify(message: str) -> None:
 
 @dataclass(slots=True)
 class LocalStorage:
-    private_key_path: Path = Path('domain_credential-key.pem')
-    csr_path: Path = Path('domain_credential-csr.pem')
-    tls_cert_path: Path = Path('trustpoint-tls.pem')
-    certificate_path: Path = Path('domain_credential-certificate.pem')
-    certificate_chain_path: Path = Path('domain_credential-chain.pem')
+    private_key_path: Path
+    csr_path: Path
+    tls_cert_path: Path
+    certificate_path: Path
+    certificate_chain_path: Path
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> LocalStorage:
         return cls(
-            private_key_path=Path(str(data.get('private_key_path', cls.private_key_path))),
-            csr_path=Path(str(data.get('csr_path', cls.csr_path))),
-            tls_cert_path=Path(str(data.get('tls_cert_path', cls.tls_cert_path))),
-            certificate_path=Path(str(data.get('certificate_path', cls.certificate_path))),
-            certificate_chain_path=Path(str(data.get('certificate_chain_path', cls.certificate_chain_path))),
+            private_key_path=Path(str(data.get('private_key_path', 'domain_credential-key.pem'))),
+            csr_path=Path(str(data.get('csr_path', 'domain_credential-csr.pem'))),
+            tls_cert_path=Path(str(data.get('tls_cert_path', 'trustpoint-tls.pem'))),
+            certificate_path=Path(str(data.get('certificate_path', 'domain_credential-certificate.pem'))),
+            certificate_chain_path=Path(str(data.get('certificate_chain_path', 'domain_credential-chain.pem'))),
         )
 
 
@@ -217,9 +217,11 @@ def read_profile(profile_path: Path) -> AgentProfile:
     try:
         raw_profile = json.loads(profile_path.read_text(encoding='utf-8'))
     except FileNotFoundError as exc:
-        raise AgentError(f'profile file not found: {profile_path}') from exc
+        msg = f'profile file not found: {profile_path}'
+        raise AgentError(msg) from exc
     except json.JSONDecodeError as exc:
-        raise AgentError(f'profile file is not valid JSON: {profile_path}: {exc}') from exc
+        msg = f'profile file is not valid JSON: {profile_path}: {exc}'
+        raise AgentError(msg) from exc
 
     profile = _expect_object(raw_profile.get('profile'), 'profile')
     onboarding = _expect_object(profile.get('onboarding'), 'profile.onboarding')
@@ -249,13 +251,15 @@ def read_profile(profile_path: Path) -> AgentProfile:
 
 def _expect_object(value: Any, field_name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise AgentError(f'{field_name} must be an object')
+        msg = f'{field_name} must be an object'
+        raise AgentError(msg)
     return value
 
 
 def _expect_non_empty_str(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise AgentError(f'{field_name} must be a non-empty string')
+        msg = f'{field_name} must be a non-empty string'
+        raise AgentError(msg)
     return value
 
 
@@ -263,7 +267,8 @@ def _optional_str(value: Any) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise AgentError(f'expected optional string, got {type(value).__name__}')
+        msg = f'expected optional string, got {type(value).__name__}'
+        raise AgentError(msg)
     return value or None
 
 
@@ -292,11 +297,11 @@ def atomic_write_bytes(path: Path, data: bytes, mode: int) -> None:
             delete=False,
         ) as tmp:
             tmp_name = tmp.name
-            os.chmod(tmp_name, mode)
+            Path(tmp_name).chmod(mode)
             tmp.write(data)
             tmp.flush()
             os.fsync(tmp.fileno())
-        os.replace(tmp_name, path)
+        Path(tmp_name).replace(path)
         tmp_name = None
         _fsync_parent(path)
     finally:
@@ -342,12 +347,12 @@ def generate_private_key(
         The generated private key (RSA or EC).
     """
     # Map OIDs to algorithm types
-    rsa_oid = '1.2.840.113549.1.1.1'
     ecc_oid = '1.2.840.10045.2.1'
 
     # Determine which algorithm to use
     use_ecc = public_key_algorithm_oid == ecc_oid if public_key_algorithm_oid else False
 
+    key: ec.EllipticCurvePrivateKey | rsa.RSAPrivateKey
     if use_ecc:
         # Generate ECC key - key_parameter is the curve name
         curve_name = (key_parameter or 'SECP256R1').upper()
@@ -382,11 +387,10 @@ def generate_private_key(
     return key
 
 
-def load_private_key(key_path: Path) -> PrivateKeyTypes:
+def load_private_key(key_path: Path) -> ec.EllipticCurvePrivateKey | rsa.RSAPrivateKey:
     """Load a private key from a PEM file."""
     raw = key_path.read_bytes()
-    key = serialization.load_pem_private_key(raw, password=None)
-    return key
+    return serialization.load_pem_private_key(raw, password=None)  # type: ignore[return-value]
 
 
 def generate_csr(
@@ -429,23 +433,27 @@ def parse_subject(subject: str | None, common_name: str) -> x509.Name:
         'EMAILADDRESS': NameOID.EMAIL_ADDRESS,
     }
 
-    attrs: list[x509.NameAttribute] = []
+    attrs: list[x509.NameAttribute[str]] = []
     for component in subject.strip('/').split('/'):
         if not component:
             continue
         if '=' not in component:
-            raise AgentError(f'invalid subject component: {component!r}')
+            msg = f'invalid subject component: {component!r}'
+            raise AgentError(msg)
         key, value = component.split('=', 1)
         key = key.upper()
         oid = oid_by_key.get(key)
         if oid is None:
-            raise AgentError(f'unsupported subject attribute: {key}')
+            msg = f'unsupported subject attribute: {key}'
+            raise AgentError(msg)
         if not value:
-            raise AgentError(f'empty subject attribute value for {key}')
+            msg = f'empty subject attribute value for {key}'
+            raise AgentError(msg)
         attrs.append(x509.NameAttribute(oid, value))
 
     if not attrs:
-        raise AgentError('subject did not contain any attributes')
+        msg = 'subject did not contain any attributes'
+        raise AgentError(msg)
     return x509.Name(attrs)
 
 
@@ -459,7 +467,8 @@ def parse_subject_alt_name(subject_alt_name: str | None) -> x509.SubjectAlternat
         if not part:
             continue
         if ':' not in part:
-            raise AgentError(f'invalid SAN component: {part!r}')
+            msg = f'invalid SAN component: {part!r}'
+            raise AgentError(msg)
         kind, value = part.split(':', 1)
         kind = kind.upper()
         if kind == 'DNS':
@@ -471,7 +480,8 @@ def parse_subject_alt_name(subject_alt_name: str | None) -> x509.SubjectAlternat
         elif kind in {'EMAIL', 'RFC822'}:
             names.append(x509.RFC822Name(value))
         else:
-            raise AgentError(f'unsupported SAN type: {kind}')
+            msg = f'unsupported SAN type: {kind}'
+            raise AgentError(msg)
 
     if not names:
         return None
@@ -510,7 +520,8 @@ def request_with_retries(
             response = session.request(method, url, timeout=timeout, **kwargs)
         except requests.RequestException as exc:
             if attempt >= max_retries:
-                raise AgentError(f'{method} {url} failed after {attempt + 1} attempt(s): {exc}') from exc
+                msg = f'{method} {url} failed after {attempt + 1} attempt(s): {exc}'
+                raise AgentError(msg) from exc
             sleep_for = _backoff_delay(attempt, initial_backoff, max_backoff)
             LOG.warning('HTTP request failed; retrying', extra={'method': method, 'url': url, 'sleep': sleep_for})
             time.sleep(sleep_for)
@@ -531,7 +542,7 @@ def request_with_retries(
 
 def _backoff_delay(attempt: int, initial_backoff: float, max_backoff: float) -> float:
     base = min(max_backoff, initial_backoff * (2 ** attempt))
-    return base * random.uniform(0.5, 1.5)
+    return float(base * random.uniform(0.5, 1.5))
 
 
 def _retry_after_delay(response: Response) -> float | None:
@@ -548,7 +559,8 @@ def require_success(response: Response, action: str) -> None:
     if 200 <= response.status_code < 300:
         return
     body = response.text[:4000]
-    raise AgentError(f'{action} failed: HTTP {response.status_code}: {body}')
+    msg = f'{action} failed: HTTP {response.status_code}: {body}'
+    raise AgentError(msg)
 
 
 def response_json_object(response: Response, action: str) -> dict[str, Any]:
@@ -558,26 +570,31 @@ def response_json_object(response: Response, action: str) -> dict[str, Any]:
     try:
         data = response.json()
     except ValueError as exc:
-        raise AgentError(f'{action} response is not valid JSON: {response.text[:4000]}') from exc
+        msg = f'{action} response is not valid JSON: {response.text[:4000]}'
+        raise AgentError(msg) from exc
     if not isinstance(data, dict):
-        raise AgentError(f'{action} response must be a JSON object')
+        msg = f'{action} response must be a JSON object'
+        raise AgentError(msg)
     return data
 
 
 def parse_enrollment_response(data: Mapping[str, Any], action: str) -> EnrollmentResponse:
     certificate = data.get('certificate')
     if not isinstance(certificate, str) or 'BEGIN CERTIFICATE' not in certificate:
-        raise AgentError(f'{action} response missing valid PEM certificate')
+        msg = f'{action} response missing valid PEM certificate'
+        raise AgentError(msg)
 
     raw_chain = data.get('certificate_chain', [])
     if raw_chain is None:
         raw_chain = []
     if not isinstance(raw_chain, list) or not all(isinstance(item, str) for item in raw_chain):
-        raise AgentError(f'{action} response field certificate_chain must be a list of PEM strings')
+        msg = f'{action} response field certificate_chain must be a list of PEM strings'
+        raise AgentError(msg)
 
     for index, item in enumerate(raw_chain):
         if 'BEGIN CERTIFICATE' not in item:
-            raise AgentError(f'{action} response certificate_chain[{index}] is not a PEM certificate')
+            msg = f'{action} response certificate_chain[{index}] is not a PEM certificate'
+            raise AgentError(msg)
 
     return EnrollmentResponse(certificate=certificate, certificate_chain=list(raw_chain))
 
@@ -664,13 +681,16 @@ def fetch_jobs(params: PollParams, session: Session, cert_pem_urlencoded: str) -
 
     poll_interval = data.get('poll_interval_seconds', 300)
     if not isinstance(poll_interval, int) or poll_interval < 1:
-        raise AgentError('job fetch response poll_interval_seconds must be a positive integer')
+        msg = 'job fetch response poll_interval_seconds must be a positive integer'
+        raise AgentError(msg)
 
     jobs = data.get('jobs', [])
     if not isinstance(jobs, list):
-        raise AgentError('job fetch response jobs must be a list')
+        msg = 'job fetch response jobs must be a list'
+        raise AgentError(msg)
     if not all(isinstance(job, dict) for job in jobs):
-        raise AgentError('each job must be an object')
+        msg = 'each job must be an object'
+        raise AgentError(msg)
 
     LOG.info('jobs fetched', extra={'count': len(jobs), 'poll_interval_seconds': poll_interval})
     return poll_interval, jobs
@@ -711,7 +731,10 @@ def execute_renewal_job(
 
     try:
         workflow_profile = _expect_object(job.get('workflow_profile'), 'job.workflow_profile')
-        cert_req = _expect_object(workflow_profile.get('certificate_request'), 'job.workflow_profile.certificate_request')
+        cert_req = _expect_object(
+            workflow_profile.get('certificate_request'),
+            'job.workflow_profile.certificate_request',
+        )
         cert_profile = str(cert_req.get('certificate_profile', 'domain_credential'))
         path = _expect_non_empty_str(cert_req.get('path'), 'job.workflow_profile.certificate_request.path')
         enroll_url = join_url(params.base_url, path)
@@ -731,7 +754,8 @@ def execute_renewal_job(
         # This prevents a failed renewal from corrupting the currently active credential.
         stage_parent = key_path.parent if str(key_path.parent) else Path()
         ensure_parent(stage_parent / '.keep')
-        with tempfile.TemporaryDirectory(prefix=f'.trustpoint-renew-{profile_id}-', dir=str(stage_parent)) as stage_dir_raw:
+        tmp_dir_prefix = f'.trustpoint-renew-{profile_id}-'
+        with tempfile.TemporaryDirectory(prefix=tmp_dir_prefix, dir=str(stage_parent)) as stage_dir_raw:
             stage_dir = Path(stage_dir_raw)
             staged_key = stage_dir / key_path.name
             staged_csr = stage_dir / csr_path.name
@@ -864,12 +888,29 @@ def sleep_interruptibly(seconds: int) -> None:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Bootstrap and run a hardened Trustpoint endpoint agent.')
     parser.add_argument('--profile', default='agent_setup.json', type=Path, help='Path to rendered agent_setup.json')
-    parser.add_argument('--once', action='store_true', help='Perform a single poll cycle after onboarding, then exit')
-    parser.add_argument('--skip-onboarding', action='store_true', help='Do not enroll; use existing local cert/key and only poll')
-    parser.add_argument('--request-timeout', type=int, default=DEFAULT_TIMEOUT_SECONDS, help='HTTP request timeout in seconds')
-    parser.add_argument('--max-retries', type=int, default=3, help='Maximum retries for transient HTTP/network failures')
-    parser.add_argument('--initial-backoff', type=float, default=DEFAULT_INITIAL_BACKOFF_SECONDS, help='Initial retry backoff in seconds')
-    parser.add_argument('--max-backoff', type=float, default=DEFAULT_MAX_BACKOFF_SECONDS, help='Maximum retry backoff in seconds')
+    parser.add_argument(
+        '--once', action='store_true', help='Perform a single poll cycle after onboarding, then exit'
+    )
+    parser.add_argument(
+        '--skip-onboarding',
+        action='store_true',
+        help='Do not enroll; use existing local cert/key and only poll',
+    )
+    parser.add_argument(
+        '--request-timeout', type=int, default=DEFAULT_TIMEOUT_SECONDS, help='HTTP request timeout in seconds'
+    )
+    parser.add_argument(
+        '--max-retries', type=int, default=3, help='Maximum retries for transient HTTP/network failures'
+    )
+    parser.add_argument(
+        '--initial-backoff',
+        type=float,
+        default=DEFAULT_INITIAL_BACKOFF_SECONDS,
+        help='Initial retry backoff in seconds',
+    )
+    parser.add_argument(
+        '--max-backoff', type=float, default=DEFAULT_MAX_BACKOFF_SECONDS, help='Maximum retry backoff in seconds'
+    )
     parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Log level')
     parser.add_argument('--log-format', default='text', choices=['text', 'json'], help='Log format')
     return parser.parse_args(argv)
@@ -890,7 +931,8 @@ def main(argv: list[str] | None = None) -> int:
                 key_path=profile.local_storage.private_key_path,
             )
             if not active.cert_path.exists() or not active.key_path.exists():
-                raise AgentError('--skip-onboarding requires existing certificate and private key files')
+                msg = '--skip-onboarding requires existing certificate and private key files'
+                raise AgentError(msg)
             LOG.info('skipping onboarding and using existing local credential')
         else:
             active = enroll_initial(profile, args)

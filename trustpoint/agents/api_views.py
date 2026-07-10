@@ -77,8 +77,11 @@ class AgentCertificateAuthentication(BaseAuthentication):
         except Exception as exc:
             msg = f'Certificate authentication failed: {exc}'
             raise AuthenticationFailed(msg) from exc
-        else:
-            return (agent, None)
+
+        if agent is None:
+            msg = 'Authentication failed: agent not found.'
+            raise AuthenticationFailed(msg)
+        return (agent, None)
 
     @staticmethod
     def _raise_auth_failed(msg: str) -> None:

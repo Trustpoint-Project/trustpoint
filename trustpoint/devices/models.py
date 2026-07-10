@@ -156,12 +156,6 @@ class DeviceModel(CustomDeleteActionModel):
         """
         return str(self.rfc_4122_uuid)
 
-    def clean(self) -> None:
-        """Validation before saving the model."""
-        error_messages = {}
-
-        if not (self.onboarding_config or self.no_onboarding_config):
-            error_messages['onboarding_config'] = 'Either onboarding or no-onboarding has to be configured.'
     def _validate_opc_ua_gds_push(self, error_messages: dict[str, str]) -> None:
         """Validate OPC UA GDS Push-specific constraints.
 
