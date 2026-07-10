@@ -1,24 +1,169 @@
-"""Module that contains the logic for generating the TLS server credential."""
+"""Logic for generating, parsing, and staging TLS server credentials during setup."""
 
 from __future__ import annotations
 
 import datetime
+import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.x509 import NameOID
-from trustpoint_core.serializer import CredentialSerializer, PrivateKeySerializer
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.x509.oid import NameOID
+from trustpoint_core.serializer import (
+    CertificateCollectionSerializer,
+    CertificateSerializer,
+    CredentialSerializer,
+    PrivateKeySerializer,
+)
+
+from pki.util.x509 import CertificateVerifier
 
 if TYPE_CHECKING:
     import ipaddress
 
 ONE_DAY = datetime.timedelta(days=1)
+MIN_CERTIFICATE_CHAIN_LENGTH = 2
+IPV4_VERSION = 4
+
+TLS_STAGING_DIRECTORY_MODE = 0o700
+TLS_STAGING_FILE_MODE = 0o600
+TLS_STAGING_ROOT = Path('/tmp/trustpoint-wizard/tls')  # noqa: S108
+TLS_PRIVATE_KEY_FILE = TLS_STAGING_ROOT / 'tls-private-key.pem'
+TLS_CERTIFICATE_FILE = TLS_STAGING_ROOT / 'tls-certificate.pem'
+TLS_CHAIN_FILE = TLS_STAGING_ROOT / 'tls-chain.pem'
+
+
+def _ensure_tls_staging_root() -> None:
+    """Create the TLS staging directory with private permissions."""
+    TLS_STAGING_ROOT.mkdir(mode=TLS_STAGING_DIRECTORY_MODE, parents=True, exist_ok=True)
+    TLS_STAGING_ROOT.chmod(TLS_STAGING_DIRECTORY_MODE)
+
+
+def _write_staged_tls_file(path: Path, content: bytes) -> None:
+    """Write a staged TLS file with private permissions."""
+    path.write_bytes(content)
+    path.chmod(TLS_STAGING_FILE_MODE)
+
+
+def clear_staged_tls_credential() -> None:
+    """Remove the staged TLS credential from wizard-local temporary storage."""
+    if TLS_STAGING_ROOT.exists():
+        shutil.rmtree(TLS_STAGING_ROOT, ignore_errors=True)
+
+
+def stage_tls_credential(credential_serializer: CredentialSerializer) -> None:
+    """Persist the staged TLS credential to the wizard-local temporary storage."""
+    private_key_serializer = credential_serializer.get_private_key_serializer()
+    certificate_serializer = credential_serializer.get_certificate_serializer()
+    if private_key_serializer is None or certificate_serializer is None:
+        err_msg = 'The staged TLS credential is missing the private key or certificate.'
+        raise ValueError(err_msg)
+
+    _ensure_tls_staging_root()
+    _write_staged_tls_file(TLS_PRIVATE_KEY_FILE, private_key_serializer.as_pkcs8_pem())
+    _write_staged_tls_file(TLS_CERTIFICATE_FILE, certificate_serializer.as_pem())
+
+    additional_certificates = list(credential_serializer.additional_certificates or [])
+    if additional_certificates:
+        _write_staged_tls_file(TLS_CHAIN_FILE, CertificateCollectionSerializer(additional_certificates).as_pem())
+    elif TLS_CHAIN_FILE.exists():
+        TLS_CHAIN_FILE.unlink()
+
+
+def load_staged_tls_credential() -> CredentialSerializer | None:
+    """Load the staged TLS credential from temporary wizard storage."""
+    if not TLS_PRIVATE_KEY_FILE.exists() or not TLS_CERTIFICATE_FILE.exists():
+        return None
+
+    private_key_serializer = PrivateKeySerializer.from_pem(TLS_PRIVATE_KEY_FILE.read_bytes(), None)
+    certificate_serializer = CertificateSerializer.from_pem(TLS_CERTIFICATE_FILE.read_bytes())
+
+    additional_certificates: list[x509.Certificate] = []
+    if TLS_CHAIN_FILE.exists():
+        chain_bytes = TLS_CHAIN_FILE.read_bytes()
+        if chain_bytes.strip():
+            additional_certificates = list(CertificateCollectionSerializer.from_pem(chain_bytes).as_crypto())
+
+    return CredentialSerializer(
+        private_key=private_key_serializer.as_crypto(),
+        certificate=certificate_serializer.as_crypto(),
+        additional_certificates=additional_certificates,
+    )
+
+
+def staged_tls_common_name() -> str | None:
+    """Return the common name from the staged TLS certificate, if available."""
+    credential = load_staged_tls_credential()
+    if credential is None or credential.certificate is None:
+        return None
+    attributes = credential.certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    if not attributes:
+        return None
+
+    common_name = attributes[0].value
+    if isinstance(common_name, bytes):
+        return common_name.decode('utf-8')
+    return common_name
+
+
+def extract_staged_tls_sans() -> tuple[list[str], list[str], list[str]]:
+    """Extract SAN values from the staged TLS credential."""
+    credential = load_staged_tls_credential()
+    if credential is None or credential.certificate is None:
+        return [], [], []
+
+    try:
+        san_extension = credential.certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
+        return [], [], []
+
+    ipv4_addresses: list[str] = []
+    ipv6_addresses: list[str] = []
+    dns_names: list[str] = []
+
+    for name in san_extension:
+        if isinstance(name, x509.IPAddress):
+            if name.value.version == IPV4_VERSION:
+                ipv4_addresses.append(str(name.value))
+            else:
+                ipv6_addresses.append(str(name.value))
+        elif isinstance(name, x509.DNSName):
+            dns_names.append(name.value)
+
+    return ipv4_addresses, ipv6_addresses, dns_names
+
+
+def get_staged_root_ca_certificate_serializer() -> CertificateSerializer | None:
+    """Return the staged TLS root CA serializer, or the self-signed end-entity when applicable."""
+    credential = load_staged_tls_credential()
+    if credential is None or credential.certificate is None:
+        return None
+
+    additional_certificates = list(credential.additional_certificates or [])
+    if additional_certificates:
+        root_candidate = additional_certificates[-1]
+        if _is_ca_certificate(root_candidate):
+            return CertificateSerializer(root_candidate)
+
+    if credential.certificate.subject == credential.certificate.issuer:
+        return CertificateSerializer(credential.certificate)
+    return None
+
+
+def _is_ca_certificate(certificate: x509.Certificate) -> bool:
+    """Return whether the certificate is marked as a CA certificate."""
+    try:
+        basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+    except x509.ExtensionNotFound:
+        return False
+    return basic_constraints.ca
 
 
 class TlsServerCredentialGenerator:
-    """Wraps methods for generating a TLS server credential."""
+    """Wrap methods for generating a TLS server credential."""
 
     def __init__(
         self,
@@ -26,23 +171,18 @@ class TlsServerCredentialGenerator:
         ipv6_addresses: list[ipaddress.IPv6Address],
         domain_names: list[str],
     ) -> None:
-        """Initializes the TlsServerCredentialGenerator with the provided SAN information.
-
-        Args:
-            ipv4_addresses: IPv4 addresses to be included in the SAN.
-            ipv6_addresses: IPv6 addresses to be included in the SAN.
-            domain_names: Domain names to be included in the SAN.
-        """
+        """Store the SAN values to include in the generated TLS server credential."""
         self._ipv4_addresses = ipv4_addresses
         self._ipv6_addresses = ipv6_addresses
         self._domain_names = domain_names
 
     @staticmethod
     def _generate_key_pair() -> PrivateKeySerializer:
+        """Generate a new EC private key for a staged TLS credential."""
         return PrivateKeySerializer(ec.generate_private_key(curve=ec.SECP256R1()))
 
     def generate_tls_server_credential(self) -> CredentialSerializer:
-        """Generates a self-signed TLS credential for use by the Trustpoint NGINX server."""
+        """Generate a self-signed TLS credential for use by the Trustpoint server."""
         one_day = datetime.timedelta(1, 0, 0)
         private_key = ec.generate_private_key(curve=ec.SECP256R1())
         public_key = private_key.public_key()
@@ -50,14 +190,14 @@ class TlsServerCredentialGenerator:
         builder = builder.subject_name(
             x509.Name(
                 [
-                    x509.NameAttribute(NameOID.COMMON_NAME, 'Trustpoint Self-Signed TLS Server Credential'),
+                    x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Trustpoint Self-Signed TLS Server Credential'),
                 ]
             )
         )
         builder = builder.issuer_name(
             x509.Name(
                 [
-                    x509.NameAttribute(NameOID.COMMON_NAME, 'Trustpoint Self-Signed TLS Server Credential'),
+                    x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Trustpoint Self-Signed TLS Server Credential'),
                 ]
             )
         )
@@ -104,3 +244,200 @@ class TlsServerCredentialGenerator:
         return CredentialSerializer(
             private_key=private_key, certificate=certificate, additional_certificates=[certificate]
         )
+
+
+class TlsServerCredentialFileParser:
+    """Build staged TLS server credentials from uploaded files."""
+
+    @staticmethod
+    def _encode_password(password: str | None, field_name: str) -> bytes | None:
+        """Encode an optional uploaded-file password as UTF-8 bytes."""
+        if not password:
+            return None
+        try:
+            return password.encode('utf-8')
+        except UnicodeError as exception:
+            err_msg = f'The {field_name} contains invalid UTF-8 data.'
+            raise ValueError(err_msg) from exception
+
+    @staticmethod
+    def _parse_certificates(raw_bytes: bytes) -> list[x509.Certificate]:
+        """Parse one or more PEM or DER certificates from uploaded bytes."""
+        try:
+            return list(CertificateCollectionSerializer.from_bytes(raw_bytes).as_crypto())
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            return [CertificateSerializer.from_bytes(raw_bytes).as_crypto()]
+        except (TypeError, ValueError) as exception:
+            err_msg = 'Failed to parse the certificate file.'
+            raise ValueError(err_msg) from exception
+
+    @staticmethod
+    def _is_ca_certificate(certificate: x509.Certificate) -> bool:
+        """Return whether the certificate is marked as a CA certificate."""
+        return _is_ca_certificate(certificate)
+
+    @classmethod
+    def _is_tls_server_certificate(cls, certificate: x509.Certificate) -> bool:
+        """Return whether the certificate is a non-CA TLS server end-entity certificate."""
+        if cls._is_ca_certificate(certificate):
+            return False
+        try:
+            eku = certificate.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
+        except x509.ExtensionNotFound:
+            return False
+        return x509.ExtendedKeyUsageOID.SERVER_AUTH in eku  # type: ignore[attr-defined]
+
+    @classmethod
+    def _get_single_end_entity_certificate(cls, certificates: list[x509.Certificate]) -> x509.Certificate:
+        """Return the single end-entity TLS server certificate from a parsed certificate set."""
+        ee_certificates = [certificate for certificate in certificates if not cls._is_ca_certificate(certificate)]
+        if len(ee_certificates) != 1:
+            err_msg = 'Expected exactly one end-entity TLS server certificate.'
+            raise ValueError(err_msg)
+
+        end_entity_certificate = ee_certificates[0]
+        if not cls._is_tls_server_certificate(end_entity_certificate):
+            err_msg = 'The end-entity certificate is not a valid TLS server certificate.'
+            raise ValueError(err_msg)
+        return end_entity_certificate
+
+    @staticmethod
+    def _match_private_key(private_key_serializer: PrivateKeySerializer, certificate: x509.Certificate) -> None:
+        """Validate that the uploaded private key matches the end-entity certificate."""
+        private_key_public_bytes = (
+            private_key_serializer.as_crypto()
+            .public_key()
+            .public_bytes(
+                Encoding.DER,
+                PublicFormat.SubjectPublicKeyInfo,
+            )
+        )
+        certificate_public_bytes = certificate.public_key().public_bytes(
+            Encoding.DER,
+            PublicFormat.SubjectPublicKeyInfo,
+        )
+        if private_key_public_bytes != certificate_public_bytes:
+            err_msg = 'The provided private key does not match the TLS server certificate.'
+            raise ValueError(err_msg)
+
+    @classmethod
+    def _find_chain(
+        cls,
+        current_certificate: x509.Certificate,
+        candidates: list[x509.Certificate],
+    ) -> list[x509.Certificate] | None:
+        """Recursively build a certificate chain from the current certificate to a root CA."""
+        if cls._is_ca_certificate(current_certificate) and current_certificate.issuer == current_certificate.subject:
+            return [current_certificate]
+
+        for index, candidate in enumerate(candidates):
+            if candidate.subject != current_certificate.issuer:
+                continue
+            try:
+                CertificateVerifier._verify_cert_signature(current_certificate, candidate)  # noqa: SLF001
+            except (TypeError, ValueError):
+                continue
+
+            remaining_candidates = [*candidates[:index], *candidates[index + 1 :]]
+            tail = cls._find_chain(candidate, remaining_candidates)
+            if tail is not None:
+                return [current_certificate, *tail]
+        return None
+
+    @classmethod
+    def _build_certificate_chain(
+        cls,
+        end_entity_certificate: x509.Certificate,
+        additional_certificates: list[x509.Certificate],
+    ) -> list[x509.Certificate]:
+        """Validate and assemble the full certificate chain for the uploaded TLS credential."""
+        invalid_certificates = [
+            certificate for certificate in additional_certificates if not cls._is_ca_certificate(certificate)
+        ]
+        if invalid_certificates:
+            err_msg = 'Only CA certificates may be included in the certificate chain.'
+            raise ValueError(err_msg)
+
+        chain = cls._find_chain(end_entity_certificate, additional_certificates)
+        if chain is None or len(chain) < MIN_CERTIFICATE_CHAIN_LENGTH:
+            err_msg = 'The uploaded certificates do not contain the full chain up to the root CA.'
+            raise ValueError(err_msg)
+        return chain
+
+    @staticmethod
+    def _to_credential_serializer(
+        private_key_serializer: PrivateKeySerializer,
+        chain: list[x509.Certificate],
+    ) -> CredentialSerializer:
+        """Convert a validated private key and certificate chain into a credential serializer."""
+        certificate_collection_serializer = CertificateCollectionSerializer(chain[1:])
+        return CredentialSerializer.from_serializers(
+            private_key_serializer=private_key_serializer,
+            certificate_serializer=CertificateSerializer(chain[0]),
+            certificate_collection_serializer=certificate_collection_serializer,
+        )
+
+    @classmethod
+    def build_from_pkcs12_bytes(
+        cls,
+        pkcs12_raw: bytes,
+        pkcs12_password: str | None = None,
+    ) -> CredentialSerializer:
+        """Build a staged TLS credential from an uploaded PKCS#12 bundle."""
+        password_bytes = cls._encode_password(pkcs12_password, 'PKCS#12 password')
+        try:
+            credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, password_bytes)
+        except (TypeError, ValueError) as exception:
+            err_msg = 'Failed to parse and load the uploaded PKCS#12 file. Either wrong password or corrupted file.'
+            raise ValueError(err_msg) from exception
+
+        certificate = credential_serializer.certificate
+        if certificate is None:
+            err_msg = 'The PKCS#12 file does not contain a TLS server certificate.'
+            raise ValueError(err_msg)
+
+        private_key_serializer = credential_serializer.get_private_key_serializer()
+        if private_key_serializer is None:
+            err_msg = 'The PKCS#12 file does not contain a private key.'
+            raise ValueError(err_msg)
+
+        chain = cls._build_certificate_chain(
+            cls._get_single_end_entity_certificate(
+                [certificate, *(credential_serializer.additional_certificates or [])]
+            ),
+            list(credential_serializer.additional_certificates or []),
+        )
+        cls._match_private_key(private_key_serializer, chain[0])
+        return cls._to_credential_serializer(private_key_serializer, chain)
+
+    @classmethod
+    def build_from_separate_files(
+        cls,
+        tls_server_certificate_raw: bytes,
+        further_certificates_raw: list[bytes],
+        key_file_raw: bytes,
+        key_password: str | None = None,
+    ) -> CredentialSerializer:
+        """Build a staged TLS credential from separate certificate chain and private key files."""
+        password_bytes = cls._encode_password(key_password, 'key password')
+        try:
+            private_key_serializer = PrivateKeySerializer.from_bytes(key_file_raw, password_bytes)
+        except (TypeError, ValueError) as exception:
+            err_msg = 'Failed to parse the private key file. Either wrong password or corrupted file.'
+            raise ValueError(err_msg) from exception
+
+        tls_server_certificates = cls._parse_certificates(tls_server_certificate_raw)
+        end_entity_certificate = cls._get_single_end_entity_certificate(tls_server_certificates)
+
+        additional_certificates = [
+            certificate for certificate in tls_server_certificates if certificate != end_entity_certificate
+        ]
+        for further_certificates_file_raw in further_certificates_raw:
+            additional_certificates.extend(cls._parse_certificates(further_certificates_file_raw))
+
+        chain = cls._build_certificate_chain(end_entity_certificate, additional_certificates)
+        cls._match_private_key(private_key_serializer, chain[0])
+        return cls._to_credential_serializer(private_key_serializer, chain)

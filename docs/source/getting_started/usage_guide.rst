@@ -62,17 +62,27 @@ Trustpoint can be configured to operate in different modes in relation to the Is
     - This configuration is ideal for integrating with existing PKI setups.
     - **Steps to Configure:**
         - In **PKI > Certificate Authorities > Add new CA**
-        - Select CA type **Local-Unprotected** or **Local-PKCS11**
+        - Select **Import a new Issuing CA from file**
         - You can import an Issuing CA from a file by importing a PKCS#12 file or by importing the key and certificate separately
+    - Private-key imports are only available when **Allow imported private keys** is enabled in the Security settings
     - **Use Case:** Issuing certificates in air-gapped environments or when you already have a CA certificate available
+
+   .. note::
+
+      Imported private keys are disabled by default. Enable **Allow imported
+      private keys** under **Management > Settings > Security** only when
+      importing existing private-key credentials is part of the deployment
+      policy. The feature requires a PKCS#11 crypto backend and PKCS#11-backed
+      application-secret protection. Imported key material is encrypted in the
+      Trustpoint database and is not injected into the HSM token.
 
 2. **Requesting CA Certificates via PKI Protocols**
     - Trustpoint can request Issuing CA certificates from a superior Certificate Authority using standard PKI protocols (CMP or EST).
     - This is the recommended approach for obtaining Issuing CA certificates in networked environments.
     - **Steps to Configure:**
         - In **PKI > Certificate Authorities > Add new CA**
-        - Select CA type **Local-Unprotected** or **Local-PKCS11**
-        - Generate a keypair locally
+        - Select **Generate a key-pair and request an Issuing CA certificate**
+        - Generate a key pair through the configured crypto backend
         - Use CMP or EST to request an Issuing CA certificate from a superior CA
         - Trustpoint will receive and store the issued CA certificate
     - **Advantages:**
@@ -167,7 +177,12 @@ Managing Truststores in Trustpoint
 Security Considerations
 =======================
 
-With the current versions of Trustpoint, there is no built-in capability to securely store private keys. However, this feature is planned for future releases and will include HSM / TPM support, likely through the use of PKCS#11.
+Trustpoint uses a configured crypto backend for Trustpoint-managed signing keys.
+With the PKCS#11 backend, generated signing authority keys are created on the
+token and marked non-extractable. Protected imported keys are a separate
+operator-enabled mode for existing credentials; they are encrypted by
+application-secret protection in the Trustpoint database and are not injected
+into the HSM token.
 
 Backup and Recovery
 ===================

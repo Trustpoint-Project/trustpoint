@@ -37,7 +37,6 @@ class WorkflowDefinitionService:
     def _prepare_source_yaml(
         yaml_text: str,
         *,
-        name: str | None = None,
         enabled: bool | None = None,
     ) -> str:
         src = parse_yaml_text(yaml_text)
@@ -47,8 +46,6 @@ class WorkflowDefinitionService:
             msg = 'Top-level YAML must be a mapping/object.'
             raise CompileError(msg)
 
-        if name is not None:
-            src['name'] = name.strip()
         if enabled is not None:
             src['enabled'] = bool(enabled)
 
@@ -58,14 +55,12 @@ class WorkflowDefinitionService:
         self,
         yaml_text: str,
         *,
-        name: str | None = None,
         enabled: bool | None = None,
     ) -> CompileResult:
         """Format and compile YAML without saving a definition."""
         try:
             formatted = self._prepare_source_yaml(
                 yaml_text,
-                name=name,
                 enabled=enabled,
             )
         except Exception as e:  # noqa: BLE001
@@ -111,14 +106,12 @@ class WorkflowDefinitionService:
     def create_definition(
         self,
         *,
-        name: str,
-        enabled: bool,
+        enabled: bool | None,
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
         """Create a new definition from validated YAML text."""
         res = self.compile_yaml(
             yaml_text,
-            name=name,
             enabled=enabled,
         )
         if not res.ok or res.ir is None or res.formatted_yaml is None:
@@ -138,14 +131,12 @@ class WorkflowDefinitionService:
         self,
         *,
         definition: Workflow2Definition,
-        name: str,
-        enabled: bool,
+        enabled: bool | None,
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
         """Update an existing definition from validated YAML text."""
         res = self.compile_yaml(
             yaml_text,
-            name=name,
             enabled=enabled,
         )
         if not res.ok or res.ir is None or res.formatted_yaml is None:

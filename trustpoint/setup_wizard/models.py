@@ -1,0 +1,432 @@
+"""SetupWizard Models."""
+
+from datetime import UTC
+from typing import Any, ClassVar, Final, Self
+
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.utils import timezone
+from django.utils.translation import gettext_lazy
+
+
+def default_tls_ipv4_addresses() -> list[str]:
+    """Default IPv4 SAN values for the fresh-install TLS step."""
+    return ['127.0.0.1']
+
+
+def default_tls_ipv6_addresses() -> list[str]:
+    """Default IPv6 SAN values for the fresh-install TLS step."""
+    return ['::1']
+
+
+def default_tls_dns_names() -> list[str]:
+    """Default DNS SAN values for the fresh-install TLS step."""
+    return ['localhost']
+
+
+class SetupWizardCompletedModel(models.Model):
+    """Global, write-once configuration state for an on-prem installation.
+
+    This model is designed as a singleton row (primary key fixed to `SINGLETON_ID`)
+    that records whether initial setup has completed. Once `setup_completed_at` is
+    set (non-null), it is treated as immutable by application-level validation.
+
+    For a hard guarantee (including against direct SQL), enforce immutability with
+    a PostgreSQL trigger as well.
+    """
+
+    SINGLETON_ID: Final[int] = 1
+
+    singleton_id: models.PositiveSmallIntegerField[int, int] = models.PositiveSmallIntegerField(
+        primary_key=True,
+        default=SINGLETON_ID,
+        editable=False,
+        help_text='Singleton primary key. Always 1.',
+    )
+    setup_completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp when initial setup was completed. Write-once once set.',
+    )
+
+    def __str__(self) -> str:
+        """Return a human-readable representation of the singleton configuration.
+
+        Returns:
+            A short string indicating whether setup is pending or completed, and
+            the completion timestamp if present.
+        """
+        if self.setup_completed_at is None:
+            return 'SetupWizardCompletedModel(setup=pending)'
+        return f'SetupWizardCompletedModel(setup=completed at {self.setup_completed_at:%Y-%m-%d %H:%M:%S%z})'
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Persist this instance after validating write-once semantics.
+
+        Args:
+            *args: Positional arguments forwarded to Django's `Model.save()`.
+            **kwargs: Keyword arguments forwarded to Django's `Model.save()`.
+        """
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def setup_wizard_completed(cls) -> bool:
+        """Class-level check.
+
+        Returns:
+            False if row does not exist or setup_completed_at is NULL, True otherwise.
+        """
+        if getattr(settings, 'TRUSTPOINT_IS_OPERATIONAL', False):
+            return True
+        return cls.objects.filter(pk=cls.SINGLETON_ID, setup_completed_at__isnull=False).exists()
+
+    def clean(self) -> None:
+        """Validate model state.
+
+        Enforces application-level immutability: if `setup_completed_at` has ever
+        been set in the database, attempts to change it (including resetting to
+        null or changing the timestamp) raise `ValidationError`.
+
+        Raises:
+            ValidationError: If `setup_completed_at` is modified after being set.
+        """
+        if self.pk:
+            prior = (
+                SetupWizardCompletedModel.objects.filter(pk=self.pk)
+                .values_list('setup_completed_at', flat=True)
+                .first()
+            )
+            if prior is not None and self.setup_completed_at != prior:
+                err_msg = {'setup_completed_at': 'Initial setup is write-once and cannot be modified.'}
+                raise ValidationError(err_msg)
+
+    @classmethod
+    def mark_setup_complete_once(cls) -> bool:
+        """Atomically mark setup as complete exactly once.
+
+        Uses a row-level lock to prevent races. If setup is already complete,
+        the method is a no-op.
+
+        Returns:
+            True if setup completion was recorded by this call, otherwise False.
+        """
+        with transaction.atomic():
+            cfg, _created = cls.objects.select_for_update().get_or_create(singleton_id=cls.SINGLETON_ID)
+            if cfg.setup_completed_at is not None:
+                return False
+            cfg.setup_completed_at = timezone.now().astimezone(UTC)
+            cfg.save(update_fields=['setup_completed_at'])
+            return True
+
+
+class SetupWizardConfigModel(models.Model):
+    """Model that holds the data that will be applied when the setup wizard is completed."""
+
+    # ClassVar and Final can be nested with python >= 3.13
+    # noinspection PyFinal
+    SINGLETON_ID: ClassVar[Final[int]] = 1
+
+    singleton_id = models.PositiveSmallIntegerField(
+        primary_key=True,
+        default=SINGLETON_ID,
+        editable=False,
+        help_text='Singleton primary key. Always 1.',
+    )
+
+    class FreshInstallCurrentStep(models.IntegerChoices):
+        """Enumerate the ordered steps in the fresh-install wizard."""
+
+        ADMIN_USER = 0, gettext_lazy('Admin User')
+        DATABASE = 1, gettext_lazy('Database')
+        CRYPTO_STORAGE = 2, gettext_lazy('Crypto-Storage')
+        BACKEND_CONFIG = 3, gettext_lazy('Backend-Config')
+        DEMO_DATA = 4, gettext_lazy('Demo-Data')
+        TLS_CONFIG = 5, gettext_lazy('TLS-Config')
+        SUMMARY = 6, gettext_lazy('Summary')
+
+    class BootstrapFlow(models.TextChoices):
+        """Enumerate the bootstrap flow currently being worked on."""
+
+        FRESH_INSTALL = 'fresh_install', gettext_lazy('Fresh Install')
+        RESTORE_BACKUP = 'restore_backup', gettext_lazy('Restore Backup')
+        CONNECT_EXISTING = 'connect_existing', gettext_lazy('Connect Existing')
+
+    bootstrap_active_flow = models.CharField(
+        max_length=32,
+        choices=BootstrapFlow,
+        blank=True,
+        default='',
+        help_text='Bootstrap flow currently being worked on.',
+    )
+    bootstrap_current_step = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        help_text='Current step name within the active bootstrap flow.',
+    )
+
+    fresh_install_current_step = models.PositiveSmallIntegerField(
+        choices=FreshInstallCurrentStep,
+        null=False,
+        blank=True,
+        default=FreshInstallCurrentStep.ADMIN_USER,
+    )
+
+    fresh_install_admin_user_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the operational admin-user step was submitted.',
+    )
+
+    fresh_install_database_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the operational database step was submitted.',
+    )
+
+    fresh_install_crypto_storage_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the crypto storage step was submitted.',
+    )
+
+    fresh_install_backend_config_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the backend configuration step was submitted.',
+    )
+
+    fresh_install_demo_data_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the demo data step was submitted.',
+    )
+
+    fresh_install_tls_config_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the TLS config step was submitted.',
+    )
+
+    fresh_install_summary_submitted = models.BooleanField(
+        default=False, help_text='Whether the summary step was submitted.'
+    )
+
+    restore_backup_archive_path = models.TextField(
+        blank=True,
+        default='',
+        help_text='Bootstrap-staged restore archive path.',
+    )
+    restore_backup_archive_original_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Original uploaded backup archive filename.',
+    )
+    restore_backup_import_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the restore backup import step was submitted.',
+    )
+    restore_backup_restored_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp when the staged backup archive was restored into the target database.',
+    )
+    restore_backup_restore_error = models.TextField(
+        blank=True,
+        default='',
+        help_text='Last restore error captured while importing the staged backup archive.',
+    )
+
+    class FreshInstallTlsConfigType(models.TextChoices):
+        """Enumerate the supported TLS credential input modes for fresh install."""
+
+        GENERATE = 'generate', gettext_lazy('Generate credential')
+        PKCS12 = 'pkcs12', gettext_lazy('Upload PKCS#12')
+        SEPARATE_FILES = 'separate_files', gettext_lazy('Upload separate files')
+
+    fresh_install_tls_mode = models.CharField(
+        max_length=32,
+        choices=FreshInstallTlsConfigType,
+        default=FreshInstallTlsConfigType.GENERATE,
+        help_text='Selected TLS configuration mode during the fresh-install wizard.',
+    )
+
+    operational_admin_username = models.CharField(
+        max_length=150,
+        blank=True,
+        default='admin',
+        help_text='Username for the first operational administrator.',
+    )
+    operational_admin_email = models.EmailField(
+        blank=True,
+        default='',
+        help_text='Email address for the first operational administrator.',
+    )
+    operational_admin_password_hash = models.CharField(
+        max_length=256,
+        blank=True,
+        default='',
+        help_text='Hashed password for the first operational administrator.',
+    )
+
+    operational_db_host = models.CharField(
+        max_length=255,
+        blank=True,
+        default='postgres',
+        help_text='Operational PostgreSQL host name or IP address.',
+    )
+    operational_db_port = models.PositiveIntegerField(
+        default=5432,
+        help_text='Operational PostgreSQL TCP port.',
+    )
+    operational_db_name = models.CharField(
+        max_length=128,
+        blank=True,
+        default='trustpoint_db',
+        help_text='Operational PostgreSQL database name.',
+    )
+    operational_db_user = models.CharField(
+        max_length=128,
+        blank=True,
+        default='admin',
+        help_text='Operational PostgreSQL user name.',
+    )
+    operational_db_password = models.CharField(
+        max_length=256,
+        blank=True,
+        default='',
+        help_text='Operational PostgreSQL password.',
+    )
+    operational_config_applied = models.BooleanField(
+        default=False,
+        help_text='Whether the bootstrap configuration was applied to the operational runtime.',
+    )
+
+    class CryptoStorageType(models.IntegerChoices):
+        """Enumerate the available cryptographic storage backends for setup."""
+
+        SoftwareStorage = 0, gettext_lazy('Software Storage')
+        HsmStorage = 1, gettext_lazy('HSM Storage')
+        RestBackend = 2, gettext_lazy('REST Backend')
+
+    crypto_storage = models.PositiveSmallIntegerField(
+        choices=CryptoStorageType, null=False, blank=False, default=CryptoStorageType.SoftwareStorage
+    )
+
+    class FreshInstallPkcs11AuthSource(models.TextChoices):
+        """Enumerate how the PKCS#11 backend resolves the user PIN."""
+
+        FILE = 'file', gettext_lazy('PIN file')
+        ENV = 'env', gettext_lazy('Environment variable')
+
+    fresh_install_pkcs11_module_path = models.TextField(
+        blank=True,
+        default='',
+        help_text='Configured PKCS#11 module path staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_token_label = models.CharField(
+        max_length=128,
+        blank=True,
+        default='',
+        help_text='Configured PKCS#11 token label staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_token_serial = models.CharField(
+        max_length=128,
+        blank=True,
+        default='',
+        help_text='Configured PKCS#11 token serial staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_slot_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Configured PKCS#11 slot id staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_auth_source = models.CharField(
+        max_length=16,
+        choices=FreshInstallPkcs11AuthSource.choices,
+        default=FreshInstallPkcs11AuthSource.FILE,
+        help_text='How the PKCS#11 backend resolves the user PIN during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_auth_source_ref = models.TextField(
+        blank=True,
+        default='',
+        help_text='PIN file path or environment variable name staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_config_path = models.TextField(
+        blank=True,
+        default='',
+        help_text='Optional provider PKCS#11 configuration file staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_config_env_var = models.CharField(
+        max_length=128,
+        blank=True,
+        default='',
+        help_text='Environment variable that points the PKCS#11 library to the provider configuration file.',
+    )
+    fresh_install_pkcs11_enforce_app_secret_protection = models.BooleanField(
+        default=True,
+        help_text='Require the PKCS#11 backend to protect the application-secret DEK during fresh install.',
+    )
+
+    inject_demo_data = models.BooleanField(null=False, blank=False, help_text='Inject demo data.', default=True)
+
+    def __str__(self) -> str:
+        """Return a concise description of the current singleton wizard configuration."""
+        current_step = self.FreshInstallCurrentStep(self.fresh_install_current_step).label
+        return f'SetupWizardConfigModel(step={current_step}, demo_data={self.inject_demo_data})'
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Persist the singleton config row while enforcing the fixed primary key."""
+        if self.pk is None:
+            self.pk = self.SINGLETON_ID
+        elif self.pk != self.SINGLETON_ID:
+            err_msg = 'Only the singleton row with pk=1 is allowed.'
+            raise ValidationError(err_msg)
+
+        return super().save(*args, **kwargs)
+
+    @classmethod
+    def get_singleton(cls) -> Self:
+        """Return the singleton setup wizard configuration row, creating it if needed."""
+        obj, _ = cls.objects.get_or_create(pk=cls.SINGLETON_ID)
+        return obj
+
+    @classmethod
+    def get_current_step(cls) -> FreshInstallCurrentStep:
+        """Return the current fresh-install step as an enum member.
+
+        Returns:
+            The current step as FreshInstallCurrentStep.
+        """
+        singleton = cls.get_singleton()
+        return singleton.FreshInstallCurrentStep(singleton.fresh_install_current_step)
+
+    def is_step_submitted(self, step: FreshInstallCurrentStep) -> bool:
+        """Return whether the given fresh-install step was submitted."""
+        submitted_fields = {
+            self.FreshInstallCurrentStep.ADMIN_USER: self.fresh_install_admin_user_submitted,
+            self.FreshInstallCurrentStep.DATABASE: self.fresh_install_database_submitted,
+            self.FreshInstallCurrentStep.CRYPTO_STORAGE: self.fresh_install_crypto_storage_submitted,
+            self.FreshInstallCurrentStep.BACKEND_CONFIG: self.fresh_install_backend_config_submitted,
+            self.FreshInstallCurrentStep.DEMO_DATA: self.fresh_install_demo_data_submitted,
+            self.FreshInstallCurrentStep.TLS_CONFIG: self.fresh_install_tls_config_submitted,
+            self.FreshInstallCurrentStep.SUMMARY: self.fresh_install_summary_submitted,
+        }
+        return submitted_fields[step]
+
+    def mark_step_submitted(self, step: FreshInstallCurrentStep) -> None:
+        """Mark the given fresh-install step as submitted."""
+        field_name = {
+            self.FreshInstallCurrentStep.ADMIN_USER: 'fresh_install_admin_user_submitted',
+            self.FreshInstallCurrentStep.DATABASE: 'fresh_install_database_submitted',
+            self.FreshInstallCurrentStep.CRYPTO_STORAGE: 'fresh_install_crypto_storage_submitted',
+            self.FreshInstallCurrentStep.BACKEND_CONFIG: 'fresh_install_backend_config_submitted',
+            self.FreshInstallCurrentStep.DEMO_DATA: 'fresh_install_demo_data_submitted',
+            self.FreshInstallCurrentStep.TLS_CONFIG: 'fresh_install_tls_config_submitted',
+            self.FreshInstallCurrentStep.SUMMARY: 'fresh_install_summary_submitted',
+        }[step]
+        setattr(self, field_name, True)
+
+    def clean(self) -> None:
+        """Validate that only the fixed singleton primary key is ever used."""
+        super().clean()
+        if self.pk is not None and self.pk != self.SINGLETON_ID:
+            err_msg = {'singleton_id': gettext_lazy('singleton_id must always be 1.')}
+            raise ValidationError(err_msg)

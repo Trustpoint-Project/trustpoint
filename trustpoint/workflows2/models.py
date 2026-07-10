@@ -57,10 +57,12 @@ class Workflow2Run(models.Model):
     STATUS_AWAITING = 'awaiting'
     STATUS_PAUSED = 'paused'
 
-    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_FINISHED = 'finished'
+    STATUS_APPROVED = 'approved'
+    STATUS_ERROR = 'error'
+    STATUS_TIMED_OUT = 'timed_out'
     STATUS_STOPPED = 'stopped'
     STATUS_REJECTED = 'rejected'
-    STATUS_FAILED = 'failed'
     STATUS_CANCELLED = 'cancelled'
 
     STATUS_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
@@ -68,10 +70,12 @@ class Workflow2Run(models.Model):
         (STATUS_RUNNING, 'Running'),
         (STATUS_AWAITING, 'Awaiting'),
         (STATUS_PAUSED, 'Paused'),
-        (STATUS_SUCCEEDED, 'Succeeded'),
+        (STATUS_FINISHED, 'Finished'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_ERROR, 'Error'),
+        (STATUS_TIMED_OUT, 'Timed out'),
         (STATUS_STOPPED, 'Stopped'),
         (STATUS_REJECTED, 'Rejected'),
-        (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
     )
 
@@ -83,6 +87,11 @@ class Workflow2Run(models.Model):
 
     # Optional idempotency key (for EST polling use-cases etc.)
     idempotency_key = models.CharField(max_length=128, blank=True, default='', db_index=True)
+    idempotency_released_key = models.CharField(max_length=128, blank=True, default='', db_index=True)
+    idempotency_released_at = models.DateTimeField(null=True, blank=True)
+    idempotency_released_by = models.CharField(max_length=150, blank=True, default='')
+    idempotency_release_reason = models.TextField(blank=True, default='')
+    idempotency_release_mode = models.CharField(max_length=16, blank=True, default='')
 
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_QUEUED)
     finalized = models.BooleanField(default=False)
@@ -98,6 +107,8 @@ class Workflow2Run(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['finalized']),
             models.Index(fields=['idempotency_key']),
+            models.Index(fields=['idempotency_released_key']),
+            models.Index(fields=['idempotency_release_mode']),
         )
         constraints = (
             models.UniqueConstraint(
@@ -125,10 +136,12 @@ class Workflow2Instance(models.Model):
     STATUS_PAUSED = 'paused'  # requires manual resume after crash/lease expiry
 
     # Terminal states
-    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_FINISHED = 'finished'
+    STATUS_APPROVED = 'approved'
+    STATUS_ERROR = 'error'
+    STATUS_TIMED_OUT = 'timed_out'
     STATUS_STOPPED = 'stopped'
     STATUS_REJECTED = 'rejected'
-    STATUS_FAILED = 'failed'
     STATUS_CANCELLED = 'cancelled'
 
     STATUS_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
@@ -136,10 +149,12 @@ class Workflow2Instance(models.Model):
         (STATUS_RUNNING, 'Running'),
         (STATUS_AWAITING, 'Awaiting'),
         (STATUS_PAUSED, 'Paused'),
-        (STATUS_SUCCEEDED, 'Succeeded'),
+        (STATUS_FINISHED, 'Finished'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_ERROR, 'Error'),
+        (STATUS_TIMED_OUT, 'Timed out'),
         (STATUS_STOPPED, 'Stopped'),
         (STATUS_REJECTED, 'Rejected'),
-        (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
     )
 
@@ -163,6 +178,8 @@ class Workflow2Instance(models.Model):
     vars_json = models.JSONField(default=dict)
 
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    status_reason = models.CharField(max_length=100, blank=True, default='')
+    status_message = models.TextField(blank=True, default='')
 
     # current_step points to NEXT step to execute.
     # For approval awaiting, we keep current_step = approval step id.

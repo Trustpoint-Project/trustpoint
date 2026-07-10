@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
@@ -14,12 +13,11 @@ from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeyLocation,
     PrivateKeySerializer,
 )
 
-from management.models import KeyStorageConfig, PKCS11Token
-from management.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
+from crypto.application.private_keys import managed_private_key_for_ref
+from crypto.models import CryptoManagedKeyModel
 from pki.models import CertificateModel
 from pki.models.issued_credential import RemoteIssuedCredentialModel
 from trustpoint.logger import LoggerMixin
@@ -28,7 +26,7 @@ from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar
+    from typing import Any
 
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
@@ -40,7 +38,6 @@ __all__ = [
     'CredentialModel',
     'IDevIDReferenceModel',
     'OwnerCredentialModel',
-    'PKCS11Key',
     'PrimaryCredentialCertificate',
 ]
 
@@ -53,83 +50,11 @@ class CredentialAlreadyExistsError(ValidationError):
         super().__init__(_('Credential already exists.'), *args, **kwargs)
 
 
-class PKCS11Key(models.Model):
-    """Model representing a private key stored in a PKCS#11 HSM/token."""
-
-    class KeyType(models.TextChoices):
-        """Supported key types in PKCS#11."""
-        RSA = 'rsa', _('RSA')
-        EC = 'ec', _('Elliptic Curve')
-        AES = 'aes', _('AES')
-
-    token_label = models.CharField(
-        max_length=255,
-        verbose_name=_('Token Label'),
-        help_text=_('Label of the HSM token containing the private key')
-    )
-
-    key_label = models.CharField(
-        max_length=255,
-        verbose_name=_('Key Label'),
-        help_text=_('Unique label of the private key within the token')
-    )
-
-    key_type = models.CharField(
-        max_length=10,
-        choices=KeyType.choices,
-        verbose_name=_('Key Type'),
-        help_text=_('Type of the cryptographic key (RSA or EC)')
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        """Meta class to define unique constraints and verbose names for the PKCS11Key model."""
-
-        unique_together: ClassVar = [['token_label', 'key_label']]
-        verbose_name = _('PKCS#11 Private Key')
-        verbose_name_plural = _('PKCS#11 Private Keys')
-
-    def __str__(self) -> str:
-        """Return a string representation of the PKCS11Key instance."""
-        return f'{self.token_label}/{self.key_label} ({self.key_type})'
-
-    def get_pkcs11_key_instance(
-        self, lib_path: str, user_pin: str
-    ) -> Pkcs11RSAPrivateKey | Pkcs11ECPrivateKey | Pkcs11AESKey:
-        """Get the appropriate PKCS#11 key instance."""
-        if self.key_type == self.KeyType.RSA:
-            return Pkcs11RSAPrivateKey(
-                lib_path=lib_path,
-                token_label=self.token_label,
-                user_pin=user_pin,
-                key_label=self.key_label
-            )
-        if self.key_type == self.KeyType.EC:
-            return Pkcs11ECPrivateKey(
-                lib_path=lib_path,
-                token_label=self.token_label,
-                user_pin=user_pin,
-                key_label=self.key_label
-            )
-        if self.key_type == self.KeyType.AES:
-            return Pkcs11AESKey(
-                lib_path=lib_path,
-                token_label=self.token_label,
-                user_pin=user_pin,
-                key_label=self.key_label
-            )
-        msg = f'Unsupported key type: {self.key_type}'
-        raise TypeError(msg)
-
-
 class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     """The CredentialModel that holds all local credentials used by the Trustpoint.
 
-    This model holds both local unprotected credentials, for which the keys and certificates are stored
-    in the DB, but also credentials that are stored within an HSM or TPM utilizing PKCS#11.
-
-    PKCS#11 credentials are not yet supported.
+    This model holds local software credentials and credentials whose private key is owned by
+    the configured Trustpoint crypto backend.
     """
 
     class CredentialTypeChoice(models.IntegerChoices):
@@ -147,15 +72,22 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         DEV_OWNER_ID = 4, _('DevOwnerID')
         SIGNER = 5, _('Signer')
 
+    BACKEND_MANAGED_SIGNING_TYPES: ClassVar[frozenset[CredentialTypeChoice]] = frozenset(
+        {
+            CredentialTypeChoice.ROOT_CA,
+            CredentialTypeChoice.ISSUING_CA,
+        }
+    )
+
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = EncryptedCharField(verbose_name=_('Private key (PEM)'), max_length=9500, default='', blank=True)
-    pkcs11_private_key = models.ForeignKey(
-        PKCS11Key,
+    managed_private_key = models.ForeignKey(
+        CryptoManagedKeyModel,
         on_delete=models.PROTECT,
         null=True,
         blank=True,
-        verbose_name=_('PKCS#11 Private Key'),
-        help_text=_('Reference to HSM-stored private key')
+        verbose_name=_('Managed Private Key'),
+        help_text=_('Reference to the configured Trustpoint crypto backend managed key'),
     )
 
     certificate = models.ForeignKey(
@@ -188,6 +120,17 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
     def clean(self) -> None:
         """Validates the CredentialModel instance."""
+        if self.private_key and self.managed_private_key_id is not None:
+            exc_msg = 'A credential cannot store both raw private-key PEM and a managed backend private key.'
+            raise ValidationError(exc_msg)
+
+        if self.private_key and self.credential_type in self.BACKEND_MANAGED_SIGNING_TYPES:
+            exc_msg = (
+                'Trustpoint signing credentials must use the configured crypto backend. '
+                'Raw private-key PEM storage is only allowed for exported end-entity/TLS material.'
+            )
+            raise ValidationError(exc_msg)
+
         qs = self.primarycredentialcertificate_set.filter(is_primary=True)
         if qs.count() > 1:
             exc_msg = 'A credential can only have one primary certificate.'
@@ -243,202 +186,6 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.certificatechainordermodel_set.order_by('order')
 
     @classmethod
-    def _import_private_key_to_hsm(
-            cls,
-            crypto_private_key: PrivateKey,
-            token_config: PKCS11Token,
-            key_label: str,
-    ) -> PKCS11Key:
-        """Import a private key to HSM and create corresponding PKCS11Key model.
-
-        Args:
-            crypto_private_key: The private key from cryptography library
-            key_label: Custom label for the key (auto-generated if None)
-            token_config: PKCS11Token configuration
-
-        Returns:
-            PKCS11Key: The created model instance referencing the HSM key
-
-        Raises:
-            RuntimeError: If HSM import fails
-            ValueError: If unsupported key type
-            NotImplementedError: If EC key import not yet supported
-        """
-        if not token_config:
-            msg = 'No PKCS#11 token configuration found'
-            raise RuntimeError(msg)
-
-        if key_label is None:
-            err_msg = 'No Key Label found'
-            raise ValueError(err_msg)
-
-        pkcs11_key_handler: Pkcs11RSAPrivateKey | Pkcs11ECPrivateKey | None = None
-        try:
-            if isinstance(crypto_private_key, rsa.RSAPrivateKey):
-                key_type = PKCS11Key.KeyType.RSA
-
-                pkcs11_key_handler = Pkcs11RSAPrivateKey(
-                    lib_path=token_config.module_path,
-                    token_label=token_config.label,
-                    user_pin=token_config.get_pin(),
-                    key_label=key_label,
-                )
-
-                if not pkcs11_key_handler.import_private_key_from_crypto(crypto_private_key):
-                    msg = 'Failed to import RSA private key to HSM'
-                    raise RuntimeError(msg)
-
-            elif isinstance(crypto_private_key, ec.EllipticCurvePrivateKey):
-                key_type = PKCS11Key.KeyType.EC
-
-                pkcs11_key_handler = Pkcs11ECPrivateKey(
-                    lib_path=token_config.module_path,
-                    token_label=token_config.label,
-                    user_pin=token_config.get_pin(),
-                    key_label=key_label,
-                )
-
-                if not pkcs11_key_handler.import_private_key_from_crypto(crypto_private_key):
-                    msg = 'Failed to import EC private key to HSM'
-                    raise RuntimeError(msg)
-
-            else:
-                msg = f'Unsupported private key type: {type(crypto_private_key)}'
-                raise TypeError(msg)
-
-            return PKCS11Key.objects.create(
-                token_label=token_config.label,
-                key_label=key_label,
-                key_type=key_type
-            )
-
-
-        finally:
-            if pkcs11_key_handler:
-                pkcs11_key_handler.close()
-
-    @classmethod
-    def _create_private_key_in_hsm(
-            cls,
-            key_type: type[PrivateKey],
-            token_config: PKCS11Token,
-            key_label: str,
-            key_size: int | None = None,
-            key_curve: ec.EllipticCurve | None = None,
-    ) -> PKCS11Key:
-        """Generate a new private key in HSM and create corresponding PKCS11Key model.
-
-        Args:
-            key_type: Type of key to generate ('rsa.PrivateKey' or 'ec.PrivateKey')
-            token_config: PKCS11Token configuration
-            key_label: Label for the new key in HSM
-            key_size: For RSA keys: key size in bits (e.g., 2048, 4096)
-            key_curve: For EC keys: curve instance (e.g., ec.SECP256R1())
-
-        Returns:
-            PKCS11Key: The created model instance referencing the HSM key
-
-        Raises:
-            RuntimeError: If HSM key generation fails
-            ValueError: If unsupported key type or invalid parameters
-            NotImplementedError: If EC key generation not yet supported
-        """
-        cls._validate_hsm_inputs(token_config, key_label, key_type, key_size, key_curve)
-
-        pkcs11_key_handler = None
-        try:
-            pkcs11_key_handler, model_key_type = cls._initialize_key_handler(
-                key_type, token_config, key_label, key_size, key_curve
-            )
-
-            return PKCS11Key.objects.create(
-                token_label=token_config.label,
-                key_label=key_label,
-                key_type=model_key_type
-            )
-
-
-        finally:
-            if pkcs11_key_handler:
-                pkcs11_key_handler.close()
-
-    @staticmethod
-    def _validate_hsm_inputs(
-        token_config: PKCS11Token,
-        key_label: str,
-        key_type: type[PrivateKey],
-        key_size: int | None,
-        key_curve: ec.EllipticCurve | None,
-    ) -> None:
-        """Validates the inputs for HSM key creation."""
-        if not token_config:
-            msg = 'No PKCS#11 token configuration found'
-            raise RuntimeError(msg)
-
-        if key_label is None:
-            msg = 'No Key Label found'
-            raise ValueError(msg)
-
-        if key_type == rsa.RSAPrivateKey:
-            if key_size is None:
-                msg = 'key_size parameter is required for RSA keys'
-                raise ValueError(msg)
-            if key_curve is not None:
-                msg = 'curve parameter should not be provided for RSA keys'
-                raise ValueError(msg)
-            min_rsa_key_size = 1024
-            if key_size < min_rsa_key_size:
-                msg = 'RSA key size must be at least 1024 bits'
-                raise ValueError(msg)
-
-        elif key_type == ec.EllipticCurvePrivateKey:
-            if key_curve is None:
-                msg = 'curve parameter is required for EC keys'
-                raise ValueError(msg)
-            if key_size is not None:
-                msg = 'key_size parameter should not be provided for EC keys'
-                raise ValueError(msg)
-
-        else:
-            msg = f"Unsupported key type: {key_type}. Supported types: 'rsa', 'ec'"
-            raise TypeError(msg)
-
-    @staticmethod
-    def _initialize_key_handler(
-        key_type: type[PrivateKey],
-        token_config: PKCS11Token,
-        key_label: str,
-        key_size: int | None,
-        key_curve: ec.EllipticCurve | None,
-    ) -> tuple[Pkcs11RSAPrivateKey | Pkcs11ECPrivateKey, str]:
-        """Initializes the PKCS#11 key handler."""
-        if key_type == rsa.RSAPrivateKey:
-            rsa_pkcs11_key_handler: Pkcs11RSAPrivateKey = Pkcs11RSAPrivateKey(
-                lib_path=token_config.module_path,
-                token_label=token_config.label,
-                user_pin=token_config.get_pin(),
-                key_label=key_label,
-            )
-            if key_size is None:
-                msg = 'key_size must be provided for RSA keys.'
-                raise ValueError(msg)
-            rsa_pkcs11_key_handler.generate_key(key_length=key_size)
-            return rsa_pkcs11_key_handler, PKCS11Key.KeyType.RSA
-
-        if key_type == ec.EllipticCurvePrivateKey:
-            ec_pkcs11_key_handler: Pkcs11ECPrivateKey = Pkcs11ECPrivateKey(
-                lib_path=token_config.module_path,
-                token_label=token_config.label,
-                user_pin=token_config.get_pin(),
-                key_label=key_label,
-            )
-            ec_pkcs11_key_handler.generate_key(curve=key_curve)
-            return ec_pkcs11_key_handler, PKCS11Key.KeyType.EC
-
-        msg = f"Unsupported key type: {key_type}. Supported types: 'rsa', 'ec'"
-        raise TypeError(msg)
-
-    @classmethod
     @transaction.atomic
     def _save_normalized_credential_serializer(
         cls,
@@ -451,12 +198,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             credential_type
         )
         certificate = cls._validate_and_save_certificate(normalized_credential_serializer)
-        pkcs11_private_key, private_key_pem = cls._process_private_key(
-            normalized_credential_serializer
-        )
-        credential_model = cls._create_credential_model(
-            certificate, credential_type, private_key_pem, pkcs11_private_key
-        )
+        private_key_pem = cls._process_private_key(normalized_credential_serializer, credential_type)
+        credential_model = cls._create_credential_model(certificate, credential_type, private_key_pem)
         additional_certificates = list(reversed(normalized_credential_serializer.additional_certificates))
         cls._save_additional_certificates(
             credential_model, additional_certificates
@@ -484,72 +227,35 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             return None
         return CertificateModel.save_certificate(normalized_credential_serializer.certificate)
 
-    @classmethod
+    @staticmethod
     def _process_private_key(
-        cls,
         normalized_credential_serializer: CredentialSerializer,
-    ) -> tuple[PKCS11Key | None, str]:
-        """Processes the private key based on its location and returns the appropriate values."""
-        pkcs11_private_key = None
-        private_key_pem = ''
-        if normalized_credential_serializer.private_key_reference.location in [
-            PrivateKeyLocation.HSM_GENERATED, PrivateKeyLocation.HSM_PROVIDED
-        ]:
-            pkcs11_private_key = cls._handle_hsm_key(normalized_credential_serializer)
-        else:
-            private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
-            if private_key_serializer:
-                private_key_pem = private_key_serializer.as_pkcs8_pem().decode()
-        return pkcs11_private_key, private_key_pem
+        credential_type: CredentialModel.CredentialTypeChoice,
+    ) -> str:
+        """Extract a software private key from a normalized serializer.
 
-    @classmethod
-    def _handle_hsm_key(cls, normalized_credential_serializer: CredentialSerializer) -> PKCS11Key:
-        """Handles the creation or import of a private key in an HSM (Hardware Security Module)."""
-        try:
-            storage_config = KeyStorageConfig.get_config()
-            if storage_config.storage_type == KeyStorageConfig.StorageType.SOFTWARE:
+        Backend-owned keys are persisted through ``CryptoManagedKeyModel``. Serializer-level
+        non-software serializer references are intentionally rejected so PKI code no longer
+        imports or generates keys through backend-specific paths.
+        """
+        private_key_reference = normalized_credential_serializer.private_key_reference
+        if private_key_reference is not None and credential_type in CredentialModel.BACKEND_MANAGED_SIGNING_TYPES:
+            msg = (
+                'Serializer-level private-key references are no longer supported for Trustpoint signing credentials. '
+                'Use CryptoManagedKeyModel-backed credentials instead.'
+            )
+            raise ValueError(msg)
+
+        private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
+        if private_key_serializer:
+            if credential_type in CredentialModel.BACKEND_MANAGED_SIGNING_TYPES:
                 msg = (
-                    'HSM private key location specified but KeyStorageConfig is set to SOFTWARE. '
+                    'Trustpoint signing credentials must be generated or imported through the configured '
+                    'crypto backend before being linked to a CredentialModel.'
                 )
                 raise ValueError(msg)
-        except KeyStorageConfig.DoesNotExist:
-            cls.logger.warning('KeyStorageConfig does not exist, proceeding with HSM operation')
-
-        token_config = PKCS11Token.objects.first()
-        if not token_config:
-            msg = 'No PKCS#11 token config stored'
-            raise ValueError(msg)
-        hsm_key_reference = normalized_credential_serializer.get_hsm_key_reference()
-        if hsm_key_reference is None:
-            msg = 'HSM key reference is required for HSM private key locations'
-            raise ValueError(msg)
-        if hsm_key_reference.key_label is None:
-            msg = 'HSM key reference key_label is required for HSM private key locations'
-            raise ValueError(msg)
-        if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.HSM_GENERATED:
-            if hsm_key_reference.key_type is None:
-                msg = 'key_type must be provided for HSM_GENERATED keys'
-                raise ValueError(msg)
-            return cls._create_private_key_in_hsm(
-                key_type=hsm_key_reference.key_type,
-                key_label=hsm_key_reference.key_label,
-                key_size=hsm_key_reference.key_size,
-                key_curve=cast('ec.EllipticCurve | None', hsm_key_reference.key_curve),
-                token_config=token_config
-            )
-        if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.HSM_PROVIDED:
-            private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
-            if private_key_serializer is None:
-                msg = 'Private key serializer is required for HSM_PROVIDED'
-                raise ValueError(msg)
-            crypto_private_key = private_key_serializer.as_crypto()
-            return cls._import_private_key_to_hsm(
-                key_label=hsm_key_reference.key_label,
-                token_config=token_config,
-                crypto_private_key=crypto_private_key
-            )
-        msg = f'Unsupported HSM location: {normalized_credential_serializer.private_key_reference.location}'
-        raise ValueError(msg)
+            return private_key_serializer.as_pkcs8_pem().decode()
+        return ''
 
     @classmethod
     def _create_credential_model(
@@ -557,20 +263,57 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         certificate: CertificateModel | None,
         credential_type: CredentialModel.CredentialTypeChoice,
         private_key_pem: str,
-        pkcs11_private_key: PKCS11Key | None,
+        managed_private_key: CryptoManagedKeyModel | None = None,
     ) -> CredentialModel:
         """Creates and saves a CredentialModel instance."""
         credential_model = cls.objects.create(
             certificate=certificate,
             credential_type=credential_type,
             private_key=private_key_pem,
-            pkcs11_private_key=pkcs11_private_key
+            managed_private_key=managed_private_key,
         )
         if certificate is not None:
             PrimaryCredentialCertificate.objects.create(
                 certificate=certificate, credential=credential_model, is_primary=True
             )
         return credential_model
+
+    @classmethod
+    @transaction.atomic
+    def save_managed_key_credential(
+        cls,
+        *,
+        certificate: x509.Certificate,
+        certificate_chain: list[x509.Certificate],
+        credential_type: CredentialModel.CredentialTypeChoice,
+        managed_key: CryptoManagedKeyModel,
+    ) -> CredentialModel:
+        """Store a credential whose private key is owned by the configured crypto backend."""
+        certificate_model = CertificateModel.save_certificate(certificate)
+        credential_model = cls._create_credential_model(
+            certificate_model,
+            credential_type,
+            private_key_pem='',
+            managed_private_key=managed_key,
+        )
+        cls._save_additional_certificates(credential_model, list(reversed(certificate_chain)))
+        return credential_model
+
+    @classmethod
+    @transaction.atomic
+    def save_managed_private_key_credential(
+        cls,
+        *,
+        credential_type: CredentialModel.CredentialTypeChoice,
+        managed_key: CryptoManagedKeyModel,
+    ) -> CredentialModel:
+        """Store a credential that has a backend-managed private key but no certificate yet."""
+        return cls._create_credential_model(
+            certificate=None,
+            credential_type=credential_type,
+            private_key_pem='',
+            managed_private_key=managed_key,
+        )
 
     @staticmethod
     def _save_additional_certificates(
@@ -670,11 +413,45 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         self.certificates.clear()
         # CertificateChainOrderModel is deleted via CASCADE
 
+    @transaction.atomic
+    def force_delete(self) -> tuple[int, dict[str, int]]:
+        """Delete the credential without running ``pre_delete`` and then delete its certificates."""
+        certificates_to_delete: list[CertificateModel] = [
+            chain_entry.certificate
+            for chain_entry in self.ordered_certificate_chain_queryset.order_by('-order')
+        ]
+        if self.certificate is not None:
+            certificates_to_delete.append(self.certificate)
+
+        count = models.Model.delete(self)
+        deleted_certificate_pks: set[int] = set()
+        for certificate in certificates_to_delete:
+            if certificate.pk in deleted_certificate_pks:
+                continue
+            deleted_certificate_pks.add(certificate.pk)
+            certificate_in_db = CertificateModel.objects.filter(pk=certificate.pk).first()
+            if certificate_in_db is None:
+                continue
+            if self._certificate_has_remaining_protected_references(certificate_in_db):
+                continue
+            certificate_in_db.delete()
+        return count
+
+    @staticmethod
+    def _certificate_has_remaining_protected_references(certificate: CertificateModel) -> bool:
+        """Return whether the certificate is still referenced through protected relations."""
+        return (
+            certificate.credential_set.exists()
+            or certificate.certificatechainordermodel_set.exists()
+            or certificate.primary_certificate_set.exists()
+            or certificate.keyless_cas.exists()
+        )
+
     def get_private_key(self) -> PrivateKey:
         """Gets an abstraction of the credential private key.
 
-        Note, in the case of keys stored in an HSM or TPM using PKCS#11, it will only be possible to use the
-        key abstraction to sign and verify, but not to export the key in any way.
+        Note, for backend-managed keys, it will only be possible to use the key abstraction to sign and verify,
+        but not to export the key in any way.
 
         Returns:
             PrivateKey: The credential private key abstraction.
@@ -682,38 +459,14 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         if self.private_key:
             return PrivateKeySerializer.from_pem(self.private_key.encode()).as_crypto()
 
-        if self.pkcs11_private_key:
-            return self.get_pkcs11_private_key()
+        if self.managed_private_key:
+            return cast('PrivateKey', managed_private_key_for_ref(self.managed_private_key.to_managed_key_ref()))
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
 
-    def get_pkcs11_private_key(self) -> PrivateKey:
-        """Gets the private key abstraction."""
-        if self.pkcs11_private_key:
-            try:
-                token_config = PKCS11Token.objects.get(label=self.pkcs11_private_key.token_label)
-                lib_path = token_config.module_path
-                user_pin = token_config.get_pin()
-
-                pkcs11_key = self.pkcs11_private_key.get_pkcs11_key_instance(lib_path, user_pin)
-                pkcs11_key.load_key()
-            except PKCS11Token.DoesNotExist as e:
-                msg = f'PKCS#11 token configuration not found: {self.pkcs11_private_key.token_label}'
-                raise RuntimeError(msg) from e
-            else:
-                return cast('PrivateKey', pkcs11_key)
-
-        msg = 'No private key available for this credential.'
-        raise RuntimeError(msg)
-
     def get_private_key_serializer(self) -> PrivateKeySerializer:
         """Gets a serializer of the credential private key.
-
-        For PKCS#11 keys, since the private key cannot be exported, this method returns
-        a PrivateKeySerializer constructed from the public key extracted from the certificate.
-        This allows code that needs the public key (via .public_key_serializer) to work
-        with both software-stored and HSM-stored credentials.
 
         Returns:
             PrivateKeySerializer: The credential private key serializer.
@@ -724,16 +477,12 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         if self.private_key:
             return PrivateKeySerializer.from_pem(self.private_key.encode())
 
-        if self.pkcs11_private_key:
-            # For PKCS#11 keys, we can't export the private key, but we can
-            # create a PrivateKeySerializer from the public key in the certificate
-            # This allows .public_key_serializer to work correctly
+        if self.managed_private_key:
             try:
-                pkcs11_key = self.get_pkcs11_private_key()
-                # PrivateKeySerializer can wrap the PKCS#11 key object
-                return PrivateKeySerializer(pkcs11_key)
+                managed_key = managed_private_key_for_ref(self.managed_private_key.to_managed_key_ref())
+                return PrivateKeySerializer(managed_key)
             except Exception as e:
-                err_msg = f'Failed to get PKCS#11 private key: {e}'
+                err_msg = f'Failed to get managed private key: {e}'
                 raise RuntimeError(err_msg) from e
 
         err_msg = 'Failed to get private key information.'
@@ -798,14 +547,13 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return None
 
     def get_root_ca_certificate_serializer(self) -> None | CertificateSerializer:
-        """Gets the root CA certificate serializer."""
+        """Get the root CA certificate serializer or a self-signed main certificate."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
-        if last_certificate_in_chain is None:
-            if self.certificate is None:
-                return None
-            return self.certificate.get_certificate_serializer()
-        if last_certificate_in_chain.certificate.is_root_ca:
+        if last_certificate_in_chain is not None and last_certificate_in_chain.certificate.is_root_ca:
             return last_certificate_in_chain.certificate.get_certificate_serializer()
+
+        if self.certificate is not None and self.certificate.is_self_signed:
+            return self.get_certificate_serializer()
         return None
 
     def get_credential_serializer(self) -> CredentialSerializer:
@@ -827,7 +575,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.signature_suite.public_key_info
 
     @property
-    def hash_algorithm(self) -> hashes.HashAlgorithm  | None:
+    def hash_algorithm(self) -> hashes.HashAlgorithm | None:
         """Returns the hash algorithm used by the current credential."""
         return self.get_certificate().signature_hash_algorithm
 
@@ -906,10 +654,13 @@ class CertificateChainOrderModel(models.Model):
         Restricts entries such that the tuple (credential, order) is unique.
         """
 
-        ordering: ClassVar = ['order']
-        constraints: ClassVar = [models.UniqueConstraint(
-            fields=['credential', 'primary_certificate', 'order'], name='unique_group_order'
-        )]
+        ordering: ClassVar[list[str]] = ['order']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['credential', 'primary_certificate', 'order'],
+                name='unique_group_order',
+            )
+        ]
 
     def __repr__(self) -> str:
         """Returns a string representation of this CertificateChainOrderModel entry."""
@@ -1073,7 +824,6 @@ class IDevIDReferenceModel(models.Model):
             return self.idevid_ref.removeprefix('dev-owner:cert:').split('_')[1]
         except IndexError:
             return ''
-
 
 
 class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
@@ -1342,5 +1092,3 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         self.logger.debug('Deleting remote issued credentials of owner credential %s', self)
         for issued in self.remote_issued_credentials.all():
             issued.credential.delete()
-
-

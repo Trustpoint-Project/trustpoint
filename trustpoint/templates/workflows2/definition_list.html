@@ -1,7 +1,11 @@
 {% extends "trustpoint/base.html" %}
-{% load i18n %}
+{% load i18n static %}
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
 {% block content %}
-<div class="container-fluid py-3">
+<div class="container-fluid py-3 wf2-list-page">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
       <h1 class="h4 mb-0">{% trans "Workflows (v2)" %}</h1>

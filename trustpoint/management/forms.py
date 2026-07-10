@@ -8,7 +8,7 @@ from zoneinfo import available_timezones
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Fieldset, Layout
+from crispy_forms.layout import HTML, Fieldset, Layout
 from cryptography.x509 import Certificate
 from django import forms
 from django.conf import settings
@@ -22,26 +22,31 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
+from crypto.models import BackendKind, CryptoProviderProfileModel
 from management.models import (
     BackupOptions,
     InternationalizationConfig,
-    KeyStorageConfig,
     LoggingConfig,
     NotificationConfig,
-    PKCS11Token,
+    PrometheusConfig,
     SecurityConfig,
+    SmtpEmailConfig,
+    UIConfig,
 )
+from management.models.organization import OrganizationModel
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CredentialModel
-from pki.util.keys import AutoGenPkiKeyAlgorithm
+from pki.util.keys import AutoGenPkiKeyAlgorithm, supported_auto_gen_pki_key_algorithms
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import ClassVar
+
+MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
 
 
 class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
@@ -73,8 +78,25 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['disabled'] = 'disabled'
 
+        supported_algorithms = supported_auto_gen_pki_key_algorithms()
+        self.supported_auto_gen_pki_key_algorithms = supported_algorithms
+
         if self.instance and self.instance.auto_gen_pki:
             self.fields['auto_gen_pki_key_algorithm'].widget.attrs['disabled'] = 'disabled'
+        elif 'auto_gen_pki_key_algorithm' in self.fields:
+            auto_gen_pki_key_algorithm_field = cast(
+                'forms.ChoiceField',
+                self.fields['auto_gen_pki_key_algorithm'],
+            )
+            if supported_algorithms:
+                auto_gen_pki_key_algorithm_field.choices = [
+                    (algorithm.value, algorithm.label) for algorithm in supported_algorithms
+                ]
+            else:
+                auto_gen_pki_key_algorithm_field.choices = [
+                    ('', _('No supported backend algorithms available')),
+                ]
+                auto_gen_pki_key_algorithm_field.widget.attrs['disabled'] = 'disabled'
 
         self.helper = FormHelper()
         self.helper.layout = Layout(
@@ -92,7 +114,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 Field('allow_ca_issuance', wrapper_class='form-check form-switch'),
                 Field('allow_auto_gen_pki', wrapper_class='form-check form-switch'),
                 Field('allow_self_signed_ca', wrapper_class='form-check form-switch'),
-                Field('require_physical_hsm', wrapper_class='form-check form-switch'),
+                Field('allow_imported_private_keys', wrapper_class='form-check form-switch'),
                 'permitted_no_onboarding_pki_protocols',
                 'permitted_onboarding_protocols'
             ),
@@ -151,7 +173,8 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             'security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm',
             'rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days',
             'allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca',
-            'require_physical_hsm', 'permitted_no_onboarding_pki_protocols',
+            'allow_imported_private_keys',
+            'permitted_no_onboarding_pki_protocols',
             'permitted_onboarding_protocols'
         ]
 
@@ -212,7 +235,16 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             if self.instance:
                 return AutoGenPkiKeyAlgorithm(self.instance.auto_gen_pki_key_algorithm)
             return AutoGenPkiKeyAlgorithm.RSA2048
-        return AutoGenPkiKeyAlgorithm(form_value)
+        selected_algorithm = AutoGenPkiKeyAlgorithm(form_value)
+        supported_algorithms = getattr(
+            self,
+            'supported_auto_gen_pki_key_algorithms',
+            supported_auto_gen_pki_key_algorithms(),
+        )
+        if selected_algorithm not in supported_algorithms:
+            msg = _('The selected auto-generated PKI algorithm is not supported by the active backend.')
+            raise ValidationError(msg)
+        return selected_algorithm
 
     def _validate_mode_constraints(self, cleaned: dict[str, Any], mode: str) -> None:
         """Validate that submitted values comply with the given security mode defaults."""
@@ -236,9 +268,6 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             if not defaults.get(field) and cleaned.get(field):
                 self.add_error(field, 'This feature cannot be enabled at this security level.')
 
-        if defaults.get('require_physical_hsm') and not cleaned.get('require_physical_hsm'):
-            self.add_error('require_physical_hsm', 'This feature cannot be disabled at this security level.')
-
         protocol_fields: list[tuple[str, list[int]]] = [
             ('permitted_no_onboarding_pki_protocols', defaults['permitted_no_onboarding_pki_protocols']),
             ('permitted_onboarding_protocols', defaults['permitted_onboarding_protocols']),
@@ -260,6 +289,20 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
         if cleaned.get('auto_gen_pki') and not cleaned.get('allow_auto_gen_pki'):
             self.add_error('auto_gen_pki', 'Cannot enable auto-generated PKI when it is not permitted.')
+
+        supported_algorithms = getattr(
+            self,
+            'supported_auto_gen_pki_key_algorithms',
+            supported_auto_gen_pki_key_algorithms(),
+        )
+        selected_algorithm = cleaned.get('auto_gen_pki_key_algorithm')
+        if cleaned.get('auto_gen_pki') and not supported_algorithms:
+            self.add_error('auto_gen_pki', _('No auto-generated PKI algorithm is supported by the active backend.'))
+        elif cleaned.get('auto_gen_pki') and selected_algorithm not in supported_algorithms:
+            self.add_error(
+                'auto_gen_pki_key_algorithm',
+                _('The selected auto-generated PKI algorithm is not supported by the active backend.'),
+            )
 
         return cleaned
 
@@ -357,6 +400,33 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 }
             )
         return crl_expiry
+
+
+class PrometheusConfigForm(forms.ModelForm['PrometheusConfig']):
+    """Form for managing the Prometheus metrics endpoint configuration."""
+
+    class Meta:
+        """ModelForm Meta configuration for PrometheusConfigForm."""
+
+        model = PrometheusConfig
+        fields: ClassVar[list[str]] = ['enabled']
+        widgets: ClassVar[dict[str, Any]] = {
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the PrometheusConfigForm."""
+        super().__init__(*args, **kwargs)
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            Fieldset(
+                _('Prometheus Metrics Export'),
+                Field('enabled'),
+            ),
+        )
+
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""
@@ -519,6 +589,8 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         pkcs12_file = cleaned_data.get('pkcs12_file')
         if pkcs12_file is None:
             self._raise_validation_error('No PKCS#12 file was uploaded.')
+        if getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
+            self._raise_validation_error('PKCS#12 file is too large, max. 256 kiB.')
 
         try:
             pkcs12_raw = pkcs12_file.read()
@@ -830,151 +902,60 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         """Return the saved credential."""
         return self.saved_credential
 
-class KeyStorageConfigForm(forms.ModelForm[KeyStorageConfig]):
-    """Form for configuring cryptographic material storage options."""
-
-    storage_type = forms.ChoiceField(
-        widget=forms.RadioSelect,
-        label=_('Storage Type'),
-        help_text=_('Select how cryptographic material should be stored'),
-        choices=[
-            ('software', _('Software Storage')),
-            ('softhsm', _('SoftHSM Container')),
-            ('physical_hsm', _('Physical HSM')),
-        ]
-    )
-
-    class Meta:
-        """ModelForm Meta configuration for KeyStorageConfig."""
-        model = KeyStorageConfig
-        fields: ClassVar[list[str]] = ['storage_type']
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the form."""
-        super().__init__(*args, **kwargs)
-
-    def clean(self) -> dict[str, Any]:
-        """Custom validation for the form."""
-        cleaned_data: dict[str, Any] = super().clean() or {}
-        return cleaned_data
-
-    def save_with_commit(self) -> KeyStorageConfig:
-        """Save the form with commit, ensuring singleton behavior."""
-        instance = KeyStorageConfig.get_or_create_default()
-        instance.storage_type = self.cleaned_data['storage_type']
-        instance.save(update_fields=['storage_type', 'last_updated'])
-        return instance
-
-    def save_without_commit(self) -> KeyStorageConfig:
-        """Save the form without commit, ensuring singleton behavior."""
-        instance = KeyStorageConfig.get_or_create_default()
-        instance.storage_type = self.cleaned_data['storage_type']
-        return instance
 
 class PKCS11ConfigForm(forms.Form):
-    """Form for configuring PKCS#11 settings including HSM PIN and token information."""
+    """Read-only summary form for the configured PKCS#11 managed-crypto backend."""
 
-    HSM_TYPE_CHOICES: ClassVar[list[tuple[str, Any]]] = [
-        ('softhsm', _('SoftHSM')),
-        ('physical', _('Physical HSM')),
-    ]
-
-    hsm_type = forms.ChoiceField(
-        choices=HSM_TYPE_CHOICES,
-        initial='softhsm',
-        widget=forms.RadioSelect,
-        label=_('HSM Type'),
-        help_text=_('Select the type of HSM to configure.')
-    )
-
-    label = forms.CharField(
+    token_label = forms.CharField(
         label=_('Token Label'),
-        max_length=100,
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-        help_text=_('Unique label for the PKCS#11 token'),
-        required=False
+        required=False,
+        disabled=True,
     )
-
-    slot = forms.IntegerField(
+    slot_id = forms.IntegerField(
         label=_('Slot Number'),
-        widget=forms.NumberInput(attrs={'class': 'form-control'}),
-        help_text=_('Slot number where the token is located'),
-        min_value=0,
-        required=False
+        required=False,
+        disabled=True,
     )
-
     module_path = forms.CharField(
         label=_('Module Path'),
-        max_length=255,
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-        help_text=_('Path to the PKCS#11 module library file'),
-        initial='/usr/lib/libpkcs11-proxy.so',
-        required=False
+        required=False,
+        disabled=True,
+    )
+    provider_config_env_var = forms.CharField(
+        label=_('Provider Config Environment Variable'),
+        required=False,
+        disabled=True,
+    )
+    provider_config_path = forms.CharField(
+        label=_('Provider Config Path'),
+        required=False,
+        disabled=True,
+    )
+    auth_source_ref = forms.CharField(
+        label=_('Authentication Source'),
+        required=False,
+        disabled=True,
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the PKCS11ConfigForm with existing token data if available."""
+        """Initialize the read-only PKCS#11 summary from the active backend profile."""
         super().__init__(*args, **kwargs)
+        profile = CryptoProviderProfileModel.objects.filter(active=True, backend_kind=BackendKind.PKCS11).first()
+        config = getattr(profile, 'pkcs11_config', None) if profile is not None else None
+        if config is None:
+            return
+        self.fields['token_label'].initial = config.token_label
+        self.fields['slot_id'].initial = config.slot_id
+        self.fields['module_path'].initial = config.module_path
+        self.fields['provider_config_env_var'].initial = config.provider_config_env_var
+        self.fields['provider_config_path'].initial = config.provider_config_path
+        self.fields['auth_source_ref'].initial = config.auth_source_ref
 
-        try:
-            token = PKCS11Token.objects.first()
-            if token:
-                self.fields['label'].initial = token.label
-                self.fields['slot'].initial = token.slot
-                self.fields['module_path'].initial = token.module_path
-        except PKCS11Token.DoesNotExist:
-            pass
+    def save_token_config(self) -> NoReturn:
+        """Reject legacy PKCS#11 token mutation through the management UI."""
+        msg = _('PKCS#11 backend configuration is managed by the setup wizard and cannot be changed here.')
+        raise ValidationError(msg)
 
-    def clean(self) -> dict[str, Any]:
-        """Custom validation for the form."""
-        cleaned_data: dict[str, Any] = super().clean() or {}
-        hsm_type = cleaned_data.get('hsm_type')
-
-        if hsm_type == 'softhsm':
-            cleaned_data['label'] = 'Trustpoint-SoftHSM'
-            cleaned_data['slot'] = 0
-            cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
-        elif hsm_type == 'physical':
-            raise forms.ValidationError(_('Physical HSM is not yet supported.'))
-
-        return cleaned_data
-
-    def clean_label(self) -> str:
-        """Validate that label is unique, excluding current token if updating."""
-        hsm_type = self.data.get('hsm_type')
-        if hsm_type == 'softhsm':
-            return 'Trustpoint-SoftHSM'
-
-        label = self.cleaned_data.get('label', '')
-        existing = PKCS11Token.objects.filter(label=label)
-
-        current_token = PKCS11Token.objects.first()
-        if current_token:
-            existing = existing.exclude(pk=current_token.pk)
-
-        if existing.exists():
-            raise forms.ValidationError(_('A token with this label already exists.'))
-
-        return str(label)
-
-    def save_token_config(self) -> PKCS11Token:
-        """Save or update token configuration."""
-        data = self.cleaned_data
-        token, created = PKCS11Token.objects.get_or_create(
-            label=data['label'],
-            defaults={
-                'hsm_type': data['hsm_type'],
-                'slot': data['slot'],
-                'module_path': data['module_path'],
-            }
-        )
-
-        if not created:
-            for field, value in data.items():
-                if field != 'label':
-                    setattr(token, field, value)
-            token.save()
-        return token
 
 class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
     """Form for managing Workflow 2 execution settings."""
@@ -988,6 +969,110 @@ class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
             'mode': forms.Select(attrs={'class': 'form-select'}),
             'worker_stale_after_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
         }
+
+
+class SmtpEmailConfigForm(forms.ModelForm[SmtpEmailConfig]):
+    """Form for managing SMTP email backend settings."""
+
+    PORT_MIN: ClassVar[int] = 1
+    PORT_MAX: ClassVar[int] = 65535
+
+    class Meta:
+        """Metadata for the SMTP email settings form."""
+
+        model = SmtpEmailConfig
+        fields: ClassVar[tuple[str, ...]] = (
+            'enabled',
+            'host',
+            'port',
+            'use_tls',
+            'use_ssl',
+            'username',
+            'password',
+            'timeout_seconds',
+            'default_from_email',
+        )
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'host': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'smtp.example.com'}),
+            'port': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 65535}),
+            'use_tls': forms.CheckboxInput(
+                attrs={'class': 'form-check-input', 'role': 'switch', 'data-smtp-security': 'starttls'}
+            ),
+            'use_ssl': forms.CheckboxInput(
+                attrs={'class': 'form-check-input', 'role': 'switch', 'data-smtp-security': 'ssl'}
+            ),
+            'username': forms.TextInput(
+                attrs={'class': 'form-control', 'autocomplete': 'off', 'data-smtp-auth': 'username'}
+            ),
+            'password': forms.PasswordInput(
+                attrs={'class': 'form-control', 'autocomplete': 'new-password', 'data-smtp-auth': 'password'},
+                render_value=True,
+            ),
+            'timeout_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+            'default_from_email': forms.EmailInput(attrs={'class': 'form-control'}),
+        }
+        labels: ClassVar[dict[str, Any]] = {
+            'enabled': _('Use SMTP server for outgoing email'),
+            'host': _('SMTP host'),
+            'port': _('SMTP port'),
+            'use_tls': _('Use STARTTLS'),
+            'use_ssl': _('Use SSL/TLS'),
+            'username': _('Username'),
+            'password': _('Password'),
+            'timeout_seconds': _('Timeout'),
+            'default_from_email': _('Default sender address'),
+        }
+        help_texts: ClassVar[dict[str, Any]] = {
+            'enabled': _(
+                'When enabled, Trustpoint sends workflow and system email through this SMTP server. '
+                "When disabled, email is written to Django's console backend."
+            ),
+            'host': _('Hostname or IP address of the SMTP server.'),
+            'port': _('Common ports are 587 for STARTTLS, 465 for SSL/TLS, and 25 for plain SMTP.'),
+            'use_tls': _('Connect first, then upgrade the connection with STARTTLS. Usually used with port 587.'),
+            'use_ssl': _('Start with an encrypted TLS connection immediately. Usually used with port 465.'),
+            'username': _('Leave empty when the SMTP server does not require authentication or does not support AUTH.'),
+            'password': _('Leave empty when the SMTP server does not require authentication or does not support AUTH.'),
+            'timeout_seconds': _('Connection timeout in seconds.'),
+            'default_from_email': _('Sender address used when a workflow or notification does not specify one.'),
+        }
+
+    def clean_port(self) -> int:
+        """Validate the SMTP port range."""
+        port = self.cleaned_data['port']
+        if port < self.PORT_MIN or port > self.PORT_MAX:
+            raise ValidationError(_('Port must be between 1 and 65535.'))
+        return int(port)
+
+    def clean(self) -> dict[str, Any]:
+        """Validate SMTP settings that depend on each other."""
+        cleaned: dict[str, Any] = super().clean() or {}
+        enabled = bool(cleaned.get('enabled'))
+        host = str(cleaned.get('host') or '').strip()
+        username = str(cleaned.get('username') or '').strip()
+        password = str(cleaned.get('password') or '')
+
+        cleaned['host'] = host
+        cleaned['username'] = username
+        cleaned['password'] = password
+
+        if enabled and not host:
+            self.add_error('host', _('SMTP host is required when SMTP delivery is enabled.'))
+
+        if cleaned.get('use_tls') and cleaned.get('use_ssl'):
+            self.add_error('use_ssl', _('STARTTLS and SSL/TLS cannot both be enabled.'))
+
+        return cleaned
+
+
+class SmtpEmailTestForm(forms.Form):
+    """Form for sending a test email through the saved SMTP settings."""
+
+    recipient = forms.EmailField(
+        label=_('Test recipient'),
+        widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'admin@example.com'}),
+    )
 
 
 class LoggingConfigForm(forms.Form):
@@ -1006,15 +1091,28 @@ class LoggingConfigForm(forms.Form):
         choices=LOG_LEVELS,
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
+    crypto_backend_audit_enabled = forms.BooleanField(
+        label=_('Audit crypto backend operations'),
+        required=False,
+        help_text=_(
+            'Write sanitized crypto backend requests to the audit log. '
+            'Secrets, PINs, private keys, payload bytes, and signatures are never logged.'
+        ),
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+    )
 
     def save(self) -> None:
         """Save the logging configuration."""
         level = self.cleaned_data['loglevel']
+        crypto_backend_audit_enabled = bool(self.cleaned_data.get('crypto_backend_audit_enabled'))
         logger = logging.getLogger()
         logger.setLevel(getattr(logging, level))
         LoggingConfig.objects.update_or_create(
             id=1,
-            defaults={'log_level': level}
+            defaults={
+                'log_level': level,
+                'crypto_backend_audit_enabled': crypto_backend_audit_enabled,
+            },
         )
 
 class InternationalizationConfigForm(forms.Form):
@@ -1070,3 +1168,76 @@ class InternationalizationConfigForm(forms.Form):
                 'timezone': self.cleaned_data['timezone'],
             }
         )
+
+
+class UIConfigForm(forms.Form):
+    """Form for managing UI configuration."""
+
+    view_mode = forms.ChoiceField(
+        label=_('View Mode'),
+        choices=[
+            ('standard', _('Standard View')),
+            ('simplified', _('Simplified View')),
+        ],
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def save(self) -> None:
+        """Save the UI configuration."""
+        UIConfig.objects.update_or_create(
+            id=1,
+            defaults={
+                'view_mode': self.cleaned_data['view_mode'],
+            }
+        )
+
+
+class OrganizationForm(forms.ModelForm[OrganizationModel]):
+    """Form for creating and updating organizations."""
+
+    name = forms.CharField(max_length=100, required=False)
+    organization = forms.CharField(max_length=255, label='Organization (O)')
+    organization_unit = forms.CharField(max_length=255, label='Organization Unit (OU)', required=False)
+    country = forms.CharField(max_length=2, label='Country (C)', required=False)
+    state = forms.CharField(max_length=255, label='State/Province (ST)', required=False)
+    locality = forms.CharField(max_length=255, label='Locality/City (L)', required=False)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the OrganizationForm."""
+        super().__init__(*args, **kwargs)
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+
+        self.helper.layout = Layout(
+            HTML('<h2>General</h2><hr>'),
+            Field('name'),
+            HTML('<h2 class="mt-5">Certificate Attribute</h2><hr>'),
+            Field('organization'),
+            Field('organization_unit'),
+            Field('country'),
+            Field('state'),
+            Field('locality'),
+        )
+
+    class Meta:
+        """Metadata for the organization form."""
+
+        model = OrganizationModel
+        fields: ClassVar[tuple[str, ...]] = (
+            'name',
+            'organization',
+            'organization_unit',
+            'country',
+            'state',
+            'locality',
+        )
+
+    def clean(self) -> dict[str, Any]:
+        """Normalize data before saving."""
+        cleaned: dict[str, Any] = super().clean() or {}
+        name = str(cleaned.get('name') or '').strip()
+        organization = str(cleaned.get('organization') or '').strip()
+        cleaned['name'] = name or organization
+        cleaned['organization'] = organization
+        return cleaned

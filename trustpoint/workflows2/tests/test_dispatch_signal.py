@@ -60,7 +60,7 @@ class DispatchSignalsTests(TestCase):
         inst = Workflow2Instance.objects.first()
         assert inst is not None
         self.assertEqual(inst.definition.name, "TP device created")
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
 
         # Because we now always enqueue jobs, inline mode also creates a job (it is just drained inline).
         self.assertEqual(Workflow2Job.objects.filter(instance=inst).count(), 1)
@@ -86,4 +86,4 @@ class DispatchSignalsTests(TestCase):
         worker.tick()
 
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)

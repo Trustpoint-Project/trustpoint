@@ -9,18 +9,14 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
-# ruff: noqa: T201  # print is used for DB connection status prior to log availability
-
 import logging
 import os
-import socket
 import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ClassVar
 
 import django_stubs_ext
-import psycopg
 from django.utils.translation import gettext_lazy as _
 
 try:
@@ -55,6 +51,7 @@ django_stubs_ext.monkeypatch()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = BASE_DIR.parent
 
 LOCALE_PATHS = [BASE_DIR / Path('trustpoint/locale')]
 
@@ -75,79 +72,85 @@ LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
 
 BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
 
+# Allows all paths that start with:
 PUBLIC_PATHS = [
-    '/setup-wizard',
     '/.well-known/cmp',
     '/.well-known/est',
     '/rest',
+    '/api',
     '/aoki',
     '/crl',
+    '/setup-wizard',
+    '/devices/browser',
+    '/prometheus/',
 ]
-
-
-# ------------- Functions --------------
-
-
-def is_postgre_available() -> bool:
-    """Checks whether PostgreSQL is available and issues differentiated error messages.
-
-    Returns:
-        bool: True, if PostgreSQL is available and accessible.
-
-    Raises:
-        RuntimeError: If PostgreSQL is deactivated, not reachable or not accessible.
-    """
-    if not POSTGRESQL:
-        print('PostgreSQL is disabled. Set POSTGRESQL=True in settings.')
-        return False
-
-    host = os.environ.get('DATABASE_HOST', DATABASE_HOST)
-    port = int(os.environ.get('DATABASE_PORT', DATABASE_PORT))
-    user = os.environ.get('DATABASE_USER', DATABASE_USER)
-    password = os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD)
-    db_name = os.environ.get('POSTGRES_DB', POSTGRES_DB)
-
-    try:
-        print(f'Trying to connect to {host}:{port}...')
-        with socket.create_connection((host, port), timeout=5):
-            print(f'Connection to {host}:{port} successful.')
-    except OSError:
-        msg = f'PostgreSQL host {host} on port {port} is unreachable. \n'
-        msg += 'Switching to SQLite Database'
-        print(msg)
-        return False
-
-    try:
-        print(f"Attempting database login with user '{user}'...")
-        conn = psycopg.connect(
-            dbname=db_name,
-            user=user,
-            password=password,
-            host=host,
-            port=port,
-        )
-        conn.close()
-        print('Database login successful.')
-    except psycopg.OperationalError as e:
-        msg = f'Failed to log in to PostgreSQL database "{db_name}" as user "{user}". Error: {e}'
-        print(msg)
-        return False
-
-    return True
 
 
 # ------------- Variables --------------
 
-ALLOWED_HOSTS = ['*']
 WSGI_APPLICATION = 'trustpoint.wsgi.application'
 
 
-# mDNS service discovery advertisement
-ADVERTISED_HOST = '127.0.0.1'
-ADVERTISED_PORT = 443
-
 
 DOCKER_CONTAINER = False
+
+
+TRUSTPOINT_PHASE_BOOTSTRAP = 'bootstrap'
+TRUSTPOINT_PHASE_OPERATIONAL = 'operational'
+TRUSTPOINT_PHASE_AUTO = 'auto'
+TRUSTPOINT_VALID_PHASES = frozenset({TRUSTPOINT_PHASE_BOOTSTRAP, TRUSTPOINT_PHASE_OPERATIONAL})
+DEFAULT_OPERATIONAL_ENV_FILE = (
+    Path('/var/lib/trustpoint/bootstrap/operational.env')
+    if DOCKER_CONTAINER
+    else REPO_ROOT / 'var' / 'bootstrap' / 'operational.env'
+)
+TRUSTPOINT_AUTO_OPERATIONAL_ENV_FILE = Path(
+    os.getenv('TRUSTPOINT_OPERATIONAL_ENV_FILE', str(DEFAULT_OPERATIONAL_ENV_FILE))
+)
+TRUSTPOINT_AUTO_OPERATIONAL_READY_FILE = Path(
+    os.getenv(
+        'TRUSTPOINT_OPERATIONAL_READY_FILE',
+        (
+            '/var/lib/trustpoint/bootstrap/operational.ready'
+            if DOCKER_CONTAINER
+            else REPO_ROOT / 'var' / 'bootstrap' / 'operational.ready'
+        ),
+    )
+)
+
+
+def _configured_trustpoint_phase() -> str:
+    """Return the explicitly configured Trustpoint lifecycle phase."""
+    configured_phase = os.getenv('TRUSTPOINT_PHASE', TRUSTPOINT_PHASE_OPERATIONAL).strip().lower()
+    if configured_phase == TRUSTPOINT_PHASE_AUTO:
+        if DOCKER_CONTAINER:
+            return (
+                TRUSTPOINT_PHASE_OPERATIONAL
+                if TRUSTPOINT_AUTO_OPERATIONAL_ENV_FILE.is_file()
+                and TRUSTPOINT_AUTO_OPERATIONAL_READY_FILE.is_file()
+                else TRUSTPOINT_PHASE_BOOTSTRAP
+            )
+        return TRUSTPOINT_PHASE_OPERATIONAL
+    if configured_phase not in TRUSTPOINT_VALID_PHASES:
+        msg = (
+            f"Invalid TRUSTPOINT_PHASE={configured_phase!r}. "
+            f"Expected one of: {', '.join(sorted({*TRUSTPOINT_VALID_PHASES, TRUSTPOINT_PHASE_AUTO}))}."
+        )
+        raise RuntimeError(msg)
+    return configured_phase
+
+
+TRUSTPOINT_PHASE = _configured_trustpoint_phase()
+TRUSTPOINT_IS_BOOTSTRAP = TRUSTPOINT_PHASE == TRUSTPOINT_PHASE_BOOTSTRAP
+TRUSTPOINT_IS_OPERATIONAL = TRUSTPOINT_PHASE == TRUSTPOINT_PHASE_OPERATIONAL
+_TRUSTPOINT_PHASE_ENV = os.getenv('TRUSTPOINT_PHASE', '').strip().lower()
+TRUSTPOINT_PHASE_CONFIGURED = _TRUSTPOINT_PHASE_ENV in TRUSTPOINT_VALID_PHASES or (
+    _TRUSTPOINT_PHASE_ENV == TRUSTPOINT_PHASE_AUTO and DOCKER_CONTAINER and TRUSTPOINT_IS_OPERATIONAL
+)
+TRUSTPOINT_BOOTSTRAP_USERNAME = os.getenv('TRUSTPOINT_BOOTSTRAP_USERNAME', 'admin')
+
+if TRUSTPOINT_IS_BOOTSTRAP:
+    PUBLIC_PATHS.append('/setup-wizard')
 
 
 # Quick-start development settings - unsuitable for production
@@ -158,6 +161,101 @@ DEBUG = not DOCKER_CONTAINER
 ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = DEBUG
 
+# Reverse proxy SSL header settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
+
+# Parse TLS certificate addresses/names for Django's ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS
+_tls_ipv4_raw = os.getenv('TP_TLS_IPV4_ADDRESSES', '').strip()
+_tls_ipv6_raw = os.getenv('TP_TLS_IPV6_ADDRESSES', '').strip()
+_tls_dns_raw = os.getenv('TP_TLS_DNS_NAMES', '').strip()
+_http_port = int(os.getenv('TP_HTTP_PORT', '80'))
+_https_port = int(os.getenv('TP_HTTPS_PORT', '443'))
+
+TP_HTTP_PORT = str(_http_port)
+TP_HTTPS_PORT = str(_https_port)
+
+# Parse comma-separated lists
+_tls_ipv4_addrs = [addr.strip() for addr in _tls_ipv4_raw.split(',') if addr.strip()]
+_tls_ipv6_addrs = [addr.strip() for addr in _tls_ipv6_raw.split(',') if addr.strip()]
+_tls_dns_names = [name.strip() for name in _tls_dns_raw.split(',') if name.strip()]
+
+def_http_port = 80
+def_https_port = 443
+
+# Add IPv4 addresses
+for ipv4 in _tls_ipv4_addrs:
+    if ipv4 not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ipv4)
+    # Add CSRF origins with non-default ports
+    if _http_port != def_http_port:
+        _http_origin = f'http://{ipv4}:{_http_port}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    else:
+        _http_origin = f'http://{ipv4}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    if _https_port != def_https_port:
+        _https_origin = f'https://{ipv4}:{_https_port}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
+    else:
+        _https_origin = f'https://{ipv4}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
+
+# Add IPv6 addresses
+for ipv6 in _tls_ipv6_addrs:
+    # ALLOWED_HOSTS uses plain IPv6 without brackets
+    if ipv6 not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ipv6)
+    # CSRF origins use bracketed IPv6
+    if _http_port != def_http_port:
+        _http_origin = f'http://[{ipv6}]:{_http_port}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    else:
+        _http_origin = f'http://[{ipv6}]'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    if _https_port != def_https_port:
+        _https_origin = f'https://[{ipv6}]:{_https_port}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
+    else:
+        _https_origin = f'https://[{ipv6}]'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
+
+# Add DNS names
+for dns_name in _tls_dns_names:
+    if dns_name not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(dns_name)
+    # Add wildcard subdomain for .local domains
+    if dns_name.endswith('.local'):
+        _wildcard = f'.{dns_name}'
+        if _wildcard not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_wildcard)
+    # Add CSRF origins
+    if _http_port != def_http_port:
+        _http_origin = f'http://{dns_name}:{_http_port}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    else:
+        _http_origin = f'http://{dns_name}'
+        if _http_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_http_origin)
+    if _https_port != def_https_port:
+        _https_origin = f'https://{dns_name}:{_https_port}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
+    else:
+        _https_origin = f'https://{dns_name}'
+        if _https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_https_origin)
 
 
 # Basic SMTP backend
@@ -169,17 +267,71 @@ else:
 
 
 # Settings for postgreql database
-POSTGRESQL = True
-DATABASE_ENGINE = 'django.db.backends.postgresql'
-DATABASE_HOST = 'localhost'
-DATABASE_PORT = '5432'
-POSTGRES_DB = 'trustpoint_db'
-DATABASE_USER = 'admin'
-DATABASE_PASSWORD = 'testing321'  # noqa: S105
+DATABASE_ENGINE = os.environ.get('DATABASE_ENGINE', 'django.db.backends.postgresql')
+DATABASE_HOST = os.environ.get('DATABASE_HOST', 'localhost')
+DATABASE_PORT = os.environ.get('DATABASE_PORT', '5432')
+POSTGRES_DB = os.environ.get('POSTGRES_DB', 'trustpoint_db')
+DATABASE_USER = os.environ.get('DATABASE_USER', 'admin')
+DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD', 'testing321')
+_DEFAULT_OPERATIONAL_DATABASE = 'postgresql' if DOCKER_CONTAINER else 'sqlite'
+TRUSTPOINT_OPERATIONAL_DATABASE = os.environ.get(
+    'TRUSTPOINT_OPERATIONAL_DATABASE',
+    _DEFAULT_OPERATIONAL_DATABASE,
+).strip().lower()
+TRUSTPOINT_LOCAL_SOFTWARE_BACKEND_NAME = os.environ.get(
+    'TRUSTPOINT_LOCAL_SOFTWARE_BACKEND_NAME',
+    'trustpoint-software-demo-testing-backend',
+)
 
 
-# Settomg for email backend
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+def _env_flag(name: str, *, default: bool) -> bool:
+    """Return a boolean environment flag."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _env_bool(name: str, *, default: bool) -> bool:
+    """Parse boolean environment variable with fallback to default for blank values."""
+    value = os.getenv(name)
+    if value is None or value.strip() == '':
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _env_value(name: str, default: str, *, file_var: str | None = None) -> str:
+    """Read environment value with optional Docker secret file fallback."""
+    # Direct env var takes precedence
+    direct_value = os.getenv(name)
+    if direct_value is not None:
+        return direct_value
+
+    # Try Docker secret file if specified
+    if file_var:
+        secret_file_path = os.getenv(file_var)
+        if secret_file_path:
+            try:
+                return Path(secret_file_path).read_text().strip()
+            except (FileNotFoundError, PermissionError, OSError):
+                pass
+
+    return default
+
+
+TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_flag(
+    'TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND',
+    default=(
+        TRUSTPOINT_IS_OPERATIONAL
+        and DEVELOPMENT_ENV
+        and not DOCKER_CONTAINER
+        and TRUSTPOINT_OPERATIONAL_DATABASE == 'sqlite'
+    ),
+)
+
+
+# Setting for email backend
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
 # Default: console (safe for dev/showcases)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -231,13 +383,16 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 LOGIN_REDIRECT_URL = 'home:dashboard'
 LOGIN_URL = 'users:login'
 
+if TRUSTPOINT_IS_BOOTSTRAP:
+    LOGIN_REDIRECT_URL = 'setup_wizard:index'
+
 DJANGO_LOG_LEVEL = 'INFO'
 
 TAGGIT_CASE_INSENSITIVE = True
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
-ROOT_URLCONF = 'trustpoint.urls'
+ROOT_URLCONF = 'trustpoint.urls_bootstrap' if TRUSTPOINT_IS_BOOTSTRAP else 'trustpoint.urls'
 
 
 # Internationalization
@@ -257,6 +412,7 @@ TIME_ZONE = 'UTC'
 INSTALLED_APPS = [
     'help_pages.apps.HelpPagesConfig',
     'shared.apps.SharedConfig',
+    'appsecrets.apps.AppSecretsConfig',
     'setup_wizard.apps.SetupWizardConfig',
     'users.apps.UsersConfig',
     'home.apps.HomeConfig',
@@ -268,9 +424,11 @@ INSTALLED_APPS = [
     'rest_pki.apps.RestPkiConfig',
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
+    'crypto.apps.CryptoConfig',
     'management.apps.ManagementConfig',
     'trustpoint_core',
     'discovery.apps.DiscoveryConfig',
+    'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -292,34 +450,65 @@ if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     INSTALLED_APPS.append('django_extensions')
     INSTALLED_APPS.append('behave_django')
 
+MIGRATION_MODULES: dict[str, str | None] = {}
+
+if TRUSTPOINT_IS_OPERATIONAL and TRUSTPOINT_PHASE_CONFIGURED:
+    MIGRATION_MODULES['setup_wizard'] = None
+
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
+    'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
+]
+
+if TRUSTPOINT_IS_BOOTSTRAP:
+    MIDDLEWARE = [
+        middleware
+        for middleware in MIDDLEWARE
+        if middleware != 'trustpoint.middleware.Workflow2InlineDrainMiddleware'
+    ]
+
+TEMPLATE_CONTEXT_PROCESSORS = [
+    'django.template.context_processors.debug',
+    'django.template.context_processors.request',
+    'django.contrib.auth.context_processors.auth',
+    'django.contrib.messages.context_processors.messages',
+    'trustpoint.settings.app_version',
+    'management.context_processors.notification_alerts',
+]
+
+BOOTSTRAP_EXCLUDED_CONTEXT_PROCESSORS = [
+    'management.context_processors.notification_alerts',
+    'management.context_processors.ui_config',
+    'workflows2.context_processors.waiting_counts',
 ]
 
 
-TEMPLATES = [
+if TRUSTPOINT_IS_BOOTSTRAP:
+    TEMPLATE_CONTEXT_PROCESSORS = [
+        context_processor
+        for context_processor in TEMPLATE_CONTEXT_PROCESSORS
+        if context_processor not in BOOTSTRAP_EXCLUDED_CONTEXT_PROCESSORS
+    ]
+
+TEMPLATES: list[dict[str, Any]] = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [BASE_DIR / Path('templates')],
         'APP_DIRS': True,
         'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-                'trustpoint.settings.app_version',
-                'management.context_processors.notification_alerts',
-            ],
+            'context_processors': TEMPLATE_CONTEXT_PROCESSORS,
         },
     },
 ]
@@ -343,27 +532,57 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+def _bootstrap_database_path() -> Path:
+    """Return the private SQLite database path used only by bootstrap mode."""
+    configured_path = os.getenv('TRUSTPOINT_BOOTSTRAP_DB_PATH')
+    if configured_path:
+        path = Path(configured_path)
+    elif DOCKER_CONTAINER:
+        path = Path('/var/lib/trustpoint/bootstrap/bootstrap.sqlite3')
+    else:
+        path = REPO_ROOT / 'var' / 'bootstrap' / 'bootstrap.sqlite3'
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-if is_postgre_available():
-    DATABASES = {
-        'default': {
-            'ENGINE': DATABASE_ENGINE,
-            'NAME': os.environ.get('POSTGRES_DB', POSTGRES_DB),
-            'USER': os.environ.get('DATABASE_USER', DATABASE_USER),
-            'PASSWORD': os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD),
-            'HOST': os.environ.get('DATABASE_HOST', DATABASE_HOST),
-            'PORT': os.environ.get('DATABASE_PORT', DATABASE_PORT),
-        }
-    }
-else:
+if TRUSTPOINT_IS_BOOTSTRAP:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': str(BASE_DIR / 'db.sqlite3'),
-            'OPTIONS': {'timeout': 20},  # type: ignore[dict-item]
+            'NAME': str(_bootstrap_database_path()),
+            'OPTIONS': {'timeout': 20},
+        }
+    }
+elif TRUSTPOINT_OPERATIONAL_DATABASE == 'postgresql':
+    DATABASES = {
+        'default': {
+            'ENGINE': DATABASE_ENGINE,
+            'NAME': POSTGRES_DB,
+            'USER': DATABASE_USER,
+            'PASSWORD': DATABASE_PASSWORD,
+            'HOST': DATABASE_HOST,
+            'PORT': DATABASE_PORT,
+        }
+    }
+elif TRUSTPOINT_OPERATIONAL_DATABASE == 'sqlite':
+    operational_sqlite_path = Path(os.getenv('TRUSTPOINT_OPERATIONAL_SQLITE_PATH', BASE_DIR / 'db.sqlite3'))
+    operational_sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': str(operational_sqlite_path),
+            'OPTIONS': {'timeout': 20},
         },
     }
+else:
+    msg = (
+        f"Invalid TRUSTPOINT_OPERATIONAL_DATABASE={TRUSTPOINT_OPERATIONAL_DATABASE!r}. "
+        "Expected 'postgresql' or 'sqlite'."
+    )
+    raise RuntimeError(msg)
 
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -414,6 +633,8 @@ LOGGING = {
     },
 }
 
+# Custome user model
+AUTH_USER_MODEL = 'users.TrustpointUser'
 
 # User interface config defaults
 class UIConfig:
@@ -462,3 +683,67 @@ Q_CLUSTER = {
     'bulk': 10,
     'orm': 'default',
 }
+
+
+# HSM storage root:
+# - local/dev defaults to <repo-root>/var/hsm
+# - deployment can override with TRUSTPOINT_HSM_ROOT=/var/lib/trustpoint/hsm
+HSM_ROOT = Path(os.getenv('TRUSTPOINT_HSM_ROOT', REPO_ROOT / 'var' / 'hsm')).resolve()
+
+HSM_CONFIG_DIR = HSM_ROOT / 'config'
+HSM_LIB_DIR = HSM_ROOT / 'lib'
+HSM_TOKEN_DIR = HSM_ROOT / 'tokens'
+
+HSM_DEFAULT_SOFTHSM_CONFIG_PATH = HSM_CONFIG_DIR / 'softhsm2.conf'
+HSM_DEFAULT_USER_PIN_FILE = HSM_CONFIG_DIR / 'user-pin.txt'
+HSM_DEFAULT_SO_PIN_FILE = HSM_CONFIG_DIR / 'so-pin.txt'
+
+HSM_DEFAULT_TOKEN_SERIAL_FILE = HSM_CONFIG_DIR / 'token-serial.txt'
+HSM_DEFAULT_TOKEN_LABEL = os.getenv('TRUSTPOINT_PKCS11_TOKEN_LABEL', 'Trustpoint-SoftHSM')
+HSM_DEFAULT_PKCS11_MODULE_PATH_FILE = HSM_CONFIG_DIR / 'pkcs11-module-path.txt'
+
+
+def _read_optional_text_file(path: Path) -> str | None:
+    """Read a small text file and return stripped content or None."""
+    try:
+        value = path.read_text(encoding='utf-8').strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def _first_existing_path(*paths: Path) -> Path | None:
+    """Return the first existing path from the provided candidates."""
+    for path in paths:
+        try:
+            path_exists = path.exists()
+        except OSError:
+            path_exists = False
+        if path_exists:
+            return path
+    return None
+
+
+_configured_pkcs11_module_path = os.getenv('TRUSTPOINT_PKCS11_MODULE_PATH')
+_file_pkcs11_module_path = _read_optional_text_file(HSM_DEFAULT_PKCS11_MODULE_PATH_FILE)
+
+if _configured_pkcs11_module_path:
+    HSM_DEFAULT_PKCS11_MODULE_PATH = Path(_configured_pkcs11_module_path)
+elif _file_pkcs11_module_path:
+    HSM_DEFAULT_PKCS11_MODULE_PATH = Path(_file_pkcs11_module_path)
+else:
+    HSM_DEFAULT_PKCS11_MODULE_PATH = (
+        _first_existing_path(
+            # current local/dev default in the Trustpoint container
+            Path('/usr/lib/libpkcs11-proxy.so.0'),
+            # direct local SoftHSM fallback
+            Path('/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so'),
+            # final fallback if a library is mounted into the HSM root
+            HSM_LIB_DIR / 'libpkcs11.so',
+        )
+        or (HSM_LIB_DIR / 'libpkcs11.so')
+    )
+
+if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
+    for directory in (HSM_CONFIG_DIR, HSM_LIB_DIR, HSM_TOKEN_DIR):
+        directory.mkdir(parents=True, exist_ok=True)

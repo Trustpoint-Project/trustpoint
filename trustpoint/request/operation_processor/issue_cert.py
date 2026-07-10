@@ -4,6 +4,8 @@ import contextlib
 from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
+from django.conf import settings
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
@@ -12,7 +14,9 @@ from devices.issuer import CredentialSaver
 from management.models import TlsSettings
 from management.models.audit_log import AuditLog
 from pki.models import CaModel, IssuedCredentialModel
+from pki.models.ca_rollover import CaRolloverState
 from pki.models.credential import CredentialModel
+from pki.services.ca_rollover import CaRolloverService
 from pki.util.keys import is_supported_public_key
 from request.clients.est_client import EstClient
 from request.request_context import (
@@ -31,6 +35,31 @@ if TYPE_CHECKING:
 
     from devices.models import DeviceModel
     from pki.models.domain import DomainModel
+
+
+def _as_authority_key_identifier_public_key(
+    public_key: object,
+) -> (
+    dsa.DSAPublicKey
+    | rsa.RSAPublicKey
+    | ec.EllipticCurvePublicKey
+    | ed25519.Ed25519PublicKey
+    | ed448.Ed448PublicKey
+):
+    if isinstance(
+        public_key,
+        (
+            dsa.DSAPublicKey,
+            rsa.RSAPublicKey,
+            ec.EllipticCurvePublicKey,
+            ed25519.Ed25519PublicKey,
+            ed448.Ed448PublicKey,
+        ),
+    ):
+        return public_key
+
+    err_msg = f'Unsupported issuer public key type for AuthorityKeyIdentifier: {type(public_key)}.'
+    raise TypeError(err_msg)
 
 
 class CertificateIssueProcessor(AbstractOperationProcessor):
@@ -92,7 +121,7 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
 
         return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, profile_display_name)
 
-class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
+class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
     """Operation processor for issuing certificates via a local CA."""
 
     def _get_crl_distribution_point_url(self, context: BaseRequestContext, ca_id: int) -> str:
@@ -107,10 +136,9 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
         request_meta = getattr(request, 'META', {}) if request else {}
         if not isinstance(request_meta, dict):
             request_meta = {}
-        port = request_meta.get('SERVER_PORT', '')
-        if port == '443': # CRL always served via HTTP
-            port = ''
-        port_str = f':{port}' if port else ''
+
+        http_port = settings.TP_HTTP_PORT or '80'
+        port_str = f':{http_port}' if http_port != '80' else ''
         return f'http://{TlsSettings.get_first_ipv4_address()}{port_str}/crl/{ca_id}'
 
     def _save_credential(
@@ -168,7 +196,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             actor=context.actor,
         )
 
-    def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
+    def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0912, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
         """Process the certificate issuance operation."""
         if not isinstance(context, BaseCertificateRequestContext):
             exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
@@ -188,6 +216,17 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
 
         cert_req = context.cert_requested
         ca = context.domain.get_issuing_ca_or_value_error()
+
+        active_rollover = CaRolloverService.get_active_rollover(ca)
+        if (active_rollover
+            and active_rollover.state == CaRolloverState.TRANSITION
+            and active_rollover.new_issuing_ca
+            and active_rollover.new_issuing_ca.credential):
+            ca = active_rollover.new_issuing_ca
+            self.logger.info(
+                'Using new CA for certificate signing (rollover in TRANSITION state)'
+            )
+
         public_key = cert_req._public_key if isinstance(cert_req, x509.CertificateBuilder) else cert_req.public_key()  # noqa: SLF001
 
         if not is_supported_public_key(public_key):
@@ -228,6 +267,10 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
         certificate_builder = certificate_builder.serial_number(x509.random_serial_number())
         certificate_builder = certificate_builder.public_key(public_key)
 
+        issuer_public_key = _as_authority_key_identifier_public_key(
+            issuing_credential.get_certificate().public_key()
+        )
+
         default_extensions = {
             x509.BasicConstraints: (x509.BasicConstraints(ca=False, path_length=None), False),
             x509.KeyUsage: (
@@ -245,9 +288,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
                 True,
             ),
             x509.AuthorityKeyIdentifier: (
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(
-                    issuing_credential.get_private_key_serializer().public_key_serializer.as_crypto()
-                ),
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_public_key),
                 False,
             ),
             x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),
@@ -265,7 +306,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
                 certificate_builder = certificate_builder.add_extension(ext, critical)
 
         signed_cert = certificate_builder.sign(
-            private_key=issuing_credential.get_private_key_serializer().as_crypto(),
+            private_key=issuing_credential.get_private_key(),
             algorithm=hash_algorithm,
         )
         self._save_credential(context, signed_cert, issuing_credential)

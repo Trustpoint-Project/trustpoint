@@ -32,6 +32,11 @@ class AuditLog(models.Model):
         DEVICE_DELETED = 'DEVICE_DELETED', _('Device Deleted')
         CA_CREATED = 'CA_CREATED', _('CA Created')
         CA_DELETED = 'CA_DELETED', _('CA Deleted')
+        CA_ROLLOVER_PLANNED = 'CA_ROLLOVER_PLANNED', _('CA Rollover Planned')
+        CA_ROLLOVER_STARTED = 'CA_ROLLOVER_STARTED', _('CA Rollover Started')
+        CA_ROLLOVER_TRANSITIONED = 'CA_ROLLOVER_TRANSITIONED', _('CA Rollover Transitioned')
+        CA_ROLLOVER_COMPLETED = 'CA_ROLLOVER_COMPLETED', _('CA Rollover Completed')
+        CA_ROLLOVER_CANCELLED = 'CA_ROLLOVER_CANCELLED', _('CA Rollover Cancelled')
         DOMAIN_CREATED = 'DOMAIN_CREATED', _('Domain Created')
         DOMAIN_DELETED = 'DOMAIN_DELETED', _('Domain Deleted')
         TLS_CERTIFICATE_CHANGED = 'TLS_CERTIFICATE_CHANGED', _('TLS Certificate Changed')
@@ -40,6 +45,14 @@ class AuditLog(models.Model):
         SIGNER_DELETED = 'SIGNER_DELETED', _('Signer Deleted')
         SIGNER_ADDED = 'SIGNER_ADDED', _('Signer Added')
         HASH_SIGNED = 'HASH_SIGNED', _('Hash Signed')
+        ORGANIZATION_UPDATED = 'ORGANIZATION_UPDATED', _('Organization Changed')
+        CRYPTO_VERIFY_PROVIDER = 'CRYPTO_VERIFY_PROVIDER', _('Crypto: Verify Provider')
+        CRYPTO_GENERATE_MANAGED_KEY = 'CRYPTO_GENERATE_MANAGED_KEY', _('Crypto: Generate Managed Key')
+        CRYPTO_IMPORT_MANAGED_KEY = 'CRYPTO_IMPORT_MANAGED_KEY', _('Crypto: Import Managed Key')
+        CRYPTO_VERIFY_MANAGED_KEY = 'CRYPTO_VERIFY_MANAGED_KEY', _('Crypto: Verify Managed Key')
+        CRYPTO_GET_PUBLIC_KEY = 'CRYPTO_GET_PUBLIC_KEY', _('Crypto: Get Public Key')
+        CRYPTO_SIGN = 'CRYPTO_SIGN', _('Crypto: Sign')
+        CRYPTO_DESTROY_MANAGED_KEY = 'CRYPTO_DESTROY_MANAGED_KEY', _('Crypto: Destroy Managed Key')
 
     timestamp = models.DateTimeField(
         verbose_name=_('Timestamp'),
@@ -85,6 +98,12 @@ class AuditLog(models.Model):
         related_name='audit_log_entries',
         help_text=_('The user who triggered the action. Null for system-triggered actions.'),
     )
+    details = models.JSONField(
+        verbose_name=_('Details'),
+        default=dict,
+        blank=True,
+        help_text=_('Structured non-secret metadata captured for this audit entry.'),
+    )
 
     class Meta(TypedModelMeta):
         """Meta options for AuditLog."""
@@ -110,6 +129,7 @@ class AuditLog(models.Model):
         target: models.Model,
         target_display: str,
         actor: models.Model | None = None,
+        details: dict[str, object] | None = None,
     ) -> AuditLog:
         """Create and persist a new audit log entry.
 
@@ -124,6 +144,8 @@ class AuditLog(models.Model):
             target is deleted.
         :param actor: The :class:`~django.contrib.auth.models.User` who
             triggered the action, or ``None`` for system-triggered actions.
+        :param details: Optional structured metadata. Do not include secrets,
+            key material, PINs, raw payloads, signatures, or auth references.
         :returns: The newly created :class:`AuditLog` instance.
         """
         return cls.objects.create(
@@ -132,5 +154,5 @@ class AuditLog(models.Model):
             target_object_id=str(target.pk),
             target_display=target_display,
             actor=actor,
+            details=details or {},
         )
-

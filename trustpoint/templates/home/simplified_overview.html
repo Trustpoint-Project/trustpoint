@@ -1,0 +1,645 @@
+{% load static %}
+{% load i18n %}
+{% load internationalization_tags %}
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Trustpoint - Simplified View</title>
+        <script src="{% static 'js/theme.js' %}"></script>
+        <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+        <link rel="stylesheet" href="{% static 'css/bootstrap-icons.min.css' %}">
+        <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
+        <link rel="icon" href="{% static 'img/favicon-32.png' %}">
+    </head>
+
+    <body id="bs-override">
+        <div class="simplified-wrapper">
+            <!-- Header -->
+            <header class="simplified-header">
+                <a href="{% url 'home:simplified_overview' %}">
+                    <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" height="40" class="light-only">
+                    <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" height="40" class="dark-only">
+                </a>
+                {% if all_domains.count > 1 %}
+                <div class="d-flex align-items-center gap-3">
+                    <h1 class="mb-0">{% trans "Domain Overview" %}</h1>
+                    <select id="domain-selector" class="form-select form-select-sm" style="width: auto; min-width: 200px;" onchange="window.location.href='?domain=' + encodeURIComponent(this.value)">
+                        {% for domain in all_domains %}
+                            <option value="{{ domain.pk }}" {% if selected_domain_id == domain.pk|stringformat:"s" or not selected_domain_id and forloop.first %}selected{% endif %}>
+                                {{ domain.unique_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if domains %}
+                        {% for domain in domains %}
+                            <a href="{% url 'pki:domains-config' domain.pk %}" class="btn btn-outline-primary btn-sm">
+                                {% trans "Configure" %}
+                            </a>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div class="d-flex align-items-center gap-3"></div>
+                {% elif all_domains.count == 1 %}
+                <div class="d-flex align-items-center gap-3">
+                    <h1 class="mb-0">{% trans "Domain Overview" %}</h1>
+                    <span class="fw-semibold">{{ all_domains.first.unique_name }}</span>
+                    {% if domains %}
+                        {% for domain in domains %}
+                            <a href="{% url 'pki:domains-config' domain.pk %}" class="btn btn-outline-primary btn-sm">
+                                {% trans "Configure" %}
+                            </a>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div class="d-flex align-items-center gap-3"></div>
+                {% else %}
+                <h1 class="mb-0">{% trans "Domain Overview" %}</h1>
+                <div></div>
+                {% endif %}
+            </header>
+
+            <!-- Main Content -->
+            <main class="simplified-content">
+                {% if messages %}
+                    <div class="messages tp-messages">
+                        {% for message in messages %}
+                            <div class="tp-message alert
+                                {% if message.tags %}
+                                    {% if message.tags == "error" %}
+                                        alert-danger
+                                    {% else %}
+                                        alert-{{ message.tags }}
+                                    {% endif %}
+                                {% endif %} d-flex" role="alert">
+                                <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img">
+                                    <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use>
+                                </svg>
+                                <div>{{ message }}</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% for domain in domains %}
+                    <div class="domain-section">
+                        <div class="domain-card-container">
+                            <!-- CA Information Card -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">{% trans "CA Information" %}</h5>
+                                </div>
+                                <div class="card-body">
+                                     {% if domain.issuing_ca %}
+                                    <div class="mb-2">
+                                        <strong>{% trans "Name" %}:</strong> {{ domain.issuing_ca.unique_name }}
+                                    </div>
+                                    {% if domain.issuing_ca.credential.certificate %}
+                                    <div class="mb-2">
+                                        <strong>{% trans "Valid Until" %}:</strong>
+                                        {{ domain.issuing_ca.credential.certificate.not_valid_after|local_datetime }}
+                                    </div>
+                                    {% if domain.issuing_ca.signature_suite %}
+                                    <div class="mb-2">
+                                        <strong>{% trans "Signature Suite" %}:</strong>
+                                        {{ domain.issuing_ca.signature_suite }}
+                                    </div>
+                                    {% endif %}
+                                    {% endif %}
+                                    <h6 class="text-muted mb-2">{% trans "Certificates" %}</h6>
+                                    <div class="d-flex flex-column gap-2 mb-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <strong>{% trans "Active" %}:</strong>
+                                            <span class="badge {% if domain.active_certificates > 0 %}bg-success{% else %}bg-secondary{% endif %}">{{ domain.active_certificates }}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <strong>{% trans "Expiring Soon (30 days)" %}:</strong>
+                                            <span class="badge {% if domain.expiring_certificates > 0 %}bg-warning{% else %}bg-secondary{% endif %}">{{ domain.expiring_certificates }}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <strong>{% trans "Expired" %}:</strong>
+                                            <span class="badge {% if domain.expired_certificates > 0 %}bg-danger{% else %}bg-secondary{% endif %}">{{ domain.expired_certificates }}</span>
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-warning mb-3">
+                                        {% trans "No Issuing CA configured for this domain." %}
+                                    </div>
+                                    <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-primary w-100">
+                                        <i class="bi bi-plus-circle me-2"></i>{% trans "Create Issuing CA" %}
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Quick Actions Card -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">{% trans "Quick Actions" %}</h5>
+                                </div>
+                                <div class="card-body">
+
+                                    {% if domain.issuing_ca %}
+                                    <h6 class="text-muted mb-2 mt-2">{% trans "Issuing CA" %}</h6>
+                                    <div class="mb-3">
+                                        <a href="{% url 'pki:issuing_cas-config' domain.issuing_ca.pk %}" class="btn btn-outline-primary btn-sm w-100 mb-2">
+                                            {% trans "Configure CA" %}
+                                        </a>
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <a href="{% url 'pki:issuing_ca-issued_certificates' domain.issuing_ca.pk %}" class="btn btn-outline-secondary btn-sm w-100">
+                                                    {% trans "View Issued Certificates" %}
+                                                </a>
+                                            </div>
+                                            <div class="col-6">
+                                                {% if domain.issuing_ca.credential.certificate %}
+                                                <a href="{% url 'pki:certificate-download' domain.issuing_ca.credential.certificate.pk %}" class="btn btn-outline-secondary btn-sm w-100">
+                                                    {% trans "Download CA Certificate" %}
+                                                </a>
+                                                {% else %}
+                                                <button class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                                    {% trans "Download CA Certificate" %}
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <h6 class="text-muted mb-2 mt-2">{% trans "CRL Management" %}</h6>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-6">
+                                            <a href="{% url 'pki:issuing_cas-crl-gen' domain.issuing_ca.pk %}" class="btn btn-outline-secondary btn-sm w-100">
+                                                {% trans "Generate CRL" %}
+                                            </a>
+                                        </div>
+                                        <div class="col-6">
+                                            {% with active_crl=domain.issuing_ca.get_active_crl %}
+                                            {% if active_crl %}
+                                            <a href="{% url 'pki:crl-download' active_crl.pk %}" class="btn btn-outline-secondary btn-sm w-100">
+                                                {% trans "Download CRL" %}
+                                            </a>
+                                            {% else %}
+                                            <button class="btn btn-outline-secondary btn-sm w-100" disabled title="{% trans 'No CRL available. Generate one first.' %}">
+                                                {% trans "Download CRL" %}
+                                            </button>
+                                            {% endif %}
+                                            {% endwith %}
+                                        </div>
+                                    </div>
+                                    {% if not domain.issuing_ca.crl_cycle_enabled %}
+                                    <form method="post" action="{% url 'home:simplified_enable_crl_cycle' domain.issuing_ca.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm w-100" title="{% trans 'Enable automatic CRL generation every 48 hours with 72 hour validity' %}">
+                                            {% trans "Enable CRL Cycle (48h/72h)" %}
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <div class="alert alert-success mb-0 py-2 px-3 small">
+                                        {% trans "CRL cycle updates are enabled" %} ({% trans "Interval" %}: {{ domain.issuing_ca.crl_cycle_interval_hours|floatformat:0 }}h | {% trans "Validity" %}: {{ domain.issuing_ca.crl_validity_hours|floatformat:0 }}h)
+                                    </div>
+                                    {% endif %}
+                                    {% else %}
+                                    <p class="text-muted mb-2">{% trans "Create an Issuing CA to access management actions." %}</p>
+                                    <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-primary w-100">
+                                        <i class="bi bi-plus-circle me-2"></i>{% trans "Create Issuing CA" %}
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Notifications Card -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">{% trans "Notifications" %}</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if domain.recent_notifications %}
+                                    <div class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
+                                        {% for notification in domain.recent_notifications %}
+                                        <a href="{% url 'management:notification_details' notification.pk %}" 
+                                           class="list-group-item px-0 py-2 notification-item text-decoration-none"
+                                           style="cursor: pointer;">
+                                            <div class="d-flex w-100 justify-content-between align-items-start mb-1">
+                                                {% if notification.notification_type == 'INF' %}
+                                                <span class="badge bg-info">{{ notification.get_notification_type_display }}</span>
+                                                {% elif notification.notification_type == 'WAR' %}
+                                                <span class="badge bg-warning">{{ notification.get_notification_type_display }}</span>
+                                                {% elif notification.notification_type == 'CRI' %}
+                                                <span class="badge bg-danger">{{ notification.get_notification_type_display }}</span>
+                                                {% else %}
+                                                <span class="badge bg-secondary">{{ notification.get_notification_type_display }}</span>
+                                                {% endif %}
+                                                <small class="text-muted">{{ notification.created_at|date:"Y-m-d H:i" }}</small>
+                                            </div>
+                                            <p class="mb-0 small">{{ notification.short_translated|truncatewords:20 }}</p>
+                                        </a>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <p class="text-muted small mb-0">{% trans "No recent notifications." %}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Devices List -->
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <h5 class="mb-0">{% trans "Devices" %} ({{ domain.total_devices }})</h5>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        {# --- Filters dropdown --- #}
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm {% if domain.filters_active %}btn-primary{% else %}btn-outline-secondary{% endif %} dropdown-toggle"
+                                                    type="button"
+                                                    data-bs-toggle="dropdown"
+                                                    data-bs-auto-close="outside"
+                                                    aria-expanded="{% if domain.filters_active %}true{% else %}false{% endif %}">
+                                                {% trans 'Filters' %}{% if domain.filters_active %} <span class="badge bg-white text-primary ms-1">{% trans 'active' %}</span>{% endif %}
+                                            </button>
+                                            <div class="dropdown-menu p-3" style="min-width: 22rem;">
+                                                <form method="get" class="d-flex flex-column gap-2">
+                                                    {% if selected_domain_id %}
+                                                        <input type="hidden" name="domain" value="{{ selected_domain_id }}">
+                                                    {% endif %}
+
+                                                    <div>
+                                                        <label for="{{ domain.device_filter.form.common_name.id_for_label }}" class="form-label mb-1 fw-semibold">
+                                                            {{ domain.device_filter.form.common_name.label }}
+                                                        </label>
+                                                        {{ domain.device_filter.form.common_name }}
+                                                    </div>
+
+                                                    <div>
+                                                        <label for="{{ domain.device_filter.form.serial_number.id_for_label }}" class="form-label mb-1 fw-semibold">
+                                                            {{ domain.device_filter.form.serial_number.label }}
+                                                        </label>
+                                                        {{ domain.device_filter.form.serial_number }}
+                                                    </div>
+
+                                                    <div>
+                                                        <label for="{{ domain.device_filter.form.enrollment_state.id_for_label }}" class="form-label mb-1 fw-semibold">
+                                                            {{ domain.device_filter.form.enrollment_state.label }}
+                                                        </label>
+                                                        {{ domain.device_filter.form.enrollment_state }}
+                                                    </div>
+
+                                                    <div>
+                                                        <label for="{{ domain.device_filter.form.domain_credential_state.id_for_label }}" class="form-label mb-1 fw-semibold">
+                                                            {{ domain.device_filter.form.domain_credential_state.label }}
+                                                        </label>
+                                                        {{ domain.device_filter.form.domain_credential_state }}
+                                                    </div>
+
+                                                    <div>
+                                                        <label for="{{ domain.device_filter.form.application_certificate_state.id_for_label }}" class="form-label mb-1 fw-semibold">
+                                                            {{ domain.device_filter.form.application_certificate_state.label }}
+                                                        </label>
+                                                        {{ domain.device_filter.form.application_certificate_state }}
+                                                    </div>
+
+                                                    <div class="d-flex gap-2">
+                                                        <div class="flex-fill">
+                                                            <label for="{{ domain.device_filter.form.created_at_from.id_for_label }}" class="form-label mb-1 fw-semibold">
+                                                                {{ domain.device_filter.form.created_at_from.label }}
+                                                            </label>
+                                                            {{ domain.device_filter.form.created_at_from }}
+                                                        </div>
+                                                        <div class="flex-fill">
+                                                            <label for="{{ domain.device_filter.form.created_at_to.id_for_label }}" class="form-label mb-1 fw-semibold">
+                                                                {{ domain.device_filter.form.created_at_to.label }}
+                                                            </label>
+                                                            {{ domain.device_filter.form.created_at_to }}
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="d-flex gap-2 mt-1">
+                                                        <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                                                            {% trans 'Apply' %}
+                                                        </button>
+                                                        <a href="{% url 'home:simplified_overview' %}{% if selected_domain_id %}?domain={{ selected_domain_id }}{% endif %}" class="btn btn-outline-secondary btn-sm flex-fill">
+                                                            {% trans 'Reset' %}
+                                                        </a>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+
+                                        {# --- Column visibility dropdown --- #}
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                                    data-bs-auto-close="outside">
+                                                {% trans "Columns" %}
+                                            </button>
+                                            <ul class="dropdown-menu" id="tp-column-toggle-menu">
+                                                <li>
+                                                    <label class="dropdown-item d-flex align-items-center gap-2">
+                                                        <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="name" checked> {% trans "Name" %}
+                                                    </label>
+                                                </li>
+                                                <li>
+                                                    <label class="dropdown-item d-flex align-items-center gap-2">
+                                                        <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="serial_number"> {% trans "Serial Number" %}
+                                                    </label>
+                                                </li>
+                                                <li>
+                                                    <label class="dropdown-item d-flex align-items-center gap-2">
+                                                        <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="created_at"> {% trans "Created at" %}
+                                                    </label>
+                                                </li>
+                                                <li>
+                                                    <label class="dropdown-item d-flex align-items-center gap-2">
+                                                        <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="enrollment" checked> {% trans "Enrollment" %}
+                                                    </label>
+                                                </li>
+                                                <li>
+                                                    <label class="dropdown-item d-flex align-items-center gap-2">
+                                                        <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="domain_credential" checked> {% trans "Domain Credential" %}
+                                                    </label>
+                                                </li>
+                                                <li>
+                                                    <label class="dropdown-item d-flex align-items-center gap-2">
+                                                        <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="application_certificates" checked> {% trans "Application Certificates" %}
+                                                    </label>
+                                                </li>
+                                                <li>
+                                                    <label class="dropdown-item d-flex align-items-center gap-2">
+                                                        <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="onboarding_protocol"> {% trans "Onboarding Protocol" %}
+                                                    </label>
+                                                </li>
+                                                <li>
+                                                    <label class="dropdown-item d-flex align-items-center gap-2">
+                                                        <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="pki_protocols"> {% trans "PKI Protocols" %}
+                                                    </label>
+                                                </li>
+                                                <li>
+                                                    <label class="dropdown-item d-flex align-items-center gap-2">
+                                                        <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="clm" checked> {% trans "Certificate Management" %}
+                                                    </label>
+                                                </li>
+                                            </ul>
+                                        </div>
+
+                                        <a href="{% url 'devices:devices_create' %}?domain={{ domain.pk }}" class="btn btn-sm btn-primary">
+                                            {% trans "Create New Device" %}
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="revokeSelectedDevices()">
+                                            {% trans "Revoke Selected" %}
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="deleteSelectedDevices()">
+                                            {% trans "Delete Selected" %}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                {% if domain.prepared_devices %}
+                                    <div style="overflow-x: auto; width: 100%;">
+                                        <table class="table table-hover mb-0" id="devices-table">
+                                            <thead>
+                                                <tr>
+                                                    <th class="text-nowrap">
+                                                        <input type="checkbox" id="select-all-devices" onclick="toggleAllDevices(this)">
+                                                    </th>
+                                                    <th class="text-nowrap" data-col="name">{% trans "Name" %}</th>
+                                                    <th class="text-nowrap" data-col="serial_number">{% trans "Serial Number" %}</th>
+                                                    <th class="text-nowrap" data-col="created_at">{% trans "Created at" %}</th>
+                                                    <th class="text-nowrap" data-col="enrollment">{% trans "Enrollment" %}</th>
+                                                    <th class="text-nowrap" data-col="domain_credential">{% trans "Domain Credential" %}</th>
+                                                    <th class="text-nowrap" data-col="application_certificates">{% trans "Application Certificates" %}</th>
+                                                    <th class="text-nowrap" data-col="onboarding_protocol">{% trans "Onboarding Protocol" %}</th>
+                                                    <th class="text-nowrap" data-col="pki_protocols">{% trans "PKI Protocols" %}</th>
+                                                    <th class="text-nowrap" data-col="clm">{% trans "Certificate Management" %}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="devices-tbody">
+                                                {% for device in domain.prepared_devices %}
+                                                    <tr class="device-row">
+                                                        <td class="text-nowrap">
+                                                            <input type="checkbox" class="device-checkbox" name="device_checkbox" value="{{ device.pk }}">
+                                                        </td>
+                                                        <td class="text-nowrap" data-col="name">{{ device.common_name }}</td>
+                                                        <td class="text-nowrap" data-col="serial_number">{{ device.serial_number|default:"-" }}</td>
+                                                        <td class="text-nowrap" data-col="created_at">{{ device.created_at|local_datetime }}</td>
+                                                        <td class="text-nowrap" data-col="enrollment">
+                                                            {% with p=device.onboarding_progress %}
+                                                            <span class="tp-status-badge tp-status-{{ p.status_key }}"
+                                                                  data-bs-toggle="tooltip"
+                                                                  data-bs-placement="top"
+                                                                  data-bs-html="true"
+                                                                  title="{{ p.tooltip }}">
+                                                                <span class="tp-status-dot"></span>
+                                                                {{ p.status_label }}
+                                                            </span>
+                                                            {% endwith %}
+                                                        </td>
+                                                        <td class="text-nowrap" data-col="domain_credential">
+                                                            {% with p=device.domain_credential_status %}
+                                                            <span class="tp-status-badge tp-status-{{ p.status_key }}"
+                                                                  data-bs-toggle="tooltip"
+                                                                  data-bs-placement="top"
+                                                                  data-bs-html="true"
+                                                                  title="{{ p.tooltip }}">
+                                                                <span class="tp-status-dot"></span>
+                                                                {{ p.status_label }}
+                                                            </span>
+                                                            {% endwith %}
+                                                        </td>
+                                                        <td class="text-nowrap" data-col="application_certificates">
+                                                            {% with p=device.application_certificate_status %}
+                                                            <span class="tp-status-badge tp-status-{{ p.status_key }}"
+                                                                  data-bs-toggle="tooltip"
+                                                                  data-bs-placement="top"
+                                                                  data-bs-html="true"
+                                                                  title="{{ p.tooltip }}">
+                                                                <span class="tp-status-dot"></span>
+                                                                {{ p.status_label }}
+                                                            </span>
+                                                            {% endwith %}
+                                                        </td>
+                                                        <td class="text-nowrap" data-col="onboarding_protocol">{{ device.onboarding_progress.onboarding_protocol }}</td>
+                                                        <td class="text-nowrap" data-col="pki_protocols">{{ device.onboarding_progress.pki_protocols }}</td>
+                                                        <td class="text-nowrap" data-col="clm">{{ device.clm_button|safe }}</td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted text-center mb-0 p-3">{% trans "No devices in this domain" %}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-inbox" style="font-size: 4rem; color: var(--bs-secondary);"></i>
+                        <h3 class="mt-3">{% trans "No domains configured" %}</h3>
+                        {% if has_available_cas %}
+                            <p class="text-muted">{% trans "Create a domain to get started" %}</p>
+                            <a href="{% url 'pki:domains-add' %}" class="btn btn-primary mt-3">
+                                <i class="bi bi-plus-circle me-2"></i>{% trans "Create Domain" %}
+                            </a>
+                        {% else %}
+                            <p class="text-muted">{% trans "Before creating a domain, you need to create an Issuing CA first" %}</p>
+                            <div class="d-flex gap-3 justify-content-center mt-3">
+                                <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-primary">
+                                    <i class="bi bi-plus-circle me-2"></i>{% trans "Create Issuing CA" %}
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </main>
+
+            <!-- Bottom Navigation -->
+            <nav class="simplified-bottom-nav">
+                <form method="POST" action="{% url 'users:logout' %}">
+                    {% csrf_token %}
+                    <button type="submit">
+                        <i class="bi bi-door-open fs-4"></i>
+                        <span>{% trans "Logout" %}</span>
+                    </button>
+                </form>
+
+                <button class="theme-toggle" type="button">
+                    <i class="bi bi-sun-fill fs-4 dark-only"></i>
+                    <i class="bi bi-moon-stars-fill fs-4 light-only"></i>
+                    <span class="dark-only">{% trans "Light theme" %}</span>
+                    <span class="light-only">{% trans "Dark theme" %}</span>
+                </button>
+
+                <a href="{% url 'management:help' %}">
+                    <i class="bi bi-question-circle fs-4"></i>
+                    <span>{% trans "Help & Support" %}</span>
+                </a>
+
+                <a href="{% url 'management:settings' %}">
+                    <i class="bi bi-gear fs-4"></i>
+                    <span>{% trans "Management" %}</span>
+                </a>
+            </nav>
+        </div>
+
+        <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+        <script>
+            // Initialize Bootstrap tooltips
+            document.addEventListener('DOMContentLoaded', function() {
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+                    new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+
+                // Initialize column visibility
+                loadHiddenColumns();
+                document.querySelectorAll('.tp-col-toggle').forEach(function(cb) {
+                    cb.addEventListener('change', function() {
+                        applyColumnVisibility(this.dataset.col, this.checked);
+                        saveHiddenColumns();
+                    });
+                });
+            });
+
+            // Toggle all device checkboxes
+            function toggleAllDevices(source) {
+                var checkboxes = document.querySelectorAll('.device-checkbox');
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = source.checked;
+                });
+            }
+
+            // Get selected device IDs
+            function getSelectedDeviceIds() {
+                var checkboxes = document.querySelectorAll('.device-checkbox:checked');
+                var ids = [];
+                checkboxes.forEach(function(checkbox) {
+                    var value = String(checkbox.value || '');
+                    if (/^\d+$/.test(value)) {
+                        ids.push(value);
+                    }
+                    // Only allow expected numeric device IDs from DOM values
+                    if (/^\d+$/.test(value)) {
+                        ids.push(value);
+                    }
+                });
+                return ids;
+            }
+
+            // Revoke selected devices
+            function revokeSelectedDevices() {
+                var deviceIds = getSelectedDeviceIds();
+                
+                if (deviceIds.length === 0) {
+                    alert('{% trans "Please select at least one device to revoke." %}');
+                var encodedIds = deviceIds.map(function(id) { return encodeURIComponent(id); });
+                var url = '/devices/revoke-device/' + encodedIds.join('/') + '/';
+                }
+
+                // Build URL with device IDs
+                var encodedIds = deviceIds.map(function(id) { return encodeURIComponent(id); });
+                var url = '/devices/revoke-device/' + encodedIds.join('/') + '/';
+                window.location.href = url;
+            }
+
+            // Delete selected devices
+            function deleteSelectedDevices() {
+                var deviceIds = getSelectedDeviceIds();
+                
+                if (deviceIds.length === 0) {
+                var encodedIds = deviceIds.map(function(id) { return encodeURIComponent(id); });
+                var url = '/devices/delete-device/' + encodedIds.join('/') + '/';
+                    return;
+                }
+
+                // Build URL with device IDs
+                var encodedIds = deviceIds.map(function(id) { return encodeURIComponent(id); });
+                var url = '/devices/delete-device/' + encodedIds.join('/') + '/';
+                window.location.href = url;
+            }
+
+            // Column visibility management
+            var STORAGE_KEY = 'tp-simplified-hidden-cols';
+
+            function applyColumnVisibility(col, visible) {
+                // Only target table headers and cells, not the checkbox inputs
+                var selector = 'th[data-col="' + col + '"], td[data-col="' + col + '"]';
+                document.querySelectorAll(selector).forEach(function(el) {
+                    el.style.display = visible ? '' : 'none';
+                });
+            }
+
+            function saveHiddenColumns() {
+                var hidden = [];
+                document.querySelectorAll('.tp-col-toggle').forEach(function(cb) {
+                    if (!cb.checked) {
+                        hidden.push(cb.dataset.col);
+                    }
+                });
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(hidden));
+            }
+
+            function loadHiddenColumns() {
+                try {
+                    var stored = localStorage.getItem(STORAGE_KEY);
+                    if (stored) {
+                        var hidden = JSON.parse(stored);
+                        hidden.forEach(function(col) {
+                            applyColumnVisibility(col, false);
+                        });
+                        
+                        // Update checkboxes
+                        document.querySelectorAll('.tp-col-toggle').forEach(function(cb) {
+                            if (hidden.includes(cb.dataset.col)) {
+                                cb.checked = false;
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error loading column visibility:', e);
+                }
+            }
+        </script>
+    </body>
+</html>

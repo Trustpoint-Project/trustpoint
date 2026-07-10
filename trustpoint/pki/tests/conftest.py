@@ -7,15 +7,24 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
-from pki.models.domain import DomainModel
 from pki.models import CaModel
-from management.models import KeyStorageConfig
+from pki.models.domain import DomainModel
+from pki.tests.managed_ca_helpers import create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 
 
 @pytest.fixture(autouse=True)
 def enable_db_access_for_all_tests(db: None) -> None:
     """Fixture to enable database access for all tests."""
+
+
+@pytest.fixture(autouse=True)
+def configure_local_crypto_backend_for_pki_tests(settings: Any) -> None:
+    """Provide a local software crypto backend for PKI tests that create managed CAs."""
+    settings.DEVELOPMENT_ENV = True
+    settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
+    settings.TRUSTPOINT_IS_OPERATIONAL = True
+    settings.DOCKER_CONTAINER = False
 
 
 # ----------------------------
@@ -49,7 +58,7 @@ def ec_private_key() -> ec.EllipticCurvePrivateKey:
 
 CA_COMMON_NAME = 'Root CA'
 UNIQUE_NAME = CA_COMMON_NAME.replace(' ', '_').lower()
-CA_TYPE = CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+CA_TYPE = CaModel.CaTypeChoice.LOCAL_PKCS11
 
 DOMAIN_UNIQUE_NAME = 'domain_name'
 
@@ -57,10 +66,7 @@ DOMAIN_UNIQUE_NAME = 'domain_name'
 @pytest.fixture
 def issuing_ca_instance() -> dict[str, Any]:
     """Fixture for a testing CaModel instance."""
-    # Ensure crypto storage config exists for encrypted fields
-    KeyStorageConfig.get_or_create_default()
-    
-    cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME)
+    cert, priv_key = create_managed_root_ca(cn=CA_COMMON_NAME)
     issuing_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE
     )
@@ -83,3 +89,34 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     domain = DomainModel.objects.create(unique_name=DOMAIN_UNIQUE_NAME, issuing_ca=issuing_ca, is_active=True)
     issuing_ca_instance.update({'domain': domain})
     return issuing_ca_instance
+
+
+# ----------------------------
+# CA Rollover Test Fixtures
+# ----------------------------
+
+
+@pytest.fixture
+def issuing_ca_model() -> CaModel:
+    """Create a standalone CaModel instance for rollover tests."""
+    cert, priv_key = create_managed_root_ca(cn='Old Issuing CA')
+    return CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=cert,
+        private_key=priv_key,
+        chain=[],
+        unique_name='old_issuing_ca',
+        ca_type=CA_TYPE,
+    )
+
+
+@pytest.fixture
+def second_issuing_ca_model() -> CaModel:
+    """Create a second CaModel instance for rollover tests (the new CA)."""
+    cert, priv_key = create_managed_root_ca(cn='New Issuing CA')
+    return CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=cert,
+        private_key=priv_key,
+        chain=[],
+        unique_name='new_issuing_ca',
+        ca_type=CA_TYPE,
+    )

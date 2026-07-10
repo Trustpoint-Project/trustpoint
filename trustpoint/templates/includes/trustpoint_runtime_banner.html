@@ -1,0 +1,6 @@
+{% if trustpoint_runtime_banner %}
+    <section class="tp-runtime-banner" role="status" aria-live="polite">
+        <div class="tp-runtime-banner-kicker">{{ trustpoint_runtime_banner.title }}</div>
+        <p class="tp-runtime-banner-copy">{{ trustpoint_runtime_banner.message }}</p>
+    </section>
+{% endif %}

@@ -23,7 +23,7 @@
                     <svg id="menu-icon-back" class="bi bi-size100 d-none" fill="currentColor" role="img" aria-label="Hide Menu">
                         <use href="{% static 'img/icons.svg' %}#icon-x"></use></svg>
                 </div>
-                <a class="navbar-brand tp-primary" href="{% url 'home:dashboard' %}">
+                <a class="navbar-brand tp-primary" href="{% url 'home:index' %}">
                     <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" id="tp-logo" class="light-only">
                     <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only">
                 </a>
@@ -52,7 +52,7 @@
                 </div>
             {% endif %}
             <div class="tp-menu-group">
-                <a href="{% url 'home:dashboard' %}" class="tp-menu-head {% if page_name == 'dashboard' %}tp-menu-active{% endif %}">
+                <a href="{% url 'home:index' %}" class="tp-menu-head {% if page_name == 'dashboard' or page_name == 'simplified_overview' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
                         <use href="{% static 'img/icons.svg' %}#icon-home"></use></svg>
                     {% translate "Dashboard" %}
@@ -121,11 +121,15 @@
                     <a href="{% url 'management:audit-log' %}" class="tp-menu-item {% if page_name == 'audit_log' %}tp-menu-active{% endif %}">{% trans "Audit Log" %}</a>
                     <a href="{% url 'management:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
                     <a href="{% url 'management:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backups" %}</a>
-                    <a href="{% url 'management:key_storage' %}" class="tp-menu-item {% if page_name == 'key_storage' %}tp-menu-active{% endif %}">{% trans "Key Storage" %}</a>
+                    <a href="{% url 'management:backend_configuration' %}" class="tp-menu-item {% if page_name == 'backend_configuration' %}tp-menu-active{% endif %}">{% trans "Crypto Backend" %}</a>
                     <a href="{% url 'management:notifications' %}" class="tp-menu-item {% if page_name == 'notifications' %}tp-menu-active{% endif %}">{% trans "Notifications" %}</a>
+                    <a href="{% url 'management:organization' %}" class="tp-menu-item {% if page_name == 'organization' %}tp-menu-active{% endif %}">{% trans "Organizations" %}</a>
+                    {% if perms.users.manage_role %}
+                    <a href="{% url 'management:user_management' %}" class="tp-menu-item {% if page_name == 'user_management' %}tp-menu-active{% endif %}">{% trans "Users" %}</a>
+                    <a href="{% url 'management:role_management' %}" class="tp-menu-item {% if page_name == 'role_management' %}tp-menu-active{% endif %}">{% trans "Roles" %}</a>
+                    {% endif %}
                 </div>
             </div>
-
             <div class="tp-menu-group">
                 <a href="{% url 'workflows2:definitions_list' %}"
                 class="tp-menu-head {% if page_category == 'workflows2' %}tp-menu-active{% endif %}">
@@ -149,9 +153,12 @@
                         {% trans "Runs" %}
                     </a>
 
-                    <a href="{% url 'workflows2:approvals-list' %}"
-                    class="tp-menu-item {% if page_name == 'approvals-list' %}tp-menu-active{% endif %}">
-                        {% trans "Approvals" %}
+                    <a href="{% url 'workflows2:waiting-list' %}"
+                    class="tp-menu-item tp-menu-item-with-badge {% if page_name == 'waiting-list' %}tp-menu-active{% endif %}">
+                        <span>{% trans "Waiting" %}</span>
+                        {% if workflow_waiting_total %}
+                          <span class="badge rounded-pill text-bg-warning">{{ workflow_waiting_total }}</span>
+                        {% endif %}
                     </a>
                 </div>
             </div>
@@ -206,6 +213,7 @@
         </nav>
 
         <main class="tp-main">
+            {% include 'includes/trustpoint_runtime_banner.html' %}
             {% if messages %}
                 <div class="messages tp-messages text-center">
                     {% for message in messages %}

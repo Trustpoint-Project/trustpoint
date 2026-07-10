@@ -24,6 +24,7 @@ class SecurityConfigFormTest(TestCase):
         self.assertIn('security_mode', form.fields)
         self.assertIn('auto_gen_pki', form.fields)
         self.assertIn('auto_gen_pki_key_algorithm', form.fields)
+        assert 'allow_imported_private_keys' in form.fields
 
     def test_form_initialization_without_instance(self):
         """Test form initializes with default values."""
@@ -68,7 +69,6 @@ class SecurityConfigFormTest(TestCase):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -90,7 +90,6 @@ class SecurityConfigFormTest(TestCase):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -110,7 +109,6 @@ class SecurityConfigFormTest(TestCase):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -130,7 +128,6 @@ class SecurityConfigFormTest(TestCase):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -178,7 +175,6 @@ class SecurityConfigFormTest(TestCase):
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
                 'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
-                'require_physical_hsm': defaults['require_physical_hsm'],
             }
             form = SecurityConfigForm(data=form_data, instance=instance)
             self.assertTrue(form.is_valid(), f"Form should be valid for mode {mode}")
@@ -188,6 +184,23 @@ class SecurityConfigFormTest(TestCase):
         form = SecurityConfigForm()
         self.assertIsNotNone(form.helper)
         self.assertIsNotNone(form.helper.layout)
+
+    def test_form_saves_imported_private_key_policy(self) -> None:
+        """Test that the imported private-key policy is saved from the Security settings form."""
+        form = SecurityConfigForm(
+            data={
+                'security_mode': SecurityConfig.SecurityModeChoices.LAB,
+                'auto_gen_pki': False,
+                'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
+                'allow_imported_private_keys': True,
+            },
+            instance=self.config,
+        )
+
+        assert form.is_valid(), form.errors
+        saved = form.save()
+
+        assert saved.allow_imported_private_keys
 
 
 @pytest.mark.django_db

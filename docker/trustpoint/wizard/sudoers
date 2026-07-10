@@ -1,4 +1,5 @@
 Defaults        env_reset
+Defaults        env_keep += "TP_* TRUSTPOINT_* DJANGO_SETTINGS_MODULE"
 Defaults        mail_badpass
 Defaults        secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -9,17 +10,8 @@ Defaults        use_pty
 # User privilege specification
 root    ALL=(ALL:ALL) ALL
 
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_setup_crypto_storage.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_setup_hsm.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_setup_mode.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_tls_server_credential_apply.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_tls_server_credential_apply_cancel.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_backup_password.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_demo_data.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_create_super_user.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_restore.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_auto_restore_password_set.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_auto_restore_success.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_complete_setup.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_reset_to_crypto_storage.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/update_tls.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls_nginx.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/install_pkcs11_assets.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/wizard_restore.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/switch_to_operational.sh

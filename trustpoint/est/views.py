@@ -13,7 +13,11 @@ from request.operation_processor.general import OperationProcessor
 if TYPE_CHECKING:
     from pki.models.credential import CredentialModel
 
+from trustpoint_core.serializer import CertificateCollectionSerializer
+
+from pki.models.ca_rollover import CaRolloverState
 from pki.models.domain import DomainModel
+from pki.services.ca_rollover import CaRolloverService
 from request.authentication import EstAuthentication
 from request.authorization import EstAuthorization
 from request.message_parser import EstMessageParser
@@ -257,7 +261,23 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
                     cast('CredentialModel', requested_domain.issuing_ca.credential)
                     .get_credential_serializer()
                 )
-                pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()
+
+                active_rollover = CaRolloverService.get_active_rollover(requested_domain.issuing_ca)
+
+                if (active_rollover
+                    and active_rollover.state == CaRolloverState.PREPARATION
+                    and active_rollover.new_issuing_ca
+                    and active_rollover.new_issuing_ca.credential):
+                    old_chain = ca_credential_serializer.get_full_chain_as_serializer()
+                    new_ca_credential = active_rollover.new_issuing_ca.credential.get_credential_serializer()
+                    new_chain = new_ca_credential.get_full_chain_as_serializer()
+
+                    combined_certs = old_chain.as_crypto() + new_chain.as_crypto()
+                    combined_chain = CertificateCollectionSerializer(combined_certs)
+                    pkcs7_certs = combined_chain.as_pkcs7_der()
+                else:
+                    pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()
+
                 b64_pkcs7 = base64.b64encode(pkcs7_certs).decode()
 
                 formatted_b64_pkcs7 = '\n'.join([b64_pkcs7[i : i + 64] for i in range(0, len(b64_pkcs7), 64)])

@@ -23,6 +23,7 @@ from workflows2.models import (
     Workflow2WorkerHeartbeat,
 )
 from workflows2.services.runtime import WorkflowRuntimeService
+from workflows2.services.transitions import WorkflowRunTransitionService
 from workflows2.services.worker import Workflow2DbWorker
 
 DispatchStatus = Literal['completed', 'blocked', 'running']
@@ -44,7 +45,7 @@ class EventSource:
     trustpoint: bool = True
     ca_id: int | None = None
     domain_id: int | None = None
-    device_id: str | None = None
+    device_id: int | None = None
 
 
 class WorkflowDispatchService:
@@ -263,15 +264,10 @@ class WorkflowDispatchService:
             raise RuntimeError(msg)
         run.refresh_from_db(fields=['status', 'finalized', 'updated_at'])
 
-        if run.status in {Workflow2Run.STATUS_AWAITING, Workflow2Run.STATUS_PAUSED}:
+        if run.status in WorkflowRunTransitionService.BLOCKED_STATUSES:
             return DispatchOutcome(status='blocked', run=run, instances=instances)
 
-        if run.status in {
-            Workflow2Run.STATUS_SUCCEEDED,
-            Workflow2Run.STATUS_REJECTED,
-            Workflow2Run.STATUS_FAILED,
-            Workflow2Run.STATUS_CANCELLED,
-        }:
+        if run.status in WorkflowRunTransitionService.TERMINAL_STATUSES:
             return DispatchOutcome(status='completed', run=run, instances=instances)
 
         return DispatchOutcome(status='running', run=run, instances=instances)
@@ -346,21 +342,50 @@ class WorkflowDispatchService:
 
     @staticmethod
     @transaction.atomic
-    def release_run_idempotency(*, run_id: Any) -> None:
-        """Release the idempotency key after the final requester response was delivered."""
+    def release_run_idempotency(
+        *,
+        run_id: Any,
+        actor: Any | None = None,
+        reason: str = '',
+        mode: str = 'automatic',
+    ) -> bool:
+        """Release the idempotency key so the same request can create a new run."""
         run = Workflow2Run.objects.select_for_update().filter(id=run_id).first()
         if run is None or not run.idempotency_key:
-            return
+            return False
         if run.status not in {
-            Workflow2Run.STATUS_SUCCEEDED,
-            Workflow2Run.STATUS_REJECTED,
-            Workflow2Run.STATUS_FAILED,
-            Workflow2Run.STATUS_CANCELLED,
-            Workflow2Run.STATUS_STOPPED,
+            *WorkflowRunTransitionService.TERMINAL_STATUSES,
         }:
-            return
+            return False
+
+        released_key = run.idempotency_key
         run.idempotency_key = ''
-        run.save(update_fields=['idempotency_key', 'updated_at'])
+        run.idempotency_released_key = released_key
+        run.idempotency_released_at = timezone.now()
+        run.idempotency_released_by = WorkflowDispatchService._release_actor_label(actor)
+        run.idempotency_release_reason = reason or 'Idempotency key released.'
+        run.idempotency_release_mode = mode[:16]
+        run.save(
+            update_fields=[
+                'idempotency_key',
+                'idempotency_released_key',
+                'idempotency_released_at',
+                'idempotency_released_by',
+                'idempotency_release_reason',
+                'idempotency_release_mode',
+                'updated_at',
+            ]
+        )
+        return True
+
+    @staticmethod
+    def _release_actor_label(actor: Any | None) -> str:
+        if actor is None:
+            return ''
+        get_username = getattr(actor, 'get_username', None)
+        if callable(get_username):
+            return str(get_username() or '')[:150]
+        return str(actor)[:150]
 
     def _select_definitions(
         self,
@@ -440,7 +465,9 @@ class WorkflowDispatchService:
         """Create a queued job for a workflow instance."""
         if instance.status != Workflow2Instance.STATUS_QUEUED:
             instance.status = Workflow2Instance.STATUS_QUEUED
-            instance.save(update_fields=['status', 'updated_at'])
+            instance.status_reason = ''
+            instance.status_message = ''
+            instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
 
         job, _created = Workflow2Job.get_or_create_active(
             instance=instance,

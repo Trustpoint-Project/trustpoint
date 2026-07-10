@@ -18,6 +18,7 @@ from pki.models import OwnerCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models import RemoteIssuedCredentialModel
+from users.models import TrustpointUser
 
 
 @pytest.fixture(autouse=True)
@@ -25,18 +26,10 @@ def _enable_db(db: None) -> None:
     """Enable database access for all tests in this module."""
 
 
-@pytest.fixture(autouse=True)
-def _key_storage_config(_enable_db: None) -> None:
-    """Ensure a KeyStorageConfig row exists (required by EncryptedCharField on every save)."""
-    from management.models import KeyStorageConfig
-
-    KeyStorageConfig.get_or_create_default()
-
-
 @pytest.fixture()
 def admin_user() -> User:
     """Create a superuser for view access."""
-    return User.objects.create_superuser(username='admin', email='admin@test.com', password='testpass123')
+    return TrustpointUser.objects.create_superuser(username='admin', email='admin@test.com', password='testpass123')
 
 
 @pytest.fixture()

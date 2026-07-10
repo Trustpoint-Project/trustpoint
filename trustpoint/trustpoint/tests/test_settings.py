@@ -3,7 +3,6 @@
 import importlib
 import os
 from pathlib import Path
-from unittest import mock
 
 import pytest
 from django.apps import apps
@@ -20,56 +19,237 @@ def set_test_env(monkeypatch):
     monkeypatch.setenv('DATABASE_PASSWORD', 'test_password')
     monkeypatch.setenv('DATABASE_HOST', 'localhost')
     monkeypatch.setenv('DATABASE_PORT', '5432')
+    monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_DATABASE', 'postgresql')
+    monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
+    yield
+    monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
+    monkeypatch.delenv('TRUSTPOINT_OPERATIONAL_DATABASE', raising=False)
+    importlib.reload(settings)
 
 
 def test_debug_setting():
-    """Ensure DEBUG is correctly set for development."""
-    assert settings.DEBUG is True, 'DEBUG should be enabled for development.'
+    """Ensure DEBUG tracks the configured container mode."""
+    assert settings.DEBUG is (not settings.DOCKER_CONTAINER), 'DEBUG should be the inverse of DOCKER_CONTAINER.'
+
+
+def test_tls_addresses_not_set_keeps_default_hosts_and_origins(monkeypatch):
+    """Ensure defaults remain unchanged when TLS address variables are not set."""
+    monkeypatch.delenv('TP_TLS_IPV4_ADDRESSES', raising=False)
+    monkeypatch.delenv('TP_TLS_IPV6_ADDRESSES', raising=False)
+    monkeypatch.delenv('TP_TLS_DNS_NAMES', raising=False)
+
+    importlib.reload(settings)
+
+    assert 'localhost' in settings.ALLOWED_HOSTS
+    assert '127.0.0.1' in settings.ALLOWED_HOSTS
+    assert '[::1]' in settings.ALLOWED_HOSTS
+    assert 'http://localhost:8000' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://127.0.0.1:8000' in settings.CSRF_TRUSTED_ORIGINS
+
+
+def test_tls_ipv4_addresses_derives_allowed_hosts_and_csrf_origins(monkeypatch):
+    """Ensure TP_TLS_IPV4_ADDRESSES entries are parsed into ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS."""
+    monkeypatch.setenv('TP_TLS_IPV4_ADDRESSES', '10.10.0.2, 192.168.1.100')
+    monkeypatch.setenv('TP_HTTP_PORT', '8080')
+    monkeypatch.setenv('TP_HTTPS_PORT', '8443')
+
+    importlib.reload(settings)
+
+    assert '10.10.0.2' in settings.ALLOWED_HOSTS
+    assert '192.168.1.100' in settings.ALLOWED_HOSTS
+
+    assert 'http://10.10.0.2:8080' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://10.10.0.2:8443' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://192.168.1.100:8080' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://192.168.1.100:8443' in settings.CSRF_TRUSTED_ORIGINS
+
+
+def test_tls_ipv6_addresses_derives_allowed_hosts_and_csrf_origins(monkeypatch):
+    """Ensure TP_TLS_IPV6_ADDRESSES entries are parsed into ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS."""
+    monkeypatch.setenv('TP_TLS_IPV6_ADDRESSES', 'fe80::1, 2001:db8::1')
+    monkeypatch.setenv('TP_HTTP_PORT', '80')
+    monkeypatch.setenv('TP_HTTPS_PORT', '443')
+
+    importlib.reload(settings)
+
+    assert 'fe80::1' in settings.ALLOWED_HOSTS
+    assert '2001:db8::1' in settings.ALLOWED_HOSTS
+
+    assert 'http://[fe80::1]' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://[fe80::1]' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://[2001:db8::1]' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://[2001:db8::1]' in settings.CSRF_TRUSTED_ORIGINS
+
+
+def test_tls_dns_names_derives_allowed_hosts_and_csrf_origins(monkeypatch):
+    """Ensure TP_TLS_DNS_NAMES entries are parsed into ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS."""
+    monkeypatch.setenv('TP_TLS_DNS_NAMES', 'trustpoint.local, example.org')
+    monkeypatch.setenv('TP_HTTP_PORT', '8080')
+    monkeypatch.setenv('TP_HTTPS_PORT', '8443')
+
+    importlib.reload(settings)
+
+    assert 'trustpoint.local' in settings.ALLOWED_HOSTS
+    assert '.trustpoint.local' in settings.ALLOWED_HOSTS
+    assert 'example.org' in settings.ALLOWED_HOSTS
+
+    assert 'http://trustpoint.local:8080' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://trustpoint.local:8443' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://example.org:8080' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://example.org:8443' in settings.CSRF_TRUSTED_ORIGINS
+
+
+def test_tls_dns_names_adds_wildcard_for_local_domains(monkeypatch):
+    """Ensure .local domains get wildcard subdomain entries in ALLOWED_HOSTS."""
+    monkeypatch.setenv('TP_TLS_DNS_NAMES', 'trustpoint.local, other.local')
+
+    importlib.reload(settings)
+
+    assert 'trustpoint.local' in settings.ALLOWED_HOSTS
+    assert '.trustpoint.local' in settings.ALLOWED_HOSTS
+    assert 'other.local' in settings.ALLOWED_HOSTS
+    assert '.other.local' in settings.ALLOWED_HOSTS
+
+
+def test_tls_addresses_deduplicates_hosts_and_origins(monkeypatch):
+    """Ensure repeated TLS address values do not create duplicate entries."""
+    monkeypatch.setenv('TP_TLS_IPV4_ADDRESSES', '10.10.0.2, 10.10.0.2')
+    monkeypatch.setenv('TP_TLS_DNS_NAMES', 'dup.local, dup.local')
+
+    importlib.reload(settings)
+
+    assert settings.ALLOWED_HOSTS.count('10.10.0.2') == 1
+    assert settings.ALLOWED_HOSTS.count('dup.local') == 1
+    assert settings.ALLOWED_HOSTS.count('.dup.local') == 1
+
+
+def test_tls_addresses_handles_default_ports(monkeypatch):
+    """Ensure default ports (80/443) are omitted from CSRF_TRUSTED_ORIGINS."""
+    monkeypatch.setenv('TP_TLS_IPV4_ADDRESSES', '10.10.0.2')
+    monkeypatch.setenv('TP_HTTP_PORT', '80')
+    monkeypatch.setenv('TP_HTTPS_PORT', '443')
+
+    importlib.reload(settings)
+
+    assert 'http://10.10.0.2' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://10.10.0.2' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://10.10.0.2:80' not in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://10.10.0.2:443' not in settings.CSRF_TRUSTED_ORIGINS
+
+
+def test_env_bool_uses_default_when_variable_is_missing(monkeypatch):
+    """Ensure boolean environment settings keep their default when unset."""
+    monkeypatch.delenv('POSTGRESQL', raising=False)
+
+    assert settings._env_bool('POSTGRESQL', default=True) is True
+    assert settings._env_bool('POSTGRESQL', default=False) is False
+
+
+def test_env_bool_uses_default_when_variable_is_blank(monkeypatch):
+    """Ensure blank boolean environment settings keep their default."""
+    monkeypatch.setenv('EMAIL_USE_TLS', '')
+
+    assert settings._env_bool('EMAIL_USE_TLS', default=True) is True
+    assert settings._env_bool('EMAIL_USE_TLS', default=False) is False
+
+
+def test_env_bool_parses_truthy_values(monkeypatch):
+    """Ensure common truthy strings enable boolean settings."""
+    for value in ('1', 'true', 'yes', 'on', ' TRUE '):
+        monkeypatch.setenv('POSTGRESQL', value)
+
+        assert settings._env_bool('POSTGRESQL', default=False) is True
+
+
+def test_env_bool_treats_other_values_as_false(monkeypatch):
+    """Ensure non-truthy strings disable boolean settings."""
+    for value in ('0', 'false', 'no', 'off', 'unexpected'):
+        monkeypatch.setenv('POSTGRESQL', value)
+
+        assert settings._env_bool('POSTGRESQL', default=True) is False
+
+
+def test_env_value_prefers_direct_environment_variable(monkeypatch, tmp_path):
+    """Ensure direct environment variables win over Docker secret files."""
+    secret_file = tmp_path / 'db_user'
+    secret_file.write_text('secret-user\n')
+    monkeypatch.setenv('DATABASE_USER', 'env-user')
+    monkeypatch.setenv('DATABASE_USER_FILE', str(secret_file))
+
+    assert settings._env_value('DATABASE_USER', 'admin', file_var='DATABASE_USER_FILE') == 'env-user'
+
+
+def test_env_value_reads_docker_secret_file(monkeypatch, tmp_path):
+    """Ensure settings can be loaded from Docker secret files."""
+    secret_file = tmp_path / 'db_password'
+    secret_file.write_text('secret-password\n')
+    monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
+    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret_file))
+
+    assert settings._env_value(
+        'DATABASE_PASSWORD',
+        'testing321',
+        file_var='DATABASE_PASSWORD_FILE',
+    ) == 'secret-password'
+
+
+def test_env_value_falls_back_when_secret_file_is_unreadable(monkeypatch, tmp_path):
+    """Ensure unreadable Docker secret paths do not break settings import."""
+    missing_file = tmp_path / 'missing_secret'
+    monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
+    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(missing_file))
+
+    assert settings._env_value(
+        'DATABASE_PASSWORD',
+        'testing321',
+        file_var='DATABASE_PASSWORD_FILE',
+    ) == 'testing321'
 
 
 def test_database_settings(monkeypatch):
-    """Ensure database settings are set correctly."""
-    with mock.patch('socket.create_connection') as mock_socket_conn:
-        mock_socket_conn.return_value.__enter__ = mock.MagicMock()
-        mock_socket_conn.return_value.__exit__ = mock.MagicMock()
+    """Ensure operational database settings are explicit and do not probe availability."""
+    monkeypatch.setenv('TRUSTPOINT_PHASE', 'operational')
+    monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_DATABASE', 'postgresql')
+    importlib.reload(settings)
 
-        with mock.patch('psycopg.connect') as mock_psycopg:
-            mock_psycopg.return_value.__enter__ = mock.MagicMock()
-            mock_psycopg.return_value.__exit__ = mock.MagicMock()
+    databases = settings.DATABASES
 
-            monkeypatch.setattr(settings, 'POSTGRESQL', True)
-            monkeypatch.setattr(settings, 'DATABASE_ENGINE', 'django.db.backends.postgresql')
-            monkeypatch.setattr(settings, 'DATABASE_HOST', 'localhost')
-            monkeypatch.setattr(settings, 'DATABASE_PORT', '5432')
-            monkeypatch.setattr(settings, 'DATABASE_USER', 'test_user')
-            monkeypatch.setattr(settings, 'DATABASE_PASSWORD', 'test_password')
-
-            monkeypatch.setattr(settings, 'is_postgre_available', lambda: True)
-
-            importlib.reload(settings)
-
-            databases = settings.DATABASES
-
-            assert databases['default']['ENGINE'] == 'django.db.backends.postgresql', "Database ENGINE should be 'django.db.backends.postgresql'."
-            assert databases['default']['USER'] == 'test_user', "Database USER should be 'test_user'."
-            assert databases['default']['PASSWORD'] == 'test_password', "Database PASSWORD should be 'test_password'."
-            assert databases['default']['HOST'] == 'localhost', "Database HOST should be 'localhost'."
-            assert databases['default']['PORT'] == '5432', "Database PORT should be '5432'."
+    assert settings.TRUSTPOINT_PHASE == 'operational'
+    assert settings.ROOT_URLCONF == 'trustpoint.urls'
+    assert databases['default']['ENGINE'] == 'django.db.backends.postgresql'
+    assert databases['default']['USER'] == 'test_user'
+    assert databases['default']['PASSWORD'] == 'test_password'
+    assert databases['default']['HOST'] == 'localhost'
+    assert databases['default']['PORT'] == '5432'
 
 
+def test_local_development_defaults_to_sqlite(monkeypatch):
+    """Ensure local development remains SQLite-backed unless explicitly overridden."""
+    monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
+    monkeypatch.delenv('TRUSTPOINT_OPERATIONAL_DATABASE', raising=False)
+    importlib.reload(settings)
 
-def test_database_fallback_to_sqlite(monkeypatch):
-    """Ensure database falls back to SQLite when PostgreSQL is unavailable."""
-    with mock.patch('socket.create_connection', side_effect=OSError):
-        with mock.patch('psycopg.connect', side_effect=Exception('Login failed')):
-            monkeypatch.setattr(settings, 'POSTGRESQL', True)
+    databases = settings.DATABASES
 
-            importlib.reload(settings)
+    assert settings.TRUSTPOINT_PHASE == 'operational'
+    assert databases['default']['ENGINE'] == 'django.db.backends.sqlite3'
+    assert str(databases['default']['NAME']).endswith('db.sqlite3')
 
-            databases = settings.DATABASES
 
-            assert databases['default']['ENGINE'] == 'django.db.backends.sqlite3', 'Database should fall back to SQLite when PostgreSQL is unavailable.'
-            assert str(databases['default']['NAME']).endswith('db.sqlite3'), "SQLite database NAME should default to 'db.sqlite3'."
+def test_bootstrap_database_settings(monkeypatch, tmp_path):
+    """Ensure bootstrap uses its own SQLite database and URL surface."""
+    bootstrap_db = tmp_path / 'bootstrap.sqlite3'
+    monkeypatch.setenv('TRUSTPOINT_PHASE', 'bootstrap')
+    monkeypatch.setenv('TRUSTPOINT_BOOTSTRAP_DB_PATH', str(bootstrap_db))
+    importlib.reload(settings)
+
+    databases = settings.DATABASES
+
+    assert settings.TRUSTPOINT_PHASE == 'bootstrap'
+    assert settings.ROOT_URLCONF == 'trustpoint.urls_bootstrap'
+    assert databases['default']['ENGINE'] == 'django.db.backends.sqlite3'
+    assert databases['default']['NAME'] == str(bootstrap_db)
+    assert 'trustpoint.middleware.Workflow2InlineDrainMiddleware' not in settings.MIDDLEWARE
 
 def test_secret_key():
     """Ensure the secret key is defined."""
@@ -93,6 +273,7 @@ def test_installed_apps():
         'pki',
         'cmp',
         'est',
+        'crypto',
         'management',
     ]
 
@@ -132,15 +313,26 @@ def test_public_paths():
     """Ensure PUBLIC_PATHS is defined and contains expected values."""
     public_paths = settings.PUBLIC_PATHS
     expected_paths = [
-        '/setup-wizard',
         '/.well-known/cmp',
         '/.well-known/est',
         '/rest',
+        '/api',
         '/aoki',
         '/crl',
+        '/setup-wizard',
+        '/devices/browser',
+        '/prometheus/'
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
+
+
+def test_hsm_paths():
+    """Verify HSM path defaults are anchored correctly."""
+    assert settings.HSM_ROOT == settings.REPO_ROOT / 'var' / 'hsm'
+    assert settings.HSM_CONFIG_DIR == settings.HSM_ROOT / 'config'
+    assert settings.HSM_LIB_DIR == settings.HSM_ROOT / 'lib'
+    assert settings.HSM_TOKEN_DIR == settings.HSM_ROOT / 'tokens'
 
 
 def test_language_settings():
