@@ -8,9 +8,10 @@ from django.contrib import messages
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.views import View
 
 from pki.models.certificate import CertificateModel
+from trustpoint.views.base import ContextDataMixin
 
 from .models import DiscoveredDevice, DiscoveryPort
 from .scanner import OTScanner
@@ -107,115 +108,158 @@ class ScanManager:
             ScanManager.end_scan()
 
 
-def device_list(request: HttpRequest) -> HttpResponse:
+class DiscoveryContextMixin(ContextDataMixin):
+    """Mixin which adds context_data for the Discovery pages."""
+
+    context_page_category = 'tools'
+    context_page_name = 'discovery'
+
+
+class DeviceListView(DiscoveryContextMixin, View):
     """Display the asset discovery dashboard with scan results and port config."""
-    all_devs = DiscoveredDevice.objects.all().order_by('-last_seen')
-    all_ports = DiscoveryPort.objects.all().order_by('port_number')
 
-    stats = {'total': all_devs.count(), 'risks': 0, 'industrial': 0}
+    http_method_names = ('get',)
 
-    ot_ports = list(
-        DiscoveryPort.objects.filter(
-            Q(description__icontains='OPC') | Q(description__icontains='MQTT')
-        ).values_list('port_number', flat=True)
-    )
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the discovery dashboard."""
+        all_devs = DiscoveredDevice.objects.all().order_by('-last_seen')
+        all_ports = DiscoveryPort.objects.all().order_by('port_number')
 
-    for d in all_devs:
-        if d.ssl_info and d.ssl_info.get('is_self_signed'):
-            stats['risks'] += 1
-        if any(p in ot_ports for p in d.open_ports):
-            stats['industrial'] += 1
+        stats = {'total': all_devs.count(), 'risks': 0, 'industrial': 0}
 
-    # Safely get the current variables
-    state = ScanManager.get_state()
+        ot_ports = list(
+            DiscoveryPort.objects.filter(
+                Q(description__icontains='OPC') | Q(description__icontains='MQTT')
+            ).values_list('port_number', flat=True)
+        )
 
-    return render(
-        request,
-        'discovery/device_list.html',
-        {
-            'devices': all_devs,
-            'scan_ports': all_ports,
-            'scan_running': state['scan_running'],
-            'stop_pending': state['stop_pending'],
-            'stats': stats,
-            'start_ip': state['start_ip'],
-            'end_ip': state['end_ip'],
-        },
-    )
+        for d in all_devs:
+            if d.ssl_info and d.ssl_info.get('is_self_signed'):
+                stats['risks'] += 1
+            if any(p in ot_ports for p in d.open_ports):
+                stats['industrial'] += 1
+
+        state = ScanManager.get_state()
+        context = self.get_context_data(
+            devices=all_devs,
+            scan_ports=all_ports,
+            scan_running=state['scan_running'],
+            stop_pending=state['stop_pending'],
+            stats=stats,
+            start_ip=state['start_ip'],
+            end_ip=state['end_ip'],
+        )
+
+        return render(
+            request,
+            'discovery/device_list.html',
+            context,
+        )
 
 
-@require_POST
-def start_scan(request: HttpRequest) -> HttpResponse:
+class StartScanView(View):
     """Initialize and start a background network scan."""
-    start_ip = request.POST.get('start_ip', '10.100.13.1')
-    end_ip = request.POST.get('end_ip', '10.100.13.254')
 
-    if ScanManager.begin_scan(start_ip, end_ip):
-        thread = threading.Thread(target=ScanManager.run_scan_in_background, args=(start_ip, end_ip))
-        thread.daemon = True
-        thread.start()
-        messages.success(request, 'Network scan started.')
-    else:
-        messages.warning(request, 'A scan is already running.')
+    http_method_names = ('post',)
 
-    return redirect('discovery:device_list')
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Start scanning in a background thread when no scan is running."""
+        start_ip = request.POST.get('start_ip', '10.100.13.1')
+        end_ip = request.POST.get('end_ip', '10.100.13.254')
+
+        if ScanManager.begin_scan(start_ip, end_ip):
+            thread = threading.Thread(target=ScanManager.run_scan_in_background, args=(start_ip, end_ip))
+            thread.daemon = True
+            thread.start()
+            messages.success(request, 'Network scan started.')
+        else:
+            messages.warning(request, 'A scan is already running.')
+
+        return redirect('discovery:device_list')
 
 
-@require_POST
-def stop_scan(request: HttpRequest) -> HttpResponse:
+class StopScanView(View):
     """Request the active scan to terminate."""
-    ScanManager.request_stop()
-    messages.info(request, 'Stopping the scan...')
-    return redirect('discovery:device_list')
+
+    http_method_names = ('post',)
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Signal the active scanner to stop."""
+        ScanManager.request_stop()
+        messages.info(request, 'Stopping the scan...')
+        return redirect('discovery:device_list')
 
 
-@require_POST
-def add_port(request: HttpRequest) -> HttpResponse:
+class AddPortView(View):
     """Add a new port to the scan configuration."""
-    port_str = request.POST.get('port_number')
-    desc = request.POST.get('description')
 
-    if port_str and desc:
-        try:
-            port_int = int(port_str)
-            DiscoveryPort.objects.get_or_create(port_number=port_int, description=desc)
-            messages.success(request, f'Port {port_int} added to scan configuration.')
-        except ValueError:
-            messages.error(request, 'Invalid port number. Please enter a valid integer.')
+    http_method_names = ('post',)
 
-    return redirect('discovery:device_list')
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Validate and persist an additional scan port."""
+        port_str = request.POST.get('port_number')
+        desc = request.POST.get('description')
+
+        if port_str and desc:
+            try:
+                port_int = int(port_str)
+                DiscoveryPort.objects.get_or_create(port_number=port_int, description=desc)
+                messages.success(request, f'Port {port_int} added to scan configuration.')
+            except ValueError:
+                messages.error(request, 'Invalid port number. Please enter a valid integer.')
+
+        return redirect('discovery:device_list')
 
 
-@require_POST
-def delete_port(request: HttpRequest, port_id: int) -> HttpResponse:
+class DeletePortView(View):
     """Remove a port from the scan configuration."""
-    port = get_object_or_404(DiscoveryPort, id=port_id)
-    port_num = port.port_number
-    port.delete()
-    messages.info(request, f'Port {port_num} removed from scan configuration.')
-    return redirect('discovery:device_list')
+
+    http_method_names = ('post',)
+
+    def post(self, request: HttpRequest, port_id: int) -> HttpResponse:
+        """Delete a configured scan port by primary key."""
+        port = get_object_or_404(DiscoveryPort, id=port_id)
+        port_num = port.port_number
+        port.delete()
+        messages.info(request, f'Port {port_num} removed from scan configuration.')
+        return redirect('discovery:device_list')
 
 
-@require_POST
-def clear_devices(request: HttpRequest) -> HttpResponse:
+class ClearDevicesView(View):
     """Wipe the discovered devices inventory."""
-    DiscoveredDevice.objects.all().delete()
-    messages.success(request, 'Discovery inventory cleared.')
-    return redirect('discovery:device_list')
+
+    http_method_names = ('post',)
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Delete all discovered devices from inventory."""
+        DiscoveredDevice.objects.all().delete()
+        messages.success(request, 'Discovery inventory cleared.')
+        return redirect('discovery:device_list')
 
 
-def device_detail(request: HttpRequest, device_id: int) -> HttpResponse:
+class DeviceDetailView(DiscoveryContextMixin, View):
     """Show detail view for a discovered device."""
-    device = get_object_or_404(DiscoveredDevice, id=device_id)
-    return render(request, 'discovery/device_detail.html', {'device': device})
+
+    http_method_names = ('get',)
+
+    def get(self, request: HttpRequest, device_id: int) -> HttpResponse:
+        """Render details for a single discovered device."""
+        device = get_object_or_404(DiscoveredDevice, id=device_id)
+        context = self.get_context_data(device=device)
+        return render(request, 'discovery/device_detail.html', context)
 
 
-def export_csv(request: HttpRequest) -> HttpResponse:  # noqa: ARG001
+class ExportCsvView(DiscoveryContextMixin, View):
     """Export the current discovery inventory to a CSV file."""
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="inventory.csv"'
-    writer = csv.writer(response)
-    writer.writerow(['IP', 'Hostname', 'Ports'])
-    for d in DiscoveredDevice.objects.all():
-        writer.writerow([d.ip_address, d.hostname, ', '.join(map(str, d.open_ports))])
-    return response
+
+    http_method_names = ('get',)
+
+    def get(self, request: HttpRequest) -> HttpResponse:  # noqa: ARG002
+        """Return inventory rows as a downloadable CSV."""
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="inventory.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['IP', 'Hostname', 'Ports'])
+        for d in DiscoveredDevice.objects.all():
+            writer.writerow([d.ip_address, d.hostname, ', '.join(map(str, d.open_ports))])
+        return response

@@ -9,7 +9,6 @@ from unittest.mock import Mock, patch, sentinel
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory
 from django.urls import reverse
 
 from discovery.models import DiscoveredDevice, DiscoveryPort
@@ -31,12 +30,6 @@ def reset_scan_manager() -> None:
     ScanManager.start_ip = '10.100.13.1'
     ScanManager.end_ip = '10.100.13.254'
     ScanManager.scanner_instance = None
-
-
-@pytest.fixture
-def request_factory() -> RequestFactory:
-    """Provide a Django request factory."""
-    return RequestFactory()
 
 
 @pytest.fixture
@@ -245,6 +238,8 @@ class TestDiscoveryViews:
         assert response.context['stop_pending'] is True
         assert response.context['start_ip'] == '192.168.1.1'
         assert response.context['end_ip'] == '192.168.1.254'
+        assert response.context['page_category'] == 'tools'
+        assert response.context['page_name'] == 'discovery'
 
     def test_start_scan_launches_background_thread_when_not_running(self, authenticated_client) -> None:
         """Posting to start should spawn the background worker when the manager accepts it."""
@@ -341,15 +336,15 @@ class TestDiscoveryViews:
 
         assert response.status_code == 200
         assert response.context['device'].id == device.id
+        assert response.context['page_category'] == 'tools'
+        assert response.context['page_name'] == 'discovery'
 
-    def test_export_csv_writes_inventory_rows(self, request_factory) -> None:
+    def test_export_csv_writes_inventory_rows(self, authenticated_client) -> None:
         """CSV exports should include one row per discovered device."""
         DiscoveredDevice.objects.create(ip_address='192.168.1.100', hostname='sensor-a', open_ports=[443, 502])
         DiscoveredDevice.objects.create(ip_address='192.168.1.101', hostname='sensor-b', open_ports=[])
 
-        from discovery.views import export_csv
-
-        response = export_csv(request_factory.get(reverse('discovery:export_csv')))
+        response = authenticated_client.get(reverse('discovery:export_csv'))
 
         assert response.status_code == 200
         assert response['Content-Disposition'] == 'attachment; filename="inventory.csv"'
