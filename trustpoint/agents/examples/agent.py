@@ -65,6 +65,7 @@ from requests.auth import HTTPBasicAuth
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
     from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
 LOG = logging.getLogger('trustpoint.agent')
