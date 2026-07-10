@@ -2,10 +2,9 @@
   <img src="../_static/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
 </p>
 
-{.text-center}
 # Risk Register
 
-<p align="center">
+<p>
   <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
   <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Version"/></a>
   <a href="#"><img src="https://img.shields.io/badge/Effective-2026--07--01-success?style=for-the-badge" alt="Effective Date"/></a>

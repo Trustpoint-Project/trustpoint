@@ -48,11 +48,14 @@ from pki.forms import (
 )
 from pki.forms.issuing_cas import IssuingCaImportMixin
 from pki.models import CaModel, CertificateModel, CredentialModel
+from pki.models.ca_rollover import CaRolloverModel, CaRolloverState
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.issued_credential import RemoteIssuedCredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.rollover.import_ca import ImportCaRolloverForm
 from pki.serializer.issuing_ca import IssuingCaImportSerializer, IssuingCaSerializer
+from pki.services.ca_rollover import CaRolloverService
 from pki.util.cert_profile import ProfileValidationError
 from request.clients import EstClient, EstClientError
 from request.clients.cmp_client import CmpClient, CmpClientError
@@ -527,7 +530,6 @@ class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormVie
         return _('Certificate content defined. Please proceed to request the certificate via EST.')
 
 
-
 class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
     """Mixin for CMP RA configuration views."""
 
@@ -546,7 +548,6 @@ class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
             actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
-
 
 
 class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddRequestCmpForm]):
@@ -601,7 +602,6 @@ class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
             actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
-
 
 
 class RemoteRaAddRequestEstView(RemoteRaAddRequestEstMixin, FormView[IssuingCaAddRequestEstForm]):
@@ -677,6 +677,24 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         else:
             context['certificate_chain'] = []
 
+        # --- CA Rollover context ---
+        active_rollover = CaRolloverService.get_active_rollover(issuing_ca)
+        context['active_rollover'] = active_rollover
+        context['rollover_history'] = CaRolloverModel.objects.filter(
+            old_issuing_ca=issuing_ca,
+            state__in=[CaRolloverState.COMPLETED, CaRolloverState.CANCELLED],
+        ).order_by('-planned_at')[:10]
+
+        has_completed = CaRolloverService.has_completed_rollover(issuing_ca)
+        context['rollover_completed'] = has_completed
+
+        if active_rollover is None and not has_completed:
+            context['rollover_form'] = ImportCaRolloverForm()
+            context['available_strategies'] = CaRolloverService.get_available_strategies()
+        else:
+            context['rollover_form'] = None
+            context['available_strategies'] = []
+
         return context
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -687,6 +705,15 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         """Handle POST request to update CRL cycle settings."""
         issuing_ca = self.get_object()
         self.object = issuing_ca
+
+        if not issuing_ca.is_active:
+            messages.error(
+                request,
+                _('Cannot update CRL settings for Issuing CA %s: CA is deactivated.')
+                % issuing_ca.unique_name
+            )
+            return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
+
         form = IssuingCaCrlCycleForm(request.POST, instance=issuing_ca)
 
         if form.is_valid():
@@ -1575,6 +1602,15 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
         del kwargs
 
         issuing_ca = self.get_object()
+
+        if not issuing_ca.is_active:
+            messages.error(
+                request,
+                _('Cannot generate CRL for Issuing CA %s: CA is deactivated.')
+                % issuing_ca.unique_name
+            )
+            return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
+
         if issuing_ca.issue_crl(crl_validity_hours=int(issuing_ca.crl_validity_hours)):
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:

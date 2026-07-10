@@ -931,6 +931,19 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
             raise ValidationError(_('CRL cycle interval must be at least 5 minutes'))
         return interval_float
 
+    def clean(self) -> dict[str, Any]:
+        """Validate that the CA is active."""
+        cleaned_data = super().clean()
+        if cleaned_data is None:
+            cleaned_data = {}
+
+        if self.instance and self.instance.pk and not self.instance.is_active:
+            raise ValidationError(
+                _('Cannot configure CRL settings: CA is deactivated.')
+            )
+
+        return cleaned_data
+
     def clean_crl_validity_hours(self) -> float:
         """Validate the CRL validity against the active security policy maximum."""
         validity = self.cleaned_data.get('crl_validity_hours')
