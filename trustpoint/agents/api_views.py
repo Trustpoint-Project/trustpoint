@@ -75,7 +75,8 @@ class AgentCertificateAuthentication(BaseAuthentication):
         except AuthenticationFailed:
             raise
         except Exception as exc:
-            msg = f'Certificate authentication failed: {exc}'
+            self.logger.exception('Certificate authentication failed due to an internal error.')
+            msg = 'Certificate authentication failed.'
             raise AuthenticationFailed(msg) from exc
 
         if agent is None:
