@@ -42,11 +42,17 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
         """Metaclass extending the standard UserCreationForm with the role field."""
 
         model = TrustpointUser
-        fields = (*UserCreationForm.Meta.fields, 'role', 'organization')
+        fields = (*UserCreationForm.Meta.fields, 'first_name', 'last_name', 'email', 'role', 'organization')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Apply Bootstrap form-control class to every field widget."""
         super().__init__(*args, **kwargs)
+        self.fields['first_name'].required = False
+        self.fields['first_name'].label = _('First name (optional)')
+        self.fields['last_name'].required = False
+        self.fields['last_name'].label = _('Last name (optional)')
+        self.fields['email'].required = False
+        self.fields['email'].label = _('Email (optional)')
         organization_field = cast('forms.ModelChoiceField[OrganizationModel]', self.fields['organization'])
         organization_field.required = False
         organization_field.queryset = OrganizationModel.objects.all()
@@ -62,11 +68,17 @@ class TrustpointUserRoleForm(forms.ModelForm[TrustpointUser]):
         """Metaclass limiting the form to role and organization fields."""
 
         model = TrustpointUser
-        fields: ClassVar = ['role', 'organization']
+        fields: ClassVar = ['first_name', 'last_name', 'email', 'role', 'organization']
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Apply Bootstrap form-control class to role and organization widgets."""
         super().__init__(*args, **kwargs)
+        self.fields['first_name'].required = False
+        self.fields['first_name'].label = _('First name (optional)')
+        self.fields['last_name'].required = False
+        self.fields['last_name'].label = _('Last name (optional)')
+        self.fields['email'].required = False
+        self.fields['email'].label = _('Email (optional)')
         organization_field = cast('forms.ModelChoiceField[OrganizationModel]', self.fields['organization'])
         organization_field.required = False
         organization_field.queryset = OrganizationModel.objects.all()
