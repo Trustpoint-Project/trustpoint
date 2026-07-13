@@ -11,7 +11,6 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic.base import TemplateView
 from django.views.generic.edit import FormView
-from django.views.generic.list import ListView
 
 from agents.models import (
     AgentAssignedProfile,
