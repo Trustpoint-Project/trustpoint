@@ -39,7 +39,7 @@ def _parse_client_cert(request: Request) -> x509.Certificate | None:
         raise AuthenticationFailed(msg) from exc
 
 
-class AgentCertificateAuthentication(BaseAuthentication):
+class AgentCertificateAuthentication(LoggerMixin, BaseAuthentication):
     """Authenticate an agent via its mTLS client certificate (domain credential)."""
 
     def authenticate(self, request: Request) -> tuple[TrustpointAgent, None] | None:

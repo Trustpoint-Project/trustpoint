@@ -519,7 +519,7 @@ class DeviceTableView(AbstractDeviceTableView):
             Returns a queryset of DeviceModels, excluding OPC_UA_GDS, AGENT_ONE_TO_N,
             and AGENT_MANAGED_DEVICE types, filtered by UI filters.
         """
-        base_qs = super(ListView, self).get_queryset().exclude(
+        base_qs = self.get_base_queryset().exclude(
             device_type__in=[
                 DeviceModel.DeviceType.OPC_UA_GDS,
                 DeviceModel.DeviceType.AGENT_ONE_TO_N,

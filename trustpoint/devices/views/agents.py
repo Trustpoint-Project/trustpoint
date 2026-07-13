@@ -54,7 +54,7 @@ class AgentTableView(AbstractDeviceTableView):
     def get_queryset(self) -> QuerySet[DeviceModel]:
         """Filter queryset to only include agent device types, filtered by UI filters."""
         _agent_types = [DeviceModel.DeviceType.AGENT_ONE_TO_ONE, DeviceModel.DeviceType.AGENT_ONE_TO_N]
-        base_qs = super(ListView, self).get_queryset().filter(device_type__in=_agent_types)
+        base_qs = self.get_base_queryset().filter(device_type__in=_agent_types)
         return self.apply_filters(base_qs)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
