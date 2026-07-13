@@ -15,7 +15,7 @@ import json
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 import requests
@@ -35,10 +35,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'examples'))
 from agent import (
     HTTP_OK_MAX,
     HTTP_OK_MIN,
-    TRANSIENT_HTTP_STATUSES,
     ActiveCredential,
     AgentError,
-    AgentProfile,
     EnrollmentResponse,
     JobResult,
     LocalStorage,
