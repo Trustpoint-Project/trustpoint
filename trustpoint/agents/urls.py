@@ -19,6 +19,7 @@ app_name = 'agents'
 
 urlpatterns = [
     path('profiles/', AgentWorkflowDefinitionTableView.as_view(), name='profiles'),
+    path('profiles/create/', AgentWorkflowDefinitionConfigView.as_view(), {'pk': 0}, name='profiles-create'),
     path('profiles/<int:pk>/', AgentWorkflowDefinitionConfigView.as_view(), name='profiles-config'),
     re_path(
         r'^profiles/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',

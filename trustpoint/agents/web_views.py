@@ -58,9 +58,14 @@ class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateVie
         'is_active',
     ]
 
-    def get_object(self, _queryset: QuerySet[Any] | None = None) -> AgentWorkflowDefinition:
-        """Retrieve the AgentWorkflowDefinition object based on the primary key in the URL."""
+    def get_object(self, _queryset: QuerySet[Any] | None = None) -> AgentWorkflowDefinition | None:
+        """Retrieve the AgentWorkflowDefinition object based on the primary key in the URL.
+        
+        Returns None if pk=0 (indicating creation mode).
+        """
         pk = self.kwargs.get('pk')
+        if pk == 0:
+            return None
         return get_object_or_404(AgentWorkflowDefinition, pk=pk)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -180,6 +185,13 @@ class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateVie
             except json.JSONDecodeError as exc:
                 form.add_error('profile', f'Invalid JSON: {exc}')
                 return self.form_invalid(form)
+        
+        if not form.instance.pk:
+            form.instance = AgentWorkflowDefinition()
+            form.instance.name = form.cleaned_data.get('name')
+            form.instance.profile = form.instance.profile
+            form.instance.is_active = form.cleaned_data.get('is_active', True)
+        
         return super().form_valid(form)
 
 
