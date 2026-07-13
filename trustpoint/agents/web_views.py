@@ -58,7 +58,7 @@ class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateVie
         'is_active',
     ]
 
-    def get_object(self, _queryset: QuerySet[Any] | None = None) -> AgentWorkflowDefinition | None:
+    def get_object(self, _queryset: QuerySet[Any] | None = None) -> AgentWorkflowDefinition | None:  # type: ignore[override]
         """Retrieve the AgentWorkflowDefinition object based on the primary key in the URL."""
         pk = self.kwargs.get('pk')
         if pk == 0:
