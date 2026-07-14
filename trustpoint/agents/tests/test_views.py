@@ -32,8 +32,6 @@ from rest_framework.test import APIClient
 
 from agents.api_views import (
     AgentCertificateAuthentication,
-    AgentJobResultView,
-    AgentJobsView,
     _build_resolved_profile,
     _parse_client_cert,
     _resolve_enrollment_url,
@@ -616,7 +614,9 @@ class TestAgentJobsView:
 
         assert response.status_code == 200
         agent.refresh_from_db()
-        assert agent.last_seen_at > initial_last_seen
+        assert agent.last_seen_at is not None
+        if initial_last_seen is not None:
+            assert agent.last_seen_at > initial_last_seen
 
     @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
     def test_get_jobs_disabled_profile_not_included(
@@ -686,7 +686,7 @@ class TestAgentJobResultView:
             'error_message': '',
         }
 
-        response = api_client.post('/api/agents/jobs/results/', payload, format='json')
+        response = api_client.post('/api/agents/jobs/result/', payload, format='json')
 
         assert response.status_code == 200
         data = response.json()
@@ -716,7 +716,7 @@ class TestAgentJobResultView:
             'error_message': 'Connection timeout',
         }
 
-        response = api_client.post('/api/agents/jobs/results/', payload, format='json')
+        response = api_client.post('/api/agents/jobs/result/', payload, format='json')
 
         assert response.status_code == 200
 
@@ -739,7 +739,7 @@ class TestAgentJobResultView:
             'success': True,
         }
 
-        response = api_client.post('/api/agents/jobs/results/', payload, format='json')
+        response = api_client.post('/api/agents/jobs/result/', payload, format='json')
 
         assert response.status_code == 404
 
@@ -758,7 +758,7 @@ class TestAgentJobResultView:
             'success': 'not-a-boolean',
         }
 
-        response = api_client.post('/api/agents/jobs/results/', payload, format='json')
+        response = api_client.post('/api/agents/jobs/result/', payload, format='json')
 
         assert response.status_code == 400
 
@@ -893,23 +893,25 @@ class TestAgentWorkflowDefinitionConfigView:
         assert response.status_code == 200
         assert b'Invalid JSON' in response.content or 'profile' in response.context.get('form', {}).errors
 
-    def test_get_profile_with_invalid_json_shows_error(
+    def test_get_profile_with_non_dict_json(
         self,
         web_client: Client,
         workflow_definition: AgentWorkflowDefinition,
     ):
-        """Test GET with corrupted JSON shows error."""
-        # Corrupt the profile JSON in the database
-        workflow_definition.profile = 'not-json'
-        workflow_definition.save()
+        """Test GET with valid JSON but wrong type (string instead of object)."""
+        # Store a JSON string value instead of an object
+        # This bypasses the model's clean() validation but is valid JSON
+        AgentWorkflowDefinition.objects.filter(pk=workflow_definition.pk).update(profile='just-a-string')
 
         url = reverse('agents:profiles-config', kwargs={'pk': workflow_definition.pk})
         response = web_client.get(url)
 
         assert response.status_code == 200
-        # Should mark JSON as invalid
+        # Should mark JSON as invalid since it's not a dict/object
         context = response.context
         assert context.get('json_valid') is False
+        # The profile_json should contain the stringified version
+        assert 'just-a-string' in str(context.get('profile_json'))
 
 
 @pytest.mark.django_db
@@ -921,27 +923,23 @@ class TestAgentWorkflowDefinitionBulkDeleteView:
         wf1 = AgentWorkflowDefinition.objects.create(name='WF1', profile={})
         wf2 = AgentWorkflowDefinition.objects.create(name='WF2', profile={})
 
-        url = reverse('agents:profiles-delete_confirm')
-        payload = {'ids': [wf1.pk, wf2.pk]}
+        url = reverse('agents:profiles-delete_confirm', kwargs={'pks': f'{wf1.pk}/{wf2.pk}/'})
 
-        response = web_client.post(url, payload)
+        response = web_client.get(url)
 
-        # Should show confirmation page or redirect
-        assert response.status_code in (200, 302)
+        # Should show confirmation page
+        assert response.status_code == 200
 
     def test_bulk_delete_executes(self, web_client: Client):
         """Test bulk delete actually deletes."""
         wf1 = AgentWorkflowDefinition.objects.create(name='WF1', profile={})
         wf2 = AgentWorkflowDefinition.objects.create(name='WF2', profile={})
 
-        url = reverse('agents:profiles-delete_confirm')
-        payload = {
-            'ids': [wf1.pk, wf2.pk],
-            'confirm': 'true',
-        }
-
         initial_count = AgentWorkflowDefinition.objects.count()
-        response = web_client.post(url, payload)
+        
+        url = reverse('agents:profiles-delete_confirm', kwargs={'pks': f'{wf1.pk}/{wf2.pk}/'})
+
+        response = web_client.post(url)
 
         # Should redirect after deletion
         assert response.status_code == 302

@@ -81,26 +81,29 @@ class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateVie
             context['profile_json'] = self._default_profile_json()
             return context
 
-        cleaned_raw = (
-            raw_json.encode('utf-8').decode('unicode_escape')
-            if isinstance(raw_json, str)
-            else str(raw_json)
-        )
-        if cleaned_raw.startswith('"') and cleaned_raw.endswith('"'):
-            cleaned_raw = cleaned_raw[1:-1]
-
-        with contextlib.suppress(json.JSONDecodeError):
-            context['profile_json'] = json.loads(cleaned_raw)
+        if isinstance(raw_json, dict):
+            context['profile_json'] = raw_json
             return context
 
-        with contextlib.suppress(json.JSONDecodeError):
-            context['profile_json'] = (
-                json.loads(raw_json) if isinstance(raw_json, str) else raw_json
-            )
-            return context
+        if isinstance(raw_json, str):
+            cleaned_raw = raw_json.encode('utf-8').decode('unicode_escape')
+            if cleaned_raw.startswith('"') and cleaned_raw.endswith('"'):
+                cleaned_raw = cleaned_raw[1:-1]
+
+            with contextlib.suppress(json.JSONDecodeError):
+                parsed = json.loads(cleaned_raw)
+                if isinstance(parsed, dict):
+                    context['profile_json'] = parsed
+                    return context
+
+            with contextlib.suppress(json.JSONDecodeError):
+                parsed = json.loads(raw_json)
+                if isinstance(parsed, dict):
+                    context['profile_json'] = parsed
+                    return context
 
         context['json_valid'] = False
-        context['profile_json'] = cleaned_raw
+        context['profile_json'] = str(raw_json)
         return context
 
     def get_initial(self) -> dict[str, Any]:
@@ -171,22 +174,25 @@ class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateVie
         """Process form submission and parse profile JSON."""
         # Convert profile JSON string to dict
         profile_data = form.cleaned_data.get('profile')
+        parsed_profile = None
         if isinstance(profile_data, str):
             try:
-                parsed = json.loads(profile_data)
+                parsed_profile = json.loads(profile_data)
                 # Ensure profile is a dict with 'steps' array
-                if not isinstance(parsed, dict):
+                if not isinstance(parsed_profile, dict):
                     form.add_error('profile', 'Profile must be a JSON object.')
                     return self.form_invalid(form)
-                form.instance.profile = parsed
+                form.instance.profile = parsed_profile
             except json.JSONDecodeError as exc:
                 form.add_error('profile', f'Invalid JSON: {exc}')
                 return self.form_invalid(form)
+        else:
+            parsed_profile = profile_data
 
         if not form.instance.pk:
             form.instance = AgentWorkflowDefinition()
             form.instance.name = form.cleaned_data.get('name')
-            form.instance.profile = form.instance.profile
+            form.instance.profile = parsed_profile
             form.instance.is_active = form.cleaned_data.get('is_active', True)
 
         return super().form_valid(form)
