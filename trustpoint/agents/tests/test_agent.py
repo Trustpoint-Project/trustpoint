@@ -27,7 +27,6 @@ from cryptography.x509.oid import NameOID
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-# Import from agent module
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'examples'))
@@ -1235,3 +1234,501 @@ class TestLogging:
 
         root = logging.getLogger()
         assert root.level == getattr(logging, level)
+
+
+# ============================================================================
+# Enrollment Tests
+# ============================================================================
+
+
+class TestEnrollment:
+    """Test initial enrollment workflow."""
+
+    @patch('agent.make_session')
+    @patch('agent.request_with_retries')
+    @patch('agent.generate_private_key')
+    @patch('agent.generate_csr')
+    def test_enroll_initial_success(
+        self,
+        mock_gen_csr: Mock,
+        mock_gen_key: Mock,
+        mock_request: Mock,
+        mock_make_session: Mock,
+        temp_dir: Path,
+        mock_profile_data: dict[str, Any],
+    ):
+        """Test successful initial enrollment."""
+        from agent import enroll_initial, read_profile
+
+        # Setup mocks
+        mock_csr = Mock()
+        mock_csr.public_bytes.return_value = b'CSR_DATA'
+        mock_gen_csr.return_value = mock_csr
+
+        response = Mock()
+        response.status_code = 200
+        response.headers = {'Content-Type': 'application/json'}
+        response.json.return_value = {
+            'certificate': '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----',
+            'chain': [
+                '-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----'
+            ],
+        }
+        mock_request.return_value = response
+
+        # Create profile
+        profile_path = temp_dir / 'profile.json'
+        profile_path.write_text(json.dumps(mock_profile_data))
+
+        profile = read_profile(profile_path)
+        args = parse_args([])
+
+        # Execute
+        credential = enroll_initial(profile, args)
+
+        # Verify
+        assert credential.cert_path.exists()
+        assert credential.key_path.exists()
+        assert mock_gen_key.called
+        assert mock_gen_csr.called
+        assert mock_request.called
+
+    @patch('agent.make_session')
+    @patch('agent.request_with_retries')
+    def test_enroll_initial_network_failure(
+        self,
+        mock_request: Mock,
+        mock_make_session: Mock,
+        temp_dir: Path,
+        mock_profile_data: dict[str, Any],
+    ):
+        """Test enrollment failure due to network error."""
+        from agent import enroll_initial, read_profile
+
+        # Setup mocks
+        mock_request.side_effect = AgentError('Network error')
+
+        profile_path = temp_dir / 'profile.json'
+        profile_path.write_text(json.dumps(mock_profile_data))
+
+        profile = read_profile(profile_path)
+        args = parse_args([])
+
+        # Execute and verify exception
+        with pytest.raises(AgentError, match='Network error'):
+            enroll_initial(profile, args)
+
+    @patch('agent.make_session')
+    @patch('agent.request_with_retries')
+    @patch('agent.generate_private_key')
+    @patch('agent.generate_csr')
+    def test_enroll_initial_invalid_response(
+        self,
+        mock_gen_csr: Mock,
+        mock_gen_key: Mock,
+        mock_request: Mock,
+        mock_make_session: Mock,
+        temp_dir: Path,
+        mock_profile_data: dict[str, Any],
+    ):
+        """Test enrollment with invalid server response."""
+        from agent import enroll_initial, read_profile
+
+        # Setup mocks
+        mock_csr = Mock()
+        mock_csr.public_bytes.return_value = b'CSR_DATA'
+        mock_gen_csr.return_value = mock_csr
+
+        response = Mock()
+        response.status_code = 200
+        response.headers = {'Content-Type': 'application/json'}
+        response.json.return_value = {'invalid': 'response'}
+        mock_request.return_value = response
+
+        profile_path = temp_dir / 'profile.json'
+        profile_path.write_text(json.dumps(mock_profile_data))
+
+        profile = read_profile(profile_path)
+        args = parse_args([])
+
+        # Execute and verify exception
+        with pytest.raises(AgentError, match='certificate'):
+            enroll_initial(profile, args)
+
+
+# ============================================================================
+# Polling Tests
+# ============================================================================
+
+
+class TestPolling:
+    """Test job polling logic."""
+
+    @patch('agent.mtls_session')
+    @patch('agent.cert_header_value')
+    @patch('agent.fetch_jobs')
+    @patch('agent.execute_renewal_job')
+    @patch('agent.acknowledge_job')
+    def test_poll_once_with_jobs(
+        self,
+        mock_ack: Mock,
+        mock_execute: Mock,
+        mock_fetch: Mock,
+        mock_cert_header: Mock,
+        mock_session: Mock,
+        temp_dir: Path,
+    ):
+        """Test polling once with pending jobs."""
+        from agent import poll_once
+
+        # Setup mocks
+        mock_session.return_value = Mock()
+        mock_cert_header.return_value = 'cert_value'
+        mock_fetch.return_value = (300, [{'profile_id': 1}])
+        mock_execute.return_value = JobResult(
+            profile_id=1,
+            success=True,
+            error_message='',
+        )
+
+        params = PollParams(
+            base_url='https://example.com',
+            ca_cert_path=temp_dir / 'ca.pem',
+            active_credential=ActiveCredential(cert_path=temp_dir / 'cert.pem', key_path=temp_dir / 'key.pem'),
+            local_storage=LocalStorage.from_mapping({}),
+            request_timeout=30,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=10.0,
+        )
+
+        # Create required files
+        params.active_credential.cert_path.write_text('CERT')
+        params.active_credential.key_path.write_text('KEY')
+
+        next_poll = poll_once(params)
+
+        assert next_poll == 300
+        assert mock_fetch.called
+        assert mock_execute.called
+        assert mock_ack.called
+
+    @patch('agent.mtls_session')
+    @patch('agent.cert_header_value')
+    @patch('agent.fetch_jobs')
+    def test_poll_once_no_jobs(
+        self,
+        mock_fetch: Mock,
+        mock_cert_header: Mock,
+        mock_session: Mock,
+        temp_dir: Path,
+    ):
+        """Test polling with no pending jobs."""
+        from agent import poll_once
+
+        # Setup mocks
+        mock_session.return_value = Mock()
+        mock_cert_header.return_value = 'cert_value'
+        mock_fetch.return_value = (300, [])
+
+        params = PollParams(
+            base_url='https://example.com',
+            ca_cert_path=temp_dir / 'ca.pem',
+            active_credential=ActiveCredential(cert_path=temp_dir / 'cert.pem', key_path=temp_dir / 'key.pem'),
+            local_storage=LocalStorage.from_mapping({}),
+            request_timeout=30,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=10.0,
+        )
+
+        # Create required files
+        params.active_credential.cert_path.write_text('CERT')
+        params.active_credential.key_path.write_text('KEY')
+
+        next_poll = poll_once(params)
+
+        assert next_poll == 300
+        assert mock_fetch.called
+
+    @patch('agent.poll_once')
+    def test_poll_loop_once_mode(self, mock_poll_once: Mock):
+        """Test poll loop in once mode."""
+        from agent import poll_loop
+
+        mock_poll_once.return_value = 300
+
+        params = PollParams(
+            base_url='https://example.com',
+            ca_cert_path=Path('/tmp/ca.pem'),
+            active_credential=ActiveCredential(cert_path=Path('/tmp/cert.pem'), key_path=Path('/tmp/key.pem')),
+            local_storage=LocalStorage.from_mapping({}),
+            request_timeout=30,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=10.0,
+        )
+
+        poll_loop(params, once=True)
+
+        assert mock_poll_once.call_count == 1
+
+    @patch('agent.poll_once')
+    @patch('agent.sleep_interruptibly')
+    def test_poll_loop_continuous_mode(self, mock_sleep: Mock, mock_poll_once: Mock):
+        """Test poll loop in continuous mode."""
+        from agent import _stop_requested, poll_loop
+
+        mock_poll_once.side_effect = [300, 300]
+
+        # Simulate stop after 2 iterations
+        def stop_after_two(*_args: Any) -> None:
+            import agent
+
+            agent._stop_requested = True
+
+        mock_sleep.side_effect = stop_after_two
+
+        params = PollParams(
+            base_url='https://example.com',
+            ca_cert_path=Path('/tmp/ca.pem'),
+            active_credential=ActiveCredential(cert_path=Path('/tmp/cert.pem'), key_path=Path('/tmp/key.pem')),
+            local_storage=LocalStorage.from_mapping({}),
+            request_timeout=30,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=10.0,
+        )
+
+        # Reset stop flag
+        import agent
+
+        agent._stop_requested = False
+
+        poll_loop(params, once=False)
+
+        assert mock_poll_once.call_count >= 1
+        # Reset for other tests
+        agent._stop_requested = False
+
+
+# ============================================================================
+# mTLS and Certificate Header Tests
+# ============================================================================
+
+
+class TestMTLSHelpers:
+    """Test mTLS session and certificate header helpers."""
+
+    def test_mtls_session(self, temp_dir: Path):
+        """Test mTLS session creation."""
+        from agent import mtls_session
+
+        cert_path = temp_dir / 'cert.pem'
+        key_path = temp_dir / 'key.pem'
+        ca_path = temp_dir / 'ca.pem'
+
+        cert_path.write_text('CERT')
+        key_path.write_text('KEY')
+        ca_path.write_text('CA')
+
+        params = PollParams(
+            base_url='https://example.com',
+            ca_cert_path=ca_path,
+            active_credential=ActiveCredential(cert_path=cert_path, key_path=key_path),
+            local_storage=LocalStorage.from_mapping({}),
+            request_timeout=30,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=10.0,
+        )
+
+        session = mtls_session(params)
+
+        assert session is not None
+        assert session.cert == (str(cert_path), str(key_path))
+        assert session.verify == str(ca_path)
+
+    def test_cert_header_value(self, temp_dir: Path):
+        """Test certificate header value generation."""
+        from agent import cert_header_value
+
+        cert_path = temp_dir / 'cert.pem'
+        cert_content = '-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----'
+        cert_path.write_text(cert_content)
+
+        header = cert_header_value(cert_path)
+
+        assert header is not None
+        assert isinstance(header, str)
+        # URL encoding should replace special chars
+        assert '\n' not in header
+
+
+# ============================================================================
+# Sleep and Signal Handler Tests
+# ============================================================================
+
+
+class TestSignalAndSleep:
+    """Test signal handling and interruptible sleep."""
+
+    @patch('agent.time.sleep')
+    def test_sleep_interruptibly_completes(self, mock_sleep: Mock):
+        """Test sleep completes normally."""
+        from agent import sleep_interruptibly
+
+        import agent
+
+        agent._stop_requested = False
+
+        sleep_interruptibly(5)
+
+        assert mock_sleep.called
+
+    @patch('agent.time.sleep')
+    def test_sleep_interruptibly_stops_early(self, mock_sleep: Mock):
+        """Test sleep stops early on stop signal."""
+        from agent import sleep_interruptibly
+
+        import agent
+
+        # Simulate stop during sleep
+        def set_stop(*_args: Any) -> None:
+            agent._stop_requested = True
+
+        mock_sleep.side_effect = set_stop
+
+        agent._stop_requested = False
+        sleep_interruptibly(10)
+
+        # Should have attempted to sleep
+        assert mock_sleep.called
+        # Reset for other tests
+        agent._stop_requested = False
+
+
+# ============================================================================
+# Main Entry Point Tests
+# ============================================================================
+
+
+class TestMainEntryPoint:
+    """Test main entry point."""
+
+    @patch('agent.install_signal_handlers')
+    @patch('agent.sd_notify')
+    @patch('agent.read_profile')
+    @patch('agent.enroll_initial')
+    @patch('agent.poll_loop')
+    def test_main_success(
+        self,
+        mock_poll: Mock,
+        mock_enroll: Mock,
+        mock_read: Mock,
+        mock_sd: Mock,
+        mock_signals: Mock,
+        temp_dir: Path,
+        mock_profile_data: dict[str, Any],
+    ):
+        """Test main function success path."""
+        from agent import ActiveCredential, main, read_profile
+
+        # Setup mocks
+        profile_path = temp_dir / 'profile.json'
+        profile_path.write_text(json.dumps(mock_profile_data))
+        
+        profile = read_profile(profile_path)
+        mock_read.return_value = profile
+
+        mock_enroll.return_value = ActiveCredential(
+            cert_path=temp_dir / 'cert.pem', key_path=temp_dir / 'key.pem'
+        )
+
+        # Execute
+        exit_code = main(['--profile', str(profile_path), '--once'])
+
+        # Verify
+        assert exit_code == 0
+        assert mock_read.called
+        assert mock_enroll.called
+        assert mock_poll.called
+
+    @patch('agent.install_signal_handlers')
+    @patch('agent.read_profile')
+    def test_main_profile_load_error(self, mock_read: Mock, mock_signals: Mock, temp_dir: Path):
+        """Test main with profile load error."""
+        from agent import main
+
+        # Setup mocks - Make read_profile raise the exception
+        mock_read.side_effect = AgentError('Invalid profile')
+
+        profile_path = temp_dir / 'profile.json'
+
+        # Execute - main catches the exception and exits with 1
+        # We need to catch SystemExit
+        with pytest.raises(SystemExit) as exc_info:
+            main(['--profile', str(profile_path)])
+
+        # Verify error exit
+        assert exc_info.value.code == 1
+
+    @patch('agent.install_signal_handlers')
+    @patch('agent.read_profile')
+    @patch('agent._handle_skip_onboarding')
+    @patch('agent.poll_loop')
+    def test_main_skip_onboarding(
+        self,
+        mock_poll: Mock,
+        mock_skip: Mock,
+        mock_read: Mock,
+        mock_signals: Mock,
+        temp_dir: Path,
+        mock_profile_data: dict[str, Any],
+    ):
+        """Test main with skip onboarding flag."""
+        from agent import main, read_profile
+
+        # Setup mocks
+        profile_path = temp_dir / 'profile.json'
+        profile_path.write_text(json.dumps(mock_profile_data))
+        
+        profile = read_profile(profile_path)
+        mock_read.return_value = profile
+
+        # Execute
+        exit_code = main(['--profile', str(profile_path), '--skip-onboarding', '--once'])
+
+        # Verify
+        assert exit_code == 0
+        assert mock_skip.called
+        assert mock_poll.called
+
+    @patch('agent.install_signal_handlers')
+    @patch('agent.read_profile')
+    @patch('agent.enroll_initial')
+    def test_main_enrollment_error(
+        self,
+        mock_enroll: Mock,
+        mock_read: Mock,
+        mock_signals: Mock,
+        temp_dir: Path,
+        mock_profile_data: dict[str, Any],
+    ):
+        """Test main with enrollment error."""
+        from agent import main, read_profile
+
+        # Setup mocks
+        profile_path = temp_dir / 'profile.json'
+        profile_path.write_text(json.dumps(mock_profile_data))
+        
+        profile = read_profile(profile_path)
+        mock_read.return_value = profile
+        mock_enroll.side_effect = AgentError('Enrollment failed')
+
+        # Execute - main catches the exception and exits with 1
+        with pytest.raises(SystemExit) as exc_info:
+            main(['--profile', str(profile_path)])
+
+        # Verify error exit
+        assert exc_info.value.code == 1
