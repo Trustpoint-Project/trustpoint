@@ -1256,14 +1256,23 @@ class TestEnrollment:
         mock_make_session: Mock,
         temp_dir: Path,
         mock_profile_data: dict[str, Any],
+        monkeypatch: pytest.MonkeyPatch,
     ):
         """Test successful initial enrollment."""
         from agent import enroll_initial, read_profile
 
-        # Setup mocks
+        # Change to temp directory so relative paths work
+        monkeypatch.chdir(temp_dir)
+
+        # Setup mocks - create actual files as side effects
+        def mock_gen_key_side_effect(key_path, **kwargs):
+            Path(key_path).write_text('MOCK_PRIVATE_KEY')
+        
+        mock_gen_key.side_effect = mock_gen_key_side_effect
+
         mock_csr = Mock()
         mock_csr.public_bytes.return_value = b'CSR_DATA'
-        mock_gen_csr.return_value = mock_csr
+        mock_gen_csr.return_value = 'MOCK_CSR_PEM'
 
         response = Mock()
         response.status_code = 200
