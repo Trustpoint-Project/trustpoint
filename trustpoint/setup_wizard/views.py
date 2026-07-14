@@ -2602,6 +2602,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             self._configure_instance_crypto_backend(config_model)
             self._configure_app_secret_backend(config_model)
             call_command('create_default_cert_profiles')
+            call_command('seed_discovery_ports')
             if config_model.inject_demo_data:
                 call_command('add_domains_and_devices')
             call_command('execute_all_notifications')
