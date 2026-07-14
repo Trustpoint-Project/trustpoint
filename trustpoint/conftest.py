@@ -31,6 +31,12 @@ from trustpoint_core.serializer import CredentialSerializer
 
 
 @pytest.fixture(autouse=True)
+def set_advertised_port_for_tests(settings: Any) -> None:
+    """Set ADVERTISED_PORT in Django settings for tests that need it."""
+    settings.ADVERTISED_PORT = 8443
+
+
+@pytest.fixture(autouse=True)
 def enable_db_access_for_all_tests(request: pytest.FixtureRequest) -> None:
     """Enable DB access for application tests that exercise Django models/views."""
     test_path = str(request.node.fspath)

@@ -232,8 +232,11 @@ class EstUsernamePasswordCommandBuilder:
         # Use ``&`` to chain commands in cmd.exe so they can be pasted as a
         # single line without requiring line continuation characters.
         return (
-            f'certutil -f -decode certificate-{cred_number}.p7c certificate-{cred_number}.p7b & '
-            f'openssl pkcs7 -inform DER -in certificate-{cred_number}.p7b -print_certs -out certificate-{cred_number}.pem'
+            f'certutil -f -decode certificate-{cred_number}.p7c '
+            f'certificate-{cred_number}.p7b & '
+            f'openssl pkcs7 -inform DER '
+            f'-in certificate-{cred_number}.p7b '
+            f'-print_certs -out certificate-{cred_number}.pem'
         )
 
     @staticmethod

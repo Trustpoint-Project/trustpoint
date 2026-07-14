@@ -207,7 +207,7 @@ class EstUsernamePasswordCommandBuilderTests(SimpleTestCase):
         """Test Windows PKCS#7 to PEM conversion command."""
         cmd = EstUsernamePasswordCommandBuilder.get_conversion_p7_pem_windows_command(cred_number=1)
 
-        assert 'certutil -decode certificate-1.p7c certificate-1.p7b' in cmd
+        assert 'certutil -f -decode certificate-1.p7c certificate-1.p7b' in cmd
         assert 'openssl pkcs7 -in certificate-1.p7b -print_certs -out certificate-1.pem' in cmd
 
 

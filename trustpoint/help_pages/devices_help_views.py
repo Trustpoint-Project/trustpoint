@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, override
 
 from cryptography import x509
+from django.conf import settings
 from django.contrib import messages
 from django.core.management import call_command
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.safestring import SafeString
@@ -20,7 +21,6 @@ from django.views.generic.base import TemplateView, View
 from django.views.generic.detail import DetailView
 from pydantic import ValidationError as PydanticValidationError
 
-from django.conf import settings
 from devices.models import DeviceModel
 from devices.views import PublicKeyInfoMissingErrorMsg
 from help_pages.base import (
@@ -325,7 +325,6 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
             - Windows: decode base64 PKCS#7 with certutil
             - Windows: install certificate with certreq
             """
-
             # Cross-platform single-line curl command suitable for both
             # Linux shells and Windows cmd.exe.
             curl_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_command(
