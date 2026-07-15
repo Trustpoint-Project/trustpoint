@@ -14,7 +14,7 @@ from django.views.generic.edit import FormView
 
 from agents.models import (
     AgentAssignedProfile,
-    AgentWorkflowDefinition,
+    AgentProfileDefinition,
     TrustpointAgent,
 )
 from devices.forms import (
@@ -160,7 +160,7 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
             os_path=agent_os_path,
         )
 
-        default_wf = AgentWorkflowDefinition.objects.filter(
+        default_wf = AgentProfileDefinition.objects.filter(
             name='Domain Credential Update', is_active=True
         ).first()
         if default_wf is not None:
@@ -209,7 +209,7 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
             os_path=agent_os_path,
         )
 
-        default_wf = AgentWorkflowDefinition.objects.filter(
+        default_wf = AgentProfileDefinition.objects.filter(
             name='Domain Credential Update', is_active=True
         ).first()
         if default_wf is not None:

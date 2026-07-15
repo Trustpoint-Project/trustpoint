@@ -1,4 +1,4 @@
-"""Web UI views for Agent Workflow Definitions (Profiles) and assigned profiles."""
+"""Web UI views for Agent Profile Definitions (Profiles) and assigned profiles."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import FormView, ListView, UpdateView
 
-from agents.models import AgentAssignedProfile, AgentWorkflowDefinition, TrustpointAgent
+from agents.models import AgentAssignedProfile, AgentProfileDefinition, TrustpointAgent
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_AGENTS_SUBCATEGORY, DEVICES_PAGE_CATEGORY, PageContextMixin
 from trustpoint.views.base import BulkDeleteView
@@ -26,27 +26,27 @@ if TYPE_CHECKING:
     from devices.models import DeviceModel
 
 
-class AgentWorkflowDefinitionTableView(PageContextMixin, LoggerMixin, ListView[AgentWorkflowDefinition]):
-    """View to list all Agent Workflow Definitions."""
+class AgentProfileDefinitionTableView(PageContextMixin, LoggerMixin, ListView[AgentProfileDefinition]):
+    """View to list all Agent Profile Definitions."""
 
     http_method_names = ('get',)
-    model = AgentWorkflowDefinition
+    model = AgentProfileDefinition
     template_name = 'agents/profiles/list.html'
     context_object_name = 'profiles'
     paginate_by = 25
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
-    def get_queryset(self) -> QuerySet[AgentWorkflowDefinition]:
+    def get_queryset(self) -> QuerySet[AgentProfileDefinition]:
         """Return all workflow definitions ordered by name."""
-        return AgentWorkflowDefinition.objects.all().order_by('name')
+        return AgentProfileDefinition.objects.all().order_by('name')
 
 
-class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateView[AgentWorkflowDefinition, Any]):
-    """View to display and edit an Agent Workflow Definition."""
+class AgentProfileDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateView[AgentProfileDefinition, Any]):
+    """View to display and edit an Agent Profile Definition."""
 
     http_method_names = ('get', 'post')
-    model = AgentWorkflowDefinition
+    model = AgentProfileDefinition
     success_url = reverse_lazy('agents:profiles')
     template_name = 'agents/profiles/config.html'
     context_object_name = 'profile'
@@ -58,12 +58,12 @@ class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateVie
         'is_active',
     ]
 
-    def get_object(self, _queryset: QuerySet[Any] | None = None) -> AgentWorkflowDefinition | None:  # type: ignore[override]
-        """Retrieve the AgentWorkflowDefinition object based on the primary key in the URL."""
+    def get_object(self, _queryset: QuerySet[Any] | None = None) -> AgentProfileDefinition | None:  # type: ignore[override]
+        """Retrieve the AgentProfileDefinition object based on the primary key in the URL."""
         pk = self.kwargs.get('pk')
         if pk == 0:
             return None
-        return get_object_or_404(AgentWorkflowDefinition, pk=pk)
+        return get_object_or_404(AgentProfileDefinition, pk=pk)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data for JSON editor."""
@@ -190,7 +190,7 @@ class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateVie
             parsed_profile = profile_data
 
         if not form.instance.pk:
-            form.instance = AgentWorkflowDefinition()
+            form.instance = AgentProfileDefinition()
             form.instance.name = form.cleaned_data.get('name')
             form.instance.profile = parsed_profile
             form.instance.is_active = form.cleaned_data.get('is_active', True)
@@ -198,15 +198,15 @@ class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateVie
         return super().form_valid(form)
 
 
-class AgentWorkflowDefinitionBulkDeleteConfirmView(PageContextMixin, BulkDeleteView):
+class AgentProfileDefinitionBulkDeleteConfirmView(PageContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple workflow definitions."""
 
-    model = AgentWorkflowDefinition
+    model = AgentProfileDefinition
     success_url = reverse_lazy('agents:profiles')
     ignore_url = reverse_lazy('agents:profiles')
     template_name = 'agents/profiles/confirm_delete.html'
     context_object_name = 'profiles'
-    queryset: QuerySet[AgentWorkflowDefinition]
+    queryset: QuerySet[AgentProfileDefinition]
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
@@ -442,7 +442,7 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
         super().__init__(*args, **kwargs)
         field = self.fields['workflow_definition']
         if isinstance(field, ModelChoiceField):
-            field.queryset = AgentWorkflowDefinition.objects.filter(is_active=True).order_by('name')
+            field.queryset = AgentProfileDefinition.objects.filter(is_active=True).order_by('name')
 
 
 class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):

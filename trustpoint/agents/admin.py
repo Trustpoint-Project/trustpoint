@@ -7,7 +7,7 @@ from django.contrib import admin
 
 from agents.models import (
     AgentAssignedProfile,
-    AgentWorkflowDefinition,
+    AgentProfileDefinition,
     TrustpointAgent,
 )
 
@@ -25,9 +25,9 @@ class TrustpointAgentAdmin(admin.ModelAdmin[TrustpointAgent]):
     readonly_fields = ('last_seen_at', 'created_at', 'updated_at')
 
 
-@admin.register(AgentWorkflowDefinition)
-class AgentWorkflowDefinitionAdmin(admin.ModelAdmin[AgentWorkflowDefinition]):
-    """Admin for AgentWorkflowDefinition."""
+@admin.register(AgentProfileDefinition)
+class AgentProfileDefinitionAdmin(admin.ModelAdmin[AgentProfileDefinition]):
+    """Admin for AgentProfileDefinition."""
 
     list_display = ('name', 'is_active', 'created_at', 'updated_at')
     list_filter = ('is_active',)

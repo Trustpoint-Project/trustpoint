@@ -10,20 +10,20 @@ from agents.web_views import (
     AgentManagedDeviceCreateView,
     AgentManagedDeviceDeleteView,
     AgentManagedDeviceTableView,
-    AgentWorkflowDefinitionBulkDeleteConfirmView,
-    AgentWorkflowDefinitionConfigView,
-    AgentWorkflowDefinitionTableView,
+    AgentProfileDefinitionBulkDeleteConfirmView,
+    AgentProfileDefinitionConfigView,
+    AgentProfileDefinitionTableView,
 )
 
 app_name = 'agents'
 
 urlpatterns = [
-    path('profiles/', AgentWorkflowDefinitionTableView.as_view(), name='profiles'),
-    path('profiles/create/', AgentWorkflowDefinitionConfigView.as_view(), {'pk': 0}, name='profiles-create'),
-    path('profiles/<int:pk>/', AgentWorkflowDefinitionConfigView.as_view(), name='profiles-config'),
+    path('profiles/', AgentProfileDefinitionTableView.as_view(), name='profiles'),
+    path('profiles/create/', AgentProfileDefinitionConfigView.as_view(), {'pk': 0}, name='profiles-create'),
+    path('profiles/<int:pk>/', AgentProfileDefinitionConfigView.as_view(), name='profiles-config'),
     re_path(
         r'^profiles/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
-        AgentWorkflowDefinitionBulkDeleteConfirmView.as_view(),
+        AgentProfileDefinitionBulkDeleteConfirmView.as_view(),
         name='profiles-delete_confirm',
     ),
 

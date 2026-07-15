@@ -174,14 +174,14 @@ class AgentJobSerializer(serializers.Serializer):  # type: ignore[type-arg]
         help_text='Primary key of the AgentAssignedProfile record.',
     )
     workflow_definition_id = serializers.IntegerField(
-        help_text='Primary key of the linked AgentWorkflowDefinition.',
+        help_text='Primary key of the linked AgentProfileDefinition.',
     )
     workflow_definition_name = serializers.CharField(
         help_text='Human-readable name of the workflow definition.',
     )
     workflow_profile = serializers.DictField(
         child=serializers.JSONField(),
-        help_text='Full profile JSON from the AgentWorkflowDefinition (metadata, device, certificate_request, steps).',
+        help_text='Full profile JSON from the AgentProfileDefinition (metadata, device, certificate_request, steps).',
     )
     next_certificate_update = serializers.DateTimeField(
         help_text='ISO-8601 datetime at which renewal was / is due.',

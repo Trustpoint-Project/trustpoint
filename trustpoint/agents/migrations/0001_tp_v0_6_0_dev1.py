@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='AgentWorkflowDefinition',
+            name='AgentProfileDefinition',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text='Unique identifier for this workflow definition.', max_length=200, unique=True, verbose_name='Name')),
@@ -22,8 +22,8 @@ class Migration(migrations.Migration):
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],
             options={
-                'verbose_name': 'Agent Workflow Definition',
-                'verbose_name_plural': 'Agent Workflow Definitions',
+                'verbose_name': 'Agent Profile Definition',
+                'verbose_name_plural': 'Agent Profile Definitions',
             },
         ),
         migrations.CreateModel(
@@ -59,7 +59,7 @@ class Migration(migrations.Migration):
                 ('enabled', models.BooleanField(default=True, help_text='Disabled assignments are skipped during renewal scheduling.', verbose_name='Enabled')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('workflow_definition', models.ForeignKey(help_text='The workflow / renewal profile applied to this agent.', on_delete=django.db.models.deletion.PROTECT, related_name='assigned_to', to='agents.agentworkflowdefinition', verbose_name='Agent Profile')),
+                ('workflow_definition', models.ForeignKey(help_text='The workflow / renewal profile applied to this agent.', on_delete=django.db.models.deletion.PROTECT, related_name='assigned_to', to='agents.agentprofiledefinition', verbose_name='Agent Profile')),
                 ('agent', models.ForeignKey(help_text='The 1-to-1 agent this profile is assigned to.', on_delete=django.db.models.deletion.CASCADE, related_name='assigned_profiles', to='agents.trustpointagent', verbose_name='Agent')),
             ],
             options={

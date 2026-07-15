@@ -8,7 +8,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
-from agents.models import AgentWorkflowDefinition
+from agents.models import AgentProfileDefinition
 from management.models import AuditLog
 
 _DEFAULTS_DIR = Path(__file__).resolve().parent.parent.parent / 'default'
@@ -44,7 +44,7 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(f'ERROR: {json_file.name} is missing "name" field'))
                     continue
                 
-                workflow, created = AgentWorkflowDefinition.objects.get_or_create(
+                workflow, created = AgentProfileDefinition.objects.get_or_create(
                     name=workflow_name,
                     defaults={
                         'profile': wf_data['profile'],

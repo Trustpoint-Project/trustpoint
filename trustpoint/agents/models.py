@@ -173,7 +173,7 @@ class TrustpointAgent(models.Model):
                 )
 
 
-class AgentWorkflowDefinition(models.Model):
+class AgentProfileDefinition(models.Model):
     """A reusable automation workflow for a specific device family or firmware variant."""
 
     name = models.CharField(
@@ -201,14 +201,14 @@ class AgentWorkflowDefinition(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        """Meta options for AgentWorkflowDefinition."""
+        """Meta options for AgentProfileDefinition."""
 
-        verbose_name = _('Agent Workflow Definition')
-        verbose_name_plural = _('Agent Workflow Definitions')
+        verbose_name = _('Agent Profile Definition')
+        verbose_name_plural = _('Agent Profile Definitions')
 
     def __str__(self) -> str:
         """Return a human-readable representation."""
-        return f'AgentWorkflowDefinition({self.name})'
+        return f'AgentProfileDefinition({self.name})'
 
     def clean(self) -> None:
         """Validate the workflow profile against the step schema."""
@@ -233,7 +233,7 @@ class AgentAssignedProfile(models.Model):
         help_text=_('The 1-to-1 agent this profile is assigned to.'),
     )
     workflow_definition = models.ForeignKey(
-        'agents.AgentWorkflowDefinition',
+        'agents.AgentProfileDefinition',
         verbose_name=_('Agent Profile'),
         on_delete=models.PROTECT,
         related_name='assigned_to',

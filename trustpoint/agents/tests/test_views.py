@@ -4,9 +4,9 @@ Covers:
 - AgentCertificateAuthentication
 - AgentJobsView (GET /api/agents/jobs/)
 - AgentJobResultView (POST /api/agents/jobs/results/)
-- AgentWorkflowDefinitionTableView
-- AgentWorkflowDefinitionConfigView
-- AgentWorkflowDefinitionBulkDeleteConfirmView
+- AgentProfileDefinitionTableView
+- AgentProfileDefinitionConfigView
+- AgentProfileDefinitionBulkDeleteConfirmView
 """
 
 from __future__ import annotations
@@ -36,8 +36,8 @@ from agents.api_views import (
     _parse_client_cert,
     _resolve_enrollment_url,
 )
-from agents.models import AgentAssignedProfile, AgentWorkflowDefinition, TrustpointAgent
-from agents.web_views import AgentWorkflowDefinitionConfigView, AgentWorkflowDefinitionTableView
+from agents.models import AgentAssignedProfile, AgentProfileDefinition, TrustpointAgent
+from agents.web_views import AgentProfileDefinitionConfigView, AgentProfileDefinitionTableView
 from devices.models import DeviceModel, DomainModel
 from pki.models import IssuedCredentialModel
 
@@ -114,7 +114,7 @@ def agent(db: Any, device: DeviceModel) -> TrustpointAgent:
 
 
 @pytest.fixture
-def workflow_definition(db: Any) -> AgentWorkflowDefinition:
+def workflow_definition(db: Any) -> AgentProfileDefinition:
     """Create a test workflow definition."""
     profile = {
         'metadata': {'agent_type': '1-to-n', 'version': '1.0'},
@@ -126,7 +126,7 @@ def workflow_definition(db: Any) -> AgentWorkflowDefinition:
         },
         'steps': [],
     }
-    return AgentWorkflowDefinition.objects.create(
+    return AgentProfileDefinition.objects.create(
         name='Test Workflow',
         profile=profile,
         is_active=True,
@@ -137,7 +137,7 @@ def workflow_definition(db: Any) -> AgentWorkflowDefinition:
 def assigned_profile(
     db: Any,
     agent: TrustpointAgent,
-    workflow_definition: AgentWorkflowDefinition,
+    workflow_definition: AgentProfileDefinition,
 ) -> AgentAssignedProfile:
     """Create an assigned profile."""
     now = timezone.now()
@@ -769,10 +769,10 @@ class TestAgentJobResultView:
 
 
 @pytest.mark.django_db
-class TestAgentWorkflowDefinitionTableView:
+class TestAgentProfileDefinitionTableView:
     """Test workflow definition list view."""
 
-    def test_get_list(self, web_client: Client, workflow_definition: AgentWorkflowDefinition):
+    def test_get_list(self, web_client: Client, workflow_definition: AgentProfileDefinition):
         """Test GET workflow definition list."""
         response = web_client.get(reverse('agents:profiles'))
 
@@ -781,11 +781,11 @@ class TestAgentWorkflowDefinitionTableView:
 
     def test_get_list_multiple(self, web_client: Client):
         """Test GET with multiple workflow definitions."""
-        AgentWorkflowDefinition.objects.create(
+        AgentProfileDefinition.objects.create(
             name='Workflow 1',
             profile={'metadata': {}},
         )
-        AgentWorkflowDefinition.objects.create(
+        AgentProfileDefinition.objects.create(
             name='Workflow 2',
             profile={'metadata': {}},
         )
@@ -804,10 +804,10 @@ class TestAgentWorkflowDefinitionTableView:
 
 
 @pytest.mark.django_db
-class TestAgentWorkflowDefinitionConfigView:
+class TestAgentProfileDefinitionConfigView:
     """Test workflow definition config view."""
 
-    def test_get_existing_profile(self, web_client: Client, workflow_definition: AgentWorkflowDefinition):
+    def test_get_existing_profile(self, web_client: Client, workflow_definition: AgentProfileDefinition):
         """Test GET existing workflow definition."""
         url = reverse('agents:profiles-config', kwargs={'pk': workflow_definition.pk})
         response = web_client.get(url)
@@ -851,11 +851,11 @@ class TestAgentWorkflowDefinitionConfigView:
         assert response.status_code == 302
 
         # Verify it was created
-        workflow = AgentWorkflowDefinition.objects.filter(name='New Workflow').first()
+        workflow = AgentProfileDefinition.objects.filter(name='New Workflow').first()
         assert workflow is not None
         assert workflow.is_active is True
 
-    def test_post_update_profile(self, web_client: Client, workflow_definition: AgentWorkflowDefinition):
+    def test_post_update_profile(self, web_client: Client, workflow_definition: AgentProfileDefinition):
         """Test POST to update existing workflow definition."""
         url = reverse('agents:profiles-config', kwargs={'pk': workflow_definition.pk})
         profile_data = workflow_definition.profile.copy()
@@ -896,12 +896,12 @@ class TestAgentWorkflowDefinitionConfigView:
     def test_get_profile_with_non_dict_json(
         self,
         web_client: Client,
-        workflow_definition: AgentWorkflowDefinition,
+        workflow_definition: AgentProfileDefinition,
     ):
         """Test GET with valid JSON but wrong type (string instead of object)."""
         # Store a JSON string value instead of an object
         # This bypasses the model's clean() validation but is valid JSON
-        AgentWorkflowDefinition.objects.filter(pk=workflow_definition.pk).update(profile='just-a-string')
+        AgentProfileDefinition.objects.filter(pk=workflow_definition.pk).update(profile='just-a-string')
 
         url = reverse('agents:profiles-config', kwargs={'pk': workflow_definition.pk})
         response = web_client.get(url)
@@ -915,13 +915,13 @@ class TestAgentWorkflowDefinitionConfigView:
 
 
 @pytest.mark.django_db
-class TestAgentWorkflowDefinitionBulkDeleteView:
+class TestAgentProfileDefinitionBulkDeleteView:
     """Test workflow definition bulk delete view."""
 
     def test_bulk_delete_confirmation(self, web_client: Client):
         """Test bulk delete confirmation page."""
-        wf1 = AgentWorkflowDefinition.objects.create(name='WF1', profile={})
-        wf2 = AgentWorkflowDefinition.objects.create(name='WF2', profile={})
+        wf1 = AgentProfileDefinition.objects.create(name='WF1', profile={})
+        wf2 = AgentProfileDefinition.objects.create(name='WF2', profile={})
 
         url = reverse('agents:profiles-delete_confirm', kwargs={'pks': f'{wf1.pk}/{wf2.pk}/'})
 
@@ -932,10 +932,10 @@ class TestAgentWorkflowDefinitionBulkDeleteView:
 
     def test_bulk_delete_executes(self, web_client: Client):
         """Test bulk delete actually deletes."""
-        wf1 = AgentWorkflowDefinition.objects.create(name='WF1', profile={})
-        wf2 = AgentWorkflowDefinition.objects.create(name='WF2', profile={})
+        wf1 = AgentProfileDefinition.objects.create(name='WF1', profile={})
+        wf2 = AgentProfileDefinition.objects.create(name='WF2', profile={})
 
-        initial_count = AgentWorkflowDefinition.objects.count()
+        initial_count = AgentProfileDefinition.objects.count()
         
         url = reverse('agents:profiles-delete_confirm', kwargs={'pks': f'{wf1.pk}/{wf2.pk}/'})
 
@@ -945,5 +945,5 @@ class TestAgentWorkflowDefinitionBulkDeleteView:
         assert response.status_code == 302
 
         # Verify deletions
-        final_count = AgentWorkflowDefinition.objects.count()
+        final_count = AgentProfileDefinition.objects.count()
         assert final_count < initial_count
