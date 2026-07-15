@@ -120,9 +120,48 @@ class DeviceListView(DiscoveryContextMixin, View):
 
     http_method_names = ('get',)
 
+    def _apply_filters(self, queryset: Any, request: HttpRequest) -> tuple[Any, bool]:
+        """Apply filters to the device queryset and return filtered queryset and active status."""
+        filters_active = False
+        ip_address = request.GET.get('ip_address', '').strip()
+        hostname = request.GET.get('hostname', '').strip()
+        ssl_status = request.GET.get('ssl_status', '').strip()
+        port = request.GET.get('port', '').strip()
+
+        if ip_address:
+            queryset = queryset.filter(ip_address__icontains=ip_address)
+            filters_active = True
+
+        if hostname:
+            queryset = queryset.filter(hostname__icontains=hostname)
+            filters_active = True
+
+        if ssl_status:
+            if ssl_status == 'self_signed':
+                queryset = queryset.filter(certificate_record__isnull=False, ssl_info__is_self_signed=True)
+            elif ssl_status == 'pki_linked':
+                queryset = queryset.filter(certificate_record__isnull=False, ssl_info__is_self_signed=False)
+            elif ssl_status == 'none':
+                queryset = queryset.filter(certificate_record__isnull=True)
+            filters_active = True
+
+        if port:
+            try:
+                port_num = int(port)
+                queryset = queryset.filter(open_ports__contains=[port_num])
+                filters_active = True
+            except (ValueError, TypeError):
+                pass
+
+        return queryset, filters_active
+
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the discovery dashboard."""
         all_devs = DiscoveredDevice.objects.all().order_by('-last_seen')
+
+        # Apply filters
+        all_devs, filters_active = self._apply_filters(all_devs, request)
+
         all_ports = DiscoveryPort.objects.all().order_by('port_number')
 
         stats = {'total': all_devs.count(), 'risks': 0, 'industrial': 0}
@@ -148,6 +187,7 @@ class DeviceListView(DiscoveryContextMixin, View):
             stats=stats,
             start_ip=state['start_ip'],
             end_ip=state['end_ip'],
+            filters_active=filters_active,
         )
 
         return render(
@@ -208,7 +248,22 @@ class AddPortView(View):
             except ValueError:
                 messages.error(request, 'Invalid port number. Please enter a valid integer.')
 
+        referer = request.META.get('HTTP_REFERER', '')
+        if 'port-config' in referer:
+            return redirect('discovery:port_config')
         return redirect('discovery:device_list')
+
+
+class PortConfigView(DiscoveryContextMixin, View):
+    """Display and manage port configuration."""
+
+    http_method_names = ('get',)
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the port configuration page."""
+        all_ports = DiscoveryPort.objects.all().order_by('port_number')
+        context = self.get_context_data(scan_ports=all_ports)
+        return render(request, 'discovery/port_config.html', context)
 
 
 class DeletePortView(View):
@@ -222,6 +277,10 @@ class DeletePortView(View):
         port_num = port.port_number
         port.delete()
         messages.info(request, f'Port {port_num} removed from scan configuration.')
+
+        referer = request.META.get('HTTP_REFERER', '')
+        if 'port-config' in referer:
+            return redirect('discovery:port_config')
         return redirect('discovery:device_list')
 
 

@@ -2,55 +2,93 @@
 {% load i18n static %}
 
 {% block content %}
-<div class="container-fluid p-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h3 fw-bold mb-0">Device Details: {{ device.ip_address }}</h1>
-        </div>
-        <a href="{% url 'discovery:device_list' %}" class="btn btn-outline-info">
-            Back to Dashboard
-        </a>
+<div class="card" style="display: flex; flex-direction: column; height: calc(100vh - 120px);">
+    <div class="card-header">
+        <h1>{% trans "Device Details" %}: {{ device.ip_address }}</h1>
     </div>
 
-    <div class="row">
-        <!-- Network Info Card -->
-        <div class="col-md-6">
-            <div class="card p-4 mb-4 border-0 shadow-sm" style="background: rgba(255,255,255,0.05);">
-                <h5 class="fw-bold mb-3 border-bottom border-secondary pb-2">Network Info</h5>
-                <table class="table table-borderless table-sm mb-0">
-                    <tr><td class="text-muted w-25">Hostname:</td><td>{{ device.hostname|default:"Unknown" }}</td></tr>
-                    <tr><td class="text-muted">Open Ports:</td>
-                        <td>
-                            {% for port in device.open_ports %}
-                                <span class="badge bg-secondary me-1">{{ port }}</span>
-                            {% endfor %}
-                        </td>
-                    </tr>
-                    <tr><td class="text-muted">Last Seen:</td><td>{{ device.last_seen|date:"Y-m-d H:i" }}</td></tr>
-                </table>
+    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1;">
+        <div class="row g-4">
+            <!-- Network Info Card -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% trans "Network Information" %}</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <td class="text-muted fw-semibold" style="width: 35%;">{% trans "IP Address" %}:</td>
+                                    <td>{{ device.ip_address }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted fw-semibold">{% trans "Hostname" %}:</td>
+                                    <td>{{ device.hostname|default:"Unknown" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted fw-semibold">{% trans "Open Ports" %}:</td>
+                                    <td>
+                                        {% for port in device.open_ports %}
+                                            <span class="badge bg-secondary me-1">{{ port }}</span>
+                                        {% empty %}
+                                            <span class="text-muted">{% trans "None" %}</span>
+                                        {% endfor %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted fw-semibold">{% trans "Last Seen" %}:</td>
+                                    <td>{{ device.last_seen|date:"Y-m-d H:i" }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security & Certificate Card -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% trans "Security & Certificates" %}</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if device.certificate_record %}
+                            <div class="alert {% if device.certificate_record.is_self_signed %}alert-warning{% else %}alert-success{% endif %} mb-0">
+                                <h6 class="fw-bold mb-2">
+                                    {% if device.certificate_record.is_self_signed %}
+                                        <svg width="16" height="16" fill="currentColor" class="me-1">
+                                            <use href="{% static 'img/icons.svg' %}#icon-warning"></use>
+                                        </svg>
+                                        {% trans "Security Risk: Self-Signed Certificate" %}
+                                    {% else %}
+                                        <svg width="16" height="16" fill="currentColor" class="me-1">
+                                            <use href="{% static 'img/icons.svg' %}#icon-check"></use>
+                                        </svg>
+                                        {% trans "Verified: Linked to PKI System" %}
+                                    {% endif %}
+                                </h6>
+                                <p class="small mb-3">
+                                    <strong>{% trans "Subject" %}:</strong> {{ device.certificate_record.common_name }}
+                                </p>
+                                <a href="{% url 'pki:certificate-detail' device.certificate_record.id %}" 
+                                   class="btn btn-sm {% if device.certificate_record.is_self_signed %}btn-warning{% else %}btn-success{% endif %}">
+                                    {% trans "View Full Certificate Details" %}
+                                </a>
+                            </div>
+                        {% else %}
+                            <p class="text-muted fst-italic mb-0">{% trans "No SSL/TLS certificates discovered on this device." %}</p>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
+    </div>
 
-        <!-- Security & Certificate Card (Manager Redirection Requirement) -->
-        <div class="col-md-6">
-            <div class="card p-4 mb-4 border-0 shadow-sm" style="background: rgba(255,255,255,0.05);">
-                <h5 class="fw-bold mb-3 border-bottom border-secondary pb-2">Security & Certificates</h5>
-                {% if device.certificate_record %}
-                    <div class="alert {% if device.certificate_record.is_self_signed %}bg-warning text-dark{% else %}alert-success bg-opacity-10{% endif %} border-0 shadow-sm">
-                        <h6 class="fw-bold">
-                            {% if device.certificate_record.is_self_signed %}SECURITY RISK: Self-Signed Certificate{% else %}Verified: Linked to PKI System{% endif %}
-                        </h6>
-                        <p class="small mb-3">Subject: {{ device.certificate_record.common_name }}</p>
-
-                        <a href="/pki/certificates/details/{{ device.certificate_record.id }}/" 
-                            class="btn btn-sm {% if device.certificate_record.is_self_signed %}btn-dark{% else %}btn-success{% endif %} fw-bold">
-                            View Full Certificate Details
-                        </a>
-                    </div>
-                {% else %}
-                    <p class="text-muted italic">No SSL/TLS certificates discovered on this device.</p>
-                {% endif %}
-            </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="tp-card-btn-footer m-1">
+            <button type="button" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
+            <a href="{% url 'discovery:device_list' %}" class="btn btn-secondary">{% trans 'To Discovery Dashboard' %}</a>
         </div>
     </div>
 </div>
