@@ -43,6 +43,7 @@ extensions = [
     'sphinx.ext.viewcode',  # Adds links to highlighted source code
     'sphinxcontrib.plantuml',  # Enables PlantUML diagrams
     'sphinxcontrib.openapi',  # Generate APIs docs
+    'sphinxcontrib.mermaid',  # Enables Mermaid diagrams
     'myst_parser',  # Supports Markdown files
 ]
 

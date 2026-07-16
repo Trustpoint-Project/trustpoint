@@ -2293,6 +2293,20 @@ wheels = [
 ]
 
 [[package]]
+name = "sphinxcontrib-mermaid"
+version = "2.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "pyyaml" },
+    { name = "sphinx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/51/29/54cf1f7e03630ca4859caba25bc192698954d7c630377c62d1e264715c37/sphinxcontrib_mermaid-2.0.3.tar.gz", hash = "sha256:a6865ef6b65b225c5403a3170de63a04a07227cada11a4a71a6b87b4f9ed185a", size = 20764, upload-time = "2026-07-08T00:30:44.216Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/57/b39c7a69b70a3ce999732bdb57fcaac78fb3cc8e2843a3daf1c1f821bc9d/sphinxcontrib_mermaid-2.0.3-py3-none-any.whl", hash = "sha256:f001ed36a55c108f6221a2d656a441c487ee30651b54db72b7c752a20c7a66e8", size = 15401, upload-time = "2026-07-08T00:30:42.877Z" },
+]
+
+[[package]]
 name = "sphinxcontrib-openapi"
 version = "0.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2459,6 +2473,7 @@ docs = [
     { name = "pillow" },
     { name = "sphinx" },
     { name = "sphinx-autoapi" },
+    { name = "sphinxcontrib-mermaid" },
     { name = "sphinxcontrib-openapi" },
     { name = "sphinxcontrib-plantuml" },
 ]
@@ -2531,6 +2546,7 @@ docs = [
     { name = "pillow", specifier = ">=11.2.1" },
     { name = "sphinx", specifier = ">=8.2.3" },
     { name = "sphinx-autoapi", specifier = ">=3.6.0" },
+    { name = "sphinxcontrib-mermaid" },
     { name = "sphinxcontrib-openapi", specifier = ">=0.8.4" },
     { name = "sphinxcontrib-plantuml", specifier = ">=0.30" },
 ]
