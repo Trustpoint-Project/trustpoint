@@ -4,7 +4,7 @@ This document describes how Trustpoint manages device identities and certificate
 
 ## Device Onboarding Flow
 
-```mermaid
+```{mermaid}
 sequenceDiagram
     autonumber
     participant Device
@@ -44,7 +44,7 @@ sequenceDiagram
 
 ## Certificate Lifecycle States
 
-```mermaid
+```{mermaid}
 stateDiagram-v2
     [*] --> Registered: Device created
     Registered --> OnboardingPending: Enrollment initiated

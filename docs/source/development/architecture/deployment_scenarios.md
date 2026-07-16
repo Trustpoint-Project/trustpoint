@@ -6,14 +6,14 @@ This document describes common deployment scenarios for Trustpoint, including ne
 
 **Use Case:** Air-gapped OT network with self-contained PKI, no enterprise CA connection
 
-```mermaid
+```{mermaid}
 graph TB
     subgraph "Isolated OT Network"
-        DEV1[PLC] -.EST/CMP.-> TP[Trustpoint<br/>Local CA Mode]
+        DEV1[PLC] -.EST/CMP.-> TP["Trustpoint / Local CA Mode"]
         DEV2[RTU] -.EST/CMP.-> TP
         DEV3[SCADA] -.EST/CMP.-> TP
-        TP --> HSM[Hardware HSM<br/>CA Key Storage]
-        TP --> DB[(PostgreSQL<br/>Certificate DB)]
+        TP --> HSM["Hardware HSM / CA Key Storage"]
+        TP --> DB[("PostgreSQL / Certificate DB")]
         ADMIN[Admin Workstation] -->|HTTPS| TP
     end
     
@@ -38,14 +38,14 @@ graph TB
 
 **Use Case:** OT devices receive certificates from enterprise CA, centralized PKI management
 
-```mermaid
+```{mermaid}
 graph TB
     subgraph "Enterprise Network"
-        ENT_CA[Enterprise CA<br/>EST/CMP Server]
+        ENT_CA["Enterprise CA / EST/CMP Server"]
     end
     
     subgraph "OT Network"
-        DEV1[PLC] -.EST.-> TP[Trustpoint<br/>RA Mode]
+        DEV1[PLC] -.EST.-> TP["Trustpoint / RA Mode"]
         DEV2[RTU] -.CMP.-> TP
         TP -.EST/CMP.-> FW[Firewall]
     end
@@ -77,10 +77,10 @@ graph TB
 
 **Use Case:** Large-scale automated provisioning via API, no web UI
 
-```mermaid
+```{mermaid}
 graph LR
     subgraph "Device Management Platform"
-        DMP[Orchestrator] -->|REST API| TP[Trustpoint<br/>API-only]
+        DMP[Orchestrator] -->|REST API| TP["Trustpoint / API-only"]
     end
     
     subgraph "Device Fleet"
@@ -89,7 +89,7 @@ graph LR
         DEV3[Device N] -.EST.-> TP
     end
     
-    TP --> CA[Enterprise CA<br/>or Local CA]
+    TP --> CA["Enterprise CA / or Local CA"]
     
     style TP fill:#FF9800,color:#fff
     style DMP fill:#2196F3,color:#fff
@@ -110,7 +110,7 @@ graph LR
 
 **Use Case:** Local development and testing on single machine
 
-```mermaid
+```{mermaid}
 graph TB
     DEV[Developer Machine] --> DC[Docker Compose]
     

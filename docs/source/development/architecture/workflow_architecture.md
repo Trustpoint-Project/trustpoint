@@ -4,26 +4,26 @@ Long-running operations (approvals, external CA requests, webhooks, notification
 
 ## Workflow Execution Flow
 
-```mermaid
+```{mermaid}
 flowchart TB
-    EVENT[Triggering event<br/>enrollment, renewal, revocation, operator action]
-    DISPATCH[Workflow dispatch service<br/>select matching definitions<br/>create instance]
+    EVENT["Triggering event / enrollment, renewal, revocation, operator action"]
+    DISPATCH["Workflow dispatch service / select matching definitions / create instance"]
     
     EVENT --> DISPATCH
     
-    DISPATCH --> DB[(PostgreSQL<br/>workflow state)]
-    DB --> QUEUE[Workflow job queue<br/>status: queued, running, blocked, done]
+    DISPATCH --> DB[("PostgreSQL / workflow state")]
+    DB --> QUEUE["Workflow job queue / status: queued, running, blocked, done"]
     
-    WORKER[workflows2_worker<br/>separate container process]
+    WORKER["workflows2_worker / separate container process"]
     WORKER -->|Claim with lease| QUEUE
     
     WORKER --> EXECUTE{Execute step}
     
-    EXECUTE -->|Approval| APPROVAL[Approval step<br/>status: awaiting_approval<br/>operator action via UI]
-    EXECUTE -->|Webhook| WEBHOOK[HTTP webhook call<br/>retry on failure]
+    EXECUTE -->|Approval| APPROVAL["Approval step / status: awaiting_approval / operator action via UI"]
+    EXECUTE -->|Webhook| WEBHOOK["HTTP webhook call / retry on failure"]
     EXECUTE -->|Email| MAIL[SMTP notification]
-    EXECUTE -->|PKI operation| PKI_OP[Certificate issuance<br/>revocation, CRL update]
-    EXECUTE -->|Logic| LOGIC[Condition evaluation<br/>variable assignment]
+    EXECUTE -->|PKI operation| PKI_OP["Certificate issuance / revocation, CRL update"]
+    EXECUTE -->|Logic| LOGIC["Condition evaluation / variable assignment"]
     
     APPROVAL --> DB
     WEBHOOK --> DB
@@ -33,7 +33,7 @@ flowchart TB
     
     DB --> NEXT{More steps?}
     NEXT -->|Yes| QUEUE
-    NEXT -->|No| TERMINAL[Terminal state<br/>completed, failed, canceled]
+    NEXT -->|No| TERMINAL["Terminal state / completed, failed, canceled"]
 ```
 
 ## Workflow Components

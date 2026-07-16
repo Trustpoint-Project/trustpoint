@@ -38,10 +38,10 @@ The Trustpoint design follows these core principles:
 
 Trustpoint integrates industrial devices, human operators, business systems, and PKI or HSM infrastructure into a unified certificate-management platform.
 
-```mermaid
+```{mermaid}
 flowchart LR
     subgraph INDUSTRIAL[Industrial environment]
-        DEV[Devices<br/>machines, sensors, controllers]
+        DEV[Devices / machines / sensors / controllers]
         OPC[OPC UA servers]
         ENG[Engineering tools]
     end
@@ -61,22 +61,22 @@ flowchart LR
 
     TP[Trustpoint Platform]
 
-    EPKI[External PKI<br/>Enterprise CA]
-    HSM[HSM or PKCS#11<br/>key storage]
+    EPKI[External PKI / Enterprise CA]
+    HSM[HSM or PKCS#11 / key storage]
 
-    DEV -->|EST, CMP, AOKI<br/>certificate requests| TP
+    DEV -->|EST, CMP, AOKI / certificate requests| TP
     OPC -->|OPC UA GDS Push| TP
-    ENG -->|REST API<br/>remote downloads| TP
+    ENG -->|REST API / remote downloads| TP
 
-    ADMIN -->|Web UI<br/>configuration| TP
-    OPS -->|Web UI<br/>approvals| TP
-    AUDIT -->|Dashboard<br/>logs, metrics| TP
+    ADMIN -->|Web UI / configuration| TP
+    OPS -->|Web UI / approvals| TP
+    AUDIT -->|Dashboard / logs, metrics| TP
 
     TP -->|RA certificate requests| EPKI
-    TP -->|Key operations<br/>signing| HSM
-    TP -->|Webhooks<br/>events| ERP
+    TP -->|Key operations / signing| HSM
+    TP -->|Webhooks / events| ERP
     TP -.->|Future: identity sync| IAM
-    TP -->|Metrics<br/>logs| MON
+    TP -->|Metrics / logs| MON
     TP -->|Notifications| MAIL
 ```
 

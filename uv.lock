@@ -894,11 +894,11 @@ wheels = [
 
 [[package]]
 name = "docutils"
-version = "0.22.4"
+version = "0.21.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ae/b6/03bb70946330e88ffec97aefd3ea75ba575cb2e762061e0e62a213befee8/docutils-0.22.4.tar.gz", hash = "sha256:4db53b1fde9abecbb74d91230d32ab626d94f6badfc575d6db9194a49df29968", size = 2291750, upload-time = "2025-12-18T19:00:26.443Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/ed/aefcc8cd0ba62a0560c3c18c33925362d46c6075480bfa4df87b28e169a9/docutils-0.21.2.tar.gz", hash = "sha256:3a6b18732edf182daa3cd12775bbb338cf5691468f91eeeb109deff6ebfa986f", size = 2204444, upload-time = "2024-04-23T18:57:18.24Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/02/10/5da547df7a391dcde17f59520a231527b8571e6f46fc8efb02ccb370ab12/docutils-0.22.4-py3-none-any.whl", hash = "sha256:d0013f540772d1420576855455d050a2180186c91c15779301ac2ccb3eeb68de", size = 633196, upload-time = "2025-12-18T19:00:18.077Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/d7/9322c609343d929e75e7e5e6255e614fcc67572cfd083959cdef3b7aad79/docutils-0.21.2-py3-none-any.whl", hash = "sha256:dafca5b9e384f0e419294eb4d2ff9fa826435bf15f15b7bd45723e8ad76811b2", size = 587408, upload-time = "2024-04-23T18:57:14.835Z" },
 ]
 
 [[package]]
@@ -2471,6 +2471,7 @@ docs = [
     { name = "furo" },
     { name = "myst-parser", extra = ["linkify"] },
     { name = "pillow" },
+    { name = "roman-numerals" },
     { name = "sphinx" },
     { name = "sphinx-autoapi" },
     { name = "sphinxcontrib-mermaid" },
@@ -2544,7 +2545,8 @@ docs = [
     { name = "furo", specifier = ">=2024.8.6" },
     { name = "myst-parser", extras = ["linkify"], specifier = ">=5.1.0" },
     { name = "pillow", specifier = ">=11.2.1" },
-    { name = "sphinx", specifier = ">=8.2.3" },
+    { name = "roman-numerals", specifier = ">=4.1.0" },
+    { name = "sphinx", specifier = ">=9.1.0" },
     { name = "sphinx-autoapi", specifier = ">=3.6.0" },
     { name = "sphinxcontrib-mermaid", specifier = ">=0.9.2" },
     { name = "sphinxcontrib-openapi", specifier = ">=0.8.4" },

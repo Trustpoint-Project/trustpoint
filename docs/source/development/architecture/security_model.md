@@ -6,19 +6,19 @@ This document describes Trustpoint's security architecture, trust boundaries, au
 
 NGINX forms the external network boundary, terminating TLS and forwarding authenticated requests to Django via HTTP on `127.0.0.1:8000`.
 
-```mermaid
+```{mermaid}
 flowchart LR
-    UNTRUSTED[Untrusted network<br/>devices, browsers, API clients]
+    UNTRUSTED["Untrusted network / devices, browsers, API clients"]
 
     subgraph TRUST_BOUNDARY[Trustpoint container]
-        NGINX[NGINX<br/>:80 HTTP: CMP, CRL only<br/>:443 HTTPS: all other traffic<br/>TLS 1.2/1.3<br/>optional mTLS]
-        GUNICORN[Gunicorn + Django<br/>:8000 HTTP on loopback<br/>trusted proxy headers]
-        STATIC[Static files<br/>/collected_static]
+        NGINX["NGINX / :80 HTTP: CMP, CRL only / :443 HTTPS: all other traffic / TLS 1.2/1.3 / optional mTLS"]
+        GUNICORN["Gunicorn + Django / :8000 HTTP on loopback / trusted proxy headers"]
+        STATIC["Static files / /collected_static"]
     end
 
-    DB[(PostgreSQL<br/>127.0.0.1:5432<br/>not externally reachable)]
+    DB[("PostgreSQL / 127.0.0.1:5432 / not externally reachable")]
     
-    HSM[HSM or PKCS#11 provider<br/>local or network HSM]
+    HSM["HSM or PKCS#11 provider / local or network HSM"]
 
     UNTRUSTED -->|HTTP| NGINX
     UNTRUSTED -->|HTTPS + optional client cert| NGINX

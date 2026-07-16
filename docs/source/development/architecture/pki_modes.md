@@ -4,28 +4,28 @@ Trustpoint can operate as a **local Certificate Authority (CA)** or as a **Regis
 
 ## Operating Mode Decision
 
-```mermaid
+```{mermaid}
 flowchart TB
     DEVICE[Device enrollment request]
-    VALIDATE[Trustpoint<br/>authentication, policy, approval]
+    VALIDATE["Trustpoint / authentication, policy, approval"]
 
     DEVICE --> VALIDATE
 
     VALIDATE --> MODE{Issuing CA type}
 
-    MODE -->|CA mode<br/>LOCAL_PKCS11<br/>AUTOGEN| LOCAL_SIGN[Generate certificate locally]
+    MODE -->|"CA mode / LOCAL_PKCS11 / AUTOGEN"| LOCAL_SIGN[Generate certificate locally]
     LOCAL_SIGN --> CRYPTO[Crypto provider API]
     CRYPTO --> PKCS11[PKCS#11 provider]
     PKCS11 --> HSM_TOKEN[HSM or SoftHSM token]
     LOCAL_SIGN --> CERT_LOCAL[Issued certificate]
 
-    MODE -->|RA mode<br/>REMOTE_EST_RA<br/>REMOTE_CMP_RA| FORWARD[Forward CSR to external CA]
+    MODE -->|"RA mode / REMOTE_EST_RA / REMOTE_CMP_RA"| FORWARD[Forward CSR to external CA]
     FORWARD --> EXT_EST[External EST endpoint]
     FORWARD --> EXT_CMP[External CMP endpoint]
     EXT_EST --> CERT_REMOTE[Issued certificate]
     EXT_CMP --> CERT_REMOTE
 
-    CERT_LOCAL --> STORE[Store in PostgreSQL<br/>update device state<br/>trigger workflows]
+    CERT_LOCAL --> STORE["Store in PostgreSQL / update device state / trigger workflows"]
     CERT_REMOTE --> STORE
     STORE --> RESPOND[Return certificate to device]
 ```

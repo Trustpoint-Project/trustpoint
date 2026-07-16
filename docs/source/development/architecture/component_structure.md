@@ -4,7 +4,7 @@ Trustpoint is organized as a modular Django monolith. Each Django app represents
 
 ## Logical Architecture
 
-```mermaid
+```{mermaid}
 flowchart TB
     subgraph ACCESS[Access and presentation layer]
         UI[home: dashboard and navigation]
@@ -54,7 +54,7 @@ flowchart TB
     WORKFLOW_LAYER --> DB
     CRYPTO_LAYER --> HSM
     CRYPTO_LAYER --> DB
-    PROTOCOLS -.->|RA mode| EXT_CA
+    PROTOCOLS -->|RA mode| EXT_CA
     SETUP --> DB
 ```
 

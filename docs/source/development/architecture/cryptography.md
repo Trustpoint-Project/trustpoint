@@ -4,27 +4,27 @@ Trustpoint separates certificate metadata (stored in PostgreSQL) from private-ke
 
 ## Cryptographic Architecture
 
-```mermaid
+```{mermaid}
 flowchart TB
-    PKI_SERVICE[PKI domain services<br/>certificate issuance, signing]
-    CRYPTO_API[Crypto provider abstraction<br/>trustpoint/crypto/]
+    PKI_SERVICE["PKI domain services / certificate issuance, signing"]
+    CRYPTO_API["Crypto provider abstraction / trustpoint/crypto/"]
     
     PKI_SERVICE --> CRYPTO_API
     
-    CRYPTO_API --> PROVIDER_PROFILE[Provider profile<br/>PKCS#11 config<br/>token selector]
+    CRYPTO_API --> PROVIDER_PROFILE["Provider profile / PKCS#11 config / token selector"]
     
     PROVIDER_PROFILE --> ADAPTER{Crypto adapter}
     
-    ADAPTER -->|Production| PKCS11_ADAPTER[PKCS#11 adapter<br/>generic PKCS#11 module]
-    ADAPTER -->|Development| SOFTWARE_ADAPTER[Software adapter<br/>in-memory keys]
+    ADAPTER -->|Production| PKCS11_ADAPTER["PKCS#11 adapter / generic PKCS#11 module"]
+    ADAPTER -->|Development| SOFTWARE_ADAPTER["Software adapter / in-memory keys"]
     ADAPTER -->|Future| FUTURE_ADAPTER[REST, KMS, other providers]
     
-    PKCS11_ADAPTER --> MODULE[PKCS#11 module<br/>libsofthsm2.so or hardware HSM]
-    MODULE --> TOKEN[PKCS#11 token<br/>slot + PIN authentication]
+    PKCS11_ADAPTER --> MODULE["PKCS#11 module / libsofthsm2.so or hardware HSM"]
+    MODULE --> TOKEN["PKCS#11 token / slot + PIN authentication"]
     
-    TOKEN --> KEYS[Private keys<br/>RSA, ECDSA]
+    TOKEN --> KEYS["Private keys / RSA, ECDSA"]
     
-    CRYPTO_API --> BINDING_DB[(PostgreSQL<br/>key metadata<br/>binding to token)]
+    CRYPTO_API --> BINDING_DB[("PostgreSQL / key metadata / binding to token")]
 ```
 
 ## Architectural Rules

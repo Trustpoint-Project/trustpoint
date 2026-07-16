@@ -4,39 +4,39 @@ Trustpoint is implemented as a Django application deployed in Docker containers.
 
 ## Container Architecture
 
-```mermaid
+```{mermaid}
 flowchart TB
     subgraph CLIENTS[Clients and devices]
         BROWSER[Web browser]
-        API[API clients<br/>JWT authentication]
-        DEVICE[Industrial devices<br/>EST, CMP, AOKI]
+        API["API clients / JWT authentication"]
+        DEVICE["Industrial devices / EST, CMP, AOKI"]
         OPC_UA[OPC UA clients]
     end
 
     subgraph WEB_EDGE[Web edge: NGINX]
-        NGINX[NGINX<br/>TLS termination<br/>static assets<br/>optional mTLS]
+        NGINX["NGINX / TLS termination / static assets / optional mTLS"]
     end
 
     subgraph TRUSTPOINT_WEB[Trustpoint web container]
-        GUNICORN[Gunicorn WSGI server<br/>4 workers, 300s timeout]
-        DJANGO[Django application<br/>protocol handlers<br/>REST APIs<br/>web UI]
-        QCLUSTER[Django-Q2 qcluster<br/>scheduled tasks<br/>CRL generation<br/>notifications]
+        GUNICORN["Gunicorn WSGI server / 4 workers, 300s timeout"]
+        DJANGO["Django application / protocol handlers / REST APIs / web UI"]
+        QCLUSTER["Django-Q2 qcluster / scheduled tasks / CRL generation / notifications"]
     end
 
     subgraph TRUSTPOINT_WORKER[Trustpoint worker container]
-        WF_WORKER[workflows2_worker<br/>long-running jobs<br/>approvals<br/>webhooks]
+        WF_WORKER["workflows2_worker / long-running jobs / approvals / webhooks"]
     end
 
     subgraph DATA_LAYER[Data and cryptography]
-        POSTGRES[(PostgreSQL<br/>operational state)]
-        FILES[Filesystem<br/>media, logs, backups]
+        POSTGRES[("PostgreSQL / operational state")]
+        FILES["Filesystem / media, logs, backups"]
         CRYPTO_API[Crypto provider abstraction]
-        PKCS11_IMPL[PKCS#11 provider<br/>SoftHSM or hardware HSM]
+        PKCS11_IMPL["PKCS#11 provider / SoftHSM or hardware HSM"]
     end
 
     subgraph EXTERNAL_SVC[External services]
-        EXTERNAL_CA[External CA<br/>RA mode]
-        WEBHOOK_TARGET[Webhook endpoints<br/>ERP, MES, IAM]
+        EXTERNAL_CA["External CA / RA mode"]
+        WEBHOOK_TARGET["Webhook endpoints / ERP, MES, IAM"]
         SMTP[SMTP server]
         PROMETHEUS[Prometheus metrics]
     end
@@ -117,7 +117,7 @@ Trustpoint operates in two distinct phases:
 
 ### Phase Transition
 
-```mermaid
+```{mermaid}
 stateDiagram-v2
     [*] --> AutoDetection
     AutoDetection --> Bootstrap: No operational marker
