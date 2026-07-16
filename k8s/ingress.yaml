@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trustpoint-ingress
+  namespace: trustpoint
+  annotations:
+    # nginx ingress controller annotations
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    # cert-manager annotations for automatic TLS
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Uncomment for other ingress controllers as needed
+spec:
+  ingressClassName: nginx  # Change based on your ingress controller
+  tls:
+  - hosts:
+    - trustpoint.example.com  # Replace with your domain
+    secretName: trustpoint-tls
+  rules:
+  - host: trustpoint.example.com  # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: trustpoint
+            port:
+              number: 443

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trustpoint-worker
+  namespace: trustpoint
+  labels:
+    app: trustpoint-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trustpoint-worker
+  template:
+    metadata:
+      labels:
+        app: trustpoint-worker
+    spec:
+      initContainers:
+      # Wait for Trustpoint main service to be healthy
+      - name: wait-for-trustpoint
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z trustpoint 443; do
+            echo "Waiting for Trustpoint..."
+            sleep 5
+          done
+          echo "Trustpoint is ready!"
+      containers:
+      - name: trustpoint-worker
+        image: trustpointproject/trustpoint:latest
+        envFrom:
+        - configMapRef:
+            name: trustpoint-config
+        env:
+        - name: TRUSTPOINT_SERVICE_ROLE
+          value: "worker"
+        - name: DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: trustpoint-secrets
+              key: DATABASE_USER
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trustpoint-secrets
+              key: DATABASE_PASSWORD
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      restartPolicy: Always

@@ -1,0 +1,8 @@
+# Ignore local overrides and sensitive data
+secrets-prod.yaml
+*.local.yaml
+*-override.yaml
+
+# Ignore generated files
+*.tmp
+*.bak
