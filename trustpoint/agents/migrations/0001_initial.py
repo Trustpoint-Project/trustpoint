@@ -7,7 +7,6 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('devices', '0004_tp_v0_6_0_dev1'),
     ]
 
     operations = [
@@ -40,7 +39,6 @@ class Migration(migrations.Migration):
                 ('last_seen_at', models.DateTimeField(blank=True, help_text='Updated on every authenticated API call. Use for liveness monitoring.', null=True, verbose_name='Last Seen')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('device', models.ForeignKey(blank=True, help_text='For 1-to-1 agents: the device that IS the agent (standalone). For 1-to-n agents: the agent-process device that holds only the domain credential. Application certificates are issued to separate managed-device records.', null=True, on_delete=django.db.models.deletion.PROTECT, related_name='agents', to='devices.devicemodel', verbose_name='Device')),
             ],
             options={
                 'verbose_name': 'Trustpoint Agent',
@@ -60,12 +58,10 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('workflow_definition', models.ForeignKey(help_text='The workflow / renewal profile applied to this agent.', on_delete=django.db.models.deletion.PROTECT, related_name='assigned_to', to='agents.agentprofiledefinition', verbose_name='Agent Profile')),
-                ('agent', models.ForeignKey(help_text='The 1-to-1 agent this profile is assigned to.', on_delete=django.db.models.deletion.CASCADE, related_name='assigned_profiles', to='agents.trustpointagent', verbose_name='Agent')),
             ],
             options={
                 'verbose_name': 'Agent Assigned Profile',
                 'verbose_name_plural': 'Agent Assigned Profiles',
-                'unique_together': {('agent', 'workflow_definition')},
             },
         ),
     ]

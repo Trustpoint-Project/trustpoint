@@ -1,3 +1,4 @@
+import uuid
 from django.db import migrations, models
 
 
@@ -15,9 +16,10 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('common_name', models.CharField(default='', max_length=100, unique=True, verbose_name='Device')),
                 ('serial_number', models.CharField(blank=True, default='', max_length=100, verbose_name='Serial-Number')),
+                ('rfc_4122_uuid', models.UUIDField(default=uuid.uuid4, editable=False, help_text='RFC 4122 version 4 UUID uniquely identifying this device. Auto-generated on device creation and immutable thereafter.', unique=True, verbose_name='Device UUID')),
                 ('ip_address', models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True, verbose_name='IP Address')),
                 ('opc_server_port', models.PositiveIntegerField(blank=True, default=0, verbose_name='OPC Server Port')),
-                ('device_type', models.IntegerField(choices=[(0, 'Generic Device'), (1, 'OPC UA GDS'), (2, 'OPC UA GDS Push')], default=0, verbose_name='Device Type')),
+                ('device_type', models.IntegerField(choices=[(0, 'Generic Device'), (1, 'OPC UA GDS'), (2, 'OPC UA GDS Push'), (3, 'Agent (1-to-1)'), (4, 'Agent (1-to-n)'), (5, 'Agent Managed Device')], default=0, verbose_name='Device Type')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
                 ('opc_gds_push_enable_periodic_update', models.BooleanField(blank=True, default=False, help_text='When enabled, the server certificate and trustlist will be automatically renewed at the specified interval.', verbose_name='Enable Periodic Certificate and Trustlist Update')),
                 ('opc_gds_push_renewal_interval', models.PositiveIntegerField(blank=True, default=168, help_text='Number of hours between each automatic server certificate and trustlist renewal. Minimum 1 hour.', verbose_name='Renewal Interval (hours)')),
