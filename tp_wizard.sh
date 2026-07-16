@@ -31,8 +31,8 @@ WF2_WORKER_NAME="trustpoint-worker"
 SOFTHSM_NAME="softhsm"
 
 # Trustpoint ports
-DEF_TP_HTTP_PORT=80
-DEF_TP_HTTPS_PORT=443
+DEF_TP_HTTP_PORT="${TP_HTTP_PORT:-80}"
+DEF_TP_HTTPS_PORT="${TP_HTTPS_PORT:-443}"
 
 # PostgreSQL defaults
 DEF_DB_NAME="${POSTGRES_DB:-trustpoint_db}"
@@ -1014,6 +1014,16 @@ start_app(){
       -e "TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR=SOFTHSM2_CONF"
       -e "TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
     )
+  fi
+
+  if [[ -S /run/pcscd/pcscd.comm ]]; then
+    hsm_mounts+=(
+      -v "/run/pcscd:/run/pcscd"
+    )
+    ok "PC/SC socket will be mounted for hardware HSM access."
+  else
+    warn "PC/SC socket not found: /run/pcscd/pcscd.comm"
+    warn "A USB smart-card HSM will not be accessible inside Trustpoint."
   fi
 
   docker run -d --name "$name" --network "$NET" \
