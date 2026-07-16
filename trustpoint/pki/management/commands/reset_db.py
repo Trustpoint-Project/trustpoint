@@ -86,6 +86,7 @@ class Command(BaseCommand):
             AppVersion.objects.get_or_create(version=settings.APP_VERSION)
             # Add default certificate profiles
             call_command('create_default_cert_profiles')
+            call_command('seed_discovery_ports')
 
         # Create organization
         call_command('create_organization')

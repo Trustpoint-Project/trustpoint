@@ -427,6 +427,7 @@ INSTALLED_APPS = [
     'crypto.apps.CryptoConfig',
     'management.apps.ManagementConfig',
     'trustpoint_core',
+    'discovery.apps.DiscoveryConfig',
     'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',

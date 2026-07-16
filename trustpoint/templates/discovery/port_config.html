@@ -1,0 +1,124 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="card" style="display: flex; flex-direction: column; height: calc(100vh - 120px);">
+    <div class="card-header">
+        <h1>{% trans "Port Configuration" %}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1;">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% trans "Active Target Ports" %}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <small>
+                                {% trans "These ports will be scanned during network discovery. Add or remove ports to customize your scanning profile." %}
+                            </small>
+                        </div>
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 20%;">{% trans "Port" %}</th>
+                                        <th style="width: 60%;">{% trans "Description" %}</th>
+                                        <th class="text-end" style="width: 20%;">{% trans "Action" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for port in scan_ports %}
+                                    <tr>
+                                        <td class="font-monospace fw-bold">{{ port.port_number }}</td>
+                                        <td>{{ port.description }}</td>
+                                        <td class="text-end">
+                                            <form action="{% url 'discovery:delete_port' port.id %}" method="post" class="d-inline">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-sm btn-danger">
+                                                    {% trans "Delete" %}
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="3" class="text-center text-muted py-4">
+                                            {% trans "No ports configured. Add ports to start scanning." %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% trans "Add Custom Port" %}</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="{% url 'discovery:add_port' %}" method="post">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">{% trans "Port Number" %}</label>
+                                <input type="number" 
+                                       name="port_number" 
+                                       class="form-control" 
+                                       placeholder="e.g. 8080" 
+                                       min="1" 
+                                       max="65535" 
+                                       required>
+                                <small class="form-text text-muted">
+                                    {% trans "Enter a port number between 1 and 65535" %}
+                                </small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">{% trans "Protocol / Description" %}</label>
+                                <input type="text" 
+                                       name="description" 
+                                       class="form-control" 
+                                       placeholder="e.g. HTTP Alt, OPC UA, MQTT" 
+                                       required>
+                                <small class="form-text text-muted">
+                                    {% trans "Brief description of the service/protocol" %}
+                                </small>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                {% trans "Add to Scan List" %}
+                            </button>
+                        </form>
+
+                        <div class="mt-4 pt-3 border-top">
+                            <h6 class="fw-semibold mb-2">{% trans "Common Industrial Ports" %}</h6>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-secondary">102 - S7</span>
+                                <span class="badge bg-secondary">502 - Modbus</span>
+                                <span class="badge bg-secondary">4840 - OPC UA</span>
+                                <span class="badge bg-secondary">1883 - MQTT</span>
+                                <span class="badge bg-secondary">47808 - BACnet</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="tp-card-btn-footer m-1">
+            <a href="{% url 'discovery:device_list' %}" class="btn btn-secondary">
+                {% trans 'Back to Discovery' %}
+            </a>
+        </div>
+        <div class="m-1 text-muted">
+            <small>{% trans "Total ports configured" %}: <strong>{{ scan_ports|length }}</strong></small>
+        </div>
+    </div>
+</div>
+{% endblock %}
