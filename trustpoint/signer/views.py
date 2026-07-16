@@ -34,7 +34,8 @@ from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTabl
 class SignerContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the Signer pages."""
 
-    context_page_category = 'signer'
+    context_page_category = 'tools'
+    context_page_name = 'signer'
 
 class SignerTableView(SignerContextMixin, SortableTableMixin[SignerModel], ListView[SignerModel]):
     """Signer Table View."""

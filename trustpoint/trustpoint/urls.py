@@ -84,6 +84,7 @@ urlpatterns += [
         name='javascript-catalog',
     ),
     path('', base.IndexView.as_view()),
+    path('discovery/', include('discovery.urls')),
     path('workflows2/', include('workflows2.urls', namespace='workflows2')),
 
     # Web UI Routes

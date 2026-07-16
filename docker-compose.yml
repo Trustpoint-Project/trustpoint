@@ -64,7 +64,7 @@ services:
       POSTGRES_PASSWORD: "${DATABASE_PASSWORD:-testing321}"
       POSTGRES_DB: "${POSTGRES_DB:-trustpoint_db}"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 5

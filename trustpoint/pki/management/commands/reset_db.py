@@ -88,6 +88,7 @@ class Command(BaseCommand):
             call_command('create_default_cert_profiles')
             # Add default agent workflow definitions
             call_command('create_default_workflow_definitions')
+            call_command('seed_discovery_ports')
 
         # Create organization
         call_command('create_organization')

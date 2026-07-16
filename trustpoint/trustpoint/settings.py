@@ -428,6 +428,7 @@ INSTALLED_APPS = [
     'management.apps.ManagementConfig',
     'agents.apps.AgentsConfig',
     'trustpoint_core',
+    'discovery.apps.DiscoveryConfig',
     'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',

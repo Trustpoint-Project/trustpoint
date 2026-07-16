@@ -479,6 +479,7 @@ class OperationalBootstrapApplier:
         self._configure_app_secret_backend()
         call_command('create_default_cert_profiles')
         call_command('create_default_workflow_definitions')
+        call_command('seed_discovery_ports')
         if self.fresh_install['inject_demo_data']:
             call_command('add_domains_and_devices')
         call_command('execute_all_notifications')
