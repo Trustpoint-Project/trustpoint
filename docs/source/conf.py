@@ -116,6 +116,21 @@ exclude_patterns = [
     '../../trustpoint/.venv'
 ]
 
+# -- Mermaid Configuration --------------------------------------------------
+# Configure Mermaid diagram rendering
+mermaid_version = 'latest'  # Use latest Mermaid version from CDN
+mermaid_init_js = """
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'default',
+        flowchart: {
+            useMaxWidth: true,
+            htmlLabels: true,
+            curve: 'basis'
+        }
+    });
+"""
+
 # -- HTML output options ----------------------------------------------------
 html_theme = 'furo'  # Modern, responsive theme
 html_static_path = ['_static']  # Directory for static assets
@@ -125,6 +140,11 @@ html_theme_options = {
     'navigation_with_keys': True,
     'sidebar_hide_name': False,
 }
+
+# Add custom JavaScript for Mermaid if needed
+html_js_files = [
+    ('https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.min.js', {'loading_method': 'async'}),
+]
 
 # Control sidebar depth - shows all levels defined in toctrees
 html_sidebars = {

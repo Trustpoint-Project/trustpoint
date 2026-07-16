@@ -2546,7 +2546,7 @@ docs = [
     { name = "pillow", specifier = ">=11.2.1" },
     { name = "sphinx", specifier = ">=8.2.3" },
     { name = "sphinx-autoapi", specifier = ">=3.6.0" },
-    { name = "sphinxcontrib-mermaid" },
+    { name = "sphinxcontrib-mermaid", specifier = ">=0.9.2" },
     { name = "sphinxcontrib-openapi", specifier = ">=0.8.4" },
     { name = "sphinxcontrib-plantuml", specifier = ">=0.30" },
 ]
