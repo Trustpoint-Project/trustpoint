@@ -43,7 +43,14 @@ RUN softhsm_lib="$(ldconfig -p | awk '/libsofthsm2\.so/ {print $NF; exit}')" && 
     if [ -z "${softhsm_lib}" ]; then softhsm_lib="/usr/lib/softhsm/libsofthsm2.so"; fi && \
     ln -sf "${softhsm_lib}" /usr/lib/libsofthsm2.so && \
     proxy_lib="$(ldconfig -p | awk '/libpkcs11-proxy\.so/ {print $NF; exit}')" && \
-    if [ -n "${proxy_lib}" ]; then ln -sf "${proxy_lib}" /usr/lib/libpkcs11-proxy.so; fi
+    if [ -n "${proxy_lib}" ]; then ln -sf "${proxy_lib}" /usr/lib/libpkcs11-proxy.so; fi && \
+    opensc_lib="$(ldconfig -p | awk '/opensc-pkcs11\.so/ {print $NF; exit}')" && \
+    if [ -z "${opensc_lib}" ]; then \
+        for candidate in /usr/lib/*/opensc-pkcs11.so /usr/lib/opensc-pkcs11.so; do \
+            if [ -f "${candidate}" ]; then opensc_lib="${candidate}"; break; fi; \
+        done; \
+    fi && \
+    if [ -n "${opensc_lib}" ]; then ln -sf "${opensc_lib}" /usr/lib/opensc-pkcs11.so; fi
 
 # Install PostgreSQL 18 client.
 RUN curl -fSsL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg && \
