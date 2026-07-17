@@ -1095,6 +1095,13 @@ start_workflows2_worker(){
     )
   fi
 
+  if [[ -S /run/pcscd/pcscd.comm ]]; then
+    hsm_mounts+=(
+      -v "/run/pcscd:/run/pcscd"
+    )
+    ok "PC/SC socket will be mounted for hardware HSM access in the worker."
+  fi
+
   if $EN_MAILPIT; then
     env_args+=(
       -e "EMAIL_HOST=mailpit"
