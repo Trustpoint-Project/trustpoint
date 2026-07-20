@@ -15,17 +15,152 @@ from devices.views import PublicKeyInfoMissingErrorMsg
 from help_pages.base import (
     HelpContext,
     HelpPageStrategy,
+    build_extract_files_from_p12_section,
     build_issuing_ca_cert_section,
     build_keygen_section,
     build_tls_trust_store_section,
 )
-from help_pages.help_section import HelpRow, HelpSection, ValueRenderType
+from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import TlsSettings
 from pki.models import CaModel, DevIdRegistration, DomainModel, IssuedCredentialModel, OwnerCredentialModel
 from trustpoint.settings import ADVERTISED_PORT
 
 PKI_PAGE_DOMAIN_SUBCATEGORY = 'pki:domain'
 PKI_PAGE_TRUSTSTORES_SUBCATEGORY = 'pki:truststores'
+
+
+class BaseHelpView(DetailView):
+    """Base help view for PKI help pages."""
+
+    template_name = 'help/help_page.html'
+    model = DevIdRegistration
+    context_object_name = 'devid_registration'
+
+    page_category = 'pki'
+    page_name: str
+    strategy: HelpPageStrategy
+
+    def _make_context(self) -> HelpContext:
+        devid_registration = self.object
+        domain = getattr(devid_registration, 'domain', None)
+        if not domain:
+            raise Http404(_('Failed to get domain from DevidRegistration.'))
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        public_key_info = domain.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        return HelpContext(
+            devid_registration=devid_registration,
+            allowed_app_profiles=[],
+            domain=domain,
+            domain_unique_name=domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{domain.unique_name}',
+            cred_count=0,
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Get the context data for the help page."""
+        context = super().get_context_data(**kwargs)
+        help_context = self._make_context()
+        sections, heading = self.strategy.build_sections(help_context)
+        context['help_page'] = HelpPage(heading=heading, sections=sections)
+        context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
+        context['back_url'] = 'pki:domains-config'
+        return context
+
+
+class OnboardingCmpIdevIdDomainCredentialStrategy(HelpPageStrategy):
+    """Strategy for CMP onboarding with IDevID domain credential."""
+
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        """Build sections for CMP onboarding help page."""
+        domain = help_context.domain
+
+        summary_section = HelpSection(
+            heading=_('Summary'),
+            rows=[
+                HelpRow(
+                    key=_non_lazy('Protocol'),
+                    value=_non_lazy('CMP'),
+                    value_render_type=ValueRenderType.TEXT,
+                ),
+                HelpRow(
+                    key=_non_lazy('Authentication'),
+                    value=_non_lazy('IDevID with Domain Credential'),
+                    value_render_type=ValueRenderType.TEXT,
+                ),
+            ],
+        )
+
+        keygen_section = build_keygen_section(
+            public_key_info=help_context.public_key_info,
+            file_name='idevid',
+        )
+
+        issuing_ca_section = build_issuing_ca_cert_section(domain=domain)
+
+        extract_section = build_extract_files_from_p12_section()
+
+        return (
+            [summary_section, keygen_section, issuing_ca_section, extract_section],
+            'Help - Issue Application Certificates',
+        )
+
+
+class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
+    """Strategy for EST onboarding with IDevID domain credential."""
+
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        """Build sections for EST onboarding help page."""
+        summary_section = HelpSection(
+            heading=_('Summary'),
+            rows=[
+                HelpRow(
+                    key=_non_lazy('Protocol'),
+                    value=_non_lazy('EST'),
+                    value_render_type=ValueRenderType.TEXT,
+                ),
+                HelpRow(
+                    key=_non_lazy('Authentication'),
+                    value=_non_lazy('IDevID with Domain Credential'),
+                    value_render_type=ValueRenderType.TEXT,
+                ),
+            ],
+        )
+
+        keygen_section = build_keygen_section(
+            public_key_info=help_context.public_key_info,
+            file_name='idevid',
+        )
+
+        tls_section = build_tls_trust_store_section()
+
+        extract_section = build_extract_files_from_p12_section()
+
+        return [summary_section, keygen_section, tls_section, extract_section], 'Help - Issue Application Certificates'
+
+
+class OnboardingCmpIdevidRegistrationHelpView(BaseHelpView):
+    """Help view for CMP onboarding with IDevID domain credential."""
+
+    page_name = 'domains'
+    strategy = OnboardingCmpIdevIdDomainCredentialStrategy()
+
+
+class OnboardingEstIdevidRegistrationHelpView(BaseHelpView):
+    """Help view for EST onboarding with IDevID domain credential."""
+
+    page_name = 'domains'
+    strategy = OnboardingEstIdevIdDomainCredentialStrategy()
 
 
 class DevIdRegistrationDetailView(DetailView):
@@ -585,7 +720,7 @@ class CaHelpView(CaDetailView):
         )
 
 
-class CrlHelpView(CaDetailView):
+class CrlDownloadHelpView(CaDetailView):
     """View to display help pages for CRL download."""
 
     template_name = 'help/help_page.html'
