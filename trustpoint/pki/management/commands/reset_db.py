@@ -86,6 +86,8 @@ class Command(BaseCommand):
             AppVersion.objects.get_or_create(version=settings.APP_VERSION)
             # Add default certificate profiles
             call_command('create_default_cert_profiles')
+            # Add default agent profile definitions
+            call_command('create_default_agent_profile_definitions')
             call_command('seed_discovery_ports')
 
         # Create organization

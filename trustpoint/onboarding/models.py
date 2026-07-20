@@ -164,32 +164,36 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
 
     def clean(self) -> None:
         """Validation before saving the model."""
-        error_messages = None
+        error_messages = self._dispatch_protocol_validation()
+        if error_messages:
+            raise ValidationError(error_messages)
 
+    def _dispatch_protocol_validation(self) -> dict[str, str]:
+        """Dispatch validation to the appropriate handler based on the onboarding protocol."""
         match self.onboarding_protocol:
             case OnboardingProtocol.MANUAL:
-                error_messages = self._validate_case_manual_onboarding()
+                result = self._validate_case_manual_onboarding()
             case OnboardingProtocol.CMP_IDEVID:
-                error_messages = self._validate_case_cmp_idevid_onboarding()
+                result = self._validate_case_cmp_idevid_onboarding()
             case OnboardingProtocol.CMP_SHARED_SECRET:
-                error_messages = self._validate_case_cmp_shared_secret_onboarding()
+                result = self._validate_case_cmp_shared_secret_onboarding()
             case OnboardingProtocol.EST_IDEVID:
-                error_messages = self._validate_case_est_idevid_onboarding()
+                result = self._validate_case_est_idevid_onboarding()
             case OnboardingProtocol.EST_USERNAME_PASSWORD | OnboardingProtocol.REST_USERNAME_PASSWORD:
-                error_messages = self._validate_case_est_username_password_onboarding()
+                result = self._validate_case_est_username_password_onboarding()
             case OnboardingProtocol.OPC_GDS_PUSH:
-                error_messages = self._validate_case_opc_gds_push_onboarding()
+                result = self._validate_case_opc_gds_push_onboarding()
             case OnboardingProtocol.AOKI:
-                error_messages = self._validate_case_aoki_onboarding()
+                result = self._validate_case_aoki_onboarding()
+            case OnboardingProtocol.AGENT:
+                result = self._validate_case_agent_onboarding()
             case OnboardingProtocol.BRSKI:
                 err_msg = 'BRSKI is not yet supported as onboarding protocol.'
                 raise ValidationError(err_msg)
             case _:
                 err_msg = f'Unknown onboarding protocol found: {self.onboarding_protocol}.'
                 raise ValidationError(err_msg)
-
-        if error_messages:
-            raise ValidationError(error_messages)
+        return result
 
     def _validate_case_opc_gds_push_onboarding(self) -> dict[str, str]:
         """Validates case OnboardingProtocol.OPC_GDS_PUSH.
@@ -322,6 +326,34 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             error_messages['idevid_trust_store'] = (
                 'IDevID truststore must not be set for EST username / password onboarding.'
             )
+
+        return error_messages
+
+    def _validate_case_agent_onboarding(self) -> dict[str, str]:
+        """Validates case OnboardingProtocol.AGENT.
+
+        Agent-managed devices use REST as the PKI protocol with a generated
+        password credential.  No CMP secret, IDevID trust store, or OPC
+        credentials are expected.
+
+        Returns:
+            The error_messages gathered.
+        """
+        error_messages = {}
+
+        if self.cmp_shared_secret != '':
+            error_messages['cmp_shared_secret'] = (
+                'CMP shared-secret must not be set for Agent onboarding.'  # noqa: S105
+            )
+
+        if self.idevid_trust_store is not None:
+            error_messages['idevid_trust_store'] = (
+                'IDevID truststore must not be set for Agent onboarding.'
+            )
+
+        allowed_protocols = self.get_pki_protocols()
+        if OnboardingPkiProtocol.REST not in allowed_protocols:
+            error_messages['pki_protocols'] = 'Agent onboarding must include the REST PKI protocol.'
 
         return error_messages
 

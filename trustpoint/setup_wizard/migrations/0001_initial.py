@@ -3,11 +3,19 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
+    initial = True
+
     dependencies = [
-        ('setup_wizard', '0001_tp_v0_5_0'),
     ]
 
     operations = [
+        migrations.CreateModel(
+            name='SetupWizardCompletedModel',
+            fields=[
+                ('singleton_id', models.PositiveSmallIntegerField(default=1, editable=False, help_text='Singleton primary key. Always 1.', primary_key=True, serialize=False)),
+                ('setup_completed_at', models.DateTimeField(blank=True, help_text='Timestamp when initial setup was completed. Write-once once set.', null=True)),
+            ],
+        ),
         migrations.CreateModel(
             name='SetupWizardConfigModel',
             fields=[
@@ -49,8 +57,5 @@ class Migration(migrations.Migration):
                 ('fresh_install_pkcs11_enforce_app_secret_protection', models.BooleanField(default=True, help_text='Require the PKCS#11 backend to protect the application-secret DEK during fresh install.')),
                 ('inject_demo_data', models.BooleanField(default=True, help_text='Inject demo data.')),
             ],
-        ),
-        migrations.DeleteModel(
-            name='SetupWizardConfigurationModel',
         ),
     ]

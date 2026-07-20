@@ -426,6 +426,7 @@ INSTALLED_APPS = [
     'aoki.apps.AokiConfig',
     'crypto.apps.CryptoConfig',
     'management.apps.ManagementConfig',
+    'agents.apps.AgentsConfig',
     'trustpoint_core',
     'discovery.apps.DiscoveryConfig',
     'django_prometheus',

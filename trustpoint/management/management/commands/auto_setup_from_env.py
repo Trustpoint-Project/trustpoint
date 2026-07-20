@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
@@ -33,6 +33,8 @@ from setup_wizard.views import execute_shell_script
 
 
 UPDATE_TLS_NGINX = Path('/etc/trustpoint/wizard/update_tls_nginx.sh')
+
+User = get_user_model()
 
 
 class Command(BaseCommand):

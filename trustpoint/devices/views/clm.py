@@ -16,6 +16,7 @@ from django.utils.translation import gettext_lazy
 from django.views.generic.detail import DetailView
 
 from devices.forms import (
+    ClmAgentDeviceForm,
     ClmDeviceModelNoOnboardingForm,
     ClmDeviceModelOnboardingForm,
     ClmDeviceModelOpcUaGdsPushOnboardingForm,
@@ -36,6 +37,7 @@ from pki.models.ca import CaModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import OwnerCredentialModel
 from trustpoint.page_context import (
+    DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
@@ -237,6 +239,11 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             and self.object.domain
             and self.object.no_onboarding_config
             and self.object.no_onboarding_config.get_pki_protocols()
+            and self.object.device_type not in (
+                DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+                DeviceModel.DeviceType.AGENT_ONE_TO_N,
+                DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
+            )
         ):
             context['issue_app_cred_no_onboarding_url'] = (
                 f'{self.page_category}:{self.page_name}_no_onboarding_clm_issue_application_credential'
@@ -264,7 +271,16 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 )
 
         context['issue_app_cred_onboarding_url'] = ''
-        if self.object.domain and self.object.onboarding_config and self.object.onboarding_config.get_pki_protocols():
+        if (
+            self.object.domain
+            and self.object.onboarding_config
+            and self.object.onboarding_config.get_pki_protocols()
+            and self.object.device_type not in (
+                DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+                DeviceModel.DeviceType.AGENT_ONE_TO_N,
+                DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
+            )
+        ):
             context['issue_app_cred_onboarding_url'] = (
                 f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential'
             )
@@ -284,6 +300,28 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['OnboardingPkiProtocol'] = OnboardingPkiProtocol
         context['NoOnboardingPkiProtocol'] = NoOnboardingPkiProtocol
         context['OnboardingStatus'] = OnboardingStatus
+        context['is_agent_managed_device'] = (
+            self.object.device_type == DeviceModel.DeviceType.AGENT_MANAGED_DEVICE
+        )
+
+        _agent_device_types = (
+            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+            DeviceModel.DeviceType.AGENT_ONE_TO_N,
+        )
+        is_agent_device = self.object.device_type in _agent_device_types
+        context['is_agent_device'] = is_agent_device
+        context['issue_domain_cred_agent_url'] = (
+            f'{self.page_category}:{self.page_name}_agent_setup_profile_help'
+            if is_agent_device
+            else ''
+        )
+
+        # Add agent information if this is an agent device
+        if is_agent_device:
+            from agents.models import TrustpointAgent  # noqa: PLC0415
+
+            agent = TrustpointAgent.objects.filter(device=self.object).first()
+            context['agent'] = agent
 
         context['device_form'] = self.get_device_form()
         if self.object.onboarding_config:
@@ -310,6 +348,36 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             'pki_protocol_est': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST),
             'pki_protocol_rest': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.REST),
         }
+
+    def get_agent_initial(self) -> dict[str, Any]:
+        """Gets the initial values for agent devices.
+
+        Returns:
+            Initial values for agent devices.
+        """
+        if not self.object.onboarding_config:
+            err_msg = gettext_lazy('The device does not have onboarding configured.')
+            raise ValueError(err_msg)
+
+        from agents.models import TrustpointAgent  # noqa: PLC0415
+
+        agent = TrustpointAgent.objects.filter(device=self.object).first()
+
+        initial = {
+            'common_name': self.object.common_name,
+            'serial_number': self.object.serial_number,
+            'domain': self.object.domain,
+            'onboarding_protocol': self.object.onboarding_config.onboarding_protocol,
+            'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
+            'poll_interval_seconds': 300,
+            'os_path': '/etc/trustpoint',
+        }
+
+        if agent:
+            initial['poll_interval_seconds'] = agent.poll_interval_seconds
+            initial['os_path'] = agent.os_path
+
+        return initial
 
     def get_no_onboarding_initial(self) -> dict[str, Any]:
         """Gets the initial values for no onboarding.
@@ -342,7 +410,25 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         Returns:
             The onboarding form.
         """
+        # Check if this is an agent device
+        _agent_device_types = (
+            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+            DeviceModel.DeviceType.AGENT_ONE_TO_N,
+        )
+        if self.object.device_type in _agent_device_types:
+            return ClmAgentDeviceForm(initial=self.get_agent_initial(), instance=self.object)
+
         return ClmDeviceModelOnboardingForm(initial=self.get_onboarding_initial(), instance=self.object)
+
+    def get_agent_form(self) -> ClmAgentDeviceForm:
+        """Gets the form for agent devices.
+
+        Returns:
+            The agent device form.
+        """
+        if self.request.method == 'POST':
+            return ClmAgentDeviceForm(self.request.POST, instance=self.object)
+        return ClmAgentDeviceForm(initial=self.get_agent_initial(), instance=self.object)
 
     def get_no_onboarding_form(self) -> ClmDeviceModelNoOnboardingForm:
         """Gets the form for no onboarding.
@@ -423,11 +509,23 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         """
         self.object = self.get_object()
 
-        form: ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm
+        _agent_device_types = (
+            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+            DeviceModel.DeviceType.AGENT_ONE_TO_N,
+        )
+
+        form: ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm | ClmAgentDeviceForm
         if self.object.onboarding_config:
-            form = ClmDeviceModelOnboardingForm(request.POST, instance=self.object)
-            if form.is_valid():
-                form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+            if self.object.device_type in _agent_device_types:
+                # Agent device
+                form = ClmAgentDeviceForm(request.POST, instance=self.object)
+                if form.is_valid():
+                    form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+            else:
+                # Regular onboarding device
+                form = ClmDeviceModelOnboardingForm(request.POST, instance=self.object)
+                if form.is_valid():
+                    form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
         else:
             form = ClmDeviceModelNoOnboardingForm(request.POST, instance=self.object)
             if form.is_valid():
@@ -441,6 +539,19 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
     """Certificate Lifecycle Management Summary View for devices."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    _AGENT_DEVICE_TYPES = (
+        DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+        DeviceModel.DeviceType.AGENT_ONE_TO_N,
+        DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
+    )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Override page_name in context for agent devices so the sidebar highlights 'Agents'."""
+        context = super().get_context_data(**kwargs)
+        if self.object.device_type in self._AGENT_DEVICE_TYPES:
+            context['page_name'] = DEVICES_PAGE_AGENTS_SUBCATEGORY
+        return context
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Redirect OPC UA GDS Push devices to their specific view if GDS Push is the only protocol."""
