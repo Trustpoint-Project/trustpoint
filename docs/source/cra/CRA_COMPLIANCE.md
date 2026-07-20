@@ -152,7 +152,7 @@ This section follows the legal content requirements of CRA Article 31 and Annex 
 | **1(b) Software versions affecting compliance** | 🔄 | Current beta version is identified; v1.0 must define which software versions are covered by the conformity assessment and support period. | Section 1 · [Releases][releases] |
 | **1(c) Hardware photographs / layout** | N/A | Trustpoint is software; no hardware product documentation is applicable. | N/A |
 | **1(d) User information and instructions from Annex II** | 🔄 | Documentation exists, but Annex II-specific user information should be checked before v1.0, including secure installation, operation, update, support-period, vulnerability contact, and decommissioning guidance. | [ReadTheDocs][readthedocs] · [`SECURITY.md`][security] |
-| **2(a) Design and development information, including system architecture** | ✅ / 🔄 | Components, system boundaries, CA/RA logic, enrollment, lifecycle, key handling, database, monitoring, and external integrations are documented; architecture evidence should be kept release-specific. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [ReadTheDocs][readthedocs] |
+| **2(a) Design and development information, including system architecture** | ✅ | System architecture, components, system boundaries, CA/RA logic, enrollment, device lifecycle, workflow engine, cryptography, key handling, security model, data management, deployment scenarios, operations, and extensions are fully documented in modular architecture documentation. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [Architecture Documentation][arch-docs] · [ReadTheDocs][readthedocs] |
 | **2(b) Vulnerability handling processes, SBOM, CVD policy, contact address, secure update distribution** | ✅ / 🔄 | SBOM, security contact, and private disclosure process exist; supported-version policy, secure update process, release notes, and advisory workflow should be matured before v1.0. | [`SECURITY.md`][security] · [SBOMs][sbom-portal] · [Releases][releases] |
 | **2(c) Production, monitoring, and validation processes** | ✅ / 🔄 | CI/CD, tests, type checking, linting, dependency scanning, OpenSSF, Docker builds, and release workflow evidence are available; release attestations remain planned. | [GitHub Actions][actions] · [OpenSSF][openssf] · [Docker builds][docker-builds] |
 | **3 Cybersecurity risk assessment and Annex I applicability** | ✅ | Threat model, risk register, control mapping, inherent / residual risk, and treatment decisions are documented. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) |
@@ -275,7 +275,7 @@ The following items should remain visible in the technical documentation until t
 | **Annex I Part II (2)-(4): remediate vulnerabilities, test/review security, disclose fixed vulnerabilities** | ✅ / 🔄 | Dependabot, CI, tests, maintainer review, release notes; fixed-vulnerability disclosure practice should be formalised before v1.0. | R-TP-005 · R-TP-009 |
 | **Annex I Part II (5)-(6): coordinated vulnerability disclosure and reporting contact** | ✅ | Private GitHub Security Advisory reporting, security contact address, 5-business-day acknowledgment, required report contents. | R-TP-009 |
 | **Annex I Part II (7)-(8): secure update distribution and free security updates with advisory messages** | ✅ / 🔄 | Versioned releases and Docker images are available; secure update distribution, supported-version policy, and advisory-message workflow remain v1.0 hardening items. | R-TP-001 · R-TP-008 · R-TP-009 |
-| **Annex II user information and instructions** | 🔄 | Documentation should explicitly cover secure commissioning, operation, updates, support period, vulnerability contact, secure decommissioning, and integration guidance. | R-TP-006 · R-TP-008 · R-TP-009 |
+| **Annex II user information and instructions** | ✅ / 🔄 | Comprehensive documentation covers deployment scenarios, operations (monitoring, backup/recovery, troubleshooting), security model, TLS configuration, and integration guidance; formal support period, vulnerability contact prominence, and secure decommissioning procedures should be finalized before v1.0. | [Architecture Documentation][arch-docs] · [ReadTheDocs][readthedocs] · [`SECURITY.md`][security] · R-TP-006 · R-TP-008 · R-TP-009 |
 
 **Status:** REQUIREMENTS_DOCUMENTED_AND_LEGISLATION_ALIGNED — Security requirements are documented and linked to threats, risks, controls, and evidence. Several controls remain in progress as part of the pre-v1.0 hardening and process maturation phase.
 
@@ -438,6 +438,7 @@ The following items should remain visible in the technical documentation until t
 <!-- Reference Links -->
 [cra-regulation]: https://eur-lex.europa.eu/eli/reg/2024/2847/oj
 [readthedocs]: https://trustpoint.readthedocs.io
+[arch-docs]: https://trustpoint.readthedocs.io/en/latest/development/architecture/index.html
 [sbom-portal]: https://trustpoint-project.github.io/trustpoint/
 [dockerhub]: https://hub.docker.com/r/trustpointproject/trustpoint
 [releases]: https://github.com/Trustpoint-Project/trustpoint/releases
