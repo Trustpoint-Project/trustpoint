@@ -14,7 +14,7 @@ from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, Onbo
 from .models import DeviceModel
 
 
-class PkiProtocolField(serializers.Field):
+class PkiProtocolField(serializers.Field[int | str, int | str, int | str, Any]):
     """Custom field to accept PKI protocol as string name or integer value."""
 
     def to_internal_value(self, data: Any) -> int | str:
