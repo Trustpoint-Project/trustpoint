@@ -134,6 +134,7 @@ component_structure
 security_model
 pki_modes
 device_lifecycle
+workflow_architecture
 
 cryptography
 data_management
