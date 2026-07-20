@@ -140,9 +140,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         builder = builder.add_extension(
             x509.IssuerAlternativeName(
                 [
-                    x509.RFC822Name('trustpoint@trustpoint.de'),
-                    x509.DNSName('trustpoint.de'),
-                    x509.UniformResourceIdentifier('https://trustpoint.de'),
+                    x509.RFC822Name('trustpoint@trustpoint.example.com'),
+                    x509.DNSName('trustpoint.example.com'),
+                    x509.UniformResourceIdentifier('https://trustpoint.example.com'),
                     x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),
                     x509.IPAddress(ipaddress.IPv6Address('2001:0db8:85a3:0000:0000:8a2e:0370:7334')),
                     x509.IPAddress(ipaddress.IPv4Network('192.168.127.12/24', strict=False)),
@@ -165,9 +165,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         builder = builder.add_extension(
             x509.SubjectAlternativeName(
                 [
-                    x509.RFC822Name('subject@trustpoint.de'),
-                    x509.DNSName('subject.trustpoint.de'),
-                    x509.UniformResourceIdentifier('https://subject.trustpoint.de'),
+                    x509.RFC822Name('subject@trustpoint.example.com'),
+                    x509.DNSName('subject.trustpoint.example.com'),
+                    x509.UniformResourceIdentifier('https://subject.trustpoint.example.com'),
                     x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),
                     x509.IPAddress(ipaddress.IPv6Address('2001:0db8:85a3:0000:0000:8a2e:0370:7334')),
                     x509.IPAddress(ipaddress.IPv4Network('192.168.127.12/24', strict=False)),

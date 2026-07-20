@@ -9,9 +9,15 @@ from urllib.request import urlopen
 
 from django.conf import settings
 from django.core import mail
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
-from workflows2.engine.adapters import DjangoEmailAdapter, RequestsWebhookAdapter
+from management.models import NotificationModel, NotificationStatus
+from workflows2.engine.adapters import (
+    DjangoEmailAdapter,
+    DjangoNotificationAdapter,
+    NotificationCreateRequest,
+    RequestsWebhookAdapter,
+)
 
 
 # -----------------------------
@@ -207,3 +213,67 @@ class DjangoEmailAdapterTests(SimpleTestCase):
             f"Subjects before (first 20): {before_subjects[:20]}\n"
             f"Subjects after  (first 20): {last[:20]}",
         )
+
+
+class DjangoNotificationAdapterTests(TestCase):
+    def test_create_stores_custom_notification_message_and_initial_status(self) -> None:
+        adapter = DjangoNotificationAdapter()
+
+        result = adapter.create(
+            NotificationCreateRequest(
+                severity="warning",
+                source="system",
+                short="Workflow needs review",
+                long="",
+                initial_status="new",
+                event="workflow.review",
+                related={},
+            )
+        )
+
+        notification = NotificationModel.objects.get(id=result["notification_id"])
+
+        self.assertEqual(notification.notification_type, NotificationModel.NotificationTypes.WARNING)
+        self.assertEqual(notification.notification_source, NotificationModel.NotificationSource.SYSTEM)
+        self.assertEqual(notification.message_type, NotificationModel.NotificationMessageType.CUSTOM)
+        self.assertEqual(notification.event, "workflow.review")
+        self.assertEqual(notification.message.short_description, "Workflow needs review")
+        self.assertEqual(notification.message.long_description, "No description provided")
+        self.assertTrue(notification.statuses.filter(status=NotificationStatus.StatusChoices.NEW).exists())
+        self.assertEqual(result["status"], NotificationStatus.StatusChoices.NEW)
+
+    def test_create_rejects_unknown_notification_enums(self) -> None:
+        adapter = DjangoNotificationAdapter()
+        base = {
+            "severity": "info",
+            "source": "system",
+            "short": "Workflow notice",
+            "long": "Details",
+            "initial_status": "new",
+            "event": "workflow.notice",
+            "related": {},
+        }
+
+        cases = (
+            ("severity", "loud", "Unsupported notification severity: loud"),
+            ("source", "planet", "Unsupported notification source: planet"),
+            ("initial_status", "maybe", "Unsupported notification status: maybe"),
+        )
+        for field, value, message in cases:
+            with self.subTest(field=field):
+                payload = {**base, field: value}
+                with self.assertRaisesMessage(ValueError, message):
+                    adapter.create(NotificationCreateRequest(**payload))
+
+    def test_related_id_validation_accepts_only_optional_integer_values(self) -> None:
+        parse = DjangoNotificationAdapter._optional_int
+
+        self.assertIsNone(parse(None, field="device_id"))
+        self.assertIsNone(parse("", field="device_id"))
+        self.assertEqual(parse(7, field="device_id"), 7)
+        self.assertEqual(parse(" 42 ", field="device_id"), 42)
+
+        with self.assertRaisesMessage(TypeError, "notification.related.device_id must be an integer id"):
+            parse(True, field="device_id")
+        with self.assertRaisesMessage(TypeError, "notification.related.device_id must be an integer id"):
+            parse("dev-1", field="device_id")

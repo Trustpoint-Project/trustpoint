@@ -23,7 +23,7 @@
                     <svg id="menu-icon-back" class="bi bi-size100 d-none" fill="currentColor" role="img" aria-label="Hide Menu">
                         <use href="{% static 'img/icons.svg' %}#icon-x"></use></svg>
                 </div>
-                <a class="navbar-brand tp-primary" href="{% url 'home:dashboard' %}">
+                <a class="navbar-brand tp-primary" href="{% url 'home:index' %}">
                     <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" id="tp-logo" class="light-only">
                     <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only">
                 </a>
@@ -52,7 +52,7 @@
                 </div>
             {% endif %}
             <div class="tp-menu-group">
-                <a href="{% url 'home:dashboard' %}" class="tp-menu-head {% if page_name == 'dashboard' %}tp-menu-active{% endif %}">
+                <a href="{% url 'home:index' %}" class="tp-menu-head {% if page_name == 'dashboard' or page_name == 'simplified_overview' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
                         <use href="{% static 'img/icons.svg' %}#icon-home"></use></svg>
                     {% translate "Dashboard" %}
@@ -63,7 +63,7 @@
                 <a href="{% url 'devices:devices' %}" class="tp-menu-head {% if page_category == 'devices' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
                         <use href="{% static 'img/icons.svg' %}#icon-boxes"></use></svg>
-                    {% translate "Devices" %}
+                    {% translate "Endpoints" %}
                     <div class="btn-collapse" data-category="devices"
                         aria-expanded="{% if page_category == 'devices' %}true{% else %}false{% endif %}">
                     </div>
@@ -72,6 +72,7 @@
                     <a href="{% url 'devices:devices' %}" class="tp-menu-item {% if page_name == 'devices' %}tp-menu-active{% endif %}">{% trans 'Devices' %}</a>
                     <a href="{% url 'devices:opc_ua_gds' %}" class="tp-menu-item {% if page_name == 'opc_ua_gds' %}tp-menu-active{% endif %}">{% trans 'OPC UA GDS' %}</a>
                     <a href="{% url 'devices:zero_touch_credentials' %}" class="tp-menu-item {% if page_name == 'zero_touch_credentials' %}tp-menu-active{% endif %}">{% trans 'Zero-Touch Onboarding' %}</a>
+                    <a href="{% url 'devices:agents' %}" class="tp-menu-item {% if page_name == 'agents' %}tp-menu-active{% endif %}">{% trans 'Agents' %}</a>
                 </div>
             </div>
 
@@ -95,16 +96,6 @@
                     <a href="{% url 'pki:truststores' %}" class="tp-menu-item {% if page_name == 'truststores' %}tp-menu-active{% endif %}">{% trans 'Truststores' %}</a>
                 </div>
             </div>
-            <div class="tp-menu-group">
-                <a href="{% url 'signer:signer_list' %}" class="tp-menu-head {% if page_category == 'signer' %}tp-menu-active{% endif %}">
-                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pen" viewBox="0 0 16 16">
-  <path d="m13.498.795.149-.149a1.207 1.207 0 1 1 1.707 1.708l-.149.148a1.5 1.5 0 0 1-.059 2.059L4.854 14.854a.5.5 0 0 1-.233.131l-4 1a.5.5 0 0 1-.606-.606l1-4a.5.5 0 0 1 .131-.232l9.642-9.642a.5.5 0 0 0-.642.056L6.854 4.854a.5.5 0 1 1-.708-.708L9.44.854A1.5 1.5 0 0 1 11.5.796a1.5 1.5 0 0 1 1.998-.001m-.644.766a.5.5 0 0 0-.707 0L1.95 11.756l-.764 3.057 3.057-.764L14.44 3.854a.5.5 0 0 0 0-.708z"/>
-</svg>
-                    {% translate "Signing" %}
-
-                </a>
-
-            </div>
 
             <div class="tp-menu-group">
                <a href="{% url 'management:settings' %}" class="tp-menu-head {% if page_category == 'management' %}tp-menu-active{% endif %}">
@@ -121,11 +112,15 @@
                     <a href="{% url 'management:audit-log' %}" class="tp-menu-item {% if page_name == 'audit_log' %}tp-menu-active{% endif %}">{% trans "Audit Log" %}</a>
                     <a href="{% url 'management:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
                     <a href="{% url 'management:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backups" %}</a>
-                    <a href="{% url 'management:key_storage' %}" class="tp-menu-item {% if page_name == 'key_storage' %}tp-menu-active{% endif %}">{% trans "Key Storage" %}</a>
+                    <a href="{% url 'management:backend_configuration' %}" class="tp-menu-item {% if page_name == 'backend_configuration' %}tp-menu-active{% endif %}">{% trans "Crypto Backend" %}</a>
                     <a href="{% url 'management:notifications' %}" class="tp-menu-item {% if page_name == 'notifications' %}tp-menu-active{% endif %}">{% trans "Notifications" %}</a>
+                    <a href="{% url 'management:organization' %}" class="tp-menu-item {% if page_name == 'organization' %}tp-menu-active{% endif %}">{% trans "Organizations" %}</a>
+                    {% if perms.users.manage_role %}
+                    <a href="{% url 'management:user_management' %}" class="tp-menu-item {% if page_name == 'user_management' %}tp-menu-active{% endif %}">{% trans "Users" %}</a>
+                    <a href="{% url 'management:role_management' %}" class="tp-menu-item {% if page_name == 'role_management' %}tp-menu-active{% endif %}">{% trans "Roles" %}</a>
+                    {% endif %}
                 </div>
             </div>
-
             <div class="tp-menu-group">
                 <a href="{% url 'workflows2:definitions_list' %}"
                 class="tp-menu-head {% if page_category == 'workflows2' %}tp-menu-active{% endif %}">
@@ -149,12 +144,32 @@
                         {% trans "Runs" %}
                     </a>
 
-                    <a href="{% url 'workflows2:approvals-list' %}"
-                    class="tp-menu-item {% if page_name == 'approvals-list' %}tp-menu-active{% endif %}">
-                        {% trans "Approvals" %}
+                    <a href="{% url 'workflows2:waiting-list' %}"
+                    class="tp-menu-item tp-menu-item-with-badge {% if page_name == 'waiting-list' %}tp-menu-active{% endif %}">
+                        <span>{% trans "Waiting" %}</span>
+                        {% if workflow_waiting_total %}
+                          <span class="badge rounded-pill text-bg-warning">{{ workflow_waiting_total }}</span>
+                        {% endif %}
                     </a>
                 </div>
             </div>
+
+            <div class="tp-menu-group">
+                <a href="{% url 'signer:signer_list' %}" class="tp-menu-head {% if page_category == 'tools' %}tp-menu-active{% endif %}">
+                    <svg class="bi" fill="currentColor" role="img">
+                        <use href="{% static 'img/icons.svg' %}#icon-flag"></use></svg>
+                    {% translate "Tools" %}
+                    <div class="btn-collapse" data-category="tools"
+                        aria-expanded="{% if page_category == 'tools' %}true{% else %}false{% endif %}">
+                    </div>
+                </a>
+                <div class="tp-menu-collapse {% if page_category == 'tools' %}show{% endif %}">
+                    <a href="{% url 'signer:signer_list' %}" class="tp-menu-item {% if page_name == 'signer' %}tp-menu-active{% endif %}">{% trans 'Signing' %}</a>
+                    <a href="{% url 'discovery:device_list' %}" class="tp-menu-item {% if page_name == 'discovery' %}tp-menu-active{% endif %}">{% trans 'Network Discovery' %}</a>
+                </div>
+            </div>
+
+
             <div class="tp-menu-footer">
                 <div class="tp-menu-group">
                     <button class="tp-menu-head theme-toggle" type="button">
@@ -196,6 +211,7 @@
         </nav>
 
         <main class="tp-main">
+            {% include 'includes/trustpoint_runtime_banner.html' %}
             {% if messages %}
                 <div class="messages tp-messages text-center">
                     {% for message in messages %}

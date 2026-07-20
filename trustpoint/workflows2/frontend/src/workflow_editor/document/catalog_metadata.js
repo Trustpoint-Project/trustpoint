@@ -112,7 +112,7 @@ export function extractStepOutcomes(stepObj) {
   }
 
   if (stepObj.type === 'approval') {
-    return uniqStrings([stepObj.approved_outcome, stepObj.rejected_outcome]);
+    return uniqStrings([stepObj.approved_outcome, stepObj.rejected_outcome, stepObj.timeout_outcome]);
   }
 
   return [];

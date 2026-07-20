@@ -11,7 +11,8 @@
             {% trans "Show Issuing CAs only" %}
         </a>
     </div>
-    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
+    {% include 'pki/cas/table_filter.html' with table_url='pki:cas' %}
+    <div class="card-body text-start pt-0" style="overflow-y: auto; flex: 1;">
         <table class="table">
             <thead>
                 <tr>

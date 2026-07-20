@@ -39,6 +39,7 @@ from rest_framework_simplejwt.views import (
 from pki.views.issuing_cas import CrlDownloadView
 
 from .views import base
+from .views.prometheus import prometheus_metrics_view
 
 last_modified_date = timezone.now()
 
@@ -66,7 +67,6 @@ else:
 urlpatterns += [
     path('users/', include('users.urls')),
     path('signer/', include('signer.urls')),
-    path('setup-wizard/', include('setup_wizard.urls')),
     path('pki/', include('pki.urls')),
     path('crl/<int:pk>/', CrlDownloadView.as_view(), name='crl-download'),
     path('.well-known/cmp/', include('cmp.urls')),
@@ -76,6 +76,7 @@ urlpatterns += [
     path('home/', include('home.urls')),
     path('devices/', include('devices.urls')),
     path('management/', include('management.urls')),
+    path('prometheus/metrics', prometheus_metrics_view, name='prometheus-metrics'),
     path('i18n/', include('django.conf.urls.i18n')),
     path(
         'jsi18n/',
@@ -83,7 +84,11 @@ urlpatterns += [
         name='javascript-catalog',
     ),
     path('', base.IndexView.as_view()),
+    path('discovery/', include('discovery.urls')),
     path('workflows2/', include('workflows2.urls', namespace='workflows2')),
+
+    # Web UI Routes
+    path('agents/', include('agents.urls', namespace='agents')),
 
     # API URLs
     path('api/', include('devices.api_urls')),
@@ -91,6 +96,7 @@ urlpatterns += [
     path('api/', include('signer.api_urls')),
     path('api/', include('management.api_urls')),
     path('api/', include('rest_pki.api_urls')),
+    path('api/', include('agents.api_urls')),
     path('api/', include('workflows2.api_urls')),
 
     # JWT endpoints

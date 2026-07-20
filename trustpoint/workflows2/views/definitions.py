@@ -12,6 +12,7 @@ from django.views import View
 from django.views.generic import ListView
 
 from trustpoint.page_context import PageContextMixin
+from trustpoint.views.base import UserPermissionRequiredMixin
 from workflows2.forms import Workflow2DefinitionForm
 from workflows2.models import Workflow2Definition
 from workflows2.services.definitions import WorkflowDefinitionService
@@ -23,7 +24,15 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class Workflow2DefinitionListView(PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
+class WF2DefPermReqMixin(UserPermissionRequiredMixin):
+    """Mixin requiring the user to have the 'users.manage_workflow' permission."""
+
+    permission_required = 'users.manage_workflow'
+    raise_exception = True
+
+
+class Workflow2DefinitionListView(
+    WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
     """Show saved Workflow 2 definitions."""
 
     page_category = 'workflows2'
@@ -38,7 +47,7 @@ class Workflow2DefinitionListView(PageContextMixin, LoginRequiredMixin, ListView
         return Workflow2Definition.objects.order_by('-created_at')
 
 
-class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2DefinitionCreateView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Create a new Workflow 2 definition from YAML."""
 
     page_category = 'workflows2'
@@ -72,7 +81,6 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
         """Render the create form with a starter workflow."""
         form = Workflow2DefinitionForm(
             initial={
-                'name': 'New workflow',
                 'enabled': True,
                 'yaml_text': self.default_yaml,
             }
@@ -109,7 +117,6 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
 
         svc = WorkflowDefinitionService()
         obj, res = svc.create_definition(
-            name=form.cleaned_data['name'],
             enabled=bool(form.cleaned_data['enabled']),
             yaml_text=form.cleaned_data['yaml_text'],
         )
@@ -137,7 +144,7 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
                     **self.get_context_data(),
                     'form': form,
                     'definition': None,
-                    'compile_error': 'Workflow save succeeded without returning a definition.',
+                    'compile_error': 'Workflow save completed without returning a definition.',
                     'ir_json': None,
                 },
             )
@@ -145,7 +152,7 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
         return redirect('workflows2:definitions_edit', pk=obj.id)
 
 
-class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2DefinitionEditView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Edit an existing Workflow 2 definition."""
 
     page_category = 'workflows2'
@@ -157,7 +164,6 @@ class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
         obj = get_object_or_404(Workflow2Definition, pk=pk)
         form = Workflow2DefinitionForm(
             initial={
-                'name': obj.name,
                 'enabled': obj.enabled,
                 'yaml_text': obj.yaml_text,
             }
@@ -198,7 +204,6 @@ class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
         svc = WorkflowDefinitionService()
         updated, res = svc.update_definition(
             definition=obj,
-            name=form.cleaned_data['name'],
             enabled=bool(form.cleaned_data['enabled']),
             yaml_text=form.cleaned_data['yaml_text'],
         )
@@ -226,7 +231,7 @@ class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
                     **self.get_context_data(),
                     'form': form,
                     'definition': obj,
-                    'compile_error': 'Workflow update succeeded without returning a definition.',
+                    'compile_error': 'Workflow update completed without returning a definition.',
                     'ir_json': obj.ir_json,
                 },
             )

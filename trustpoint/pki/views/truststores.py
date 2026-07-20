@@ -31,6 +31,7 @@ from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
 from pki.serializer.truststore import TruststoreSerializer
 from pki.services.truststore import TruststoreService
+from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.page_context import PKI_PAGE_CATEGORY, PKI_PAGE_TRUSTSTORES_SUBCATEGORY, PageContextMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -60,7 +61,9 @@ class TruststoresContextMixin(PageContextMixin):
     page_name = PKI_PAGE_TRUSTSTORES_SUBCATEGORY
 
 
-class TruststoreTableView(TruststoresContextMixin, SortableTableMixin[TruststoreModel], ListView[TruststoreModel]):
+class TruststoreTableView(
+    ExportMixin, TruststoresContextMixin, SortableTableMixin[TruststoreModel], ListView[TruststoreModel]
+):
     """Truststore Table View."""
 
     model = TruststoreModel
@@ -69,6 +72,22 @@ class TruststoreTableView(TruststoresContextMixin, SortableTableMixin[Truststore
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
     filterset_class = TruststoreFilter
+
+    def get_export_config(self) -> ExportConfig:
+        """Return the CSV export configuration for the truststores table."""
+        return ExportConfig.from_model(
+            TruststoreModel,
+            include=['unique_name', 'created_at'],
+            labels={'created_at': str(_('Created At'))},
+            extra=[
+                ExportColumn(
+                    key='intended_usage',
+                    label=str(_('Intended Usage')),
+                    accessor=lambda t: t.get_intended_usage_display(),
+                ),
+            ],
+            filename='truststores',
+        )
 
     def apply_filters(self, qs: QuerySet[TruststoreModel]) -> QuerySet[TruststoreModel]:
         """Applies the `TruststoreFilter` to the given queryset.
@@ -102,6 +121,9 @@ class TruststoreTableView(TruststoresContextMixin, SortableTableMixin[Truststore
         """
         context = super().get_context_data(**kwargs)
         context['filter'] = getattr(self, 'filterset', None)
+        context['filters_active'] = any(
+            self.request.GET.get(k) for k in ('unique_name', 'intended_usage')
+        )
         return context
 
 

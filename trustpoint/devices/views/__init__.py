@@ -1,6 +1,11 @@
 """Views for the devices application."""
 
-
+from .agents import (
+    AgentCreateChooseTypeView,
+    AgentCreateOneToNOnboardingView,
+    AgentCreateOneToOneOnboardingView,
+    AgentTableView,
+)
 from .browser_onboarding import (
     DeviceBrowserOnboardingCancelView,
     DeviceBrowserOnboardingOTPView,
@@ -28,6 +33,7 @@ from .credential_issuance import (
     OpcUaGdsSelectCertificateProfileNewApplicationCredentialView,
 )
 from .delete import (
+    AgentsBulkDeleteView,
     DeviceBulkDeleteView,
     OpcUaGdsBulkDeleteView,
     OpcUaGdsPushBulkDeleteView,
@@ -77,6 +83,11 @@ from .tables import (
 )
 
 __all__ = [
+    'AgentCreateChooseTypeView',
+    'AgentCreateOneToNOnboardingView',
+    'AgentCreateOneToOneOnboardingView',
+    'AgentTableView',
+    'AgentsBulkDeleteView',
     'DeviceBrowserCredentialDownloadView',
     'DeviceBrowserOnboardingCancelView',
     'DeviceBrowserOnboardingOTPView',

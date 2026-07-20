@@ -50,6 +50,7 @@
                     <th>{% trans 'Target Type' %}</th>
                     <th>{% trans 'Target' %}</th>
                     <th>{% trans 'Actor' %}</th>
+                    <th>{% trans 'Details' %}</th>
                 </tr>
             </thead>
             <tbody>
@@ -60,10 +61,24 @@
                     <td>{{ entry.target_content_type }}</td>
                     <td>{{ entry.target_display }}</td>
                     <td>{{ entry.actor|default:_('System') }}</td>
+                    <td>
+                        {% if entry.details %}
+                            <details>
+                                <summary>{% trans 'View' %}</summary>
+                                <ul class="list-unstyled mb-0 small">
+                                    {% for key, value in entry.details.items %}
+                                        <li><span class="text-muted">{{ key }}:</span> {{ value }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </details>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center text-muted">{% trans 'No audit log entries found.' %}</td>
+                    <td colspan="6" class="text-center text-muted">{% trans 'No audit log entries found.' %}</td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -12,6 +12,7 @@ urlpatterns = [
 
     # Signer add workflow
     path('add/method-select/', views.SignerAddMethodSelectView.as_view(), name='signer-add-method_select'),
+    path('add/generate/', views.SignerGenerateView.as_view(), name='signer-add-generate'),
     path(
         'add/file-import/file-type-select/',
         views.SignerAddFileImportFileTypeSelectView.as_view(),

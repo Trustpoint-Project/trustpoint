@@ -10,6 +10,7 @@ from django.shortcuts import redirect
 from django.utils.translation import gettext_lazy
 from django.views.generic.list import ListView
 
+from agents.models import TrustpointAgent
 from devices.forms import (
     DeleteDevicesForm,
 )
@@ -21,6 +22,7 @@ from devices.models import (
 from management.models.audit_log import AuditLog
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
+    DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
@@ -51,6 +53,11 @@ class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel
 
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
+
+    @property
+    def success_redirect_url(self) -> str:
+        """Returns the URL name to redirect to after a successful deletion."""
+        return 'devices:devices'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the primary keys to the context.
@@ -149,6 +156,7 @@ class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel
 
         try:
             devices_to_delete = list(self.queryset)
+            TrustpointAgent.objects.filter(device__in=self.queryset).delete()
             count, _ = self.queryset.delete()
             actor = request.user if request.user.is_authenticated else None
             for device in devices_to_delete:
@@ -170,7 +178,7 @@ class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel
                 request, gettext_lazy('Failed to delete DeviceModel records. See logs for more information.')
             )
 
-        return redirect('devices:devices')
+        return redirect(self.success_redirect_url)
 
 
 class DeviceBulkDeleteView(AbstractBulkDeleteView):
@@ -188,3 +196,14 @@ class OpcUaGdsPushBulkDeleteView(AbstractBulkDeleteView):
     """abc."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class AgentsBulkDeleteView(AbstractBulkDeleteView):
+    """Bulk delete view for agent devices — redirects back to the agents list on success."""
+
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
+
+    @property
+    def success_redirect_url(self) -> str:
+        """Returns the agents list URL to redirect to after a successful deletion."""
+        return f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}'

@@ -54,6 +54,19 @@ class SchemaLinter:
                 'capture',
             })
         ),
+        'notification': _StepSpec(
+            allowed_keys=frozenset({
+                'type',
+                'title',
+                'severity',
+                'source',
+                'short',
+                'long',
+                'initial_status',
+                'event',
+                'related',
+            })
+        ),
         'logic': _StepSpec(
             allowed_keys=frozenset({
                 'type',
@@ -69,6 +82,15 @@ class SchemaLinter:
                 'vars',
             })
         ),
+        'set_status': _StepSpec(
+            allowed_keys=frozenset({
+                'type',
+                'title',
+                'status',
+                'reason',
+                'message',
+            })
+        ),
         'compute': _StepSpec(
             allowed_keys=frozenset({
                 'type',
@@ -82,6 +104,7 @@ class SchemaLinter:
                 'title',
                 'approved_outcome',
                 'rejected_outcome',
+                'timeout_outcome',
                 'timeout_seconds',
             })
         ),

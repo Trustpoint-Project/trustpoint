@@ -8,7 +8,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from management.models import BackupOptions, KeyStorageConfig
+from management.models import BackupOptions
 
 
 @pytest.fixture
@@ -32,13 +32,7 @@ def authenticated_client(api_client: APIClient, user) -> APIClient:
 
 
 @pytest.fixture
-def key_storage() -> KeyStorageConfig:
-    """Ensure KeyStorageConfig exists (required for models with encrypted fields)."""
-    return KeyStorageConfig.get_or_create_default()
-
-
-@pytest.fixture
-def backup_options(key_storage: KeyStorageConfig) -> BackupOptions:
+def backup_options() -> BackupOptions:
     """Create a BackupOptions instance for use in tests."""
     return BackupOptions.objects.create(remote_directory='/backups/test')
 
@@ -114,14 +108,14 @@ class TestBackupViewSetRetrieve:
 class TestBackupViewSetCreate:
     """Tests for POST /api/backups/."""
 
-    def test_create_with_valid_data_returns_201(self, authenticated_client: APIClient, key_storage: KeyStorageConfig) -> None:
+    def test_create_with_valid_data_returns_201(self, authenticated_client: APIClient) -> None:
         """Valid POST creates a BackupOptions row and returns 201."""
         payload = {'remote_directory': '/var/backups/new'}
         response = authenticated_client.post(reverse('backup-list'), payload, format='json')
         assert response.status_code == status.HTTP_201_CREATED
         assert BackupOptions.objects.filter(remote_directory='/var/backups/new').exists()
 
-    def test_create_returns_id_in_response(self, authenticated_client: APIClient, key_storage: KeyStorageConfig) -> None:
+    def test_create_returns_id_in_response(self, authenticated_client: APIClient) -> None:
         """Created response body contains the new object's id."""
         payload = {'remote_directory': '/var/backups/with-id'}
         response = authenticated_client.post(reverse('backup-list'), payload, format='json')

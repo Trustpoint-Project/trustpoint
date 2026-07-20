@@ -27,7 +27,6 @@ class _SecurityModeDefaults(TypedDict):
     allow_ca_issuance: bool
     allow_auto_gen_pki: bool
     allow_self_signed_ca: bool
-    require_physical_hsm: bool
     permitted_no_onboarding_pki_protocols: list[int]
     permitted_onboarding_protocols: list[int]
 
@@ -48,7 +47,6 @@ class SecurityConfig(models.Model):
     * :attr:`allow_ca_issuance` — whether BasicConstraints ca=True is permitted in issued certs.
     * :attr:`allow_auto_gen_pki` — whether auto-generated PKI may be enabled.
     * :attr:`allow_self_signed_ca` — whether self-signed CAs with credentials are allowed.
-    * :attr:`require_physical_hsm` — whether key storage must be a physical HSM.
     * :attr:`permitted_no_onboarding_pki_protocols` — JSON list of allowed
       :class:`onboarding.models.NoOnboardingPkiProtocol` integer values.
     * :attr:`permitted_onboarding_protocols` — JSON list of allowed
@@ -179,11 +177,12 @@ class SecurityConfig(models.Model):
         help_text=_('Allow self-signed CAs to be imported with credentials.'),
     )
 
-    # -- Infrastructure constraints ----------------------------------------
-
-    require_physical_hsm = models.BooleanField(
+    allow_imported_private_keys = models.BooleanField(
         default=False,
-        help_text=_('Require key storage to use a physical HSM (KeyStorageConfig.StorageType.PHYSICAL_HSM).'),
+        help_text=_(
+            'Allow existing private-key credentials to be imported. Imported keys require '
+            'PKCS#11-backed application-secret protection and are stored encrypted in the database.'
+        ),
     )
 
     # -- Protocol allow-lists (stored as JSON lists of integer values) -----
@@ -229,7 +228,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': True,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -246,7 +244,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -269,7 +266,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'require_physical_hsm': False,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -294,7 +290,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'require_physical_hsm': False,
             'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
@@ -321,7 +316,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'require_physical_hsm': True,
             'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
@@ -349,7 +343,6 @@ class SecurityConfig(models.Model):
         self.allow_ca_issuance = defaults['allow_ca_issuance']
         self.allow_auto_gen_pki = defaults['allow_auto_gen_pki']
         self.allow_self_signed_ca = defaults['allow_self_signed_ca']
-        self.require_physical_hsm = defaults['require_physical_hsm']
         self.permitted_no_onboarding_pki_protocols = list(defaults['permitted_no_onboarding_pki_protocols'])
         self.permitted_onboarding_protocols = list(defaults['permitted_onboarding_protocols'])
         self.save(update_fields=[
@@ -361,7 +354,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance',
             'allow_auto_gen_pki',
             'allow_self_signed_ca',
-            'require_physical_hsm',
             'permitted_no_onboarding_pki_protocols',
             'permitted_onboarding_protocols',
         ])
@@ -390,7 +382,6 @@ class SecurityConfig(models.Model):
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
                 'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
-                'require_physical_hsm': defaults['require_physical_hsm'],
                 'permitted_no_onboarding_pki_protocols': [
                     no_onboarding_labels.get(v, v)
                     for v in defaults['permitted_no_onboarding_pki_protocols']
@@ -417,7 +408,6 @@ class SecurityConfig(models.Model):
         from devices.models import DeviceModel  # noqa: PLC0415
         from pki.models.ca import CaModel  # noqa: PLC0415
 
-        violations.extend(self._check_hsm(defaults, mode_label))
         violations.extend(self._check_auto_gen_pki(defaults, mode_label))
         violations.extend(self._check_self_signed_cas(defaults, mode_label, CaModel))
         violations.extend(self._check_rsa_key_size(defaults, mode_label, CaModel))
@@ -431,23 +421,6 @@ class SecurityConfig(models.Model):
     # ------------------------------------------------------------------
     # Private helpers — one method per check group
     # ------------------------------------------------------------------
-
-    def _check_hsm(self, defaults: _SecurityModeDefaults, mode_label: str) -> list[str]:
-        """Return violations for the require_physical_hsm constraint."""
-        if not defaults['require_physical_hsm']:
-            return []
-        from management.models.key_storage import KeyStorageConfig  # noqa: PLC0415
-        try:
-            ks = KeyStorageConfig.get_config()
-            if ks.storage_type != KeyStorageConfig.StorageType.PHYSICAL_HSM:
-                return [str(_(
-                    'Key storage is "%(storage_type)s" but %(mode)s requires a Physical HSM.'
-                ) % {'storage_type': ks.get_storage_type_display(), 'mode': mode_label})]
-        except KeyStorageConfig.DoesNotExist:
-            return [str(_(
-                '%(mode)s requires a Physical HSM but no key storage configuration exists.'
-            ) % {'mode': mode_label})]
-        return []
 
     def _check_auto_gen_pki(self, defaults: _SecurityModeDefaults, mode_label: str) -> list[str]:
         """Return a violation if auto-generated PKI is enabled but not permitted in the target mode."""
