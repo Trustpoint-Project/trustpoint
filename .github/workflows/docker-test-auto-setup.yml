@@ -51,12 +51,12 @@ jobs:
             if curl -fsk --max-time 5 https://127.0.0.1/ > /dev/null 2>&1; then
               echo "✅ Trustpoint HTTPS endpoint is responding (attempt $i)"
               
-              if docker compose logs trustpoint 2>&1 | grep -q "Auto-setup completed successfully\|Trustpoint startup complete\|Application startup complete"; then
+              if docker compose logs trustpoint 2>&1 | grep -q "Auto-setup completed successfully\|Startup Sequence Completed Successfully"; then
                 echo "✅ Auto-setup process completed"
                 setup_complete=true
                 break
-              elif docker compose exec -T postgres psql -U admin -d trustpoint_db -c "\dt auth_user" 2>&1 | grep -q "auth_user"; then
-                echo "✅ Database migrations completed (auth_user table exists)"
+              elif docker compose exec -T postgres psql -U admin -d trustpoint_db -c "\dt users_trustpointuser" 2>&1 | grep -q "users_trustpointuser"; then
+                echo "✅ Database migrations completed (users_trustpointuser table exists)"
                 setup_complete=true
                 break
               else
@@ -122,13 +122,13 @@ jobs:
           
           echo "Checking if database tables exist..." | tee -a "$GITHUB_STEP_SUMMARY"
           tables=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
-            -c "\dt" -t 2>&1 || echo "ERROR")
+            -c "\dt users_trustpointuser" -t 2>&1 || echo "ERROR")
           
-          if echo "$tables" | grep -q "auth_user"; then
+          if echo "$tables" | grep -q "users_trustpointuser"; then
             echo "✅ Database migrations have run" | tee -a "$GITHUB_STEP_SUMMARY"
             
             db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
-              -c "SELECT username, is_superuser, is_staff FROM auth_user WHERE username='admin';" -t 2>&1 || echo "")
+              -c "SELECT username, is_superuser, is_staff FROM users_trustpointuser WHERE username='admin';" -t 2>&1 || echo "")
             
             echo "Admin user query result: $db_check" | tee -a "$GITHUB_STEP_SUMMARY"
             
@@ -138,10 +138,11 @@ jobs:
               echo "❌ Admin user not found in database" | tee -a "$GITHUB_STEP_SUMMARY"
               echo "All users in database:" | tee -a "$GITHUB_STEP_SUMMARY"
               docker compose exec -T postgres psql -U admin -d trustpoint_db \
-                -c "SELECT id, username, is_superuser, is_staff FROM auth_user;" | tee -a "$GITHUB_STEP_SUMMARY"
+                -c "SELECT id, username, is_superuser, is_staff FROM users_trustpointuser;" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 1
             fi
           else
-            echo "❌ Database migrations have NOT run - auth_user table missing" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "❌ Database migrations have NOT run - users_trustpointuser table missing" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "Available tables:" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "$tables" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -235,7 +236,7 @@ jobs:
           echo "## Test 7: Database Initialization" >> "$GITHUB_STEP_SUMMARY"
           
           db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
-            -c "SELECT COUNT(*) FROM auth_user WHERE username='admin';" -t || echo "0")
+            -c "SELECT COUNT(*) FROM users_trustpointuser WHERE username='admin';" -t || echo "0")
           
           if [ $(echo "$db_check" | tr -d ' ') -ge 1 ]; then
             echo "✅ Admin user found in database" | tee -a "$GITHUB_STEP_SUMMARY"
