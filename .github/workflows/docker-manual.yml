@@ -8,6 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
+      attestations: write
     env:
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
       GITHUB_SHA: ${{ github.sha }}
@@ -56,6 +58,7 @@ jobs:
             type=sha,format=long
 
       - name: Build and push trustpoint image
+        id: push-trustpoint
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -66,7 +69,15 @@ jobs:
           cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint:latest
           cache-to: type=inline
 
+      - name: Generate artifact attestation for trustpoint
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
+          subject-digest: ${{ steps.push-trustpoint.outputs.digest }}
+          push-to-registry: true
+
       - name: Build and push postgres image
+        id: push-postgres
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -76,3 +87,10 @@ jobs:
           labels: ${{ steps.meta-postgres.outputs.labels }}
           cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/postgres:latest
           cache-to: type=inline
+
+      - name: Generate artifact attestation for postgres
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/postgres
+          subject-digest: ${{ steps.push-postgres.outputs.digest }}
+          push-to-registry: true
