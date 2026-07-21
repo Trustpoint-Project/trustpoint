@@ -28,12 +28,25 @@ jobs:
         uses: hoverkraft-tech/compose-action@v3.0.0
         with:
           compose-file: "./docker-compose.yml"
-          up-flags: "--build --wait"
+          up-flags: "--build --wait --wait-timeout 180"
 
       - name: Wait for services to be fully ready
         run: |
           echo "Waiting for Trustpoint to complete auto-setup..."
-          sleep 10
+          for i in {1..30}; do
+            if docker compose ps trustpoint | grep -q "healthy"; then
+              echo "✅ Trustpoint container is healthy"
+              break
+            fi
+            echo "⏳ Waiting for container to be healthy (attempt $i/30)..."
+            sleep 5
+          done
+          
+          echo "Checking container status:"
+          docker compose ps
+          
+          echo "Recent container logs:"
+          docker compose logs --tail=50 trustpoint
 
       - name: Test 1 - Check HTTPS endpoint is accessible
         run: |
