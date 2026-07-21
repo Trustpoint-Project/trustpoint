@@ -18,9 +18,7 @@ jobs:
       - name: Setup .env file with auto-setup enabled
         run: |
           cp .env.example .env
-          # Enable auto-setup
           echo "" >> .env
-          echo "# Auto-setup configuration for CI testing" >> .env
           echo "TP_AUTO_SETUP=true" >> .env
           echo "TP_ADMIN_USERNAME=admin" >> .env
           echo "TP_ADMIN_PASSWORD=testing321" >> .env
@@ -64,7 +62,6 @@ jobs:
         run: |
           echo "## Test 2: Auto-Setup Verification" >> "$GITHUB_STEP_SUMMARY"
           
-          # Check that we're not redirected to the setup wizard
           response=$(curl -k -L -s "https://127.0.0.1/")
           
           if echo "$response" | grep -q "setup wizard" || echo "$response" | grep -q "initial setup"; then
@@ -78,7 +75,6 @@ jobs:
         run: |
           echo "## Test 3: Admin Login" >> "$GITHUB_STEP_SUMMARY"
           
-          # Get CSRF token
           csrf_token=$(curl -k -s -c cookies.txt "https://127.0.0.1/accounts/login/" | grep -oP 'name="csrfmiddlewaretoken" value="\K[^"]+' || echo "")
           
           if [ -z "$csrf_token" ]; then
@@ -88,7 +84,6 @@ jobs:
           
           echo "CSRF Token extracted: ${csrf_token:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
           
-          # Attempt login
           login_response=$(curl -k -L -s -b cookies.txt -c cookies.txt \
             -w "%{http_code}" -o login_response.txt \
             -d "username=admin" \
@@ -99,7 +94,6 @@ jobs:
           
           echo "Login response code: $login_response" | tee -a "$GITHUB_STEP_SUMMARY"
           
-          # Check if login was successful (should redirect to dashboard)
           if [ "$login_response" = "200" ] && grep -q "sessionid" cookies.txt; then
             echo "✅ Admin login successful" | tee -a "$GITHUB_STEP_SUMMARY"
           else
@@ -113,7 +107,6 @@ jobs:
         run: |
           echo "## Test 4: Authenticated Dashboard Access" >> "$GITHUB_STEP_SUMMARY"
           
-          # Try to access the dashboard with the session
           dashboard_response=$(curl -k -s -b cookies.txt -w "%{http_code}" -o dashboard.txt \
             "https://127.0.0.1/")
           
@@ -128,8 +121,6 @@ jobs:
         run: |
           echo "## Test 5: Demo Data Verification" >> "$GITHUB_STEP_SUMMARY"
           
-          # Check if demo data is present by accessing a page that would show it
-          # This is dependent on your application structure
           demo_check=$(curl -k -s -b cookies.txt "https://127.0.0.1/" | grep -i "demo" || echo "")
           
           if [ -n "$demo_check" ]; then
@@ -148,7 +139,6 @@ jobs:
           docker compose logs --tail=50 trustpoint >> "$GITHUB_STEP_SUMMARY" || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           
-          # Check for critical errors in logs
           if docker compose logs trustpoint | grep -i "error\|exception\|failed" | grep -v "Failed password" | grep -v "DEBUG"; then
             echo "⚠️  Potential errors found in logs" | tee -a "$GITHUB_STEP_SUMMARY"
           else
@@ -159,7 +149,6 @@ jobs:
         run: |
           echo "## Test 7: Database Initialization" >> "$GITHUB_STEP_SUMMARY"
           
-          # Check that the admin user was created in the database
           db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
             -c "SELECT COUNT(*) FROM auth_user WHERE username='admin';" -t || echo "0")
           

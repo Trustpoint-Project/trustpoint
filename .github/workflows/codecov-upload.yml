@@ -1,6 +1,5 @@
 name: Codecov upload
 
-# Trigger this workflow on pull requests to ensure tests are executed before merging.
 on:
   pull_request:
   push:
@@ -9,17 +8,17 @@ on:
 
 jobs:
   codecov-upload:
-    runs-on: ubuntu-latest # Use the latest Ubuntu runner for compatibility and performance.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v7  # Ensures the repository code is available.
+        uses: actions/checkout@v7
 
       - name: Setup uv environment
-        uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
+        uses: ./.github/actions/setup-uv-action
         with:
-          run_migrations: true  # Enable database migrations.
+          run_migrations: true
 
       - name: Run Pytest with Coverage
         run: uv run pytest --cov=trustpoint --cov-report=xml --junitxml=junit.xml -o junit_family=legacy trustpoint/

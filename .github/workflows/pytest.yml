@@ -1,6 +1,5 @@
 name: Pytest
 
-# Trigger this workflow on pull requests to ensure tests are executed before merging.
 on:
   pull_request:
   push:
@@ -9,20 +8,20 @@ on:
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
+    runs-on: ubuntu-latest
 
     permissions:
-      contents: read  # Grants read access to repository contents.
-      pull-requests: write  # Allows posting test reports as comments on pull requests.
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v7  # Ensures the repository code is available.
+        uses: actions/checkout@v7
 
       - name: Setup uv environment
-        uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
+        uses: ./.github/actions/setup-uv-action
         with:
-          run_migrations: true  # Enable database migrations.
+          run_migrations: true
 
       - name: Run Pytest and create reports
         run: |
@@ -35,7 +34,7 @@ jobs:
           trustpoint/ 
 
       - name: Display Summary in GitHub Actions even if tests fail
-        if: always()  # Ensures this step runs even if pytest fails.
+        if: always()
         run: |
           echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -44,8 +43,8 @@ jobs:
           echo "</details>" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Test Reports even if tests fail
-        uses: actions/upload-artifact@v7  # Uploads reports for review.
-        if: always()  # Ensures this step runs even if pytest fails.
+        uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: pytest-reports
           path: reports/
