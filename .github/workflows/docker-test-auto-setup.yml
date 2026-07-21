@@ -27,11 +27,14 @@ jobs:
           echo "Environment variables set in .env:"
           grep "TP_" .env || true
 
-      - name: Run Docker compose
-        uses: hoverkraft-tech/compose-action@v3.0.0
-        with:
-          compose-file: "./docker-compose.yml"
-          up-flags: "--build"
+      - name: Run Docker compose  
+        run: |
+          echo "Starting services without waiting for healthchecks..."
+          docker compose build
+          docker compose up -d postgres trustpoint
+          
+          echo "Services started, worker will start once trustpoint is healthy"
+          docker compose ps
 
       - name: Wait for services to be fully ready
         run: |
