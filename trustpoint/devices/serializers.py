@@ -43,7 +43,11 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
         required=False,
         allow_empty=True,
         write_only=True,
-        help_text='List of PKI protocol names or values (e.g., ["CMP", "EST"] or [1, 2]).'
+        help_text=(
+            'List of PKI protocol names or values. '
+            'Accepts: "CMP" (1), "EST" (2), "OPC_GDS_PUSH" (4), "REST" (8). '
+            'Can use names ["CMP", "EST"] or values [1, 2] or mix both.'
+        )
     )
 
     class Meta:
@@ -64,6 +68,21 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
             'opc_trust_store',
         ]
         read_only_fields: ClassVar[list[str]] = ['id', 'onboarding_status']
+        extra_kwargs: ClassVar[dict[str, dict[str, str]]] = {
+            'onboarding_protocol': {
+                'help_text': (
+                    'Onboarding protocol: MANUAL (0), CMP_IDEVID (1), CMP_SHARED_SECRET (2), '
+                    'EST_IDEVID (3), EST_USERNAME_PASSWORD (4), AOKI (5), BRSKI (6), '
+                    'OPC_GDS_PUSH (7), REST_USERNAME_PASSWORD (8), AGENT (9)'
+                )
+            },
+            'est_password': {
+                'help_text': 'Password for EST. Auto-generated if omitted for EST protocols.'
+            },
+            'cmp_shared_secret': {
+                'help_text': 'Shared secret for CMP. Auto-generated if omitted for CMP protocols.'
+            },
+        }
 
     def _generate_secure_secret(self, length: int = 32) -> str:
         """Generate a cryptographically secure random secret.
