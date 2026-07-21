@@ -28,16 +28,28 @@ jobs:
         uses: hoverkraft-tech/compose-action@v3.0.0
         with:
           compose-file: "./docker-compose.yml"
-          up-flags: "--build --wait --wait-timeout 180"
+          up-flags: "--build"
 
       - name: Wait for services to be fully ready
         run: |
           echo "Waiting for Trustpoint to complete auto-setup..."
           
+          echo "Waiting for postgres to be ready..."
+          for i in {1..30}; do
+            if docker compose exec -T postgres pg_isready -U admin -d trustpoint_db > /dev/null 2>&1; then
+              echo "✅ PostgreSQL is ready (attempt $i)"
+              break
+            fi
+            echo "⏳ Waiting for PostgreSQL (attempt $i/30)..."
+            sleep 2
+          done
+          
+          echo ""
+          echo "Waiting for Trustpoint container to start responding..."
           setup_complete=false
-          for i in {1..60}; do
-            if docker compose ps trustpoint | grep -q "healthy"; then
-              echo "✅ Trustpoint container is healthy (attempt $i)"
+          for i in {1..90}; do
+            if curl -fsk --max-time 5 https://127.0.0.1/ > /dev/null 2>&1; then
+              echo "✅ Trustpoint HTTPS endpoint is responding (attempt $i)"
               
               if docker compose logs trustpoint 2>&1 | grep -q "Auto-setup completed successfully\|Trustpoint startup complete\|Application startup complete"; then
                 echo "✅ Auto-setup process completed"
@@ -48,12 +60,12 @@ jobs:
                 setup_complete=true
                 break
               else
-                echo "⏳ Container healthy but setup still in progress..."
+                echo "⏳ Endpoint responding but setup still in progress (attempt $i/90)..."
               fi
             else
-              echo "⏳ Waiting for container to be healthy (attempt $i/60)..."
+              echo "⏳ Waiting for HTTPS endpoint to respond (attempt $i/90)..."
             fi
-            sleep 3
+            sleep 2
           done
           
           if [ "$setup_complete" = false ]; then
