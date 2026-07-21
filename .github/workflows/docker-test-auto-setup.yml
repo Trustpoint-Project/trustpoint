@@ -168,7 +168,7 @@ jobs:
         run: |
           echo "## Test 3: Admin Login" >> "$GITHUB_STEP_SUMMARY"
           
-          # First verify the admin user exists and get details
+          # Verify the admin user exists and get details
           echo "Verifying admin user in database..." | tee -a "$GITHUB_STEP_SUMMARY"
           admin_exists=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
             -c "SELECT username, is_superuser, is_active FROM users_trustpointuser WHERE username='admin';" -t 2>&1)
@@ -184,12 +184,8 @@ jobs:
           
           echo "CSRF Token extracted: ${csrf_token:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
           
-          # Extract CSRF token from cookie as well
-          csrf_cookie=$(grep csrftoken cookies.txt | awk '{print $7}')
-          echo "CSRF Cookie: ${csrf_cookie:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
-          
-          # Attempt login with proper headers
-          login_response=$(curl -k -s -b cookies.txt -c cookies_after.txt \
+          # Attempt login - follow redirects with -L to get final session
+          login_response=$(curl -k -L -s -b cookies.txt -c cookies.txt \
             -w "%{http_code}" -o login_response.txt \
             -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
@@ -203,24 +199,17 @@ jobs:
           echo "Login response code: $login_response" | tee -a "$GITHUB_STEP_SUMMARY"
           
           # Check if we got a session cookie
-          if grep -q "sessionid" cookies_after.txt; then
+          if grep -q "sessionid" cookies.txt; then
             echo "✅ Admin login successful - session cookie received" | tee -a "$GITHUB_STEP_SUMMARY"
-            cp cookies_after.txt cookies.txt
           else
             echo "❌ Admin login failed - no session cookie" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "Cookies after login attempt:" | tee -a "$GITHUB_STEP_SUMMARY"
-            cat cookies_after.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            cat cookies.txt | tee -a "$GITHUB_STEP_SUMMARY"
             echo "" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "Response body (first 1000 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
             head -c 1000 login_response.txt | tee -a "$GITHUB_STEP_SUMMARY"
             echo "" | tee -a "$GITHUB_STEP_SUMMARY"
-            
-            # Check for error messages in response
-            if grep -q "password" login_response.txt; then
-              echo "⚠️  Response contains 'password' - possible authentication error" | tee -a "$GITHUB_STEP_SUMMARY"
-            fi
-            
             exit 1
           fi
 
