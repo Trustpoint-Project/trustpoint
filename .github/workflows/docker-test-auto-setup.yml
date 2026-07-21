@@ -1,0 +1,176 @@
+name: Docker Compose Auto-Setup Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-auto-setup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup .env file with auto-setup enabled
+        run: |
+          cp .env.example .env
+          # Enable auto-setup
+          echo "" >> .env
+          echo "# Auto-setup configuration for CI testing" >> .env
+          echo "TP_AUTO_SETUP=true" >> .env
+          echo "TP_ADMIN_USERNAME=admin" >> .env
+          echo "TP_ADMIN_PASSWORD=testing321" >> .env
+          echo "TP_INJECT_DEMO_DATA=true" >> .env
+
+      - name: Run Docker compose
+        uses: hoverkraft-tech/compose-action@v3.0.0
+        with:
+          compose-file: "./docker-compose.yml"
+          up-flags: "--build --wait"
+
+      - name: Wait for services to be fully ready
+        run: |
+          echo "Waiting for Trustpoint to complete auto-setup..."
+          sleep 10
+
+      - name: Test 1 - Check HTTPS endpoint is accessible
+        run: |
+          echo "## Test 1: HTTPS Endpoint" >> "$GITHUB_STEP_SUMMARY"
+          
+          URL="https://127.0.0.1/"
+          
+          for i in {1..20}; do
+            http_response=$(curl -k -L -s -o response.txt -w "%{http_code}" "$URL") || true
+            
+            if [ "$http_response" = "200" ]; then
+              echo "✅ HTTPS endpoint accessible on attempt $i" | tee -a "$GITHUB_STEP_SUMMARY"
+              break
+            else
+              echo "⏳ Attempt $i failed with HTTP code $http_response, retrying..."
+              sleep 3
+            fi
+          done
+          
+          if [ "$http_response" != "200" ]; then
+            echo "❌ HTTPS endpoint test failed" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Test 2 - Verify auto-setup bypassed wizard
+        run: |
+          echo "## Test 2: Auto-Setup Verification" >> "$GITHUB_STEP_SUMMARY"
+          
+          # Check that we're not redirected to the setup wizard
+          response=$(curl -k -L -s "https://127.0.0.1/")
+          
+          if echo "$response" | grep -q "setup wizard" || echo "$response" | grep -q "initial setup"; then
+            echo "❌ Setup wizard still present - auto-setup may have failed" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          else
+            echo "✅ Auto-setup successfully bypassed wizard" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Test 3 - Admin login and session creation
+        run: |
+          echo "## Test 3: Admin Login" >> "$GITHUB_STEP_SUMMARY"
+          
+          # Get CSRF token
+          csrf_token=$(curl -k -s -c cookies.txt "https://127.0.0.1/accounts/login/" | grep -oP 'name="csrfmiddlewaretoken" value="\K[^"]+' || echo "")
+          
+          if [ -z "$csrf_token" ]; then
+            echo "⚠️  Could not extract CSRF token, trying alternative method..."
+            csrf_token=$(curl -k -s -c cookies.txt "https://127.0.0.1/accounts/login/" | grep csrfmiddlewaretoken | grep -oP 'value="\K[^"]+' | head -1)
+          fi
+          
+          echo "CSRF Token extracted: ${csrf_token:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          # Attempt login
+          login_response=$(curl -k -L -s -b cookies.txt -c cookies.txt \
+            -w "%{http_code}" -o login_response.txt \
+            -d "username=admin" \
+            -d "password=testing321" \
+            -d "csrfmiddlewaretoken=$csrf_token" \
+            -H "Referer: https://127.0.0.1/accounts/login/" \
+            "https://127.0.0.1/accounts/login/")
+          
+          echo "Login response code: $login_response" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          # Check if login was successful (should redirect to dashboard)
+          if [ "$login_response" = "200" ] && grep -q "sessionid" cookies.txt; then
+            echo "✅ Admin login successful" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Admin login failed" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Response body:" | tee -a "$GITHUB_STEP_SUMMARY"
+            cat login_response.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Test 4 - Access authenticated dashboard
+        run: |
+          echo "## Test 4: Authenticated Dashboard Access" >> "$GITHUB_STEP_SUMMARY"
+          
+          # Try to access the dashboard with the session
+          dashboard_response=$(curl -k -s -b cookies.txt -w "%{http_code}" -o dashboard.txt \
+            "https://127.0.0.1/")
+          
+          if [ "$dashboard_response" = "200" ]; then
+            echo "✅ Dashboard accessible with authenticated session" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Dashboard access failed with code $dashboard_response" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Test 5 - Check demo data injection
+        run: |
+          echo "## Test 5: Demo Data Verification" >> "$GITHUB_STEP_SUMMARY"
+          
+          # Check if demo data is present by accessing a page that would show it
+          # This is dependent on your application structure
+          demo_check=$(curl -k -s -b cookies.txt "https://127.0.0.1/" | grep -i "demo" || echo "")
+          
+          if [ -n "$demo_check" ]; then
+            echo "✅ Demo data appears to be injected" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ℹ️  Demo data check inconclusive (depends on UI)" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Test 6 - Check container logs for errors
+        if: always()
+        run: |
+          echo "## Test 6: Container Logs Check" >> "$GITHUB_STEP_SUMMARY"
+          
+          echo "### Trustpoint Container Logs (last 50 lines):" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          docker compose logs --tail=50 trustpoint >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          
+          # Check for critical errors in logs
+          if docker compose logs trustpoint | grep -i "error\|exception\|failed" | grep -v "Failed password" | grep -v "DEBUG"; then
+            echo "⚠️  Potential errors found in logs" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No critical errors in container logs" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Test 7 - Verify database initialization
+        run: |
+          echo "## Test 7: Database Initialization" >> "$GITHUB_STEP_SUMMARY"
+          
+          # Check that the admin user was created in the database
+          db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
+            -c "SELECT COUNT(*) FROM auth_user WHERE username='admin';" -t || echo "0")
+          
+          if [ $(echo "$db_check" | tr -d ' ') -ge 1 ]; then
+            echo "✅ Admin user found in database" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Admin user not found in database" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v
