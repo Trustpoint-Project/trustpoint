@@ -23,6 +23,9 @@ jobs:
           echo "TP_ADMIN_USERNAME=admin" >> .env
           echo "TP_ADMIN_PASSWORD=testing321" >> .env
           echo "TP_INJECT_DEMO_DATA=true" >> .env
+          
+          echo "Environment variables set in .env:"
+          grep "TP_" .env || true
 
       - name: Run Docker compose
         uses: hoverkraft-tech/compose-action@v3.0.0
@@ -128,12 +131,19 @@ jobs:
             echo "✅ Database migrations have run" | tee -a "$GITHUB_STEP_SUMMARY"
             
             db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
-              -c "SELECT username, is_superuser, is_staff FROM users_trustpointuser WHERE username='admin';" -t 2>&1 || echo "")
+              -c "SELECT username, is_superuser, is_staff, is_active FROM users_trustpointuser WHERE username='admin';" -t 2>&1 || echo "")
             
             echo "Admin user query result: $db_check" | tee -a "$GITHUB_STEP_SUMMARY"
             
             if echo "$db_check" | grep -q "admin"; then
               echo "✅ Admin user exists in database" | tee -a "$GITHUB_STEP_SUMMARY"
+              
+              # Check if user is active and has proper permissions
+              if echo "$db_check" | grep -q "t.*t.*t"; then
+                echo "✅ Admin user has superuser, staff, and active flags set" | tee -a "$GITHUB_STEP_SUMMARY"
+              else
+                echo "⚠️  Admin user flags: $db_check" | tee -a "$GITHUB_STEP_SUMMARY"
+              fi
             else
               echo "❌ Admin user not found in database" | tee -a "$GITHUB_STEP_SUMMARY"
               echo "All users in database:" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -155,6 +165,13 @@ jobs:
         run: |
           echo "## Test 3: Admin Login" >> "$GITHUB_STEP_SUMMARY"
           
+          # First verify the admin user exists and get details
+          echo "Verifying admin user in database..." | tee -a "$GITHUB_STEP_SUMMARY"
+          admin_exists=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
+            -c "SELECT username, is_superuser, is_active FROM users_trustpointuser WHERE username='admin';" -t 2>&1)
+          echo "Admin user status: $admin_exists" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          # Get login page and extract CSRF token
           csrf_token=$(curl -k -s -c cookies.txt "https://127.0.0.1/accounts/login/" | grep -oP 'name="csrfmiddlewaretoken" value="\K[^"]+' || echo "")
           
           if [ -z "$csrf_token" ]; then
@@ -164,28 +181,43 @@ jobs:
           
           echo "CSRF Token extracted: ${csrf_token:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
           
-          login_response=$(curl -k -L -s -b cookies.txt -c cookies.txt \
+          # Extract CSRF token from cookie as well
+          csrf_cookie=$(grep csrftoken cookies.txt | awk '{print $7}')
+          echo "CSRF Cookie: ${csrf_cookie:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          # Attempt login with proper headers
+          login_response=$(curl -k -s -b cookies.txt -c cookies_after.txt \
             -w "%{http_code}" -o login_response.txt \
+            -X POST \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -H "Referer: https://127.0.0.1/accounts/login/" \
+            -H "Origin: https://127.0.0.1" \
             -d "username=admin" \
             -d "password=testing321" \
             -d "csrfmiddlewaretoken=$csrf_token" \
-            -H "Referer: https://127.0.0.1/accounts/login/" \
             "https://127.0.0.1/accounts/login/")
           
           echo "Login response code: $login_response" | tee -a "$GITHUB_STEP_SUMMARY"
           
-          if grep -q "sessionid" cookies.txt && ! grep -q "Login" login_response.txt; then
-            echo "✅ Admin login successful" | tee -a "$GITHUB_STEP_SUMMARY"
+          # Check if we got a session cookie
+          if grep -q "sessionid" cookies_after.txt; then
+            echo "✅ Admin login successful - session cookie received" | tee -a "$GITHUB_STEP_SUMMARY"
+            cp cookies_after.txt cookies.txt
           else
-            echo "❌ Admin login failed" | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "Cookies:" | tee -a "$GITHUB_STEP_SUMMARY"
-            cat cookies.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "❌ Admin login failed - no session cookie" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "" | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "Response body (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
-            head -c 500 login_response.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Cookies after login attempt:" | tee -a "$GITHUB_STEP_SUMMARY"
+            cat cookies_after.txt | tee -a "$GITHUB_STEP_SUMMARY"
             echo "" | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "Checking container logs for errors:" | tee -a "$GITHUB_STEP_SUMMARY"
-            docker compose logs --tail=30 trustpoint | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Response body (first 1000 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+            head -c 1000 login_response.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "" | tee -a "$GITHUB_STEP_SUMMARY"
+            
+            # Check for error messages in response
+            if grep -q "password" login_response.txt; then
+              echo "⚠️  Response contains 'password' - possible authentication error" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+            
             exit 1
           fi
 
