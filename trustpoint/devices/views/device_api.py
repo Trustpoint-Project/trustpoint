@@ -1,10 +1,12 @@
 """REST API viewsets for device management."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.utils.translation import gettext_lazy
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import viewsets
+from rest_framework.request import Request
+from rest_framework.response import Response
 
 # noinspection PyUnresolvedReferences
 from devices.models import (
@@ -173,7 +175,7 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
             ),
         ]
     )
-    def create(self, request, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN201
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Create a new device, optionally with onboarding configuration."""
         return super().create(request, *args, **kwargs)
 
