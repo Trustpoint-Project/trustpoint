@@ -84,6 +84,25 @@ jobs:
             echo "✅ Auto-setup successfully bypassed wizard" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Test 2b - Verify admin user was created in database
+        run: |
+          echo "## Test 2b: Admin User Creation" >> "$GITHUB_STEP_SUMMARY"
+          
+          db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
+            -c "SELECT username, is_superuser, is_staff FROM auth_user WHERE username='admin';" -t || echo "")
+          
+          echo "Admin user query result: $db_check" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          if [ -n "$db_check" ]; then
+            echo "✅ Admin user exists in database" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Admin user not found in database" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "All users in database:" | tee -a "$GITHUB_STEP_SUMMARY"
+            docker compose exec -T postgres psql -U admin -d trustpoint_db \
+              -c "SELECT id, username, is_superuser, is_staff FROM auth_user;" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
       - name: Test 3 - Admin login and session creation
         run: |
           echo "## Test 3: Admin Login" >> "$GITHUB_STEP_SUMMARY"
@@ -107,12 +126,18 @@ jobs:
           
           echo "Login response code: $login_response" | tee -a "$GITHUB_STEP_SUMMARY"
           
-          if [ "$login_response" = "200" ] && grep -q "sessionid" cookies.txt; then
+          if grep -q "sessionid" cookies.txt && ! grep -q "Login" login_response.txt; then
             echo "✅ Admin login successful" | tee -a "$GITHUB_STEP_SUMMARY"
           else
             echo "❌ Admin login failed" | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "Response body:" | tee -a "$GITHUB_STEP_SUMMARY"
-            cat login_response.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Cookies:" | tee -a "$GITHUB_STEP_SUMMARY"
+            cat cookies.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Response body (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+            head -c 500 login_response.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Checking container logs for errors:" | tee -a "$GITHUB_STEP_SUMMARY"
+            docker compose logs --tail=30 trustpoint | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
