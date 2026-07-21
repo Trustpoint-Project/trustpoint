@@ -11,6 +11,18 @@
 {% block content %}
 
     <section class="tp-setup-form-shell">
+        {% if show_bootstrap_hint %}
+            <div class="alert alert-info d-flex" role="alert">
+                <div>
+                    <strong>{% trans "Initial Setup" %}</strong><br>
+                    {% blocktranslate with username=bootstrap_username %}
+                    This is your first login. The initial credentials can be found in the Docker container logs.
+                    Look for "Trustpoint bootstrap username" and "Trustpoint bootstrap password".
+                    {% endblocktranslate %}
+                </div>
+            </div>
+        {% endif %}
+
         {% if messages %}
             <div class="messages tp-messages text-center tp-setup-form-messages">
                 {% for message in messages %}
