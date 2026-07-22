@@ -1,55 +1,110 @@
-name: Generate SBOM for Trustpoint
+name: Generate and Publish SBOMs
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-  pull_request:
+  release:
     types:
-      - reopened
-      - ready_for_review
-      - synchronize
+      - published
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
 
 jobs:
   sbom:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
-    - name: Checkout Trustpoint repo
-      uses: actions/checkout@v6
+      - name: Checkout Trustpoint repo
+        uses: actions/checkout@v7
 
-    - name: Install Syft
-      run: |
-        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.42.1
-    
-    - name: Build Trustpoint Docker image
-      run: docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
-    
-    - name: Generate CycloneDX SBOM
-      run: syft trustpoint:latest -o cyclonedx-json=sbom_cyclonedx.json
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin v1.42.1
+          syft version
 
-    - name: Generate SPDX SBOM
-      run: syft trustpoint:latest -o spdx-json=sbom_spdx.json
+      - name: Build Trustpoint Docker image
+        run: |
+          docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
 
-    - name: Check if CycloneDX SBOM file exists
-      run: |
-        ls -lh sbom_cyclonedx.json
+      - name: Determine SBOM version
+        id: sbom_version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
 
-    - name: Check if SPDX SBOM file exists
-      run: |
-        ls -lh sbom_spdx.json
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-    - name: Upload CycloneDX SBOM
-      uses: actions/upload-artifact@v7
-      with:
-        name: sbom-cyclonedx
-        path: sbom_cyclonedx.json
+      - name: Generate SBOMs for GitHub Pages
+        run: |
+          VERSION="${{ steps.sbom_version.outputs.version }}"
 
-    - name: Upload SPDX SBOM
-      uses: actions/upload-artifact@v7
-      with:
-        name: sbom-spdx
-        path: sbom_spdx.json
+          mkdir -p public/sbom/latest
+          mkdir -p "public/sbom/${VERSION}"
+
+          syft docker:trustpoint:latest \
+            -o cyclonedx-json=public/sbom/latest/trustpoint.cyclonedx.json
+
+          syft docker:trustpoint:latest \
+            -o spdx-json=public/sbom/latest/trustpoint.spdx.json
+
+          cp public/sbom/latest/trustpoint.cyclonedx.json \
+            "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
+
+          cp public/sbom/latest/trustpoint.spdx.json \
+            "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
+
+          test -s public/sbom/latest/trustpoint.cyclonedx.json
+          test -s public/sbom/latest/trustpoint.spdx.json
+          test -s "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
+          test -s "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
+
+      - name: Create SBOM index page
+        run: |
+          VERSION="${{ steps.sbom_version.outputs.version }}"
+
+          cat > public/index.html <<EOF
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>Trustpoint SBOMs</title>
+          </head>
+          <body>
+            <h1>Trustpoint Software Bill of Materials</h1>
+
+            <p>These SBOMs are generated from the Trustpoint Docker image using Syft.</p>
+
+            <h2>Latest</h2>
+            <ul>
+              <li><a href="sbom/latest/trustpoint.cyclonedx.json">CycloneDX JSON</a></li>
+              <li><a href="sbom/latest/trustpoint.spdx.json">SPDX JSON</a></li>
+            </ul>
+
+            <h2>${VERSION}</h2>
+            <ul>
+              <li><a href="sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json">CycloneDX JSON</a></li>
+              <li><a href="sbom/${VERSION}/trustpoint-${VERSION}.spdx.json">SPDX JSON</a></li>
+            </ul>
+          </body>
+          </html>
+          EOF
+
+      - name: Publish SBOMs to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: public
+          keep_files: false
+          allow_empty_commit: true

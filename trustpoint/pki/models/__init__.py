@@ -23,17 +23,20 @@ from .ca import CaModel
 from .credential import (CredentialAlreadyExistsError,
                          CredentialModel,
                          CertificateChainOrderModel,
-                         OwnerCredentialModel,
-                         PKCS11Key)
+                         OwnerCredentialModel)
 from .domain import DomainModel, DomainAllowedCertificateProfileModel
 from .devid_registration import DevIdRegistration
 from .cert_profile import CertificateProfileModel
 from .truststore import TruststoreModel, TruststoreOrderModel
 from .issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
+from .ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
 
 __all__ = [
     'AttributeTypeAndValue',
     'CaModel',
+    'CaRolloverModel',
+    'CaRolloverState',
+    'CaRolloverStrategyType',
     'CertificateExtension',
     'CertificateModel',
     'CertificateProfileModel',
@@ -46,7 +49,6 @@ __all__ = [
     'GeneralNameIpAddress',
     'IssuedCredentialModel',
     'OwnerCredentialModel',
-    'PKCS11Key',
     'RemoteIssuedCredentialModel',
     'RevokedCertificateModel',
     'TruststoreModel',

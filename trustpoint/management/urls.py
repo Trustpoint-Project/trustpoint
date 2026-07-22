@@ -2,17 +2,21 @@
 
 from django.urls import path, re_path
 
+from management.views import organization
+
 from .views import (
     IndexView,
     audit_log,
+    backend_configuration,
     backup,
     docs,
     help_support,
-    key_storage,
     logging,
     notifications,
+    role_management,
     settings,
     tls,
+    user_management,
 )
 
 app_name = 'management'
@@ -21,6 +25,7 @@ urlpatterns = [
     # Settings URLs
     path('settings/', settings.SettingsTabView.as_view(), name='settings'),
     path('settings/internationalization/',settings.InternationalizationSettingsView.as_view(),name='settings-internationalization'),
+    path('settings/ui/', settings.UISettingsView.as_view(), name='settings-ui'),
     path('settings/security/', settings.SecuritySettingsView.as_view(), name='settings-security'),
     path('settings/logging/', settings.LoggingSettingsView.as_view(), name='settings-logging'),
     path('settings/notifications/', settings.NotificationSettingsView.as_view(), name='settings-notifications'),
@@ -86,9 +91,26 @@ urlpatterns = [
     path('docs/build/trigger/', docs.BuildDocsTriggerView.as_view(), name='trigger_build_docs'),
     path('docs/', docs.ServeLocalDocsView.as_view(), name='local_docs'),
     path('docs/<path:path>', docs.ServeLocalDocsView.as_view(), name='local_docs_path'),
-    path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
+    path(
+        'backend-configuration/',
+        backend_configuration.BackendConfigurationView.as_view(),
+        name='backend_configuration',
+    ),
+    path(
+        'backend-configuration/pkcs11-assets/<str:asset>/download/',
+        backend_configuration.BackendConfigurationPkcs11AssetDownloadView.as_view(),
+        name='backend_configuration_pkcs11_asset_download',
+    ),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
     path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
+    path('user_management/', user_management.UserTableView.as_view(), name='user_management'),
+    path('user_management/add_user/', user_management.UserCreateView.as_view(), name='add_user'),
+    path('user_management/<int:pk>/delete/', user_management.UserDeleteView.as_view(), name='delete_user'),
+    path('user_management/<int:pk>/change_role/', user_management.UserChangeRoleView.as_view(), name='change_role'),
+    path('role_management/', role_management.RoleTableView.as_view(), name='role_management'),
+    path('role_management/add/', role_management.RoleCreateView.as_view(), name='add_role'),
+    path('role_management/<int:pk>/edit/', role_management.RoleEditView.as_view(), name='edit_role'),
+    path('role_management/<int:pk>/delete/', role_management.RoleDeleteView.as_view(), name='delete_role'),
     path('notifications/', notifications.NotificationsListView.as_view(), name='notifications'),
     path('notifications/<int:pk>/', notifications.NotificationDetailsView.as_view(), name='notification_details'),
     path('notifications/<int:pk>/mark-as-solved/',
@@ -97,4 +119,9 @@ urlpatterns = [
         notifications.NotificationToggleReadView.as_view(), name='notification_toggle_read'),
     # Audit log
     path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
+    # Organization
+    path('organization/', organization.OrganizationTableView.as_view(), name='organization'),
+    path('organization/add/', organization.OrganizationCreateView.as_view(), name='add_organization'),
+    path('organization/<int:pk>/edit/', organization.OrganizationEditView.as_view(), name='edit_organization'),
+    path('organization/<int:pk>/delete/', organization.OrganizationDeleteView.as_view(), name='delete_organization'),
 ]

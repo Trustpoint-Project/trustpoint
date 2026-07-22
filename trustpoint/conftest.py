@@ -3,6 +3,8 @@ import base64
 from typing import Any
 
 import pytest
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel, AppSecretSoftwareConfigModel
+from appsecrets.service import clear_app_secret_cache
 from cryptography import x509
 from cryptography.hazmat._oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
@@ -19,8 +21,10 @@ from devices.models import (
     RemoteDeviceCredentialDownloadModel,
 )
 from django.http import HttpRequest
+from django.test import SimpleTestCase, TransactionTestCase
 from django.test.client import RequestFactory
-from management.models import KeyStorageConfig
+from crypto.application.private_keys import generate_managed_signing_private_key
+from crypto.domain.specs import RsaKeySpec
 from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
@@ -28,6 +32,14 @@ from pki.models import CaModel
 from setup_wizard.models import SetupWizardCompletedModel
 from pki.util.x509 import CertificateGenerator
 from trustpoint_core.serializer import CredentialSerializer
+
+
+def _is_db_less_django_simple_test(request: pytest.FixtureRequest) -> bool:
+    """Return whether the collected unittest class intentionally forbids DB access."""
+    test_cls = getattr(request.node, 'cls', None)
+    if not isinstance(test_cls, type):
+        return False
+    return issubclass(test_cls, SimpleTestCase) and not issubclass(test_cls, TransactionTestCase)
 
 
 @pytest.fixture(autouse=True)
@@ -39,6 +51,9 @@ def set_advertised_port_for_tests(settings: Any) -> None:
 @pytest.fixture(autouse=True)
 def enable_db_access_for_all_tests(request: pytest.FixtureRequest) -> None:
     """Enable DB access for application tests that exercise Django models/views."""
+    if _is_db_less_django_simple_test(request):
+        return
+
     test_path = str(request.node.fspath)
     excluded_paths = (
         '/trustpoint/tests/test_settings.py',
@@ -74,6 +89,29 @@ def complete_setup_wizard_by_default(monkeypatch: pytest.MonkeyPatch, request: p
     )
 
 
+@pytest.fixture(autouse=True)
+def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest) -> None:
+    """Provide a development app-secret backend for tests that save encrypted model fields."""
+    if _is_db_less_django_simple_test(request):
+        return
+
+    test_path = str(request.node.fspath)
+    excluded_paths = (
+        '/trustpoint/tests/test_settings.py',
+    )
+    if any(path_fragment in test_path for path_fragment in excluded_paths):
+        return
+
+    request.getfixturevalue('db')
+    backend = AppSecretBackendModel.get_singleton()
+    backend.backend_kind = AppSecretBackendKind.SOFTWARE
+    backend.save()
+    config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
+    config.raw_dek = b'a' * 32
+    config.save()
+    clear_app_secret_cache()
+
+
 # ----------------------------
 # RSA Private Key Fixture
 # ----------------------------
@@ -105,18 +143,23 @@ def ec_private_key() -> ec.EllipticCurvePrivateKey:
 
 CA_COMMON_NAME = 'Root CA'
 UNIQUE_NAME = CA_COMMON_NAME.replace(' ', '_').lower()
-CA_TYPE = CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+CA_TYPE = CaModel.CaTypeChoice.LOCAL_PKCS11
 
 DOMAIN_UNIQUE_NAME = 'domain_test_instance'
 
 
 @pytest.fixture
-def issuing_ca_instance() -> dict[str, Any]:
+def issuing_ca_instance(settings: Any) -> dict[str, Any]:
     """Fixture for a testing CaModel instance."""
-    # Ensure crypto storage config exists for encrypted fields
-    KeyStorageConfig.get_or_create_default()
-
-    cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME)
+    settings.DEVELOPMENT_ENV = True
+    settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
+    settings.TRUSTPOINT_IS_OPERATIONAL = True
+    settings.DOCKER_CONTAINER = False
+    priv_key = generate_managed_signing_private_key(
+        alias=f'{UNIQUE_NAME}-fixture',
+        key_spec=RsaKeySpec(key_size=2048),
+    )
+    cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME, private_key=priv_key)
     issuing_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE
     )

@@ -1,0 +1,33 @@
+{
+  "type": "agent_profile",
+  "name": "TLS Webserver Certificate",
+  "profile": {
+    "metadata": {
+      "agent_type": "1-to-1",
+      "version": "1.0",
+      "description": "Request policy for a 1-to-1 agent TLS webserver certificate. Used for HTTPS servers, web interfaces, and other TLS-enabled services."
+    },
+    "device": {
+      "vendor": "Generic",
+      "device_family": "Webserver",
+      "firmware_hint": "1.0"
+    },
+    "local_storage": {
+      "os_path": "/etc/trustpoint/certs",
+      "certificate_path": "{{ os_path }}/{{ certificate_profile }}-certificate.pem",
+      "certificate_chain_path": "{{ os_path }}/{{ certificate_profile }}-full-chain.pem",
+      "csr_path": "{{ os_path }}/{{ certificate_profile }}-csr.pem",
+      "private_key_path": "{{ os_path }}/{{ certificate_profile }}-key.pem",
+      "crl_path": "{{ os_path }}/{{ certificate_profile }}-crl.pem"
+    },
+    "certificate_request": {
+      "certificate_profile": "tls_server",
+      "url": "{{ endpoint }}",
+      "path": "{{ path }}",
+      "subject": "{{ subject }}",
+      "subject_alt_name": "{{ subject_alt_name }}",
+      "public_key_algorithm_oid": "{{ public_key_algorithm_oid }}",
+      "key_parameter": "{{ key_parameter }}"
+    }
+  }
+}

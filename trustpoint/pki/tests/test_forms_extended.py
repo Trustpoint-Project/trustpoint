@@ -7,13 +7,11 @@ from unittest.mock import Mock, patch
 import pytest
 from django import forms
 from django.core.files.uploadedfile import SimpleUploadedFile
-from management.models import KeyStorageConfig
-from trustpoint_core.serializer import PrivateKeyLocation
 
 from pki.forms import (
-    CertProfileConfigForm,
     CertificateDownloadForm,
     CertificateIssuanceForm,
+    CertProfileConfigForm,
     DevIdAddMethodSelectForm,
     DevIdRegistrationForm,
     IssuingCaAddMethodSelectForm,
@@ -21,43 +19,10 @@ from pki.forms import (
     ProfileBasedFormFieldBuilder,
     TruststoreAddForm,
     TruststoreDownloadForm,
-    get_private_key_location_from_config,
 )
 from pki.models import DevIdRegistration
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
-
-
-class TestGetPrivateKeyLocationFromConfig:
-    """Test the get_private_key_location_from_config function."""
-
-    def test_returns_hsm_provided_for_softhsm(self):
-        """Test that HSM_PROVIDED is returned for SOFTHSM storage type."""
-        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
-            mock_config = Mock()
-            mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
-            mock_get_config.return_value = mock_config
-            
-            result = get_private_key_location_from_config()
-            assert result == PrivateKeyLocation.HSM_PROVIDED
-
-    def test_returns_hsm_provided_for_physical_hsm(self):
-        """Test that HSM_PROVIDED is returned for PHYSICAL_HSM storage type."""
-        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
-            mock_config = Mock()
-            mock_config.storage_type = KeyStorageConfig.StorageType.PHYSICAL_HSM
-            mock_get_config.return_value = mock_config
-            
-            result = get_private_key_location_from_config()
-            assert result == PrivateKeyLocation.HSM_PROVIDED
-
-    def test_returns_software_when_config_does_not_exist(self):
-        """Test that SOFTWARE is returned when KeyStorageConfig does not exist."""
-        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
-            mock_get_config.side_effect = KeyStorageConfig.DoesNotExist()
-            
-            result = get_private_key_location_from_config()
-            assert result == PrivateKeyLocation.SOFTWARE
 
 
 class TestDevIdAddMethodSelectForm:
@@ -462,6 +427,25 @@ class TestIssuingCaAddFileImportPkcs12Form:
         from pki.forms import IssuingCaAddFileImportPkcs12Form
         form = IssuingCaAddFileImportPkcs12Form()
         assert form.fields['unique_name'].required is False
+
+    @pytest.mark.django_db
+    def test_oversized_pkcs12_file_is_rejected_before_parsing(self):
+        """Oversized CA PKCS#12 uploads are rejected before parser work."""
+        from pki.forms import IssuingCaAddFileImportPkcs12Form
+        from pki.forms.issuing_cas import MAX_PKCS12_UPLOAD_BYTES
+
+        pkcs12_file = SimpleUploadedFile(
+            'issuing-ca.p12',
+            b'x' * (MAX_PKCS12_UPLOAD_BYTES + 1),
+            content_type='application/x-pkcs12',
+        )
+        form = IssuingCaAddFileImportPkcs12Form(
+            data={'unique_name': 'oversized-ca', 'pkcs12_password': ''},
+            files={'pkcs12_file': pkcs12_file},
+        )
+
+        assert not form.is_valid()
+        assert 'PKCS#12 file is too large' in str(form.errors)
 
 
 @pytest.mark.django_db

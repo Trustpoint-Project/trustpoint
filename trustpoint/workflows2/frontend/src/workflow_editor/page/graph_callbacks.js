@@ -1,4 +1,13 @@
 import {
+  addApplyChild,
+  addApplyRule,
+  removeApplyChild,
+  removeApplyRule,
+  saveApplyCompare,
+  saveApplyExists,
+  setApplyNodeOperator,
+} from '../document/operations/apply_rules.js';
+import {
   addLinearFlowEdge,
   addOutcomeFlowEdge,
   addStepToWorkflow,
@@ -39,6 +48,12 @@ import {
   setMultipleStepFieldValues,
   setStepFieldValue,
 } from '../document/operations/step_fields.js';
+import {
+  addTriggerSourceValue,
+  removeTriggerSourceValue,
+  setTriggerOn,
+  setTriggerTrustpoint,
+} from '../document/operations/trigger_sources.js';
 import { setWorkflowStart } from '../document/operations/workflow.js';
 
 function applyStepMutation(applyYamlMutation, result, message, options) {
@@ -417,6 +432,103 @@ export function createGraphCallbacks({
       }
 
       return applyStepMutation(applyYamlMutation, result, `Set workflow.start to "${stepId}".`);
+    },
+
+    async onSetTriggerOn(triggerKey) {
+      const result = setTriggerOn({ yamlText: getYamlText(), triggerKey });
+      if (!result.changed) {
+        setStatus(`Trigger is already "${triggerKey}".`);
+        return result;
+      }
+
+      return applyStepMutation(applyYamlMutation, result, `Trigger set to "${triggerKey}".`);
+    },
+
+    async onSetTriggerTrustpoint(enabled) {
+      const result = setTriggerTrustpoint({ yamlText: getYamlText(), enabled });
+      if (!result.changed) {
+        setStatus(enabled ? 'Trigger is already trustpoint-wide.' : 'Trigger already uses explicit source filters.');
+        return result;
+      }
+
+      return applyStepMutation(
+        applyYamlMutation,
+        result,
+        enabled ? 'Trigger is now trustpoint-wide.' : 'Trigger now uses explicit source filters.',
+      );
+    },
+
+    async onAddTriggerSourceValue(sourceKind, rawValue) {
+      const result = addTriggerSourceValue({ yamlText: getYamlText(), sourceKind, rawValue });
+      if (!result.changed) {
+        setStatus('That source filter is already present.');
+        return result;
+      }
+
+      return applyStepMutation(applyYamlMutation, result, 'Added trigger source filter.');
+    },
+
+    async onRemoveTriggerSourceValue(sourceKind, rawValue) {
+      const result = removeTriggerSourceValue({ yamlText: getYamlText(), sourceKind, rawValue });
+      if (!result.changed) {
+        setStatus('That source filter is already absent.');
+        return result;
+      }
+
+      return applyStepMutation(applyYamlMutation, result, 'Removed trigger source filter.');
+    },
+
+    async onAddApplyRule(operator) {
+      const result = addApplyRule({ yamlText: getYamlText(), operator });
+      return applyStepMutation(applyYamlMutation, result, `Added ${operator || 'compare'} apply rule.`);
+    },
+
+    async onRemoveApplyRule(ruleIndex) {
+      return applyStepMutation(
+        applyYamlMutation,
+        removeApplyRule({ yamlText: getYamlText(), ruleIndex }),
+        `Removed apply rule ${ruleIndex + 1}.`,
+      );
+    },
+
+    async onSetApplyNodeOperator(ruleIndex, path, operator) {
+      return applyStepMutation(
+        applyYamlMutation,
+        setApplyNodeOperator({ yamlText: getYamlText(), ruleIndex, path, operator }),
+        `Updated apply rule ${ruleIndex + 1} operator.`,
+      );
+    },
+
+    async onSaveApplyExists(ruleIndex, path, value) {
+      return applyStepMutation(
+        applyYamlMutation,
+        saveApplyExists({ yamlText: getYamlText(), ruleIndex, path, value }),
+        `Updated exists condition for apply rule ${ruleIndex + 1}.`,
+      );
+    },
+
+    async onSaveApplyCompare(ruleIndex, path, left, op, right) {
+      return applyStepMutation(
+        applyYamlMutation,
+        saveApplyCompare({ yamlText: getYamlText(), ruleIndex, path, left, op, right }),
+        `Updated compare condition for apply rule ${ruleIndex + 1}.`,
+      );
+    },
+
+    async onAddApplyChild(ruleIndex, path, operator) {
+      return applyStepMutation(
+        applyYamlMutation,
+        addApplyChild({ yamlText: getYamlText(), ruleIndex, path, operator }),
+        `Added nested apply condition to rule ${ruleIndex + 1}.`,
+      );
+    },
+
+    async onRemoveApplyChild(ruleIndex, path) {
+      return applyStepMutation(
+        applyYamlMutation,
+        removeApplyChild({ yamlText: getYamlText(), ruleIndex, path }),
+        `Removed nested apply condition from rule ${ruleIndex + 1}.`,
+      );
     },
 
     async onDeleteStep(stepId) {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.conf import settings
 from django.http import Http404
 from django.urls import reverse
 from django.utils.html import format_html

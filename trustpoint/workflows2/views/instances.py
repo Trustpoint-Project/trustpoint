@@ -17,6 +17,7 @@ from trustpoint.page_context import PageContextMixin
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance, Workflow2Job, Workflow2StepRun
 from workflows2.services.runtime import WorkflowRuntimeService
+from workflows2.services.transitions import WorkflowInstanceTransitionService, save_instance_status
 from workflows2.views.presentation import (
     compact_value,
     describe_event_context,
@@ -162,7 +163,7 @@ class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
             approval for approval in approvals if approval.status != Workflow2Approval.STATUS_PENDING
         ]
         latest_failed_step_run = next(
-            (step_run for step_run in reversed(step_runs) if step_run.status == 'failed' or step_run.error),
+            (step_run for step_run in reversed(step_runs) if step_run.status == 'error' or step_run.error),
             None,
         )
         latest_failed_job = next((job for job in jobs if job.last_error), None)
@@ -190,6 +191,16 @@ class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
         # Config for UI hint
         cfg = WorkflowExecutionConfig.load()
         cfg_mode = _display_execution_mode(str(cfg.mode).lower())
+        inline_skipped_statuses = {
+            *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
+            Workflow2Instance.STATUS_AWAITING,
+            Workflow2Instance.STATUS_PAUSED,
+            Workflow2Instance.STATUS_ERROR,
+        }
+        can_run_inline = (
+            str(cfg.mode).lower() != WorkflowExecutionConfig.Mode.INLINE
+            and inst.status not in inline_skipped_statuses
+        )
 
         return render(
             request,
@@ -214,24 +225,30 @@ class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
                 'vars_pretty': pretty_json(inst.vars_json),
                 'inst_badge': status_badge_class(inst.status),
                 'cfg_mode': cfg_mode,
+                'can_run_inline': can_run_inline,
             },
         )
 
 
 class Workflow2InstanceRunInlineView(LoginRequiredMixin, View):
-    """Force-run inline. If FAILED, this is 'retry from current_step'."""
+    """Force-run inline. If errored, this resumes from current_step."""
 
     def post(self, request: HttpRequest, instance_id: UUID) -> HttpResponse:
-        """Execute the instance inline, resetting failed instances first."""
+        """Execute the instance inline, resetting errored instances first."""
+        cfg = WorkflowExecutionConfig.load()
+        if str(cfg.mode).lower() == WorkflowExecutionConfig.Mode.INLINE:
+            messages.info(request, _('Inline execution is already handled by the workflow execution mode.'))
+            return redirect('workflows2:instances-detail', instance_id=instance_id)
+
         executor = WorkflowExecutor()
         runtime = WorkflowRuntimeService(executor=executor)
 
         try:
             with transaction.atomic():
                 inst = Workflow2Instance.objects.select_for_update().get(id=instance_id)
-                if inst.status == Workflow2Instance.STATUS_FAILED:
-                    inst.status = Workflow2Instance.STATUS_QUEUED
-                    inst.save(update_fields=['status', 'updated_at'])
+                if WorkflowInstanceTransitionService.is_resumable(inst.status):
+                    WorkflowInstanceTransitionService.mark_queued(inst)
+                    save_instance_status(inst)
 
             inst = Workflow2Instance.objects.get(id=instance_id)
             runtime.run_instance(inst)
@@ -265,9 +282,8 @@ class Workflow2InstanceCancelView(LoginRequiredMixin, View):
                 locked_by='',
             )
 
-            inst.status = Workflow2Instance.STATUS_CANCELLED
-            inst.current_step = ''
-            inst.save(update_fields=['status', 'current_step', 'updated_at'])
+            WorkflowInstanceTransitionService.mark_cancelled(inst)
+            save_instance_status(inst)
 
             if inst.run_id:
                 executor = WorkflowExecutor()
@@ -278,11 +294,66 @@ class Workflow2InstanceCancelView(LoginRequiredMixin, View):
         return redirect('workflows2:instances-detail', instance_id=inst.id)
 
 
-class Workflow2InstanceResumeView(LoginRequiredMixin, View):
-    """Retry failed step by re-queueing (and inline-executing if config is inline)."""
+class Workflow2InstanceStopView(LoginRequiredMixin, View):
+    """Stop an errored or paused workflow instance without resuming it."""
 
     def post(self, request: HttpRequest, instance_id: UUID) -> HttpResponse:
-        """Resume a failed or paused instance by queueing another run."""
+        """Stop the selected instance and preserve useful error context."""
+        inst = get_object_or_404(Workflow2Instance.objects.select_related('run'), id=instance_id)
+
+        with transaction.atomic():
+            inst = Workflow2Instance.objects.select_for_update().get(id=inst.id)
+            if inst.status not in {
+                Workflow2Instance.STATUS_ERROR,
+                Workflow2Instance.STATUS_PAUSED,
+            }:
+                messages.info(request, _('Only errored or paused instances can be stopped.'))
+                return redirect('workflows2:instances-detail', instance_id=inst.id)
+
+            Workflow2Job.objects.filter(
+                instance=inst,
+                status__in=[Workflow2Job.STATUS_QUEUED, Workflow2Job.STATUS_RUNNING],
+            ).update(
+                status=Workflow2Job.STATUS_CANCELLED,
+                locked_until=None,
+                locked_by='',
+            )
+
+            latest_error = (
+                Workflow2StepRun.objects.filter(instance=inst)
+                .exclude(error='')
+                .order_by('-run_index')
+                .values_list('error', flat=True)
+                .first()
+            )
+            latest_job_error = (
+                Workflow2Job.objects.filter(instance=inst)
+                .exclude(last_error='')
+                .order_by('-updated_at')
+                .values_list('last_error', flat=True)
+                .first()
+            )
+            was_error = inst.status == Workflow2Instance.STATUS_ERROR
+            reason = 'stopped_after_error' if was_error else 'stopped_by_operator'
+            message = inst.status_message or latest_error or latest_job_error or _('Stopped by operator.')
+
+            WorkflowInstanceTransitionService.mark_stopped(inst, reason=reason, message=str(message))
+            save_instance_status(inst)
+
+            if inst.run_id:
+                executor = WorkflowExecutor()
+                runtime = WorkflowRuntimeService(executor=executor)
+                runtime.recompute_run_status(inst.run)
+
+        messages.success(request, _('Instance stopped.'))
+        return redirect('workflows2:instances-detail', instance_id=inst.id)
+
+
+class Workflow2InstanceResumeView(LoginRequiredMixin, View):
+    """Resume an errored or paused instance from its current step."""
+
+    def post(self, request: HttpRequest, instance_id: UUID) -> HttpResponse:
+        """Resume an errored or paused instance by queueing another run."""
         executor = WorkflowExecutor()
         runtime = WorkflowRuntimeService(executor=executor)
 
@@ -290,12 +361,12 @@ class Workflow2InstanceResumeView(LoginRequiredMixin, View):
             with transaction.atomic():
                 inst = Workflow2Instance.objects.select_for_update().get(id=instance_id)
 
-                if inst.status not in {Workflow2Instance.STATUS_FAILED, Workflow2Instance.STATUS_PAUSED}:
-                    messages.info(request, _('Instance is not failed/paused; nothing to retry.'))
+                if not WorkflowInstanceTransitionService.is_resumable(inst.status):
+                    messages.info(request, _('Instance is not errored or paused; nothing to resume.'))
                     return redirect('workflows2:instances-detail', instance_id=instance_id)
 
-                inst.status = Workflow2Instance.STATUS_QUEUED
-                inst.save(update_fields=['status', 'updated_at'])
+                WorkflowInstanceTransitionService.mark_queued(inst)
+                save_instance_status(inst)
 
                 Workflow2Job.get_or_create_active(
                     instance=inst,
@@ -307,14 +378,14 @@ class Workflow2InstanceResumeView(LoginRequiredMixin, View):
             if str(cfg.mode).lower() == WorkflowExecutionConfig.Mode.INLINE:
                 inst = Workflow2Instance.objects.get(id=instance_id)
                 runtime.run_instance(inst)
-                messages.success(request, _('Retry executed inline.'))
+                messages.success(request, _('Instance resumed inline.'))
             else:
-                messages.success(request, _('Retry job enqueued.'))
+                messages.success(request, _('Resume job enqueued.'))
 
         except Exception as e:  # noqa: BLE001
             messages.error(
                 request,
-                _('Retry failed: %(type)s: %(error)s')
+                _('Resume failed: %(type)s: %(error)s')
                 % {'type': type(e).__name__, 'error': e},
             )
 
