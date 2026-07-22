@@ -175,14 +175,28 @@ jobs:
           echo "Admin user status: $admin_exists" | tee -a "$GITHUB_STEP_SUMMARY"
           
           # Get login page and extract CSRF token
-          csrf_token=$(curl -k -s -c cookies.txt "https://127.0.0.1/accounts/login/" | grep -oP 'name="csrfmiddlewaretoken" value="\K[^"]+' || echo "")
+          echo "Fetching login page and extracting CSRF token..."
+          curl -k -s -c cookies.txt "https://127.0.0.1/accounts/login/" > login_page.html
+          
+          csrf_token=$(grep -oP 'name="csrfmiddlewaretoken" value="\K[^"]+' login_page.html | head -1)
           
           if [ -z "$csrf_token" ]; then
-            echo "⚠️  Could not extract CSRF token, trying alternative method..."
-            csrf_token=$(curl -k -s -c cookies.txt "https://127.0.0.1/accounts/login/" | grep csrfmiddlewaretoken | grep -oP 'value="\K[^"]+' | head -1)
+            echo "⚠️  Could not extract CSRF token with first method, trying alternative..."
+            csrf_token=$(grep csrfmiddlewaretoken login_page.html | grep -oP 'value="\K[^"]+' | head -1)
           fi
           
-          echo "CSRF Token extracted: ${csrf_token:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -z "$csrf_token" ]; then
+            echo "❌ Failed to extract CSRF token" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Login page content (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+            head -c 500 login_page.html | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          
+          echo "CSRF Token extracted: ${csrf_token:0:10}... (length: ${#csrf_token})" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          # Get CSRF cookie value
+          csrf_cookie=$(grep csrftoken cookies.txt | awk '{print $7}')
+          echo "CSRF Cookie: ${csrf_cookie:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
           
           # Attempt login - follow redirects with -L to get final session
           login_response=$(curl -k -L -s -b cookies.txt -c cookies.txt \
