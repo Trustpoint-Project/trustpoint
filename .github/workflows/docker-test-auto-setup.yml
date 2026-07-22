@@ -177,16 +177,23 @@ jobs:
           # Get login page and extract CSRF token
           echo "Fetching login page and extracting CSRF token..."
           # Clear any existing cookies first
-          rm -f cookies.txt
+          rm -f cookies.txt login_page.html
+          
+          # Give the server a moment to be fully ready
+          sleep 2
           
           # Make a simple request to get the login page and CSRF cookie
-          curl -k -s -c cookies.txt -o login_page.html "https://127.0.0.1/accounts/login/"
+          if ! curl -k -s -c cookies.txt -o login_page.html "https://127.0.0.1/accounts/login/"; then
+            echo "❌ Curl command failed" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           
-          http_code=$?
-          echo "Login page fetch result: $http_code" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "Login page size: $(wc -c < login_page.html) bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+          page_size=$(wc -c < login_page.html 2>/dev/null || echo "0")
+          echo "Login page size: $page_size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+          page_size=$(wc -c < login_page.html 2>/dev/null || echo "0")
+          echo "Login page size: $page_size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
           
-          if [ ! -s login_page.html ]; then
+          if [ "$page_size" -eq 0 ] || [ ! -s login_page.html ]; then
             echo "❌ Login page is empty" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "Checking if services are running:" | tee -a "$GITHUB_STEP_SUMMARY"
             docker compose ps | tee -a "$GITHUB_STEP_SUMMARY"
