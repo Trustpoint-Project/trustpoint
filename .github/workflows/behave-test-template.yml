@@ -1,4 +1,4 @@
-name: Behave Tests
+name: Tests / Behave Template
 
 # This workflow is designed to be reusable by other workflows via `workflow_call`.
 on:

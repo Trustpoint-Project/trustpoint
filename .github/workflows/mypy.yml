@@ -1,4 +1,4 @@
-name: MyPy
+name: Code Quality / MyPy
 
 on:
   pull_request:

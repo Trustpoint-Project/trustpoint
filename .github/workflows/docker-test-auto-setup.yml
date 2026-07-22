@@ -1,4 +1,4 @@
-name: Docker Compose Auto-Setup Test
+name: Tests / Docker Auto-Setup
 
 on:
   pull_request:

@@ -1,4 +1,4 @@
-name: Docker manual action
+name: CI/CD / Docker Manual Build
 
 on: workflow_dispatch
 

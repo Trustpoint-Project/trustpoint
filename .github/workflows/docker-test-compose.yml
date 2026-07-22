@@ -1,4 +1,4 @@
-name: Docker Compose Test
+name: Tests / Docker Compose
 
 on:
   pull_request:

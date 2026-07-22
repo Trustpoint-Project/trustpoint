@@ -1,5 +1,5 @@
 # .github/workflows/backup-restore.yml
-name: Backup & Restore Trustpoint
+name: Tests / Backup & Restore
 
 on:
   workflow_call:

@@ -1,4 +1,4 @@
-name: Ruff
+name: Code Quality / Ruff
 
 on:
   pull_request:
