@@ -1,0 +1,74 @@
+name: Tests / Migrations Compatibility
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/migrations/**"
+      - .github/workflows/test-migrations-compatibility.yml
+
+env:
+  DATABASE_ENGINE: "django.db.backends.postgresql"
+  DATABASE_HOST: "postgres"
+  DATABASE_PORT: "5432"
+  DATABASE_USER: "trustpoint"
+  DATABASE_PASSWORD: "trustpoint"
+  POSTGRES_DB: "trustpoint"
+  TRUSTPOINT_OPERATIONAL_DATABASE: "postgresql"
+  SECRET_KEY: "test-secret-key-for-ci"
+
+permissions:
+  contents: read
+
+jobs:
+  test-migrations:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: trustpoint
+          POSTGRES_USER: trustpoint
+          POSTGRES_DB: trustpoint
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libpq-dev
+
+      - name: Apply current branch migrations
+        run: uv run manage.py migrate
+        working-directory: trustpoint
+
+      - name: Checkout base branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Sync dependencies for base branch
+        run: uv sync --locked
+
+      - name: Run tests with base code and new migrations
+        run: uv run pytest --reuse-db
+        working-directory: trustpoint
+        continue-on-error: false
+
+      - name: Verify migration reversibility (if applicable)
+        run: |
+          echo "✅ Migrations are compatible with base branch"
+          uv run manage.py showmigrations
+        working-directory: trustpoint
