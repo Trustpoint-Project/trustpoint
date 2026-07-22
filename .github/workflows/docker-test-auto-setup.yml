@@ -27,7 +27,7 @@ jobs:
           echo "Environment variables set in .env:"
           grep "TP_" .env || true
 
-      - name: Run Docker compose  
+      - name: Run Docker compose
         run: |
           echo "Starting services without waiting for healthchecks..."
           docker compose build
@@ -41,14 +41,27 @@ jobs:
           echo "Waiting for Trustpoint to complete auto-setup..."
           
           echo "Waiting for postgres to be ready..."
+          postgres_ready=false
           for i in {1..30}; do
             if docker compose exec -T postgres pg_isready -U admin -d trustpoint_db > /dev/null 2>&1; then
               echo "✅ PostgreSQL is ready (attempt $i)"
+              postgres_ready=true
               break
             fi
             echo "⏳ Waiting for PostgreSQL (attempt $i/30)..."
             sleep 2
           done
+          
+          if [ "$postgres_ready" = false ]; then
+            echo "❌ PostgreSQL did not become ready within timeout"
+            echo ""
+            echo "Container status:"
+            docker compose ps
+            echo ""
+            echo "PostgreSQL logs:"
+            docker compose logs --tail=50 postgres
+            exit 1
+          fi
           
           echo ""
           echo "Waiting for Trustpoint container to start responding..."
@@ -86,7 +99,14 @@ jobs:
           done
           
           if [ "$setup_complete" = false ]; then
-            echo "⚠️ Auto-setup may not have completed within timeout"
+            echo "❌ Auto-setup did not complete within timeout"
+            echo ""
+            echo "Container status:"
+            docker compose ps
+            echo ""
+            echo "Recent container logs:"
+            docker compose logs --tail=100 trustpoint
+            exit 1
           fi
           
           echo ""
@@ -104,7 +124,7 @@ jobs:
           URL="https://127.0.0.1/"
           
           for i in {1..20}; do
-            http_response=$(curl -k -L -s -o response.txt -w "%{http_code}" "$URL") || true
+            http_response=$(curl -k -L -s --connect-timeout 10 --max-time 30 -o response.txt -w "%{http_code}" "$URL") || true
             
             if [ "$http_response" = "200" ]; then
               echo "✅ HTTPS endpoint accessible on attempt $i" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -124,7 +144,7 @@ jobs:
         run: |
           echo "## Test 2: Auto-Setup Verification" >> "$GITHUB_STEP_SUMMARY"
           
-          response=$(curl -k -L -s "https://127.0.0.1/")
+          response=$(curl -k -L -s --connect-timeout 10 --max-time 30 "https://127.0.0.1/")
           
           if echo "$response" | grep -q "setup wizard" || echo "$response" | grep -q "initial setup"; then
             echo "❌ Setup wizard still present - auto-setup may have failed" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -179,22 +199,17 @@ jobs:
         run: |
           echo "## Test 3: Admin Login" >> "$GITHUB_STEP_SUMMARY"
           
-          # Verify the admin user exists and get details
           echo "Verifying admin user in database..." | tee -a "$GITHUB_STEP_SUMMARY"
           admin_exists=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
             -c "SELECT username, is_superuser, is_active FROM users_trustpointuser WHERE username='admin';" -t 2>&1)
           echo "Admin user status: $admin_exists" | tee -a "$GITHUB_STEP_SUMMARY"
           
-          # Get login page and extract CSRF token
           echo "Fetching login page and extracting CSRF token..."
-          # Clear any existing cookies first
           rm -f cookies.txt login_page.html
           
-          # Give the server a moment to be fully ready (Nginx might have just started)
           echo "Waiting for web server to be fully ready..."
           sleep 5
           
-          # Verify the endpoint is accessible before trying to get the login page
           for attempt in {1..10}; do
             if curl -fsk --max-time 5 -o /dev/null "https://127.0.0.1/"; then
               echo "✅ HTTPS endpoint is accessible (attempt $attempt)"
@@ -204,14 +219,11 @@ jobs:
             sleep 2
           done
           
-          # Make a simple request to get the login page and CSRF cookie
           if ! curl -k -s -c cookies.txt -o login_page.html "https://127.0.0.1/users/login/"; then
             echo "❌ Curl command failed" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
           
-          page_size=$(wc -c < login_page.html 2>/dev/null || echo "0")
-          echo "Login page size: $page_size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
           page_size=$(wc -c < login_page.html 2>/dev/null || echo "0")
           echo "Login page size: $page_size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
           
@@ -240,13 +252,11 @@ jobs:
           
           echo "✅ CSRF Token extracted: ${csrf_token:0:10}... (length: ${#csrf_token})" | tee -a "$GITHUB_STEP_SUMMARY"
           
-          # Show cookie for debugging
           if [ -f cookies.txt ]; then
             csrf_cookie=$(grep csrftoken cookies.txt | awk '{print $7}')
             echo "CSRF Cookie: ${csrf_cookie:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
           
-          # Attempt login - follow redirects with -L to get final session
           login_response=$(curl -k -L -s -b cookies.txt -c cookies.txt \
             -w "%{http_code}" -o login_response.txt \
             -X POST \
@@ -261,7 +271,6 @@ jobs:
           
           echo "Login response code: $login_response" | tee -a "$GITHUB_STEP_SUMMARY"
           
-          # Check if we got a session cookie
           if grep -q "sessionid" cookies.txt; then
             echo "✅ Admin login successful - session cookie received" | tee -a "$GITHUB_STEP_SUMMARY"
           else
@@ -280,19 +289,16 @@ jobs:
         run: |
           echo "## Test 4: Authenticated Dashboard Access" >> "$GITHUB_STEP_SUMMARY"
           
-          # Check what cookies we have
           echo "Current cookies:" | tee -a "$GITHUB_STEP_SUMMARY"
           cat cookies.txt | tee -a "$GITHUB_STEP_SUMMARY"
           echo "" | tee -a "$GITHUB_STEP_SUMMARY"
           
-          # Try to access dashboard, following redirects
           dashboard_response=$(curl -k -L -s -b cookies.txt -c cookies.txt -w "%{http_code}" -o dashboard.txt \
             "https://127.0.0.1/")
           
           echo "Dashboard response code: $dashboard_response" | tee -a "$GITHUB_STEP_SUMMARY"
           
           if [ "$dashboard_response" = "200" ]; then
-            # Check if we're still logged in (not redirected to login)
             if grep -q "login" dashboard.txt; then
               echo "⚠️  Got 200 but appears to be login page - session may have been lost" | tee -a "$GITHUB_STEP_SUMMARY"
               echo "Dashboard content (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
