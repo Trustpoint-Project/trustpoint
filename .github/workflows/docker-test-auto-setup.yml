@@ -176,6 +176,8 @@ jobs:
           
           # Get login page and extract CSRF token
           echo "Fetching login page and extracting CSRF token..."
+          # Clear any existing cookies first
+          rm -f cookies.txt
           http_code=$(curl -k -L -s -c cookies.txt -w "%{http_code}" -o login_page.html "https://127.0.0.1/accounts/login/")
           
           echo "Login page HTTP code: $http_code" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -213,9 +215,17 @@ jobs:
           
           echo "CSRF Token extracted: ${csrf_token:0:10}... (length: ${#csrf_token})" | tee -a "$GITHUB_STEP_SUMMARY"
           
-          # Get CSRF cookie value
+          # Get CSRF cookie value for verification
           csrf_cookie=$(grep csrftoken cookies.txt | awk '{print $7}')
           echo "CSRF Cookie: ${csrf_cookie:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          # Verify token and cookie match (they should be the same)
+          if [ "$csrf_token" != "$csrf_cookie" ]; then
+            echo "⚠️  CSRF token and cookie don't match!" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "This can happen with redirects - will use the cookie value" | tee -a "$GITHUB_STEP_SUMMARY"
+            # Use the cookie value as the token since Django checks against the cookie
+            csrf_token="$csrf_cookie"
+          fi
           
           # Attempt login - follow redirects with -L to get final session
           login_response=$(curl -k -L -s -b cookies.txt -c cookies.txt \
