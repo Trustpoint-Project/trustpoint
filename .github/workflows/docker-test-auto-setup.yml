@@ -59,8 +59,19 @@ jobs:
               
               if docker compose logs trustpoint 2>&1 | grep -q "Auto-setup completed successfully\|Startup Sequence Completed Successfully"; then
                 echo "✅ Auto-setup process completed"
-                setup_complete=true
-                break
+                
+                # Wait a bit more for Nginx to fully start
+                echo "⏳ Waiting for Nginx to be fully ready..."
+                sleep 5
+                
+                # Verify we can actually get content
+                if curl -fsk --max-time 5 https://127.0.0.1/ > /dev/null 2>&1; then
+                  echo "✅ Nginx is serving content"
+                  setup_complete=true
+                  break
+                else
+                  echo "⏳ Waiting for Nginx to start serving..."
+                fi
               elif docker compose exec -T postgres psql -U admin -d trustpoint_db -c "\dt users_trustpointuser" 2>&1 | grep -q "users_trustpointuser"; then
                 echo "✅ Database migrations completed (users_trustpointuser table exists)"
                 setup_complete=true
@@ -179,11 +190,22 @@ jobs:
           # Clear any existing cookies first
           rm -f cookies.txt login_page.html
           
-          # Give the server a moment to be fully ready
-          sleep 2
+          # Give the server a moment to be fully ready (Nginx might have just started)
+          echo "Waiting for web server to be fully ready..."
+          sleep 5
+          
+          # Verify the endpoint is accessible before trying to get the login page
+          for attempt in {1..10}; do
+            if curl -fsk --max-time 5 -o /dev/null "https://127.0.0.1/"; then
+              echo "✅ HTTPS endpoint is accessible (attempt $attempt)"
+              break
+            fi
+            echo "⏳ Waiting for HTTPS endpoint (attempt $attempt/10)..."
+            sleep 2
+          done
           
           # Make a simple request to get the login page and CSRF cookie
-          if ! curl -k -s -c cookies.txt -o login_page.html "https://127.0.0.1/accounts/login/"; then
+          if ! curl -k -s -c cookies.txt -o login_page.html "https://127.0.0.1/users/login/"; then
             echo "❌ Curl command failed" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
@@ -229,13 +251,13 @@ jobs:
             -w "%{http_code}" -o login_response.txt \
             -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
-            -H "Referer: https://127.0.0.1/accounts/login/" \
+            -H "Referer: https://127.0.0.1/users/login/" \
             -H "Origin: https://127.0.0.1" \
             -H "X-CSRFToken: $csrf_token" \
             -d "username=admin" \
             -d "password=testing321" \
             -d "csrfmiddlewaretoken=$csrf_token" \
-            "https://127.0.0.1/accounts/login/")
+            "https://127.0.0.1/users/login/")
           
           echo "Login response code: $login_response" | tee -a "$GITHUB_STEP_SUMMARY"
           
