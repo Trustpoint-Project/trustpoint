@@ -1,0 +1,85 @@
+name: Code Quality / License Check
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    paths:
+      # Self
+      - ".github/workflows/check-licenses.yml"
+      # Python Ecosystem
+      - "**/pyproject.toml"
+      - "**/setup.py"
+      - "**/requirements*.txt"
+      - "**/Pipfile.lock"
+      - "**/uv.lock"
+
+jobs:
+  check-licenses:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+
+      - name: Install pip-licenses
+        run: uv pip install pip-licenses
+
+      - name: Generate license report
+        run: uv run pip-licenses --format=markdown --order=license > licenses.md
+        continue-on-error: true
+
+      - name: Check for incompatible licenses
+        run: |
+          # Check for GPL licenses (incompatible with MIT for distribution)
+          if uv run pip-licenses | grep -iE "GPL-[0-9]|GPLv[0-9]" | grep -v "LGPL"; then
+            echo "::error::Found GPL-licensed dependencies which may have compatibility issues with MIT license"
+            echo "GPL licenses found:"
+            uv run pip-licenses | grep -iE "GPL-[0-9]|GPLv[0-9]" | grep -v "LGPL"
+            exit 1
+          fi
+          
+          # Check for proprietary licenses
+          if uv run pip-licenses | grep -iE "Proprietary|Commercial"; then
+            echo "::error::Found proprietary/commercial licenses that need review"
+            echo "Proprietary licenses found:"
+            uv run pip-licenses | grep -iE "Proprietary|Commercial"
+            exit 1
+          fi
+          
+          echo "✅ No incompatible licenses detected"
+
+      - name: Comment license report on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = '';
+            try {
+              report = fs.readFileSync('licenses.md', 'utf8');
+            } catch (e) {
+              report = '⚠️ License report generation failed';
+            }
+            
+            const comment = `## 📋 License Check Report
+            
+            ${report}
+            
+            ---
+            **Note:** This project is MIT-licensed. LGPL and most permissive licenses are compatible. GPL and proprietary licenses require review.
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
