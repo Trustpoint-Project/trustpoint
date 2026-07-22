@@ -8,14 +8,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
+      attestations: write
     env:
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
       GITHUB_SHA: ${{ github.sha }}
-      TAG_VERSION: v0.2.0
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Extract version from pyproject.toml
+        id: get_version
+        run: |
+          VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "Extracted version: v${VERSION}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -29,27 +37,60 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: Build the Docker images using Docker Compose
-        run: docker compose build
+      - name: Generate Docker metadata for trustpoint
+        id: meta-trustpoint
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.get_version.outputs.version }}
+            type=sha,format=long
 
-      - name: Tag additional versions for trustpoint and postgres images
-        run: |
-          # For the trustpoint container:
-            docker tag ${DOCKER_HUB_USERNAME}/trustpoint:latest ${DOCKER_HUB_USERNAME}/trustpoint:${TAG_VERSION}
-            docker tag ${DOCKER_HUB_USERNAME}/trustpoint:latest ${DOCKER_HUB_USERNAME}/trustpoint:latest
-            docker tag ${DOCKER_HUB_USERNAME}/trustpoint:latest ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA}
-          # For the postgres container:
-            docker tag ${DOCKER_HUB_USERNAME}/postgres:latest ${DOCKER_HUB_USERNAME}/postgres:${TAG_VERSION}
-            docker tag ${DOCKER_HUB_USERNAME}/postgres:latest ${DOCKER_HUB_USERNAME}/postgres:latest
-            docker tag ${DOCKER_HUB_USERNAME}/postgres:latest ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA}
+      - name: Generate Docker metadata for postgres
+        id: meta-postgres
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ secrets.DOCKER_HUB_USERNAME }}/postgres
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.get_version.outputs.version }}
+            type=sha,format=long
 
-      - name: Push docker images to Docker Hub
-        run: |
-          # Push trustpoint images
-          docker push ${DOCKER_HUB_USERNAME}/trustpoint:${TAG_VERSION}
-          docker push ${DOCKER_HUB_USERNAME}/trustpoint:latest
-          docker push ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA}
-          # Push postgres images
-          docker push ${DOCKER_HUB_USERNAME}/postgres:${TAG_VERSION}
-          docker push ${DOCKER_HUB_USERNAME}/postgres:latest
-          docker push ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA}
+      - name: Build and push trustpoint image
+        id: push-trustpoint
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/trustpoint/Dockerfile
+          push: true
+          tags: ${{ steps.meta-trustpoint.outputs.tags }}
+          labels: ${{ steps.meta-trustpoint.outputs.labels }}
+          cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint:latest
+          cache-to: type=inline
+
+      - name: Generate artifact attestation for trustpoint
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
+          subject-digest: ${{ steps.push-trustpoint.outputs.digest }}
+          push-to-registry: true
+
+      - name: Build and push postgres image
+        id: push-postgres
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/db/Dockerfile
+          push: true
+          tags: ${{ steps.meta-postgres.outputs.tags }}
+          labels: ${{ steps.meta-postgres.outputs.labels }}
+          cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/postgres:latest
+          cache-to: type=inline
+
+      - name: Generate artifact attestation for postgres
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/postgres
+          subject-digest: ${{ steps.push-postgres.outputs.digest }}
+          push-to-registry: true

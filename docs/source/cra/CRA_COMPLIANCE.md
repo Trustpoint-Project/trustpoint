@@ -76,7 +76,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | Field | Value |
 | ----- | ----- |
 | Product | Trustpoint Trust Anchor Software |
-| Version Tag | 0.6.0.dev1 (Beta - Technology Preview) |
+| Version Tag | 0.6.0 (Beta - Technology Preview) |
 | Repository | https://github.com/Trustpoint-Project/trustpoint |
 | Security Contact | trustpoint@campus-schwarzwald.de |
 | Purpose (1-2 lines) | Open-source trust anchor software for managing digital identities, PKI infrastructure, and certificate lifecycle operations in industrial and OT environments |
@@ -361,7 +361,7 @@ The following items should remain visible in the technical documentation until t
 > **To be completed when placing the product on the EU market after the technology preview / beta phase.**
 
 **Manufacturer:** Trustpoint Project  
-**Product:** Trustpoint Trust Anchor Software v0.6.0.dev1  
+**Product:** Trustpoint Trust Anchor Software v0.6.0 
 **Classification:** Important Class I Candidate / Technology Preview  
 **Assessment:** Conformity route to be determined under CRA Article 32; Annex VIII Module A may be available where applicable harmonised standards, common specifications, or recognised certification schemes are applied, otherwise Module B+C or Module H may be required for Important Class I products.  
 **Standards and References:** RFC 7030 (EST), RFC 9483 (CMP), OPC UA GDS Push, Django Security, OWASP ASVS, BSI TR-03183-1-oriented risk management documentation

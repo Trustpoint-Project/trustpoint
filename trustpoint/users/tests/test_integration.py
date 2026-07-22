@@ -1,5 +1,7 @@
 """Integration tests for the users app."""
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -85,3 +87,57 @@ class LoginIntegrationTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.wsgi_request.user.is_authenticated)
+
+
+class BootstrapHintTest(TestCase):
+    """Test the bootstrap hint feature on the login page."""
+
+    def setUp(self) -> None:
+        self.client = Client()
+        self.login_url = reverse('users:login')
+
+    @patch('users.views.SetupWizardCompletedModel.setup_wizard_completed')
+    def test_bootstrap_hint_shown_for_new_user(self, mock_setup_completed: object) -> None:
+        """Bootstrap hint should be shown when setup is not complete and admin has never logged in."""
+        mock_setup_completed.return_value = False
+        User.objects.create_user(username='admin', password='testpass123')
+
+        response = self.client.get(self.login_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context.get('show_bootstrap_hint'))
+        self.assertEqual(response.context.get('bootstrap_username'), 'admin')
+
+    @patch('users.views.SetupWizardCompletedModel.setup_wizard_completed')
+    def test_bootstrap_hint_not_shown_after_login(self, mock_setup_completed: object) -> None:
+        """Bootstrap hint should not be shown once the admin has logged in."""
+        mock_setup_completed.return_value = False
+        user = User.objects.create_user(username='admin', password='testpass123')
+        self.client.login(username='admin', password='testpass123')
+        user.refresh_from_db()
+
+        self.client.logout()
+        response = self.client.get(self.login_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context.get('show_bootstrap_hint', False))
+
+    @patch('users.views.SetupWizardCompletedModel.setup_wizard_completed')
+    def test_bootstrap_hint_not_shown_when_user_doesnt_exist(self, mock_setup_completed: object) -> None:
+        """Bootstrap hint should not be shown when bootstrap user doesn't exist."""
+        mock_setup_completed.return_value = False
+        response = self.client.get(self.login_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context.get('show_bootstrap_hint', False))
+
+    @patch('users.views.SetupWizardCompletedModel.setup_wizard_completed')
+    def test_bootstrap_hint_not_shown_after_setup_complete(self, mock_setup_completed: object) -> None:
+        """Bootstrap hint should not be shown after setup wizard is completed."""
+        mock_setup_completed.return_value = True
+        User.objects.create_user(username='admin', password='testpass123')
+
+        response = self.client.get(self.login_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context.get('show_bootstrap_hint', False))
