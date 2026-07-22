@@ -176,7 +176,7 @@ jobs:
           
           # Get login page and extract CSRF token
           echo "Fetching login page and extracting CSRF token..."
-          http_code=$(curl -k -s -c cookies.txt -w "%{http_code}" -o login_page.html "https://127.0.0.1/accounts/login/")
+          http_code=$(curl -k -L -s -c cookies.txt -w "%{http_code}" -o login_page.html "https://127.0.0.1/accounts/login/")
           
           echo "Login page HTTP code: $http_code" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "Login page size: $(wc -c < login_page.html) bytes" | tee -a "$GITHUB_STEP_SUMMARY"
