@@ -1,0 +1,75 @@
+name: Compliance / CRA Quarterly Review
+
+on:
+  schedule:
+    # Run on the 1st day of Jan, Apr, Jul, Oct at 09:00 UTC
+    - cron: '0 9 1 1,4,7,10 *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  create-review-issue:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Get current quarter info
+        id: quarter
+        run: |
+          MONTH=$(date +%m)
+          YEAR=$(date +%Y)
+          
+          if [ $MONTH -eq 1 ]; then
+            QUARTER="Q1"
+            NEXT_REVIEW="${YEAR}-04-01"
+          elif [ $MONTH -eq 4 ]; then
+            QUARTER="Q2"
+            NEXT_REVIEW="${YEAR}-07-01"
+          elif [ $MONTH -eq 7 ]; then
+            QUARTER="Q3"
+            NEXT_REVIEW="${YEAR}-10-01"
+          else
+            QUARTER="Q4"
+            NEXT_YEAR=$((YEAR + 1))
+            NEXT_REVIEW="${NEXT_YEAR}-01-01"
+          fi
+          
+          echo "quarter=${QUARTER}" >> $GITHUB_OUTPUT
+          echo "year=${YEAR}" >> $GITHUB_OUTPUT
+          echo "next_review=${NEXT_REVIEW}" >> $GITHUB_OUTPUT
+
+      - name: Create CRA Review Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const quarter = '${{ steps.quarter.outputs.quarter }}';
+            const year = '${{ steps.quarter.outputs.year }}';
+            const nextReview = '${{ steps.quarter.outputs.next_review }}';
+            
+            const title = `CRA Compliance Review - ${quarter} ${year}`;
+            
+            const body = `## CRA Compliance Quarterly Review - ${quarter} ${year}
+            
+            Quarterly review of CRA compliance documentation per [CRA_COMPLIANCE.md](https://github.com/Trustpoint-Project/trustpoint/blob/main/docs/source/cra/CRA_COMPLIANCE.md).
+            
+            ### Review Checklist
+            
+            - [ ] Review [\`THREAT_MODEL.md\`](https://github.com/Trustpoint-Project/trustpoint/blob/main/docs/source/cra/THREAT_MODEL.md) - verify threats, add new ones
+            - [ ] Review [\`RISK_REGISTER.md\`](https://github.com/Trustpoint-Project/trustpoint/blob/main/docs/source/cra/RISK_REGISTER.md) - re-evaluate risk levels
+            - [ ] Review [\`CONTROLS.md\`](https://github.com/Trustpoint-Project/trustpoint/blob/main/docs/source/cra/CONTROLS.md) - update control status
+            - [ ] Update [\`CRA_COMPLIANCE.md\`](https://github.com/Trustpoint-Project/trustpoint/blob/main/docs/source/cra/CRA_COMPLIANCE.md) dates and next review to: **${nextReview}**
+            
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['compliance', 'cra', 'quarterly-review', 'documentation']
+            });
