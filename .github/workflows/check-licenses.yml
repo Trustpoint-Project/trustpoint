@@ -30,27 +30,27 @@ jobs:
         uses: ./.github/actions/setup-uv-action
 
       - name: Install pip-licenses
-        run: uv pip install pip-licenses
+        run: uv tool install pip-licenses
 
       - name: Generate license report
-        run: uv run pip-licenses --format=markdown --order=license > licenses.md
+        run: uv tool run pip-licenses --format=markdown --order=license > licenses.md
         continue-on-error: true
 
       - name: Check for incompatible licenses
         run: |
           # Check for GPL licenses (incompatible with MIT for distribution)
-          if uv run pip-licenses | grep -iE "GPL-[0-9]|GPLv[0-9]" | grep -v "LGPL"; then
+          if uv tool run pip-licenses | grep -iE "GPL-[0-9]|GPLv[0-9]" | grep -v "LGPL"; then
             echo "::error::Found GPL-licensed dependencies which may have compatibility issues with MIT license"
             echo "GPL licenses found:"
-            uv run pip-licenses | grep -iE "GPL-[0-9]|GPLv[0-9]" | grep -v "LGPL"
+            uv tool run pip-licenses | grep -iE "GPL-[0-9]|GPLv[0-9]" | grep -v "LGPL"
             exit 1
           fi
           
           # Check for proprietary licenses
-          if uv run pip-licenses | grep -iE "Proprietary|Commercial"; then
+          if uv tool run pip-licenses | grep -iE "Proprietary|Commercial"; then
             echo "::error::Found proprietary/commercial licenses that need review"
             echo "Proprietary licenses found:"
-            uv run pip-licenses | grep -iE "Proprietary|Commercial"
+            uv tool run pip-licenses | grep -iE "Proprietary|Commercial"
             exit 1
           fi
           
