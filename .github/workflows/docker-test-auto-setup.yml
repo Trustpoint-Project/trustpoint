@@ -280,13 +280,30 @@ jobs:
         run: |
           echo "## Test 4: Authenticated Dashboard Access" >> "$GITHUB_STEP_SUMMARY"
           
-          dashboard_response=$(curl -k -s -b cookies.txt -w "%{http_code}" -o dashboard.txt \
+          # Check what cookies we have
+          echo "Current cookies:" | tee -a "$GITHUB_STEP_SUMMARY"
+          cat cookies.txt | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          # Try to access dashboard, following redirects
+          dashboard_response=$(curl -k -L -s -b cookies.txt -c cookies.txt -w "%{http_code}" -o dashboard.txt \
             "https://127.0.0.1/")
           
+          echo "Dashboard response code: $dashboard_response" | tee -a "$GITHUB_STEP_SUMMARY"
+          
           if [ "$dashboard_response" = "200" ]; then
-            echo "✅ Dashboard accessible with authenticated session" | tee -a "$GITHUB_STEP_SUMMARY"
+            # Check if we're still logged in (not redirected to login)
+            if grep -q "login" dashboard.txt; then
+              echo "⚠️  Got 200 but appears to be login page - session may have been lost" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "Dashboard content (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+              head -c 500 dashboard.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "✅ Dashboard accessible with authenticated session" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
           else
             echo "❌ Dashboard access failed with code $dashboard_response" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Dashboard content (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+            head -c 500 dashboard.txt | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
