@@ -1,0 +1,62 @@
+name: Translations / Update Strings
+
+on:
+  schedule:
+    - cron: '0 5 * * *'  # Run daily at 5 AM UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  LOCALE: "de"
+
+jobs:
+  update-translations:
+    if: github.repository == 'Trustpoint-Project/trustpoint'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y gettext
+        
+      - name: Run makemessages for Python files
+        run: uv run manage.py makemsg -l ${{ env.LOCALE }}
+        working-directory: trustpoint
+
+      - name: Run makemessages for JavaScript files
+        run: uv run manage.py makemsg -l ${{ env.LOCALE }} -d djangojs
+        working-directory: trustpoint
+
+      - name: Compile messages
+        run: uv run manage.py compilemsg -l ${{ env.LOCALE }}
+        working-directory: trustpoint
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet; then
+            echo "changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changes == 'true'
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: |
+            trustpoint/*/locale/
+            trustpoint/locale/
+          default_author: github_actions
+          message: 'chore: update translation strings'
+          push: true
