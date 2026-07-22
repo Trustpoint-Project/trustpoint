@@ -1,0 +1,112 @@
+# Automatically label PRs based on changed files
+# See: https://github.com/actions/labeler
+
+# GitHub Workflows
+'.github/workflows/**':
+  - 'ci/cd'
+
+# Documentation
+'docs/**':
+  - 'documentation'
+'*.md':
+  - 'documentation'
+
+# CRA Compliance
+'docs/source/cra/**':
+  - 'compliance'
+  - 'cra'
+
+# Tests
+'tests/**':
+  - 'tests'
+'**/test_*.py':
+  - 'tests'
+
+# Docker
+'docker/**':
+  - 'docker'
+'Dockerfile':
+  - 'docker'
+'docker-compose*.yml':
+  - 'docker'
+
+# Database Migrations
+'**/migrations/**':
+  - 'migrations'
+  - 'database'
+
+# Dependencies
+'pyproject.toml':
+  - 'dependencies'
+'uv.lock':
+  - 'dependencies'
+'requirements*.txt':
+  - 'dependencies'
+
+# Security
+'SECURITY.md':
+  - 'security'
+'docs/source/cra/**':
+  - 'security'
+
+# PKI Components
+'trustpoint/pki/**':
+  - 'pki'
+'trustpoint/crypto/**':
+  - 'crypto'
+
+# Protocols
+'trustpoint/cmp/**':
+  - 'cmp'
+  - 'protocol'
+'trustpoint/est/**':
+  - 'est'
+  - 'protocol'
+'trustpoint/aoki/**':
+  - 'aoki'
+  - 'protocol'
+
+# Device Management
+'trustpoint/devices/**':
+  - 'devices'
+'trustpoint/onboarding/**':
+  - 'onboarding'
+
+# Setup Wizard
+'trustpoint/setup_wizard/**':
+  - 'setup-wizard'
+
+# Signer
+'trustpoint/signer/**':
+  - 'signer'
+
+# Agents
+'trustpoint/agents/**':
+  - 'agents'
+
+# Static Files
+'trustpoint/static/**':
+  - 'frontend'
+  - 'static'
+
+# Frontend
+'trustpoint/workflows2/frontend/**':
+  - 'frontend'
+'**/*.js':
+  - 'frontend'
+'**/*.ts':
+  - 'frontend'
+'**/*.vue':
+  - 'frontend'
+
+# Configuration
+'trustpoint/trustpoint/settings.py':
+  - 'configuration'
+
+# Localization
+'**/locale/**':
+  - 'i18n'
+'**/*.po':
+  - 'i18n'
+'**/*.mo':
+  - 'i18n'
