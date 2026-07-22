@@ -176,7 +176,26 @@ jobs:
           
           # Get login page and extract CSRF token
           echo "Fetching login page and extracting CSRF token..."
-          curl -k -s -c cookies.txt "https://127.0.0.1/accounts/login/" > login_page.html
+          http_code=$(curl -k -s -c cookies.txt -w "%{http_code}" -o login_page.html "https://127.0.0.1/accounts/login/")
+          
+          echo "Login page HTTP code: $http_code" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Login page size: $(wc -c < login_page.html) bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Failed to fetch login page (HTTP $http_code)" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Response content:" | tee -a "$GITHUB_STEP_SUMMARY"
+            cat login_page.html | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          
+          if [ ! -s login_page.html ]; then
+            echo "❌ Login page is empty" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Checking if services are running:" | tee -a "$GITHUB_STEP_SUMMARY"
+            docker compose ps | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Recent logs:" | tee -a "$GITHUB_STEP_SUMMARY"
+            docker compose logs --tail=30 trustpoint | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           
           csrf_token=$(grep -oP 'name="csrfmiddlewaretoken" value="\K[^"]+' login_page.html | head -1)
           
@@ -187,8 +206,8 @@ jobs:
           
           if [ -z "$csrf_token" ]; then
             echo "❌ Failed to extract CSRF token" | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "Login page content (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
-            head -c 500 login_page.html | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Login page content (first 1000 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+            head -c 1000 login_page.html | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
           
