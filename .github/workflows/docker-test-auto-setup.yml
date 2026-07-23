@@ -33,7 +33,7 @@ jobs:
           docker compose build
           docker compose up -d postgres trustpoint
           
-          echo "Services started, worker will start once trustpoint is healthy"
+          echo "Services started (postgres + trustpoint)."
           docker compose ps
 
       - name: Wait for services to be fully ready
