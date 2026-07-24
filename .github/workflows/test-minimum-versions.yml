@@ -28,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: "pyproject.toml"
+          python-version: "3.13"
 
       - name: Remove regular lock file
         run: rm -f uv.lock
@@ -36,7 +36,7 @@ jobs:
       - name: Install minimum direct dependencies
         id: install_min_deps
         run: |
-          uv sync --resolution lowest-direct --only-binary :all:
+          uv sync --resolution lowest-direct
         continue-on-error: true
 
       - name: Show installed versions
