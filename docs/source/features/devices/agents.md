@@ -65,11 +65,11 @@ A workflow profile contains:
     },
     "local_storage": {
       "os_path": "/etc/trustpoint/certs",
-      "certificate_path": "{{ os_path }}/{{ certificate_profile }}-certificate.pem",
-      "certificate_chain_path": "{{ os_path }}/{{ certificate_profile }}-full-chain.pem",
-      "csr_path": "{{ os_path }}/{{ certificate_profile }}-csr.pem",
-      "private_key_path": "{{ os_path }}/{{ certificate_profile }}-key.pem",
-      "crl_path": "{{ os_path }}/{{ certificate_profile }}-crl.pem"
+      "certificate_path": "{{ os_path }}/{{ common_name }}-certificate.pem",
+      "certificate_chain_path": "{{ os_path }}/{{ common_name }}-full-chain.pem",
+      "csr_path": "{{ os_path }}/{{ common_name }}-csr.pem",
+      "private_key_path": "{{ os_path }}/{{ common_name }}-key.pem",
+      "crl_path": "{{ os_path }}/{{ common_name }}-crl.pem"
     },
     "certificate_request": {
       "certificate_profile": "tls_server",
@@ -83,6 +83,26 @@ A workflow profile contains:
   }
 
 ```
+
+**Template Variables:**
+
+The profile can use these template variables that are resolved when sent to the agent:
+
+- `{{ os_path }}` - Base directory path from the agent's configuration (e.g., "/Users/user/certs", "/etc/trustpoint")
+- `{{ common_name }}` - The Common Name (CN) for this certificate assignment (e.g., "webserver.example.com", "api-server.local")
+- `{{ endpoint }}` - Trustpoint enrollment endpoint URL
+- `{{ path }}` - Certificate enrollment path based on certificate_profile
+- `{{ subject }}` - Subject DN configured for this profile assignment (with CN automatically added)
+- `{{ subject_alt_name }}` - SAN extension configured for this profile assignment
+- `{{ public_key_algorithm_oid }}` - Public key algorithm OID from domain
+- `{{ key_parameter }}` - Key size (RSA) or curve name (ECC) from domain
+- `{{ certificate_profile }}` - The certificate profile name from certificate_request
+
+**Note:** The `{{ common_name }}` is mandatory for each profile assignment and must be unique per agent. It serves two purposes:
+1. **Certificate Identity**: Used as the Common Name (CN) in the certificate subject
+2. **File Management**: Used in file paths to ensure different certificates don't overwrite each other
+
+The `{{ os_path }}` variable uses the agent's configured base directory, ensuring all certificates are stored in the same location as the agent's domain credential.
 
 ## Agent API
 

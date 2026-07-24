@@ -419,10 +419,20 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
         """Meta options."""
 
         model = AgentAssignedProfile
-        fields: ClassVar = ('workflow_definition', 'renewal_threshold_days', 'subject', 'subject_alt_name')
+        fields: ClassVar = (
+            'workflow_definition',
+            'common_name',
+            'renewal_threshold_days',
+            'subject',
+            'subject_alt_name',
+        )
         widgets: ClassVar = {
+            'common_name': forms.TextInput(attrs={
+                'placeholder': 'webserver.example.com',
+                'class': 'form-control',
+            }),
             'subject': forms.TextInput(attrs={
-                'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
+                'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT',
                 'class': 'form-control',
             }),
             'subject_alt_name': forms.TextInput(attrs={
@@ -431,7 +441,11 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
             }),
         }
         help_texts: ClassVar = {
-            'subject': 'OpenSSL-style subject DN. Leave empty to use default.',
+            'common_name': (
+                'Common Name (CN) for the certificate. Must be unique per agent. '
+                'Used as the certificate CN and in file paths.'
+            ),
+            'subject': 'Additional subject fields (without CN). The CN will be added automatically.',
             'subject_alt_name': 'OpenSSL-style SAN extension. Leave empty for no SAN.',
         }
 
@@ -452,10 +466,14 @@ class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
         """Meta options."""
 
         model = AgentAssignedProfile
-        fields: ClassVar = ('renewal_threshold_days', 'subject', 'subject_alt_name', 'enabled')
+        fields: ClassVar = ('common_name', 'renewal_threshold_days', 'subject', 'subject_alt_name', 'enabled')
         widgets: ClassVar = {
+            'common_name': forms.TextInput(attrs={
+                'placeholder': 'webserver.example.com',
+                'class': 'form-control',
+            }),
             'subject': forms.TextInput(attrs={
-                'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
+                'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT',
                 'class': 'form-control',
             }),
             'subject_alt_name': forms.TextInput(attrs={
@@ -464,7 +482,11 @@ class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
             }),
         }
         help_texts: ClassVar = {
-            'subject': 'OpenSSL-style subject DN. Leave empty to use default.',
+            'common_name': (
+                'Common Name (CN) for the certificate. Must be unique per agent. '
+                'Used as the certificate CN and in file paths.'
+            ),
+            'subject': 'Additional subject fields (without CN). The CN will be added automatically.',
             'subject_alt_name': 'OpenSSL-style SAN extension. Leave empty for no SAN.',
         }
 

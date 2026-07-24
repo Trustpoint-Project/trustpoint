@@ -13,12 +13,12 @@
       "firmware": "1.0"
     },
     "local_storage": {
-      "os_path": "/etc/trustpoint/certs",
-      "certificate_path": "{{ os_path }}/{{ certificate_profile }}-certificate.pem",
-      "certificate_chain_path": "{{ os_path }}/{{ certificate_profile }}-full-chain.pem",
-      "csr_path": "{{ os_path }}/{{ certificate_profile }}-csr.pem",
-      "private_key_path": "{{ os_path }}/{{ certificate_profile }}-key.pem",
-      "crl_path": "{{ os_path }}/{{ certificate_profile }}-crl.pem",
+      "os_path": "{{ os_path }}",
+      "certificate_path": "{{ os_path }}/{{ common_name }}-certificate.pem",
+      "certificate_chain_path": "{{ os_path }}/{{ common_name }}-full-chain.pem",
+      "csr_path": "{{ os_path }}/{{ common_name }}-csr.pem",
+      "private_key_path": "{{ os_path }}/{{ common_name }}-key.pem",
+      "crl_path": "{{ os_path }}/{{ common_name }}-crl.pem",
       "tls_cert_path": "{{ os_path }}/trustpoint-tls.pem"
     },
     "certificate_request": {

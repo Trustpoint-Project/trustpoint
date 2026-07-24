@@ -239,6 +239,15 @@ class AgentAssignedProfile(models.Model):
         related_name='assigned_to',
         help_text=_('The workflow / renewal profile applied to this agent.'),
     )
+    common_name = models.CharField(
+        verbose_name=_('Common Name (CN)'),
+        max_length=100,
+        help_text=_(
+            'The Common Name (CN) for the certificate. '
+            'Must be unique per agent. Used in the certificate subject and for file paths. '
+            'Examples: "webserver.example.com", "api-server-443", "backup-service"'
+        ),
+    )
     renewal_threshold_days = models.PositiveIntegerField(
         verbose_name=_('Renewal Threshold (days)'),
         default=30,
@@ -294,13 +303,13 @@ class AgentAssignedProfile(models.Model):
     class Meta:
         """Meta options for AgentAssignedProfile."""
 
-        unique_together: ClassVar = [('agent', 'workflow_definition')]
+        unique_together: ClassVar = [('agent', 'common_name')]
         verbose_name = _('Agent Assigned Profile')
         verbose_name_plural = _('Agent Assigned Profiles')
 
     def __str__(self) -> str:
         """Return a human-readable representation."""
-        return f'AgentAssignedProfile({self.agent.name} / {self.workflow_definition.name})'
+        return f'AgentAssignedProfile({self.agent.name} / {self.workflow_definition.name} / CN={self.common_name})'
 
     @property
     def next_certificate_update(self) -> datetime:

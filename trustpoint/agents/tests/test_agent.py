@@ -221,6 +221,25 @@ class TestProfileLoading:
         assert profile.local_storage.private_key_path == Path('domain_credential-key.pem')
         assert profile.local_storage.csr_path == Path('domain_credential-csr.pem')
 
+    def test_local_storage_template_resolution(self):
+        """Test that LocalStorage resolves {{ variable }} templates."""
+        data = {
+            'os_path': '/etc/trustpoint/certs',
+            'common_name': 'webserver.example.com',
+            'certificate_path': '{{ os_path }}/{{ common_name }}-certificate.pem',
+            'private_key_path': '{{ os_path }}/{{ common_name }}-key.pem',
+            'csr_path': '{{ os_path }}/{{ common_name }}-csr.pem',
+            'certificate_chain_path': '{{ os_path }}/{{ common_name }}-chain.pem',
+            'tls_cert_path': '{{ os_path }}/tls.pem',
+        }
+        storage = LocalStorage.from_mapping(data)
+        
+        assert storage.certificate_path == Path('/etc/trustpoint/certs/webserver.example.com-certificate.pem')
+        assert storage.private_key_path == Path('/etc/trustpoint/certs/webserver.example.com-key.pem')
+        assert storage.csr_path == Path('/etc/trustpoint/certs/webserver.example.com-csr.pem')
+        assert storage.certificate_chain_path == Path('/etc/trustpoint/certs/webserver.example.com-chain.pem')
+        assert storage.tls_cert_path == Path('/etc/trustpoint/certs/tls.pem')
+
     def test_optional_fields(self, profile_file: Path):
         """Test that optional fields are properly handled."""
         profile = read_profile(profile_file)

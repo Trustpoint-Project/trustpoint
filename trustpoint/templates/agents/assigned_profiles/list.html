@@ -19,6 +19,7 @@
                 <tr>
                     <th id="checkbox-column"><input type="checkbox"/></th>
                     <th>{% trans "Agent Profile" %}</th>
+                    <th>{% trans "Common Name" %}</th>
                     <th>{% trans "Renewal Threshold (days)" %}</th>
                     <th>{% trans "Last Update" %}</th>
                     <th>{% trans "Next Update" %}</th>
@@ -38,6 +39,7 @@
                                 {{ assignment.workflow_definition.name }}
                             </a>
                         </td>
+                        <td><code>{{ assignment.common_name }}</code></td>
                         <td>{{ assignment.renewal_threshold_days }}</td>
                         <td>
                             {% if assignment.last_certificate_update %}
@@ -78,7 +80,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="7" class="middle">
+                        <td colspan="8" class="middle">
                             {% trans "No profiles have been assigned to this agent yet." %}
                         </td>
                     </tr>

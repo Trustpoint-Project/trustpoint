@@ -45,6 +45,7 @@ import json
 import logging
 import os
 import random
+import re
 import signal
 import socket
 import sys
@@ -168,13 +169,44 @@ class LocalStorage:
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> LocalStorage:
-        """Create LocalStorage from a dictionary mapping."""
+        """Create LocalStorage from a dictionary mapping with template resolution.
+
+        Resolves simple {{ variable }} templates where the variable is another key
+        in the mapping. For example, if data contains:
+            {'os_path': '/etc/certs', 'certificate_path': '{{ os_path }}/cert.pem'}
+        Then certificate_path will be resolved to '/etc/certs/cert.pem'.
+        """
+        resolved_data = dict(data)
+
+        max_iterations = 10
+        for _ in range(max_iterations):
+            changed = False
+            for key, value in list(resolved_data.items()):
+                if not isinstance(value, str):
+                    continue
+                matches = re.findall(r'\{\{\s*(\w+)\s*\}\}', value)
+                if not matches:
+                    continue
+                new_value = value
+                for var_name in matches:
+                    if var_name in resolved_data:
+                        replacement = str(resolved_data[var_name])
+                        new_value = new_value.replace(f'{{{{ {var_name} }}}}', replacement)
+                        new_value = new_value.replace(f'{{{{{var_name}}}}}', replacement)
+                if new_value != value:
+                    resolved_data[key] = new_value
+                    changed = True
+            if not changed:
+                break
+
         return cls(
-            private_key_path=Path(str(data.get('private_key_path', 'domain_credential-key.pem'))),
-            csr_path=Path(str(data.get('csr_path', 'domain_credential-csr.pem'))),
-            tls_cert_path=Path(str(data.get('tls_cert_path', 'trustpoint-tls.pem'))),
-            certificate_path=Path(str(data.get('certificate_path', 'domain_credential-certificate.pem'))),
-            certificate_chain_path=Path(str(data.get('certificate_chain_path', 'domain_credential-chain.pem'))),
+            private_key_path=Path(str(resolved_data.get('private_key_path', 'domain_credential-key.pem'))),
+            csr_path=Path(str(resolved_data.get('csr_path', 'domain_credential-csr.pem'))),
+            tls_cert_path=Path(str(resolved_data.get('tls_cert_path', 'trustpoint-tls.pem'))),
+            certificate_path=Path(str(resolved_data.get('certificate_path', 'domain_credential-certificate.pem'))),
+            certificate_chain_path=Path(
+                str(resolved_data.get('certificate_chain_path', 'domain_credential-chain.pem'))
+            ),
         )
 
 
@@ -740,8 +772,30 @@ def fetch_jobs(params: PollParams, session: Session, cert_pem_urlencoded: str) -
     return poll_interval, jobs
 
 
-def deterministic_paths_for_job(params: PollParams, cert_profile: str) -> tuple[Path, Path, Path, Path]:
-    """Determine file paths for certificate renewal based on profile."""
+def deterministic_paths_for_job(
+    params: PollParams,
+    cert_profile: str,
+    local_storage_override: LocalStorage | None = None,
+) -> tuple[Path, Path, Path, Path]:
+    """Determine file paths for certificate renewal based on profile.
+
+    Args:
+        params: Polling parameters with default local storage paths
+        cert_profile: Certificate profile name (e.g., 'domain_credential', 'tls_server')
+        local_storage_override: Optional LocalStorage from job profile with resolved paths
+
+    Returns:
+        Tuple of (private_key_path, csr_path, certificate_path, certificate_chain_path)
+    """
+    if local_storage_override is not None:
+        return (
+            local_storage_override.private_key_path,
+            local_storage_override.csr_path,
+            local_storage_override.certificate_path,
+            local_storage_override.certificate_chain_path,
+        )
+
+    # Legacy fallback for domain_credential
     if cert_profile == 'domain_credential':
         return (
             params.local_storage.private_key_path,
@@ -750,7 +804,7 @@ def deterministic_paths_for_job(params: PollParams, cert_profile: str) -> tuple[
             params.local_storage.certificate_chain_path,
         )
 
-    # For non-domain credentials, keep deterministic names beside the configured domain key.
+
     base_dir = params.local_storage.private_key_path.parent
     if str(base_dir) == '':
         base_dir = Path()
@@ -789,7 +843,14 @@ def execute_renewal_job(
         public_key_algorithm_oid = _optional_str(cert_req.get('public_key_algorithm_oid'))
         key_parameter = _optional_str(cert_req.get('key_parameter'))
 
-        key_path, csr_path, cert_path, chain_path = deterministic_paths_for_job(params, cert_profile)
+        local_storage_override: LocalStorage | None = None
+        if 'local_storage' in workflow_profile:
+            local_storage_data = _expect_object(workflow_profile['local_storage'], 'job.workflow_profile.local_storage')
+            local_storage_override = LocalStorage.from_mapping(local_storage_data)
+
+        key_path, csr_path, cert_path, chain_path = deterministic_paths_for_job(
+            params, cert_profile, local_storage_override
+        )
 
         LOG.info(
             'executing renewal job',

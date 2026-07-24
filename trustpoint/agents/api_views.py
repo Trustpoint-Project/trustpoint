@@ -121,6 +121,8 @@ def _build_resolved_profile(
     - ``certificate_request.public_key_algorithm_oid`` → OID from domain's issuing CA
     - ``certificate_request.key_size`` → RSA key size (if RSA)
     - ``certificate_request.named_curve`` → ECC curve name (if ECC)
+    - ``local_storage.instance_name`` → unique identifier from assigned_profile
+    - ``local_storage.os_path`` → agent's configured base path
     """
     profile = copy.deepcopy(raw_profile)
     cert_req: dict[str, Any] = profile.get('certificate_request', {})
@@ -157,6 +159,17 @@ def _build_resolved_profile(
             cert_req.pop(key, None)
 
     profile['certificate_request'] = cert_req
+
+    if 'local_storage' in profile:
+        profile['local_storage']['common_name'] = assigned_profile.common_name
+        profile['local_storage']['os_path'] = agent.os_path
+
+    if assigned_profile.common_name:
+        if not assigned_profile.subject or not assigned_profile.subject.strip():
+            cert_req['subject'] = f'/CN={assigned_profile.common_name}'
+        elif '/CN=' not in assigned_profile.subject:
+            cert_req['subject'] = f'{assigned_profile.subject}/CN={assigned_profile.common_name}'
+
     return profile
 
 class IsAuthenticatedAgent(BasePermission):

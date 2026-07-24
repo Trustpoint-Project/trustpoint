@@ -144,9 +144,10 @@ def assigned_profile(
     return AgentAssignedProfile.objects.create(
         agent=agent,
         workflow_definition=workflow_definition,
+        common_name='test-device.local',
         enabled=True,
         next_certificate_update_scheduled=now - timedelta(hours=1),  # Due 1 hour ago
-        subject='/CN=test-device',
+        subject='/C=DE/O=Test Org',
         subject_alt_name='DNS:test-device.local',
     )
 
@@ -538,6 +539,37 @@ class TestProfileResolution:
         resolved = _build_resolved_profile(agent, raw_profile, assigned_profile)
 
         assert 'subject' not in resolved['certificate_request']
+
+    @patch('agents.api_views._resolve_enrollment_url')
+    def test_build_resolved_profile_includes_instance_name(
+        self,
+        mock_resolve_url: Mock,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        """Test that common_name and os_path are included in local_storage and subject."""
+        mock_resolve_url.return_value = None
+        agent.device.domain = None  # Avoid issuing CA requirement
+        agent.device.save()
+        agent.os_path = '/custom/agent/path'
+        agent.save()
+
+        raw_profile = {
+            'local_storage': {
+                'os_path': '/etc/certs',
+                'certificate_path': '{{ os_path }}/{{ common_name }}-cert.pem',
+            },
+            'certificate_request': {},
+        }
+
+        resolved = _build_resolved_profile(agent, raw_profile, assigned_profile)
+
+        assert 'local_storage' in resolved
+        assert resolved['local_storage']['common_name'] == 'test-device.local'
+        assert resolved['local_storage']['os_path'] == '/custom/agent/path'
+        # Check that CN was added to subject
+        assert 'subject' in resolved['certificate_request']
+        assert 'test-device.local' in resolved['certificate_request']['subject']
 
 
 # ============================================================================
