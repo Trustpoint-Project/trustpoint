@@ -41,6 +41,10 @@
 # Security
 'SECURITY.md':
   - 'security'
+'docs/source/cra/**':
+  - 'compliance'
+  - 'cra'
+  - 'security'
 
 # PKI Components
 'trustpoint/pki/**':
