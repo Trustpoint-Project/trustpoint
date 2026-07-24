@@ -109,21 +109,23 @@ jobs:
             trustpoint/
 
       - name: Display Summary in GitHub Actions
-        if: always()
+        if: always() && steps.install_deps.outcome == 'success'
         run: |
           echo "# Minimum Dependency Versions Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "This workflow verifies that Trustpoint works with the minimum dependency versions specified in pyproject.toml" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          cat "md-report.md" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "</details>" >> $GITHUB_STEP_SUMMARY
+          if [ -f "md-report.md" ]; then
+            echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            cat "md-report.md" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Upload Test Reports
         uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && steps.install_deps.outcome == 'success'
         with:
           name: minimum-versions-test-reports
           path: |
@@ -132,7 +134,7 @@ jobs:
 
       - name: Render the report to the PR
         uses: marocchino/sticky-pull-request-comment@v3
-        if: always() && github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request' && steps.install_deps.outcome == 'success' && hashFiles('md-report.md') != ''
         with:
           header: minimum-versions-test-report
           recreate: true

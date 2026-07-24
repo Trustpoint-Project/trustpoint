@@ -25,8 +25,6 @@ def normalize_version(version: str) -> str:
 def parse_version_spec(spec: str) -> str | None:
     """Parse a PEP 440 version specifier and extract the minimum version."""
     spec = spec.strip()
-    """Parse a PEP 440 version specifier and extract the minimum version."""
-    spec = spec.strip()
 
     if match := re.match(r'^==\s*(.+)$', spec):
         return match.group(1)
