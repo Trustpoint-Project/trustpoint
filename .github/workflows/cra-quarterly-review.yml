@@ -19,6 +19,7 @@ jobs:
       - name: Get current quarter info
         id: quarter
         run: |
+          MONTH=$(date +%m)
           MONTH=$((10#$MONTH))
           YEAR=$(date +%Y)
           
