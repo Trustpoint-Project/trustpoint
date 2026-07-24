@@ -77,7 +77,7 @@ jobs:
           cache-to: type=inline
 
       - name: Generate attestation for trustpoint
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/trustpoint
           subject-digest: ${{ steps.push-trustpoint.outputs.digest }}
@@ -96,7 +96,7 @@ jobs:
           cache-to: type=inline
 
       - name: Generate attestation for postgres
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/trustpoint-postgres
           subject-digest: ${{ steps.push-postgres.outputs.digest }}
