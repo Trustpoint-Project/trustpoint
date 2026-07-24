@@ -1,5 +1,18 @@
 name: Tests / Minimum Dependency Versions
 
+# This workflow ensures Trustpoint is compatible with the minimum versions
+# of all dependencies specified in pyproject.toml.
+#
+# It uses uv's --resolution=lowest-direct flag to install the lowest
+# compatible versions that satisfy all dependency constraints.
+#
+# For example, if pyproject.toml specifies "cryptography>=46.0.1",
+# this workflow will install the lowest compatible version (46.0.1 or higher
+# if 46.0.1 conflicts with other dependencies).
+#
+# This helps catch breaking changes in dependencies early and ensures
+# our version constraints are accurate.
+
 on:
   pull_request:
   push:
@@ -30,24 +43,32 @@ jobs:
         with:
           python-version-file: "pyproject.toml"
 
-      - name: Generate minimum versions constraints
+      - name: Install with minimum versions using lowest resolution
         run: |
-          python .github/scripts/generate_minimum_versions.py > constraints.txt
-          echo "Generated constraints:"
-          cat constraints.txt
-
-      - name: Create virtual environment and install with minimum versions
-        run: |
-          # Create a virtual environment
-          uv venv
-          # Install the project's dependencies using the constraint file
-          # This ensures we get the minimum versions
-          uv pip install -c constraints.txt -e ".[dev]"
+          # Use uv's --resolution=lowest-direct to install the minimum compatible versions
+          # This automatically resolves to the lowest versions that satisfy all constraints
+          uv sync --resolution=lowest-direct --all-extras
 
       - name: Verify installed versions
         run: |
-          echo "Installed package versions:"
+          echo "Installed package versions (should be minimum compatible versions):"
           uv pip list
+          echo ""
+          echo "Checking specific key packages:"
+          uv pip show cryptography django django-stubs mypy
+
+      - name: Export resolved versions for transparency
+        run: |
+          echo "Resolved dependency versions:" > resolved-versions.txt
+          uv pip list >> resolved-versions.txt
+          cat resolved-versions.txt
+
+      - name: Validate minimum versions
+        run: |
+          echo "## Minimum Version Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          uv run python .github/scripts/validate_minimum_versions.py | tee -a $GITHUB_STEP_SUMMARY
+        continue-on-error: true  # Don't fail the workflow, just report
 
       - name: Run Django system checks
         run: |
@@ -87,7 +108,7 @@ jobs:
           name: minimum-versions-test-reports
           path: |
             reports/
-            constraints.txt
+            resolved-versions.txt
 
       - name: Render the report to the PR
         uses: marocchino/sticky-pull-request-comment@v3

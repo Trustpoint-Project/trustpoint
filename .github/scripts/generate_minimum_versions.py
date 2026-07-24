@@ -1,4 +1,10 @@
-"""Generate minimum version constraints from pyproject.toml."""
+"""Generate minimum version constraints from pyproject.toml.
+
+This script parses pyproject.toml and extracts the minimum version for each
+dependency. It can be used to:
+1. Generate a constraints file for manual testing
+2. Validate that installed versions match the specified minimums
+"""
 
 import re
 import sys
