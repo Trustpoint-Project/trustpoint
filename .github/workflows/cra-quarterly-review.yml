@@ -43,7 +43,7 @@ jobs:
           echo "next_review=${NEXT_REVIEW}" >> $GITHUB_OUTPUT
 
       - name: Create CRA Review Issue
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const quarter = '${{ steps.quarter.outputs.quarter }}';
