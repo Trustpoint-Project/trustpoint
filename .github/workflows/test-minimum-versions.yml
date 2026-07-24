@@ -44,12 +44,27 @@ jobs:
           python-version-file: "pyproject.toml"
 
       - name: Install with minimum versions using lowest resolution
+        id: install_deps
+        continue-on-error: true
         run: |
           # Use uv's --resolution=lowest-direct to install the minimum compatible versions
           # This automatically resolves to the lowest versions that satisfy all constraints
           uv sync --resolution=lowest-direct --all-extras
 
+      - name: Report installation failures
+        if: steps.install_deps.outcome == 'failure'
+        run: |
+          echo "## ❌ Installation Failed with Minimum Versions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The minimum dependency versions specified in pyproject.toml are incompatible with the current Python version or build environment." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This indicates that the minimum version constraints need to be updated." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Action Required:** Review and update the minimum versions in \`pyproject.toml\`" >> $GITHUB_STEP_SUMMARY
+          exit 1
+
       - name: Verify installed versions
+        if: steps.install_deps.outcome == 'success'
         run: |
           echo "Installed package versions (should be minimum compatible versions):"
           uv pip list
@@ -58,12 +73,14 @@ jobs:
           uv pip show cryptography django django-stubs mypy
 
       - name: Export resolved versions for transparency
+        if: steps.install_deps.outcome == 'success'
         run: |
           echo "Resolved dependency versions:" > resolved-versions.txt
           uv pip list >> resolved-versions.txt
           cat resolved-versions.txt
 
       - name: Validate minimum versions
+        if: steps.install_deps.outcome == 'success'
         run: |
           echo "## Minimum Version Validation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -71,14 +88,17 @@ jobs:
         continue-on-error: true  # Don't fail the workflow, just report
 
       - name: Run Django system checks
+        if: steps.install_deps.outcome == 'success'
         run: |
           uv run trustpoint/manage.py check --deploy
 
       - name: Run database migrations
+        if: steps.install_deps.outcome == 'success'
         run: |
           uv run trustpoint/manage.py migrate
 
       - name: Run Pytest
+        if: steps.install_deps.outcome == 'success'
         run: |
           mkdir -p reports
           uv run pytest \
