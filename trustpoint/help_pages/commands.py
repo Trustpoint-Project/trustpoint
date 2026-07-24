@@ -131,15 +131,19 @@ class EstUsernamePasswordCommandBuilder:
         """
         profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
         profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
-        sans_line = f'-addext "subjectAltName = {profile_sans}" \\\n' if profile_sans else ''
+
+        # For better cross-platform usability (Linux shells and Windows cmd.exe),
+        # we avoid shell-specific line continuations here and emit a single-line
+        # command that can be pasted into either environment without modification.
+        sans_part = f'-addext "subjectAltName = {profile_sans}" ' if profile_sans else ''
 
         return (
-            'openssl req \\\n'
-            '-new \\\n'
-            f'-key key-{cred_number}.pem \\\n'
-            '-outform DER \\\n'
-            f'-out csr-{cred_number}.der \\\n'
-            f'{sans_line}'
+            'openssl req '
+            '-new '
+            f'-key key-{cred_number}.pem '
+            '-outform DER '
+            f'-out csr-{cred_number}.der '
+            f'{sans_part}'
             f'-subj "{profile_subject_entries}"'
         )
 
@@ -156,13 +160,42 @@ class EstUsernamePasswordCommandBuilder:
         Returns:
             The constructed command.
         """
+        # Emit a single-line curl command so it can be pasted into both
+        # Linux shells and Windows cmd.exe without requiring line
+        # continuation characters.
         return (
-            f'curl --user "{est_username}:{est_password}" \\\n'
-            f'--cacert trustpoint-tls-trust-store.pem \\\n'
-            '--header "Content-Type: application/pkcs10" \\\n'
-            f'--data-binary "@csr-{cred_number}.der" \\\n'
-            f'-o certificate-{cred_number}.p7c \\\n'
+            'curl '
+            f'--user "{est_username}:{est_password}" '
+            '--cacert trustpoint-tls-trust-store.pem '
+            '--header "Content-Type: application/pkcs10" '
+            f'--data-binary "@csr-{cred_number}.der" '
+            f'-o certificate-{cred_number}.p7c '
             f'{host}'
+        )
+
+    @staticmethod
+    def get_curl_enroll_windows_command(est_username: str, est_password: str, host: str, cred_number: int) -> str:
+        """Get the Windows cmd.exe-friendly curl enroll command.
+
+        This variant uses ``curl.exe`` and caret (``^``) line continuations so that the
+        multi-line command can be copied directly into a Windows ``cmd`` prompt.
+
+        Args:
+            est_username: The EST username to use.
+            est_password:The EST password to use.
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./est/...
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            f'curl.exe --user "{est_username}:{est_password}" ^\n'
+            f'  --cacert trustpoint-tls-trust-store.pem ^\n'
+            '  --header "Content-Type: application/pkcs10" ^\n'
+            f'  --data-binary "@csr-{cred_number}.der" ^\n'
+            f'  -o certificate-{cred_number}.p7c ^\n'
+            f'  {host}'
         )
 
     @staticmethod
@@ -178,6 +211,32 @@ class EstUsernamePasswordCommandBuilder:
         return (
             f'base64 -d -i certificate-{cred_number}.p7c \\\n'
             f'| openssl pkcs7 -inform DER -print_certs -out certificate-{cred_number}.pem'
+        )
+
+    @staticmethod
+    def get_conversion_p7_pem_windows_command(cred_number: int) -> str:
+        """Get the Windows-friendly conversion from PKCS#7 to PEM command.
+
+        This variant is designed for Windows environments where the EST server
+        response has been stored as a base64-encoded PKCS#7 file
+        (``certificate-<n>.p7c``). It first decodes the base64 content to a
+        binary PKCS#7 file using ``certutil`` and then converts it to PEM using
+        ``openssl pkcs7``.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
+        # Use ``&`` to chain commands in cmd.exe so they can be pasted as a
+        # single line without requiring line continuation characters.
+        return (
+            f'certutil -f -decode certificate-{cred_number}.p7c '
+            f'certificate-{cred_number}.p7b & '
+            f'openssl pkcs7 -inform DER '
+            f'-in certificate-{cred_number}.p7b '
+            f'-print_certs -out certificate-{cred_number}.pem'
         )
 
     @staticmethod

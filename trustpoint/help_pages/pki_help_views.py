@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, override
+from typing import Any
 
 from django.conf import settings
 from django.http import Http404
@@ -21,33 +21,24 @@ from help_pages.base import (
     build_keygen_section,
     build_tls_trust_store_section,
 )
-from help_pages.commands import (
-    CmpClientCertificateCommandBuilder,
-    EstClientCertificateCommandBuilder,
-)
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import TlsSettings
-from pki.models import CaModel, DevIdRegistration
-from trustpoint.page_context import (
-    PKI_PAGE_CATEGORY,
-    PKI_PAGE_DOMAIN_SUBCATEGORY,
-    PKI_PAGE_ISSUING_CAS_SUBCATEGORY,
-    PageContextMixin,
-)
+from pki.models import CaModel, DevIdRegistration, DomainModel, IssuedCredentialModel, OwnerCredentialModel
+from trustpoint.settings import ADVERTISED_PORT
 
-# --------------------------------------------------- Base Classes ----------------------------------------------------
+PKI_PAGE_DOMAIN_SUBCATEGORY = 'pki:domain'
+PKI_PAGE_TRUSTSTORES_SUBCATEGORY = 'pki:truststores'
 
 
-class BaseHelpView(PageContextMixin, DetailView[DevIdRegistration]):
-    """Base help view that constructs the context."""
+class BaseHelpView(DetailView):
+    """Base help view for PKI help pages."""
 
     template_name = 'help/help_page.html'
-    http_method_names = ('get',)
     model = DevIdRegistration
-    context_object_name = 'idevid_registration'
+    context_object_name = 'devid_registration'
 
-    page_category = PKI_PAGE_CATEGORY
-    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
+    page_category = 'pki'
+    page_name: str
     strategy: HelpPageStrategy
 
     def _make_context(self) -> HelpContext:
@@ -56,9 +47,10 @@ class BaseHelpView(PageContextMixin, DetailView[DevIdRegistration]):
         if not domain:
             raise Http404(_('Failed to get domain from DevidRegistration.'))
 
-        https_port = settings.TP_HTTPS_PORT or '443'
-        first_ip = TlsSettings.get_first_ipv4_address()
-        host_base = f'https://{first_ip}:{https_port}' if https_port != '443' else f'https://{first_ip}'
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
 
         public_key_info = domain.public_key_info
         if not public_key_info:
@@ -66,7 +58,7 @@ class BaseHelpView(PageContextMixin, DetailView[DevIdRegistration]):
 
         return HelpContext(
             devid_registration=devid_registration,
-            allowed_app_profiles=[], # not required, IDevID help views only for domain credential, not app certs
+            allowed_app_profiles=[],
             domain=domain,
             domain_unique_name=domain.unique_name,
             public_key_info=public_key_info,
@@ -76,197 +68,674 @@ class BaseHelpView(PageContextMixin, DetailView[DevIdRegistration]):
             cred_count=0,
         )
 
-    @override
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Gets the context data and builds the HelpPage.
-
-        Args:
-            kwargs: Passed to super().get_context_data().
-
-        Returns:
-            The django context for the detail view.
-        """
+        """Get the context data for the help page."""
         context = super().get_context_data(**kwargs)
-        if not self.strategy:
-            err_msg = _('No strategy configured.')
-            raise RuntimeError(err_msg)
         help_context = self._make_context()
-        sections, heading = self.strategy.build_sections(help_context=help_context)
-
+        sections, heading = self.strategy.build_sections(help_context)
         context['help_page'] = HelpPage(heading=heading, sections=sections)
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
-        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
-        context['back_url'] = f'{self.page_category}:{self.page_name}-config'
-
+        context['back_url'] = 'pki:domains-config'
         return context
 
 
-# ------------------------- Onboarding - Application Certificates - Help Page Implementations -------------------------
-
-
 class OnboardingCmpIdevIdDomainCredentialStrategy(HelpPageStrategy):
-    """Strategy for building the onboarding cmp shared-secret help page."""
+    """Strategy for CMP onboarding with IDevID domain credential."""
 
-    @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
-        operation = 'initialization'
-        base = help_context.host_cmp_path
+        """Build sections for CMP onboarding help page."""
+        domain = help_context.domain
 
-        summary = HelpSection(
-            _non_lazy('Summary'),
-            [
+        summary_section = HelpSection(
+            heading=_('Summary'),
+            rows=[
                 HelpRow(
-                    _non_lazy('Domain Credential Request URL'),
-                    f'{base}/{operation}',
-                    ValueRenderType.CODE,
+                    key=_non_lazy('Protocol'),
+                    value=_non_lazy('CMP'),
+                    value_render_type=ValueRenderType.TEXT,
                 ),
                 HelpRow(
-                    _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
-                    ValueRenderType.CODE,
+                    key=_non_lazy('Authentication'),
+                    value=_non_lazy('IDevID with Domain Credential'),
+                    value_render_type=ValueRenderType.TEXT,
                 ),
             ],
         )
 
-        domain_cred_profile = help_context.domain.get_domain_credential_profile_name()
-
-        enroll_cmd = CmpClientCertificateCommandBuilder.get_idevid_domain_credential_command(
-            host=f'{base}/{domain_cred_profile}/{operation}'
+        keygen_section = build_keygen_section(
+            public_key_info=help_context.public_key_info,
+            file_name='idevid',
         )
 
-        enroll_row = HelpRow(
-            _non_lazy('Enroll the Domain Credential with CMP'), value=enroll_cmd, value_render_type=ValueRenderType.CODE
+        issuing_ca_section = build_issuing_ca_cert_section(domain=domain)
+
+        extract_section = build_extract_files_from_p12_section()
+
+        return (
+            [summary_section, keygen_section, issuing_ca_section, extract_section],
+            'Help - Issue Application Certificates',
         )
-
-        enroll_section = HelpSection(heading=_non_lazy('Enroll Domain Credential'), rows=[enroll_row])
-        sections = [
-            summary,
-            build_issuing_ca_cert_section(domain=help_context.domain),
-            build_keygen_section(help_context, file_name='domain-credential-key.pem'),
-            build_extract_files_from_p12_section(),
-            enroll_section,
-        ]
-
-        return sections, _non_lazy('Help - Issue Application Certificates using CMP with a Domain Credential')
-
-
-class OnboardingCmpIdevidRegistrationHelpView(BaseHelpView):
-    """Help view for the CMP IDevID Registration, which displays the required OpenSSL commands."""
-
-    strategy = OnboardingCmpIdevIdDomainCredentialStrategy()
 
 
 class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
-    """Strategy for building the onboarding EST shared-secret help page."""
+    """Strategy for EST onboarding with IDevID domain credential."""
 
-    @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
-        operation = 'simpleenroll'
-        base = help_context.host_est_path
-
-        summary = HelpSection(
-            _non_lazy('Summary'),
-            [
-                HelpRow(
-                    _non_lazy('Domain Credential Request URL'),
-                    f'{base}/{operation}',
-                    ValueRenderType.CODE,
-                ),
-                HelpRow(
-                    _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
-                    ValueRenderType.CODE,
-                ),
-            ],
-        )
-
-        gen_csr_row = HelpRow(
-            _non_lazy('Domain Credential CSR Generation'),
-            value=EstClientCertificateCommandBuilder.get_idevid_gen_csr_command(),
-            value_render_type=ValueRenderType.CODE,
-        )
-
-        domain_cred_profile = help_context.domain.get_domain_credential_profile_name()
-
-        enroll_row = HelpRow(
-            _non_lazy('Enroll the Domain Credential with EST'),
-            value=EstClientCertificateCommandBuilder.get_idevid_enroll_domain_credential_command(
-                host=f'{base}/{domain_cred_profile}/{operation}'
-            ),
-            value_render_type=ValueRenderType.CODE,
-        )
-
-        der_pem_conversion_row = HelpRow(
-            _non_lazy('Convert DER to PEM'),
-            value=EstClientCertificateCommandBuilder.get_idevid_der_pem_conversion_command(),
-            value_render_type=ValueRenderType.CODE,
-        )
-
-        enroll_section = HelpSection(
-            heading=_non_lazy('Enroll Domain Credential'), rows=[gen_csr_row, enroll_row, der_pem_conversion_row]
-        )
-
-        get_ca_certs_row = HelpRow(
-            _non_lazy('Retrieve CA chain'),
-            value=EstClientCertificateCommandBuilder.get_idevid_ca_certs_command(host=f'{base}/cacerts/'),
-            value_render_type=ValueRenderType.CODE,
-        )
-
-        pkcs7_pem_conversion_row = HelpRow(
-            _non_lazy('Convert PKCS7 to PEM'),
-            value=EstClientCertificateCommandBuilder.get_idevid_pkcs7_pem_conversion_command(),
-            value_render_type=ValueRenderType.CODE,
-        )
-
-        ca_cert_section = HelpSection(
-            heading=_non_lazy('CA Certificate Chain'),
+        """Build sections for EST onboarding help page."""
+        summary_section = HelpSection(
+            heading=_('Summary'),
             rows=[
-                get_ca_certs_row,
-                pkcs7_pem_conversion_row,
+                HelpRow(
+                    key=_non_lazy('Protocol'),
+                    value=_non_lazy('EST'),
+                    value_render_type=ValueRenderType.TEXT,
+                ),
+                HelpRow(
+                    key=_non_lazy('Authentication'),
+                    value=_non_lazy('IDevID with Domain Credential'),
+                    value_render_type=ValueRenderType.TEXT,
+                ),
             ],
         )
 
-        sections = [
-            summary,
-            build_tls_trust_store_section(),
-            build_keygen_section(help_context, file_name='domain-credential-key.pem'),
-            build_extract_files_from_p12_section(),
-            enroll_section,
-            ca_cert_section,
-        ]
+        keygen_section = build_keygen_section(
+            public_key_info=help_context.public_key_info,
+            file_name='idevid',
+        )
 
-        return sections, _non_lazy('Help - Issue Application Certificates using CMP with a Domain Credential')
+        tls_section = build_tls_trust_store_section()
+
+        extract_section = build_extract_files_from_p12_section()
+
+        return [summary_section, keygen_section, tls_section, extract_section], 'Help - Issue Application Certificates'
+
+
+class OnboardingCmpIdevidRegistrationHelpView(BaseHelpView):
+    """Help view for CMP onboarding with IDevID domain credential."""
+
+    page_name = 'domains'
+    strategy = OnboardingCmpIdevIdDomainCredentialStrategy()
 
 
 class OnboardingEstIdevidRegistrationHelpView(BaseHelpView):
-    """Help view for the EST IDevID Registration, which displays the required OpenSSL commands."""
+    """Help view for EST onboarding with IDevID domain credential."""
 
+    page_name = 'domains'
     strategy = OnboardingEstIdevIdDomainCredentialStrategy()
 
 
-# ------------------------------------------ CRL Download Help Page ---------------------------------------------------
+class DevIdRegistrationDetailView(DetailView):
+    """View to display details of a DevIdRegistration."""
+
+    model = DevIdRegistration
+    template_name = 'help/devid_registration_detail.html'
+    context_object_name = 'devid_registration'
+
+    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
+    strategy: HelpPageStrategy
+
+    def _make_context(self) -> HelpContext:
+        devid_registration = self.object
+        domain = getattr(devid_registration, 'domain', None)
+        if not domain:
+            raise Http404(_('Failed to get domain from DevidRegistration.'))
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        public_key_info = domain.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        return HelpContext(
+            devid_registration=devid_registration,
+            allowed_app_profiles=[],  # not required for IDevID help views
+            domain=domain,
+            domain_unique_name=domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[],
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Get the context data for the DevIdRegistration detail view."""
+        context = super().get_context_data(**kwargs)
+        help_context = self._make_context()
+        context.update(
+            {
+                'page_name': help_context.page_name,
+                'domain': help_context.domain,
+                'domain_unique_name': help_context.domain_unique_name,
+                'public_key_info': help_context.public_key_info,
+                'host_base': help_context.host_base,
+                'help_sections': help_context.help_sections,
+            }
+        )
+        return context
 
 
-class CrlDownloadHelpView(PageContextMixin, DetailView[CaModel]):
-    """Help view for downloading CRLs via curl commands."""
+class DevIdRegistrationHelpView(DevIdRegistrationDetailView):
+    """View to display help pages for DevIdRegistration."""
 
     template_name = 'help/help_page.html'
-    http_method_names = ('get',)
+    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
+
+    def _make_context(self) -> HelpContext:
+        devid_registration = self.object
+        domain = getattr(devid_registration, 'domain', None)
+        if not domain:
+            raise Http404(_('Failed to get domain from DevidRegistration.'))
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        public_key_info = domain.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        keygen_section = build_keygen_section(
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        issuing_ca_cert_section = build_issuing_ca_cert_section(
+            domain=domain,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        tls_trust_store_section = build_tls_trust_store_section(
+            domain=domain,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        return HelpContext(
+            devid_registration=devid_registration,
+            allowed_app_profiles=[],
+            domain=domain,
+            domain_unique_name=domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[
+                HelpSection(
+                    title=_('Key Generation'),
+                    rows=keygen_section,
+                ),
+                HelpSection(
+                    title=_('Issuing CA Certificate'),
+                    rows=issuing_ca_cert_section,
+                ),
+                HelpSection(
+                    title=_('TLS Trust Store'),
+                    rows=tls_trust_store_section,
+                ),
+            ],
+        )
+
+
+class DomainDetailView(DetailView):
+    """View to display details of a Domain."""
+
+    model = DomainModel
+    template_name = 'help/domain_detail.html'
+    context_object_name = 'domain'
+
+    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
+    strategy: HelpPageStrategy
+
+    def _make_context(self) -> HelpContext:
+        domain = self.object
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        public_key_info = domain.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        return HelpContext(
+            allowed_app_profiles=domain.get_allowed_cert_profiles(),
+            domain=domain,
+            domain_unique_name=domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[],
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Get the context data for the Domain detail view."""
+        context = super().get_context_data(**kwargs)
+        help_context = self._make_context()
+        context.update(
+            {
+                'page_name': help_context.page_name,
+                'domain': help_context.domain,
+                'domain_unique_name': help_context.domain_unique_name,
+                'public_key_info': help_context.public_key_info,
+                'host_base': help_context.host_base,
+                'help_sections': help_context.help_sections,
+                'allowed_app_profiles': help_context.allowed_app_profiles,
+            }
+        )
+        return context
+
+
+class DomainHelpView(DomainDetailView):
+    """View to display help pages for Domain."""
+
+    template_name = 'help/help_page.html'
+    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
+
+    def _make_context(self) -> HelpContext:
+        domain = self.object
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        public_key_info = domain.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        keygen_section = build_keygen_section(
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        issuing_ca_cert_section = build_issuing_ca_cert_section(
+            domain=domain,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        tls_trust_store_section = build_tls_trust_store_section(
+            domain=domain,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        return HelpContext(
+            allowed_app_profiles=domain.get_allowed_cert_profiles(),
+            domain=domain,
+            domain_unique_name=domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[
+                HelpSection(
+                    title=_('Key Generation'),
+                    rows=keygen_section,
+                ),
+                HelpSection(
+                    title=_('Issuing CA Certificate'),
+                    rows=issuing_ca_cert_section,
+                ),
+                HelpSection(
+                    title=_('TLS Trust Store'),
+                    rows=tls_trust_store_section,
+                ),
+            ],
+        )
+
+
+class IssuedCredentialDetailView(DetailView):
+    """View to display details of an IssuedCredential."""
+
+    model = IssuedCredentialModel
+    template_name = 'help/issued_credential_detail.html'
+    context_object_name = 'issued_credential'
+
+    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
+    strategy: HelpPageStrategy
+
+    def _make_context(self) -> HelpContext:
+        issued_credential = self.object
+        device = getattr(issued_credential, 'device', None)
+        if not device:
+            raise Http404(_('Failed to get device from IssuedCredential.'))
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        public_key_info = device.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        return HelpContext(
+            device=device,
+            issued_credential=issued_credential,
+            allowed_app_profiles=[],
+            domain=device.domain,
+            domain_unique_name=device.domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[],
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Get the context data for the IssuedCredential detail view."""
+        context = super().get_context_data(**kwargs)
+        help_context = self._make_context()
+        context.update(
+            {
+                'page_name': help_context.page_name,
+                'device': help_context.device,
+                'issued_credential': help_context.issued_credential,
+                'domain': help_context.domain,
+                'domain_unique_name': help_context.domain_unique_name,
+                'public_key_info': help_context.public_key_info,
+                'host_base': help_context.host_base,
+                'help_sections': help_context.help_sections,
+            }
+        )
+        return context
+
+
+class IssuedCredentialHelpView(IssuedCredentialDetailView):
+    """View to display help pages for IssuedCredential."""
+
+    template_name = 'help/help_page.html'
+    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
+
+    def _make_context(self) -> HelpContext:
+        issued_credential = self.object
+        device = getattr(issued_credential, 'device', None)
+        if not device:
+            raise Http404(_('Failed to get device from IssuedCredential.'))
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        public_key_info = device.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        keygen_section = build_keygen_section(
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        issuing_ca_cert_section = build_issuing_ca_cert_section(
+            domain=device.domain,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        tls_trust_store_section = build_tls_trust_store_section(
+            domain=device.domain,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        return HelpContext(
+            device=device,
+            issued_credential=issued_credential,
+            allowed_app_profiles=[],
+            domain=device.domain,
+            domain_unique_name=device.domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[
+                HelpSection(
+                    title=_('Key Generation'),
+                    rows=keygen_section,
+                ),
+                HelpSection(
+                    title=_('Issuing CA Certificate'),
+                    rows=issuing_ca_cert_section,
+                ),
+                HelpSection(
+                    title=_('TLS Trust Store'),
+                    rows=tls_trust_store_section,
+                ),
+            ],
+        )
+
+
+class OwnerCredentialDetailView(DetailView):
+    """View to display details of an OwnerCredential."""
+
+    model = OwnerCredentialModel
+    template_name = 'help/owner_credential_detail.html'
+    context_object_name = 'owner_credential'
+
+    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
+    strategy: HelpPageStrategy
+
+    def _make_context(self) -> HelpContext:
+        owner_credential = self.object
+        device = getattr(owner_credential, 'device', None)
+        if not device:
+            raise Http404(_('Failed to get device from OwnerCredential.'))
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        public_key_info = device.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        return HelpContext(
+            device=device,
+            owner_credential=owner_credential,
+            allowed_app_profiles=[],
+            domain=device.domain,
+            domain_unique_name=device.domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[],
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Get the context data for the OwnerCredential detail view."""
+        context = super().get_context_data(**kwargs)
+        help_context = self._make_context()
+        context.update(
+            {
+                'page_name': help_context.page_name,
+                'device': help_context.device,
+                'owner_credential': help_context.owner_credential,
+                'domain': help_context.domain,
+                'domain_unique_name': help_context.domain_unique_name,
+                'public_key_info': help_context.public_key_info,
+                'host_base': help_context.host_base,
+                'help_sections': help_context.help_sections,
+            }
+        )
+        return context
+
+
+class OwnerCredentialHelpView(OwnerCredentialDetailView):
+    """View to display help pages for OwnerCredential."""
+
+    template_name = 'help/help_page.html'
+    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
+
+    def _make_context(self) -> HelpContext:
+        owner_credential = self.object
+        device = getattr(owner_credential, 'device', None)
+        if not device:
+            raise Http404(_('Failed to get device from OwnerCredential.'))
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        public_key_info = device.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        keygen_section = build_keygen_section(
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        issuing_ca_cert_section = build_issuing_ca_cert_section(
+            domain=device.domain,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        tls_trust_store_section = build_tls_trust_store_section(
+            domain=device.domain,
+            host_base=host_base,
+            page_name=self.page_name,
+        )
+
+        return HelpContext(
+            device=device,
+            owner_credential=owner_credential,
+            allowed_app_profiles=[],
+            domain=device.domain,
+            domain_unique_name=device.domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[
+                HelpSection(
+                    title=_('Key Generation'),
+                    rows=keygen_section,
+                ),
+                HelpSection(
+                    title=_('Issuing CA Certificate'),
+                    rows=issuing_ca_cert_section,
+                ),
+                HelpSection(
+                    title=_('TLS Trust Store'),
+                    rows=tls_trust_store_section,
+                ),
+            ],
+        )
+
+
+class CaDetailView(DetailView):
+    """View to display details of a CA."""
+
     model = CaModel
+    template_name = 'help/ca_detail.html'
     context_object_name = 'ca'
 
-    page_category = PKI_PAGE_CATEGORY
-    page_name = PKI_PAGE_ISSUING_CAS_SUBCATEGORY
+    page_name = PKI_PAGE_TRUSTSTORES_SUBCATEGORY
+    strategy: HelpPageStrategy
 
-    @override
+    def _make_context(self) -> HelpContext:
+        ca = self.object
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        return HelpContext(
+            ca=ca,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[],
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Get the context data for the CA detail view."""
+        context = super().get_context_data(**kwargs)
+        help_context = self._make_context()
+        context.update(
+            {
+                'page_name': help_context.page_name,
+                'ca': help_context.ca,
+                'host_base': help_context.host_base,
+                'help_sections': help_context.help_sections,
+            }
+        )
+        return context
+
+
+class CaHelpView(CaDetailView):
+    """View to display help pages for CA."""
+
+    template_name = 'help/help_page.html'
+    page_name = PKI_PAGE_TRUSTSTORES_SUBCATEGORY
+
+    def _make_context(self) -> HelpContext:
+        ca = self.object
+
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
+
+        ca_cert_section = [
+            HelpRow(
+                _non_lazy('CA Certificate'),
+                _non_lazy('Download the CA certificate in PEM format.'),
+                ValueRenderType.CODE,
+                format_html(
+                    '<a href="{}">Download CA Certificate (PEM)</a>',
+                    reverse('pki:ca-cert-download', kwargs={'pk': ca.pk}),
+                ),
+            ),
+            HelpRow(
+                _non_lazy('CA Certificate Chain'),
+                _non_lazy('Download the complete CA certificate chain in PEM format.'),
+                ValueRenderType.CODE,
+                format_html(
+                    '<a href="{}">Download CA Certificate Chain (PEM)</a>',
+                    reverse('pki:ca-cert-chain-download', kwargs={'pk': ca.pk}),
+                ),
+            ),
+        ]
+
+        return HelpContext(
+            ca=ca,
+            host_base=host_base,
+            page_name=self.page_name,
+            help_sections=[
+                HelpSection(
+                    title=_('CA Certificate'),
+                    rows=ca_cert_section,
+                ),
+            ],
+        )
+
+
+class CrlDownloadHelpView(CaDetailView):
+    """View to display help pages for CRL download."""
+
+    template_name = 'help/help_page.html'
+    page_name = PKI_PAGE_TRUSTSTORES_SUBCATEGORY
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Gets the context data and builds the HelpPage for CRL download."""
         context = super().get_context_data(**kwargs)
         ca = self.object
 
-        https_port = settings.TP_HTTPS_PORT or '443'
-        first_ip = TlsSettings.get_first_ipv4_address()
-        host_base = f'https://{first_ip}:{https_port}' if https_port != '443' else f'https://{first_ip}'
+        host_base = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+        )
         crl_endpoint = f'{host_base}/crl/{ca.pk}/'
 
         has_crl = bool(ca.crl_pem)
@@ -277,115 +746,46 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[CaModel]):
                 HelpRow(
                     _non_lazy('CRL Status'),
                     _non_lazy('Available'),
-                    ValueRenderType.PLAIN,
+                    ValueRenderType.TEXT,
+                    _non_lazy('A CRL is available for download.'),
                 )
             )
             crl_status_rows.append(
                 HelpRow(
-                    _non_lazy('Last Generated'),
-                    ca.last_crl_issued_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                    ValueRenderType.PLAIN,
+                    _non_lazy('Last CRL Issued At'),
+                    _non_lazy('Timestamp'),
+                    ValueRenderType.TEXT,
+                    ca.last_crl_issued_at.isoformat(),
+                )
+            )
+            crl_status_rows.append(
+                HelpRow(
+                    _non_lazy('CRL Download'),
+                    _non_lazy('Download the CRL in PEM format.'),
+                    ValueRenderType.CODE,
+                    format_html(
+                        '<a href="{}">Download CRL (PEM)</a>',
+                        reverse('pki:ca-crl-download', kwargs={'pk': ca.pk}),
+                    ),
                 )
             )
         else:
             crl_status_rows.append(
                 HelpRow(
                     _non_lazy('CRL Status'),
-                    _non_lazy('Not Available - Generate a CRL first'),
-                    ValueRenderType.PLAIN,
+                    _non_lazy('Not Available'),
+                    ValueRenderType.TEXT,
+                    _non_lazy('No CRL is available for download.'),
                 )
             )
 
-        help_page_url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': ca.pk})
-        generate_url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': ca.pk})
-        generate_url_with_next = f'{generate_url}?next={help_page_url}'
-        generate_button = format_html(
-            '<a href="{}" class="btn btn-primary w-100">{}</a>',
-            generate_url_with_next,
-            _non_lazy('Generate CRL')
-        )
-        crl_status_rows.append(
-            HelpRow(
-                _non_lazy('Generate New CRL'),
-                generate_button,
-                ValueRenderType.PLAIN,
-            )
-        )
-
-        crl_status_section = HelpSection(_non_lazy('CRL Status'), crl_status_rows)
-
-        summary = HelpSection(
-            _non_lazy('Summary'),
-            [
-                HelpRow(
-                    _non_lazy('CA'),
-                    ca.unique_name,
-                    ValueRenderType.PLAIN,
-                ),
-                HelpRow(
-                    _non_lazy('CRL Download Endpoint'),
-                    crl_endpoint,
-                    ValueRenderType.CODE,
-                ),
-            ],
-        )
-
-        download_pem_cmd = (
-            f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
-            f'  -o {ca.unique_name}.pem.crl \\\n'
-            f'  "{crl_endpoint}"'
-        )
-
-        download_der_cmd = (
-            f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
-            f'  -o {ca.unique_name}.der.crl \\\n'
-            f'  "{crl_endpoint}?encoding=der"'
-        )
-
-        download_section = HelpSection(
-            _non_lazy('Download CRL'),
-            [
-                HelpRow(
-                    _non_lazy('Download CRL in PEM Format'),
-                    download_pem_cmd,
-                    ValueRenderType.CODE,
-                ),
-                HelpRow(
-                    _non_lazy('Download CRL in DER Format'),
-                    download_der_cmd,
-                    ValueRenderType.CODE,
-                ),
-            ],
-        )
-
-        notes_section = HelpSection(
-            _non_lazy('Important Notes'),
-            [
-                HelpRow(
-                    _non_lazy('Public Access'),
-                    _non_lazy(
-                        'This endpoint does not require authentication and can be accessed by any client '
-                        'that needs to verify certificate revocation status.'
-                    ),
-                    ValueRenderType.PLAIN,
-                ),
-            ],
-        )
-
-        tls_trust_store_section = build_tls_trust_store_section()
-
-        sections = [summary, crl_status_section, tls_trust_store_section, download_section, notes_section]
-
-        context['help_page'] = HelpPage(
-            heading=_non_lazy(f'Help - Download CRL for {ca.unique_name}'), sections=sections
-        )
-        context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
-        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
-
-        context['idevid_registration'] = type('obj', (object,), {
-            'domain': type('obj', (object,), {'pk': ca.pk})()
-        })()
-        context['back_url'] = f'{self.page_category}:{self.page_name}-config'
-        context['back_button_text'] = _non_lazy('Back to Issuing CA Configuration')
+        context['help_sections'] = [
+            HelpSection(
+                title=_('CRL Status'),
+                rows=crl_status_rows,
+            ),
+        ]
+        context['host_base'] = host_base
+        context['crl_endpoint'] = crl_endpoint
 
         return context
