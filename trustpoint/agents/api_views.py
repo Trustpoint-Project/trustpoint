@@ -25,6 +25,9 @@ if TYPE_CHECKING:
     from rest_framework.request import Request
 
 
+_logger = LoggerMixin().logger
+
+
 def _parse_client_cert(request: Request) -> x509.Certificate | None:
     """Extract and parse the client certificate from the Django request META."""
     raw: str | None = request.META.get('HTTP_SSL_CLIENT_CERT')
@@ -35,7 +38,8 @@ def _parse_client_cert(request: Request) -> x509.Certificate | None:
         pem_bytes = urllib.parse.unquote(raw).encode('utf-8')
         return x509.load_pem_x509_certificate(pem_bytes)
     except Exception as exc:
-        msg = f'Invalid HTTP_SSL_CLIENT_CERT header: {exc}'
+        _logger.exception('Invalid HTTP_SSL_CLIENT_CERT header.')
+        msg = 'Invalid client certificate header.'
         raise AuthenticationFailed(msg) from exc
 
 
