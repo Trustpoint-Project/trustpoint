@@ -1,21 +1,25 @@
-name: CI/CD / Docker Manual Build
+name: CI/CD / Publish to GHCR
 
-on: workflow_dispatch
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
 
 jobs:
-
-  build:
+  publish:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    env:
-      DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-      GITHUB_SHA: ${{ github.sha }}
-
+    
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v7
 
       - name: Extract version from pyproject.toml
@@ -26,36 +30,39 @@ jobs:
           echo "Extracted version: v${VERSION}"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@v3
 
-      - name: Setup up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate Docker metadata for trustpoint
         id: meta-trustpoint
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
+          images: ghcr.io/${{ github.repository_owner }}/trustpoint
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ steps.get_version.outputs.version }}
             type=sha,format=long
+            type=ref,event=tag
 
       - name: Generate Docker metadata for postgres
         id: meta-postgres
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_HUB_USERNAME }}/postgres
+          images: ghcr.io/${{ github.repository_owner }}/trustpoint-postgres
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ steps.get_version.outputs.version }}
             type=sha,format=long
+            type=ref,event=tag
 
       - name: Build and push trustpoint image
         id: push-trustpoint
@@ -66,13 +73,13 @@ jobs:
           push: true
           tags: ${{ steps.meta-trustpoint.outputs.tags }}
           labels: ${{ steps.meta-trustpoint.outputs.labels }}
-          cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint:latest
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trustpoint:latest
           cache-to: type=inline
 
-      - name: Generate artifact attestation for trustpoint
+      - name: Generate attestation for trustpoint
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
+          subject-name: ghcr.io/${{ github.repository_owner }}/trustpoint
           subject-digest: ${{ steps.push-trustpoint.outputs.digest }}
           push-to-registry: true
 
@@ -85,12 +92,18 @@ jobs:
           push: true
           tags: ${{ steps.meta-postgres.outputs.tags }}
           labels: ${{ steps.meta-postgres.outputs.labels }}
-          cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/postgres:latest
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trustpoint-postgres:latest
           cache-to: type=inline
 
-      - name: Generate artifact attestation for postgres
+      - name: Generate attestation for postgres
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/postgres
+          subject-name: ghcr.io/${{ github.repository_owner }}/trustpoint-postgres
           subject-digest: ${{ steps.push-postgres.outputs.digest }}
           push-to-registry: true
+
+      - name: Show published images
+        run: |
+          echo "✅ Published images to GitHub Container Registry:"
+          echo "📦 ghcr.io/${{ github.repository_owner }}/trustpoint:${{ steps.get_version.outputs.version }}"
+          echo "📦 ghcr.io/${{ github.repository_owner }}/trustpoint-postgres:${{ steps.get_version.outputs.version }}"

@@ -1,4 +1,4 @@
-name: R_103
+name: Tests / R-103
 
 on:
   pull_request:

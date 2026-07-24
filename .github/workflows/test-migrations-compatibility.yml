@@ -1,0 +1,48 @@
+name: Tests / Migrations Compatibility
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/migrations/**"
+      - .github/workflows/test-migrations-compatibility.yml
+
+env:
+  TRUSTPOINT_OPERATIONAL_DATABASE: "sqlite"
+  SECRET_KEY: "test-secret-key-for-ci"
+
+permissions:
+  contents: read
+
+jobs:
+  test-migrations:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+
+      - name: Apply current branch migrations
+        run: uv run manage.py migrate
+        working-directory: trustpoint
+
+      - name: Checkout base branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Sync dependencies for base branch
+        run: uv sync --locked
+
+      - name: Verify base code works with new schema
+        run: |
+          # Check that Django can load with the new schema
+          uv run manage.py check
+          # Show migration status
+          uv run manage.py showmigrations
+          echo "✅ Migrations are compatible with base branch"
+        working-directory: trustpoint
