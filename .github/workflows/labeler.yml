@@ -11,6 +11,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 
 jobs:
   labeler:
@@ -18,7 +19,9 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Apply labels
         uses: actions/labeler@v7
