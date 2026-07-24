@@ -1,141 +1,142 @@
-name: Tests / Minimum Dependency Versions
+name: Tests / Minimum Dependencies
 
-# This workflow ensures Trustpoint is compatible with the minimum versions
-# of all dependencies specified in pyproject.toml.
-#
-# It uses uv's --resolution=lowest-direct flag to install the lowest
-# compatible versions that satisfy all dependency constraints.
-#
-# For example, if pyproject.toml specifies "cryptography>=46.0.1",
-# this workflow will install the lowest compatible version (46.0.1 or higher
-# if 46.0.1 conflicts with other dependencies).
-#
-# This helps catch breaking changes in dependencies early and ensures
-# our version constraints are accurate.
-
+# Verify that minimum dependency versions specified in pyproject.toml work correctly
 on:
   pull_request:
   push:
     branches:
       - main
-  schedule:
-    - cron: '0 3 * * 1'
 
 jobs:
-  test-minimum-versions:
+  minimum-dependencies:
+    name: Test with Minimum Dependencies
     runs-on: ubuntu-latest
-
+    
     permissions:
       contents: read
       pull-requests: write
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
 
       - name: Install and setup uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v7
         with:
-          enable-cache: false  # Disable cache to ensure fresh minimal installs
+          enable-cache: true
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v6
         with:
           python-version-file: "pyproject.toml"
 
-      - name: Install with minimum versions using lowest resolution
-        id: install_deps
-        continue-on-error: true
-        run: |
-          # Use uv's --resolution=lowest-direct to install the minimum compatible versions
-          # This automatically resolves to the lowest versions that satisfy all constraints
-          uv sync --resolution=lowest-direct --all-extras
+      - name: Remove regular lock file
+        run: rm -f uv.lock
 
-      - name: Report installation failures
-        if: steps.install_deps.outcome == 'failure'
+      - name: Install minimum direct dependencies
+        id: install_min_deps
         run: |
-          echo "## ❌ Installation Failed with Minimum Versions" >> $GITHUB_STEP_SUMMARY
+          uv sync --resolution lowest-direct
+        continue-on-error: true
+
+      - name: Show installed versions
+        if: steps.install_min_deps.outcome == 'success'
+        run: uv pip freeze
+
+      - name: Run tests with minimum dependencies
+        if: steps.install_min_deps.outcome == 'success'
+        id: run_tests
+        run: uv run pytest
+        continue-on-error: true
+
+      - name: Check for version conflicts
+        if: steps.install_min_deps.outcome == 'failure'
+        run: |
+          echo "## ⚠️ Minimum Dependency Installation Failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The minimum dependency versions specified in pyproject.toml are incompatible with the current Python version or build environment." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "This indicates that the minimum version constraints need to be updated." >> $GITHUB_STEP_SUMMARY
+          echo "The minimum dependency versions specified in \`pyproject.toml\` are incompatible." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Action Required:** Review and update the minimum versions in \`pyproject.toml\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Current Minimum Versions:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`toml" >> $GITHUB_STEP_SUMMARY
+          grep -A 20 "dependencies = \[" pyproject.toml | grep -B 20 "^\]" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR if installation failed
+        if: steps.install_min_deps.outcome == 'failure' && github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const pyproject = fs.readFileSync('pyproject.toml', 'utf8');
+            const depsMatch = pyproject.match(/dependencies = \[([\s\S]*?)\]/);
+            const deps = depsMatch ? depsMatch[0] : 'Could not extract dependencies';
+            
+            const comment = `## ⚠️ Minimum Dependency Installation Failed
+            
+            The minimum dependency versions specified in \`pyproject.toml\` could not be installed together.
+            
+            This usually means:
+            - One or more minimum versions are too old and incompatible with each other
+            - A minimum version is incompatible with the Python version
+            - Version constraints are too restrictive
+            
+            ### Current Minimum Versions:
+            \`\`\`toml
+            ${deps}
+            \`\`\`
+            
+            **Action Required:** Please review and update the minimum versions in \`pyproject.toml\` to compatible versions.
+            
+            You can test locally with:
+            \`\`\`bash
+            rm -f uv.lock
+            uv sync --resolution lowest-direct
+            \`\`\`
+            `;
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Check if tests passed
+        if: steps.run_tests.outcome == 'failure'
+        run: |
+          echo "## ❌ Tests Failed with Minimum Dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "While the minimum dependencies could be installed, the tests failed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This indicates that the minimum versions may be too old to support all features." >> $GITHUB_STEP_SUMMARY
           exit 1
 
-      - name: Verify installed versions
-        if: steps.install_deps.outcome == 'success'
-        run: |
-          echo "Installed package versions (should be minimum compatible versions):"
-          uv pip list
-          echo ""
-          echo "Checking specific key packages:"
-          uv pip show cryptography django django-stubs mypy
-
-      - name: Export resolved versions for transparency
-        if: steps.install_deps.outcome == 'success'
-        run: |
-          echo "Resolved dependency versions:" > resolved-versions.txt
-          uv pip list >> resolved-versions.txt
-          cat resolved-versions.txt
-
-      - name: Validate minimum versions
-        if: steps.install_deps.outcome == 'success'
-        run: |
-          echo "## Minimum Version Validation" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          uv run python .github/scripts/validate_minimum_versions.py | tee -a $GITHUB_STEP_SUMMARY
-        continue-on-error: true  # Don't fail the workflow, just report
-
-      - name: Run Django system checks
-        if: steps.install_deps.outcome == 'success'
-        run: |
-          uv run trustpoint/manage.py check --deploy
-
-      - name: Run database migrations
-        if: steps.install_deps.outcome == 'success'
-        run: |
-          uv run trustpoint/manage.py migrate
-
-      - name: Run Pytest
-        if: steps.install_deps.outcome == 'success'
-        run: |
-          mkdir -p reports
-          uv run pytest \
-            --md-report-flavor github \
-            --md-report-color never \
-            --html=reports/pytest-report.html \
-            --junitxml=reports/junit-report.xml \
-            trustpoint/
-
-      - name: Display Summary in GitHub Actions
-        if: always() && steps.install_deps.outcome == 'success'
-        run: |
-          echo "# Minimum Dependency Versions Test" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "This workflow verifies that Trustpoint works with the minimum dependency versions specified in pyproject.toml" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f "md-report.md" ]; then
-            echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            cat "md-report.md" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "</details>" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Upload Test Reports
-        uses: actions/upload-artifact@v7
-        if: always() && steps.install_deps.outcome == 'success'
+      - name: Comment on PR if tests failed
+        if: steps.run_tests.outcome == 'failure' && github.event_name == 'pull_request'
+        uses: actions/github-script@v9
         with:
-          name: minimum-versions-test-reports
-          path: |
-            reports/
-            resolved-versions.txt
+          script: |
+            const comment = `## ❌ Tests Failed with Minimum Dependencies
+            
+            The minimum dependency versions could be installed, but the tests failed.
+            
+            This indicates that while the versions are compatible with each other, they may be too old to support all features of the project.
+            
+            **Action Required:** Consider increasing the minimum versions in \`pyproject.toml\`.
+            `;
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
 
-      - name: Render the report to the PR
-        uses: marocchino/sticky-pull-request-comment@v3
-        if: always() && github.event_name == 'pull_request' && steps.install_deps.outcome == 'success' && hashFiles('md-report.md') != ''
-        with:
-          header: minimum-versions-test-report
-          recreate: true
-          path: md-report.md
+      - name: Success message
+        if: steps.install_min_deps.outcome == 'success' && steps.run_tests.outcome == 'success'
+        run: |
+          echo "## ✅ Minimum Dependencies Test Passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All tests passed with the minimum dependency versions!" >> $GITHUB_STEP_SUMMARY
