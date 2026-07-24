@@ -36,10 +36,13 @@ jobs:
           echo "Generated constraints:"
           cat constraints.txt
 
-      - name: Install dependencies with minimum versions
+      - name: Create virtual environment and install with minimum versions
         run: |
-          # Install with constraints to pin to minimum versions
-          uv sync --constraint constraints.txt
+          # Create a virtual environment
+          uv venv
+          # Install the project's dependencies using the constraint file
+          # This ensures we get the minimum versions
+          uv pip install -c constraints.txt -e ".[dev]"
 
       - name: Verify installed versions
         run: |
