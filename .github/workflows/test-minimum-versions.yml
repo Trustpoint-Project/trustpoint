@@ -36,7 +36,7 @@ jobs:
       - name: Install minimum direct dependencies
         id: install_min_deps
         run: |
-          uv sync --resolution lowest-direct
+          uv sync --resolution lowest-direct --only-binary :all:
         continue-on-error: true
 
       - name: Show installed versions
@@ -54,14 +54,14 @@ jobs:
         run: |
           echo "## ⚠️ Minimum Dependency Installation Failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The minimum dependency versions specified in \`pyproject.toml\` are incompatible." >> $GITHUB_STEP_SUMMARY
+          echo "The minimum dependency versions specified in \`pyproject.toml\` could not be installed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This usually means:" >> $GITHUB_STEP_SUMMARY
+          echo "- One or more minimum versions are too old and incompatible with each other" >> $GITHUB_STEP_SUMMARY
+          echo "- A minimum version lacks pre-built wheels for the current Python version" >> $GITHUB_STEP_SUMMARY
+          echo "- Version constraints are too restrictive" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Action Required:** Review and update the minimum versions in \`pyproject.toml\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Current Minimum Versions:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`toml" >> $GITHUB_STEP_SUMMARY
-          grep -A 20 "dependencies = \[" pyproject.toml | grep -B 20 "^\]" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Comment on PR if installation failed
         if: steps.install_min_deps.outcome == 'failure' && github.event_name == 'pull_request'
