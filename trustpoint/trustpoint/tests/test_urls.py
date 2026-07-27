@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for the url module."""
 
 from django.contrib import admin

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test cases for devices help views."""
 import ipaddress
 from cryptography import x509

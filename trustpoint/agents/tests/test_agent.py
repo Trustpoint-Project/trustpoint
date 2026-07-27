@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Comprehensive test suite for the Trustpoint agent.
 
 This test suite focuses on high-value scenarios with maximum branch coverage:

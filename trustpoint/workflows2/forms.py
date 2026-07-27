@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Forms used by the Workflow 2 definition editor."""
 
 from __future__ import annotations

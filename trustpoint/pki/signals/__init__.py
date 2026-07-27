@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django signals for PKI models."""
 
 from __future__ import annotations

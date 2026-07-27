@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides the 'RestAuthentication' class using the Composite pattern for modular REST authentication."""
 
 from typing import Never

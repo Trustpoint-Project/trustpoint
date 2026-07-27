@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Models for the agents application."""
 
 from __future__ import annotations

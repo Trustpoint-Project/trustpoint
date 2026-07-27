@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Devices filters.
 
 Defines the `DeviceFilter` used to filter the devices list view.

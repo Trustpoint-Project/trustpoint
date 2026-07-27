@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Durable software-managed crypto backend."""
 
 from __future__ import annotations

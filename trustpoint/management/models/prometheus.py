@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Prometheus Configuration Model."""
 
 from __future__ import annotations

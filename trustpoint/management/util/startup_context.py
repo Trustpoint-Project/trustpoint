@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Context builder for startup strategies."""
 
 from __future__ import annotations

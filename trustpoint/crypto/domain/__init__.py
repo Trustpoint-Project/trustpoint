@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Core domain types for the new crypto layer."""
 
 from crypto.domain.algorithms import (

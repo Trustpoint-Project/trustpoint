@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 # util/sftp.py
 """Wrapper around Paramiko SFTP functionality and related exceptions."""
 

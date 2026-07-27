@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for EST (Enrollment over Secure Transport) handling authentication and certificate issuance."""
 
 import base64

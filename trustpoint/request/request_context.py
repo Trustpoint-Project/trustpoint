@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains the RequestContext class for managing request-specific named attributes."""
 from __future__ import annotations
 

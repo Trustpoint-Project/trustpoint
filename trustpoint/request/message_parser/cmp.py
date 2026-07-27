@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides classes for parsing CMP PKI messages."""
 
 import ipaddress

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Imports Truststores from specific PEM files in tests/data/idevid_hierarchies."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Forms exclusively used in the device application."""
 
 from __future__ import annotations

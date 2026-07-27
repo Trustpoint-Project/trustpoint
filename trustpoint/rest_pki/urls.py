@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """URL configuration for the 'rest_pki' app."""
 
 from django.urls import re_path

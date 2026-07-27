@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test cases for help_pages commands module."""
 
 from django.test import SimpleTestCase

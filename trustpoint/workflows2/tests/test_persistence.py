@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 # workflows2/tests/test_persistence.py
 from __future__ import annotations
 

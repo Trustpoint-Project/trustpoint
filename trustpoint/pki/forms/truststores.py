@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django forms for truststore configuration and management."""
 
 from __future__ import annotations

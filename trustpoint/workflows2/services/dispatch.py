@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Dispatch workflow runs from incoming events using inline or worker execution."""
 from __future__ import annotations
 

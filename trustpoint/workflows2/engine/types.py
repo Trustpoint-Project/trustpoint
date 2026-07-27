@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Structured result types used by the Workflow 2 runtime."""
 
 from __future__ import annotations

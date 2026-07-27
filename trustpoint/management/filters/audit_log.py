@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """FilterSet for the audit log list view."""
 
 from __future__ import annotations

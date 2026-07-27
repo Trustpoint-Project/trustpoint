@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test suite for security features."""
 import threading
 from unittest.mock import patch

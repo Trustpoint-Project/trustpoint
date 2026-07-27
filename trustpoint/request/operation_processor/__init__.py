@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Initialization for the operation processing step of the request pipeline."""
 
 from .cert_conf import CertConfProcessor

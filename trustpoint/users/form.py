@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Forms for creating and updating Trustpoint users and managing groups."""
 
 from typing import Any, ClassVar, cast

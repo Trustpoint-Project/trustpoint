@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains template tags for sorting lists or columns in a table."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Module to handle revocation logic for devices and device credentials."""
 
 from __future__ import annotations

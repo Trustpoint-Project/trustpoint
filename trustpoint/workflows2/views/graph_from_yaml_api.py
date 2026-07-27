@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Compile draft YAML and return the corresponding graph payload."""
 
 from __future__ import annotations

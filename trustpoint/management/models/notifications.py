@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Module that contains all models corresponding to the devices app."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
 

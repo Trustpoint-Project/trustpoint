@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for page_context module."""
 
 from django.test import TestCase

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """CMP Mock Server that integrates CMP factory and key generation factory."""
 
 import binascii

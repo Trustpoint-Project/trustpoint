@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """UI configuration model."""
 
 from __future__ import annotations

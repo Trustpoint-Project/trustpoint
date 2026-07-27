@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Shared bootstrap architecture for attaching to operational state.
 
 This module intentionally contains no handoff side effects. It describes the

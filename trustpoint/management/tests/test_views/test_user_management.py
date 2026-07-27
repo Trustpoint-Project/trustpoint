@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for the User Management views."""
 
 from django.contrib.auth import get_user_model

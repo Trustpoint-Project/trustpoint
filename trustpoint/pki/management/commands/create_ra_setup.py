@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django management command to create RA (Registration Authority) setup for testing.
 
 This command creates a complete RA testing environment with:

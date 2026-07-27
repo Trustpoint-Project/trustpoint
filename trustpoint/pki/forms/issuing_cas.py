@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django forms for issuing CA configuration and management."""
 
 from __future__ import annotations
@@ -520,7 +522,7 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
 
         return certificate_serializer
 
-    def clean_ca_certificate_chain(self) -> None | CertificateCollectionSerializer:
+    def clean_ca_certificate_chain(self) -> CertificateCollectionSerializer | None:
         """Validates and parses the uploaded Issuing CA certificate chain file.
 
         This method checks if the optional certificate chain file is provided.

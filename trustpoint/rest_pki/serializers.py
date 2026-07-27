@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Serializers for the REST PKI certificate enrollment API."""
 
 from typing import Any

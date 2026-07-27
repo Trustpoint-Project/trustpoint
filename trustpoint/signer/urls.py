@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Contains Routes of URls for Signer App at App level."""
 
 from django.urls import path, re_path

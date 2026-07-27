@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """PKCS#11 mechanism and template selection helpers."""
 
 from __future__ import annotations

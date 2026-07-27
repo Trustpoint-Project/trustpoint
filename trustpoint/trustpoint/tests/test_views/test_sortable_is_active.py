@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for SortableTableMixin with is_active field."""
 
 from django.db import models

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test cases for notification views in the management app."""
 
 from datetime import UTC, datetime

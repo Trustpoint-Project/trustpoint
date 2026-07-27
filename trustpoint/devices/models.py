@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This modules contains all models specific to the device abstractions."""
 
 from __future__ import annotations

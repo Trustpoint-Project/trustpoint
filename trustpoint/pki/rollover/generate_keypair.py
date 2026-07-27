@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Generate keypair rollover strategy — stub for future implementation."""
 
 from __future__ import annotations

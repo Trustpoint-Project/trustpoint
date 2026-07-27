@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Build graph payloads for Workflow 2 definitions and instances."""
 
 from __future__ import annotations

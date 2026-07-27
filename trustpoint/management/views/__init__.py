@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Package that contains all Django Views of the management App."""
 
 from __future__ import annotations

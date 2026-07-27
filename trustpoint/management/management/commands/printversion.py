@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to print the trustpoint version."""
 from django.conf import settings
 from django.core.management.base import BaseCommand

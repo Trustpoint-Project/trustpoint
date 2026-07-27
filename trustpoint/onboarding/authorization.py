@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Protocol authorization for the onboarding app."""
 from __future__ import annotations
 

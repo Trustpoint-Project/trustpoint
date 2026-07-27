@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Bootstrap-phase startup preparation for Trustpoint."""
 
 from __future__ import annotations

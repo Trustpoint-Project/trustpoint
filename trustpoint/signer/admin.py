@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Admin configuration for Signer app."""
 
 from django.contrib import admin

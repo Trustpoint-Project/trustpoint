@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """CSR operation processor classes."""
 from abc import abstractmethod
 from typing import get_args

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for CMP Django app configuration."""
 
 from django.apps import apps

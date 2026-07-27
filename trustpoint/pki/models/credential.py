@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Module that contains the CredentialModel."""
 
 from __future__ import annotations
@@ -532,21 +534,21 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             ]
         )
 
-    def get_last_in_chain(self) -> None | CertificateModel:
+    def get_last_in_chain(self) -> CertificateModel | None:
         """Gets the root ca certificate model, if any."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
         if last_certificate_in_chain is None:
             return self.certificate
         return last_certificate_in_chain.certificate
 
-    def get_root_ca_certificate(self) -> None | x509.Certificate:
+    def get_root_ca_certificate(self) -> x509.Certificate | None:
         """Gets the root CA certificate of the credential certificate chain."""
         root_ca_certificate_serializer = self.get_root_ca_certificate_serializer()
         if root_ca_certificate_serializer:
             return root_ca_certificate_serializer.as_crypto()
         return None
 
-    def get_root_ca_certificate_serializer(self) -> None | CertificateSerializer:
+    def get_root_ca_certificate_serializer(self) -> CertificateSerializer | None:
         """Get the root CA certificate serializer or a self-signed main certificate."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
         if last_certificate_in_chain is not None and last_certificate_in_chain.certificate.is_root_ca:

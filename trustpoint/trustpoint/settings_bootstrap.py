@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django settings entrypoint for the isolated Trustpoint bootstrap phase."""
 
 from __future__ import annotations

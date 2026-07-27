@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Capability-gated live signing contract tests."""
 
 from __future__ import annotations

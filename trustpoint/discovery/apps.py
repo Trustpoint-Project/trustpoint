@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Configuration for the discovery application."""
 
 from django.apps import AppConfig

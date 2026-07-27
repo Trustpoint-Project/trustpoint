@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Additional tests for forms to improve coverage."""
 
 from typing import Any

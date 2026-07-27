@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains a Django management command to schedule all notification checks via Django-Q2."""
 
 from __future__ import annotations

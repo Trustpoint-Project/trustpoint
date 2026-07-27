@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for device credential issuance workflows."""
 
 import abc

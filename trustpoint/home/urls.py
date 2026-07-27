@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Defines URL patterns for the Home application, mapping views to URLs."""
 
 from django.urls import path

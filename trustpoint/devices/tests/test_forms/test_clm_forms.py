@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for Certificate Lifecycle Management (CLM) Device forms."""
 
 from typing import Any

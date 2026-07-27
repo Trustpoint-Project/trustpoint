@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for device views."""
 from http import HTTPStatus
 from typing import Any

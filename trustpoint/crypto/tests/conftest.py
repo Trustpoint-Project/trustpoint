@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Shared pytest fixtures for crypto tests."""
 
 from __future__ import annotations

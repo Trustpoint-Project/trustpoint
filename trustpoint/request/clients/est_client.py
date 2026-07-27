@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """EST (Enrollment over Secure Transport) client implementation."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Python steps file for R_010 and R_011."""
 
 from enum import Enum

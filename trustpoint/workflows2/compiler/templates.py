@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Compile `${...}` templates into template IR fragments."""
 from __future__ import annotations
 

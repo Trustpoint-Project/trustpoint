@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Credential issuance operation processor classes."""
 
 from cryptography.x509 import CertificateBuilder

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django management command to run all notification-related checks sequentially."""
 
 from __future__ import annotations

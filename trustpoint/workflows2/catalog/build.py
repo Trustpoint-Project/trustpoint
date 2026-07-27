@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Build the editor context catalog for the Workflow 2 frontend."""
 
 from __future__ import annotations

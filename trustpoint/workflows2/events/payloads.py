@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Helpers for building JSON-safe Workflow 2 event payloads."""
 
 from __future__ import annotations

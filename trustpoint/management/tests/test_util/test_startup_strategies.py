@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for the explicit bootstrap and operational startup helpers."""
 
 from unittest.mock import Mock

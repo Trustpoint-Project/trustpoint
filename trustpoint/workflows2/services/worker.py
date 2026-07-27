@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Database-backed worker loop for Workflow 2 jobs."""
 
 from __future__ import annotations

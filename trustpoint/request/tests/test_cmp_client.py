@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Unit tests for the CMP client."""
 
 from unittest.mock import Mock, patch

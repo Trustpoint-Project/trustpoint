@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django management command to initialize notification scheduling."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Domain error types for the redesigned crypto layer."""
 
 

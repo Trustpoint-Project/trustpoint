@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Workflows2 config Model."""
 from __future__ import annotations
 

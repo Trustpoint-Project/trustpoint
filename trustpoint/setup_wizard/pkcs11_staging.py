@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Helpers for one-time PKCS#11 wizard staging files."""
 
 from __future__ import annotations

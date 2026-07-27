@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains classes and functions used by all help pages."""
 
 from __future__ import annotations
@@ -49,8 +51,8 @@ class HelpContext:
     host_cmp_path: str  # {host_base}/.well-known/cmp/p/{domain.unique_name}
     host_est_path: str  # {host_base}/.well-known/est/{domain.unique_name}
     cred_count: int  # Running number to avoid overriding files on the client side
-    device: None | DeviceModel = None
-    devid_registration: None | DevIdRegistration = None
+    device: DeviceModel | None = None
+    devid_registration: DevIdRegistration | None = None
 
     def get_device_or_http_404(self) -> DeviceModel:
         """Gets the device or throws an HTTP404 error.

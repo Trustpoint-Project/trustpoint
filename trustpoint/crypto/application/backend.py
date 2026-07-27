@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Application-facing crypto backend contract."""
 
 from __future__ import annotations

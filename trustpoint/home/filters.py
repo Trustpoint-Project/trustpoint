@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Contains custom filter sets to filter model data based on various criteria."""
 
 from datetime import timedelta

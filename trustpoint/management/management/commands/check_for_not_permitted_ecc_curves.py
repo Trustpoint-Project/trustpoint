@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to check for not permitted ECC curves."""
 
 from __future__ import annotations

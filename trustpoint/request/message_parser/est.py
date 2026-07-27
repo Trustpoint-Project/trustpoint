@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides classes for parsing EST PKI messages."""
 import base64
 import contextlib

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains the CMP endpoints (views)."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Email utility classes and functions for rendering and sending templates."""
 
 from __future__ import annotations

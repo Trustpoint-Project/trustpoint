@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test suite for validating the TLS Server Credential functionality."""
 
 import ipaddress

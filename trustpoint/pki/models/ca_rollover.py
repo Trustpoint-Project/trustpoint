@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Models for Issuing CA rollover management."""
 
 from __future__ import annotations

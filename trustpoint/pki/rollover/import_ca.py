@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Import CA rollover strategy — provisions the new CA by file upload."""
 
 from __future__ import annotations

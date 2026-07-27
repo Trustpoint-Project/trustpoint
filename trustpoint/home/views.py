@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Contains views that handle HTTP requests and return appropriate responses for the application."""
 
 from __future__ import annotations

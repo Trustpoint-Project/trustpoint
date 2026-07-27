@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains cli commands which are displayed in the help pages."""
 
 from typing import Any

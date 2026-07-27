@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """URL configuration for the REST PKI API endpoints."""
 
 from django.urls import path

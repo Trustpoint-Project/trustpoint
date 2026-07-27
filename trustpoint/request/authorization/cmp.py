@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides the 'CmpAuthorization' class using the Composite pattern for modular CMP authorization."""
 from typing import Never
 

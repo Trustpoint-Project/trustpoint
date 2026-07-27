@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Fixtures for the PKI pytest suite."""
 
 # ruff: noqa: ERA001  # commented out tests for extensions that are not yet supported

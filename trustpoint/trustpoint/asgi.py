@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """ASGI config for trustpoint project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.

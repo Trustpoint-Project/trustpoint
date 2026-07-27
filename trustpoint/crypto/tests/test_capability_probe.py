@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Unit tests for PKCS#11 capability probing."""
 
 from __future__ import annotations

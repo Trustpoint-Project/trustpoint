@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Override the default makemigrations to get Trustpoint naming and additional checks."""
 
 import os

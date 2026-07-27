@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Command to update the Nginx TLS configuration to the current active TLS server credential."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Contains classes and helpers for forms that can be used in the whole project."""
 
 from typing import Any

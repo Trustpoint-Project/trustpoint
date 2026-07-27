@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """WSGI config for trustpoint project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.

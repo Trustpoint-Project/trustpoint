@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for REST PKI certificate enrollment and re-enrollment."""
 
 from typing import Any, cast

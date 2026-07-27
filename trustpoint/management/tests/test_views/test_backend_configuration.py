@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test suite for backend configuration views."""
 
 from pathlib import Path

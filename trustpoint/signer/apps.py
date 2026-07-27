@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Apps configuration for the Signer app."""
 from django.apps import AppConfig
 

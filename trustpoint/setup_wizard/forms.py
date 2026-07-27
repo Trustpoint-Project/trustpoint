@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains forms for the setup wizard app."""
 
 from __future__ import annotations

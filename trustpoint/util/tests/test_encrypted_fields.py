@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for encrypted field wrappers over the app-secret subsystem."""
 
 from unittest.mock import patch

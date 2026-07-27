@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Database model utilities for Trustpoint."""
 
 from __future__ import annotations

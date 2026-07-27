@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for CMP URL configuration."""
 
 from django.urls import resolve, reverse

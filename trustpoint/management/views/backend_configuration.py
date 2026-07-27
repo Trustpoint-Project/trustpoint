@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Read-only view of the configured crypto/app-secret backend state."""
 
 import io

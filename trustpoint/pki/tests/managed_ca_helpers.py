@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Helpers for PKI tests that need backend-managed CA keys."""
 
 import uuid

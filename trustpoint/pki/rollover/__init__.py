@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Rollover strategy package.
 
 Provides the strategy pattern implementation for CA rollovers.

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for the User Management section of the management app."""
 
 from typing import Any

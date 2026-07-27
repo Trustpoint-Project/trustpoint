@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides the 'CmpAuthentication' class using the Composite pattern for modular CMP authentication."""
 
 from typing import Never
@@ -267,7 +269,7 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
     def _handle_unexpected_error(self, error: Exception) -> None:
         """Handle unexpected errors during authentication."""
         error_message = 'CMP shared secret authentication failed due to unexpected error'
-        self.logger.exception('Unexpected error during CMP shared secret authentication')
+        self.logger.error('Unexpected error during CMP shared secret authentication')
         raise ValueError(error_message) from error
 
     def _raise_cmp_error(self, message: str) -> Never:

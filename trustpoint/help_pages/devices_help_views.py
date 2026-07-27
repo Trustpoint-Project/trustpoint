@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains all views concerning the help pages used within the devices app."""
 
 from __future__ import annotations

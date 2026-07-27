@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides the `HttpRequestValidator` class for validating HTTP requests."""
 import base64
 import contextlib

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """CRL views for the PKI application."""
 
 import binascii

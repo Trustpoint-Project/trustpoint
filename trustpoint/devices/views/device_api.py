@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """REST API viewsets for device management."""
 
 from typing import Any, ClassVar

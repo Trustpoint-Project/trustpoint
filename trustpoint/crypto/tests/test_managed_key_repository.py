@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for managed-key persistence helpers."""
 
 from __future__ import annotations

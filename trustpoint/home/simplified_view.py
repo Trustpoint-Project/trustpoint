@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Simplified domain-centric view."""
 
 from __future__ import annotations

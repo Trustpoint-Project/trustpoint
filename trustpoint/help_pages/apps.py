@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Configures the help_pages application and its settings for inclusion in the Django project."""
 
 from django.apps import AppConfig

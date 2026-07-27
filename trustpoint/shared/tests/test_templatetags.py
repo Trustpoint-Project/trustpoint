@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test cases for template tags in the shared application."""
 
 from __future__ import annotations

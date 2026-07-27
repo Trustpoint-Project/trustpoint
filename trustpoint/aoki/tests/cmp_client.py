@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """AOKI Client for testing AOKI via CMP.
 
 Please run from /rootdir/trustpoint with "uv run -m aoki.tests.cmp_client" for paths and imports to work.

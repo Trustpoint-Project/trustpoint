@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Logic for generating, parsing, and staging TLS server credentials during setup."""
 
 from __future__ import annotations

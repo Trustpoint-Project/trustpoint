@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to check the validity of Issuing CAs."""
 
 from __future__ import annotations

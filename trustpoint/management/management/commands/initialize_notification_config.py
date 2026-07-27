@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to initialize the notifications configuration."""
 from typing import Any
 

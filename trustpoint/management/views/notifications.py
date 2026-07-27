@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Defines views for managing notifications."""
 
 from __future__ import annotations

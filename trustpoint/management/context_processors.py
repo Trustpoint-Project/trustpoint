@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Context processors for the management app."""
 
 from __future__ import annotations

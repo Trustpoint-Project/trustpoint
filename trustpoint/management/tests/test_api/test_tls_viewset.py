@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for TlsViewSet API endpoints."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module defines a Django management command to delete all existing notifications."""
 
 from typing import Any

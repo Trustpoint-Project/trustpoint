@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Workflow 2 integration hooks for certificate lifecycle events."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Integration tests against a configured live PKCS#11 provider."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provider configuration for the PKCS#11 adapter."""
 
 from __future__ import annotations

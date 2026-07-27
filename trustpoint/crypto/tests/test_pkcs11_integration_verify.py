@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Live managed-key verification tests against a configured PKCS#11 provider."""
 
 from __future__ import annotations

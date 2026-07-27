@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Custom user model with role-based access control.
 
 Defines a ``Role`` enum whose values are human-readable group names

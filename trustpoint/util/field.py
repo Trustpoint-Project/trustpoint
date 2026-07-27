@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains validators that are used in several different apps in the trustpoint project."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Additional tests for CLM POST operations and credential management."""
 
 from typing import Any

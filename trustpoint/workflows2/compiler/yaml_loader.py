@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """YAML loading helpers with Trustpoint-specific parsing behavior."""
 
 from __future__ import annotations

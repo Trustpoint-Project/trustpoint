@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to check certificates with insufficient key lengths."""
 
 from __future__ import annotations

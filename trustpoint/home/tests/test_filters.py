@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test cases for home app filters."""
 
 from unittest.mock import Mock, patch

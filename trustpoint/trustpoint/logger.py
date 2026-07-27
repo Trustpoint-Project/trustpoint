@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Contains logging utilities for the trustpoint project."""
 from __future__ import annotations
 

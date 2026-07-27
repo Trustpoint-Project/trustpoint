@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Manages the auto-generated local PKI."""
 
 from __future__ import annotations

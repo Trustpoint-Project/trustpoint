@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Comprehensive tests for EST views.py module."""
 
 import base64

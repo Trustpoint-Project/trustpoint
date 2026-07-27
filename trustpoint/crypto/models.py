@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django persistence models for provider profiles, managed keys, and capability snapshots."""
 
 from __future__ import annotations
@@ -132,7 +134,7 @@ class CryptoProviderProfileModel(models.Model):
             CryptoProviderProfileModel.objects.exclude(pk=self.pk).values_list('backend_kind', flat=True)
         )
         if existing_backend_kinds and self.backend_kind not in existing_backend_kinds:
-            configured_backend_kind = sorted(existing_backend_kinds)[0]
+            configured_backend_kind = min(existing_backend_kinds)
             raise ValidationError(
                 {
                     'backend_kind': (

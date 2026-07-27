@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for PKCS#11 Pkcs11PrivateKey class."""
 
 from typing import Any

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """DRF API views for Workflow 2 definitions."""
 
 from __future__ import annotations

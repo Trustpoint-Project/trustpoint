@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test cases for Trustpoint model deletion."""
 
 from typing import Any

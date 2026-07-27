@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Initialization for the message building step of the request pipeline."""
 
 from .cmp import CmpMessageBuilder

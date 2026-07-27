@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides base authentication class using the Composite pattern for modular authentication."""
 
 from abc import ABC, abstractmethod

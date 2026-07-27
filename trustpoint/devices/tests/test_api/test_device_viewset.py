@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for DeviceViewSet API endpoints.
 
 DeviceViewSet is a standard ModelViewSet registered at /api/devices/.

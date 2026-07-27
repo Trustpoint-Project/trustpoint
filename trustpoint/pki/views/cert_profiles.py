@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for Certificate Profile management."""
 
 from __future__ import annotations

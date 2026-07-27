@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Helpers for explicitly handing bootstrap configuration to operational mode."""
 
 from __future__ import annotations

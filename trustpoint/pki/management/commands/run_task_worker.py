@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to run a background task worker for CRL generation."""
 
 from __future__ import annotations

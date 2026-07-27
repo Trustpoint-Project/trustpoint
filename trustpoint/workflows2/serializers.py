@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Serializers for Workflow 2 API endpoints."""
 
 from __future__ import annotations

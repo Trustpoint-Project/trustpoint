@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Cryptography-compatible private-key wrappers for managed backend keys."""
 
 from __future__ import annotations

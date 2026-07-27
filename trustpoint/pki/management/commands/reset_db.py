@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to reset the database and migrations."""
 
 from __future__ import annotations

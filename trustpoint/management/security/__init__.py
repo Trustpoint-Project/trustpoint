@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Security management package."""
 
 from management.models import SecurityConfig

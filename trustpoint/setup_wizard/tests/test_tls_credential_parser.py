@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for TlsServerCredentialFileParser in setup_wizard.tls_credential."""
 
 from __future__ import annotations

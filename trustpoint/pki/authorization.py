@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Security-policy authorization checks for PKI objects (CAs and certificates)."""
 from __future__ import annotations
 

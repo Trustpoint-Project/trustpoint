@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for the Role Management section of the management app.
 
 Provides CRUD operations for Django ``Group`` instances (used as roles)

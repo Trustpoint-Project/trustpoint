@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Basic test EST client implementation."""
 import base64
 import logging

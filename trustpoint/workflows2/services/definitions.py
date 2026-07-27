@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Create, update, and compile stored Workflow 2 definitions."""
 
 from __future__ import annotations

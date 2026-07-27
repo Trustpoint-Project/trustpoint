@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to run the development server and Django-Q2 qcluster together."""
 
 from __future__ import annotations

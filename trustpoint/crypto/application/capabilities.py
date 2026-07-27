@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Trustpoint-facing crypto backend capability service."""
 
 from __future__ import annotations

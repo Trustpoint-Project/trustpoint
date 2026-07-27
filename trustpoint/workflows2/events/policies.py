@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Step policy sets used by Workflow 2 trigger definitions."""
 
 from __future__ import annotations

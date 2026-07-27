@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test cases for help_pages base module."""
 
 from unittest.mock import Mock, patch

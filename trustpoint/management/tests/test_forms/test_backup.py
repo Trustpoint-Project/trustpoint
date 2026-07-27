@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test suite for the BackupOptionsForm."""
 from django.test import TestCase
 from management.forms import BackupOptionsForm

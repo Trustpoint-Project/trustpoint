@@ -111,6 +111,7 @@ select = ["ALL"]
 ignore = [
     "ANN401", # Since django makes extensive use of the Any type, we are OK with using it.
     "COM812", # Not compatible with the formatter
+    "PLR0917", # Too many positional arguments - not enforcing this limit
     # TODO(AlexHx8472): We should use this in the future:
     "TD003",
 ]

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for the RemoteDeviceCredential model."""
 
 from datetime import timedelta

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django management command for issuing CRLs to all issuing CAs."""
 
 from __future__ import annotations

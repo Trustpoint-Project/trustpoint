@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django forms for PKI management in Trustpoint."""
 
 from .cert_profiles import CertificateIssuanceForm, CertProfileConfigForm, ProfileBasedFormFieldBuilder

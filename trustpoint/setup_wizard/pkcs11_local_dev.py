@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Shared helpers for the local tp_wizard PKCS#11 handoff."""
 
 from __future__ import annotations

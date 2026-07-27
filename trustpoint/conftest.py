@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """pytest configuration for the tests in the PKI app."""
 import base64
 from typing import Any

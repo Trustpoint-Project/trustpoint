@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """JSON Certificate Profile implementation.
 
 This module provides functionality to verify certificate requests against JSON-based profiles.

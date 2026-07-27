@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to check the validity of the Trustpoint TLS server certificate.
 
 This module defines a Django management command that checks whether the active

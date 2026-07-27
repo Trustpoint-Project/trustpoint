@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests that verify the correctness of certificate property values."""
 
 # ruff: noqa: F401  # keep the unused imports for future test use

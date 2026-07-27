@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Registrations for Django Admin."""
 
 from django.contrib import admin

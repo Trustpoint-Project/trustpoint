@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module defines a Django management command to generate a TLS credential for use in the dev environment."""
 
 import ipaddress

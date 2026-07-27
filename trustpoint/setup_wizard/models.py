@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """SetupWizard Models."""
 
 from datetime import UTC

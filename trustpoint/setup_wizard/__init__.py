@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This Package contains the setup wizard django application."""
 
 from __future__ import annotations

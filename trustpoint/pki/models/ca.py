@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Module that contains the CaModel."""
 
 from __future__ import annotations

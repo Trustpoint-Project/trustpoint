@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Capability probing for standard PKCS#11 providers."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Business logic for truststore operations."""
 
 from django.core.exceptions import ValidationError

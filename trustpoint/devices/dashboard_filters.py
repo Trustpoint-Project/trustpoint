@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Shared device dashboard status filters."""
 
 from __future__ import annotations

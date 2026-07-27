@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Command to create a test Issuing CA and some example end-entity certificates."""
 
 from __future__ import annotations

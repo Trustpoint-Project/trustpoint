@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for browser-based device onboarding workflows."""
 
 from typing import Any, cast

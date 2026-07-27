@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """To be added to trustpoint_core as trustpoint_core.oid.CertificateExtensionOid."""
 
 import enum

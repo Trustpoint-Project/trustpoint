@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for the NotificationModel model and related functionality in the notifications app."""
 
 import pytest

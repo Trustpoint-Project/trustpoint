@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 from django.core.management.commands.makemessages import Command as MakeMessagesCommand
 
 

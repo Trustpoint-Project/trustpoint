@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for discovery views and scan management."""
 
 from __future__ import annotations

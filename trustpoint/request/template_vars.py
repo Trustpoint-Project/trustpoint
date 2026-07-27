@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Template variable resolver for certificate profile values."""
 
 from __future__ import annotations

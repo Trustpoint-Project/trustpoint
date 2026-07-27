@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for newly added owner credential views."""
 
 from __future__ import annotations

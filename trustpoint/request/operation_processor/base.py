@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Carries out the requested operation after authentication and authorization."""
 from abc import ABC, abstractmethod
 

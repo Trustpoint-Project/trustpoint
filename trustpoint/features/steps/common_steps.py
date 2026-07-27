@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """File for steps which are used more often across multiple feature files."""
 
 import logging

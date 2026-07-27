@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains models related to onboarding configurations."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Strategy registry for CA rollover strategies."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Utility methods for private key generation and hash algorithm retrieval."""
 
 from __future__ import annotations

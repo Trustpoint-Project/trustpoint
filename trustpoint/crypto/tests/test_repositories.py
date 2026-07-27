@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for provider profile repositories."""
 
 from __future__ import annotations

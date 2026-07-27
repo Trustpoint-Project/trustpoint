@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for setup_wizard.models module."""
 
 from __future__ import annotations

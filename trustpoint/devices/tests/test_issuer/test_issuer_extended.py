@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Extended tests for devices/issuer.py to increase coverage."""
 
 import ipaddress

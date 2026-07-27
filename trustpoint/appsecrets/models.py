@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Persistence models for the application-secret encryption subsystem."""
 
 from __future__ import annotations

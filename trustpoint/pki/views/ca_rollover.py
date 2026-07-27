@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for CA rollover management within the Issuing CA config page."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Static metadata that describes supported Workflow 2 step types."""
 
 from __future__ import annotations

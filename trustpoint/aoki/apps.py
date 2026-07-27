@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django application configuration for the AOKI app."""
 
 from django.apps import AppConfig

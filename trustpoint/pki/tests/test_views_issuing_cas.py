@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for PKI issuing CA views."""
 
 from unittest.mock import Mock, call, patch

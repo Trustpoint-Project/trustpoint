@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Classes for handling IDevID certificates according to IEEE 802.1AR."""
 
 from __future__ import annotations

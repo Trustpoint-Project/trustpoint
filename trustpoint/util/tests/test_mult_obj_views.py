@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for util/mult_obj_views.py."""
 
 import pytest

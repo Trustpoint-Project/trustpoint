@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Serializer package for pki app."""
 from .certificate import CertificateSerializer
 from .devid_registration import DevIdRegistrationDetailSerializer, DevIdRegistrationSerializer

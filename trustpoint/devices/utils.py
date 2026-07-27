@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Utility functions for the devices app."""
 
 from django import forms

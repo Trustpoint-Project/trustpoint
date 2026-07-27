@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides the `AuthorizationComponent` class for authorization logic."""
 from __future__ import annotations
 

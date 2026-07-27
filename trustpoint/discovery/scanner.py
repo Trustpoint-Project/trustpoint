@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Scanner logic for industrial and standard network protocols."""
 
 import concurrent.futures

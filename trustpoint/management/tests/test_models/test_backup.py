@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test suite for the BackupOptions model."""
 from django.core.exceptions import ValidationError
 from django.test import TestCase

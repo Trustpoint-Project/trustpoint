@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """URL configuration for trustpoint project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:

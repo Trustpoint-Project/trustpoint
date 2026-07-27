@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Focused tests for explicit workflows2 dispatch in REST PKI views."""
 
 from __future__ import annotations

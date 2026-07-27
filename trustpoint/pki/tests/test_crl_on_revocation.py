@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for auto-issuing CRLs after certificate revocation."""
 
 from __future__ import annotations

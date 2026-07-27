@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Compile Workflow 2 YAML documents into normalized IR."""
 from __future__ import annotations
 

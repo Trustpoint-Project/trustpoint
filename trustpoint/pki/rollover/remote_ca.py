@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Remote CA rollover strategy — stub for future implementation."""
 
 from __future__ import annotations

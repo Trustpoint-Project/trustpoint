@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Object lookup helpers for PKCS#11-managed keys."""
 
 from __future__ import annotations

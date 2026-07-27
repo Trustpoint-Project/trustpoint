@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Extended tests for device views to increase coverage."""
 
 from datetime import timedelta

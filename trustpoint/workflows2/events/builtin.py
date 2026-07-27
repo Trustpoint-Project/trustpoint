@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Register the built-in Workflow 2 trigger definitions."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Admin configuration for the network discovery module."""
 
 from django.contrib import admin

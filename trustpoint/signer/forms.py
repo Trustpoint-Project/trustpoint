@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Contains Logic for Form on Add/Edit Signer Page."""
 
 from typing import Any, ClassVar, NoReturn, cast
@@ -358,7 +360,7 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return certificate_serializer
 
-    def clean_signer_certificate_chain(self) -> None | CertificateCollectionSerializer:
+    def clean_signer_certificate_chain(self) -> CertificateCollectionSerializer | None:
         """Validates and parses the uploaded signer certificate chain file."""
         signer_certificate_chain = self.cleaned_data['signer_certificate_chain']
 

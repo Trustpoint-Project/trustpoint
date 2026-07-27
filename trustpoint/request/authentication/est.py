@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides the 'EstAuthentication' class using the Composite pattern for modular EST authentication."""
 
 from typing import Never

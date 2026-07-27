@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Serve trigger metadata used by the Workflow 2 editor."""
 
 from __future__ import annotations

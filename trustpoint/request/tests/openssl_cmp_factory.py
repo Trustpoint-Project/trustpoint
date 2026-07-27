@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 import os
 from abc import ABC, abstractmethod
 from typing import Any

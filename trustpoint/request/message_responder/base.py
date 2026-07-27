@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Responds to the PKI message according to the original request protocol."""
 from abc import ABC, abstractmethod
 

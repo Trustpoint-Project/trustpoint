@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Evaluate Workflow 2 expressions, templates, and conditions at runtime."""
 from __future__ import annotations
 

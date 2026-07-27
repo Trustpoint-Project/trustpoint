@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Comprehensive tests for PKI forms module - focused on increasing coverage."""
 
 from __future__ import annotations

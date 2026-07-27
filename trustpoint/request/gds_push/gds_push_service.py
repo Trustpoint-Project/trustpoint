@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Service for OPC UA GDS Push operations."""
 
 from __future__ import annotations

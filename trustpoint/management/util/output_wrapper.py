@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Output wrapper for Django management commands.
 
 Provides an adapter between Django's CommandStyle and our OutputWriter protocol.

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Algorithm primitives for the redesigned crypto layer."""
 
 from __future__ import annotations

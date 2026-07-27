@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Integration tests for the users app."""
 
 from unittest.mock import patch

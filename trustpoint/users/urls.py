@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """URL configuration for the users application."""
 
 from django.contrib.auth import views as auth_views

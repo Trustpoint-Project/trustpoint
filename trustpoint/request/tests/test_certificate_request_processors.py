@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Focused tests for request operation processors."""
 
 from __future__ import annotations

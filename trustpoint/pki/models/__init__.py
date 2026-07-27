@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Package that contains all models of the PKI App."""
 
 # ruff: noqa: I001, F401  # ignore import order as the order must be preserved to avoid circular imports

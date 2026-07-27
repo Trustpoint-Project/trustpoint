@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """The Django REST PKI Application Configuration."""
 
 from django.apps import AppConfig

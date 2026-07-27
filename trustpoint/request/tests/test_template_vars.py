@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Unit tests for the template variable resolver."""
 
 from __future__ import annotations

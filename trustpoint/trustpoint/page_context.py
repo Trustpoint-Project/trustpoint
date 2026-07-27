@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module contains page category objects providing the corresponding subcategories."""
 
 from typing import Any, cast

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for request-level Workflow 2 delivery helpers."""
 
 from __future__ import annotations

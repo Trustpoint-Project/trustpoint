@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Startup helpers for Trustpoint bootstrap TLS and operational runtime startup."""
 
 from __future__ import annotations

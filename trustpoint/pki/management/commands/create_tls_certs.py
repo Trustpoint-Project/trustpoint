@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django management command for creating a self-signed TLS server credential."""
 
 from __future__ import annotations

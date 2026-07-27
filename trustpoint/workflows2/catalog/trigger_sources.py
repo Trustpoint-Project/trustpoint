@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Expose available trigger source filters for the editor catalog."""
 
 from __future__ import annotations

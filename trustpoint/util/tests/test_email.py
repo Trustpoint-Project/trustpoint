@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Test file for emails.py."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Sets up a Trustpoint test environment for AOKI IDevID-based onboarding testing."""
 
 from __future__ import annotations

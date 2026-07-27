@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Certificate revocation operation processor classes."""
 
 from cmp.util import PKIFailureInfo

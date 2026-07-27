@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Serializers for Signer-related API endpoints."""
 
 from typing import Any, ClassVar

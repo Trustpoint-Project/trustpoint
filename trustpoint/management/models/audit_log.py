@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Audit log model for recording important changes to managed objects."""
 
 from __future__ import annotations

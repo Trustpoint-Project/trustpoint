@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Unit tests for PKI message parser components."""
 from unittest.mock import MagicMock, Mock, patch
 

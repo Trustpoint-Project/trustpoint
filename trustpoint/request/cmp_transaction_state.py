@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Small helpers for CMP transaction persistence and state transitions."""
 
 from __future__ import annotations

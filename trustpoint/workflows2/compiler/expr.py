@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Parse and validate Workflow 2 expressions."""
 from __future__ import annotations
 

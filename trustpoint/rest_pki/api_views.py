@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """DRF API views for REST PKI certificate enrollment."""
 
 from __future__ import annotations

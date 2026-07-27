@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Serializers for Truststore-related API endpoints.
 
 Defines classes that handle validation and transformation

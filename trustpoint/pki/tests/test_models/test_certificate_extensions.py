@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for the parsing and handling of certificate extensions."""
 
 # ruff: noqa: ERA001  # commented out tests for extensions that are not yet supported

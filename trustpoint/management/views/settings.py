@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Settings views with dedicated views for each setting type."""
 
 from __future__ import annotations

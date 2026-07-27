@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Thin Django field wrappers over the application-secret encryption subsystem."""
 
 from __future__ import annotations

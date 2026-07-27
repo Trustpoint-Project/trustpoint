@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides the `PkiMessageParser` class for parsing PKI messages."""
 from abc import ABC, abstractmethod
 
@@ -10,7 +12,7 @@ class ParsingComponent(ABC):
     """Abstract base class for components in the composite parsing pattern."""
 
     @abstractmethod
-    def parse(self, context: BaseRequestContext) -> None | BaseRequestContext:
+    def parse(self, context: BaseRequestContext) -> BaseRequestContext | None:
         """Execute parsing logic and store results in the context."""
 
 

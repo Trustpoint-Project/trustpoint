@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Manually reprobe a crypto provider and persist the capability snapshot."""
 
 from __future__ import annotations

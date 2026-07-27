@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """CMP certConf operation processor classes."""
 
 from cmp.util import PKI_STATUS_REJECTION, PKIFailureInfo

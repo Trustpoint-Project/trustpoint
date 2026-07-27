@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """App configuration for the application-secret subsystem."""
 
 from django.apps import AppConfig

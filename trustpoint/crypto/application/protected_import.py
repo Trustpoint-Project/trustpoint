@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Operations for protected imported private keys."""
 
 from __future__ import annotations

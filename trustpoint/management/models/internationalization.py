@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Internationalization configuration model."""
 
 from __future__ import annotations

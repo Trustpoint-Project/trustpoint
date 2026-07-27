@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for setup-wizard operational handoff payloads."""
 
 import pytest

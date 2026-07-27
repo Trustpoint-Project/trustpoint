@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Presentation helpers shared by the Workflow 2 monitoring views."""
 
 from __future__ import annotations

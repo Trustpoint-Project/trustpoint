@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Command for generating test cross-signed CA certificates."""
 
 from __future__ import annotations

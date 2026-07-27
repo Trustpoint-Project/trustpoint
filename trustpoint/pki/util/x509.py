@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Handles certificate creation for Issuing CA certificates."""
 
 from __future__ import annotations
@@ -38,8 +40,8 @@ class CertificateGenerator:
     def create_root_ca(
         cn: str,
         validity_days: int = 7300,
-        private_key: None | PrivateKey = None,
-        hash_algorithm: None | HashAlgorithm = None,
+        private_key: PrivateKey | None = None,
+        hash_algorithm: HashAlgorithm | None = None,
         path_length: int | None = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
         """Creates a root CA certificate for testing and AutoGenPKI.
@@ -61,12 +63,12 @@ class CertificateGenerator:
 
     @staticmethod
     def create_issuing_ca(  # noqa: PLR0913
-        issuer_private_key: None | PrivateKey,
+        issuer_private_key: PrivateKey | None,
         issuer_cn: str,
         subject_cn: str,
-        private_key: None | PrivateKey = None,
+        private_key: PrivateKey | None = None,
         validity_days: int = 3650,
-        hash_algorithm: None | HashAlgorithm = None,
+        hash_algorithm: HashAlgorithm | None = None,
         path_length: int | None = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
         """Creates an issuing CA certificate + key pair.
@@ -164,7 +166,7 @@ class CertificateGenerator:
         issuer_private_key: PrivateKey,
         issuer_name: x509.Name,
         subject_name: str | x509.Name,
-        private_key: None | PrivateKey = None,
+        private_key: PrivateKey | None = None,
         extensions: list[tuple[x509.ExtensionType, bool]] | None = None,
         validity_days: int = 365,
     ) -> tuple[x509.Certificate, PrivateKey]:

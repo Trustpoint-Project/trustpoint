@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Runtime services for application-secret encryption."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module defines models for managing trustpoints, including server credentials and truststores."""
 
 from __future__ import annotations

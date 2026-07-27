@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for PKCS#11 session pooling."""
 
 from crypto.adapters.pkcs11.session_pool import Pkcs11SessionPool

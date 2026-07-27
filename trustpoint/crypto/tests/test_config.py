@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for PKCS#11 adapter configuration helpers."""
 
 from __future__ import annotations

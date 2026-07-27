@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """A model for issued credentials."""
 
 from __future__ import annotations

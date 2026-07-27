@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command for generating a long test PKI chain."""
 
 from __future__ import annotations

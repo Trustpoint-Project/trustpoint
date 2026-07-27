@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """New crypto backend package for the Trustpoint redesign."""
 
 from __future__ import annotations

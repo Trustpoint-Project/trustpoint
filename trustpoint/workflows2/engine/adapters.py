@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Runtime adapters for workflow side effects."""
 from __future__ import annotations
 

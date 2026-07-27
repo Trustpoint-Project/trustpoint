@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Local sqlite defaults for Trustpoint's software demo/testing backend.
 
 The setup wizard remains the source of truth for Docker and production-like

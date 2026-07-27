@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """URL configuration for the devices' application."""
 
 from django.urls import path, re_path

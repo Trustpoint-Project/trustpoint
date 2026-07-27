@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """CMP-specific message responder classes."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Extended tests for request/authentication.py to increase coverage."""
 
 from typing import Any

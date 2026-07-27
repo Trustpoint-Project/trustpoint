@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Business logic for certificate operations."""
 
 from django.db.models.query import QuerySet

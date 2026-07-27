@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """URLs for the Django CMP Application."""
 
 from django.urls import path

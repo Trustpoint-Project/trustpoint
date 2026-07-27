@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Contains common functionality for PKI management commands."""
 
 # ruff: noqa: T201  # print is fine in management commands

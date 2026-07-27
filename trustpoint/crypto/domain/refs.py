@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Stable application-facing references to backend-managed crypto material."""
 
 from __future__ import annotations

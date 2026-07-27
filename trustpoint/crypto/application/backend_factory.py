@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Backend-adapter factory for provider profiles."""
 
 from __future__ import annotations

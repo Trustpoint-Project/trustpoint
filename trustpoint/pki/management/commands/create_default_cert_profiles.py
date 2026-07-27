@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django management command for creating default certificate profiles."""
 
 from __future__ import annotations

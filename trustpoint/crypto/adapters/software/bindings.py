@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Internal binding types for the software backend."""
 
 from __future__ import annotations

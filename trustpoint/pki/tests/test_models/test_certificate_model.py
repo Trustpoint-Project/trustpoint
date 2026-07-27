@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for the CertificateModel class."""
 
 # ruff: noqa: F811  # ruff does not like pytest fixtures as arguments

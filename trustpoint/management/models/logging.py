@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Logging Configuration Model."""
 
 from __future__ import annotations

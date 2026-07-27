@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for signer.forms module."""
 
 from datetime import datetime, timedelta, timezone as dt_timezone

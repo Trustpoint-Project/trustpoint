@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Asynchronous tasks for management operations."""
 
 from __future__ import annotations

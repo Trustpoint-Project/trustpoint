@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for the network discovery dashboard and port management."""
 
 import csv

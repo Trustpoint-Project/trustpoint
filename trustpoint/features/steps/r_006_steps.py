@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Python steps file for R_006."""
 
 from behave import runner, then, when

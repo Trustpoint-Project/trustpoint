@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 # TODO(Air): Remove when reworking pkcs11.  # noqa: FIX002
 # mypy: ignore-errors
 """PKCS#11 Utility Functions."""

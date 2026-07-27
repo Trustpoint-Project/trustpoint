@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for backend placeholder and environment guard behavior."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """AOKI Client for testing purposes.
 
 Please run from /rootdir/trustpoint with "uv run -m aoki.tests.client" for paths and imports to work.

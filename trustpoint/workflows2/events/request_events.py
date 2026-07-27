@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Canonical request-pipeline events owned by Workflow 2."""
 
 from __future__ import annotations

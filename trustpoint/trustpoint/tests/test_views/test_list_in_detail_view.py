@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for the ListInDetailView class."""
 
 from devices.models import DeviceModel

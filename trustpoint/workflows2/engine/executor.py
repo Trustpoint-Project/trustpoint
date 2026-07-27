@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Execute compiled Workflow 2 IR one step at a time."""
 from __future__ import annotations
 

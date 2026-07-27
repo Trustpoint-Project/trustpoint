@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Management command to check the validity of CRLs.
 
 This module defines a Django management command that checks for expiring

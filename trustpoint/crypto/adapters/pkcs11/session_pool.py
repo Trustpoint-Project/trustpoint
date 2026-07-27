@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Session-pool management for PKCS#11 tokens."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Monitoring views for Workflow 2 instances."""
 
 from __future__ import annotations

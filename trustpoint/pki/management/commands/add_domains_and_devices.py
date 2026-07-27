@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Adds Issuing CAs, Domains and Devices with different onboarding protocols."""
 
 # ruff: noqa: T201  # print is fine in management commands

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Database models used by the Workflow 2 compiler, runtime, and UI."""
 from __future__ import annotations
 

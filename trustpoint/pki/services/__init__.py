@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Service layer package for the pki app."""
 
 from .ca_rollover import CaRolloverError, CaRolloverService

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Registry for trigger metadata known to Workflow 2."""
 
 from __future__ import annotations

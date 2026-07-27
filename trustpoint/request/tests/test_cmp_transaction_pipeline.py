@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Focused tests for CMP transaction persistence and polling integration."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Provides classes for parsing REST API PKI messages."""
 
 from __future__ import annotations

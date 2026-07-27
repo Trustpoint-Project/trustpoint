@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """PKCS#11 adapter implementation for the redesigned crypto layer."""
 
 from crypto.adapters.pkcs11.backend import Pkcs11Backend

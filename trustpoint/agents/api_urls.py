@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """API URL configuration for the agents application."""
 from django.urls import path
 

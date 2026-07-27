@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Django application configuration for Workflow 2."""
 
 from django.apps import AppConfig

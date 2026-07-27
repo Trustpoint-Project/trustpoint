@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """CMP pollReq processing backed by persisted CMP transaction state."""
 
 from __future__ import annotations

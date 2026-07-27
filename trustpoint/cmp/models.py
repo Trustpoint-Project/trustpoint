@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """CMP-owned transaction persistence for delayed delivery and polling."""
 from __future__ import annotations
 

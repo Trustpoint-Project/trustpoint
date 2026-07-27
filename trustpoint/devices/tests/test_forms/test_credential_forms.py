@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Tests for credential forms that extend BaseCredentialForm."""
 
 from typing import Any

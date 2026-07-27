@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Internal PKCS#11 binding types for managed keys."""
 
 from __future__ import annotations

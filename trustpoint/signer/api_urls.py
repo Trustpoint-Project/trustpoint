@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """URL configuration for Signer API endpoints.
 
 Defines routes that map API requests to their corresponding viewsets and views.

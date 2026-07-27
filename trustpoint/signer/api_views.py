@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """API Views for Signer-related endpoints.
 
 Provides REST API views for signer operations including hash signing.

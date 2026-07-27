@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """This module defines the configuration for the Onboarding app."""
 
 from django.apps import AppConfig

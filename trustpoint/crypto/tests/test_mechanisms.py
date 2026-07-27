@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Unit tests for PKCS#11 signing mechanism policy."""
 
 from __future__ import annotations

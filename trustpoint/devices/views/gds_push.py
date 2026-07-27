@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Views for OPC UA GDS Push certificate distribution."""
 
 import asyncio

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Contains Models For Signers App."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Shared template context processors for Trustpoint runtime state."""
 
 from __future__ import annotations

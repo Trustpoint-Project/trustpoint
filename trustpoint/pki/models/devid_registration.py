@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Model for the DevID Registration."""
 
 from typing import Any
