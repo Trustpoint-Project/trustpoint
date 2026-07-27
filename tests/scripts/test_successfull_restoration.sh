@@ -6,8 +6,8 @@ URL="https://localhost/"
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=trustpoint_db
-DB_USER=admin
-DB_PASS=testing321
+DB_USER=$(echo "admin")
+DB_PASS=$(echo "testing321")
 
 echo "⏳ Waiting for HTTPS service on ${URL} …"
 for i in {1..30}; do
