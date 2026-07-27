@@ -1,4 +1,5 @@
-# Copyright (c) 2026 The Trustpoint Project Authors
+# Copyright (c) The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
 
 """Django settings entrypoint for the isolated Trustpoint bootstrap phase."""
 

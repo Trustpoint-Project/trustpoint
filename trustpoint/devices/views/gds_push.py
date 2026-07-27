@@ -1,4 +1,5 @@
-# Copyright (c) 2026 The Trustpoint Project Authors
+# Copyright (c) The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
 
 """Views for OPC UA GDS Push certificate distribution."""
 

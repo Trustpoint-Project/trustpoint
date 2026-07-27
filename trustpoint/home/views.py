@@ -1,4 +1,5 @@
-# Copyright (c) 2026 The Trustpoint Project Authors
+# Copyright (c) The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
 
 """Contains views that handle HTTP requests and return appropriate responses for the application."""
 
