@@ -44,7 +44,7 @@ jobs:
 
       - name: Generate Docker metadata for trustpoint
         id: meta-trustpoint
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/trustpoint
           tags: |
@@ -55,7 +55,7 @@ jobs:
 
       - name: Generate Docker metadata for postgres
         id: meta-postgres
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/trustpoint-postgres
           tags: |
