@@ -59,7 +59,7 @@ jobs:
 
       - name: Build and push trustpoint image
         id: push-trustpoint
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/trustpoint/Dockerfile
@@ -78,7 +78,7 @@ jobs:
 
       - name: Build and push postgres image
         id: push-postgres
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/db/Dockerfile
