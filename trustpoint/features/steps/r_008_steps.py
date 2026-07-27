@@ -133,7 +133,7 @@ def step_then_new_ca_available(context: runner.Context, name: str) -> None:  # n
     Args:
         context (runner.Context): Behave context.
     """
-    context.response = context.authenticated_client.get("/pki/issuing-cas/")
+    context.response = context.authenticated_client.get("/pki/cas/")
     soup = BeautifulSoup(context.response.content, "html.parser")
 
     # Find all <td> elements
@@ -165,7 +165,8 @@ def step_when_pkcs12_file_import(context: runner.Context, name: str) -> None:  #
             follow=True
         )
         assert response.status_code == 200, f"Failed to submit the CA form."
-        response = context.authenticated_client.get("/pki/issuing-cas/")
+        response = context.authenticated_client.get("/pki/cas/")
+
         soup = BeautifulSoup(response.content, "html.parser")
 
         # Find all <td> elements
