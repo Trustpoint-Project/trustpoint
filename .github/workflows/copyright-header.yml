@@ -32,8 +32,8 @@ jobs:
           FAILED=0
           for file in $NEW_FILES; do
             if [ -f "$file" ]; then
-              if ! grep -qE "# Copyright \(C\) $CURRENT_YEAR" "$file"; then
-                echo "Error: $file is missing '# Copyright (C) $CURRENT_YEAR'"
+              if ! grep -qE "# Copyright \([cC]\) $CURRENT_YEAR" "$file"; then
+                echo "Error: $file is missing '# Copyright (c) $CURRENT_YEAR'"
                 FAILED=1
               fi
             fi
