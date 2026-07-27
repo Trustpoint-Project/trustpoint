@@ -1679,7 +1679,9 @@ final_summary(){
   local token_label
   local user_pin
 
-  export containers="$(summary_container_list)"
+  local containers
+  containers="$(summary_container_list)"
+  export containers
   local bootstrap_login
   bootstrap_login="$(summary_bootstrap_login || true)"
 
