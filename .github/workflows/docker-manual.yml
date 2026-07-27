@@ -70,7 +70,7 @@ jobs:
           cache-to: type=inline
 
       - name: Generate artifact attestation for trustpoint
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
           subject-digest: ${{ steps.push-trustpoint.outputs.digest }}
@@ -89,7 +89,7 @@ jobs:
           cache-to: type=inline
 
       - name: Generate artifact attestation for postgres
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/postgres
           subject-digest: ${{ steps.push-postgres.outputs.digest }}
