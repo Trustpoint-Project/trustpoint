@@ -2,108 +2,140 @@
 # See: https://github.com/actions/labeler
 
 # GitHub Workflows
-'.github/workflows/**':
-  - 'ci/cd'
+'ci/cd':
+  - changed-files:
+    - any-glob-to-any-file: '.github/workflows/**'
 
 # Documentation
-'docs/**':
-  - 'documentation'
-'*.md':
-  - 'documentation'
+'documentation':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**'
+      - '*.md'
 
 # Tests
-'tests/**':
-  - 'tests'
-'**/test_*.py':
-  - 'tests'
+'tests':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'tests/**'
+      - '**/test_*.py'
 
 # Docker
-'docker/**':
-  - 'docker'
-'Dockerfile':
-  - 'docker'
-'docker-compose*.yml':
-  - 'docker'
+'docker':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docker/**'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
 
 # Database Migrations
-'**/migrations/**':
-  - 'migrations'
-  - 'database'
+'migrations':
+  - changed-files:
+    - any-glob-to-any-file: '**/migrations/**'
+
+'database':
+  - changed-files:
+    - any-glob-to-any-file: '**/migrations/**'
 
 # Dependencies
-'pyproject.toml':
-  - 'dependencies'
-'uv.lock':
-  - 'dependencies'
-'requirements*.txt':
-  - 'dependencies'
+'dependencies':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'requirements*.txt'
 
 # Security
-'SECURITY.md':
-  - 'security'
-'docs/source/cra/**':
-  - 'compliance'
-  - 'cra'
-  - 'security'
+'security':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'SECURITY.md'
+      - 'docs/source/cra/**'
+
+'compliance':
+  - changed-files:
+    - any-glob-to-any-file: 'docs/source/cra/**'
+
+'cra':
+  - changed-files:
+    - any-glob-to-any-file: 'docs/source/cra/**'
 
 # PKI Components
-'trustpoint/pki/**':
-  - 'pki'
-'trustpoint/crypto/**':
-  - 'crypto'
+'pki':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/pki/**'
+
+'crypto':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/crypto/**'
 
 # Protocols
-'trustpoint/cmp/**':
-  - 'cmp'
-  - 'protocol'
-'trustpoint/est/**':
-  - 'est'
-  - 'protocol'
-'trustpoint/aoki/**':
-  - 'aoki'
-  - 'protocol'
+'cmp':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/cmp/**'
+
+'est':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/est/**'
+
+'aoki':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/aoki/**'
+
+'protocol':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'trustpoint/cmp/**'
+      - 'trustpoint/est/**'
+      - 'trustpoint/aoki/**'
 
 # Device Management
-'trustpoint/devices/**':
-  - 'devices'
-'trustpoint/onboarding/**':
-  - 'onboarding'
+'devices':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/devices/**'
+
+'onboarding':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/onboarding/**'
 
 # Setup Wizard
-'trustpoint/setup_wizard/**':
-  - 'setup-wizard'
+'setup-wizard':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/setup_wizard/**'
 
 # Signer
-'trustpoint/signer/**':
-  - 'signer'
+'signer':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/signer/**'
 
 # Agents
-'trustpoint/agents/**':
-  - 'agents'
+'agents':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/agents/**'
 
 # Static Files
-'trustpoint/static/**':
-  - 'frontend'
-  - 'static'
+'frontend':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'trustpoint/static/**'
+      - 'trustpoint/workflows2/frontend/**'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.vue'
 
-# Frontend
-'trustpoint/workflows2/frontend/**':
-  - 'frontend'
-'**/*.js':
-  - 'frontend'
-'**/*.ts':
-  - 'frontend'
-'**/*.vue':
-  - 'frontend'
+'static':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/static/**'
 
 # Configuration
-'trustpoint/trustpoint/settings.py':
-  - 'configuration'
+'configuration':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/trustpoint/settings.py'
 
 # Localization
-'**/locale/**':
-  - 'i18n'
-'**/*.po':
-  - 'i18n'
-'**/*.mo':
-  - 'i18n'
+'i18n':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/locale/**'
+      - '**/*.po'
+      - '**/*.mo'
