@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+
 """Generate Trustpoint architecture documentation automatically.
 
 This script is intended for development use only with trusted inputs.
