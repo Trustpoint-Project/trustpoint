@@ -1,4 +1,4 @@
-# Copyright (c) The Trustpoint Project Authors
+# Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
 """Tests for request-level Workflow 2 delivery helpers."""

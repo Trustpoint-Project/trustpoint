@@ -1,4 +1,4 @@
-# Copyright (c) The Trustpoint Project Authors
+# Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
 """Canonical YAML formatting helpers for Workflow 2 definitions."""

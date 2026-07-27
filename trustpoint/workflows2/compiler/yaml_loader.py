@@ -1,4 +1,4 @@
-# Copyright (c) The Trustpoint Project Authors
+# Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
 """YAML loading helpers with Trustpoint-specific parsing behavior."""
