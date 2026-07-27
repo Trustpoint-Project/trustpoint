@@ -1407,7 +1407,8 @@ wait_tls_fingerprint(){
   done
 
   echo
-  export TLS_FP_ELAPSED=$(( $(date +%s) - start ))
+   # shellcheck disable=SC2034
+  TLS_FP_ELAPSED=$(( $(date +%s) - start ))
   return 1
 }
 
