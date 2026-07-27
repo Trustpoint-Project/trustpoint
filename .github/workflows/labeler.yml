@@ -1,7 +1,7 @@
 name: CI/CD / Auto Labeler
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened]
 
 concurrency:
