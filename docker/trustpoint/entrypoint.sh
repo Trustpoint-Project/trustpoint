@@ -9,8 +9,8 @@ WWW_DATA_HOME="${WWW_DATA_HOME:-/tmp/trustpoint-www-data-home}"
 
 load_operational_env() {
   if [ -f "$OPERATIONAL_ENV_FILE" ]; then
-    # shellcheck source=/dev/null
     set -a
+    # shellcheck source=/dev/null
     . "$OPERATIONAL_ENV_FILE"
     set +a
   fi

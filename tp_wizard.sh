@@ -1680,6 +1680,7 @@ final_summary(){
   local user_pin
 
   export containers="$(summary_container_list)"
+  local bootstrap_login
   bootstrap_login="$(summary_bootstrap_login || true)"
 
   echo
