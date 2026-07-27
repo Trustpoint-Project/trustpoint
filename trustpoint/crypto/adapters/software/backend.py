@@ -7,7 +7,7 @@ import secrets
 from typing import TYPE_CHECKING, Any
 
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
+from cryptography.hazmat.primitives.asymmetric import ec, mldsa, padding, rsa, utils
 
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding, SoftwareManagedKeyVerification
 from crypto.adapters.software.capabilities import SoftwareCapabilities
@@ -20,7 +20,14 @@ from crypto.domain.errors import (
 )
 from crypto.domain.policies import SigningExecutionMode
 from crypto.domain.refs import ManagedKeyVerificationStatus
-from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec, algorithm_for_key_spec
+from crypto.domain.specs import (
+    EcKeySpec,
+    KeySpec,
+    MlDsaKeySpec,
+    MlDsaVariant,
+    RsaKeySpec,
+    algorithm_for_key_spec,
+)
 
 if TYPE_CHECKING:
     from crypto.adapters.software.config import SoftwareProviderProfile
@@ -28,7 +35,13 @@ if TYPE_CHECKING:
     from crypto.domain.policies import KeyPolicy
     from crypto.domain.specs import SignRequest
 
-type SupportedPrivateKey = rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
+type SupportedPrivateKey = (
+    rsa.RSAPrivateKey
+    | ec.EllipticCurvePrivateKey
+    | mldsa.MLDSA44PrivateKey
+    | mldsa.MLDSA65PrivateKey
+    | mldsa.MLDSA87PrivateKey
+)
 
 
 class SoftwareBackend:
@@ -63,8 +76,8 @@ class SoftwareBackend:
         self._profile.require_encryption_material()
         if self._capabilities is None:
             self._capabilities = SoftwareCapabilities(
-                supported_key_algorithms=('rsa', 'ec'),
-                supported_signature_algorithms=('rsa_pkcs1v15', 'ecdsa'),
+                supported_key_algorithms=('rsa', 'ec', 'mldsa'),
+                supported_signature_algorithms=('rsa_pkcs1v15', 'ecdsa', 'mldsa'),
                 supported_signing_execution_modes=(
                     SigningExecutionMode.COMPLETE_BACKEND.value,
                     SigningExecutionMode.ALLOW_APPLICATION_HASH.value,
@@ -123,7 +136,16 @@ class SoftwareBackend:
         """Load the public key for a software-managed binding."""
         private_key = self._load_private_key(key)
         public_key = private_key.public_key()
-        if isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
+        if isinstance(
+            public_key,
+            (
+                rsa.RSAPublicKey,
+                ec.EllipticCurvePublicKey,
+                mldsa.MLDSA44PublicKey,
+                mldsa.MLDSA65PublicKey,
+                mldsa.MLDSA87PublicKey,
+            ),
+        ):
             return public_key
         msg = f'Unsupported software backend public-key type {type(public_key).__name__}.'
         raise ProviderUnavailableError(msg)
@@ -143,7 +165,7 @@ class SoftwareBackend:
                     data,
                     padding.PKCS1v15(),
                     algorithm,
-                )
+                ),
             )
 
         if key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey):
@@ -152,6 +174,15 @@ class SoftwareBackend:
                 raise MechanismUnsupportedError(msg)
             algorithm = utils.Prehashed(hash_algorithm) if request.prehashed else hash_algorithm
             return bytes(private_key.sign(data, ec.ECDSA(algorithm)))
+
+        if key.algorithm is KeyAlgorithm.MLDSA and isinstance(
+            private_key,
+            (mldsa.MLDSA44PrivateKey, mldsa.MLDSA65PrivateKey, mldsa.MLDSA87PrivateKey),
+        ):
+            if request.signature_algorithm is not SignatureAlgorithm.MLDSA:
+                msg = f'Unsupported ML-DSA signature algorithm {request.signature_algorithm.value!r}.'
+                raise MechanismUnsupportedError(msg)
+            return bytes(private_key.sign(data))
 
         msg = 'Software key algorithm and private-key type are inconsistent.'
         raise ProviderUnavailableError(msg)
@@ -170,6 +201,16 @@ class SoftwareBackend:
             curve = self._curve_for_name(key_spec.curve)
             return ec.generate_private_key(curve)
 
+        if isinstance(key_spec, MlDsaKeySpec):
+            if key_spec.variant is MlDsaVariant.MLDSA44:
+                return mldsa.MLDSA44PrivateKey.generate()
+            if key_spec.variant is MlDsaVariant.MLDSA65:
+                return mldsa.MLDSA65PrivateKey.generate()
+            if key_spec.variant is MlDsaVariant.MLDSA87:
+                return mldsa.MLDSA87PrivateKey.generate()
+            msg = f'Unsupported ML-DSA variant: {key_spec.variant}.'
+            raise UnsupportedKeySpecError(msg)
+
         msg = f'Unsupported key specification: {type(key_spec).__name__}.'
         raise UnsupportedKeySpecError(msg)
 
@@ -184,7 +225,16 @@ class SoftwareBackend:
             msg = 'Failed to decrypt software-managed private key material.'
             raise KeyNotFoundError(msg) from exc
 
-        if isinstance(private_key, (rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)):
+        if isinstance(
+            private_key,
+            (
+                rsa.RSAPrivateKey,
+                ec.EllipticCurvePrivateKey,
+                mldsa.MLDSA44PrivateKey,
+                mldsa.MLDSA65PrivateKey,
+                mldsa.MLDSA87PrivateKey,
+            ),
+        ):
             return private_key
 
         msg = f'Unsupported software-managed private-key type {type(private_key).__name__}.'

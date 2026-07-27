@@ -5,6 +5,11 @@ from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
 from django.conf import settings
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
@@ -18,6 +23,7 @@ from pki.models.ca_rollover import CaRolloverState
 from pki.models.credential import CredentialModel
 from pki.services.ca_rollover import CaRolloverService
 from pki.util.keys import is_supported_public_key
+from pki.util.x509 import _unwrap_mldsa_managed_key
 from request.clients.est_client import EstClient
 from request.request_context import (
     BaseCertificateRequestContext,
@@ -45,7 +51,9 @@ def _as_authority_key_identifier_public_key(
     | ec.EllipticCurvePublicKey
     | ed25519.Ed25519PublicKey
     | ed448.Ed448PublicKey
+    | object  # For ML-DSA public keys
 ):
+    """Cast public key to a type supported by AuthorityKeyIdentifier.from_issuer_public_key()."""
     if isinstance(
         public_key,
         (
@@ -56,6 +64,14 @@ def _as_authority_key_identifier_public_key(
             ed448.Ed448PublicKey,
         ),
     ):
+        return public_key
+
+    # Check for ML-DSA keys
+    if mldsa and isinstance(public_key, (
+        mldsa.MLDSA44PublicKey,
+        mldsa.MLDSA65PublicKey,
+        mldsa.MLDSA87PublicKey,
+    )):
         return public_key
 
     err_msg = f'Unsupported issuer public key type for AuthorityKeyIdentifier: {type(public_key)}.'
@@ -246,14 +262,18 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             raise ValueError(err_msg)
 
         hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
-        if hash_algorithm_enum is None:
-            err_msg = 'Failed to get hash algorithm.'
-            raise ValueError(err_msg)
-        hash_algorithm = hash_algorithm_enum.hash_algorithm()
 
-        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
-            err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
-            raise TypeError(err_msg)
+        if hash_algorithm_enum is None:
+            hash_algorithm = None
+        else:
+            hash_algorithm = hash_algorithm_enum.hash_algorithm()
+
+            if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+                err_msg = (
+                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
+                    f'but found {type(hash_algorithm)}'
+                )
+                raise TypeError(err_msg)
 
         certificate_builder = context.cert_requested_profile_validated
         if certificate_builder is None:
@@ -305,8 +325,11 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             with contextlib.suppress(ValueError): # extension already present
                 certificate_builder = certificate_builder.add_extension(ext, critical)
 
+        issuer_private_key = issuing_credential.get_private_key()
+        actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
+
         signed_cert = certificate_builder.sign(
-            private_key=issuing_credential.get_private_key(),
+            private_key=actual_issuer_key,
             algorithm=hash_algorithm,
         )
         self._save_credential(context, signed_cert, issuing_credential)

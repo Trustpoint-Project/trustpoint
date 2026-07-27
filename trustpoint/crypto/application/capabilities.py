@@ -28,6 +28,7 @@ SOFTWARE_EC_CURVES = (
     EllipticCurveName.SECP384R1,
     EllipticCurveName.SECP521R1,
 )
+SOFTWARE_MLDSA_VARIANTS = ('mldsa44', 'mldsa65', 'mldsa87')
 
 
 class CapabilityRefreshingBackendAdapter(Protocol):
@@ -51,6 +52,7 @@ class BackendCapabilityReport:
     diagnostics: tuple[str, ...] = ()
     rsa_key_sizes: tuple[int, ...] = ()
     ec_curves: tuple[EllipticCurveName, ...] = ()
+    mldsa_variants: tuple[str, ...] = ()  # e.g., ('mldsa44', 'mldsa65', 'mldsa87')
 
     def supports_rsa_key_size(self, key_size: int) -> bool:
         """Return whether the backend can generate and use an RSA key of this size."""
@@ -61,14 +63,20 @@ class BackendCapabilityReport:
         curve_name = normalize_curve_name(curve)
         return curve_name is not None and self.available and curve_name in self.ec_curves
 
+    def supports_mldsa_variant(self, variant: str) -> bool:
+        """Return whether the backend can generate and use an ML-DSA variant."""
+        return self.available and variant.lower() in self.mldsa_variants
+
     def supports_key_spec(self, key_spec: KeySpec) -> bool:
         """Return whether the backend can generate and use the requested key spec."""
-        from crypto.domain.specs import EcKeySpec, RsaKeySpec  # noqa: PLC0415
+        from crypto.domain.specs import EcKeySpec, MlDsaKeySpec, RsaKeySpec  # noqa: PLC0415
 
         if isinstance(key_spec, RsaKeySpec):
             return self.supports_rsa_key_size(key_spec.key_size)
         if isinstance(key_spec, EcKeySpec):
             return self.supports_ec_curve(key_spec.curve)
+        if isinstance(key_spec, MlDsaKeySpec):
+            return self.supports_mldsa_variant(key_spec.variant.value)
         return False
 
 
@@ -199,6 +207,7 @@ class BackendCapabilityService:
                 available=True,
                 rsa_key_sizes=SOFTWARE_RSA_KEY_SIZES,
                 ec_curves=SOFTWARE_EC_CURVES,
+                mldsa_variants=SOFTWARE_MLDSA_VARIANTS,
             )
 
         if isinstance(capabilities, RestCapabilities):
@@ -209,6 +218,7 @@ class BackendCapabilityService:
                 available=True,
                 rsa_key_sizes=SOFTWARE_RSA_KEY_SIZES if 'rsa' in supported_algorithms else (),
                 ec_curves=SOFTWARE_EC_CURVES if 'ec' in supported_algorithms else (),
+                mldsa_variants=SOFTWARE_MLDSA_VARIANTS if 'mldsa' in supported_algorithms else (),
             )
 
         return BackendCapabilityReport(

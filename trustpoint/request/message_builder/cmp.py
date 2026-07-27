@@ -8,6 +8,11 @@ from datetime import UTC, datetime
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc3280, rfc4210, rfc4211, rfc5280  # type: ignore[import-untyped]
@@ -101,7 +106,7 @@ class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
     @staticmethod
     def _build_cert_template(
         subject: x509.Name,
-        public_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey,
+        public_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey | object,
         extensions: list[x509.Extension[x509.ExtensionType]] | None = None,
     ) -> rfc4211.CertTemplate:
         """Build a ``CertTemplate`` from certificate components.
@@ -207,13 +212,13 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
     @staticmethod
     def _build_pop_signature(
         cert_request: rfc4211.CertRequest,
-        private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
+        private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | object,
     ) -> rfc4211.ProofOfPossession:
         """Build signature-based Proof-of-Possession.
 
         Args:
             cert_request: The certificate request to sign.
-            private_key: Private key for signing.
+            private_key: Private key for signing (RSA, EC, or ML-DSA).
 
         Returns:
             ``ProofOfPossession`` structure with signature.
@@ -236,6 +241,18 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
                 ec.ECDSA(hashes.SHA256()),
             )
             algorithm_oid = AlgorithmIdentifier.ECDSA_SHA256.dotted_string
+        elif mldsa and isinstance(private_key, (
+            mldsa.MLDSA44PrivateKey,
+            mldsa.MLDSA65PrivateKey,
+            mldsa.MLDSA87PrivateKey,
+        )):
+            signature = private_key.sign(encoded_cert_request)
+            if isinstance(private_key, mldsa.MLDSA44PrivateKey):
+                algorithm_oid = AlgorithmIdentifier.MLDSA44.dotted_string
+            elif isinstance(private_key, mldsa.MLDSA65PrivateKey):
+                algorithm_oid = AlgorithmIdentifier.MLDSA65.dotted_string
+            else:  # MLDSA87PrivateKey
+                algorithm_oid = AlgorithmIdentifier.MLDSA87.dotted_string
         else:
             msg = f'Unsupported private key type: {type(private_key)}'
             raise CmpMessageBuilderError(msg)

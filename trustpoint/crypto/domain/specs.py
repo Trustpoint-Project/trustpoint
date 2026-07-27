@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 from crypto.domain.algorithms import EllipticCurveName, HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
 
@@ -21,7 +22,22 @@ class EcKeySpec:
     curve: EllipticCurveName
 
 
-type KeySpec = RsaKeySpec | EcKeySpec
+class MlDsaVariant(StrEnum):
+    """ML-DSA parameter sets."""
+
+    MLDSA44 = 'mldsa44'
+    MLDSA65 = 'mldsa65'
+    MLDSA87 = 'mldsa87'
+
+
+@dataclass(frozen=True, slots=True)
+class MlDsaKeySpec:
+    """Specification for an ML-DSA key pair."""
+
+    variant: MlDsaVariant
+
+
+type KeySpec = RsaKeySpec | EcKeySpec | MlDsaKeySpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,11 +57,11 @@ class SignRequest:
         )
 
     @classmethod
-    def ecdsa_sha256(cls) -> SignRequest:
-        """Build a common ECDSA request."""
+    def mldsa_pure(cls) -> SignRequest:
+        """Build a pure ML-DSA request (no hash algorithm needed)."""
         return cls(
-            signature_algorithm=SignatureAlgorithm.ECDSA,
-            hash_algorithm=HashAlgorithmName.SHA256,
+            signature_algorithm=SignatureAlgorithm.MLDSA,
+            hash_algorithm=HashAlgorithmName.SHA256,  # Placeholder, not used for ML-DSA
         )
 
 
@@ -53,4 +69,6 @@ def algorithm_for_key_spec(key_spec: KeySpec) -> KeyAlgorithm:
     """Resolve the high-level key algorithm for a key specification."""
     if isinstance(key_spec, RsaKeySpec):
         return KeyAlgorithm.RSA
-    return KeyAlgorithm.EC
+    if isinstance(key_spec, EcKeySpec):
+        return KeyAlgorithm.EC
+    return KeyAlgorithm.MLDSA

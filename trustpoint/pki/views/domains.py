@@ -21,6 +21,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from trustpoint_core.oid import AlgorithmIdentifier
 
 from management.models.audit_log import AuditLog
 from pki.filters import DomainFilter
@@ -95,7 +96,20 @@ class DomainTableView(ExportMixin, DomainContextMixin, SortableTableMixin[Domain
         """Safely return the signature suite label for a domain."""
         try:
             ss = domain.signature_suite
-            return str(ss) if ss is not None else '-'
+            if ss is None:
+                return '-'
+            # For ML-DSA (pure signature scheme), format without hash algorithm
+            if hasattr(ss, 'signature_algorithm') and ss.signature_algorithm:
+                sig_alg = ss.signature_algorithm
+                # Check if it's ML-DSA by comparing with AlgorithmIdentifier constants
+                if hasattr(sig_alg, 'value'):
+                    if sig_alg.value == AlgorithmIdentifier.ML_DSA_44.dotted_string:
+                        return 'ML-DSA-44'
+                    if sig_alg.value == AlgorithmIdentifier.ML_DSA_65.dotted_string:
+                        return 'ML-DSA-65'
+                    if sig_alg.value == AlgorithmIdentifier.ML_DSA_87.dotted_string:
+                        return 'ML-DSA-87'
+            return str(ss)
         except ValueError:
             return '-'
 

@@ -29,6 +29,9 @@ class AutoGenPkiKeyAlgorithm(models.TextChoices):
     RSA2048 = 'RSA2048SHA256', 'RSA2048'
     RSA4096 = 'RSA4096SHA256', 'RSA4096'
     SECP256R1 = 'SECP256R1SHA256', 'SECP256R1'
+    MLDSA44 = 'MLDSA44', 'ML-DSA-44'
+    MLDSA65 = 'MLDSA65', 'ML-DSA-65'
+    MLDSA87 = 'MLDSA87', 'ML-DSA-87'
     # omitting the rest of the choices as an example that Auto Gen PKI doesn't have to support all key algorithms
 
     def to_public_key_info(self) -> PublicKeyInfo:
@@ -39,6 +42,12 @@ class AutoGenPkiKeyAlgorithm(models.TextChoices):
             return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=4096)
         if self.value == AutoGenPkiKeyAlgorithm.SECP256R1:
             return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=NamedCurve.SECP256R1)
+        if self.value == AutoGenPkiKeyAlgorithm.MLDSA44:
+            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_44)
+        if self.value == AutoGenPkiKeyAlgorithm.MLDSA65:
+            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_65)
+        if self.value == AutoGenPkiKeyAlgorithm.MLDSA87:
+            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_87)
         exc_msg = f'Unsupported key algorithm type for AutoGenPKI: {self.value}'
         raise ValueError(exc_msg)
 
@@ -46,6 +55,7 @@ class AutoGenPkiKeyAlgorithm(models.TextChoices):
 def supported_auto_gen_pki_key_algorithms() -> tuple[AutoGenPkiKeyAlgorithm, ...]:
     """Return AutoGenPKI algorithms supported by the active crypto backend."""
     from crypto.application.capabilities import get_active_backend_capability_report  # noqa: PLC0415
+    from crypto.domain.specs import MlDsaKeySpec, MlDsaVariant  # noqa: PLC0415
 
     report = get_active_backend_capability_report()
     if not report.available:
@@ -63,6 +73,14 @@ def supported_auto_gen_pki_key_algorithms() -> tuple[AutoGenPkiKeyAlgorithm, ...
         supported.append(AutoGenPkiKeyAlgorithm.RSA4096)
     if report.supports_ec_curve(ec.SECP256R1()):
         supported.append(AutoGenPkiKeyAlgorithm.SECP256R1)
+
+    if report.backend_kind == 'software':
+        if report.supports_key_spec(MlDsaKeySpec(variant=MlDsaVariant.MLDSA44)):
+            supported.append(AutoGenPkiKeyAlgorithm.MLDSA44)
+        if report.supports_key_spec(MlDsaKeySpec(variant=MlDsaVariant.MLDSA65)):
+            supported.append(AutoGenPkiKeyAlgorithm.MLDSA65)
+        if report.supports_key_spec(MlDsaKeySpec(variant=MlDsaVariant.MLDSA87)):
+            supported.append(AutoGenPkiKeyAlgorithm.MLDSA87)
 
     return tuple(supported)
 

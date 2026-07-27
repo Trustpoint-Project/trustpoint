@@ -10,6 +10,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from django.utils import timezone
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 
+from pki.util.x509 import _unwrap_mldsa_managed_key
+
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric import ec, rsa
     from cryptography.x509 import CertificateRevocationList
@@ -49,7 +51,8 @@ def generate_empty_crl(
     )
     crl_builder = crl_builder.add_extension(x509.CRLNumber(crl_number), critical=False)
 
-    crl = crl_builder.sign(private_key=private_key, algorithm=hash_algorithm)  # type: ignore[arg-type]
+    actual_private_key = _unwrap_mldsa_managed_key(private_key)
+    crl = crl_builder.sign(private_key=actual_private_key, algorithm=hash_algorithm)  # type: ignore[arg-type]
     return crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
 
 
@@ -110,5 +113,6 @@ def generate_crl_with_revoked_certs(
         raise TypeError(err_msg)
 
     priv_k = issuing_ca.credential.get_private_key()
+    actual_priv_k = _unwrap_mldsa_managed_key(priv_k)
 
-    return crl_builder.sign(private_key=priv_k, algorithm=hash_algorithm)
+    return crl_builder.sign(private_key=actual_priv_k, algorithm=hash_algorithm)

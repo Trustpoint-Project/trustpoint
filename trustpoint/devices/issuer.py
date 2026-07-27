@@ -7,7 +7,7 @@ import re
 from typing import TYPE_CHECKING, NoReturn, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
+from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, mldsa, rsa
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
@@ -16,6 +16,7 @@ from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models.credential import CredentialModel
 from pki.models.issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
 from pki.util.keys import KeyGenerator
+from pki.util.x509 import _unwrap_mldsa_managed_key
 from trustpoint.logger import LoggerMixin
 from workflows2.integrations.certificates import emit_certificate_issued_for_record
 
@@ -450,6 +451,9 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                     ec.EllipticCurvePublicKey,
                     ed25519.Ed25519PublicKey,
                     ed448.Ed448PublicKey,
+                    mldsa.MLDSA44PublicKey,
+                    mldsa.MLDSA65PublicKey,
+                    mldsa.MLDSA87PublicKey,
                 ),
             ):
                 err_msg = 'The issuing CA public key type cannot be used for an AuthorityKeyIdentifier extension.'
@@ -458,19 +462,20 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                 issuer_certificate
             ).algorithm_identifier
             hash_algorithm_enum = algorithm_identifier.hash_algorithm
+
             if hash_algorithm_enum is None:
-                err_msg = 'Failed to get hash algorithm.'
-                self._raise_value_error(err_msg)
-            hash_algorithm = hash_algorithm_enum.hash_algorithm()
+                allowed_hash_algorithm = None
+            else:
+                hash_algorithm = hash_algorithm_enum.hash_algorithm()
 
-            if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
-                err_msg = (
-                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
-                    f'but found {type(hash_algorithm)}'
-                )
-                self._raise_type_error(err_msg)
+                if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+                    err_msg = (
+                        f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
+                        f'but found {type(hash_algorithm)}'
+                    )
+                    self._raise_type_error(err_msg)
 
-            allowed_hash_algorithm: AllowedCertSignHashAlgos = hash_algorithm
+                allowed_hash_algorithm: AllowedCertSignHashAlgos = hash_algorithm
 
             one_day = datetime.timedelta(days=1)
 
@@ -526,8 +531,12 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             for ext, critical in default_extensions.values():
                 certificate_builder = certificate_builder.add_extension(ext, critical)
 
+            issuer_private_key = issuing_credential.get_private_key()
+            actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
+
+
             certificate = certificate_builder.sign(
-                private_key=issuing_credential.get_private_key(),
+                private_key=actual_issuer_key,
                 algorithm=allowed_hash_algorithm,
             )
 
@@ -925,7 +934,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         )
 
     def _get_key_usage(self, public_key: PublicKey) -> x509.KeyUsage:
-        """Determines Key Usage based on RSA vs ECC."""
+        """Determines Key Usage based on RSA vs ECC vs ML-DSA."""
         if isinstance(public_key, rsa.RSAPublicKey):
             return x509.KeyUsage(
                 digital_signature=True,
@@ -939,6 +948,18 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
                 decipher_only=False,
             )
         if isinstance(public_key, ec.EllipticCurvePublicKey):
+            return x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=True,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            )
+        if isinstance(public_key, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)):
             return x509.KeyUsage(
                 digital_signature=True,
                 content_commitment=True,
@@ -1079,7 +1100,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         return x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)])
 
     def _get_key_usage(self, public_key: PublicKey) -> x509.KeyUsage:
-        """Determines Key Usage based on RSA vs ECC."""
+        """Determines Key Usage based on RSA vs ECC vs ML-DSA."""
         if isinstance(public_key, rsa.RSAPublicKey):
             return x509.KeyUsage(
                 digital_signature=True,
@@ -1093,6 +1114,18 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
                 decipher_only=False,
             )
         if isinstance(public_key, ec.EllipticCurvePublicKey):
+            return x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=True,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            )
+        if isinstance(public_key, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)):
             return x509.KeyUsage(
                 digital_signature=True,
                 content_commitment=True,

@@ -39,6 +39,13 @@ class KeyGenCommandBuilder:
                 raise ValueError(NamedCurveMissingForEccErrorMsg)
             return f'openssl ecparam -name {public_key_info.named_curve.ossl_curve_name} -genkey -noout -out {key_name}'
 
+        if public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ML_DSA_44:
+            return f'openssl genpkey -algorithm ML-DSA-44 -out {key_name}'
+        if public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ML_DSA_65:
+            return f'openssl genpkey -algorithm ML-DSA-65 -out {key_name}'
+        if public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ML_DSA_87:
+            return f'openssl genpkey -algorithm ML-DSA-87 -out {key_name}'
+
         err_msg = _('Unsupported public key algorithm')
         raise ValueError(err_msg)
 

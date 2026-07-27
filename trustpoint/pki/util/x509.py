@@ -18,7 +18,7 @@ from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import NamedCurve
 
-from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
+from crypto.application.private_keys import ManagedECPrivateKey, ManagedMLDSAPrivateKey, ManagedRSAPrivateKey
 from crypto.models import CryptoManagedKeyModel
 from management.models import SecurityConfig
 from pki.models import CaModel, CredentialModel
@@ -29,6 +29,63 @@ if TYPE_CHECKING:
     from trustpoint_core.crypto_types import PrivateKey
 
 logger = logging.getLogger(__name__)
+
+
+def _unwrap_mldsa_managed_key(private_key: object) -> object:
+    """Unwrap a managed key to get the actual cryptography private key.
+
+    For software-backed managed keys, we need to retrieve the actual private key
+    because builder.sign() may not accept our managed wrapper in all cases.
+
+    Args:
+        private_key: The private key, possibly a Managed key wrapper (RSA, EC, or ML-DSA).
+
+    Returns:
+        The actual cryptography private key if it's a managed key, otherwise the input unchanged.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.debug(f'_unwrap_mldsa_managed_key: input type = {type(private_key).__name__}')
+    if not isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey, ManagedMLDSAPrivateKey)):
+        logger.debug('_unwrap_mldsa_managed_key: not a managed key, returning unchanged')
+        return private_key
+
+    logger.debug('_unwrap_mldsa_managed_key: is managed key, unwrapping...')
+
+    from crypto.models import CryptoManagedKeyModel, CryptoProviderSoftwareConfigModel
+
+    try:
+        managed_key_model = CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
+        backend_kind = managed_key_model.provider_profile.backend_kind
+        logger.debug(f'_unwrap_mldsa_managed_key: backend_kind = {backend_kind}')
+    except CryptoManagedKeyModel.DoesNotExist as exc:
+        msg = f'Managed key {private_key.managed_key_ref.alias!r} not found in database.'
+        raise ValueError(msg) from exc
+
+    if backend_kind != 'software':
+        msg = f'Only software-backed managed keys can be used for certificate signing, got {backend_kind!r}.'
+        raise NotImplementedError(msg)
+
+    from cryptography.hazmat.primitives import serialization
+
+    software_config = CryptoProviderSoftwareConfigModel.objects.get(
+        profile=managed_key_model.provider_profile
+    )
+    profile = software_config.build_provider_profile()
+
+    binding = managed_key_model.software_binding
+    if not binding:
+        msg = f'No software binding found for managed key {private_key.managed_key_ref.alias!r}.'
+        raise ValueError(msg)
+
+    actual_key = serialization.load_der_private_key(
+        binding.encrypted_private_key_pkcs8_der,
+        password=profile.require_encryption_material(),
+    )
+
+    logger.debug(f'_unwrap_mldsa_managed_key: unwrapped to type = {type(actual_key).__name__}')
+    return actual_key
 
 
 class CertificateGenerator:
@@ -153,10 +210,18 @@ class CertificateGenerator:
             x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_private_key.public_key()), critical=False
         )
 
-        certificate = builder.sign(
-            private_key=issuer_private_key,
-            algorithm=hash_algorithm,
-        )
+        actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
+
+        if isinstance(issuer_private_key, ManagedMLDSAPrivateKey):
+            certificate = builder.sign(
+                private_key=actual_issuer_key,
+                algorithm=None,
+            )
+        else:
+            certificate = builder.sign(
+                private_key=actual_issuer_key,
+                algorithm=hash_algorithm,
+            )
         return certificate, private_key
 
     @staticmethod

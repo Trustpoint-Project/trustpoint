@@ -10,6 +10,11 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
 from django.contrib import admin
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
@@ -102,11 +107,18 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
         PASSWORD_BASED_MAC = AlgorithmIdentifier.PASSWORD_BASED_MAC.dotted_string
 
+        MLDSA44 = AlgorithmIdentifier.ML_DSA_44.dotted_string
+        MLDSA65 = AlgorithmIdentifier.ML_DSA_65.dotted_string
+        MLDSA87 = AlgorithmIdentifier.ML_DSA_87.dotted_string
+
     class PublicKeyAlgorithmOidChoices(models.TextChoices):
         """Public Key Algorithm OIDs."""
 
         ECC = PublicKeyAlgorithmOid.ECC.dotted_string
         RSA = PublicKeyAlgorithmOid.RSA.dotted_string
+        MLDSA44 = PublicKeyAlgorithmOid.ML_DSA_44.dotted_string
+        MLDSA65 = PublicKeyAlgorithmOid.ML_DSA_65.dotted_string
+        MLDSA87 = PublicKeyAlgorithmOid.ML_DSA_87.dotted_string
 
     class PublicKeyEcCurveOidChoices(models.TextChoices):
         """Public Key EC Curve OIDs."""
@@ -419,6 +431,24 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         return SignatureSuite.from_certificate(self.get_certificate_serializer().as_crypto())
 
     @property
+    def signature_suite_display(self) -> str:
+        """Get a safe string representation of the signature suite."""
+        try:
+            ss = self.signature_suite
+            if hasattr(ss, 'signature_algorithm') and ss.signature_algorithm:
+                sig_alg = ss.signature_algorithm
+                if hasattr(sig_alg, 'value'):
+                    if sig_alg.value == AlgorithmIdentifier.ML_DSA_44.dotted_string:
+                        return 'ML-DSA-44'
+                    if sig_alg.value == AlgorithmIdentifier.ML_DSA_65.dotted_string:
+                        return 'ML-DSA-65'
+                    if sig_alg.value == AlgorithmIdentifier.ML_DSA_87.dotted_string:
+                        return 'ML-DSA-87'
+            return str(ss)
+        except ValueError:
+            return '-'
+
+    @property
     def public_key_info(self) -> PublicKeyInfo:
         """Public Key Info of the certificate."""
         return self.signature_suite.public_key_info
@@ -489,17 +519,32 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     @staticmethod
     def _get_spki_info(cert: x509.Certificate) -> tuple[PublicKeyAlgorithmOid, int, NamedCurve]:
         cert_public_key = cert.public_key()
+        spki_key_size: int
         if isinstance(cert_public_key, rsa.RSAPublicKey):
             spki_algorithm_oid = PublicKeyAlgorithmOid.RSA
             spki_ec_curve_oid = NamedCurve.NONE
+            spki_key_size = cert_public_key.key_size
         elif isinstance(cert_public_key, ec.EllipticCurvePublicKey):
             spki_algorithm_oid = PublicKeyAlgorithmOid.ECC
             spki_ec_curve_oid = NamedCurve[cert_public_key.curve.name.upper()]
+            spki_key_size = cert_public_key.key_size
+        elif mldsa and isinstance(cert_public_key, mldsa.MLDSA44PublicKey):
+            spki_algorithm_oid = PublicKeyAlgorithmOid.ML_DSA_44
+            spki_ec_curve_oid = NamedCurve.NONE
+            spki_key_size = 0  # ML-DSA doesn't have key_size
+        elif mldsa and isinstance(cert_public_key, mldsa.MLDSA65PublicKey):
+            spki_algorithm_oid = PublicKeyAlgorithmOid.ML_DSA_65
+            spki_ec_curve_oid = NamedCurve.NONE
+            spki_key_size = 0  # ML-DSA doesn't have key_size
+        elif mldsa and isinstance(cert_public_key, mldsa.MLDSA87PublicKey):
+            spki_algorithm_oid = PublicKeyAlgorithmOid.ML_DSA_87
+            spki_ec_curve_oid = NamedCurve.NONE
+            spki_key_size = 0  # ML-DSA doesn't have key_size
         else:
             exc_msg = 'Subject Public Key Info contains an unsupported key type.'
             raise TypeError(exc_msg)
 
-        return spki_algorithm_oid, cert_public_key.key_size, spki_ec_curve_oid
+        return spki_algorithm_oid, spki_key_size, spki_ec_curve_oid
 
     # --------------------------------------------- Data Retrieval Methods ---------------------------------------------
 

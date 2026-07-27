@@ -8,6 +8,7 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
 from pki.models import CredentialModel
+from pki.util.x509 import _unwrap_mldsa_managed_key
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -87,7 +88,8 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
             csr_builder = csr_builder.add_extension(extension.value, extension.critical)
 
         private_key = signing_credential.get_private_key()
-        self._signed_csr = csr_builder.sign(private_key=private_key, algorithm=hash_algorithm)
+        actual_private_key = _unwrap_mldsa_managed_key(private_key)
+        self._signed_csr = csr_builder.sign(private_key=actual_private_key, algorithm=hash_algorithm)
 
         if signing_credential.certificate:
             self.logger.info(

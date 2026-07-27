@@ -8,11 +8,12 @@ from typing import TYPE_CHECKING, cast
 
 from crypto.application.private_keys import (
     ManagedECPrivateKey,
+    ManagedMLDSAPrivateKey,
     ManagedRSAPrivateKey,
     generate_managed_signing_private_key,
 )
 from crypto.domain.algorithms import EllipticCurveName
-from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.domain.specs import EcKeySpec, KeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificateModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm, supported_auto_gen_pki_key_algorithms
@@ -41,6 +42,12 @@ class AutoGenPki(LoggerMixin):
             return RsaKeySpec(key_size=4096)
         if key_alg == AutoGenPkiKeyAlgorithm.SECP256R1:
             return EcKeySpec(curve=EllipticCurveName.SECP256R1)
+        if key_alg == AutoGenPkiKeyAlgorithm.MLDSA44:
+            return MlDsaKeySpec(variant=MlDsaVariant.MLDSA44)
+        if key_alg == AutoGenPkiKeyAlgorithm.MLDSA65:
+            return MlDsaKeySpec(variant=MlDsaVariant.MLDSA65)
+        if key_alg == AutoGenPkiKeyAlgorithm.MLDSA87:
+            return MlDsaKeySpec(variant=MlDsaVariant.MLDSA87)
         msg = f'Unsupported AutoGenPKI key algorithm {key_alg!r}.'
         raise ValueError(msg)
 
@@ -48,7 +55,7 @@ class AutoGenPki(LoggerMixin):
     def _generate_private_key(
         key_alg: AutoGenPkiKeyAlgorithm,
         key_label: str,
-    ) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
+    ) -> ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey:
         """Generate an AutoGenPKI key in the active backend."""
         if key_alg not in supported_auto_gen_pki_key_algorithms():
             msg = f'The active crypto backend does not support AutoGenPKI algorithm {key_alg.label}.'
@@ -60,7 +67,9 @@ class AutoGenPki(LoggerMixin):
         )
 
     @staticmethod
-    def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey) -> CryptoManagedKeyModel:
+    def _managed_key_model(
+        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey,
+    ) -> CryptoManagedKeyModel:
         """Resolve a generated managed private-key facade to its database model."""
         return CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
 
@@ -69,7 +78,7 @@ class AutoGenPki(LoggerMixin):
         *,
         certificate: x509.Certificate,
         certificate_chain: list[x509.Certificate],
-        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey,
+        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey,
         unique_name: str,
         ca_type: CaModel.CaTypeChoice,
         parent_ca: CaModel | None = None,
