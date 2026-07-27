@@ -1,4 +1,4 @@
-# Copyright (c) 2026 The Trustpoint Project Authors
+# Copyright (c) 2025 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
 """Thin Django field wrappers over the application-secret encryption subsystem."""

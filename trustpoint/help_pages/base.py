@@ -1,4 +1,4 @@
-# Copyright (c) 2026 The Trustpoint Project Authors
+# Copyright (c) 2025 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
 """This module contains classes and functions used by all help pages."""

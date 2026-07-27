@@ -1,0 +1,33 @@
+name: Code Quality / Copyright Header Check
+
+on:
+  pull_request:
+    paths:
+      - '**.py'
+
+jobs:
+  verify-copyright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check new python source files for valid copyright header
+        run: |
+          CURRENT_YEAR=$(date +%Y)
+          # Get list of new files added in this PR
+          NEW_FILES=$(git diff --name-only --diff-filter=A origin/${{ github.base_ref }}...HEAD | grep '\.py$' || true)
+
+          FAILED=0
+          for file in $NEW_FILES; do
+            if ! grep -qE "# Copyright \(C\) $CURRENT_YEAR" "$file"; then
+              echo "Error: $file does not contain '# Copyright (C) $CURRENT_YEAR'"
+              FAILED=1
+            fi
+          done
+
+          if [ $FAILED -eq 1 ]; then
+            echo "Please add or update copyright headers for newly added Python files."
+            exit 1
+          fi

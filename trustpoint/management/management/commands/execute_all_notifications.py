@@ -1,4 +1,4 @@
-# Copyright (c) 2026 The Trustpoint Project Authors
+# Copyright (c) 2024 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
 """This module contains a Django management command to schedule all notification checks via Django-Q2."""
