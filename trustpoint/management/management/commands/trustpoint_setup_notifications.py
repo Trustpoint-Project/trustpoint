@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains a Django management command to generate setup related notifications."""
 
 from __future__ import annotations

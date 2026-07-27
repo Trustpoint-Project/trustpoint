@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Initialization for the message responding step of the request pipeline."""
 
 from .cmp import CmpMessageResponder

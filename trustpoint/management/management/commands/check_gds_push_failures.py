@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to check for failed OPC UA GDS Push operations.
 
 This module defines a Django management command that checks for OPC UA GDS Push

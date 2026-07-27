@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """URL configuration for trustpoint project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:

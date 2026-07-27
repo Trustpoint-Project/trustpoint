@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Unit tests for PKI message parser components."""
 from unittest.mock import MagicMock, Mock, patch
 

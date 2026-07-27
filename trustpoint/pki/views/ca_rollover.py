@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for CA rollover management within the Issuing CA config page."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Test suite for the BackupOptions model."""
 from django.core.exceptions import ValidationError
 from django.test import TestCase

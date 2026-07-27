@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Helpers for interpreting Workflow 2 outcomes during certificate issuance."""
 
 from __future__ import annotations

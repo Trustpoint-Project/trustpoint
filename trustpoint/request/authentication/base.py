@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Provides base authentication class using the Composite pattern for modular authentication."""
 
 from abc import ABC, abstractmethod

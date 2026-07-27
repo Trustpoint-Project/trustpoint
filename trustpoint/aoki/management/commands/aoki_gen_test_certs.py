@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Generates a testing IDevID PKI and associated Owner Certificate PKI for AOKI testing."""
 
 from __future__ import annotations

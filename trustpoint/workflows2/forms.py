@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Forms used by the Workflow 2 definition editor."""
 
 from __future__ import annotations

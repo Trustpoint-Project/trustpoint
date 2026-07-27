@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """URL configuration for Management App API endpoints.
 
 Defines routes that map API requests to their corresponding viewsets and views.

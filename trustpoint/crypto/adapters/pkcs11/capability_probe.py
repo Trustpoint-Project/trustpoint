@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Capability probing for standard PKCS#11 providers."""
 
 from __future__ import annotations

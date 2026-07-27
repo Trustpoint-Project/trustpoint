@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module defines a Django management command to delete all existing notifications."""
 
 from typing import Any

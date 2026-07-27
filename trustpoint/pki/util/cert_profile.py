@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """JSON Certificate Profile implementation.
 
 This module provides functionality to verify certificate requests against JSON-based profiles.

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Workflow 2 execution engine exports."""
 
 from .executor import WorkflowExecutor as WorkflowExecutor

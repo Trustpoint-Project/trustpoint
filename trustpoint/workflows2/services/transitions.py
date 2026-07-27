@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Central status transitions for Workflow 2 instances and runs."""
 # ruff: noqa: D102
 
