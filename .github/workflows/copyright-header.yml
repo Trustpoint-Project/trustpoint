@@ -16,14 +16,26 @@ jobs:
       - name: Check new python source files for valid copyright header
         run: |
           CURRENT_YEAR=$(date +%Y)
-          # Get list of new files added in this PR
-          NEW_FILES=$(git diff --name-only --diff-filter=A origin/${{ github.base_ref }}...HEAD | grep '\.py$' || true)
+          BASE_REF="${{ github.base_ref }}"
+          
+          # Fallback if triggered on push instead of PR
+          if [ -z "$BASE_REF" ]; then
+            BASE_REF="${{ github.event.repository.default_branch }}"
+          fi
+
+          # Ensure the base branch ref is explicitly fetched
+          git fetch origin "$BASE_REF"
+
+          # Use -M to enable rename/move detection so existing files aren't flagged as 'A'
+          NEW_FILES=$(git diff --name-only --diff-filter=A -M "origin/$BASE_REF...HEAD" | grep '\.py$' || true)
 
           FAILED=0
           for file in $NEW_FILES; do
-            if ! grep -qE "# Copyright \(C\) $CURRENT_YEAR" "$file"; then
-              echo "Error: $file does not contain '# Copyright (C) $CURRENT_YEAR'"
-              FAILED=1
+            if [ -f "$file" ]; then
+              if ! grep -qE "# Copyright \(C\) $CURRENT_YEAR" "$file"; then
+                echo "Error: $file is missing '# Copyright (C) $CURRENT_YEAR'"
+                FAILED=1
+              fi
             fi
           done
 
