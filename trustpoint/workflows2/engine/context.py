@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Runtime context objects used while executing Workflow 2 steps."""
 
 from __future__ import annotations

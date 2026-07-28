@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Command for generating test cross-signed CA certificates."""
 
 from __future__ import annotations

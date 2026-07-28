@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Package that contains all models of the PKI App."""
 
 # ruff: noqa: I001, F401  # ignore import order as the order must be preserved to avoid circular imports

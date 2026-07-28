@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for EST (Enrollment over Secure Transport) handling authentication and certificate issuance."""
 
 import base64

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Provides classes for building CMP PKI messages."""
 
 from __future__ import annotations

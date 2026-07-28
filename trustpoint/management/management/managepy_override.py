@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Override the default makemigrations to get Trustpoint naming and additional checks."""
 
 import os

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module defines a Django management command to generate a TLS credential for use in the dev environment."""
 
 import ipaddress

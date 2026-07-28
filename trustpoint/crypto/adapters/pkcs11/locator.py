@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Object lookup helpers for PKCS#11-managed keys."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Reusable context variable groups for built-in Workflow 2 triggers."""
 
 from __future__ import annotations

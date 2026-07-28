@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains all views concerning the PKI -> Certificates section."""
 
 from __future__ import annotations
@@ -359,8 +362,8 @@ class CertificateMultipleDownloadView(
         self,
         request: HttpRequest,
         pks: str | None = None,
-        file_format: None | str = None,
-        archive_format: None | str = None,
+        file_format: str | None = None,
+        archive_format: str | None = None,
         *args: tuple[Any],
         **kwargs: dict[str, Any],
     ) -> HttpResponse:

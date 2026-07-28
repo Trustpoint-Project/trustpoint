@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Module that contains all models corresponding to the devices app."""
 
 from __future__ import annotations

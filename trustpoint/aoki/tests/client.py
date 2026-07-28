@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """AOKI Client for testing purposes.
 
 Please run from /rootdir/trustpoint with "uv run -m aoki.tests.client" for paths and imports to work.

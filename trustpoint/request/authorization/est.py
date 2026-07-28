@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Provides the 'EstAuthorization' class using the Composite pattern for modular EST authorization."""
 from request.request_context import BaseRequestContext, EstBaseRequestContext
 from trustpoint.logger import LoggerMixin

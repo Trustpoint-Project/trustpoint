@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Command to create a test Issuing CA and some example end-entity certificates."""
 
 from __future__ import annotations

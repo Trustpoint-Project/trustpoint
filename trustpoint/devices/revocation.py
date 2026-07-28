@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Module to handle revocation logic for devices and device credentials."""
 
 from __future__ import annotations

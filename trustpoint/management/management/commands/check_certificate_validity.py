@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to check the validity of certificates.
 
 This module defines a Django management command that checks for expiring

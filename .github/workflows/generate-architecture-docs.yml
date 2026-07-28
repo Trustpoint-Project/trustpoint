@@ -1,4 +1,4 @@
-name: Generate Architecture Documentation
+name: Docs / Generate Architecture
 
 on:
   workflow_dispatch:

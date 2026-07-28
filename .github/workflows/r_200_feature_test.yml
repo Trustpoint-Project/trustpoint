@@ -1,4 +1,4 @@
-name: R_200 - Docker Setup Wizard
+name: Tests / R-200 - Docker Setup Wizard
 
 permissions:
   contents: read

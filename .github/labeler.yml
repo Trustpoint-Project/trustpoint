@@ -1,0 +1,141 @@
+# Automatically label PRs based on changed files
+# See: https://github.com/actions/labeler
+
+# GitHub Workflows
+'ci/cd':
+  - changed-files:
+    - any-glob-to-any-file: '.github/workflows/**'
+
+# Documentation
+'documentation':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**'
+      - '*.md'
+
+# Tests
+'tests':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'tests/**'
+      - '**/test_*.py'
+
+# Docker
+'docker':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docker/**'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
+
+# Database Migrations
+'migrations':
+  - changed-files:
+    - any-glob-to-any-file: '**/migrations/**'
+
+'database':
+  - changed-files:
+    - any-glob-to-any-file: '**/migrations/**'
+
+# Dependencies
+'dependencies':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'requirements*.txt'
+
+# Security
+'security':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'SECURITY.md'
+      - 'docs/source/cra/**'
+
+'compliance':
+  - changed-files:
+    - any-glob-to-any-file: 'docs/source/cra/**'
+
+'cra':
+  - changed-files:
+    - any-glob-to-any-file: 'docs/source/cra/**'
+
+# PKI Components
+'pki':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/pki/**'
+
+'crypto':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/crypto/**'
+
+# Protocols
+'cmp':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/cmp/**'
+
+'est':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/est/**'
+
+'aoki':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/aoki/**'
+
+'protocol':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'trustpoint/cmp/**'
+      - 'trustpoint/est/**'
+      - 'trustpoint/aoki/**'
+
+# Device Management
+'devices':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/devices/**'
+
+'onboarding':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/onboarding/**'
+
+# Setup Wizard
+'setup-wizard':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/setup_wizard/**'
+
+# Signer
+'signer':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/signer/**'
+
+# Agents
+'agents':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/agents/**'
+
+# Static Files
+'frontend':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'trustpoint/static/**'
+      - 'trustpoint/workflows2/frontend/**'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.vue'
+
+'static':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/static/**'
+
+# Configuration
+'configuration':
+  - changed-files:
+    - any-glob-to-any-file: 'trustpoint/trustpoint/settings.py'
+
+# Localization
+'i18n':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/locale/**'
+      - '**/*.po'
+      - '**/*.mo'

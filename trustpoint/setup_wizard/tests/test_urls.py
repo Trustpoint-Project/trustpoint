@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for the redesigned setup_wizard URL configuration."""
 
 from django.test import TestCase, override_settings

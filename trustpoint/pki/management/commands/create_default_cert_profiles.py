@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Django management command for creating default certificate profiles."""
 
 from __future__ import annotations

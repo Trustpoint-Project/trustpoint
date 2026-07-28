@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Provides the 'CmpAuthorization' class using the Composite pattern for modular CMP authorization."""
 from typing import Never
 

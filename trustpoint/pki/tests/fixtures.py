@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Fixtures for the PKI pytest suite."""
 
 # ruff: noqa: ERA001  # commented out tests for extensions that are not yet supported

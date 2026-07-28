@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Session-pool management for PKCS#11 tokens."""
 
 from __future__ import annotations

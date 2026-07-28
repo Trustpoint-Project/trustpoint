@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """The Django CMP Application Configuration."""
 
 from django.apps import AppConfig

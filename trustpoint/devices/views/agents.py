@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Table View listing devices that are registered as automation agents (1-to-1 or 1-to-n)."""
 
 import secrets

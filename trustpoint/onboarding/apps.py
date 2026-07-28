@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module defines the configuration for the Onboarding app."""
 
 from django.apps import AppConfig

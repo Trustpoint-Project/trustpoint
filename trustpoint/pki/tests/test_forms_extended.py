@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Comprehensive tests for PKI forms module - focused on increasing coverage."""
 
 from __future__ import annotations

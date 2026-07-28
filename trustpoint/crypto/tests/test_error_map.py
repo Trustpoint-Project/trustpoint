@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Unit tests for PKCS#11 error mapping."""
 
 from __future__ import annotations

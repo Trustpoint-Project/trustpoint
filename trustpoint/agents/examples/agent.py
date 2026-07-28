@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 r"""Hardened Trustpoint endpoint agent for Linux hosts.
 
 Trustpoint fills all ``{{ placeholder }}`` values in the rendered

@@ -1,4 +1,4 @@
-name: Build and push Docker images
+name: CI/CD / Docker Manual Build
 
 on: workflow_dispatch
 
@@ -59,7 +59,7 @@ jobs:
 
       - name: Build and push trustpoint image
         id: push-trustpoint
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/trustpoint/Dockerfile
@@ -70,7 +70,7 @@ jobs:
           cache-to: type=inline
 
       - name: Generate artifact attestation for trustpoint
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
           subject-digest: ${{ steps.push-trustpoint.outputs.digest }}
@@ -78,7 +78,7 @@ jobs:
 
       - name: Build and push postgres image
         id: push-postgres
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/db/Dockerfile
@@ -89,7 +89,7 @@ jobs:
           cache-to: type=inline
 
       - name: Generate artifact attestation for postgres
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ secrets.DOCKER_HUB_USERNAME }}/postgres
           subject-digest: ${{ steps.push-postgres.outputs.digest }}
