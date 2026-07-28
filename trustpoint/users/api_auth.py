@@ -1,4 +1,4 @@
-# Copyright (c) 2024 The Trustpoint Project Authors
+# Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
 """REST Framework authentication for service accounts."""
