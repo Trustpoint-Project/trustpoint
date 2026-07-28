@@ -24,6 +24,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='created at')),
                 ('expires_at', models.DateTimeField(blank=True, help_text='Optional expiration date for the credential.', null=True, verbose_name='expires at')),
                 ('last_used', models.DateTimeField(blank=True, null=True, verbose_name='last used')),
+                ('usage_count', models.PositiveIntegerField(default=0, help_text='Number of times this credential has been used for authentication.', verbose_name='usage count')),
                 ('is_active', models.BooleanField(default=True, help_text='Deactivate to revoke access without deleting the credential.', verbose_name='active')),
                 ('description', models.TextField(blank=True, help_text='Optional description of this credential.', verbose_name='description')),
                 ('service_account', models.ForeignKey(limit_choices_to={'account_type': 'SERVICE'}, on_delete=django.db.models.deletion.CASCADE, related_name='service_credentials', to=settings.AUTH_USER_MODEL, verbose_name='service account')),

@@ -282,6 +282,12 @@ class ServiceAccountCredential(models.Model):
         verbose_name=_('last used'),
     )
 
+    usage_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_('usage count'),
+        help_text=_('Number of times this credential has been used for authentication.'),
+    )
+
     is_active = models.BooleanField(
         default=True,
         verbose_name=_('active'),
@@ -327,7 +333,8 @@ class ServiceAccountCredential(models.Model):
     def record_usage(self) -> None:
         """Record the last usage time of this credential."""
         self.last_used = timezone.now()
-        self.save(update_fields=['last_used'])
+        self.usage_count += 1
+        self.save(update_fields=['last_used', 'usage_count'])
 
     @staticmethod
     def generate_client_id() -> str:
