@@ -13,7 +13,6 @@ from django.contrib.auth.hashers import check_password
 from .models import ServiceAccountCredential, TrustpointUser
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AnonymousUser
     from django.http import HttpRequest
 
 
@@ -26,18 +25,18 @@ class ServiceAccountBackend(BaseBackend):
 
     def authenticate(
         self,
-        del_request: HttpRequest | None = None,
+        request: HttpRequest | None = None,  # noqa: ARG002
         client_id: str | None = None,
         secret: str | None = None,
-        **del_kwargs: object,
+        **kwargs: object,  # noqa: ARG002
     ) -> TrustpointUser | None:
         """Authenticate a service account using client ID and secret.
 
         Args:
-            request: The HTTP request (optional).
+            request: The HTTP request (unused, required for compatibility with BaseBackend).
             client_id: The service account's client ID.
             secret: The service account's API secret (plaintext).
-            **kwargs: Additional keyword arguments (ignored).
+            **kwargs: Additional keyword arguments (unused, required for compatibility with BaseBackend).
 
         Returns:
             The authenticated TrustpointUser (service account) or None.
@@ -63,7 +62,7 @@ class ServiceAccountBackend(BaseBackend):
 
         return credential.service_account
 
-    def get_user(self, user_id: int) -> TrustpointUser | AnonymousUser | None:
+    def get_user(self, user_id: int) -> TrustpointUser | None:
         """Retrieve a user by ID.
 
         Args:

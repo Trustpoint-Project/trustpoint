@@ -305,7 +305,7 @@ class ServiceAccountCredential(models.Model):
 
         verbose_name = _('service account credential')
         verbose_name_plural = _('service account credentials')
-        indexes = [
+        indexes = [  # noqa: RUF012
             models.Index(fields=['client_id']),
             models.Index(fields=['service_account', 'is_active']),
         ]

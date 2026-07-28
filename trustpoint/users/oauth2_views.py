@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth import authenticate
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from rest_framework.request import Request
 
 
-class TokenObtainRequestSerializer(serializers.Serializer):
+class TokenObtainRequestSerializer(serializers.Serializer[Any]):
     """Serializer for token request - supports both authentication methods."""
     username = serializers.CharField(required=False, help_text='Username (for human users)')
     password = serializers.CharField(required=False, help_text='Password (for human users)')
@@ -33,7 +33,7 @@ class TokenObtainRequestSerializer(serializers.Serializer):
     client_secret = serializers.CharField(required=False, help_text='Client secret (for service accounts)')
 
 
-class TokenObtainResponseSerializer(serializers.Serializer):
+class TokenObtainResponseSerializer(serializers.Serializer[Any]):
     """Serializer for token response."""
     access = serializers.CharField(help_text='JWT access token')
     refresh = serializers.CharField(required=False, help_text='JWT refresh token (only for username/password)')
@@ -134,7 +134,7 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
         }
     """
 
-    def post(self, request: Request, *args: tuple, **kwargs: dict) -> Response:
+    def post(self, request: Request, *args: tuple[Any, ...], **kwargs: dict[str, Any]) -> Response:
         """Handle token request for both human users and service accounts."""
         grant_type = request.data.get('grant_type')
         client_id = request.data.get('client_id')

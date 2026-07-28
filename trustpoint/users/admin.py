@@ -16,7 +16,7 @@ class TrustpointUserAdmin(UserAdmin[TrustpointUser]):
 
     # Append 'role' and 'account_type' after the standard UserAdmin columns.
     list_display = (*UserAdmin.list_display, 'role', 'account_type')  # type: ignore[misc]
-    list_filter = (*UserAdmin.list_filter, 'account_type')  # type: ignore[misc]
+    list_filter = (*UserAdmin.list_filter, 'account_type')
 
     # Add a Trustpoint fieldset so role and account_type are editable in the detail view.
     fieldsets = (

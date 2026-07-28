@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.hashers import make_password
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class ServiceAccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class ServiceAccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListView[TrustpointUser]):
     """List all service accounts."""
 
     model = TrustpointUser
@@ -49,7 +50,7 @@ class ServiceAccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListVi
         return context
 
 
-class ServiceAccountDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class ServiceAccountDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView[TrustpointUser]):
     """View service account details and credentials."""
 
     model = TrustpointUser
@@ -72,13 +73,17 @@ class ServiceAccountDetailView(LoginRequiredMixin, PermissionRequiredMixin, Deta
         return context
 
 
-class ServiceAccountCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ServiceAccountCreateView(
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    CreateView[TrustpointUser, forms.ModelForm[TrustpointUser]]
+):
     """Create a new service account with API credentials."""
 
     model = TrustpointUser
     template_name = 'management/service_accounts/service_account_create.html'
     permission_required = 'users.add_trustpointuser'
-    fields = ['username', 'role', 'organization']
+    fields = ['username', 'role', 'organization']  # noqa: RUF012
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add available roles and page context."""
@@ -212,7 +217,7 @@ def generate_credential_view(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect(reverse('management:service_account_created'))
 
 
-class ServiceAccountDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+class ServiceAccountDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView[TrustpointUser, forms.Form]):
     """Delete a service account."""
 
     model = TrustpointUser
