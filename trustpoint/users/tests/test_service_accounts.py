@@ -324,33 +324,41 @@ class TestServiceAccountAPI:
         self,
         service_credential: tuple[ServiceAccountCredential, str]
     ) -> None:
-        """Test API authentication using service account credentials."""
+        """Test API authentication using service account credentials via OAuth 2.0."""
         credential, secret = service_credential
         client = APIClient()
 
-        # Set authorization header
-        auth_header = f'ServiceAccount {credential.client_id}:{secret}'
-        client.credentials(HTTP_AUTHORIZATION=auth_header)
+        # Use OAuth 2.0 client credentials grant
+        response = client.post('/api/token/', {
+            'grant_type': 'client_credentials',
+            'client_id': credential.client_id,
+            'client_secret': secret,
+        })
 
-        # Make a test request to token endpoint
-        response = client.get('/api/token/')
-
-        # Should not get 401 Unauthorized
-        assert response.status_code != status.HTTP_401_UNAUTHORIZED
+        # Should get access token
+        assert response.status_code == status.HTTP_200_OK
+        assert 'access' in response.data
+        assert 'token_type' in response.data
+        assert response.data['token_type'] == 'Bearer'
 
     def test_api_authentication_with_invalid_format(self) -> None:
-        """Test API authentication with invalid header format."""
+        """Test API authentication with invalid credentials."""
         client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION='ServiceAccount invalid_format')
 
-        response = client.get('/api/token/')
+        response = client.post('/api/token/', {
+            'grant_type': 'client_credentials',
+            'client_id': 'invalid_client',
+            'client_secret': 'invalid_secret',
+        })
         # Should get authentication error
-        assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_api_authentication_missing_credentials(self) -> None:
         """Test API request without credentials."""
         client = APIClient()
 
-        response = client.get('/api/token/')
-        # Should require authentication
-        assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
+        response = client.post('/api/token/', {
+            'grant_type': 'client_credentials',
+        })
+        # Should get bad request error for missing required fields
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
