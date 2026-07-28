@@ -62,6 +62,16 @@ class Command(BaseCommand):
             return default
         return raw_value.strip().lower() in {'1', 'true', 'yes', 'on'}
 
+    def _ensure_admin_role(self) -> None:
+        """Ensure the Admin role (Group) exists with proper superuser permissions."""
+        self.stdout.write('Ensuring Admin role exists...')
+        try:
+            call_command('create_admin_group')
+            self.stdout.write(self.style.SUCCESS('Admin role configured'))
+        except Exception as e:
+            err_msg = f'Failed to create Admin role: {e}'
+            raise CommandError(err_msg) from e
+
     def _create_superuser(self, username: str, password: str, email: str) -> None:
         """Create the superuser account."""
         self.stdout.write('Creating superuser...')
@@ -70,10 +80,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f'User {username} already exists, skipping creation'))
                 return
 
-            call_command('createsuperuser', interactive=False, username=username, email=email)
-            user = User.objects.get(username=username)
-            user.set_password(password)
-            user.save()
+            User.objects.create_superuser(username=username, email=email, password=password)
             self.stdout.write(self.style.SUCCESS(f'Superuser {username} created successfully'))
         except Exception as e:
             err_msg = f'Failed to create superuser: {e}'
@@ -234,6 +241,8 @@ class Command(BaseCommand):
                 if not isinstance(username, str) or not isinstance(password, str):
                     err_msg = 'Username and password must be strings'
                     raise CommandError(err_msg)
+                
+                self._ensure_admin_role()
                 self._create_superuser(username, password, email)
 
                 self._configure_storage()
