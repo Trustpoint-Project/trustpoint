@@ -29,9 +29,9 @@ CERTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Command(BaseCommand):
-    """Command to check for certificates using insufficient RSA key lengths."""
+    """Command to generate testing IDevID and DevOwnerID certificates for AOKI."""
 
-    help = 'Check certificates with insufficient key lengths.'
+    help = 'Generate testing IDevID and DevOwnerID certificates for AOKI.'
 
     def handle(self, *args: Any, **kwargs: Any) -> None:
         """Entrypoint for the command.
@@ -42,7 +42,11 @@ class Command(BaseCommand):
         """
         del args, kwargs  # Unused
         idevid_cert = AokiTestCertGenerator.generate_idevid_pki()
-        AokiTestCertGenerator.generate_owner_id_cert(idevid_cert)
+        owner_ca_cert, owner_ca_key = AokiTestCertGenerator.generate_owner_id_ca()
+        AokiTestCertGenerator.generate_owner_id_cert(idevid_cert, owner_ca_cert=owner_ca_cert, owner_ca_key=owner_ca_key)
+        # AokiTestCertGenerator.generate_domain_ca_owner_id_cert(
+        #     domain_ca_cert=idevid_cert, owner_ca_cert=owner_ca_cert, owner_ca_key=owner_ca_key
+        # )
         print('Certificates generated successfully.')
 
 
@@ -103,16 +107,22 @@ class AokiTestCertGenerator:
         return idevid_cert
 
     @staticmethod
-    def generate_owner_id_cert(idevid_cert: x509.Certificate) -> None:
-        """Generate the DeviceOwnerID certificate."""
-        # It is RECOMMENDED that the same CA is used as for the IDevID cert,
-        # but here a separate CA is used to ascertain they can be different
+    def generate_owner_id_ca() -> tuple[x509.Certificate, PrivateKey]:
+        """Generate the CA used to sign DevOwnerIDs."""
         owner_ca_cert, owner_ca_key = CertificateGenerator.create_root_ca(
             'Owner_Test_Root_CA'
         )
         write_cert_pem(owner_ca_cert, CERTS_DIR / 'ownerid_ca.pem')
         write_private_key(owner_ca_key, CERTS_DIR / 'ownerid_ca_pk.pem')
+        return owner_ca_cert, owner_ca_key
 
+    @staticmethod
+    def generate_owner_id_cert(
+        idevid_cert: x509.Certificate,
+        owner_ca_cert: x509.Certificate,
+        owner_ca_key: PrivateKey,
+    ) -> None:
+        """Generate the DevOwnerID certificate."""
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
         # Build URI string "dev-owner:cert:<idevid_subj_sn>_<idevid_sha256_fingerprint>"
         # If the IDevID Subject Serial Number is not present, '' shall be used as a placeholder
@@ -142,3 +152,35 @@ class AokiTestCertGenerator:
         write_cert_pem(ownerid_cert, CERTS_DIR / 'owner_id.pem')
         write_private_key(ownerid_key, CERTS_DIR / 'owner_id_pk.pem')
 
+    @staticmethod
+    def generate_domain_ca_owner_id_cert(
+        domain_ca_cert: x509.Certificate,
+        owner_ca_cert: x509.Certificate,
+        owner_ca_key: PrivateKey,
+    ) -> None:
+        """Generate the domain-based (CA pinning) DevOwnerID certificate."""
+        ca_sha256_fingerprint = domain_ca_cert.fingerprint(hashes.SHA256()).hex()
+        # Build URI string "dev-owner:ca:<idevid_sha256_fingerprint>"
+        ca_san_uri = f'dev-owner:ca:{ca_sha256_fingerprint}'
+        print(f'Domain CA DeviceOwnerID SAN URI: {ca_san_uri}')
+        san_ext_list = [x509.UniformResourceIdentifier(ca_san_uri)]
+
+        ownerid_cert, ownerid_key = CertificateGenerator.create_ee(
+            issuer_private_key=owner_ca_key,
+            issuer_name=owner_ca_cert.subject,
+            subject_name=x509.Name(
+                [
+                    x509.NameAttribute(x509.NameOID.COMMON_NAME, 'DomainBased_DevOwnerID_Test'),
+                    x509.NameAttribute(x509.NameOID.PSEUDONYM, 'DevOwnerID'),
+                ]
+            ),
+            private_key=None,
+            extensions=[
+                (x509.SubjectAlternativeName(san_ext_list), False),
+                # SAN should be critical for an OwnerID cert,
+                # but then the subject name should be empty according to RFC 5280
+            ],
+            validity_days=99999,
+        )
+        write_cert_pem(ownerid_cert, CERTS_DIR / 'domain_ca_owner_id.pem')
+        write_private_key(ownerid_key, CERTS_DIR / 'domain_ca_owner_id_pk.pem')

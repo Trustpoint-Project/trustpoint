@@ -25,6 +25,8 @@ from trustpoint.views.base import LoggedHttpResponse
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
+    from pki.models.domain import DomainModel
+
 
 class AokiServiceMixin:
     """Mixin for AOKI functionality."""
@@ -68,6 +70,25 @@ class AokiServiceMixin:
             if not uri_refs:
                 return None
             owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref__in=uri_refs).first()
+        if not owner_cred_ref:
+            return None
+        owner_cred = owner_cred_ref.dev_owner_id
+        issued = owner_cred.dev_owner_id_credential
+        if issued is None:
+            return None
+        return issued.credential
+
+    @staticmethod
+    def get_domain_based_owner_credential(domain: DomainModel | None) -> CredentialModel | None:
+        """Get the domain-based (CA pinning) DevOwnerID credential for a given domain, or None if it does not exist."""
+        if not domain:
+            return None
+        try:
+            domain_ca_cert = domain.get_issuing_ca_or_value_error().get_certificate()
+        except ValueError:
+            return None
+        ca_sha256_fingerprint = domain_ca_cert.fingerprint(hashes.SHA256()).hex()
+        owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref=f'dev-owner:ca:{ca_sha256_fingerprint}').first()
         if not owner_cred_ref:
             return None
         owner_cred = owner_cred_ref.dev_owner_id
