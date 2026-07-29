@@ -64,6 +64,33 @@ ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS = [
 ]
 
 
+def _get_permitted_onboarding_protocols() -> list[tuple[int, str]]:
+    """Return the list of onboarding protocols permitted by the current security configuration.
+
+    Returns:
+        List of tuples (protocol_value, protocol_label) for permitted protocols.
+    """
+    from management.models import SecurityConfig  # noqa: PLC0415
+
+    try:
+        cfg: SecurityConfig = SecurityConfig.objects.get()
+        permitted: list[int] = cfg.permitted_onboarding_protocols or []
+    except SecurityConfig.DoesNotExist:
+        return ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS
+    except SecurityConfig.MultipleObjectsReturned:
+        cfg = SecurityConfig.objects.first()  # type: ignore[assignment]
+        permitted = cfg.permitted_onboarding_protocols or [] if cfg else []
+
+    if not permitted:
+        return []
+
+    return [
+        (proto_value, proto_label)
+        for proto_value, proto_label in ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS
+        if proto_value in permitted
+    ]
+
+
 def _get_secret(number_of_symbols: int = 16) -> str:
     """Generates a secret with the number of symbols provided.
 
@@ -491,6 +518,21 @@ class OnboardingCreateForm(forms.Form):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the CreateDeviceForm."""
         super().__init__(*args, **kwargs)
+
+        permitted_protocols = _get_permitted_onboarding_protocols()
+        self.fields['onboarding_protocol'].choices = permitted_protocols
+
+        all_protocol_values = {proto[0] for proto in permitted_protocols}
+        disabled_options = [
+            proto for proto in [
+                OnboardingProtocol.MANUAL,
+                OnboardingProtocol.AOKI,
+                OnboardingProtocol.BRSKI,
+                OnboardingProtocol.OPC_GDS_PUSH,
+            ]
+            if proto.value in all_protocol_values
+        ]
+        self.fields['onboarding_protocol'].widget = DisableOptionsSelect(disabled_options=disabled_options)
 
         self.helper = FormHelper()
         self.helper.form_tag = False

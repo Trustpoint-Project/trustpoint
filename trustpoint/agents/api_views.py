@@ -21,6 +21,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from agents.models import AgentAssignedProfile, TrustpointAgent
+from agents.security import AgentSecurity
 from devices.models import DeviceModel
 from trustpoint.logger import LoggerMixin
 
@@ -260,6 +261,12 @@ class AgentJobsView(LoggerMixin, APIView):
     )
     def get(self, request: Request) -> Response:
         """Return pending renewal jobs for the authenticated agent."""
+        if not AgentSecurity.is_agent_protocol_permitted():
+            return Response(
+                {'detail': 'Agent functionality is disabled by the current security configuration.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         agent: TrustpointAgent = request.user  # type: ignore[assignment]
 
         TrustpointAgent.objects.filter(pk=agent.pk).update(last_seen_at=timezone.now())
@@ -393,6 +400,12 @@ class AgentJobResultView(LoggerMixin, APIView):
     )
     def post(self, request: Request) -> Response:
         """Process a job result posted by the authenticated agent."""
+        if not AgentSecurity.is_agent_protocol_permitted():
+            return Response(
+                {'detail': 'Agent functionality is disabled by the current security configuration.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         agent: TrustpointAgent = request.user  # type: ignore[assignment]
 
         TrustpointAgent.objects.filter(pk=agent.pk).update(last_seen_at=timezone.now())

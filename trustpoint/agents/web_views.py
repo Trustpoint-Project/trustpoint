@@ -19,6 +19,7 @@ from django.views import View
 from django.views.generic import FormView, ListView, UpdateView
 
 from agents.models import AgentAssignedProfile, AgentProfileDefinition, TrustpointAgent
+from agents.security import AgentSecurityMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_AGENTS_SUBCATEGORY, DEVICES_PAGE_CATEGORY, PageContextMixin
 from trustpoint.views.base import BulkDeleteView
@@ -29,7 +30,9 @@ if TYPE_CHECKING:
     from devices.models import DeviceModel
 
 
-class AgentProfileDefinitionTableView(PageContextMixin, LoggerMixin, ListView[AgentProfileDefinition]):
+class AgentProfileDefinitionTableView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, ListView[AgentProfileDefinition]
+):
     """View to list all Agent Profile Definitions."""
 
     http_method_names = ('get',)
@@ -45,7 +48,9 @@ class AgentProfileDefinitionTableView(PageContextMixin, LoggerMixin, ListView[Ag
         return AgentProfileDefinition.objects.all().order_by('name')
 
 
-class AgentProfileDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateView[AgentProfileDefinition, Any]):
+class AgentProfileDefinitionConfigView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, UpdateView[AgentProfileDefinition, Any]
+):
     """View to display and edit an Agent Profile Definition."""
 
     http_method_names = ('get', 'post')
@@ -201,7 +206,7 @@ class AgentProfileDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateView
         return super().form_valid(form)
 
 
-class AgentProfileDefinitionBulkDeleteConfirmView(PageContextMixin, BulkDeleteView):
+class AgentProfileDefinitionBulkDeleteConfirmView(AgentSecurityMixin, PageContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple workflow definitions."""
 
     model = AgentProfileDefinition
@@ -238,7 +243,9 @@ class AgentProfileDefinitionBulkDeleteConfirmView(PageContextMixin, BulkDeleteVi
         return response
 
 
-class AgentManagedDeviceTableView(PageContextMixin, LoggerMixin, ListView['DeviceModel']):
+class AgentManagedDeviceTableView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, ListView['DeviceModel']
+):
     """List all AGENT_MANAGED_DEVICE devices in the same domain as a 1-to-n agent's device."""
 
     http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
@@ -296,7 +303,9 @@ class ManagedDeviceCreateForm(forms.Form):
     )
 
 
-class AgentManagedDeviceCreateView(PageContextMixin, LoggerMixin, FormView[ManagedDeviceCreateForm]):
+class AgentManagedDeviceCreateView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, FormView[ManagedDeviceCreateForm]
+):
     """Create a new AGENT_MANAGED_DEVICE record under a 1-to-n agent."""
 
     http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
@@ -368,7 +377,7 @@ class AgentManagedDeviceCreateView(PageContextMixin, LoggerMixin, FormView[Manag
         return HttpResponseRedirect(self.get_success_url())
 
 
-class AgentManagedDeviceDeleteView(PageContextMixin, BulkDeleteView):
+class AgentManagedDeviceDeleteView(AgentSecurityMixin, PageContextMixin, BulkDeleteView):
     """Confirm and bulk-delete AGENT_MANAGED_DEVICE records."""
 
     template_name = 'agents/targets/confirm_delete.html'
@@ -472,7 +481,9 @@ class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
         }
 
 
-class AgentAssignedProfileTableView(PageContextMixin, LoggerMixin, ListView[AgentAssignedProfile]):
+class AgentAssignedProfileTableView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, ListView[AgentAssignedProfile]
+):
     """List all workflow profiles assigned to a specific 1-to-1 agent."""
 
     http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
@@ -498,7 +509,9 @@ class AgentAssignedProfileTableView(PageContextMixin, LoggerMixin, ListView[Agen
         return context
 
 
-class AgentAssignedProfileCreateView(PageContextMixin, LoggerMixin, FormView[AgentAssignedProfileForm]):
+class AgentAssignedProfileCreateView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, FormView[AgentAssignedProfileForm]
+):
     """Assign a new workflow profile to a 1-to-1 agent."""
 
     http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
@@ -541,7 +554,7 @@ class AgentAssignedProfileCreateView(PageContextMixin, LoggerMixin, FormView[Age
 
 
 class AgentAssignedProfileEditView(
-    PageContextMixin, LoggerMixin, UpdateView[AgentAssignedProfile, AgentAssignedProfileEditForm]
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, UpdateView[AgentAssignedProfile, AgentAssignedProfileEditForm]
 ):
     """Edit an existing AgentAssignedProfile (renewal_threshold_days, subject, subject_alt_name)."""
 
@@ -579,7 +592,7 @@ class AgentAssignedProfileEditView(
         return HttpResponseRedirect(self.get_success_url())
 
 
-class AgentAssignedProfileDeleteView(PageContextMixin, BulkDeleteView):
+class AgentAssignedProfileDeleteView(AgentSecurityMixin, PageContextMixin, BulkDeleteView):
     """Confirm and execute bulk deletion of AgentAssignedProfile records."""
 
     model = AgentAssignedProfile
@@ -624,7 +637,7 @@ class AgentAssignedProfileDeleteView(PageContextMixin, BulkDeleteView):
         return response
 
 
-class AgentAssignedProfileForceUpdateView(PageContextMixin, LoggerMixin, View):
+class AgentAssignedProfileForceUpdateView(AgentSecurityMixin, PageContextMixin, LoggerMixin, View):
     """Force an immediate certificate update by setting next_certificate_update_scheduled to now."""
 
     http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]
