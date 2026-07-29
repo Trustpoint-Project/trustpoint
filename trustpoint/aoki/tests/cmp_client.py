@@ -109,6 +109,21 @@ class AokiCmpClient:
         return owner_san_uris or None
 
 
+    def _verify_matches_domain_ca_cert(self, owner_id_cert: x509.Certificate) -> None:
+        """Verify the Owner ID certificate is valid for the domain issuing CA certificate."""
+        print('Verifying Owner ID certificate matches Domain CA certificate')
+        candidate_ca_certs = self._load_certificates(CERTS_DIR / 'full_chain.pem')
+        for domain_ca_cert in candidate_ca_certs:
+            ca_sha256_fingerprint = domain_ca_cert.fingerprint(hashes.SHA256()).hex()
+            expected_san_uri = f'dev-owner:ca:{ca_sha256_fingerprint}'
+            for san in owner_id_cert.extensions.get_extension_for_oid(x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value:
+                if isinstance(san, x509.UniformResourceIdentifier) and san.value == expected_san_uri:
+                    print(f'Domain-based Owner ID certificate SAN URI matches Domain CA certificate {ca_sha256_fingerprint}!')
+                    return
+        exc_msg = 'Owner ID certificate does not match Domain CA certificate.'
+        raise AokiClientOwnerIdCertVerificationError(exc_msg)
+
+
     def _verify_matches_idevid_cert(self, owner_id_cert: x509.Certificate, idevid_cert: x509.Certificate) -> None:
         """Verify the Owner ID certificate is valid for the device IDevID."""
         print('Verifying Owner ID certificate matches IDevID certificate')
@@ -122,6 +137,7 @@ class AokiCmpClient:
                 print('Owner ID certificate SAN URI matches IDevID certificate!')
                 return
         exc_msg = 'Owner ID certificate does not match IDevID certificate.'
+        print(exc_msg)
         raise AokiClientOwnerIdCertVerificationError(exc_msg)
     
     def _discover_aoki_owner_service_mdns(self) -> None:
@@ -204,7 +220,10 @@ class AokiCmpClient:
         # Assuming first extraCert is the OwnerID / CMP signer cert, this is the case in the Trustpoint implementation
         owner_id_cert = self._load_certificates(CERTS_DIR / 'full_chain.pem')[0]
         idevid_cert = self._load_certificate(CERTS_DIR / self.cert_file)
-        self._verify_matches_idevid_cert(owner_id_cert, idevid_cert)
+        try:
+            self._verify_matches_idevid_cert(owner_id_cert, idevid_cert)
+        except AokiClientOwnerIdCertVerificationError as e:
+            self._verify_matches_domain_ca_cert(owner_id_cert)
 
         print('AOKI-CMP Client Onboarding completed successfully!')
         self.onboarding_completed = True

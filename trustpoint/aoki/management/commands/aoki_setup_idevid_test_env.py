@@ -36,6 +36,7 @@ OWNER_ID_KEY_PATH = CERTS_DIR / 'owner_id_pk.pem'
 DOMAIN_BASED_OWNER_ID_CERT_PATH = CERTS_DIR / 'domain_ca_owner_id.pem'
 DOMAIN_BASED_OWNER_ID_KEY_PATH = CERTS_DIR / 'domain_ca_owner_id_pk.pem'
 OWNER_CA_CERT_PATH = CERTS_DIR / 'ownerid_ca.pem'
+OWNER_CA_KEY_PATH = CERTS_DIR / 'ownerid_ca_pk.pem'
 
 IDEVID_TRUSTSTORE_UNIQUE_NAME = 'AokiIDevIDTruststore'
 DEVID_REGISTRATION_UNIQUE_NAME = 'AokiIDevIDRegistration'
@@ -176,7 +177,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         """Generates a domain-based DevOwnerID, pinning the certificate of the domain CA."""
         domain_ca_cert = domain_ca.get_certificate()
         owner_ca_cert = x509.load_pem_x509_certificate(OWNER_CA_CERT_PATH.read_bytes())
-        owner_ca_key = load_pem_private_key(OWNER_ID_KEY_PATH.read_bytes(), password=None)
+        owner_ca_key = load_pem_private_key(OWNER_CA_KEY_PATH.read_bytes(), password=None)
 
         AokiTestCertGenerator.generate_domain_ca_owner_id_cert(
             domain_ca_cert=domain_ca_cert,
