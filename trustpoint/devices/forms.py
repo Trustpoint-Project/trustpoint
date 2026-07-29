@@ -64,7 +64,7 @@ ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS = [
 ]
 
 
-def _get_permitted_onboarding_protocols() -> list[tuple[int, str]]:
+def _get_permitted_onboarding_protocols() -> list[tuple[int, Any]]:
     """Return the list of onboarding protocols permitted by the current security configuration.
 
     Returns:
@@ -520,7 +520,9 @@ class OnboardingCreateForm(forms.Form):
         super().__init__(*args, **kwargs)
 
         permitted_protocols = _get_permitted_onboarding_protocols()
-        self.fields['onboarding_protocol'].choices = permitted_protocols
+        onboarding_protocol_field = self.fields['onboarding_protocol']
+        if isinstance(onboarding_protocol_field, forms.ChoiceField):
+            onboarding_protocol_field.choices = permitted_protocols
 
         all_protocol_values = {proto[0] for proto in permitted_protocols}
         disabled_options = [
@@ -532,7 +534,8 @@ class OnboardingCreateForm(forms.Form):
             ]
             if proto.value in all_protocol_values
         ]
-        self.fields['onboarding_protocol'].widget = DisableOptionsSelect(disabled_options=disabled_options)
+        if isinstance(onboarding_protocol_field, forms.ChoiceField):
+            onboarding_protocol_field.widget = DisableOptionsSelect(disabled_options=disabled_options)
 
         self.helper = FormHelper()
         self.helper.form_tag = False
@@ -653,16 +656,18 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
 
     onboarding_protocol = forms.ChoiceField(
         choices=[(OnboardingProtocol.REST_USERNAME_PASSWORD.value, OnboardingProtocol.REST_USERNAME_PASSWORD.label)],
-        initial=OnboardingProtocol.REST_USERNAME_PASSWORD,
+        initial=OnboardingProtocol.REST_USERNAME_PASSWORD.value,
         label=_('Onboarding Protocol'),
         widget=forms.HiddenInput(),
+        required=True,
     )
 
     # REST is the only allowed PKI protocol for agents — submitted as hidden input.
     onboarding_pki_protocols = forms.MultipleChoiceField(
-        choices=[(OnboardingPkiProtocol.REST, OnboardingPkiProtocol.REST.label)],
-        initial=[OnboardingPkiProtocol.REST],
+        choices=[(OnboardingPkiProtocol.REST.value, OnboardingPkiProtocol.REST.label)],
+        initial=[OnboardingPkiProtocol.REST.value],
         widget=forms.MultipleHiddenInput(),
+        required=True,
     )
 
     # Agent-specific field for OS path where certificates will be stored
@@ -679,11 +684,24 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the AgentOnboardingCreateForm with fixed EST-only fields."""
+        if 'initial' not in kwargs:
+            kwargs['initial'] = {}
+        kwargs['initial']['onboarding_protocol'] = OnboardingProtocol.REST_USERNAME_PASSWORD.value
+        kwargs['initial']['onboarding_pki_protocols'] = [OnboardingPkiProtocol.REST.value]
+
         super().__init__(*args, **kwargs)
 
-        # Ensure hidden fields carry the correct pre-selected values.
-        self.initial['onboarding_protocol'] = str(OnboardingProtocol.REST_USERNAME_PASSWORD.value)
-        self.initial['onboarding_pki_protocols'] = [str(OnboardingPkiProtocol.REST.value)]
+        onboarding_protocol_field = self.fields['onboarding_protocol']
+        if isinstance(onboarding_protocol_field, forms.ChoiceField):
+            onboarding_protocol_field.choices = [
+                (OnboardingProtocol.REST_USERNAME_PASSWORD.value, OnboardingProtocol.REST_USERNAME_PASSWORD.label)
+            ]
+
+        onboarding_pki_protocols_field = self.fields['onboarding_pki_protocols']
+        if isinstance(onboarding_pki_protocols_field, forms.MultipleChoiceField):
+            onboarding_pki_protocols_field.choices = [
+                (OnboardingPkiProtocol.REST.value, OnboardingPkiProtocol.REST.label)
+            ]
 
         self.helper = FormHelper()
         self.helper.form_tag = False

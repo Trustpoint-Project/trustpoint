@@ -55,4 +55,4 @@ class AgentSecurityMixin(LoggerMixin):
                 'Agent functionality is disabled by the current security configuration.',
             )
             return HttpResponseRedirect(reverse_lazy('devices:list'))
-        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc]
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc,no-any-return]
