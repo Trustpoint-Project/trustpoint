@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:f6f90c80-06e2-4b47-9b04-e99b1e93eb38",
+  "serialNumber": "urn:uuid:2f4262d2-8565-4ec2-9f77-6a5ee989c28b",
   "version": 4,
   "metadata": {
-    "timestamp": "2026-07-30T09:22:59Z",
+    "timestamp": "2026-07-30T09:45:24Z",
     "tools": {
       "services": [
         {
@@ -26,7 +26,7 @@
       },
       {
         "name": "commit",
-        "value": "9c9f9bcc32aa1f9903bd1f8c6fbfd8edfcfc9b8f"
+        "value": "efa1d158222837f7978bffb98ca4d952d9aa5835"
       },
       {
         "name": "trustpoint:cbom:source",
@@ -69,35 +69,14 @@
   "components": [
     {
       "type": "cryptographic-asset",
-      "bom-ref": "7cefe5f8-3540-4a9a-8fd4-7c4baa2c136c",
-      "name": "secret-key@7cefe5f8-3540-4a9a-8fd4-7c4baa2c136c",
+      "bom-ref": "bbbfd00d-b79c-423b-b0d8-0cc26b2b4c37",
+      "name": "private-key@bbbfd00d-b79c-423b-b0d8-0cc26b2b4c37",
       "evidence": {
         "occurrences": [
           {
-            "location": "trustpoint/appsecrets/service.py",
-            "line": 542,
-            "offset": 12,
-            "additionalContext": "generate_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "secret-key"
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "c3d71790-f8b1-4acb-ab50-67f5400d6484",
-      "name": "private-key@c3d71790-f8b1-4acb-ab50-67f5400d6484",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/agents/examples/agent.py",
-            "line": 397,
-            "offset": 14,
+            "location": "trustpoint/pki/util/x509.py",
+            "line": 189,
+            "offset": 26,
             "additionalContext": "generate_private_key"
           }
         ]
@@ -105,40 +84,20 @@
       "cryptoProperties": {
         "assetType": "related-crypto-material",
         "relatedCryptoMaterialProperties": {
-          "type": "private-key"
+          "type": "private-key",
+          "size": 2048
         }
       }
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "15d7b843-b8c0-4087-89d1-82286ad8f742",
-      "name": "secret-key@15d7b843-b8c0-4087-89d1-82286ad8f742",
+      "bom-ref": "389a9ff5-5f6d-4149-9da0-8b75722c1e3c",
+      "name": "private-key@389a9ff5-5f6d-4149-9da0-8b75722c1e3c",
       "evidence": {
         "occurrences": [
           {
-            "location": "trustpoint/appsecrets/service.py",
-            "line": 469,
-            "offset": 24,
-            "additionalContext": "generate_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "secret-key"
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "25b1010e-f903-4070-bb67-d744fadc043b",
-      "name": "private-key@25b1010e-f903-4070-bb67-d744fadc043b",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/setup_wizard/tls_credential.py",
-            "line": 190,
+            "location": "trustpoint/pki/management/commands/create_tls_certs.py",
+            "line": 59,
             "offset": 22,
             "additionalContext": "generate_private_key"
           }
@@ -147,13 +106,14 @@
       "cryptoProperties": {
         "assetType": "related-crypto-material",
         "relatedCryptoMaterialProperties": {
-          "type": "private-key"
+          "type": "private-key",
+          "size": 4096
         }
       }
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "db59beeb-407b-4f28-8f54-6334f12f9be5",
+      "bom-ref": "c032704d-0c5b-4e78-a6b8-8944f5950b85",
       "name": "AES-GCM",
       "evidence": {
         "occurrences": [
@@ -186,7 +146,28 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "457616b0-7449-4814-9879-56ec448a6685",
+      "bom-ref": "903fcc39-d9ef-4eb7-8560-379d5296b24e",
+      "name": "secret-key@903fcc39-d9ef-4eb7-8560-379d5296b24e",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/management/pkcs11_util.py",
+            "line": 571,
+            "offset": 28,
+            "additionalContext": "generate_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "secret-key"
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "87cc2ad2-8933-4143-a40f-da07a24b1a7c",
       "name": "HMAC-SHA256",
       "evidence": {
         "occurrences": [
@@ -235,14 +216,14 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "c6047716-bb69-4b9c-9c81-b09bbe509830",
-      "name": "secret-key@c6047716-bb69-4b9c-9c81-b09bbe509830",
+      "bom-ref": "6f39b05c-3329-4db4-afce-bff380836f4f",
+      "name": "secret-key@6f39b05c-3329-4db4-afce-bff380836f4f",
       "evidence": {
         "occurrences": [
           {
-            "location": "trustpoint/management/pkcs11_util.py",
-            "line": 571,
-            "offset": 28,
+            "location": "trustpoint/appsecrets/service.py",
+            "line": 427,
+            "offset": 20,
             "additionalContext": "generate_key"
           }
         ]
@@ -256,7 +237,28 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "96d97727-0596-47ed-bbec-7ad314e7ae7d",
+      "bom-ref": "d87b1ee7-1772-4324-9dcd-68984f94f665",
+      "name": "secret-key@d87b1ee7-1772-4324-9dcd-68984f94f665",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/appsecrets/service.py",
+            "line": 469,
+            "offset": 24,
+            "additionalContext": "generate_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "secret-key"
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "b1a47d0c-b7b7-45e2-b579-eeda59b36a67",
       "name": "RSA-2048",
       "evidence": {
         "occurrences": [
@@ -318,57 +320,14 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "93a63337-0ec9-4d70-9202-5c2e1ff72bf0",
-      "name": "secret-key@93a63337-0ec9-4d70-9202-5c2e1ff72bf0",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/appsecrets/service.py",
-            "line": 533,
-            "offset": 16,
-            "additionalContext": "generate_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "secret-key"
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "27c21f96-b6b4-48d7-8b1b-282ac329d5f2",
-      "name": "private-key@27c21f96-b6b4-48d7-8b1b-282ac329d5f2",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/agents/examples/agent.py",
-            "line": 406,
-            "offset": 14,
-            "additionalContext": "generate_private_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "private-key",
-          "size": 0
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "d8515ad6-7d80-42ba-98b9-8d6838a4b001",
-      "name": "private-key@d8515ad6-7d80-42ba-98b9-8d6838a4b001",
+      "bom-ref": "72d376ea-158b-4bfe-9c98-db1ac464d303",
+      "name": "private-key@72d376ea-158b-4bfe-9c98-db1ac464d303",
       "evidence": {
         "occurrences": [
           {
             "location": "trustpoint/pki/util/x509.py",
-            "line": 93,
-            "offset": 26,
+            "line": 257,
+            "offset": 21,
             "additionalContext": "generate_private_key"
           }
         ]
@@ -383,7 +342,7 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "7751c2a6-d19b-4b75-b499-d894ea069d2f",
+      "bom-ref": "93485929-6b6d-4c3a-a6af-72e776c04250",
       "name": "RSA-64",
       "evidence": {
         "occurrences": [
@@ -409,13 +368,55 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "37d7be73-53dd-493e-942a-c73d1e7442f5",
-      "name": "private-key@37d7be73-53dd-493e-942a-c73d1e7442f5",
+      "bom-ref": "ff01d221-7dcd-4a7b-b891-a94b94c7467b",
+      "name": "private-key@ff01d221-7dcd-4a7b-b891-a94b94c7467b",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/setup_wizard/tls_credential.py",
+            "line": 190,
+            "offset": 22,
+            "additionalContext": "generate_private_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "private-key"
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "b9027529-7ce5-40e7-be80-fd6fdca6ce84",
+      "name": "private-key@b9027529-7ce5-40e7-be80-fd6fdca6ce84",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/setup_wizard/tls_credential.py",
+            "line": 185,
+            "offset": 36,
+            "additionalContext": "generate_private_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "private-key"
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "db872719-57fd-4084-875e-8917208e7409",
+      "name": "private-key@db872719-57fd-4084-875e-8917208e7409",
       "evidence": {
         "occurrences": [
           {
             "location": "trustpoint/pki/util/x509.py",
-            "line": 189,
+            "line": 93,
             "offset": 26,
             "additionalContext": "generate_private_key"
           }
@@ -431,72 +432,7 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "24f21000-b110-4633-a69b-3229b138de40",
-      "name": "secret-key@24f21000-b110-4633-a69b-3229b138de40",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/appsecrets/service.py",
-            "line": 469,
-            "offset": 24,
-            "additionalContext": "generate_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "secret-key"
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "a42baca4-b079-4fd8-8779-9eb91140ae6a",
-      "name": "private-key@a42baca4-b079-4fd8-8779-9eb91140ae6a",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/pki/management/commands/create_tls_certs.py",
-            "line": 59,
-            "offset": 22,
-            "additionalContext": "generate_private_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "private-key",
-          "size": 4096
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "cc493d30-d7fa-4621-aa28-443a2af4fee4",
-      "name": "private-key@cc493d30-d7fa-4621-aa28-443a2af4fee4",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/conftest.py",
-            "line": 591,
-            "offset": 27,
-            "additionalContext": "generate_private_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "private-key",
-          "size": 2048
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "8e4137a2-b343-42d4-9938-af143fd1fd62",
+      "bom-ref": "cdb01788-1500-47a1-bbdc-d34b19b648ce",
       "name": "RSA",
       "evidence": {
         "occurrences": [
@@ -521,51 +457,7 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "1ba7a10f-1d50-4194-a160-4007b185f410",
-      "name": "private-key@1ba7a10f-1d50-4194-a160-4007b185f410",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/agents/examples/agent.py",
-            "line": 406,
-            "offset": 14,
-            "additionalContext": "generate_private_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "private-key",
-          "size": 2048
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "e5fc69e7-19d1-4024-8bb6-ddfd3b66697e",
-      "name": "private-key@e5fc69e7-19d1-4024-8bb6-ddfd3b66697e",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/pki/management/commands/base_commands.py",
-            "line": 146,
-            "offset": 26,
-            "additionalContext": "generate_private_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "private-key",
-          "size": 2048
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "ea80e0bd-b4f8-4d67-99d4-b5f2e5a5c9e7",
+      "bom-ref": "5c22bf85-edc1-462c-a828-c68986110281",
       "name": "RSA-4096",
       "evidence": {
         "occurrences": [
@@ -591,7 +483,7 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "018730d7-ce1d-43ad-903a-834b03c34d5c",
+      "bom-ref": "e4639157-7a62-4646-8567-97a10b552931",
       "name": "AES128-CBC-PKCS7",
       "evidence": {
         "occurrences": [
@@ -640,28 +532,28 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "a311e1ca-04e2-4b6c-9cec-6e9a8d4fb241",
-      "name": "secret-key@a311e1ca-04e2-4b6c-9cec-6e9a8d4fb241",
+      "bom-ref": "09a4f9dc-dcf5-46b0-b75b-4a4c23ab089d",
+      "name": "private-key@09a4f9dc-dcf5-46b0-b75b-4a4c23ab089d",
       "evidence": {
         "occurrences": [
           {
-            "location": "trustpoint/appsecrets/service.py",
-            "line": 533,
-            "offset": 16,
-            "additionalContext": "generate_key"
+            "location": "trustpoint/agents/examples/agent.py",
+            "line": 397,
+            "offset": 14,
+            "additionalContext": "generate_private_key"
           }
         ]
       },
       "cryptoProperties": {
         "assetType": "related-crypto-material",
         "relatedCryptoMaterialProperties": {
-          "type": "secret-key"
+          "type": "private-key"
         }
       }
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "833efcfd-8f18-46a1-bf41-d5ba8dd2113e",
+      "bom-ref": "e8ca7033-bfdd-49f3-8700-d52810e8c753",
       "name": "RSA-0",
       "evidence": {
         "occurrences": [
@@ -687,28 +579,73 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "dc1b429d-7056-4c3c-adb2-81903a0a6b34",
-      "name": "secret-key@dc1b429d-7056-4c3c-adb2-81903a0a6b34",
+      "bom-ref": "7f2e8222-758f-49d9-a62f-68b209ee5e02",
+      "name": "private-key@7f2e8222-758f-49d9-a62f-68b209ee5e02",
       "evidence": {
         "occurrences": [
           {
-            "location": "trustpoint/management/pkcs11_util.py",
-            "line": 571,
-            "offset": 28,
-            "additionalContext": "generate_key"
+            "location": "trustpoint/agents/examples/agent.py",
+            "line": 406,
+            "offset": 14,
+            "additionalContext": "generate_private_key"
           }
         ]
       },
       "cryptoProperties": {
         "assetType": "related-crypto-material",
         "relatedCryptoMaterialProperties": {
-          "type": "secret-key"
+          "type": "private-key",
+          "size": 2048
         }
       }
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "7e2f8541-73a0-40be-a2b1-241847e31fad",
+      "bom-ref": "ca2e2016-348e-46b0-8a0e-c3d0b670e1cb",
+      "name": "private-key@ca2e2016-348e-46b0-8a0e-c3d0b670e1cb",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/agents/examples/agent.py",
+            "line": 406,
+            "offset": 14,
+            "additionalContext": "generate_private_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "private-key",
+          "size": 0
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "0a8312d5-3e3d-46b7-a630-1ade852c6f9a",
+      "name": "private-key@0a8312d5-3e3d-46b7-a630-1ade852c6f9a",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/conftest.py",
+            "line": 591,
+            "offset": 27,
+            "additionalContext": "generate_private_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "private-key",
+          "size": 2048
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "2802f4e3-9a2b-405a-a9ff-6e27e601f257",
       "name": "Poly1305",
       "evidence": {
         "occurrences": [
@@ -756,50 +693,28 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "a17e6398-8d05-44e2-b441-e5bfb89d09b7",
-      "name": "private-key@a17e6398-8d05-44e2-b441-e5bfb89d09b7",
+      "bom-ref": "8b2d1822-0562-43bb-b9a5-3d1de8a9f984",
+      "name": "secret-key@8b2d1822-0562-43bb-b9a5-3d1de8a9f984",
       "evidence": {
         "occurrences": [
           {
-            "location": "trustpoint/crypto/adapters/software/backend.py",
-            "line": 170,
-            "offset": 19,
-            "additionalContext": "generate_private_key"
+            "location": "trustpoint/appsecrets/service.py",
+            "line": 533,
+            "offset": 16,
+            "additionalContext": "generate_key"
           }
         ]
       },
       "cryptoProperties": {
         "assetType": "related-crypto-material",
         "relatedCryptoMaterialProperties": {
-          "type": "private-key",
-          "size": 64
+          "type": "secret-key"
         }
       }
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "eba6a1ed-c47e-475c-8891-0cef32460216",
-      "name": "private-key@eba6a1ed-c47e-475c-8891-0cef32460216",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/setup_wizard/tls_credential.py",
-            "line": 185,
-            "offset": 36,
-            "additionalContext": "generate_private_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "private-key"
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "f561abeb-7812-4925-8479-1dd105f37761",
+      "bom-ref": "b0421538-b8b9-411d-898c-d9d8a17e1b11",
       "name": "ChaCha20Poly1305",
       "evidence": {
         "occurrences": [
@@ -847,7 +762,7 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "840c9870-5bed-4b3a-8861-d9ffac2d214a",
+      "bom-ref": "f85ee663-6a52-4314-8530-58f93a6e74a7",
       "name": "SHA256",
       "evidence": {
         "occurrences": [
@@ -897,8 +812,8 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "782b5f5a-d410-4ce9-a215-319fa73f66eb",
-      "name": "private-key@782b5f5a-d410-4ce9-a215-319fa73f66eb",
+      "bom-ref": "0718c960-6e82-4bc0-ba98-112293bd2238",
+      "name": "private-key@0718c960-6e82-4bc0-ba98-112293bd2238",
       "evidence": {
         "occurrences": [
           {
@@ -918,8 +833,29 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "c45bba30-ffa0-4d11-ab62-45477351ead4",
-      "name": "public-key@c45bba30-ffa0-4d11-ab62-45477351ead4",
+      "bom-ref": "94b77f67-44f9-492e-bfcb-d441cb3d7532",
+      "name": "secret-key@94b77f67-44f9-492e-bfcb-d441cb3d7532",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/management/pkcs11_util.py",
+            "line": 571,
+            "offset": 28,
+            "additionalContext": "generate_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "secret-key"
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "f24ddb7c-5812-4208-b880-0e7252659f8f",
+      "name": "public-key@f24ddb7c-5812-4208-b880-0e7252659f8f",
       "evidence": {
         "occurrences": [
           {
@@ -939,36 +875,14 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "77e50b1c-5420-4557-9992-73697b06498a",
-      "name": "private-key@77e50b1c-5420-4557-9992-73697b06498a",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/conftest.py",
-            "line": 120,
-            "offset": 11,
-            "additionalContext": "generate_private_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "private-key",
-          "size": 2048
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "d9638bcf-eb92-42d6-b192-26765db2bb26",
-      "name": "secret-key@d9638bcf-eb92-42d6-b192-26765db2bb26",
+      "bom-ref": "d30c1b1a-2d3e-4555-a4fc-e08920427a21",
+      "name": "secret-key@d30c1b1a-2d3e-4555-a4fc-e08920427a21",
       "evidence": {
         "occurrences": [
           {
             "location": "trustpoint/appsecrets/service.py",
-            "line": 427,
-            "offset": 20,
+            "line": 469,
+            "offset": 24,
             "additionalContext": "generate_key"
           }
         ]
@@ -982,30 +896,8 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "18d79a85-f133-4427-b03a-6b63bd91304c",
-      "name": "private-key@18d79a85-f133-4427-b03a-6b63bd91304c",
-      "evidence": {
-        "occurrences": [
-          {
-            "location": "trustpoint/pki/util/x509.py",
-            "line": 257,
-            "offset": 21,
-            "additionalContext": "generate_private_key"
-          }
-        ]
-      },
-      "cryptoProperties": {
-        "assetType": "related-crypto-material",
-        "relatedCryptoMaterialProperties": {
-          "type": "private-key",
-          "size": 2048
-        }
-      }
-    },
-    {
-      "type": "cryptographic-asset",
-      "bom-ref": "62021f40-d6d4-4d6c-9938-cec46c7ffc90",
-      "name": "secret-key@62021f40-d6d4-4d6c-9938-cec46c7ffc90",
+      "bom-ref": "6d48508d-1a2b-411a-9609-909c8114c450",
+      "name": "secret-key@6d48508d-1a2b-411a-9609-909c8114c450",
       "evidence": {
         "occurrences": [
           {
@@ -1025,7 +917,93 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "2c6f6868-cc91-4245-9af4-95263dc670b8",
+      "bom-ref": "7ae9f26b-c801-40ed-8f1b-7ad4b510ea78",
+      "name": "private-key@7ae9f26b-c801-40ed-8f1b-7ad4b510ea78",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/crypto/adapters/software/backend.py",
+            "line": 170,
+            "offset": 19,
+            "additionalContext": "generate_private_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "private-key",
+          "size": 64
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "605ff3bd-c0c8-489e-825f-4a5c453a7a36",
+      "name": "private-key@605ff3bd-c0c8-489e-825f-4a5c453a7a36",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/pki/management/commands/base_commands.py",
+            "line": 146,
+            "offset": 26,
+            "additionalContext": "generate_private_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "private-key",
+          "size": 2048
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "57f50fb4-49b3-4fd2-ad63-3c94bce31512",
+      "name": "secret-key@57f50fb4-49b3-4fd2-ad63-3c94bce31512",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/appsecrets/service.py",
+            "line": 427,
+            "offset": 20,
+            "additionalContext": "generate_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "secret-key"
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "678f9d06-46df-427d-b3b8-7d6b4b9c9df9",
+      "name": "secret-key@678f9d06-46df-427d-b3b8-7d6b4b9c9df9",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/appsecrets/service.py",
+            "line": 542,
+            "offset": 12,
+            "additionalContext": "generate_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "secret-key"
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "39391e49-c3c0-4fd6-bbb7-b00efb25be79",
       "name": "Fernet",
       "evidence": {
         "occurrences": [
@@ -1073,28 +1051,29 @@
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "a823d25a-c928-47c5-864a-beae15818857",
-      "name": "secret-key@a823d25a-c928-47c5-864a-beae15818857",
+      "bom-ref": "62d1224f-a1c2-4c12-ad50-1bd72062f854",
+      "name": "private-key@62d1224f-a1c2-4c12-ad50-1bd72062f854",
       "evidence": {
         "occurrences": [
           {
-            "location": "trustpoint/appsecrets/service.py",
-            "line": 427,
-            "offset": 20,
-            "additionalContext": "generate_key"
+            "location": "trustpoint/conftest.py",
+            "line": 120,
+            "offset": 11,
+            "additionalContext": "generate_private_key"
           }
         ]
       },
       "cryptoProperties": {
         "assetType": "related-crypto-material",
         "relatedCryptoMaterialProperties": {
-          "type": "secret-key"
+          "type": "private-key",
+          "size": 2048
         }
       }
     },
     {
       "type": "cryptographic-asset",
-      "bom-ref": "7574d53a-c8ce-4f94-acca-19b00c67a0ed",
+      "bom-ref": "d544ca4b-dc15-4f72-830f-fdff7a64fa84",
       "name": "EC-secp256r1",
       "evidence": {
         "occurrences": [
@@ -1134,6 +1113,27 @@
           ]
         },
         "oid": "1.2.840.10045.2.1"
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "a1f89f03-9013-4d6e-8e58-e3cf711b60a3",
+      "name": "secret-key@a1f89f03-9013-4d6e-8e58-e3cf711b60a3",
+      "evidence": {
+        "occurrences": [
+          {
+            "location": "trustpoint/appsecrets/service.py",
+            "line": 533,
+            "offset": 16,
+            "additionalContext": "generate_key"
+          }
+        ]
+      },
+      "cryptoProperties": {
+        "assetType": "related-crypto-material",
+        "relatedCryptoMaterialProperties": {
+          "type": "secret-key"
+        }
       }
     },
     {
@@ -1741,172 +1741,172 @@
   ],
   "dependencies": [
     {
-      "ref": "a42baca4-b079-4fd8-8779-9eb91140ae6a",
+      "ref": "b0421538-b8b9-411d-898c-d9d8a17e1b11",
       "dependsOn": [
-        "ea80e0bd-b4f8-4d67-99d4-b5f2e5a5c9e7"
+        "2802f4e3-9a2b-405a-a9ff-6e27e601f257"
       ]
     },
     {
-      "ref": "18d79a85-f133-4427-b03a-6b63bd91304c",
+      "ref": "39391e49-c3c0-4fd6-bbb7-b00efb25be79",
       "dependsOn": [
-        "96d97727-0596-47ed-bbec-7ad314e7ae7d"
+        "87cc2ad2-8933-4143-a40f-da07a24b1a7c",
+        "e4639157-7a62-4646-8567-97a10b552931"
       ]
     },
     {
-      "ref": "c6047716-bb69-4b9c-9c81-b09bbe509830",
+      "ref": "6f39b05c-3329-4db4-afce-bff380836f4f",
       "dependsOn": [
-        "2c6f6868-cc91-4245-9af4-95263dc670b8"
+        "39391e49-c3c0-4fd6-bbb7-b00efb25be79"
       ]
     },
     {
-      "ref": "a823d25a-c928-47c5-864a-beae15818857",
+      "ref": "7f2e8222-758f-49d9-a62f-68b209ee5e02",
       "dependsOn": [
-        "2c6f6868-cc91-4245-9af4-95263dc670b8"
+        "b1a47d0c-b7b7-45e2-b579-eeda59b36a67"
       ]
     },
     {
-      "ref": "e5fc69e7-19d1-4024-8bb6-ddfd3b66697e",
+      "ref": "87cc2ad2-8933-4143-a40f-da07a24b1a7c",
       "dependsOn": [
-        "96d97727-0596-47ed-bbec-7ad314e7ae7d"
+        "f85ee663-6a52-4314-8530-58f93a6e74a7"
       ]
     },
     {
-      "ref": "15d7b843-b8c0-4087-89d1-82286ad8f742",
+      "ref": "b9027529-7ce5-40e7-be80-fd6fdca6ce84",
       "dependsOn": [
-        "f561abeb-7812-4925-8479-1dd105f37761"
+        "d544ca4b-dc15-4f72-830f-fdff7a64fa84"
       ]
     },
     {
-      "ref": "7cefe5f8-3540-4a9a-8fd4-7c4baa2c136c",
+      "ref": "8b2d1822-0562-43bb-b9a5-3d1de8a9f984",
       "dependsOn": [
-        "f561abeb-7812-4925-8479-1dd105f37761"
+        "b0421538-b8b9-411d-898c-d9d8a17e1b11"
       ]
     },
     {
-      "ref": "62021f40-d6d4-4d6c-9938-cec46c7ffc90",
+      "ref": "605ff3bd-c0c8-489e-825f-4a5c453a7a36",
       "dependsOn": [
-        "2c6f6868-cc91-4245-9af4-95263dc670b8"
+        "b1a47d0c-b7b7-45e2-b579-eeda59b36a67"
       ]
     },
     {
-      "ref": "f561abeb-7812-4925-8479-1dd105f37761",
+      "ref": "d30c1b1a-2d3e-4555-a4fc-e08920427a21",
       "dependsOn": [
-        "7e2f8541-73a0-40be-a2b1-241847e31fad"
+        "b0421538-b8b9-411d-898c-d9d8a17e1b11"
       ]
     },
     {
-      "ref": "2c6f6868-cc91-4245-9af4-95263dc670b8",
+      "ref": "ca2e2016-348e-46b0-8a0e-c3d0b670e1cb",
       "dependsOn": [
-        "457616b0-7449-4814-9879-56ec448a6685",
-        "018730d7-ce1d-43ad-903a-834b03c34d5c"
+        "e8ca7033-bfdd-49f3-8700-d52810e8c753"
       ]
     },
     {
-      "ref": "cc493d30-d7fa-4621-aa28-443a2af4fee4",
+      "ref": "0718c960-6e82-4bc0-ba98-112293bd2238",
       "dependsOn": [
-        "96d97727-0596-47ed-bbec-7ad314e7ae7d"
+        "d544ca4b-dc15-4f72-830f-fdff7a64fa84"
       ]
     },
     {
-      "ref": "24f21000-b110-4633-a69b-3229b138de40",
+      "ref": "389a9ff5-5f6d-4149-9da0-8b75722c1e3c",
       "dependsOn": [
-        "2c6f6868-cc91-4245-9af4-95263dc670b8"
+        "5c22bf85-edc1-462c-a828-c68986110281"
       ]
     },
     {
-      "ref": "27c21f96-b6b4-48d7-8b1b-282ac329d5f2",
+      "ref": "bbbfd00d-b79c-423b-b0d8-0cc26b2b4c37",
       "dependsOn": [
-        "833efcfd-8f18-46a1-bf41-d5ba8dd2113e"
+        "b1a47d0c-b7b7-45e2-b579-eeda59b36a67"
       ]
     },
     {
-      "ref": "93a63337-0ec9-4d70-9202-5c2e1ff72bf0",
+      "ref": "ff01d221-7dcd-4a7b-b891-a94b94c7467b",
       "dependsOn": [
-        "f561abeb-7812-4925-8479-1dd105f37761"
+        "d544ca4b-dc15-4f72-830f-fdff7a64fa84"
       ]
     },
     {
-      "ref": "1ba7a10f-1d50-4194-a160-4007b185f410",
+      "ref": "a1f89f03-9013-4d6e-8e58-e3cf711b60a3",
       "dependsOn": [
-        "96d97727-0596-47ed-bbec-7ad314e7ae7d"
+        "39391e49-c3c0-4fd6-bbb7-b00efb25be79"
       ]
     },
     {
-      "ref": "a311e1ca-04e2-4b6c-9cec-6e9a8d4fb241",
+      "ref": "94b77f67-44f9-492e-bfcb-d441cb3d7532",
       "dependsOn": [
-        "2c6f6868-cc91-4245-9af4-95263dc670b8"
+        "39391e49-c3c0-4fd6-bbb7-b00efb25be79"
       ]
     },
     {
-      "ref": "d9638bcf-eb92-42d6-b192-26765db2bb26",
+      "ref": "db872719-57fd-4084-875e-8917208e7409",
       "dependsOn": [
-        "f561abeb-7812-4925-8479-1dd105f37761"
+        "b1a47d0c-b7b7-45e2-b579-eeda59b36a67"
       ]
     },
     {
-      "ref": "457616b0-7449-4814-9879-56ec448a6685",
+      "ref": "62d1224f-a1c2-4c12-ad50-1bd72062f854",
       "dependsOn": [
-        "840c9870-5bed-4b3a-8861-d9ffac2d214a"
+        "b1a47d0c-b7b7-45e2-b579-eeda59b36a67"
       ]
     },
     {
-      "ref": "d8515ad6-7d80-42ba-98b9-8d6838a4b001",
+      "ref": "f24ddb7c-5812-4208-b880-0e7252659f8f",
       "dependsOn": [
-        "96d97727-0596-47ed-bbec-7ad314e7ae7d"
+        "cdb01788-1500-47a1-bbdc-d34b19b648ce"
       ]
     },
     {
-      "ref": "c3d71790-f8b1-4acb-ab50-67f5400d6484",
+      "ref": "678f9d06-46df-427d-b3b8-7d6b4b9c9df9",
       "dependsOn": [
-        "7574d53a-c8ce-4f94-acca-19b00c67a0ed"
+        "b0421538-b8b9-411d-898c-d9d8a17e1b11"
       ]
     },
     {
-      "ref": "77e50b1c-5420-4557-9992-73697b06498a",
+      "ref": "6d48508d-1a2b-411a-9609-909c8114c450",
       "dependsOn": [
-        "96d97727-0596-47ed-bbec-7ad314e7ae7d"
+        "39391e49-c3c0-4fd6-bbb7-b00efb25be79"
       ]
     },
     {
-      "ref": "782b5f5a-d410-4ce9-a215-319fa73f66eb",
+      "ref": "903fcc39-d9ef-4eb7-8560-379d5296b24e",
       "dependsOn": [
-        "7574d53a-c8ce-4f94-acca-19b00c67a0ed"
+        "b0421538-b8b9-411d-898c-d9d8a17e1b11"
       ]
     },
     {
-      "ref": "37d7be73-53dd-493e-942a-c73d1e7442f5",
+      "ref": "09a4f9dc-dcf5-46b0-b75b-4a4c23ab089d",
       "dependsOn": [
-        "96d97727-0596-47ed-bbec-7ad314e7ae7d"
+        "d544ca4b-dc15-4f72-830f-fdff7a64fa84"
       ]
     },
     {
-      "ref": "25b1010e-f903-4070-bb67-d744fadc043b",
+      "ref": "7ae9f26b-c801-40ed-8f1b-7ad4b510ea78",
       "dependsOn": [
-        "7574d53a-c8ce-4f94-acca-19b00c67a0ed"
+        "93485929-6b6d-4c3a-a6af-72e776c04250"
       ]
     },
     {
-      "ref": "c45bba30-ffa0-4d11-ab62-45477351ead4",
+      "ref": "72d376ea-158b-4bfe-9c98-db1ac464d303",
       "dependsOn": [
-        "8e4137a2-b343-42d4-9938-af143fd1fd62"
+        "b1a47d0c-b7b7-45e2-b579-eeda59b36a67"
       ]
     },
     {
-      "ref": "dc1b429d-7056-4c3c-adb2-81903a0a6b34",
+      "ref": "57f50fb4-49b3-4fd2-ad63-3c94bce31512",
       "dependsOn": [
-        "f561abeb-7812-4925-8479-1dd105f37761"
+        "b0421538-b8b9-411d-898c-d9d8a17e1b11"
       ]
     },
     {
-      "ref": "a17e6398-8d05-44e2-b441-e5bfb89d09b7",
+      "ref": "0a8312d5-3e3d-46b7-a630-1ade852c6f9a",
       "dependsOn": [
-        "7751c2a6-d19b-4b75-b499-d894ea069d2f"
+        "b1a47d0c-b7b7-45e2-b579-eeda59b36a67"
       ]
     },
     {
-      "ref": "eba6a1ed-c47e-475c-8891-0cef32460216",
+      "ref": "d87b1ee7-1772-4324-9dcd-68984f94f665",
       "dependsOn": [
-        "7574d53a-c8ce-4f94-acca-19b00c67a0ed"
+        "39391e49-c3c0-4fd6-bbb7-b00efb25be79"
       ]
     },
     {
