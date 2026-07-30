@@ -1,0 +1,225 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:9ce0de28-e5c8-46f4-8974-283872848553",
+  "version": 1,
+  "metadata": {
+    "properties": [
+      {
+        "name": "trustpoint:cbom:source",
+        "value": "Manually maintained protocol inventory"
+      },
+      {
+        "name": "trustpoint:cbom:scope",
+        "value": "Trustpoint CMP implementation capability; no deployment-specific keys, certificates, secrets, or configuration"
+      },
+      {
+        "name": "trustpoint:cbom:review-note",
+        "value": "CMP protocol version is declared as 2. Change the protocol asset and bom-ref only if Trustpoint actually accepts or emits CMP pvno=3."
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "application",
+      "bom-ref": "trustpoint:application",
+      "group": "Trustpoint-Project",
+      "name": "trustpoint",
+      "description": "Open-source certificate lifecycle management and PKI application for industrial environments.",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/TrustPoint-Project/trustpoint"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:protocol:cmp-v2",
+      "name": "Certificate Management Protocol (CMP)",
+      "version": "2",
+      "description": "CMP server-side implementation provided by Trustpoint for certificate enrollment, update, confirmation, and revocation.",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "other",
+          "version": "2",
+          "cryptoRefArray": [
+            "urn:trustpoint:crypto:algorithm:cmp-password-based-mac",
+            "urn:trustpoint:crypto:algorithm:rsassa-pkcs1-v1_5",
+            "urn:trustpoint:crypto:algorithm:ecdsa"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "trustpoint:cmp:standards",
+          "value": "RFC 4210 with RFC 9480 updates"
+        },
+        {
+          "name": "trustpoint:cmp:role",
+          "value": "CMP server endpoint"
+        },
+        {
+          "name": "trustpoint:cmp:transport",
+          "value": "HTTP POST; HTTPS required for production deployments"
+        },
+        {
+          "name": "trustpoint:cmp:media-type",
+          "value": "application/pkixcmp"
+        },
+        {
+          "name": "trustpoint:cmp:encoding",
+          "value": "ASN.1 DER-encoded PKIMessage"
+        },
+        {
+          "name": "trustpoint:cmp:operation",
+          "value": "ir"
+        },
+        {
+          "name": "trustpoint:cmp:operation",
+          "value": "cr"
+        },
+        {
+          "name": "trustpoint:cmp:operation",
+          "value": "kur"
+        },
+        {
+          "name": "trustpoint:cmp:operation",
+          "value": "certConf"
+        },
+        {
+          "name": "trustpoint:cmp:operation",
+          "value": "rr"
+        },
+        {
+          "name": "trustpoint:cmp:message-protection",
+          "value": "PasswordBasedMac using a shared secret and PBMParameter"
+        },
+        {
+          "name": "trustpoint:cmp:message-protection",
+          "value": "Signature-based protection using RSA PKCS#1 v1.5 or ECDSA"
+        },
+        {
+          "name": "trustpoint:cmp:authentication",
+          "value": "Shared-secret authentication"
+        },
+        {
+          "name": "trustpoint:cmp:authentication",
+          "value": "Certificate-based authentication, including IDevID-based authentication"
+        },
+        {
+          "name": "trustpoint:cmp:algorithm-selection",
+          "value": "Concrete digest, MAC, curve, and key parameters are determined by the CMP protection parameters and configured credentials"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://www.rfc-editor.org/rfc/rfc4210.html"
+        },
+        {
+          "type": "documentation",
+          "url": "https://www.rfc-editor.org/rfc/rfc9480.html"
+        },
+        {
+          "type": "documentation",
+          "url": "https://www.rfc-editor.org/rfc/rfc6712.html"
+        },
+        {
+          "type": "documentation",
+          "url": "https://trustpoint.readthedocs.io/en/latest/features/apis/cmp.html"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:algorithm:cmp-password-based-mac",
+      "name": "CMP PasswordBasedMac",
+      "description": "CMP PasswordBasedMac construction using an iterated one-way function and a message authentication code. The concrete OWF and MAC are carried in PBMParameter.",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "other",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "keyderive",
+            "tag",
+            "verify"
+          ]
+        },
+        "oid": "1.2.840.113533.7.66.13"
+      },
+      "properties": [
+        {
+          "name": "trustpoint:cmp:parameterization",
+          "value": "PBMParameter supplies salt, one-way function, iteration count, and MAC algorithm"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:algorithm:rsassa-pkcs1-v1_5",
+      "name": "RSASSA-PKCS1-v1_5",
+      "description": "RSA signature generation and verification with PKCS#1 v1.5 padding. The digest algorithm depends on the configured signing credential and CMP algorithm identifier.",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "signature",
+          "implementationPlatform": "generic",
+          "padding": "pkcs1v15",
+          "cryptoFunctions": [
+            "sign",
+            "verify"
+          ]
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:algorithm:ecdsa",
+      "name": "ECDSA",
+      "description": "ECDSA signature generation and verification. The curve and digest algorithm depend on the configured signing credential.",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "signature",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "sign",
+            "verify"
+          ]
+        }
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "trustpoint:application",
+      "provides": [
+        "urn:trustpoint:crypto:protocol:cmp-v2"
+      ]
+    },
+    {
+      "ref": "urn:trustpoint:crypto:protocol:cmp-v2",
+      "dependsOn": [
+        "urn:trustpoint:crypto:algorithm:cmp-password-based-mac",
+        "urn:trustpoint:crypto:algorithm:rsassa-pkcs1-v1_5",
+        "urn:trustpoint:crypto:algorithm:ecdsa"
+      ]
+    },
+    {
+      "ref": "urn:trustpoint:crypto:algorithm:cmp-password-based-mac",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:trustpoint:crypto:algorithm:rsassa-pkcs1-v1_5",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:trustpoint:crypto:algorithm:ecdsa",
+      "dependsOn": []
+    }
+  ]
+}

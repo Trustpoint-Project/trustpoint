@@ -1,0 +1,374 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:56c17668-ef58-4db0-b027-f3a2e995b66b",
+  "version": 1,
+  "metadata": {
+    "properties": [
+      {
+        "name": "trustpoint:cbom:source",
+        "value": "Manually maintained cryptographic backend inventory"
+      },
+      {
+        "name": "trustpoint:cbom:scope",
+        "value": "Trustpoint PKCS#11 backend capability; no deployment-specific module paths, token identifiers, PINs, keys, provider versions, mechanisms, certifications, or customer configuration"
+      },
+      {
+        "name": "trustpoint:cbom:review-note",
+        "value": "The effective PKCS#11 version, token capabilities, supported mechanisms, key-size ranges, and provider identity are discovered from the configured provider at runtime and belong in an operational CBOM."
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "application",
+      "bom-ref": "trustpoint:application",
+      "group": "Trustpoint-Project",
+      "name": "trustpoint",
+      "description": "Open-source certificate lifecycle management and PKI application for industrial environments.",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/TrustPoint-Project/trustpoint"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "urn:trustpoint:component:crypto-backend:pkcs11",
+      "group": "Trustpoint-Project",
+      "name": "Trustpoint PKCS#11 Crypto Backend",
+      "description": "Provider-neutral Trustpoint backend that consumes the PKCS#11 Cryptoki interface to discover token capabilities, manage token-resident key pairs, retrieve public keys, perform private-key signing operations, and destroy managed keys.",
+      "properties": [
+        {
+          "name": "trustpoint:pkcs11:role",
+          "value": "Consumer of a deployment-provided PKCS#11 Cryptoki module"
+        },
+        {
+          "name": "trustpoint:pkcs11:binding",
+          "value": "python-pkcs11 >=0.8.1"
+        },
+        {
+          "name": "trustpoint:pkcs11:capability",
+          "value": "Dynamic PKCS#11 module loading"
+        },
+        {
+          "name": "trustpoint:pkcs11:capability",
+          "value": "Slot and token selection"
+        },
+        {
+          "name": "trustpoint:pkcs11:capability",
+          "value": "Token authentication using runtime-provided credentials"
+        },
+        {
+          "name": "trustpoint:pkcs11:capability",
+          "value": "Provider, token, and mechanism capability probing"
+        },
+        {
+          "name": "trustpoint:pkcs11:capability",
+          "value": "Session pooling"
+        },
+        {
+          "name": "trustpoint:pkcs11:capability",
+          "value": "Managed RSA and elliptic-curve key-pair generation"
+        },
+        {
+          "name": "trustpoint:pkcs11:capability",
+          "value": "Public-key retrieval and SubjectPublicKeyInfo fingerprint verification"
+        },
+        {
+          "name": "trustpoint:pkcs11:capability",
+          "value": "RSA PKCS#1 v1.5 and ECDSA private-key signing"
+        },
+        {
+          "name": "trustpoint:pkcs11:capability",
+          "value": "Managed key destruction"
+        },
+        {
+          "name": "trustpoint:pkcs11:key-persistence",
+          "value": "Controlled by the configured backend policy and provider capabilities"
+        },
+        {
+          "name": "trustpoint:pkcs11:key-extractability",
+          "value": "Controlled by the configured backend policy and provider enforcement"
+        },
+        {
+          "name": "trustpoint:pkcs11:provider",
+          "value": "Deployment-specific; no particular HSM, software token, or vendor module is asserted by this release CBOM"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/TrustPoint-Project/trustpoint/tree/main/trustpoint/crypto/adapters/pkcs11"
+        },
+        {
+          "type": "documentation",
+          "url": "https://github.com/TrustPoint-Project/trustpoint/blob/main/README.md"
+        }
+      ]
+    },
+    {
+      "type": "framework",
+      "bom-ref": "urn:trustpoint:interface:pkcs11-cryptoki",
+      "name": "PKCS #11 Cryptographic Token Interface (Cryptoki)",
+      "description": "Standardized API consumed by Trustpoint to communicate with a deployment-provided cryptographic token or HSM module. The effective interface version is reported by the loaded provider at runtime.",
+      "properties": [
+        {
+          "name": "trustpoint:pkcs11:interface-version",
+          "value": "Runtime provider-reported; not fixed by the Trustpoint release"
+        },
+        {
+          "name": "trustpoint:pkcs11:implementation",
+          "value": "Deployment-provided shared library or proxy module"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.oasis-open.org/pkcs11/pkcs11-spec/v3.2/pkcs11-spec-v3.2.html"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:algorithm:pkcs11-rsa-keypair-generation",
+      "name": "PKCS#11 RSA Key-Pair Generation",
+      "description": "Generation of managed RSA public/private key pairs through a configured PKCS#11 provider using CKM_RSA_PKCS_KEY_PAIR_GEN. Effective key-size limits and object attributes depend on Trustpoint policy and provider capabilities.",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "other",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "keygen"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "trustpoint:pkcs11:mechanism",
+          "value": "CKM_RSA_PKCS_KEY_PAIR_GEN"
+        },
+        {
+          "name": "trustpoint:pkcs11:execution-location",
+          "value": "Configured PKCS#11 provider"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:algorithm:pkcs11-ec-keypair-generation",
+      "name": "PKCS#11 Elliptic-Curve Key-Pair Generation",
+      "description": "Generation of managed elliptic-curve public/private key pairs through a configured PKCS#11 provider using CKM_EC_KEY_PAIR_GEN. Trustpoint supports the secp256r1, secp384r1, and secp521r1 curves, subject to provider support.",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "other",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "keygen"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "trustpoint:pkcs11:mechanism",
+          "value": "CKM_EC_KEY_PAIR_GEN"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-curve",
+          "value": "secp256r1"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-curve",
+          "value": "secp384r1"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-curve",
+          "value": "secp521r1"
+        },
+        {
+          "name": "trustpoint:pkcs11:execution-location",
+          "value": "Configured PKCS#11 provider"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:algorithm:pkcs11-rsassa-pkcs1-v1_5",
+      "name": "PKCS#11 RSASSA-PKCS1-v1_5",
+      "description": "RSA signature generation through a configured PKCS#11 provider using either a raw CKM_RSA_PKCS operation with application-side hashing or a provider-side combined digest-and-sign mechanism, depending on policy and provider capabilities.",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "signature",
+          "implementationPlatform": "generic",
+          "padding": "pkcs1v15",
+          "cryptoFunctions": [
+            "sign"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "trustpoint:pkcs11:mechanism",
+          "value": "CKM_RSA_PKCS"
+        },
+        {
+          "name": "trustpoint:pkcs11:mechanism-selection",
+          "value": "Raw or combined digest-and-sign mechanism selected according to Trustpoint signing mode and provider capability probe"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA-224"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA-256"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA-384"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA-512"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA3-224"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA3-256"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA3-384"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA3-512"
+        },
+        {
+          "name": "trustpoint:pkcs11:execution-location",
+          "value": "Private-key operation occurs in the configured PKCS#11 provider"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:algorithm:pkcs11-ecdsa",
+      "name": "PKCS#11 ECDSA",
+      "description": "ECDSA signature generation through a configured PKCS#11 provider using either a raw CKM_ECDSA operation with application-side hashing or a provider-side combined digest-and-sign mechanism, depending on policy and provider capabilities.",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "signature",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "sign"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "trustpoint:pkcs11:mechanism",
+          "value": "CKM_ECDSA"
+        },
+        {
+          "name": "trustpoint:pkcs11:mechanism-selection",
+          "value": "Raw or combined digest-and-sign mechanism selected according to Trustpoint signing mode and provider capability probe"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-curve",
+          "value": "secp256r1"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-curve",
+          "value": "secp384r1"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-curve",
+          "value": "secp521r1"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA-224"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA-256"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA-384"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA-512"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA3-224"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA3-256"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA3-384"
+        },
+        {
+          "name": "trustpoint:pkcs11:supported-digest",
+          "value": "SHA3-512"
+        },
+        {
+          "name": "trustpoint:pkcs11:execution-location",
+          "value": "Private-key operation occurs in the configured PKCS#11 provider"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "trustpoint:application",
+      "provides": [
+        "urn:trustpoint:component:crypto-backend:pkcs11"
+      ]
+    },
+    {
+      "ref": "urn:trustpoint:component:crypto-backend:pkcs11",
+      "dependsOn": [
+        "urn:trustpoint:interface:pkcs11-cryptoki",
+        "urn:trustpoint:crypto:algorithm:pkcs11-rsa-keypair-generation",
+        "urn:trustpoint:crypto:algorithm:pkcs11-ec-keypair-generation",
+        "urn:trustpoint:crypto:algorithm:pkcs11-rsassa-pkcs1-v1_5",
+        "urn:trustpoint:crypto:algorithm:pkcs11-ecdsa"
+      ]
+    },
+    {
+      "ref": "urn:trustpoint:interface:pkcs11-cryptoki",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:trustpoint:crypto:algorithm:pkcs11-rsa-keypair-generation",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:trustpoint:crypto:algorithm:pkcs11-ec-keypair-generation",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:trustpoint:crypto:algorithm:pkcs11-rsassa-pkcs1-v1_5",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:trustpoint:crypto:algorithm:pkcs11-ecdsa",
+      "dependsOn": []
+    }
+  ]
+}

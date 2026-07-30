@@ -1,4 +1,4 @@
-name: Security / SBOM
+name: Security / SBOM and CBOM
 
 on:
   push:
@@ -17,25 +17,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sbom:
+  bom:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Trustpoint repo
         uses: actions/checkout@v7
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
       - name: Install Syft
+        shell: bash
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
             | sh -s -- -b /usr/local/bin v1.42.1
+
           syft version
 
       - name: Build Trustpoint Docker image
+        shell: bash
         run: |
-          docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
+          docker build \
+            --tag trustpoint:latest \
+            --file docker/trustpoint/Dockerfile \
+            .
 
-      - name: Determine SBOM version
-        id: sbom_version
+      - name: Determine BOM version
+        id: bom_version
+        shell: bash
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
@@ -43,68 +55,191 @@ jobs:
             VERSION="${{ github.ref_name }}"
           fi
 
+          # Prevent branch-name slashes from creating nested directories.
+          VERSION="${VERSION//\//-}"
+
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Generate SBOMs for GitHub Pages
+      # Generates the source-code-derived CBOM.
+      - name: Generate source-code CBOM
+        id: generated_cbom
+        uses: cbomkit/cbomkit-action@v2.2.0
+        env:
+          CBOMKIT_LANGUAGES: python
+          CBOMKIT_OUTPUT_DIR: cbom-output
+          CBOMKIT_GENERATE_MODULE_CBOMS: "false"
+
+      - name: Verify generated CBOM
+        shell: bash
         run: |
-          VERSION="${{ steps.sbom_version.outputs.version }}"
+          test -s cbom-output/cbom.json
+          python -m json.tool cbom-output/cbom.json > /dev/null
+
+      # Adds Trustpoint-specific assets that cannot be reliably inferred
+      # from the Python source code alone.
+      - name: Merge Trustpoint CBOM enrichments
+        shell: bash
+        run: |
+          python .github/cbom/merge_cbom.py \
+            --generated cbom-output/cbom.json \
+            --manual .github/cbom/trustpoint-cmp.cdx.json \
+            --manual .github/cbom/trustpoint-est.cdx.json \
+            --manual .github/cbom/trustpoint-pkcs11.cdx.json \
+            --output cbom-output/trustpoint.cbom.cyclonedx.json \
+            --trustpoint-version "${{ steps.bom_version.outputs.version }}"
+
+          test -s cbom-output/trustpoint.cbom.cyclonedx.json
+
+          python -m json.tool \
+            cbom-output/trustpoint.cbom.cyclonedx.json \
+            > /dev/null
+
+      - name: Validate merged CBOM
+        shell: bash
+        run: |
+          docker run --rm \
+            --volume "$PWD:/work:ro" \
+            cyclonedx/cyclonedx-cli:0.32.0 \
+            validate \
+            --input-file /work/cbom-output/trustpoint.cbom.cyclonedx.json \
+            --input-format json \
+            --input-version v1_6 \
+            --fail-on-errors
+
+      - name: Generate SBOMs and prepare GitHub Pages
+        shell: bash
+        run: |
+          VERSION="${{ steps.bom_version.outputs.version }}"
 
           mkdir -p public/sbom/latest
           mkdir -p "public/sbom/${VERSION}"
+          mkdir -p public/cbom/latest
+          mkdir -p "public/cbom/${VERSION}"
 
+          # Generate container SBOMs.
           syft docker:trustpoint:latest \
             -o cyclonedx-json=public/sbom/latest/trustpoint.cyclonedx.json
 
           syft docker:trustpoint:latest \
             -o spdx-json=public/sbom/latest/trustpoint.spdx.json
 
+          # Create versioned SBOM copies.
           cp public/sbom/latest/trustpoint.cyclonedx.json \
             "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
 
           cp public/sbom/latest/trustpoint.spdx.json \
             "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
 
-          test -s public/sbom/latest/trustpoint.cyclonedx.json
-          test -s public/sbom/latest/trustpoint.spdx.json
-          test -s "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
-          test -s "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
+          # Publish the merged source and manually enriched CBOM.
+          cp cbom-output/trustpoint.cbom.cyclonedx.json \
+            public/cbom/latest/trustpoint.cbom.cyclonedx.json
 
-      - name: Create SBOM index page
+          cp cbom-output/trustpoint.cbom.cyclonedx.json \
+            "public/cbom/${VERSION}/trustpoint-${VERSION}.cbom.cyclonedx.json"
+
+          # Prevent GitHub Pages from applying Jekyll processing.
+          touch public/.nojekyll
+
+      - name: Verify publication files
+        shell: bash
         run: |
-          VERSION="${{ steps.sbom_version.outputs.version }}"
+          VERSION="${{ steps.bom_version.outputs.version }}"
+
+          FILES=(
+            "public/sbom/latest/trustpoint.cyclonedx.json"
+            "public/sbom/latest/trustpoint.spdx.json"
+            "public/cbom/latest/trustpoint.cbom.cyclonedx.json"
+            "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
+            "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
+            "public/cbom/${VERSION}/trustpoint-${VERSION}.cbom.cyclonedx.json"
+          )
+
+          for file in "${FILES[@]}"; do
+            test -s "$file"
+            python -m json.tool "$file" > /dev/null
+          done
+
+      - name: Create BOM index page
+        shell: bash
+        run: |
+          VERSION="${{ steps.bom_version.outputs.version }}"
 
           cat > public/index.html <<EOF
           <!doctype html>
           <html lang="en">
           <head>
             <meta charset="utf-8">
-            <title>Trustpoint SBOMs</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Trustpoint Bills of Materials</title>
           </head>
           <body>
-            <h1>Trustpoint Software Bill of Materials</h1>
+            <h1>Trustpoint Bills of Materials</h1>
 
-            <p>These SBOMs are generated from the Trustpoint Docker image using Syft.</p>
+            <p>
+              The SBOMs are generated from the Trustpoint Docker image using
+              Syft. The CBOM is generated from the Python source code using
+              CBOMkit and enriched with manually maintained Trustpoint
+              cryptographic assets.
+            </p>
 
             <h2>Latest</h2>
+
+            <h3>Software Bill of Materials</h3>
             <ul>
-              <li><a href="sbom/latest/trustpoint.cyclonedx.json">CycloneDX JSON</a></li>
-              <li><a href="sbom/latest/trustpoint.spdx.json">SPDX JSON</a></li>
+              <li>
+                <a href="sbom/latest/trustpoint.cyclonedx.json">
+                  SBOM – CycloneDX JSON
+                </a>
+              </li>
+              <li>
+                <a href="sbom/latest/trustpoint.spdx.json">
+                  SBOM – SPDX JSON
+                </a>
+              </li>
+            </ul>
+
+            <h3>Cryptography Bill of Materials</h3>
+            <ul>
+              <li>
+                <a href="cbom/latest/trustpoint.cbom.cyclonedx.json">
+                  CBOM – CycloneDX JSON
+                </a>
+              </li>
             </ul>
 
             <h2>${VERSION}</h2>
+
+            <h3>Software Bill of Materials</h3>
             <ul>
-              <li><a href="sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json">CycloneDX JSON</a></li>
-              <li><a href="sbom/${VERSION}/trustpoint-${VERSION}.spdx.json">SPDX JSON</a></li>
+              <li>
+                <a href="sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json">
+                  SBOM – CycloneDX JSON
+                </a>
+              </li>
+              <li>
+                <a href="sbom/${VERSION}/trustpoint-${VERSION}.spdx.json">
+                  SBOM – SPDX JSON
+                </a>
+              </li>
+            </ul>
+
+            <h3>Cryptography Bill of Materials</h3>
+            <ul>
+              <li>
+                <a href="cbom/${VERSION}/trustpoint-${VERSION}.cbom.cyclonedx.json">
+                  CBOM – CycloneDX JSON
+                </a>
+              </li>
             </ul>
           </body>
           </html>
           EOF
 
-      - name: Publish SBOMs to gh-pages
+      - name: Publish BOMs to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: public
-          keep_files: false
+          keep_files: true
           allow_empty_commit: true
