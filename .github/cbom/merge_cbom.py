@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Trustpoint Project
-# ruff: noqa: D103, EM101, EM102, TRY003, T201, C901, PLR0912
+# ruff: noqa: D103, EM101, EM102, TRY003, T201, C901, PLR0912, S603, S607
 """Merge a generated CycloneDX CBOM with a manually maintained CBOM.
 
 The generated CBOM remains authoritative for scanner findings. The manual CBOM
@@ -13,6 +13,7 @@ import argparse
 import copy
 import json
 import shutil
+import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -355,15 +356,27 @@ def main() -> int:
     # Ensure parent directory exists
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
-    # Remove output path if it exists as a directory
+    # Remove output path if it exists
     if args.output.exists():
+        print(f'Output path exists: {args.output}')
         if args.output.is_dir():
+            print(f'Removing directory: {args.output}')
             shutil.rmtree(args.output)
         else:
+            print(f'Removing file: {args.output}')
             args.output.unlink()
 
-    # Write the merged CBOM
-    args.output.write_text(json.dumps(merged, indent=2) + '\n', encoding='utf-8')
+    # Write the merged CBOM with explicit error handling
+    try:
+        args.output.write_text(json.dumps(merged, indent=2) + '\n', encoding='utf-8')
+    except PermissionError:
+        print(f'Permission error writing to {args.output}')
+        print(f'Output exists: {args.output.exists()}')
+        print(f'Output is dir: {args.output.is_dir() if args.output.exists() else "N/A"}')
+        print(f'Output is file: {args.output.is_file() if args.output.exists() else "N/A"}')
+        subprocess.run(['ls', '-la', str(args.output.parent)], check=False)
+        raise
+
     print(
         f"Wrote {args.output} with {len(merged.get('components', []))} components "
         f"and {len(merged.get('dependencies', []))} dependency entries."
