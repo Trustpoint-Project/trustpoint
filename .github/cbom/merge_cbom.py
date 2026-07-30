@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2024 Trustpoint Project
-# Licensed under the Apache License, Version 2.0
+# Copyright (c) 2026 Trustpoint Project
 # ruff: noqa: D103, EM101, EM102, TRY003, T201, C901, PLR0912
 """Merge a generated CycloneDX CBOM with a manually maintained CBOM.
 
@@ -335,7 +334,8 @@ def merge_cboms(generated: JsonObject, manual: JsonObject, version: str | None) 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--generated', required=True, type=Path)
-    parser.add_argument('--manual', required=True, type=Path)
+    parser.add_argument('--manual', required=True, type=Path, action='append', dest='manual_files',
+                        help='Manual CBOM file to merge (can be specified multiple times)')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--trustpoint-version')
     return parser.parse_args()
@@ -344,15 +344,28 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     generated = load_json(args.generated)
-    manual = load_json(args.manual)
-    merged = merge_cboms(generated, manual, args.trustpoint_version)
 
+    # Merge multiple manual CBOM files progressively
+    merged = generated
+    for manual_file in args.manual_files:
+        manual = load_json(manual_file)
+        merged = merge_cboms(merged, manual, args.trustpoint_version)
+
+    # Ensure parent directory exists
     args.output.parent.mkdir(parents=True, exist_ok=True)
+
+    # Check if output path is a directory
+    if args.output.exists() and args.output.is_dir():
+        msg = f'Output path is a directory, not a file: {args.output}'
+        raise SystemExit(msg)
+
+    # Write the merged CBOM
     args.output.write_text(json.dumps(merged, indent=2) + '\n', encoding='utf-8')
     print(
         f"Wrote {args.output} with {len(merged.get('components', []))} components "
         f"and {len(merged.get('dependencies', []))} dependency entries."
     )
+    return 0
     return 0
 
 
