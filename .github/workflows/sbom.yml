@@ -141,6 +141,13 @@ jobs:
           cp public/sbom/latest/trustpoint.spdx.json \
             "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
 
+          # Publish the generated CBOM (before enrichment).
+          cp cbom-output/cbom.json \
+            public/cbom/latest/trustpoint.generated.cbom.cyclonedx.json
+
+          cp cbom-output/cbom.json \
+            "public/cbom/${VERSION}/trustpoint-${VERSION}.generated.cbom.cyclonedx.json"
+
           # Publish the merged source and manually enriched CBOM.
           cp cbom-output/trustpoint.cbom.cyclonedx.json \
             public/cbom/latest/trustpoint.cbom.cyclonedx.json
@@ -159,9 +166,11 @@ jobs:
           FILES=(
             "public/sbom/latest/trustpoint.cyclonedx.json"
             "public/sbom/latest/trustpoint.spdx.json"
+            "public/cbom/latest/trustpoint.generated.cbom.cyclonedx.json"
             "public/cbom/latest/trustpoint.cbom.cyclonedx.json"
             "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
             "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
+            "public/cbom/${VERSION}/trustpoint-${VERSION}.generated.cbom.cyclonedx.json"
             "public/cbom/${VERSION}/trustpoint-${VERSION}.cbom.cyclonedx.json"
           )
 
@@ -175,7 +184,7 @@ jobs:
         run: |
           VERSION="${{ steps.bom_version.outputs.version }}"
 
-          cat > public/index.html <<EOF
+          cat > public/index.html <<'EOF'
           <!doctype html>
           <html lang="en">
           <head>
@@ -213,22 +222,27 @@ jobs:
             <ul>
               <li>
                 <a href="cbom/latest/trustpoint.cbom.cyclonedx.json">
-                  CBOM – CycloneDX JSON
+                  CBOM – CycloneDX JSON (Enriched)
+                </a>
+              </li>
+              <li>
+                <a href="cbom/latest/trustpoint.generated.cbom.cyclonedx.json">
+                  CBOM – CycloneDX JSON (Generated)
                 </a>
               </li>
             </ul>
 
-            <h2>${VERSION}</h2>
+            <h2>VERSION_PLACEHOLDER</h2>
 
             <h3>Software Bill of Materials</h3>
             <ul>
               <li>
-                <a href="sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json">
+                <a href="sbom/VERSION_PLACEHOLDER/trustpoint-VERSION_PLACEHOLDER.cyclonedx.json">
                   SBOM – CycloneDX JSON
                 </a>
               </li>
               <li>
-                <a href="sbom/${VERSION}/trustpoint-${VERSION}.spdx.json">
+                <a href="sbom/VERSION_PLACEHOLDER/trustpoint-VERSION_PLACEHOLDER.spdx.json">
                   SBOM – SPDX JSON
                 </a>
               </li>
@@ -237,14 +251,22 @@ jobs:
             <h3>Cryptography Bill of Materials</h3>
             <ul>
               <li>
-                <a href="cbom/${VERSION}/trustpoint-${VERSION}.cbom.cyclonedx.json">
-                  CBOM – CycloneDX JSON
+                <a href="cbom/VERSION_PLACEHOLDER/trustpoint-VERSION_PLACEHOLDER.cbom.cyclonedx.json">
+                  CBOM – CycloneDX JSON (Enriched)
+                </a>
+              </li>
+              <li>
+                <a href="cbom/VERSION_PLACEHOLDER/trustpoint-VERSION_PLACEHOLDER.generated.cbom.cyclonedx.json">
+                  CBOM – CycloneDX JSON (Generated)
                 </a>
               </li>
             </ul>
           </body>
           </html>
           EOF
+
+          # Replace placeholders with actual version
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" public/index.html
 
       - name: Publish BOMs to gh-pages
         uses: peaceiris/actions-gh-pages@v4
