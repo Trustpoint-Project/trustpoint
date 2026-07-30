@@ -79,16 +79,12 @@ jobs:
           test -s cbom-output/cbom.json
           python -m json.tool cbom-output/cbom.json > /dev/null
 
-      - name: Debug cbom-output directory
+      - name: Fix cbom-output permissions
         shell: bash
         run: |
-          echo "Contents of cbom-output:"
+          echo "Fixing permissions for cbom-output directory"
+          sudo chown -R runner:runner cbom-output/
           ls -la cbom-output/
-          echo "Checking if output path exists as directory:"
-          if [ -d "cbom-output/trustpoint.cbom.cyclonedx.json" ]; then
-            echo "ERROR: Output path exists as a directory!"
-            rm -rf "cbom-output/trustpoint.cbom.cyclonedx.json"
-          fi
 
       # Adds Trustpoint-specific assets that cannot be reliably inferred
       # from the Python source code alone.
