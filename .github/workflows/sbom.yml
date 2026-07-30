@@ -68,6 +68,8 @@ jobs:
       - name: Generate source-code CBOM
         id: generated_cbom
         uses: cbomkit/cbomkit-action@v2.2.0
+        with:
+          image: 'docker:trustpoint:latest'
         env:
           CBOMKIT_LANGUAGES: python
           CBOMKIT_OUTPUT_DIR: cbom-output
