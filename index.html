@@ -2,23 +2,67 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Trustpoint SBOMs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trustpoint Bills of Materials</title>
 </head>
 <body>
-  <h1>Trustpoint Software Bill of Materials</h1>
+  <h1>Trustpoint Bills of Materials</h1>
 
-  <p>These SBOMs are generated from the Trustpoint Docker image using Syft.</p>
+  <p>
+    The SBOMs are generated from the Trustpoint Docker image using
+    Syft. The CBOM is generated from the Python source code using
+    CBOMkit and enriched with manually maintained Trustpoint
+    cryptographic assets.
+  </p>
 
   <h2>Latest</h2>
+
+  <h3>Software Bill of Materials</h3>
   <ul>
-    <li><a href="sbom/latest/trustpoint.cyclonedx.json">CycloneDX JSON</a></li>
-    <li><a href="sbom/latest/trustpoint.spdx.json">SPDX JSON</a></li>
+    <li>
+      <a href="sbom/latest/trustpoint.cyclonedx.json">
+        SBOM – CycloneDX JSON
+      </a>
+    </li>
+    <li>
+      <a href="sbom/latest/trustpoint.spdx.json">
+        SBOM – SPDX JSON
+      </a>
+    </li>
   </ul>
 
-  <h2>main</h2>
+  <h3>Cryptography Bill of Materials</h3>
   <ul>
-    <li><a href="sbom/main/trustpoint-main.cyclonedx.json">CycloneDX JSON</a></li>
-    <li><a href="sbom/main/trustpoint-main.spdx.json">SPDX JSON</a></li>
+    <li>
+      <a href="cbom/latest/trustpoint.cbom.cyclonedx.json">
+        CBOM – CycloneDX JSON
+      </a>
+    </li>
+  </ul>
+
+  <h2>cbom</h2>
+
+  <h3>Software Bill of Materials</h3>
+  <ul>
+    <li>
+      <a href="sbom/cbom/trustpoint-cbom.cyclonedx.json">
+        SBOM – CycloneDX JSON
+      </a>
+    </li>
+    <li>
+      <a href="sbom/cbom/trustpoint-cbom.spdx.json">
+        SBOM – SPDX JSON
+      </a>
+    </li>
+  </ul>
+
+  <h3>Cryptography Bill of Materials</h3>
+  <ul>
+    <li>
+      <a href="cbom/cbom/trustpoint-cbom.cbom.cyclonedx.json">
+        CBOM – CycloneDX JSON
+      </a>
+    </li>
   </ul>
 </body>
 </html>
