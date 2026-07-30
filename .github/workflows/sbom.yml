@@ -3,11 +3,15 @@ name: Security / SBOM and CBOM
 on:
   push:
     branches:
-      - main
+      - cbom
   workflow_dispatch:
-  release:
-    types:
-      - published
+  # TODO: Re-enable for production
+  # push:
+  #   branches:
+  #     - main
+  # release:
+  #   types:
+  #     - published
 
 permissions:
   contents: write
