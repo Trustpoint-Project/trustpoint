@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import shutil
 import sys
 import uuid
 from pathlib import Path
@@ -354,10 +355,12 @@ def main() -> int:
     # Ensure parent directory exists
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
-    # Check if output path is a directory
-    if args.output.exists() and args.output.is_dir():
-        msg = f'Output path is a directory, not a file: {args.output}'
-        raise SystemExit(msg)
+    # Remove output path if it exists as a directory
+    if args.output.exists():
+        if args.output.is_dir():
+            shutil.rmtree(args.output)
+        else:
+            args.output.unlink()
 
     # Write the merged CBOM
     args.output.write_text(json.dumps(merged, indent=2) + '\n', encoding='utf-8')
@@ -365,7 +368,6 @@ def main() -> int:
         f"Wrote {args.output} with {len(merged.get('components', []))} components "
         f"and {len(merged.get('dependencies', []))} dependency entries."
     )
-    return 0
     return 0
 
 
