@@ -42,16 +42,13 @@ class Command(BaseCommand):
             help='Run HTTPS server using test certificates from tests/data/x509/'
         )
 
-    def handle(self, *args: Any, **options: Any) -> None:
+    def handle(self, *_args: Any, **options: Any) -> None:
         """Execute the command."""
         use_https = options['https']
         host = options['host']
 
         # Set default port based on HTTPS option
-        if options['port'] is None:
-            port = 443 if use_https else 8000
-        else:
-            port = options['port']
+        port = (443 if use_https else 8000) if options['port'] is None else options['port']
 
         protocol = 'https' if use_https else 'http'
         self.stdout.write(self.style.SUCCESS('Starting Django development server and Django-Q2 qcluster...'))
@@ -61,7 +58,7 @@ class Command(BaseCommand):
         self.stdout.write('Press Ctrl+C to stop both processes\n')
 
         processes = []
-        
+
         # Get the directory where manage.py is located
         manage_py_dir = Path(__file__).resolve().parents[4] / 'trustpoint'
         os.chdir(manage_py_dir)
@@ -87,10 +84,11 @@ class Command(BaseCommand):
                 key_path = project_root / 'tests' / 'data' / 'x509' / 'https_server.pem'
 
                 if not cert_path.exists() or not key_path.exists():
-                    self.stdout.write(self.style.ERROR(f'Certificate files not found:'))
+                    self.stdout.write(self.style.ERROR('Certificate files not found:'))
                     self.stdout.write(self.style.ERROR(f'  Cert: {cert_path}'))
                     self.stdout.write(self.style.ERROR(f'  Key: {key_path}'))
-                    raise FileNotFoundError('HTTPS certificates not found')
+                    msg = 'HTTPS certificates not found'
+                    raise FileNotFoundError(msg)
 
                 self.stdout.write(self.style.WARNING(f'[runserver_plus] Starting HTTPS server on {host}:{port}...'))
                 runserver_cmd = [

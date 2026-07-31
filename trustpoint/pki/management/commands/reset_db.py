@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import psycopg
 from django.conf import settings
@@ -101,9 +101,10 @@ class Command(BaseCommand):
         if not options.get('no_user'):
             self.stdout.write('Creating superuser...')
             user = get_user_model()
+            pw = 'testing321'
             user.objects.create_superuser(
-                username="admin",
-                password="testing321",
+                username='admin',
+                password=pw,
                 organization=org,
             )
             self.stdout.write('Superuser created:')
@@ -116,7 +117,7 @@ class Command(BaseCommand):
         if options.get('add'):
             call_command('add_domains_and_devices')
 
-    def _remove_migration_files(self, base_path: Path, *_args: tuple, keep_established: bool) -> None:
+    def _remove_migration_files(self, base_path: Path, *_args: Any, keep_established: bool) -> None:
         """Removes all Django migration files."""
         current_version_py_id = settings.APP_VERSION.replace('.', '_')
         for root, _dirs, files in os.walk(base_path):

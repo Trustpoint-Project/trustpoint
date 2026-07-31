@@ -6,8 +6,8 @@
 from __future__ import annotations
 
 from django.core.management.base import BaseCommand
-from pki.models import CaModel
 
+from pki.models import CaModel
 from trustpoint.logger import LoggerMixin
 
 

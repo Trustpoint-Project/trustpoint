@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -15,7 +17,7 @@ class Command(BaseCommand):
 
     help = _('Check for scheduled CRL generations and execute them if due')
 
-    def handle(self, *args, **options):
+    def handle(self, *_args: Any, **_options: Any) -> None:
         """Execute the command."""
         from pki.models import CaModel  # noqa: PLC0415
 

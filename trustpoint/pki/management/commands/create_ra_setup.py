@@ -64,7 +64,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                 self.log_and_stdout('Using active TLS server credential from Docker.')
             else:
                 self.log_and_stdout('No active TLS server credential found in Docker.', level='error')
-                raise RuntimeError('No TLS server credential available')
+                msg = 'No TLS server credential available'
+                raise RuntimeError(msg)
         else:
             # Load from test files
             cert_path = Path(__file__).parent.parent.parent.parent.parent / 'tests/data/x509/https_server.crt'
@@ -80,7 +81,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                 self.log_and_stdout('Loaded TLS certificate from test files.')
             else:
                 self.log_and_stdout('TLS certificate files not found.', level='error')
-                raise RuntimeError('TLS certificate files not found')
+                msg_0 = 'TLS certificate files not found'
+                raise RuntimeError(msg_0)
 
         truststore, created = TruststoreModel.objects.get_or_create(
             unique_name='tls-truststore',
@@ -246,7 +248,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         issuing_ca_cert = issuing_ca.credential.certificate if issuing_ca.credential else None
         if not issuing_ca_cert:
             self.log_and_stdout('Issuing CA certificate not found for EST RA.', level='error')
-            raise ValueError('CA certificate required for EST RA')
+            msg = 'CA certificate required for EST RA'
+            raise ValueError(msg)
 
         # Create a truststore for the remote CA's chain
         ca_chain_truststore, created = TruststoreModel.objects.get_or_create(
@@ -364,7 +367,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         ca_cert = ca.credential.certificate if ca.credential else None
         if not ca_cert:
             self.log_and_stdout('Issuing CA certificate not found for CMP truststore.', level='error')
-            raise ValueError('CA certificate required for CMP RA')
+            msg = 'CA certificate required for CMP RA'
+            raise ValueError(msg)
 
         cmp_onboarding_truststore, created = TruststoreModel.objects.get_or_create(
             unique_name=f'{ra_name}-onboarding-truststore',
@@ -374,7 +378,9 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             cmp_onboarding_truststore.certificates.add(ca_cert, through_defaults={'order': 0})
             self.log_and_stdout(f'Created CMP onboarding truststore for "{ra_name}".')
         elif not cmp_onboarding_truststore.certificates.filter(pk=ca_cert.pk).exists():
-            max_order = cmp_onboarding_truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
+            max_order = (
+                cmp_onboarding_truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
+            )
             cmp_onboarding_truststore.certificates.add(ca_cert, through_defaults={'order': max_order + 1})
             self.log_and_stdout(f'Updated CMP onboarding truststore for "{ra_name}".')
 
@@ -504,7 +510,9 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         self.log_and_stdout('EST Issuing CA: est_issuing_ca domain with EST-Issuing-CA-Device')
         self.log_and_stdout('EST RA: est_ra domain with EST-RA-Device, configured at: /.well-known/est/simpleenroll')
         self.log_and_stdout('CMP Issuing CA: cmp_issuing_ca domain with CMP-Issuing-CA-Device')
-        self.log_and_stdout('CMP RA: cmp_ra domain with CMP-RA-Device, configured at: /.well-known/cmp/p/ra/certification')
+        self.log_and_stdout(
+            'CMP RA: cmp_ra domain with CMP-RA-Device, configured at: /.well-known/cmp/p/ra/certification'
+        )
 
     def log_and_stdout(self, message: str, level: str = 'info') -> None:
         """Log a message and write it to stdout.

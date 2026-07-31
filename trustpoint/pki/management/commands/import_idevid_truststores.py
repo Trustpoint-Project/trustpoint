@@ -11,6 +11,7 @@ from types import MappingProxyType
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from django.core.management.base import BaseCommand
+
 from pki.models import CertificateModel, TruststoreModel, TruststoreOrderModel
 
 
@@ -73,7 +74,7 @@ class Command(BaseCommand):
         trust_store_model = TruststoreModel(unique_name=unique_name, intended_usage=intended_usage)
         trust_store_model.save()
 
-        for number, certificate in enumerate(saved_certs):
-            TruststoreOrderModel.objects.create(order=number, certificate=certificate, trust_store=trust_store_model)
+        for number, cert in enumerate(saved_certs):
+            TruststoreOrderModel.objects.create(order=number, certificate=cert, trust_store=trust_store_model)
 
         return trust_store_model

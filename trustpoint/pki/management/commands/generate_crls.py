@@ -5,11 +5,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.translation import gettext as _
 
 from pki.models import CaModel
 from pki.tasks import generate_crl_for_ca
+
+if TYPE_CHECKING:
+    from django.core.management.base import CommandParser
 
 
 class Command(BaseCommand):
@@ -17,7 +22,7 @@ class Command(BaseCommand):
 
     help = _('Generate CRLs for all CAs with enabled CRL cycle updates')
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) ->None:
         """Add command arguments."""
         parser.add_argument(
             '--ca-id',
@@ -30,7 +35,7 @@ class Command(BaseCommand):
             help=_('Generate CRLs for all CAs with enabled cycles'),
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *_args: Any, **options: Any) -> None:
         """Execute the command."""
         ca_id = options.get('ca_id')
         all_cas = options.get('all', False)
@@ -56,9 +61,11 @@ class Command(BaseCommand):
                 self.style.SUCCESS(f'CRL generated successfully for CA: {ca.unique_name}')
             )
         except CaModel.DoesNotExist as exc:
-            raise CommandError(f'CA with ID {ca_id} does not exist') from exc
+            msg = f'CA with ID {ca_id} does not exist'
+            raise CommandError(msg) from exc
         except Exception as exc:
-            raise CommandError(f'Failed to generate CRL for CA {ca_id}: {exc}') from exc
+            msg_0 = f'Failed to generate CRL for CA {ca_id}: {exc}'
+            raise CommandError(msg_0) from exc
 
     def _generate_crls_for_all_enabled(self) -> None:
         """Generate CRLs for all CAs with enabled cycles."""

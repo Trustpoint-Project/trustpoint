@@ -27,9 +27,9 @@ class Command(BaseCommand):
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Executes the command."""
         one_day = datetime.timedelta(1, 0, 0)
-        
+
         ipv4_addresses_list = ['127.0.0.1', '192.168.88.10']
-        
+
         basic_constraints_extension = x509.BasicConstraints(ca=False, path_length=None)
         key_usage_extension = x509.KeyUsage(
             digital_signature=True,

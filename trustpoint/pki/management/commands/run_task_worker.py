@@ -6,18 +6,21 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING, Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+if TYPE_CHECKING:
+    from django.core.management.base import CommandParser
 
 class Command(BaseCommand):
     """Management command to run a continuous background worker for CRL tasks."""
 
     help = _('Run a background worker that processes pending CRL generation tasks')
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         """Add command arguments."""
         parser.add_argument(
             '--interval',
@@ -26,7 +29,7 @@ class Command(BaseCommand):
             help=_('Check interval in seconds (default: 60)'),
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *_args: Any, **options: Any) -> None:
         """Execute the command."""
         from pki.models import CaModel  # noqa: PLC0415
 

@@ -97,13 +97,14 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
 
         # Create EST device
         est_device = None
+        est_pw = 'foo123'
         if DeviceModel.objects.filter(common_name='CA Issuer - EST').exists():
             self.log_and_stdout('Device "CA Issuer - EST" already exists.')
             est_device = DeviceModel.objects.get(common_name='CA Issuer - EST')
         else:
             est_no_onboarding_config = NoOnboardingConfigModel()
             est_no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD])
-            est_no_onboarding_config.est_password = 'foo123'
+            est_no_onboarding_config.est_password = est_pw
             est_no_onboarding_config.full_clean()
             est_no_onboarding_config.save()
 
@@ -126,7 +127,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         else:
             cmp_no_onboarding_config = NoOnboardingConfigModel()
             cmp_no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.CMP_SHARED_SECRET])
-            cmp_no_onboarding_config.cmp_shared_secret = 'foo123'
+            cmp_no_onboarding_config.cmp_shared_secret = est_pw
             cmp_no_onboarding_config.full_clean()
             cmp_no_onboarding_config.save()
 
@@ -262,7 +263,9 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                         cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': 0})
                         self.log_and_stdout('Created CMP CA truststore.')
                     elif not cmp_truststore.certificates.filter(pk=ca_issuer_cert.pk).exists():
-                        max_order = cmp_truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
+                        max_order = cmp_truststore.truststoreordermodel_set.aggregate(
+                            models.Max('order')
+                        )['order__max'] or -1
                         cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': max_order + 1})
                         self.log_and_stdout('Updated CMP CA truststore.')
 

@@ -10,6 +10,7 @@ from typing import Any
 
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
 from django.core.management.base import BaseCommand
+
 from pki.models import CertificateModel
 
 from .base_commands import CertificateCreationCommandMixin
