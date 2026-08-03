@@ -428,6 +428,7 @@ INSTALLED_APPS = [
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
     'crypto.apps.CryptoConfig',
+    'web_ui_automation.apps.WebUiAutomationConfig',
     'management.apps.ManagementConfig',
     'agents.apps.AgentsConfig',
     'trustpoint_core',
@@ -686,6 +687,7 @@ Q_CLUSTER = {
     'queue_limit': 50,
     'bulk': 10,
     'orm': 'default',
+    'sync': False,  # Use async workers but tasks handle their own threading
 }
 
 
@@ -751,3 +753,6 @@ else:
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     for directory in (HSM_CONFIG_DIR, HSM_LIB_DIR, HSM_TOKEN_DIR):
         directory.mkdir(parents=True, exist_ok=True)
+
+# Web UI Automation
+WEB_UI_AUTOMATION_ISSUANCE_ADAPTER = 'web_ui_automation.adapters.TrustpointIssuanceAdapter'

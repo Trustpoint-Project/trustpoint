@@ -1,0 +1,50 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1>{% trans "Confirm Certificate Revocation" %}</h1>
+    </div>
+    <div class="card-body">
+       
+        <p>{% trans "You are about to revoke all certificates for the following Web UI automation devices:" %}</p>
+        
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>{% trans "Device Name" %}</th>
+                    <th>{% trans "Domain" %}</th>
+                    <th>{% trans "Assigned Profiles" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for automation_device in automation_devices %}
+                <tr>
+                    <td>{{ automation_device.device.common_name }}</td>
+                    <td>
+                        {% if automation_device.device.domain %}
+                            {{ automation_device.device.domain }}
+                        {% else %}
+                            {% trans "No domain" %}
+                        {% endif %}
+                    </td>
+                    <td>{{ automation_device.assigned_profiles.count }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center">{% trans "No devices selected." %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer d-flex justify-content-between">
+        <a class="btn btn-secondary" href="{% url 'web_ui_automation:devices' %}">{% trans "Cancel" %}</a>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">{% trans "Confirm Revocation" %}</button>
+        </form>
+    </div>
+</div>
+{% endblock content %}

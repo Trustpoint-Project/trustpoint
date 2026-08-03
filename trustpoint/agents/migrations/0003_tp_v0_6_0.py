@@ -10,6 +10,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RemoveField(
+            model_name='trustpointagent',
+            name='capabilities',
+        ),
         migrations.AlterField(
             model_name='trustpointagent',
             name='device',
