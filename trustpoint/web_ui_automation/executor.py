@@ -443,6 +443,7 @@ def _verify_tls_fingerprint(base_url: str, expected_fingerprint: str) -> None:
         raise ValueError(msg)
     port = split.port or 443
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
     with socket.create_connection((split.hostname, port), timeout=10) as raw_socket, \
