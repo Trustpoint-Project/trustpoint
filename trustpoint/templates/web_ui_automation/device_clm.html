@@ -140,7 +140,7 @@
                                 {% if assignment.current_certificate %}
                                     {% if not last_onboard_job or last_onboard_job.status != 'FAILED' %}
                                     <a href="{% url 'pki:certificate-detail' assignment.current_certificate.pk %}">
-                                        {{ assignment.current_certificate.subject_common_name|default:"Certificate" }}
+                                        {{ assignment.current_certificate.common_name|default:"Certificate" }}
                                     </a>
                                     {% else %}
                                     <span class="text-muted">—</span>
