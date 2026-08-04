@@ -5,9 +5,13 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
 import threading
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from django import db
 from django.contrib import messages
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -296,12 +300,100 @@ class AutomationProfileCreateView(
     http_method_names: ClassVar[list[str]] = ['get', 'post']
     model = WebUiAutomationProfileDefinition
     form_class = WebUiAutomationProfileForm
-    template_name = 'web_ui_automation/form.html'
+    template_name = 'web_ui_automation/profile_config.html'
     success_url = reverse_lazy('web_ui_automation:profiles')
     extra_context: ClassVar[dict[str, str]] = {'title': 'Create Web UI Automation Profile'}
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add additional context data for JSON editor."""
+        context = super().get_context_data(**kwargs)
+        form = context['form']
+
+        raw_json = form['profile'].value() or None
+
+        if not self.object or not self.object.pk:
+            context['is_new'] = True
+
+        context['json_valid'] = True
+
+        if not raw_json or raw_json == 'null':
+            context['profile_json'] = self._default_profile_json()
+            return context
+
+        if isinstance(raw_json, dict):
+            context['profile_json'] = raw_json
+            return context
+
+        if isinstance(raw_json, str):
+            cleaned_raw = raw_json.encode('utf-8').decode('unicode_escape')
+            if cleaned_raw.startswith('"') and cleaned_raw.endswith('"'):
+                cleaned_raw = cleaned_raw[1:-1]
+
+            with contextlib.suppress(json.JSONDecodeError):
+                parsed = json.loads(cleaned_raw)
+                if isinstance(parsed, dict):
+                    context['profile_json'] = parsed
+                    return context
+
+            with contextlib.suppress(json.JSONDecodeError):
+                parsed = json.loads(raw_json)
+                if isinstance(parsed, dict):
+                    context['profile_json'] = parsed
+                    return context
+
+        context['json_valid'] = False
+        context['profile_json'] = str(raw_json)
+        return context
+
+    def get_initial(self) -> dict[str, Any]:
+        """Initialize the form with default values."""
+        initial = super().get_initial()
+        if self.object and self.object.pk:
+            initial['name'] = self.object.name
+            if self.object.profile:
+                initial['profile'] = json.dumps(self.object.profile)
+            else:
+                initial['profile'] = self._default_profile_json()
+        else:
+            initial['profile'] = self._default_profile_json()
+        return initial
+
+    @staticmethod
+    def _default_profile_json() -> str:
+        """Load default profile from JSON file."""
+        default_profile_path = Path(__file__).parent / 'default_profiles' / 'minimal_default.json'
+        try:
+            with default_profile_path.open('r', encoding='utf-8') as f:
+                profile_data = json.load(f)
+                return json.dumps(profile_data, indent=2)
+        except (FileNotFoundError, json.JSONDecodeError):
+            # Fallback to minimal profile if file doesn't exist or is invalid
+            return json.dumps({
+                'schema': 'trustpoint.web-automation.v1',
+                'name': 'New Profile',
+                'version': '1.0.0',
+                'metadata': {
+                    'vendor': 'Generic',
+                    'device_family': 'Device',
+                    'description': 'Custom profile',
+                },
+                'operations': {},
+            }, indent=2)
+
     def form_valid(self, form: WebUiAutomationProfileForm) -> HttpResponse:
         """Save and audit the profile."""
+        profile_data = form.cleaned_data.get('profile')
+        if isinstance(profile_data, str):
+            try:
+                parsed_profile = json.loads(profile_data)
+                if not isinstance(parsed_profile, dict):
+                    form.add_error('profile', 'Profile must be a JSON object.')
+                    return self.form_invalid(form)
+                form.instance.profile = parsed_profile
+            except json.JSONDecodeError as exc:
+                form.add_error('profile', f'Invalid JSON: {exc}')
+                return self.form_invalid(form)
+
         response = super().form_valid(form)
         write_audit_entry(WebUiAuditOperation.PROFILE_CREATED, self.object, actor=self.request.user)
         messages.success(self.request, 'Automation profile created and validated.')
@@ -318,12 +410,95 @@ class AutomationProfileUpdateView(
     http_method_names: ClassVar[list[str]] = ['get', 'post']
     model = WebUiAutomationProfileDefinition
     form_class = WebUiAutomationProfileForm
-    template_name = 'web_ui_automation/form.html'
+    template_name = 'web_ui_automation/profile_config.html'
     success_url = reverse_lazy('web_ui_automation:profiles')
     extra_context: ClassVar[dict[str, str]] = {'title': 'Edit Web UI Automation Profile'}
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add additional context data for JSON editor."""
+        context = super().get_context_data(**kwargs)
+        form = context['form']
+
+        raw_json = form['profile'].value() or None
+
+        context['json_valid'] = True
+
+        if not raw_json or raw_json == 'null':
+            context['profile_json'] = self._default_profile_json()
+            return context
+
+        if isinstance(raw_json, dict):
+            context['profile_json'] = raw_json
+            return context
+
+        if isinstance(raw_json, str):
+            cleaned_raw = raw_json.encode('utf-8').decode('unicode_escape')
+            if cleaned_raw.startswith('"') and cleaned_raw.endswith('"'):
+                cleaned_raw = cleaned_raw[1:-1]
+
+            with contextlib.suppress(json.JSONDecodeError):
+                parsed = json.loads(cleaned_raw)
+                if isinstance(parsed, dict):
+                    context['profile_json'] = parsed
+                    return context
+
+            with contextlib.suppress(json.JSONDecodeError):
+                parsed = json.loads(raw_json)
+                if isinstance(parsed, dict):
+                    context['profile_json'] = parsed
+                    return context
+
+        context['json_valid'] = False
+        context['profile_json'] = str(raw_json)
+        return context
+
+    def get_initial(self) -> dict[str, Any]:
+        """Initialize the form with default values."""
+        initial = super().get_initial()
+        if self.object and self.object.pk:
+            initial['name'] = self.object.name
+            if self.object.profile:
+                initial['profile'] = json.dumps(self.object.profile)
+            else:
+                initial['profile'] = self._default_profile_json()
+        return initial
+
+    @staticmethod
+    def _default_profile_json() -> str:
+        """Load default profile from JSON file."""
+        default_profile_path = Path(__file__).parent / 'default_profiles' / 'minimal_default.json'
+        try:
+            with default_profile_path.open('r', encoding='utf-8') as f:
+                profile_data = json.load(f)
+                return json.dumps(profile_data, indent=2)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return json.dumps({
+                'schema': 'trustpoint.web-automation.v1',
+                'name': 'New Profile',
+                'version': '1.0.0',
+                'metadata': {
+                    'vendor': 'Generic',
+                    'device_family': 'Device',
+                    'description': 'Custom profile',
+                },
+                'operations': {},
+            }, indent=2)
+
     def form_valid(self, form: WebUiAutomationProfileForm) -> HttpResponse:
         """Save and audit a profile change."""
+        # Parse JSON if needed
+        profile_data = form.cleaned_data.get('profile')
+        if isinstance(profile_data, str):
+            try:
+                parsed_profile = json.loads(profile_data)
+                if not isinstance(parsed_profile, dict):
+                    form.add_error('profile', 'Profile must be a JSON object.')
+                    return self.form_invalid(form)
+                form.instance.profile = parsed_profile
+            except json.JSONDecodeError as exc:
+                form.add_error('profile', f'Invalid JSON: {exc}')
+                return self.form_invalid(form)
+
         response = super().form_valid(form)
         write_audit_entry(
             WebUiAuditOperation.PROFILE_UPDATED,
@@ -479,13 +654,25 @@ class StartOperationView(WebUiPageMixin, LoggerMixin, View):
             )
             return HttpResponseRedirect(reverse('web_ui_automation:job-detail', kwargs={'pk': existing_job.pk}))
 
+        failed_job = WebUiAutomationJob.objects.filter(
+            assignment=assignment,
+            operation=operation,
+            status='FAILED'
+        ).order_by('-created_at').first()
+
         try:
             job = queue_operation(assignment, operation, actor=request.user, is_automatic=False)
         except (ImproperlyConfigured, ValidationError) as exc:
             messages.error(request, str(exc))
             return HttpResponseRedirect(reverse('web_ui_automation:device-clm', kwargs={'pk': device_id}))
 
-        messages.success(request, f'Automation job {job.pk} queued.')
+        if failed_job:
+            messages.success(
+                request,
+                f'Automation job {job.pk} queued. Retrying after previous failed job {failed_job.pk}.'
+            )
+        else:
+            messages.success(request, f'Automation job {job.pk} queued.')
         return HttpResponseRedirect(reverse('web_ui_automation:job-detail', kwargs={'pk': job.pk}))
 
 
@@ -513,8 +700,6 @@ class ExecuteJobNowView(WebUiPageMixin, LoggerMixin, View):
 
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         """Execute the job immediately if it's in QUEUED state."""
-        from django import db
-
         job = get_object_or_404(WebUiAutomationJob, pk=pk)
 
         if job.status != 'QUEUED':
