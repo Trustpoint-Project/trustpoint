@@ -24,16 +24,6 @@ urlpatterns = [
     path('agents/', views.AgentTableView.as_view(), name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}'),
     # Agent Create Views
     path(
-        'agents/create/',
-        views.AgentCreateChooseTypeView.as_view(),
-        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create',
-    ),
-    path(
-        'agents/create/1-to-n/',
-        views.AgentCreateOneToNOnboardingView.as_view(),
-        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_n',
-    ),
-    path(
         'agents/create/1-to-1/',
         views.AgentCreateOneToOneOnboardingView.as_view(),
         name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_one',

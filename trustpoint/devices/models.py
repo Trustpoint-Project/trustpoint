@@ -93,8 +93,6 @@ class DeviceModel(CustomDeleteActionModel):
         OPC_UA_GDS = 1, _('OPC UA GDS')
         OPC_UA_GDS_PUSH = 2, _('OPC UA GDS Push')
         AGENT_ONE_TO_ONE = 3, _('Agent (1-to-1)')
-        AGENT_ONE_TO_N = 4, _('Agent (1-to-n)')
-        AGENT_MANAGED_DEVICE = 5, _('Agent Managed Device')
 
     device_type = models.IntegerField(
         choices=DeviceType,
@@ -212,8 +210,7 @@ class DeviceModel(CustomDeleteActionModel):
         if self.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
             self._validate_opc_ua_gds_push(error_messages)
 
-        _agent_types = (DeviceModel.DeviceType.AGENT_ONE_TO_ONE, DeviceModel.DeviceType.AGENT_ONE_TO_N)
-        if self.device_type in _agent_types:
+        if self.device_type == DeviceModel.DeviceType.AGENT_ONE_TO_ONE:
             self._validate_agent_device(error_messages)
 
         if error_messages:
