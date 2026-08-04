@@ -187,4 +187,4 @@ into the HSM token.
 Backup and Recovery
 ===================
 
-The Trustpoint is currently in an early Beta Phase and does not yet have backup, update and restore features implemented. Thus, be aware that you will not be able to update the current version and take your configurations with you on migration to a later version.
+Trustpoint is currently in an early beta phase. Backup, restore, and migration functionality is available; however, the update process may still be subject to changes between releases. Before upgrading, users should therefore create a backup and review the release-specific migration instructions.
