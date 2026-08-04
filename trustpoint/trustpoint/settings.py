@@ -687,7 +687,7 @@ Q_CLUSTER = {
     'queue_limit': 50,
     'bulk': 10,
     'orm': 'default',
-    'sync': False,  # Use async workers but tasks handle their own threading
+    'sync': False,
 }
 
 

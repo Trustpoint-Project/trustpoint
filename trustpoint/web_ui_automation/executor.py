@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
 import re
 import socket
@@ -12,8 +13,11 @@ import ssl
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin, urlsplit
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -33,6 +37,17 @@ from web_ui_automation.schema import validate_profile_schema
 from web_ui_automation.services import record_job_failure, record_job_success
 
 DEFAULT_TIMEOUT_MS = 30_000
+
+
+def _run_db[T](func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    """Run a database-touching callable in a plain worker thread.
+
+    Playwright's sync API drives an asyncio event loop in the current thread, so
+    Django's ORM refuses to run there (SynchronousOnlyOperation). Executing the
+    callable in a fresh thread (which has no running event loop) sidesteps this.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(func, *args, **kwargs).result()
 
 
 class StepExecutionError(RuntimeError):
@@ -202,8 +217,8 @@ def _create_browser_context(browser: Browser, job: WebUiAutomationJob) -> Browse
     }
     if automation_device.authentication_type == AuthenticationType.HTTP_BASIC:
         context_options['http_credentials'] = {
-            'username': automation_device.get_username(),
-            'password': automation_device.get_password(),
+            'username': _run_db(automation_device.get_username),
+            'password': _run_db(automation_device.get_password),
         }
     return browser.new_context(**context_options)
 
@@ -235,7 +250,8 @@ def _execute_and_log_step(
     sequence: int,
 ) -> None:
     """Execute a step and persist a sanitized step-level log."""
-    step_log = WebUiAutomationStepLog.objects.create(
+    step_log = _run_db(
+        WebUiAutomationStepLog.objects.create,
         job=job,
         sequence=sequence,
         step_id=step['id'],
@@ -247,14 +263,14 @@ def _execute_and_log_step(
         step_log.status = StepStatus.FAILED
         step_log.message = _sanitized_step_message(step, success=False)
         step_log.finished_at = timezone.now()
-        step_log.save(update_fields=['status', 'message', 'finished_at'])
+        _run_db(step_log.save, update_fields=['status', 'message', 'finished_at'])
         error_message = 'Sensitive step failed.' if step.get('sensitive') else str(exc)
         raise StepExecutionError(step['id'], type(exc).__name__, error_message) from exc
     else:
         step_log.status = StepStatus.SUCCESSFUL
         step_log.message = _sanitized_step_message(step, success=True)
         step_log.finished_at = timezone.now()
-        step_log.save(update_fields=['status', 'message', 'finished_at'])
+        _run_db(step_log.save, update_fields=['status', 'message', 'finished_at'])
 
 
 def _execute_step(
