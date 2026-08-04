@@ -17,6 +17,7 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views import View
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
@@ -814,9 +815,16 @@ class RenewalConfigView(WebUiPageMixin, LoggerMixin, DetailView[WebUiAutomationA
     http_method_names: ClassVar[list[str]] = ['get', 'post']
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add device to context."""
+        """Add device and renewal jobs to context."""
         context = super().get_context_data(**kwargs)
         context['automation_device'] = self.object.automation_device
+
+        # Get all renewal jobs for this assignment
+        context['renewal_jobs'] = WebUiAutomationJob.objects.filter(
+            assignment=self.object,
+            operation='renew'
+        ).order_by('-created_at')[:10]  # Show last 10 renewal jobs
+
         return context
 
     def post(self, request: HttpRequest, device_id: int, pk: int) -> HttpResponse:
@@ -829,7 +837,12 @@ class RenewalConfigView(WebUiPageMixin, LoggerMixin, DetailView[WebUiAutomationA
 
         next_update = request.POST.get('next_certificate_update_scheduled')
         if next_update:
-            assignment.next_certificate_update_scheduled = parse_datetime(next_update)
+            naive_dt = parse_datetime(next_update)
+            if naive_dt:
+                # Make datetime timezone-aware
+                assignment.next_certificate_update_scheduled = timezone.make_aware(naive_dt)
+            else:
+                assignment.next_certificate_update_scheduled = None
         else:
             assignment.next_certificate_update_scheduled = None
 

@@ -66,11 +66,65 @@
             <div class="mb-3">
                 <h5>{% trans "Current Certificate Information" %}</h5>
                 {% if assignment.current_certificate %}
-                    <p><strong>{% trans "Subject" %}:</strong> {{ assignment.current_certificate.subject_common_name }}</p>
+                    <p><strong>{% trans "Subject" %}:</strong> 
+                        {% if assignment.current_certificate.subject_common_name %}
+                            {{ assignment.current_certificate.subject_common_name }}
+                        {% else %}
+                            {% for entry in assignment.current_certificate.subject.all %}
+                                {{ entry.value }}{% if not forloop.last %}, {% endif %}
+                            {% empty %}
+                                {% trans "No subject information" %}
+                            {% endfor %}
+                        {% endif %}
+                    </p>
                     <p><strong>{% trans "Not Valid After" %}:</strong> {{ assignment.current_certificate.not_valid_after|date:"Y-m-d H:i" }}</p>
                     <p><strong>{% trans "Next Scheduled Renewal" %}:</strong> {{ assignment.next_certificate_update|date:"Y-m-d H:i"|default:"—" }}</p>
                 {% else %}
                     <p class="text-muted">{% trans "No certificate issued yet" %}</p>
+                {% endif %}
+            </div>
+
+            <hr>
+
+            <div class="mb-3">
+                <h5>{% trans "Renewal History" %}</h5>
+                {% if renewal_jobs %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Job ID" %}</th>
+                            <th>{% trans "Created" %}</th>
+                            <th>{% trans "Status" %}</th>
+                            <th>{% trans "Result" %}</th>
+                            <th>{% trans "Actions" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in renewal_jobs %}
+                        <tr>
+                            <td>{{ job.pk }}</td>
+                            <td>{{ job.created_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>
+                                <span class="badge bg-{% if job.status == 'COMPLETED' %}success{% elif job.status == 'FAILED' %}danger{% elif job.status == 'RUNNING' %}primary{% elif job.status == 'QUEUED' %}secondary{% else %}warning{% endif %}">
+                                    {{ job.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if job.result == 'SUCCESSFUL' %}success{% elif job.result == 'FAILED' %}danger{% elif job.result == 'PARTIALLY_SUCCESSFUL' %}warning{% else %}secondary{% endif %}">
+                                    {{ job.get_result_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{% url 'web_ui_automation:job-detail' pk=job.pk %}" class="btn btn-sm btn-primary">
+                                    {% trans "Details" %}
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">{% trans "No renewal jobs yet" %}</p>
                 {% endif %}
             </div>
 
@@ -80,6 +134,16 @@
         <div class="tp-card-btn-footer m-1">
             <button type="submit" class="btn btn-primary" form="renewal-form">{% trans "Save Configuration" %}</button>
         </div>
+        {% if assignment.current_certificate %}
+        <div class="tp-card-btn-footer m-1">
+            <form method="post" action="{% url 'web_ui_automation:operation-run' pk=assignment.pk operation='renew' %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">
+                    {% trans "Trigger Renewal Now" %}
+                </button>
+            </form>
+        </div>
+        {% endif %}
         <div class="tp-card-btn-footer m-1">
             <a href="{% url 'web_ui_automation:device-clm' pk=automation_device.pk %}" class="btn btn-secondary">
                 {% trans "Back to CLM" %}
