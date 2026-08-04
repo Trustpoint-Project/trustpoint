@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Submit
@@ -91,7 +91,7 @@ class WebUiAutomationDeviceCreateForm(
 
     def clean_common_name(self) -> str:
         """Reject an existing Trustpoint device common name."""
-        common_name = self.cleaned_data['common_name'].rstrip()
+        common_name: str = self.cleaned_data['common_name'].rstrip()
 
         if DeviceModel.objects.filter(
             common_name=common_name,
@@ -103,9 +103,9 @@ class WebUiAutomationDeviceCreateForm(
         return common_name
 
     @transaction.atomic
+    @override
     def save(
         self,
-        *,
         commit: bool = True,
     ) -> WebUiAutomationDevice:
         """Create the Trustpoint device and Web UI configuration."""
@@ -182,14 +182,16 @@ class WebUiAutomationProfileForm(
                 },
             ),
         }
-        help_texts: ClassVar[dict[str, str]] = {
+        help_texts: ClassVar[dict[str, Any]] = {
             'profile': _(
                 'Enter a valid Web UI automation profile as JSON.',
             ),
         }
+
+    @staticmethod
     def validate_certificate_profile_field(
         profile: dict[str, Any],
-        ) -> None:
+    ) -> None:
         """Validate the certificate-profile identifier in a profile."""
         certificate_profile = profile.get('certificate_profile')
 
@@ -217,7 +219,7 @@ class WebUiAutomationProfileForm(
         return profile
 
 
-class WebUiAutomationAssignmentForm(forms.ModelForm):
+class WebUiAutomationAssignmentForm(forms.ModelForm[WebUiAutomationAssignedProfile]):
     """Configure one profile assignment."""
 
     class Meta:
@@ -251,7 +253,7 @@ class EnableAutomaticRenewalForm(forms.Form):
                         self.add_error(None, error)
             else:
                 raise
-        return cleaned_data
+        return cleaned_data or {}
 
 
 class ConfirmExecutionForm(forms.Form):
@@ -334,7 +336,7 @@ class WebUiAutomationDeviceUpdateForm(forms.Form):
 
     def clean_common_name(self) -> str:
         """Validate that common name is unique (excluding current device)."""
-        common_name = self.cleaned_data['common_name'].rstrip()
+        common_name: str = self.cleaned_data['common_name'].rstrip()
         device = self.automation_device.device
 
         existing = DeviceModel.objects.filter(common_name=common_name)

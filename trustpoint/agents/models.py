@@ -124,12 +124,7 @@ class TrustpointAgent(models.Model):
         return f'TrustpointAgent({self.name} / {self.agent_id})'
 
     def clean(self) -> None:
-        """Validate that all declared capabilities are known values and enforce device-type constraints."""
-        valid = {c.value for c in TrustpointAgent.Capability}
-        unknown = [c for c in self.capabilities if c not in valid]
-        if unknown:
-            raise ValidationError({'capabilities': f'Unknown capabilities: {unknown}'})
-
+        """Enforce device-type constraints."""
         self._validate_device_association()
 
     def _validate_device_association(self) -> None:

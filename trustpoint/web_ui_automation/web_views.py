@@ -58,7 +58,7 @@ class WebUiPageMixin(PageContextMixin):
 class AutomationDeviceListView(WebUiPageMixin, LoggerMixin, ListView[WebUiAutomationDevice]):
     """List Web UI automation device configurations."""
 
-    http_method_names: ClassVar[list[str]] = ['get']
+    http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
     model = WebUiAutomationDevice
     template_name = 'web_ui_automation/device_list.html'
     context_object_name = 'automation_devices'
@@ -83,17 +83,22 @@ class AutomationDeviceCreateView(
 ):
     """Create a Web UI automation device and encrypted credential set."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     model = WebUiAutomationDevice
     form_class = WebUiAutomationDeviceCreateForm
     template_name = 'web_ui_automation/form.html'
     success_url = reverse_lazy('web_ui_automation:devices')
-    extra_context: ClassVar[dict[str, str]] = {'title': 'Create Web UI Automation Device'}
+    extra_context: ClassVar[dict[str, str]] = {'title': 'Create Web UI Automation Device'}  # type: ignore[misc]
 
     def form_valid(self, form: WebUiAutomationDeviceCreateForm) -> HttpResponse:
         """Save and audit a new device configuration."""
         response = super().form_valid(form)
-        write_audit_entry(WebUiAuditOperation.DEVICE_CONFIGURED, self.object, actor=self.request.user)
+        # After super().form_valid(), self.object is guaranteed to be set
+        if self.object is None:
+            msg = 'Object not created after form validation'
+            raise ImproperlyConfigured(msg)
+        user = self.request.user if self.request.user.is_authenticated else None
+        write_audit_entry(WebUiAuditOperation.DEVICE_CONFIGURED, self.object, actor=user)
         messages.success(self.request, 'Web UI automation device created.')
         return response
 
@@ -101,7 +106,7 @@ class AutomationDeviceCreateView(
 class AutomationDeviceDeleteView(WebUiPageMixin, LoggerMixin, ListView[WebUiAutomationDevice]):
     """Delete Web UI automation devices (supports bulk operations)."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     model = WebUiAutomationDevice
     template_name = 'web_ui_automation/device_confirm_delete.html'
     context_object_name = 'automation_devices'
@@ -169,15 +174,16 @@ class AutomationDeviceDeleteView(WebUiPageMixin, LoggerMixin, ListView[WebUiAuto
 
             automation_device.delete()
 
+
             if device:
                 device.delete()
-
-            write_audit_entry(
-                WebUiAuditOperation.DEVICE_DELETED,
-                None,
-                actor=request.user,
-                details=f'Deleted device: {device_name}'
-            )
+                user = request.user if request.user.is_authenticated else None
+                write_audit_entry(
+                    WebUiAuditOperation.DEVICE_DELETED,
+                    device,
+                    actor=user,
+                    details={'device_name': device_name}
+                )
             deleted_count += 1
 
         if deleted_count > 0:
@@ -191,7 +197,7 @@ class AutomationDeviceDeleteView(WebUiPageMixin, LoggerMixin, ListView[WebUiAuto
 class AutomationDeviceRevokeView(WebUiPageMixin, LoggerMixin, ListView[WebUiAutomationDevice]):
     """Revoke all certificates for Web UI automation devices (supports bulk operations)."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     model = WebUiAutomationDevice
     template_name = 'web_ui_automation/device_confirm_revoke.html'
     context_object_name = 'automation_devices'
@@ -284,7 +290,7 @@ class AutomationDeviceRevokeView(WebUiPageMixin, LoggerMixin, ListView[WebUiAuto
 class AutomationProfileListView(WebUiPageMixin, LoggerMixin, ListView[WebUiAutomationProfileDefinition]):
     """List Web UI automation profile definitions."""
 
-    http_method_names: ClassVar[list[str]] = ['get']
+    http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
     model = WebUiAutomationProfileDefinition
     template_name = 'web_ui_automation/profile_list.html'
     context_object_name = 'profiles'
@@ -298,12 +304,12 @@ class AutomationProfileCreateView(
 ):
     """Create and schema-validate a custom automation profile."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     model = WebUiAutomationProfileDefinition
     form_class = WebUiAutomationProfileForm
     template_name = 'web_ui_automation/profile_config.html'
     success_url = reverse_lazy('web_ui_automation:profiles')
-    extra_context: ClassVar[dict[str, str]] = {'title': 'Create Web UI Automation Profile'}
+    extra_context: ClassVar[dict[str, str]] = {'title': 'Create Web UI Automation Profile'}  # type: ignore[misc]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data for JSON editor."""
@@ -396,7 +402,12 @@ class AutomationProfileCreateView(
                 return self.form_invalid(form)
 
         response = super().form_valid(form)
-        write_audit_entry(WebUiAuditOperation.PROFILE_CREATED, self.object, actor=self.request.user)
+        # After super().form_valid(), self.object is guaranteed to be set
+        if self.object is None:
+            msg = 'Object not created after form validation'
+            raise ImproperlyConfigured(msg)
+        user = self.request.user if self.request.user.is_authenticated else None
+        write_audit_entry(WebUiAuditOperation.PROFILE_CREATED, self.object, actor=user)
         messages.success(self.request, 'Automation profile created and validated.')
         return response
 
@@ -408,12 +419,12 @@ class AutomationProfileUpdateView(
 ):
     """Edit a custom automation profile in place."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     model = WebUiAutomationProfileDefinition
     form_class = WebUiAutomationProfileForm
     template_name = 'web_ui_automation/profile_config.html'
     success_url = reverse_lazy('web_ui_automation:profiles')
-    extra_context: ClassVar[dict[str, str]] = {'title': 'Edit Web UI Automation Profile'}
+    extra_context: ClassVar[dict[str, str]] = {'title': 'Edit Web UI Automation Profile'}  # type: ignore[misc]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data for JSON editor."""
@@ -501,10 +512,11 @@ class AutomationProfileUpdateView(
                 return self.form_invalid(form)
 
         response = super().form_valid(form)
+        user = self.request.user if self.request.user.is_authenticated else None
         write_audit_entry(
             WebUiAuditOperation.PROFILE_UPDATED,
             self.object,
-            actor=self.request.user,
+            actor=user,
             details={'checksum': self.object.checksum},
         )
         messages.success(self.request, 'Profile updated. Automatic renewal was disabled for assigned devices.')
@@ -514,7 +526,7 @@ class AutomationProfileUpdateView(
 class AssignedProfileListView(WebUiPageMixin, LoggerMixin, ListView[WebUiAutomationAssignedProfile]):
     """List profiles assigned to one Web UI automation device."""
 
-    http_method_names: ClassVar[list[str]] = ['get']
+    http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
     model = WebUiAutomationAssignedProfile
     template_name = 'web_ui_automation/assignment_list.html'
     context_object_name = 'assignments'
@@ -540,11 +552,11 @@ class AssignedProfileCreateView(
 ):
     """Assign a profile to a Web UI automation device."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     model = WebUiAutomationAssignedProfile
     form_class = WebUiAutomationAssignmentForm
     template_name = 'web_ui_automation/form.html'
-    extra_context: ClassVar[dict[str, str]] = {'title': 'Assign Web UI Automation Profile'}
+    extra_context: ClassVar[dict[str, str]] = {'title': 'Assign Web UI Automation Profile'}  # type: ignore[misc]
 
     def get_initial(self) -> dict[str, Any]:
         """Preselect the parent automation device."""
@@ -570,11 +582,11 @@ class AssignedProfileUpdateView(
 ):
     """Update assignment and renewal scheduling settings."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     model = WebUiAutomationAssignedProfile
     form_class = WebUiAutomationAssignmentForm
     template_name = 'web_ui_automation/form.html'
-    extra_context: ClassVar[dict[str, str]] = {'title': 'Edit Assigned Automation Profile'}
+    extra_context: ClassVar[dict[str, str]] = {'title': 'Edit Assigned Automation Profile'}  # type: ignore[misc]
 
     def get_queryset(self) -> QuerySet[WebUiAutomationAssignedProfile]:
         """Restrict updates to the parent automation device."""
@@ -588,7 +600,7 @@ class AssignedProfileUpdateView(
 class AssignedProfileDeleteView(WebUiPageMixin, LoggerMixin, View):
     """Delete an assigned profile."""
 
-    http_method_names: ClassVar[list[str]] = ['post']
+    http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]
 
     def post(self, request: HttpRequest, device_id: int, pk: int) -> HttpResponse:
         """Delete the profile assignment.
@@ -614,7 +626,7 @@ class AssignedProfileDeleteView(WebUiPageMixin, LoggerMixin, View):
 class AutomationJobDetailView(WebUiPageMixin, LoggerMixin, DetailView[WebUiAutomationJob]):
     """Display a job result and sanitized step logs."""
 
-    http_method_names: ClassVar[list[str]] = ['get']
+    http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
     model = WebUiAutomationJob
     template_name = 'web_ui_automation/job_detail.html'
     context_object_name = 'job'
@@ -630,7 +642,7 @@ class AutomationJobDetailView(WebUiPageMixin, LoggerMixin, DetailView[WebUiAutom
 class StartOperationView(WebUiPageMixin, LoggerMixin, View):
     """Queue onboarding, renewal, or inventory for one assigned profile."""
 
-    http_method_names: ClassVar[list[str]] = ['post']
+    http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]
 
     def post(self, request: HttpRequest, pk: int, operation: str) -> HttpResponse:
         """Prepare and enqueue the selected operation."""
@@ -662,7 +674,8 @@ class StartOperationView(WebUiPageMixin, LoggerMixin, View):
         ).order_by('-created_at').first()
 
         try:
-            job = queue_operation(assignment, operation, actor=request.user, is_automatic=False)
+            user = request.user if request.user.is_authenticated else None
+            job = queue_operation(assignment, operation, actor=user, is_automatic=False)
         except (ImproperlyConfigured, ValidationError) as exc:
             messages.error(request, str(exc))
             return HttpResponseRedirect(reverse('web_ui_automation:device-clm', kwargs={'pk': device_id}))
@@ -680,14 +693,15 @@ class StartOperationView(WebUiPageMixin, LoggerMixin, View):
 class ConfirmJobView(WebUiPageMixin, LoggerMixin, View):
     """Confirm a completed onboarding or manual renewal execution."""
 
-    http_method_names: ClassVar[list[str]] = ['post']
+    http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]
 
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         """Validate confirmation and apply the lifecycle transition."""
         job = get_object_or_404(WebUiAutomationJob, pk=pk)
         form = ConfirmExecutionForm(request.POST)
         if form.is_valid():
-            confirm_job(job, actor=request.user)
+            user = request.user if request.user.is_authenticated else None
+            confirm_job(job, actor=user)
             messages.success(request, 'The certificate operation was confirmed.')
         else:
             messages.error(request, 'The confirmation could not be applied.')
@@ -697,7 +711,7 @@ class ConfirmJobView(WebUiPageMixin, LoggerMixin, View):
 class ExecuteJobNowView(WebUiPageMixin, LoggerMixin, View):
     """Execute a queued job immediately, bypassing the queue."""
 
-    http_method_names: ClassVar[list[str]] = ['post']
+    http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]
 
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         """Execute the job immediately if it's in QUEUED state."""
@@ -725,17 +739,20 @@ class ExecuteJobNowView(WebUiPageMixin, LoggerMixin, View):
 class EnableAutomaticRenewalView(WebUiPageMixin, LoggerMixin, View):
     """Explicitly enable automatic renewal for one assignment."""
 
-    http_method_names: ClassVar[list[str]] = ['post']
+    http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]
 
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         """Enable renewal after validating all safety preconditions."""
         assignment = get_object_or_404(WebUiAutomationAssignedProfile, pk=pk)
         form = EnableAutomaticRenewalForm(assignment, request.POST)
         if form.is_valid():
-            enable_automatic_renewal(assignment, actor=request.user)
+            user = request.user if request.user.is_authenticated else None
+            enable_automatic_renewal(assignment, actor=user)
             messages.success(request, 'Automatic renewal enabled.')
         else:
-            messages.error(request, '; '.join(form.non_field_errors()))
+            # Cast to list of strings to satisfy type checker
+            error_messages = [str(error) for error in form.non_field_errors()]
+            messages.error(request, '; '.join(error_messages))
         return HttpResponseRedirect(
             reverse('web_ui_automation:assignments', kwargs={'device_id': assignment.automation_device_id})
         )
@@ -744,12 +761,13 @@ class EnableAutomaticRenewalView(WebUiPageMixin, LoggerMixin, View):
 class DisableAutomaticRenewalView(WebUiPageMixin, LoggerMixin, View):
     """Disable automatic renewal for one assignment."""
 
-    http_method_names: ClassVar[list[str]] = ['post']
+    http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]
 
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         """Disable renewal and audit the explicit user action."""
         assignment = get_object_or_404(WebUiAutomationAssignedProfile, pk=pk)
-        disable_automatic_renewal(assignment, actor=request.user, reason='Disabled by user')
+        user = request.user if request.user.is_authenticated else None
+        disable_automatic_renewal(assignment, actor=user, reason='Disabled by user')
         messages.success(request, 'Automatic renewal disabled.')
         return HttpResponseRedirect(
             reverse('web_ui_automation:assignments', kwargs={'device_id': assignment.automation_device_id})
@@ -759,7 +777,7 @@ class DisableAutomaticRenewalView(WebUiPageMixin, LoggerMixin, View):
 class WebUiAutomationDeviceCLMView(WebUiPageMixin, LoggerMixin, DetailView[WebUiAutomationDevice]):
     """Certificate Lifecycle Management view for Web UI automation devices."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     model = WebUiAutomationDevice
     template_name = 'web_ui_automation/device_clm.html'
     context_object_name = 'automation_device'
@@ -812,7 +830,7 @@ class RenewalConfigView(WebUiPageMixin, LoggerMixin, DetailView[WebUiAutomationA
     model = WebUiAutomationAssignedProfile
     template_name = 'web_ui_automation/renewal_config.html'
     context_object_name = 'assignment'
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add device and renewal jobs to context."""
@@ -861,7 +879,7 @@ class RenewalConfigView(WebUiPageMixin, LoggerMixin, DetailView[WebUiAutomationA
 class RevokeCertificateView(WebUiPageMixin, LoggerMixin, View):
     """View for revoking a certificate associated with an assigned profile."""
 
-    http_method_names: ClassVar[list[str]] = ['post']
+    http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]
 
     def post(self, request: HttpRequest, device_id: int, pk: int) -> HttpResponse:
         """Revoke the certificate for the given assignment."""

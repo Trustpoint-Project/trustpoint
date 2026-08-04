@@ -273,7 +273,7 @@ def _execute_and_log_step(
         _run_db(step_log.save, update_fields=['status', 'message', 'finished_at'])
 
 
-def _execute_step(
+def _execute_step(  # noqa: C901, PLR0912, PLR0915
     job: WebUiAutomationJob,
     page: Page,
     step: dict[str, Any],
@@ -420,8 +420,8 @@ def _get_locator(page: Page, step: dict[str, Any]) -> Locator:
 
 def _build_target_url(base_url: str, profile: dict[str, Any], step: dict[str, Any]) -> str:
     """Join a configured device base URL and a fixed named profile path."""
-    path_ref = step['path_ref']
-    path = profile['paths'][path_ref]
+    path_ref: str = step['path_ref']
+    path: str = profile['paths'][path_ref]
     normalized_base = f'{base_url.rstrip("/")}/'
     return urljoin(normalized_base, path.lstrip('/'))
 
@@ -445,9 +445,12 @@ def _verify_tls_fingerprint(base_url: str, expected_fingerprint: str) -> None:
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
-    with socket.create_connection((split.hostname, port), timeout=10) as raw_socket:
-        with context.wrap_socket(raw_socket, server_hostname=split.hostname) as tls_socket:
-            certificate_der = tls_socket.getpeercert(binary_form=True)
+    with socket.create_connection((split.hostname, port), timeout=10) as raw_socket, \
+         context.wrap_socket(raw_socket, server_hostname=split.hostname) as tls_socket:
+        certificate_der = tls_socket.getpeercert(binary_form=True)
+    if certificate_der is None:
+        msg = 'Failed to retrieve TLS certificate from server.'
+        raise ValueError(msg)
     actual_fingerprint = hashlib.sha256(certificate_der).hexdigest()
     if _normalize_fingerprint(actual_fingerprint) != _normalize_fingerprint(expected_fingerprint):
         msg = 'The live TLS certificate fingerprint does not match the candidate certificate.'

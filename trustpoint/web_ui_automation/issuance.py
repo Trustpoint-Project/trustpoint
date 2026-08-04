@@ -62,4 +62,4 @@ def get_issuance_adapter() -> CredentialIssuanceAdapter:
         'web_ui_automation.issuance.NotConfiguredIssuanceAdapter',
     )
     adapter_class = import_string(dotted_path)
-    return adapter_class()
+    return adapter_class()  # type: ignore[no-any-return]

@@ -59,7 +59,7 @@ def create_job(
         profile_snapshot=profile_snapshot,
         profile_checksum=assignment.workflow_definition.checksum,
         candidate_certificate=candidate_certificate,
-        initiated_by=actor,
+        initiated_by=actor,  # type: ignore[misc]
         is_automatic=is_automatic,
     )
     audit_operation = (

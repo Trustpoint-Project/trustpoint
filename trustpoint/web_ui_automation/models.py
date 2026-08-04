@@ -28,7 +28,7 @@ from web_ui_automation.schema import (
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractBaseUser
-    from django.db.models.manager import RelatedManager
+    from django.db.models.manager import RelatedManager  # type: ignore[attr-defined]
 
     from pki.models.certificate import CertificateModel
 
@@ -354,7 +354,8 @@ class WebUiAutomationAssignedProfile(models.Model):
     def clean(self) -> None:
         """Validate credential ownership and automatic-renewal eligibility."""
         super().clean()
-        if self.issued_credential_id and self.issued_credential.device_id != self.automation_device.device_id:
+        if (self.issued_credential_id and self.issued_credential
+                and self.issued_credential.device_id != self.automation_device.device_id):
             raise ValidationError({'issued_credential': _('The issued credential belongs to another device.')})
         if not self.enabled and self.automatic_renewal_enabled:
             raise ValidationError({'automatic_renewal_enabled': _('A disabled assignment cannot renew automatically.')})
@@ -364,7 +365,7 @@ class WebUiAutomationAssignedProfile(models.Model):
     @property
     def current_certificate(self) -> CertificateModel | None:
         """Return the certificate currently referenced by the managed credential."""
-        if not self.issued_credential_id:
+        if not self.issued_credential_id or not self.issued_credential:
             return None
         return self.issued_credential.credential.certificate
 
@@ -468,7 +469,7 @@ class WebUiAutomationJob(models.Model):
     created_at = models.DateTimeField(verbose_name=_('Created At'), auto_now_add=True)
 
     if TYPE_CHECKING:
-        initiated_by: AbstractBaseUser | None
+        initiated_by: AbstractBaseUser | None  # type: ignore[no-redef]
         step_logs: RelatedManager[WebUiAutomationStepLog]
 
     class Meta(TypedModelMeta):
