@@ -175,6 +175,10 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
 
     def _get_or_create_domain_ca_owner_id_cert(self, domain_ca: CaModel) -> None:
         """Generates a domain-based DevOwnerID, pinning the certificate of the domain CA."""
+        if DOMAIN_BASED_OWNER_ID_CERT_PATH.exists() and DOMAIN_BASED_OWNER_ID_KEY_PATH.exists():
+            self.log_and_stdout('Domain-based DevOwnerID certificate files already exist, skipping generation.')
+            return
+
         domain_ca_cert = domain_ca.get_certificate()
         owner_ca_cert = x509.load_pem_x509_certificate(OWNER_CA_CERT_PATH.read_bytes())
         owner_ca_key = load_pem_private_key(OWNER_CA_KEY_PATH.read_bytes(), password=None)
@@ -184,7 +188,6 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             owner_ca_cert=owner_ca_cert,
             owner_ca_key=owner_ca_key,
         )
-
     def _get_or_create_idevid_truststore(self) -> TruststoreModel:
         """Return an existing IDevID truststore or create one from the generated IDevID CA cert."""
         if TruststoreModel.objects.filter(unique_name=IDEVID_TRUSTSTORE_UNIQUE_NAME).exists():

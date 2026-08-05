@@ -829,17 +829,11 @@ class IDevIDReferenceModel(models.Model):
             return ''
 
     @property
-    def domain_ca_sha256_fingerprint(self) -> str:
-        """Returns the domain pinned-CA SHA256 Fingerprint from the SAN of the DevOwnerID certificate.
-
-        Third dot-separated segment after stripping the ``dev-owner:`` prefix.
-        """
+def domain_ca_sha256_fingerprint(self) -> str:
+        """Return the pinned domain CA SHA256 fingerprint from a ``dev-owner:ca:<sha256_hex>`` reference."""
         if not self.idevid_ref.startswith('dev-owner:ca:'):
             return ''
-        try:
-            return self.idevid_ref.removeprefix('dev-owner:ca:')
-        except IndexError:
-            return ''
+        return self.idevid_ref.removeprefix('dev-owner:ca:')
 
     @property
     def sha256_fingerprint_display(self) -> str:
