@@ -257,6 +257,50 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
         """Initialize the composite authenticator with a set of authentication components."""
         self.components: list[AuthenticationComponent] = []
 
+    def _resolve_request_ip(self, context: BaseRequestContext) -> str | None:
+        """Resolve the client IP address from an HTTP-based request context."""
+        if not isinstance(context, HttpBaseRequestContext) or not context.raw_message:
+            return None
+
+        meta = getattr(context.raw_message, 'META', None)
+        if not isinstance(meta, dict):
+            return None
+
+        # Prefer the original client address when running behind a reverse proxy.
+        forwarded_for = meta.get('HTTP_X_FORWARDED_FOR')
+        if isinstance(forwarded_for, str) and forwarded_for.strip():
+            forwarded_ip = forwarded_for.split(',', 1)[0].strip()
+            if forwarded_ip:
+                return forwarded_ip
+
+        remote_addr = meta.get('REMOTE_ADDR')
+        if isinstance(remote_addr, str):
+            normalized_remote_addr = remote_addr.strip()
+            if normalized_remote_addr:
+                return normalized_remote_addr
+
+        return None
+
+    def _update_device_ip_from_request(self, context: BaseRequestContext) -> None:
+        """Update the authenticated device IP address from the incoming request."""
+        if context.device is None:
+            return
+
+        resolved_ip = self._resolve_request_ip(context)
+        if not resolved_ip or context.device.ip_address == resolved_ip:
+            return
+
+        try:
+            context.device.ip_address = resolved_ip
+            context.device.save(update_fields=['ip_address'])
+            self.logger.info(
+                'Updated authenticated device IP address from request',
+                extra={'device_common_name': context.device.common_name, 'ip_address': resolved_ip},
+            )
+        except Exception:
+            # Authentication already succeeded, ignore failed IP update
+            self.logger.exception('Failed to update authenticated device IP address from request')
+
     def add(self, component: AuthenticationComponent) -> None:
         """Add an authentication component to the composite."""
         self.components.append(component)
@@ -275,6 +319,7 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
             try:
                 component.authenticate(context)
                 if context.device is not None:
+                    self._update_device_ip_from_request(context)
                     self.logger.info('Authentication successful using %s', component.__class__.__name__)
                     return
             except ValueError as e:
