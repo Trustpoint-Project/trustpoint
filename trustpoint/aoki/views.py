@@ -87,6 +87,8 @@ class AokiServiceMixin:
             domain_ca_cert = domain.get_issuing_ca_or_value_error().get_certificate()
         except ValueError:
             return None
+        if not domain_ca_cert:
+            return None
         ca_sha256_fingerprint = domain_ca_cert.fingerprint(hashes.SHA256()).hex()
         owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref=f'dev-owner:ca:{ca_sha256_fingerprint}').first()
         if not owner_cred_ref:
