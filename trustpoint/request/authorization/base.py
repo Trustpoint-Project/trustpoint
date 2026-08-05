@@ -228,7 +228,10 @@ class DevOwnerIDAuthorization(AuthorizationComponent, LoggerMixin):
             self.logger.warning('DevOwnerID authorization failed: Client certificate is missing')
             raise ValueError(error_message)
 
-        owner_credential = AokiServiceMixin.get_owner_credential(client_cert)
+        owner_credential = (
+            AokiServiceMixin.get_owner_credential(client_cert)
+            or AokiServiceMixin.get_domain_based_owner_credential(context.domain)
+        )
         if not owner_credential:
             err_msg = 'No DevOwnerID credential present for this IDevID.'
             context.http_response_content = err_msg
