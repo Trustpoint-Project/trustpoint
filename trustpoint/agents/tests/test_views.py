@@ -115,8 +115,24 @@ def agent(db: Any, device: DeviceModel) -> TrustpointAgent:
         poll_interval_seconds=300,
     )
 
-
-
+@pytest.fixture
+def workflow_definition(db: Any) -> AgentProfileDefinition:
+    """Create a test workflow definition."""
+    profile = {
+        'metadata': {'agent_type': '1-to-1', 'version': '1.0'},
+        'device': {'vendor': 'TestVendor'},
+        'certificate_request': {
+            'certificate_profile': 'domain_credential',
+            'url': 'https://trustpoint.local',
+            'path': '/enroll/',
+        },
+        'steps': [],
+    }
+    return AgentProfileDefinition.objects.create(
+        name='Test Workflow',
+        profile=profile,
+        is_active=True,
+    )
 
 @pytest.fixture
 def assigned_profile(
