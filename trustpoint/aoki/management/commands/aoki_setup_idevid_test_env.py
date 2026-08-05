@@ -117,6 +117,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             OWNER_ID_CERT_PATH,
             OWNER_ID_KEY_PATH,
             OWNER_CA_CERT_PATH,
+            OWNER_CA_KEY_PATH,
         ]
         if not all(f.exists() for f in required_files):
             self.log_and_stdout('Test certificates not found - running aoki_gen_test_certs...')
@@ -188,6 +189,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             owner_ca_cert=owner_ca_cert,
             owner_ca_key=owner_ca_key,
         )
+
     def _get_or_create_idevid_truststore(self) -> TruststoreModel:
         """Return an existing IDevID truststore or create one from the generated IDevID CA cert."""
         if TruststoreModel.objects.filter(unique_name=IDEVID_TRUSTSTORE_UNIQUE_NAME).exists():

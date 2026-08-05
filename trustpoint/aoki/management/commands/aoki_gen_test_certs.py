@@ -44,9 +44,6 @@ class Command(BaseCommand):
         idevid_cert = AokiTestCertGenerator.generate_idevid_pki()
         owner_ca_cert, owner_ca_key = AokiTestCertGenerator.generate_owner_id_ca()
         AokiTestCertGenerator.generate_owner_id_cert(idevid_cert, owner_ca_cert=owner_ca_cert, owner_ca_key=owner_ca_key)
-        # AokiTestCertGenerator.generate_domain_ca_owner_id_cert(
-        #     domain_ca_cert=idevid_cert, owner_ca_cert=owner_ca_cert, owner_ca_key=owner_ca_key
-        # )
         print('Certificates generated successfully.')
 
 
