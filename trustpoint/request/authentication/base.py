@@ -266,18 +266,24 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
         if not isinstance(meta, dict):
             return None
 
+        import ipaddress
+
         # Prefer the original client address when running behind a reverse proxy.
         forwarded_for = meta.get('HTTP_X_FORWARDED_FOR')
         if isinstance(forwarded_for, str) and forwarded_for.strip():
-            forwarded_ip = forwarded_for.split(',', 1)[0].strip()
-            if forwarded_ip:
-                return forwarded_ip
+            candidate = forwarded_for.split(',', 1)[0].strip()
+            try:
+                return str(ipaddress.ip_address(candidate))
+            except ValueError:
+                pass
 
         remote_addr = meta.get('REMOTE_ADDR')
-        if isinstance(remote_addr, str):
-            normalized_remote_addr = remote_addr.strip()
-            if normalized_remote_addr:
-                return normalized_remote_addr
+        if isinstance(remote_addr, str) and remote_addr.strip():
+            candidate = remote_addr.strip()
+            try:
+                return str(ipaddress.ip_address(candidate))
+            except ValueError:
+                return None
 
         return None
 
