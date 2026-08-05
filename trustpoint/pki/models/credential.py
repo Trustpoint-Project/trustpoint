@@ -829,7 +829,7 @@ class IDevIDReferenceModel(models.Model):
             return ''
 
     @property
-def domain_ca_sha256_fingerprint(self) -> str:
+    def domain_ca_sha256_fingerprint(self) -> str:
         """Return the pinned domain CA SHA256 fingerprint from a ``dev-owner:ca:<sha256_hex>`` reference."""
         if not self.idevid_ref.startswith('dev-owner:ca:'):
             return ''
