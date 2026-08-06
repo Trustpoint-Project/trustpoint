@@ -3,7 +3,7 @@
   "name": "Agent Setup",
   "profile": {
     "metadata": {
-      "agent_type": ["1-to-1", "1-to-n"],
+      "agent_type": ["1-to-1"],
       "version": "1.0",
       "description": "Initial onboarding profile for a new agent. Used once to bootstrap the agent's domain credential (LDevID) using a shared secret. After successful setup the agent switches to the Domain Credential Update profile for subsequent renewals via mTLS."
     },

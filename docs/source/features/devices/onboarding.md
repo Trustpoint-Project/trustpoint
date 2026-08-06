@@ -8,14 +8,9 @@ that are used for secure device authentication with Trustpoint.
 
 ## Overview
 
-Trustpoint provides multiple ways to onboard a device.
-Currently, the primary onboarding mechanism is user-driven,
-with zero-touch onboarding being a future enhancement.
-The following sections provide detailed information on each of these methods.
+Trustpoint provides multiple methods for onboarding devices. These methods are grouped into two categories: user-driven onboarding and zero-touch onboarding. User-driven onboarding is currently the primary and most mature approach, while zero-touch onboarding is available as an experimental implementation intended for evaluation and further development.
 
-Onboarding a device to Trustpoint involves issuing a domain credential,
-which allows the device to securely authenticate with Trustpoint.
-There are two categories of onboarding available: user-driven onboarding and zero-touch onboarding.
+During onboarding, Trustpoint issues a domain credential to the device. This credential establishes the device’s identity within the selected domain and enables it to authenticate securely with Trustpoint. The following sections describe the supported onboarding methods, their authentication mechanisms, and their current maturity levels.
 
 ## No Onboarding
 
@@ -42,7 +37,7 @@ This method offers several options, depending on the user's preferences and avai
 
 To initially secure the client's request for a domain credential, various methods can be used depending on the onboarding:
 
-- **IDevID onboarding**: EST (WIP) and CMP both support an initial onboarding with the IDevID on the device.
+- **IDevID onboarding**: EST and CMP both support an initial onboarding with the IDevID on the device.
   To do this, the initial request (for CMP an initialization request [ir]; for EST a `/simpleenroll`) must be signed with the IDevID.
 - **Shared secret**: Onboard a new device using CMP and a shared secret.
 - **Password**: Onboard a new device with EST protocol using a username and password
@@ -57,8 +52,8 @@ Users can also onboard their device manually by executing commands on the device
 - A new device with one of the the following options:
   - CMP **with shared secret onboarding**
   - CMP **with IDevID onboarding**
-  - EST **with username and password onboarding** (WIP)
-  - EST **with IDevID onboarding** (WIP)
+  - EST **with username and password onboarding** 
+  - EST **with IDevID onboarding**
 - In **Devices** click **Manage** on the new device
 - Click **Help - Issue New Credentials**
 - Copy the provided (OpenSSL) commands to your clipboard and execute it on the device
