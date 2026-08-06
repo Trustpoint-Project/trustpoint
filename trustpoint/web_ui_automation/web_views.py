@@ -93,7 +93,6 @@ class AutomationDeviceCreateView(
     def form_valid(self, form: WebUiAutomationDeviceCreateForm) -> HttpResponse:
         """Save and audit a new device configuration."""
         response = super().form_valid(form)
-        # After super().form_valid(), self.object is guaranteed to be set
         if self.object is None:
             msg = 'Object not created after form validation'
             raise ImproperlyConfigured(msg)
