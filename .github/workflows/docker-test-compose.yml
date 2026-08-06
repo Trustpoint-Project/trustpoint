@@ -19,7 +19,7 @@ jobs:
         run: cp .env.example .env
 
       - name: Run Docker compose
-        uses: hoverkraft-tech/compose-action@v3.0.0
+        uses: hoverkraft-tech/compose-action@v3.1.0
         with:
           compose-file: "./docker-compose.yml"
           up-flags: "--build --wait"
