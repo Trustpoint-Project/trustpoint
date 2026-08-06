@@ -1,0 +1,155 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        <h1>{% trans "Renewal Configuration" %}</h1>
+        <p class="mb-0">
+            {% trans "Device" %}: <strong>{{ automation_device.device.common_name }}</strong> |
+            {% trans "Profile" %}: <strong>{{ assignment.workflow_definition.name }}</strong>
+        </p>
+    </div>
+    <div class="card-body">
+        <form method="post" id="renewal-form">
+            {% csrf_token %}
+            
+            <div class="mb-3">
+                <label class="form-label">{% trans "Automatic Renewal" %}</label>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="automatic_renewal_enabled" 
+                           id="automatic_renewal_enabled" {% if assignment.automatic_renewal_enabled %}checked{% endif %}>
+                    <label class="form-check-label" for="automatic_renewal_enabled">
+                        {% trans "Enable automatic renewal" %}
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="renewal_mode" class="form-label">{% trans "Renewal Mode" %}</label>
+                <select class="form-select" id="renewal_mode" name="renewal_mode">
+                    <option value="BEFORE_EXPIRY" {% if assignment.renewal_mode == 'BEFORE_EXPIRY' %}selected{% endif %}>
+                        {% trans "Before Expiry" %}
+                    </option>
+                    <option value="INTERVAL" {% if assignment.renewal_mode == 'INTERVAL' %}selected{% endif %}>
+                        {% trans "Fixed Interval" %}
+                    </option>
+                </select>
+                <div class="form-text">
+                    {% trans "Choose when to automatically renew the certificate" %}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="renewal_days" class="form-label">{% trans "Renewal Days" %}</label>
+                <input type="number" class="form-control" id="renewal_days" name="renewal_days" 
+                       value="{{ assignment.renewal_days }}" min="1">
+                <div class="form-text">
+                    {% trans "For before-expiry mode: renew when this many days remain. For interval mode: renew this many days after last update." %}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="next_certificate_update_scheduled" class="form-label">{% trans "Schedule Override" %}</label>
+                <input type="datetime-local" class="form-control" id="next_certificate_update_scheduled" 
+                       name="next_certificate_update_scheduled" 
+                       value="{% if assignment.next_certificate_update_scheduled %}{{ assignment.next_certificate_update_scheduled|date:'Y-m-d\TH:i' }}{% endif %}">
+                <div class="form-text">
+                    {% trans "Optional: manually schedule a specific renewal time (takes precedence over calculated date)" %}
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="mb-3">
+                <h5>{% trans "Current Certificate Information" %}</h5>
+                {% if assignment.current_certificate %}
+                    <p><strong>{% trans "Subject" %}:</strong> 
+                        {% if assignment.current_certificate.subject_common_name %}
+                            {{ assignment.current_certificate.subject_common_name }}
+                        {% else %}
+                            {% for entry in assignment.current_certificate.subject.all %}
+                                {{ entry.value }}{% if not forloop.last %}, {% endif %}
+                            {% empty %}
+                                {% trans "No subject information" %}
+                            {% endfor %}
+                        {% endif %}
+                    </p>
+                    <p><strong>{% trans "Not Valid After" %}:</strong> {{ assignment.current_certificate.not_valid_after|date:"Y-m-d H:i" }}</p>
+                    <p><strong>{% trans "Next Scheduled Renewal" %}:</strong> {{ assignment.next_certificate_update|date:"Y-m-d H:i"|default:"—" }}</p>
+                {% else %}
+                    <p class="text-muted">{% trans "No certificate issued yet" %}</p>
+                {% endif %}
+            </div>
+
+            <hr>
+
+            <div class="mb-3">
+                <h5>{% trans "Renewal History" %}</h5>
+                {% if renewal_jobs %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Job ID" %}</th>
+                            <th>{% trans "Created" %}</th>
+                            <th>{% trans "Status" %}</th>
+                            <th>{% trans "Result" %}</th>
+                            <th>{% trans "Actions" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in renewal_jobs %}
+                        <tr>
+                            <td>{{ job.pk }}</td>
+                            <td>{{ job.created_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>
+                                <span class="badge bg-{% if job.status == 'COMPLETED' %}success{% elif job.status == 'FAILED' %}danger{% elif job.status == 'RUNNING' %}primary{% elif job.status == 'QUEUED' %}secondary{% else %}warning{% endif %}">
+                                    {{ job.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if job.result == 'SUCCESSFUL' %}success{% elif job.result == 'FAILED' %}danger{% elif job.result == 'PARTIALLY_SUCCESSFUL' %}warning{% else %}secondary{% endif %}">
+                                    {{ job.get_result_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{% url 'web_ui_automation:job-detail' pk=job.pk %}" class="btn btn-sm btn-primary">
+                                    {% trans "Details" %}
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">{% trans "No renewal jobs yet" %}</p>
+                {% endif %}
+            </div>
+
+        </form>
+    </div>
+    <div class="card-footer d-flex">
+        <div class="tp-card-btn-footer m-1">
+            <button type="submit" class="btn btn-primary" form="renewal-form">{% trans "Save Configuration" %}</button>
+        </div>
+        {% if assignment.current_certificate %}
+        <div class="tp-card-btn-footer m-1">
+            <form method="post" action="{% url 'web_ui_automation:operation-run' pk=assignment.pk operation='renew' %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">
+                    {% trans "Trigger Renewal Now" %}
+                </button>
+            </form>
+        </div>
+        {% endif %}
+        <div class="tp-card-btn-footer m-1">
+            <a href="{% url 'web_ui_automation:device-clm' pk=automation_device.pk %}" class="btn btn-secondary">
+                {% trans "Back to CLM" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}

@@ -1,0 +1,115 @@
+{
+  "schema": "trustpoint.web-automation.v1",
+  "name": "Generic Firewall HTTPS Certificate",
+  "version": "1.0.0",
+  "metadata": {
+    "vendor": "Generic",
+    "device_family": "Firewall",
+    "firmware_hint": "Adapt selectors before use",
+    "description": "Example profile for onboarding and renewing a management HTTPS certificate."
+  },
+  "certificate_profile": "firewall-management-tls",
+  "key_generation": "trustpoint",
+  "encoding": "PEM",
+  "paths": {
+    "login": "/login",
+    "certificate_import": "/admin/certificates/import",
+    "certificate_replace": "/admin/certificates/replace",
+    "certificate_inventory": "/admin/certificates"
+  },
+  "operations": {
+    "onboard": {
+      "steps": [
+        {"id": "open-login", "action": "goto", "path_ref": "login"},
+        {
+          "id": "accept-cookies",
+          "action": "click_if_visible",
+          "target": {"role": "button", "names": ["Accept all", "Alle akzeptieren"]}
+        },
+        {
+          "id": "enter-username",
+          "action": "fill",
+          "selector": "input[name='username']",
+          "value": "{{ device_username }}",
+          "sensitive": true
+        },
+        {
+          "id": "enter-password",
+          "action": "fill",
+          "selector": "input[name='password']",
+          "value": "{{ device_password }}",
+          "sensitive": true
+        },
+        {"id": "submit-login", "action": "press", "selector": "input[name='password']", "key": "Enter"},
+        {"id": "open-import", "action": "goto", "path_ref": "certificate_import"},
+        {
+          "id": "upload-certificate",
+          "action": "upload",
+          "selector": "input[name='certificate']",
+          "artifact": "{{ certificate_pem }}"
+        },
+        {
+          "id": "upload-private-key",
+          "action": "upload",
+          "selector": "input[name='private_key']",
+          "artifact": "{{ private_key_pem }}",
+          "sensitive": true
+        },
+        {"id": "activate", "action": "click", "selector": "button[type='submit']"}
+      ],
+      "postconditions": [
+        {
+          "id": "verify-live-certificate",
+          "action": "verify_tls_certificate",
+          "expected_fingerprint": "{{ certificate_sha256_fingerprint }}"
+        }
+      ]
+    },
+    "renew": {
+      "steps": [
+        {"id": "open-login", "action": "goto", "path_ref": "login"},
+        {
+          "id": "enter-username",
+          "action": "fill",
+          "selector": "input[name='username']",
+          "value": "{{ device_username }}",
+          "sensitive": true
+        },
+        {
+          "id": "enter-password",
+          "action": "fill",
+          "selector": "input[name='password']",
+          "value": "{{ device_password }}",
+          "sensitive": true
+        },
+        {"id": "submit-login", "action": "press", "selector": "input[name='password']", "key": "Enter"},
+        {"id": "open-replace", "action": "goto", "path_ref": "certificate_replace"},
+        {
+          "id": "upload-certificate",
+          "action": "upload",
+          "selector": "input[name='certificate']",
+          "artifact": "{{ certificate_pem }}"
+        },
+        {"id": "apply", "action": "click", "selector": "button[data-action='replace']"}
+      ],
+      "postconditions": [
+        {
+          "id": "verify-live-certificate",
+          "action": "verify_tls_certificate",
+          "expected_fingerprint": "{{ certificate_sha256_fingerprint }}"
+        }
+      ]
+    },
+    "inventory": {
+      "steps": [
+        {"id": "open-inventory", "action": "goto", "path_ref": "certificate_inventory"},
+        {
+          "id": "read-fingerprint",
+          "action": "extract_text",
+          "selector": "[data-field='fingerprint']",
+          "output": "installed_fingerprint"
+        }
+      ]
+    }
+  }
+}

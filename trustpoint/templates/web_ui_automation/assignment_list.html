@@ -1,0 +1,46 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header"><h1>{% blocktrans with name=automation_device.device.common_name %}Assigned Profiles — {{ name }}{% endblocktrans %}</h1></div>
+    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
+        <table class="table">
+            <thead><tr>
+                <th>{% trans "Profile" %}</th><th>{% trans "Onboarding" %}</th>
+                <th>{% trans "Enabled" %}</th><th>{% trans "Automatic Renewal" %}</th>
+                <th>{% trans "Next Update" %}</th><th>{% trans "Actions" %}</th>
+            </tr></thead>
+            <tbody>
+            {% for assignment in page_obj %}
+                <tr>
+                    <td>{{ assignment.workflow_definition.name }}</td>
+                    <td>{{ assignment.get_onboarding_status_display }}</td>
+                    <td>{{ assignment.enabled|yesno:"Yes,No" }}</td>
+                    <td>{{ assignment.automatic_renewal_enabled|yesno:"Yes,No" }}</td>
+                    <td>{{ assignment.next_certificate_update|default:"—" }}</td>
+                    <td class="d-flex flex-wrap gap-1">
+                        <a class="btn btn-sm btn-secondary" href="{% url 'web_ui_automation:assignment-edit' device_id=automation_device.pk pk=assignment.pk %}">{% trans "Edit" %}</a>
+                        <form method="post" action="{% url 'web_ui_automation:operation-run' pk=assignment.pk operation='onboard' %}">{% csrf_token %}<button class="btn btn-sm btn-primary" type="submit">{% trans "Onboard" %}</button></form>
+                        <form method="post" action="{% url 'web_ui_automation:operation-run' pk=assignment.pk operation='renew' %}">{% csrf_token %}<button class="btn btn-sm btn-primary" type="submit">{% trans "Renew Now" %}</button></form>
+                        <form method="post" action="{% url 'web_ui_automation:operation-run' pk=assignment.pk operation='inventory' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary" type="submit">{% trans "Inventory" %}</button></form>
+                        {% if assignment.automatic_renewal_enabled %}
+                        <form method="post" action="{% url 'web_ui_automation:renewal-disable' pk=assignment.pk %}">{% csrf_token %}<button class="btn btn-sm btn-warning" type="submit">{% trans "Disable Renewal" %}</button></form>
+                        {% else %}
+                        <form method="post" action="{% url 'web_ui_automation:renewal-enable' pk=assignment.pk %}">{% csrf_token %}<button class="btn btn-sm btn-success" type="submit">{% trans "Enable Renewal" %}</button></form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="6" class="middle">{% trans "No profiles assigned." %}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% include "trustpoint/pagination.html" %}
+    </div>
+    <div class="card-footer d-flex justify-content-between">
+        <a class="btn btn-secondary" href="{% url 'web_ui_automation:devices' %}">{% trans "Back" %}</a>
+        <a class="btn btn-primary" href="{% url 'web_ui_automation:assignment-create' device_id=automation_device.pk %}">{% trans "Assign Profile" %}</a>
+    </div>
+</div>
+{% endblock content %}
