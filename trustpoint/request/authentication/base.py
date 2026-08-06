@@ -3,6 +3,7 @@
 
 """Provides base authentication class using the Composite pattern for modular authentication."""
 
+import ipaddress
 from abc import ABC, abstractmethod
 from typing import Never
 
@@ -265,8 +266,6 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
         meta = getattr(context.raw_message, 'META', None)
         if not isinstance(meta, dict):
             return None
-
-        import ipaddress
 
         # Prefer the original client address when running behind a reverse proxy.
         forwarded_for = meta.get('HTTP_X_FORWARDED_FOR')
