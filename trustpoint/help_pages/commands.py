@@ -123,10 +123,7 @@ class CmpSharedSecretCommandBuilder:
 
         Args:
             host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
-            pk: The primary key of the device in question used as Key Identifier (KID).
-            shared_secret: The shared secret.
             cred_number: The credential number - counter of issued credentials.
-            sample_request: The sample certificate request in JSON format.
 
         Returns:
             The constructed command.
@@ -139,7 +136,7 @@ class CmpSharedSecretCommandBuilder:
             f'-key key-{cred_number}.pem \\\n'
             f'-oldcert certificate-{cred_number}.pem \\\n'
             f'-revreason 0 \\\n'
-            f'-trusted domain-credential-full-chain-{cred_number}.pem \\\n'
+            f'-trusted full-chain-{cred_number}.pem \\\n'
         )
 
     @staticmethod

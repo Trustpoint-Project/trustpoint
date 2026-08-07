@@ -18,7 +18,7 @@ from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirec
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
-from django.utils.safestring import SafeString
+from django.utils.safestring import SafeString, mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import TemplateView, View
@@ -49,6 +49,7 @@ from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from pki.models import IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
+from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from trustpoint.page_context import (
@@ -271,6 +272,37 @@ class CmpRevocationStrategy(HelpPageStrategy):
         operation = 'revocation'
         base = help_context.host_cmp_path
 
+        app_credentials = IssuedCredentialModel.objects.filter(
+            device=device,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
+        ).select_related('credential__certificate', 'domain')
+
+        credential_rows = []
+        for app_cred in app_credentials:
+            cert = app_cred.credential.certificate_or_error
+            cert_url = reverse('pki:certificate-detail', kwargs={'pk': cert.pk})
+            credential_link = format_html(
+                '<a href="{}" target="_blank">{}</a>',
+                cert_url,
+                app_cred.common_name
+            )
+            credential_rows.append(
+                HelpRow(
+                    _non_lazy(f'Credential #{app_cred.id}'),
+                    credential_link,
+                    ValueRenderType.HTML,
+                )
+            )
+
+        if not credential_rows:
+            credential_rows.append(
+                HelpRow(
+                    _non_lazy('No Credentials'),
+                    _non_lazy('No application credentials found for this device'),
+                    ValueRenderType.PLAIN,
+                )
+            )
+
         summary = HelpSection(
             _non_lazy('Summary'),
             [
@@ -279,46 +311,66 @@ class CmpRevocationStrategy(HelpPageStrategy):
                     f'{base}/{operation}',
                     ValueRenderType.CODE,
                 ),
-                HelpRow(_non_lazy('Key Identifier (KID)'), str(device.pk), ValueRenderType.CODE),
+                *credential_rows,
             ],
         )
 
         cred = help_context.cred_count
 
-        def _build_section(title: str, profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
-            return HelpSection(
-                title,
-                [
-                    HelpRow(_non_lazy('OpenSSL Command'), cmd, ValueRenderType.CODE),
-                ],
-                css_id=profile_name,
-                hidden=hidden,
-            )
+        reason_options_html = (
+            '<select id="revreason-select" class="form-select mb-3" '
+            'onchange="updateRevocationCommand()">\n'
+        )
+        for reason_code in RevokedCertificateModel.ReasonCode:
+            reason_options_html += f'  <option value="{reason_code.name.lower()}">{reason_code.label}</option>\n'
+        reason_options_html += '</select>\n'
+        reason_options_html += (
+            '<p class="text-muted">Select the revocation reason and the OpenSSL command below '
+            'will update automatically.</p>'
+        )
 
-        sections = [summary]
+        revocation_reason_section = HelpSection(
+            _non_lazy('Revocation Reason'),
+            [
+                HelpRow(
+                    _non_lazy('Select Reason'),
+                    mark_safe(reason_options_html),  # noqa: S308
+                    ValueRenderType.HTML,
+                ),
+            ],
+        )
+
+        sections = [summary, revocation_reason_section]
 
         try:
-            cmd = CmpSharedSecretCommandBuilder.get_app_cert_self_revoke_command(
+            base_cmd = CmpSharedSecretCommandBuilder.get_app_cert_self_revoke_command(
                 host=f'{base}/{operation}',
                 cred_number=cred,
             )
         except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
             err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
             err_sect = HelpSection(
-                _non_lazy('Revocation Request for an application cCertificate'),
+                _non_lazy('Revocation Request for an application Certificate'),
                 [
                     HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
                 ],
                 css_id='error',
             )
             sections.append(err_sect)
+            return sections, _non_lazy('Help - Revoke CMP Application Credential Certificate')
 
-        sect = _build_section(
-            _non_lazy('Revocation Request for an application Certificate'),
-            'rr',
-            cmd,
-        )
-        sections.append(sect)
+        for idx, reason_code in enumerate(RevokedCertificateModel.ReasonCode):
+            cmd_with_reason = base_cmd.replace('-revreason 0', f'-revreason {reason_code.value}')
+
+            sect = HelpSection(
+                _non_lazy('Revocation Request for an application Certificate'),
+                [
+                    HelpRow(_non_lazy('OpenSSL Command'), cmd_with_reason, ValueRenderType.CODE),
+                ],
+                css_id=f'rr-{reason_code.name.lower()}',
+                hidden=(idx != 0),  # Hide all except the first one initially
+            )
+            sections.append(sect)
 
         return sections, _non_lazy('Help - Revoke CMP Application Credential Certificate')
 

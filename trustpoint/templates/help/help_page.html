@@ -6,6 +6,24 @@
 
 {% block head %}
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
+    <script>
+        function updateRevocationCommand() {
+            const selectedReason = document.getElementById('revreason-select');
+            if (!selectedReason) return;
+
+            const reasonValue = selectedReason.value;
+
+            const allSections = document.querySelectorAll('[id^="rr-"]');
+            allSections.forEach(section => {
+                section.hidden = true;
+            });
+
+            const targetSection = document.getElementById('rr-' + reasonValue);
+            if (targetSection) {
+                targetSection.hidden = false;
+            }
+        }
+    </script>
 {% endblock head %}
 
 {% block content %}
