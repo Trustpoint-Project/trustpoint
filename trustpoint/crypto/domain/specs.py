@@ -60,6 +60,14 @@ class SignRequest:
         )
 
     @classmethod
+    def ecdsa_sha256(cls) -> SignRequest:
+        """Build a common ECDSA with SHA-256 request."""
+        return cls(
+            signature_algorithm=SignatureAlgorithm.ECDSA,
+            hash_algorithm=HashAlgorithmName.SHA256,
+        )
+
+    @classmethod
     def mldsa_pure(cls) -> SignRequest:
         """Build a pure ML-DSA request (no hash algorithm needed)."""
         return cls(
