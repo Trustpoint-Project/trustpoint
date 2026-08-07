@@ -5,12 +5,7 @@
 # ============================================================
 
 PROFILE="mldsa65"
-ROOT_CN="Trustpoint Demo IDevID Hierarchy - Root CA"
 ISSUING_CN="Trustpoint Demo IDevID Hierarchy - Issuing CA"
-
-# Issuing CA validity
-ISSUING_NOT_BEFORE="20250216170500Z"  # Feb 16 17:05:00 2025 GMT
-ISSUING_NOT_AFTER="20280217170500Z"   # Feb 17 17:05:00 2028 GMT
 
 # End-entity cert validity
 EE_DAYS=825
