@@ -136,7 +136,7 @@ class CmpSharedSecretCommandBuilder:
             f'-key key-{cred_number}.pem \\\n'
             f'-oldcert certificate-{cred_number}.pem \\\n'
             f'-revreason 0 \\\n'
-            f'-trusted full-chain-{cred_number}.pem \\\n'
+            f'-trusted full-chain-{cred_number}.pem'
         )
 
     @staticmethod
