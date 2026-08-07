@@ -1,4 +1,4 @@
-# Copyright (c) 2024 The Trustpoint Project Authors
+# Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 """Partial ASN.1 updates from RFC 9480 (CMP Updates) applied on top of RFC 4210.
 
