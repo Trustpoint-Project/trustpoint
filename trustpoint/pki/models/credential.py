@@ -482,8 +482,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
         if self.managed_private_key:
             try:
+                from pki.util.x509 import _unwrap_mldsa_managed_key  # noqa: PLC0415
                 managed_key = managed_private_key_for_ref(self.managed_private_key.to_managed_key_ref())
-                return PrivateKeySerializer(managed_key)
+                actual_key = _unwrap_mldsa_managed_key(managed_key)
+                return PrivateKeySerializer(actual_key)  # type: ignore[arg-type]
             except Exception as e:
                 err_msg = f'Failed to get managed private key: {e}'
                 raise RuntimeError(err_msg) from e

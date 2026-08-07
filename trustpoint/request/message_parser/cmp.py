@@ -28,6 +28,7 @@ from trustpoint.logger import LoggerMixin
 from workflows2.events.request_events import Events
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
+from .rfc9480 import build_pki_message_spec
 
 
 class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
@@ -51,7 +52,7 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
 
         try:
             body_size = len(context.raw_message.body)
-            serialized_message, _ = ber_decoder.decode(context.raw_message.body, asn1Spec=rfc4210.PKIMessage())
+            serialized_message, _ = ber_decoder.decode(context.raw_message.body, asn1Spec=build_pki_message_spec())
             context.parsed_message = serialized_message
 
             self._extract_signer_certificate(context)
@@ -150,7 +151,8 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
 
     def _check_header(self, serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
         """Checks some parts of the header."""
-        if serialized_pyasn1_message['header']['pvno'] != self.cmp_message_version:
+        # cmp2000 (2) or cmp2021 (3, RFC 9480; required when e.g. certConf carries hashAlg)
+        if serialized_pyasn1_message['header']['pvno'] not in (self.cmp_message_version, 3):
             err_msg = 'pvno fail'
             raise ValueError(err_msg)
 
