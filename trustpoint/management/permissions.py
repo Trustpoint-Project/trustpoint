@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Custom DRF permission classes for the management API."""
 
 from rest_framework.permissions import BasePermission
