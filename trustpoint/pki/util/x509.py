@@ -20,6 +20,7 @@ try:
 except ImportError:
     mldsa = None  # type: ignore[assignment]
 
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509 import load_pem_x509_certificate
 from cryptography.x509.oid import NameOID
@@ -28,7 +29,7 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import NamedCurve
 
 from crypto.application.private_keys import ManagedECPrivateKey, ManagedMLDSAPrivateKey, ManagedRSAPrivateKey
-from crypto.models import CryptoManagedKeyModel
+from crypto.models import CryptoManagedKeyModel, CryptoProviderSoftwareConfigModel
 from management.models import SecurityConfig
 from pki.models import CaModel, CredentialModel
 from pki.util.keys import CryptographyUtils
@@ -52,22 +53,19 @@ def _unwrap_mldsa_managed_key(private_key: object) -> object:
     Returns:
         The actual cryptography private key if it's a managed key, otherwise the input unchanged.
     """
-    import logging
     logger = logging.getLogger(__name__)
 
-    logger.debug(f'_unwrap_mldsa_managed_key: input type = {type(private_key).__name__}')
+    logger.debug('_unwrap_mldsa_managed_key: input type = %s', type(private_key).__name__)
     if not isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey, ManagedMLDSAPrivateKey)):
         logger.debug('_unwrap_mldsa_managed_key: not a managed key, returning unchanged')
         return private_key
 
     logger.debug('_unwrap_mldsa_managed_key: is managed key, unwrapping...')
 
-    from crypto.models import CryptoManagedKeyModel, CryptoProviderSoftwareConfigModel
-
     try:
         managed_key_model = CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
         backend_kind = managed_key_model.provider_profile.backend_kind
-        logger.debug(f'_unwrap_mldsa_managed_key: backend_kind = {backend_kind}')
+        logger.debug('_unwrap_mldsa_managed_key: backend_kind = %s', backend_kind)
     except CryptoManagedKeyModel.DoesNotExist as exc:
         msg = f'Managed key {private_key.managed_key_ref.alias!r} not found in database.'
         raise ValueError(msg) from exc
@@ -75,8 +73,6 @@ def _unwrap_mldsa_managed_key(private_key: object) -> object:
     if backend_kind != 'software':
         msg = f'Only software-backed managed keys can be used for certificate signing, got {backend_kind!r}.'
         raise NotImplementedError(msg)
-
-    from cryptography.hazmat.primitives import serialization
 
     software_config = CryptoProviderSoftwareConfigModel.objects.get(
         profile=managed_key_model.provider_profile
@@ -93,7 +89,7 @@ def _unwrap_mldsa_managed_key(private_key: object) -> object:
         password=profile.require_encryption_material(),
     )
 
-    logger.debug(f'_unwrap_mldsa_managed_key: unwrapped to type = {type(actual_key).__name__}')
+    logger.debug('_unwrap_mldsa_managed_key: unwrapped to type = %s', type(actual_key).__name__)
     return actual_key
 
 
