@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """ASGI config for trustpoint project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.

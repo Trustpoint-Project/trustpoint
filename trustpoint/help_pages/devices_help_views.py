@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains all views concerning the help pages used within the devices app."""
 
 from __future__ import annotations
@@ -2036,6 +2039,8 @@ _AOKI_DEMO_CERT_FILES: list[tuple[str, str]] = [
     ('owner_id.pem', 'DevOwnerID Certificate'),
     ('owner_id_pk.pem', 'DevOwnerID Private Key'),
     ('ownerid_ca.pem', 'Owner CA Certificate'),
+    ('domain_ca_owner_id.pem', 'DevOwnerID (domain-based) Certificate'),
+    ('domain_ca_owner_id_pk.pem', 'DevOwnerID (domain-based) Private Key'),
 ]
 
 _AOKI_DEMO_CERTS_DIR: Path = (

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Additional tests for CLM POST operations and credential management."""
 
 from typing import Any

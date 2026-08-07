@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains the CMP endpoints (views)."""
 
 from __future__ import annotations

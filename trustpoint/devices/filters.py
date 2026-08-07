@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Devices filters.
 
 Defines the `DeviceFilter` used to filter the devices list view.

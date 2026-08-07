@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Module that contains the CertificateModel."""
 
 from __future__ import annotations
@@ -487,7 +490,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         return not self.is_ca
 
     @classmethod
-    def get_cert_by_sha256_fingerprint(cls, sha256_fingerprint: str) -> None | CertificateModel:
+    def get_cert_by_sha256_fingerprint(cls, sha256_fingerprint: str) -> CertificateModel | None:
         """Get a CertificateModel instance by its SHA256 fingerprint."""
         sha256_fingerprint = sha256_fingerprint.upper()
         return cls.objects.filter(sha256_fingerprint=sha256_fingerprint).first()

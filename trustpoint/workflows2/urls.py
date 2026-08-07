@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """URL routes for the Workflow 2 app."""
 
 from django.urls import path

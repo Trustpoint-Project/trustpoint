@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Utilities for Certificate Revocation List (CRL) generation and management."""
 
 from __future__ import annotations

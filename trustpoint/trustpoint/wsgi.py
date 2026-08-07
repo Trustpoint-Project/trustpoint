@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """WSGI config for trustpoint project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.

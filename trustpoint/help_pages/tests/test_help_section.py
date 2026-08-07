@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Test cases for help_pages help_section module."""
 
 from django.test import SimpleTestCase

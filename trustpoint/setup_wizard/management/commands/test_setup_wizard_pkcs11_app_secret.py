@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Test staged setup-wizard PKCS#11 support for app-secret protection."""
 
 from __future__ import annotations

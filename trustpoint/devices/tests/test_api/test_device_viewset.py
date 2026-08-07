@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for DeviceViewSet API endpoints.
 
 DeviceViewSet is a standard ModelViewSet registered at /api/devices/.

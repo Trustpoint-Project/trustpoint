@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """URL configuration for the devices' application."""
 
 from django.urls import path, re_path
@@ -20,16 +23,6 @@ urlpatterns = [
     path('opc-ua-gds/', views.OpcUaGdsTableView.as_view(), name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'),
     path('agents/', views.AgentTableView.as_view(), name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}'),
     # Agent Create Views
-    path(
-        'agents/create/',
-        views.AgentCreateChooseTypeView.as_view(),
-        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create',
-    ),
-    path(
-        'agents/create/1-to-n/',
-        views.AgentCreateOneToNOnboardingView.as_view(),
-        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_n',
-    ),
     path(
         'agents/create/1-to-1/',
         views.AgentCreateOneToOneOnboardingView.as_view(),

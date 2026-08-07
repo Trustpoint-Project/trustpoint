@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Module for issuing and managing TLS and OPC UA credentials."""
 
 from __future__ import annotations
@@ -312,9 +315,9 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
     _device: DeviceModel
     _domain: DomainModel
 
-    _credential: None | CredentialSerializer = None
-    _credential_model: None | CredentialModel = None
-    _issued_application_credential_model: None | IssuedCredentialModel = None
+    _credential: CredentialSerializer | None = None
+    _credential_model: CredentialModel | None = None
+    _issued_application_credential_model: IssuedCredentialModel | None = None
 
     def __init__(self, device: DeviceModel, domain: DomainModel) -> None:
         """Initializes the TLS Credential Issuer.

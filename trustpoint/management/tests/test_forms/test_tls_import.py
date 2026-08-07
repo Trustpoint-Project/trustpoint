@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Test suite for TLS import forms."""
 import datetime
 from unittest.mock import Mock, patch

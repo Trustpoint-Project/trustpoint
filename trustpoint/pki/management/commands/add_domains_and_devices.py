@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Adds Issuing CAs, Domains and Devices with different onboarding protocols."""
 
 # ruff: noqa: T201  # print is fine in management commands

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Business logic for truststore operations."""
 
 from django.core.exceptions import ValidationError

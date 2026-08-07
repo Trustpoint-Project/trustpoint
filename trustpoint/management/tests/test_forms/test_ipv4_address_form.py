@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Test suite for IPv4AddressForm."""
 from django.test import TestCase
 

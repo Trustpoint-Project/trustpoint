@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Django management command to create RA (Registration Authority) setup for testing.
 
 This command creates a complete RA testing environment with:

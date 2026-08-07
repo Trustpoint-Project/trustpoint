@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Serializers for DevIdRegistration-related API endpoints.
 
 Defines classes that handle validation and transformation

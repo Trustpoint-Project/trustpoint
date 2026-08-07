@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """CSV export utilities for Django list views."""
 
 from __future__ import annotations

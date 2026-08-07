@@ -1,6 +1,11 @@
-# Sphinx configuration file for the Trustpoint documentation.  # noqa: D100, INP001
-# For full details, see:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
+"""Sphinx configuration file for the Trustpoint documentation.
+
+For full details, see:
+https://www.sphinx-doc.org/en/master/usage/configuration.html
+"""
 
 import os
 import sys

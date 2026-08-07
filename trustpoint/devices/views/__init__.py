@@ -1,8 +1,9 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for the devices application."""
 
 from .agents import (
-    AgentCreateChooseTypeView,
-    AgentCreateOneToNOnboardingView,
     AgentCreateOneToOneOnboardingView,
     AgentTableView,
 )
@@ -83,8 +84,6 @@ from .tables import (
 )
 
 __all__ = [
-    'AgentCreateChooseTypeView',
-    'AgentCreateOneToNOnboardingView',
     'AgentCreateOneToOneOnboardingView',
     'AgentTableView',
     'AgentsBulkDeleteView',

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Static metadata that describes supported Workflow 2 step types."""
 
 from __future__ import annotations

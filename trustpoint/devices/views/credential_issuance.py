@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for device credential issuance workflows."""
 
 import abc
@@ -76,11 +79,8 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
     page_name: str
 
     def get_object(self, queryset: QuerySet[DeviceModel] | None = None) -> DeviceModel:
-        """Return the device, raising Http404 for 1-to-n agents (no app-cred issuance allowed)."""
-        device = super().get_object(queryset)
-        if device.device_type == DeviceModel.DeviceType.AGENT_ONE_TO_N:
-            raise Http404
-        return device
+        """Return the device."""
+        return super().get_object(queryset)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the sections to the context.

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 # TODO(Air): Remove when reworking pkcs11.  # noqa: FIX002
 # mypy: ignore-errors
 """PKCS#11 Utility Functions."""

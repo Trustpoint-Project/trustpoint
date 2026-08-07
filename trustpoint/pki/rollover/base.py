@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Abstract base class for CA rollover strategies."""
 
 from __future__ import annotations

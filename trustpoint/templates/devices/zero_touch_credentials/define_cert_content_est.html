@@ -59,8 +59,9 @@
                                             {% blocktrans %}
                                             One URI per line. The Zero-Touch Credential profile requires at least one URI
                                             referencing an IDevID in the format:<br>
-                                            <code>dev-owner:&lt;IDevID_Subject_SN&gt;.&lt;IDevID_X509_SN&gt;.&lt;IDevID_SHA256_Fingerprint&gt;</code><br>
-                                            Example: <code>dev-owner:SN-12345678.0123456789ABCDEF.AA:BB:CC:DD:EE:FF</code>
+                                            <code>dev-owner:cert:&lt;IDevID_Subject_SN&gt;_&lt;IDevID_SHA256_Fingerprint&gt;</code> or<br>
+                                            <code>dev-owner:uri:urn:uuid:&lt;Device UUID&gt;</code><br>
+                                            Example: <code>dev-owner:cert:SN-12345678_8a58abcdef123456789...</code>
                                             {% endblocktrans %}
                                         </small>
                                         {% endif %}

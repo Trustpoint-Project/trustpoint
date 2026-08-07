@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Contains some global views that are not specific to a single app.
 
 This module contains some general redirect and error views (e.g. 404) as well as specific mixins and view classes

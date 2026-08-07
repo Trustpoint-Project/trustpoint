@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Utility methods for private key generation and hash algorithm retrieval."""
 
 from __future__ import annotations

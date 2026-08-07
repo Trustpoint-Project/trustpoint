@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
 

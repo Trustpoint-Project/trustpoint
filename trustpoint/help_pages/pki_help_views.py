@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains all views concerning the help pages used within the pki app."""
 
 from __future__ import annotations

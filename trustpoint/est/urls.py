@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """URL configuration for the 'est' app."""
 from django.urls import path, re_path
 

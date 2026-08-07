@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Contains views that handle HTTP requests and return appropriate responses for the application."""
 
 from __future__ import annotations

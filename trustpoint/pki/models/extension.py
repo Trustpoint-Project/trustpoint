@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Module that contains X.509 Extension Models."""
 
 from __future__ import annotations
@@ -280,7 +283,7 @@ class BasicConstraintsExtension(CertificateExtension, models.Model):
     @classmethod
     def save_from_crypto_extensions(
         cls, crypto_basic_constraints_extension: x509.Extension[T]
-    ) -> None | BasicConstraintsExtension:
+    ) -> BasicConstraintsExtension | None:
         """Stores the BasicConstraintsExtension in the database.
 
         Args:
@@ -351,7 +354,7 @@ class KeyUsageExtension(CertificateExtension, models.Model):
     @classmethod
     def save_from_crypto_extensions(
         cls, crypto_basic_constraints_extension: x509.Extension[T]
-    ) -> None | KeyUsageExtension:
+    ) -> KeyUsageExtension | None:
         """Stores the KeyUsage extension in the database.
 
         Args:
@@ -557,7 +560,7 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
 
     def save_general_names(
         self, general_names: x509.Extension[x509.ExtensionType] | list[x509.GeneralName]
-    ) -> None | GeneralNamesModel:
+    ) -> GeneralNamesModel | None:
         """Stores general names in the database.
 
         Args:
@@ -620,7 +623,7 @@ class IssuerAlternativeNameExtension(CertificateExtension, CustomDeleteActionMod
         GeneralNamesModel.delete_if_orphaned(self.issuer_alt_name)
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | IssuerAlternativeNameExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> IssuerAlternativeNameExtension | None:
         """Stores the IssuerAlternativeNameExtension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -673,7 +676,7 @@ class SubjectAlternativeNameExtension(CertificateExtension, CustomDeleteActionMo
         GeneralNamesModel.delete_if_orphaned(self.subject_alt_name)
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | SubjectAlternativeNameExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> SubjectAlternativeNameExtension | None:
         """Stores the SubjectAlternativeName extension in the database.
 
         Args:
@@ -731,7 +734,7 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, CustomDeleteActionMo
         GeneralNamesModel.delete_if_orphaned(self.authority_cert_issuer)
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | AuthorityKeyIdentifierExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> AuthorityKeyIdentifierExtension | None:
         """Stores the AuthorityKeyIdentifier extension in the database.
 
         Args:
@@ -786,7 +789,7 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.SUBJECT_KEY_IDENTIFIER.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | SubjectKeyIdentifierExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> SubjectKeyIdentifierExtension | None:
         """Stores the SubjectKeyIdentifierExtension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -949,7 +952,7 @@ class CertificatePoliciesExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.CERTIFICATE_POLICIES.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | CertificatePoliciesExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> CertificatePoliciesExtension | None:
         """Stores the CertificatePoliciesExtension in the database.
 
         Args:
@@ -1046,7 +1049,7 @@ class ExtendedKeyUsageExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.EXTENDED_KEY_USAGE.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | ExtendedKeyUsageExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> ExtendedKeyUsageExtension | None:
         """Stores the ExtendedKeyUsage extension in the database.
 
         Args:
@@ -1247,7 +1250,7 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.NAME_CONSTRAINTS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | NameConstraintsExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> NameConstraintsExtension | None:
         """Stores the NameConstraints extension in the database.
 
         Args:
@@ -1659,7 +1662,7 @@ class PolicyMappingsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.POLICY_MAPPINGS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | PolicyMappingsExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> PolicyMappingsExtension | None:
         """Stores the PolicyMappingsExtension in the database.
 
         Args:
@@ -1723,7 +1726,7 @@ class PolicyConstraintsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.POLICY_CONSTRAINTS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | PolicyConstraintsExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> PolicyConstraintsExtension | None:
         """Stores the PolicyMappingsExtension in the database.
 
         Args:
@@ -1780,7 +1783,7 @@ class SubjectDirectoryAttributesExtension(CertificateExtension, models.Model):
     def save_from_crypto_extensions(
         cls,
         extension: x509.Extension[T],
-    ) -> None | SubjectDirectoryAttributesExtension:
+    ) -> SubjectDirectoryAttributesExtension | None:
         """Stores the SubjectDirectoryAttributesExtension in the database.
 
         Args:

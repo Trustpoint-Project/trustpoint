@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """CSR operation processor classes."""
 from abc import abstractmethod
 from typing import get_args

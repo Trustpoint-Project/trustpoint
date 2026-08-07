@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for the Role Management section of the management app.
 
 Provides CRUD operations for Django ``Group`` instances (used as roles)
