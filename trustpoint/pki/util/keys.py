@@ -7,6 +7,17 @@ from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
+try:
+    from crypto.application.private_keys import ManagedMLDSAPrivateKey
+except ImportError:
+    ManagedMLDSAPrivateKey = None  # type: ignore[assignment, misc]
+
 from django.db import models
 from trustpoint_core.crypto_types import PublicKey
 from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
@@ -118,15 +129,25 @@ class CryptographyUtils:
     """Utilities methods for cryptography corresponding to Trustpoint models."""
 
     @staticmethod
-    def get_hash_algorithm_for_private_key(private_key: PrivateKey) -> hashes.HashAlgorithm:
+    def get_hash_algorithm_for_private_key(private_key: PrivateKey) -> hashes.HashAlgorithm | None:
         """Gets a suitable hash algorithm for a given private key.
 
         Args:
             private_key: The private key to consider.
 
         Returns:
-            The hash algorithm to use.
+            The hash algorithm to use, or None for ML-DSA keys.
         """
+        # Check for ML-DSA keys first
+        if ManagedMLDSAPrivateKey and isinstance(private_key, ManagedMLDSAPrivateKey):
+            return None
+        if mldsa and isinstance(private_key, (
+            mldsa.MLDSA44PrivateKey,
+            mldsa.MLDSA65PrivateKey,
+            mldsa.MLDSA87PrivateKey,
+        )):
+            return None
+
         if isinstance(private_key, rsa.RSAPrivateKey):
             return hashes.SHA256()
         if isinstance(private_key, ec.EllipticCurvePrivateKey):

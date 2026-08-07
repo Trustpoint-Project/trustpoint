@@ -24,6 +24,7 @@ class Command(BaseCommand):
             'rsa2/rsa2_chain.pem': 'RSA-2048',
             'rsa3/rsa3_chain.pem': 'RSA-3072',
             'rsa4/rsa4_chain.pem': 'RSA-4096',
+            'mldsa65/mldsa65_chain.pem': 'ML-DSA-65',
         }
     )
 

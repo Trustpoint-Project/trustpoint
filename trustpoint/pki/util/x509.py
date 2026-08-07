@@ -11,6 +11,12 @@ from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509 import load_pem_x509_certificate
 from cryptography.x509.oid import NameOID
@@ -286,13 +292,15 @@ class CertificateGenerator:
         for ext, critical in extensions or []:
             builder = builder.add_extension(ext, critical=critical)
 
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(issuer_private_key)
-        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+        actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
+        hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(actual_issuer_key)
+        # For ML-DSA keys, hash_algorithm will be None, which is correct
+        if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
             err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
             raise TypeError(err_msg)
 
         certificate = builder.sign(
-            private_key=issuer_private_key,
+            private_key=actual_issuer_key,
             algorithm=hash_algorithm,
         )
         return certificate, private_key
@@ -704,12 +712,19 @@ class CertificateVerifier:
             ValueError: If the signature verification fails or the hash algorithm is missing.
             TypeError: If the issuer public key type is unsupported.
         """
+        issuer_public_key = issuer_cert.public_key()
+
+        is_mldsa = mldsa and isinstance(issuer_public_key, (
+            mldsa.MLDSA44PublicKey,
+            mldsa.MLDSA65PublicKey,
+            mldsa.MLDSA87PublicKey,
+        ))
+
         hash_algorithm = cert.signature_hash_algorithm
-        if hash_algorithm is None:
+        if hash_algorithm is None and not is_mldsa:
             err_msg = 'Certificate signature algorithm is not supported or is missing'
             raise ValueError(err_msg)
 
-        issuer_public_key = issuer_cert.public_key()
         if isinstance(issuer_public_key, rsa.RSAPublicKey):
             try:
                 issuer_public_key.verify(
@@ -727,6 +742,15 @@ class CertificateVerifier:
                     cert.signature,
                     cert.tbs_certificate_bytes,
                     ec.ECDSA(hash_algorithm),
+                )
+            except Exception as e:
+                err_msg = f'Certificate signature verification failed: {e}'
+                raise ValueError(err_msg) from e
+        elif is_mldsa:
+            try:
+                issuer_public_key.verify(
+                    signature=cert.signature,
+                    data=cert.tbs_certificate_bytes,
                 )
             except Exception as e:
                 err_msg = f'Certificate signature verification failed: {e}'

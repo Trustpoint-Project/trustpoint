@@ -23,11 +23,12 @@ from cryptography.x509.oid import NameOID
 from crypto.application.capabilities import normalize_curve_name
 from crypto.application.private_keys import (
     ManagedECPrivateKey,
+    ManagedMLDSAPrivateKey,
     ManagedRSAPrivateKey,
     generate_managed_signing_private_key,
 )
 from crypto.domain.algorithms import EllipticCurveName
-from crypto.domain.specs import EcKeySpec, RsaKeySpec
+from crypto.domain.specs import EcKeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from pki.models import CertificateModel
 from pki.util.x509 import CertificateGenerator
 
@@ -73,6 +74,23 @@ class CertificateCreationCommandMixin(CertificateGenerator):
         )
         if not isinstance(private_key, ManagedECPrivateKey):
             msg = f'Backend returned a non-EC key for EC alias {alias!r}.'
+            raise TypeError(msg)
+        return private_key
+
+    @classmethod
+    def create_backend_mldsa_private_key(
+        cls,
+        *,
+        alias: str,
+        variant: MlDsaVariant,
+    ) -> ManagedMLDSAPrivateKey:
+        """Generate an ML-DSA signing key through the configured crypto backend."""
+        private_key = generate_managed_signing_private_key(
+            alias=cls._managed_key_alias(alias),
+            key_spec=MlDsaKeySpec(variant=variant),
+        )
+        if not isinstance(private_key, ManagedMLDSAPrivateKey):
+            msg = f'Backend returned a non-ML-DSA key for ML-DSA alias {alias!r}.'
             raise TypeError(msg)
         return private_key
 
