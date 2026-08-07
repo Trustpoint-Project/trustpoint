@@ -267,6 +267,8 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
         if not isinstance(meta, dict):
             return None
 
+        import ipaddress  # noqa: PLC0415
+
         # Prefer the original client address when running behind a reverse proxy.
         forwarded_for = meta.get('HTTP_X_FORWARDED_FOR')
         if isinstance(forwarded_for, str) and forwarded_for.strip():
