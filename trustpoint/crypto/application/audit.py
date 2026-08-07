@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Sanitized audit helpers for crypto backend operations."""
 
 from __future__ import annotations
@@ -106,7 +109,7 @@ def audit_crypto_backend_operation(  # noqa: PLR0913
             actor=None,
             details=payload,
         )
-    except Exception:  # noqa: BLE001  # pragma: no cover - defensive; auditing must never break crypto operations
+    except Exception:  # pragma: no cover - defensive; auditing must never break crypto operations
         logger.warning('Failed to write crypto backend audit entry.')
         logger.debug('Crypto backend audit write failure details.', exc_info=True)
 

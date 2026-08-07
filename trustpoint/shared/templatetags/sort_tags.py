@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains template tags for sorting lists or columns in a table."""
 
 from __future__ import annotations

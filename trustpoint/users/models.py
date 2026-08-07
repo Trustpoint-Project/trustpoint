@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Custom user model with role-based access control.
 
 Defines a ``Role`` enum whose values are human-readable group names

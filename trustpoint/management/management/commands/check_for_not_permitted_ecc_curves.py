@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to check for not permitted ECC curves."""
 
 from __future__ import annotations

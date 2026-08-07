@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 from django.core.management.commands.compilemessages import Command as CompileMessagesCommand
 
 

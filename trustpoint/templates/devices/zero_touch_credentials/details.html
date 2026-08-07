@@ -57,7 +57,7 @@
                 <tr>
                     <td>{{ ref.idevid_subject_serial_number|default:"—" }}</td>
                     <td>{{ ref.idevid_san_uri|default:"—" }}</td>
-                    <td class="small text-break">{{ ref.idevid_sha256_fingerprint|default:"—" }}</td>
+                    <td class="small text-break">{{ ref.sha256_fingerprint_display|default:"—" }}</td>
                     <td>
                         {% if ref.dev_owner_id_certificate %}
                             <a href="{% url 'pki:certificate-detail' pk=ref.dev_owner_id_certificate.pk %}">

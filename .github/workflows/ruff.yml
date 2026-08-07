@@ -1,6 +1,5 @@
-name: Ruff
+name: Code Quality / Ruff
 
-# Trigger this workflow on pull requests to ensure tests are executed before merging.
 on:
   pull_request:
   push:
@@ -11,16 +10,16 @@ on:
 
 jobs:
   ruff:
-    runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v7  # Ensures the repository code is available.
+        uses: actions/checkout@v7
 
       - name: Setup uv environment
-        uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
+        uses: ./.github/actions/setup-uv-action
 
       - name: Run Ruff Linting
         run: uv run ruff check .

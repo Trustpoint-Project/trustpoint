@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Runtime helpers for the configured Trustpoint crypto backend."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """CMP certificate-request processing with CMP-owned transaction persistence."""
 
 from __future__ import annotations

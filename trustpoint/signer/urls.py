@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Contains Routes of URls for Signer App at App level."""
 
 from django.urls import path, re_path

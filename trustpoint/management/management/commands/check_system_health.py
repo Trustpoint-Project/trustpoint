@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to perform a system health check and generate notifications for issues.
 
 This command assesses the health of the system by performing various checks (to be implemented).

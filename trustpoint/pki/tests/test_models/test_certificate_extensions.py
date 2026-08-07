@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for the parsing and handling of certificate extensions."""
 
 # ruff: noqa: ERA001  # commented out tests for extensions that are not yet supported

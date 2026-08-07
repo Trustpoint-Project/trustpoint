@@ -950,21 +950,6 @@ start_softhsm(){
     -e "TRUSTPOINT_LOCAL_HSM_AUTO_BOOTSTRAP=1" \
     "$SOFTHSM_IMAGE" >/dev/null
 
-POSTGRES_DB=${APP_DB_NAME}
-DATABASE_USER=${APP_DB_USER}
-DATABASE_PASSWORD=${APP_DB_PASS}
-DATABASE_HOST=${APP_DB_HOST}
-DATABASE_PORT=${APP_DB_PORT}
-TP_TLS_DNS_NAMES=${TP_TLS_DNS_NAMES_VALUE}
-TP_TLS_IPV4_ADDRESSES=${TP_TLS_IPV4_ADDRESSES_VALUE}
-TP_TLS_IPV6_ADDRESSES=${TP_TLS_IPV6_ADDRESSES_VALUE}
-TRUSTPOINT_SERVICE_ROLE=worker
-WORKFLOWS2_WORKER_ID=${WF2_WORKER_NAME}
-WORKFLOWS2_WORKER_LEASE=${WF2_WORKER_LEASE}
-WORKFLOWS2_WORKER_BATCH=${WF2_WORKER_BATCH}
-WORKFLOWS2_WORKER_SLEEP=${WF2_WORKER_SLEEP}
-DEFAULT_FROM_EMAIL=no-reply@trustpoint.local
-EOF2
   sleep 1
 
   if ! running "$name"; then
@@ -1422,6 +1407,7 @@ wait_tls_fingerprint(){
   done
 
   echo
+   # shellcheck disable=SC2034
   TLS_FP_ELAPSED=$(( $(date +%s) - start ))
   return 1
 }
@@ -1487,7 +1473,8 @@ probe_mailpit_from_container(){
 
   exists "$container" || return 0
 
-  local subject="trustpoint wizard ${label} mailpit probe $(date +%s)"
+  local subject
+  subject="trustpoint wizard ${label} mailpit probe $(date +%s)"
   log "Sending Mailpit probe email from ${label} container..."
 
   if ! docker exec -e "PROBE_SUBJECT=${subject}" "$container" bash -lc \
@@ -1693,7 +1680,10 @@ final_summary(){
   local token_label
   local user_pin
 
+  local containers
   containers="$(summary_container_list)"
+  export containers
+  local bootstrap_login
   bootstrap_login="$(summary_bootstrap_login || true)"
 
   echo

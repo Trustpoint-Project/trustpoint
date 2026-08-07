@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for device credential issuance workflows."""
 
 import abc
@@ -8,6 +11,7 @@ from typing import Any, cast
 from cryptography import x509
 from django import forms
 from django.contrib import messages
+from django.db.models import QuerySet
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.http.request import HttpRequest
 from django.shortcuts import get_object_or_404, redirect
@@ -73,6 +77,10 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
 
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
+
+    def get_object(self, queryset: QuerySet[DeviceModel] | None = None) -> DeviceModel:
+        """Return the device."""
+        return super().get_object(queryset)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the sections to the context.

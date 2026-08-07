@@ -1,0 +1,28 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+<form method="post" autocomplete="off">
+    {% csrf_token %}
+    <div class="card">
+        <div class="card-header">
+            <h1>{% trans "Configure Profile Assignment" %}</h1>
+        </div>
+        <div class="card-body">
+            <div class="tp-card-centered-content">
+                <h2>{% blocktrans with profile_name=assignment.workflow_definition.name agent_name=agent.name %}{{ profile_name }} — {{ agent_name }}{% endblocktrans %}</h2>
+                <hr>
+                {{ form|crispy }}
+            </div>
+        </div>
+        <div class="card-footer d-flex">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'agents:assigned-profiles-list' agent_id=agent.pk %}"
+                   class="btn btn-secondary">{% trans "Cancel" %}</a>
+                <button type="submit" class="btn btn-primary">{% trans "Save Changes" %}</button>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock content %}

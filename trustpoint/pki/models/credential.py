@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Module that contains the CredentialModel."""
 
 from __future__ import annotations
@@ -532,21 +535,21 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             ]
         )
 
-    def get_last_in_chain(self) -> None | CertificateModel:
+    def get_last_in_chain(self) -> CertificateModel | None:
         """Gets the root ca certificate model, if any."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
         if last_certificate_in_chain is None:
             return self.certificate
         return last_certificate_in_chain.certificate
 
-    def get_root_ca_certificate(self) -> None | x509.Certificate:
+    def get_root_ca_certificate(self) -> x509.Certificate | None:
         """Gets the root CA certificate of the credential certificate chain."""
         root_ca_certificate_serializer = self.get_root_ca_certificate_serializer()
         if root_ca_certificate_serializer:
             return root_ca_certificate_serializer.as_crypto()
         return None
 
-    def get_root_ca_certificate_serializer(self) -> None | CertificateSerializer:
+    def get_root_ca_certificate_serializer(self) -> CertificateSerializer | None:
         """Get the root CA certificate serializer or a self-signed main certificate."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
         if last_certificate_in_chain is not None and last_certificate_in_chain.certificate.is_root_ca:
@@ -824,6 +827,25 @@ class IDevIDReferenceModel(models.Model):
             return self.idevid_ref.removeprefix('dev-owner:cert:').split('_')[1]
         except IndexError:
             return ''
+
+    @property
+    def domain_ca_sha256_fingerprint(self) -> str:
+        """Return the pinned domain CA SHA256 fingerprint from a ``dev-owner:ca:<sha256_hex>`` reference."""
+        if not self.idevid_ref.startswith('dev-owner:ca:'):
+            return ''
+        return self.idevid_ref.removeprefix('dev-owner:ca:')
+
+    @property
+    def sha256_fingerprint_display(self) -> str:
+        """Returns the SHA256 Fingerprint for display purposes.
+
+        This property returns the SHA256 Fingerprint of the IDevID if available, otherwise that of the domain CA.
+        """
+        if fingerprint := self.idevid_sha256_fingerprint:
+            return fingerprint
+        if domain_fp := self.domain_ca_sha256_fingerprint:
+            return f'Pinned CA: {domain_fp}'
+        return ''
 
 
 class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):

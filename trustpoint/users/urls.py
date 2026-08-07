@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """URL configuration for the users application."""
 
 from django.contrib.auth import views as auth_views

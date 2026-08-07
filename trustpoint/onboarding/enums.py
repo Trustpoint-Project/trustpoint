@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Onboarding protocol and status enumerations."""
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ class OnboardingProtocol(models.IntegerChoices):
     BRSKI = 6, _('BRSKI')
     OPC_GDS_PUSH = 7, _('OPC - GDS Push')
     REST_USERNAME_PASSWORD = 8, _('REST - Username & Password')
+    AGENT = 9, _('Agent')
 
 
 class OnboardingPkiProtocol(models.IntegerChoices):

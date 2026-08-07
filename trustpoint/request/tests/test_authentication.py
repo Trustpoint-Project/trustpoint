@@ -1,15 +1,20 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Unit tests for authentication components."""
 import datetime
 from unittest.mock import Mock, patch
 
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from django.test import RequestFactory
 from pki.models import IssuedCredentialModel
 
-from request.authentication.base import ClientCertificateAuthentication
+from request.authentication.base import AuthenticationComponent, ClientCertificateAuthentication, CompositeAuthentication
 from request.authentication.est import UsernamePasswordAuthentication
 from request.authentication.rest import RestUsernamePasswordAuthentication
-from request.request_context import BaseRequestContext, EstBaseRequestContext, RestBaseRequestContext
+from request.request_context import BaseRequestContext, EstBaseRequestContext, HttpBaseRequestContext, RestBaseRequestContext
 
 
 class TestUsernamePasswordAuthentication:
@@ -172,3 +177,55 @@ class TestClientCertificateAuthentication:
 
 
 # TODO (FHK): Write tests for IDevID auth and reenrollment
+
+
+class _SetDeviceAuthentication(AuthenticationComponent):
+    """Test component that marks authentication as successful by setting a device."""
+
+    def __init__(self, device):
+        self._device = device
+
+    def authenticate(self, context):
+        context.device = self._device
+
+
+@pytest.mark.django_db
+def test_composite_authentication_updates_device_ip_from_forwarded_for(device_instance):
+    """Ensure authenticated requests persist the first forwarded client IP on the device."""
+    device = device_instance['device']
+    device.ip_address = None
+    device.save(update_fields=['ip_address'])
+
+    request = RequestFactory().post('/')
+    request.META['HTTP_X_FORWARDED_FOR'] = '203.0.113.5, 10.0.0.8'
+    request.META['REMOTE_ADDR'] = '10.0.0.8'
+
+    context = HttpBaseRequestContext(raw_message=request)
+    auth = CompositeAuthentication()
+    auth.add(_SetDeviceAuthentication(device))
+
+    auth.authenticate(context)
+
+    device.refresh_from_db()
+    assert device.ip_address == '203.0.113.5'
+
+
+@pytest.mark.django_db
+def test_composite_authentication_updates_device_ip_from_remote_addr(device_instance):
+    """Ensure authenticated requests persist REMOTE_ADDR when X-Forwarded-For is absent."""
+    device = device_instance['device']
+    device.ip_address = None
+    device.save(update_fields=['ip_address'])
+
+    request = RequestFactory().post('/')
+    request.META.pop('HTTP_X_FORWARDED_FOR', None)
+    request.META['REMOTE_ADDR'] = '198.51.100.7'
+
+    context = HttpBaseRequestContext(raw_message=request)
+    auth = CompositeAuthentication()
+    auth.add(_SetDeviceAuthentication(device))
+
+    auth.authenticate(context)
+
+    device.refresh_from_db()
+    assert device.ip_address == '198.51.100.7'

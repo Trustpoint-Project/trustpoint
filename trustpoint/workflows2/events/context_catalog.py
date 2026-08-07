@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Reusable context variable groups for built-in Workflow 2 triggers."""
 
 from __future__ import annotations
@@ -72,6 +75,14 @@ DEVICE_CONTEXT = ctx(
         title=_('Serial number'),
         group='event.device',
         example='ABC123456',
+    ),
+    ContextVar(
+        'event.device.ip_address',
+        'string',
+        _('Device IP address.'),
+        title=_('Device IP address'),
+        group='event.device',
+        example='192.168.1.1',
     ),
     ContextVar(
         'event.device.domain_id',

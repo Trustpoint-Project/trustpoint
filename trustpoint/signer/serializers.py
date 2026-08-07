@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Serializers for Signer-related API endpoints."""
 
 from typing import Any, ClassVar

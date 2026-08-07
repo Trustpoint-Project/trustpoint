@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """URL configuration for Trustpoint bootstrap mode.
 
 Bootstrap intentionally exposes only setup-oriented routes. Operational APIs,

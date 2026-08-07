@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to print the trustpoint version."""
 from django.conf import settings
 from django.core.management.base import BaseCommand
