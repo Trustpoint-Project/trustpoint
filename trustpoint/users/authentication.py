@@ -55,12 +55,16 @@ class ServiceAccountBackend(BaseBackend):
         if not credential.is_valid():
             return None
 
+        user = credential.service_account
+        if user.account_type != TrustpointUser.AccountType.SERVICE or not user.is_active:
+            return None
+
         if not check_password(secret, credential.hashed_secret):
             return None
 
         credential.record_usage()
 
-        return credential.service_account
+        return user
 
     def get_user(self, user_id: int) -> TrustpointUser | None:
         """Retrieve a user by ID.
