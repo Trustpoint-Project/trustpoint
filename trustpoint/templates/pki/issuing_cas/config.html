@@ -325,7 +325,8 @@
                                             </a>
                                         {% else %}
                                             <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
-                                                class="btn btn-sm btn-primary me-2">
+                                                class="btn btn-sm btn-primary me-2{% if not issuing_ca.is_active %} disabled{% endif %}"
+                                                {% if not issuing_ca.is_active %}aria-disabled="true" tabindex="-1"{% endif %}>
                                                 {% trans 'Generate CRL' %}
                                             </a>
                                         {% endif %}
@@ -441,12 +442,13 @@
                 </div>
             </div>
             {% endif %}
+
+            {% include 'pki/issuing_cas/includes/ca_rollover_section.html' %}
+
         </div>
 
         <div class="card-footer d-flex">
-            <div class="tp-card-btn-footer m-1">
-                <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
-            </div>
+            <button type="button" class="btn btn-secondary" onclick="history.back()">{% trans 'Back' %}</button>
         </div>
     </div>
 

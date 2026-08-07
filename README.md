@@ -118,6 +118,9 @@ Remote Credential Download
 - **Import Issuing CA**: Integrate with an existing PKI by importing external CAs.
 - **Auto-Generated CA**: Create a root and issuing CA for testing purposes.
 - **CA Certificate Retrieval**: Devices can request the CA certificate via EST or CMP protocols.
+- **Protected imported keys**: Optionally allow imported private-key credentials while keeping
+  the key material encrypted by Trustpoint application-secret protection instead of injecting it
+  into the configured PKCS#11 token.
 
 **Registration Authority**
 
@@ -159,3 +162,23 @@ We are also providing the Trustpoint as a docker-container. Please see
 [Trustpoint on Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) or follow the
 instructions in our [Trustpoint Documentation](https://trustpoint.readthedocs.io/en/latest/) to build the
 container yourself.
+
+### Local PKCS#11 Dev
+
+The local/dev PKCS#11 path now uses a dedicated SoftHSM container plus the PKCS#11 proxy client
+library inside the Trustpoint app container. ``tp_wizard.sh`` can start that separate SoftHSM
+service, provision the local token state under ``./var/hsm``, and create the active local/dev
+provider profile for the new generic PKCS#11 backend.
+
+See ``docs/source/development/pkcs11_local_dev.rst`` for the local filesystem layout, exact
+Django-shell smoke commands, and the live PKCS#11 pytest integration test command.
+
+### Protected Imported Keys
+
+Trustpoint normally generates signing authority keys through the configured crypto backend. For
+deployments that must also import existing private-key credentials, enable **Allow imported private
+keys** under **Management > Settings > Security**.
+
+Protected imported keys require a PKCS#11 crypto backend and PKCS#11-backed application-secret
+protection. The imported key is stored encrypted in the Trustpoint database and is exposed to the
+application only through the crypto backend API. It is not imported into the HSM token.

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Test cases for help_pages base module."""
 
 from unittest.mock import Mock, patch

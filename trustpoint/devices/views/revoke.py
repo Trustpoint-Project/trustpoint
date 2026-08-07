@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for revoking device certificates."""
 
 import datetime
@@ -266,7 +269,7 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
                 device__in=self.queryset,
                 credential__certificate__revoked_certificate__isnull=True,
                 credential__certificate__not_valid_after__gte=now,
-            )
+            ).select_related('device', 'domain')
 
             n_revoked = 0
             for credential in issued_credentials_to_revoke_qs:

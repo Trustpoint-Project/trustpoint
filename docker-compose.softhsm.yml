@@ -5,29 +5,45 @@ services:
       dockerfile: docker/trustpoint/Dockerfile
     image: trustpointproject/trustpoint:latest
     container_name: trustpoint
+    restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${TP_HTTP_PORT:-80}:80"
+      - "${TP_HTTPS_PORT:-443}:443"
     depends_on:
-      postgres:
-        condition: service_started
       softhsm:
         condition: service_healthy
     volumes:
       - ./trustpoint/settings:/var/www/html/trustpoint/trustpoint/settings
+      - softhsm_config:/var/lib/trustpoint/hsm/config
+      - softhsm_tokens:/var/lib/trustpoint/hsm/tokens
     environment:
-      POSTGRES_DB: "trustpoint_db"
-      POSTGRES_USER_FILE: /run/secrets/db_user
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-      DATABASE_HOST: "postgres"
-      DATABASE_PORT: "5432"
+      POSTGRES_DB: "${POSTGRES_DB:-trustpoint_db}"
+      DATABASE_USER_FILE: /run/secrets/db_user
+      DATABASE_PASSWORD_FILE: /run/secrets/db_password
+      DATABASE_HOST: "${DATABASE_HOST:-postgres}"
+      DATABASE_PORT: "${DATABASE_PORT:-5432}"
       HSM_PIN_FILE: /run/secrets/hsm_pin
       HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
+      TRUSTPOINT_HSM_ROOT: /var/lib/trustpoint/hsm
+      SOFTHSM2_CONF: /var/lib/trustpoint/hsm/config/softhsm2.conf
+      TRUSTPOINT_LOCAL_HSM_ENABLED: "1"
+      TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL: Trustpoint-SoftHSM
+      TRUSTPOINT_LOCAL_HSM_PROFILE_NAME: local-dev-softhsm
+      TRUSTPOINT_LOCAL_HSM_MODULE_PATH: /usr/lib/libsofthsm2.so
+      TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE: /var/lib/trustpoint/hsm/config/user-pin.txt
+      TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR: SOFTHSM2_CONF
+      TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF: /var/lib/trustpoint/hsm/config/softhsm2.conf
     secrets:
       - db_user
       - db_password
       - hsm_pin
       - hsm_so_pin
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsk --max-time 5 https://localhost/ > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
 
   postgres:
     build:
@@ -35,25 +51,37 @@ services:
       dockerfile: docker/db/Dockerfile
     image: trustpointproject/postgres:latest
     container_name: postgres
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      # Bind to loopback only – PostgreSQL must not be reachable from the network.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
     environment:
       POSTGRES_USER_FILE: /run/secrets/db_user
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-      POSTGRES_DB: "trustpoint_db"
+      POSTGRES_DB: "${POSTGRES_DB:-trustpoint_db}"
     secrets:
       - db_user
       - db_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   softhsm:
     build:
       context: .
       dockerfile: docker/softhsm/Dockerfile
     container_name: softhsm
+    restart: unless-stopped
     ports:
       - "5657:5657"
+    volumes:
+      - softhsm_config:/var/lib/trustpoint/hsm/config
+      - softhsm_tokens:/var/lib/trustpoint/hsm/tokens
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "5657"]
       interval: 10s
@@ -73,3 +101,5 @@ secrets:
 
 volumes:
   postgres_data:
+  softhsm_config:
+  softhsm_tokens:

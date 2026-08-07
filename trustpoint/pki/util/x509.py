@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Handles certificate creation for Issuing CA certificates."""
 
 from __future__ import annotations
@@ -17,10 +20,11 @@ from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import NamedCurve
-from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
-from management.models import KeyStorageConfig, SecurityConfig
-from pki.models import CaModel
+from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
+from crypto.models import CryptoManagedKeyModel
+from management.models import SecurityConfig
+from pki.models import CaModel, CredentialModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
@@ -37,8 +41,8 @@ class CertificateGenerator:
     def create_root_ca(
         cn: str,
         validity_days: int = 7300,
-        private_key: None | PrivateKey = None,
-        hash_algorithm: None | HashAlgorithm = None,
+        private_key: PrivateKey | None = None,
+        hash_algorithm: HashAlgorithm | None = None,
         path_length: int | None = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
         """Creates a root CA certificate for testing and AutoGenPKI.
@@ -60,12 +64,12 @@ class CertificateGenerator:
 
     @staticmethod
     def create_issuing_ca(  # noqa: PLR0913
-        issuer_private_key: None | PrivateKey,
+        issuer_private_key: PrivateKey | None,
         issuer_cn: str,
         subject_cn: str,
-        private_key: None | PrivateKey = None,
+        private_key: PrivateKey | None = None,
         validity_days: int = 3650,
-        hash_algorithm: None | HashAlgorithm = None,
+        hash_algorithm: HashAlgorithm | None = None,
         path_length: int | None = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
         """Creates an issuing CA certificate + key pair.
@@ -163,7 +167,7 @@ class CertificateGenerator:
         issuer_private_key: PrivateKey,
         issuer_name: x509.Name,
         subject_name: str | x509.Name,
-        private_key: None | PrivateKey = None,
+        private_key: PrivateKey | None = None,
         extensions: list[tuple[x509.ExtensionType, bool]] | None = None,
         validity_days: int = 365,
     ) -> tuple[x509.Certificate, PrivateKey]:
@@ -287,7 +291,7 @@ class CertificateGenerator:
         chain: list[x509.Certificate],
         private_key: PrivateKey,
         unique_name: str = 'issuing_ca',
-        ca_type: CaModel.CaTypeChoice = CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
+        ca_type: CaModel.CaTypeChoice = CaModel.CaTypeChoice.LOCAL_PKCS11,
         parent_ca: CaModel | None = None,
     ) -> CaModel:
         """Saves an Issuing CA certificate to the database and returns the CaModel.
@@ -303,86 +307,32 @@ class CertificateGenerator:
         Returns:
             CaModel: The created CA model.
         """
-        issuing_ca_credential_serializer = CredentialSerializer(
-            private_key=private_key,
-            certificate=issuing_ca_cert,
-            additional_certificates=chain
-        )
-
-        # Determine private key location based on CA type and storage configuration
-        if ca_type == CaModel.CaTypeChoice.LOCAL_UNPROTECTED:
-            # Unprotected local CAs always use software storage
-            private_key_location = PrivateKeyLocation.SOFTWARE
-        elif ca_type in [
-            CaModel.CaTypeChoice.AUTOGEN_ROOT,
-            CaModel.CaTypeChoice.AUTOGEN,
-        ]:
-            # Auto-generated CAs use the configured storage type
-            try:
-                config = KeyStorageConfig.get_config()
-            except KeyStorageConfig.DoesNotExist as e:
-                error_msg = (
-                    f'Cannot create auto-generated CA "{unique_name}": KeyStorageConfig not found. '
-                    'Please configure key storage first.'
-                )
-                logger.exception(error_msg)
-                raise ValueError(error_msg) from e
-
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
-                private_key_location = PrivateKeyLocation.HSM_PROVIDED
-            else:
-                # Software storage
-                private_key_location = PrivateKeyLocation.SOFTWARE
-        else:
-            # For protected CAs (LOCAL_PKCS11), HSM storage is required
-            try:
-                config = KeyStorageConfig.get_config()
-            except KeyStorageConfig.DoesNotExist as e:
-                error_msg = (
-                    f'Cannot create protected CA "{unique_name}": KeyStorageConfig not found. '
-                    'Protected CAs require HSM storage configuration.'
-                )
-                logger.exception(error_msg)
-                raise ValueError(error_msg) from e
-
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
-                private_key_location = PrivateKeyLocation.HSM_PROVIDED
-            else:
-                error_msg = (
-                    f'Cannot create protected CA "{unique_name}" with storage type "{config.storage_type}". '
-                    f'Protected CAs require HSM storage (SoftHSM or Physical HSM), but current storage type is: '
-                    f'{config.storage_type}'
-                )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-
-        if not issuing_ca_credential_serializer.private_key:
-            err_msg = 'Issuing CA credential serializer must have a private key before saving.'
-            raise ValueError(err_msg)
-        issuing_ca_credential_serializer.private_key_reference = (
-            PrivateKeyReference.from_private_key(
-                private_key=issuing_ca_credential_serializer.private_key,
-                key_label=unique_name,
-                location=private_key_location
+        if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey)):
+            CaModel._validate_ca_certificate(issuing_ca_cert)  # noqa: SLF001
+            CaModel._validate_ca_type(ca_type)  # noqa: SLF001
+            credential = CredentialModel.save_managed_key_credential(
+                certificate=issuing_ca_cert,
+                certificate_chain=chain,
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+                managed_key=CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id),
             )
+            issuing_ca = CaModel(
+                unique_name=unique_name,
+                credential=credential,
+                ca_type=ca_type,
+                parent_ca=parent_ca,
+            )
+            issuing_ca.save()
+            truststore = CaModel._create_chain_truststore(issuing_ca)  # noqa: SLF001
+            issuing_ca.chain_truststore = truststore
+            issuing_ca.save(update_fields=['chain_truststore'])
+            return issuing_ca
+
+        msg = (
+            'Issuing CA private keys must be managed by the configured Trustpoint crypto backend. '
+            'Use generate_managed_signing_private_key() or TrustpointCryptoBackend.generate_managed_key() first.'
         )
-
-        issuing_ca = CaModel.create_new_issuing_ca(
-            credential_serializer=issuing_ca_credential_serializer,
-            ca_type=ca_type,
-            unique_name=unique_name,
-            parent_ca=parent_ca
-        )
-
-        logger.info("Issuing CA '%s' saved successfully.", unique_name)
-
-        return issuing_ca
+        raise ValueError(msg)
 
     @staticmethod
     def save_keyless_ca(
@@ -885,5 +835,3 @@ class CertificateVerifier:
             untrusted_intermediates = []
 
         return CertificateVerifier._build_ca_chain(cert, trusted_roots, untrusted_intermediates)
-
-

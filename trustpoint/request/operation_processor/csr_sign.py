@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """CSR operation processor classes."""
 from abc import abstractmethod
 from typing import get_args
@@ -86,7 +89,7 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
         for extension in csr.extensions:
             csr_builder = csr_builder.add_extension(extension.value, extension.critical)
 
-        private_key = signing_credential.get_private_key_serializer().as_crypto()
+        private_key = signing_credential.get_private_key()
         self._signed_csr = csr_builder.sign(private_key=private_key, algorithm=hash_algorithm)
 
         if signing_credential.certificate:

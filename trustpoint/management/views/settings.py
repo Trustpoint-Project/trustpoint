@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Settings views with dedicated views for each setting type."""
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ from management.forms import (
     SecurityConfigForm,
     SmtpEmailConfigForm,
     SmtpEmailTestForm,
+    UIConfigForm,
     WorkflowExecutionConfigForm,
 )
 from management.models import (
@@ -37,6 +41,7 @@ from management.models import (
     PrometheusConfig,
     SecurityConfig,
     SmtpEmailConfig,
+    UIConfig,
 )
 from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -318,6 +323,7 @@ class SettingsFormViewMixin[FormType: (
     | NotificationConfigForm
     | PrometheusConfigForm
     | SecurityConfigForm
+    | UIConfigForm
 )](
     PageContextMixin,
     SecurityLevelMixin,
@@ -378,6 +384,11 @@ class SettingsTabView(TemplateView):
         internationalization_view.request = self.request
         internationalization_view.setup(self.request)
         context['internationalization_form'] = self._get_unbound_settings_form(internationalization_view)
+
+        ui_view = UISettingsView()
+        ui_view.request = self.request
+        ui_view.setup(self.request)
+        context['ui_form'] = ui_view.get_form()
 
         security_view = SecuritySettingsView()
         security_view.request = self.request
@@ -607,6 +618,42 @@ class InternationalizationSettingsView(SettingsFormViewMixin[Internationalizatio
         return response
 
 
+class UISettingsView(SettingsFormViewMixin[UIConfigForm]):
+    """View for managing UI settings."""
+
+    template_name = 'management/includes/ui_configuration.html'
+    form_class = UIConfigForm
+    setting_type = 'ui'
+
+    def get_initial(self) -> dict[str, Any]:
+        """Get initial form data with current UI settings."""
+        initial = super().get_initial()
+        config = UIConfig.get_current()
+        initial['view_mode'] = config.view_mode
+        return initial
+
+    def form_valid(self, form: UIConfigForm) -> HttpResponse:
+        """Handle valid UI form submission."""
+        view_mode = form.cleaned_data['view_mode']
+
+        self.logger.info('Changing view mode to: %s', view_mode)
+
+        UIConfig.objects.update_or_create(
+            id=1,
+            defaults={
+                'view_mode': view_mode,
+            },
+        )
+
+        messages.success(
+            self.request,
+            _('UI configuration saved successfully. Redirecting to apply changes...')
+        )
+        # Redirect to home to immediately show the new view mode
+        return redirect('home:index')
+
+
+
 class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
     """View for managing security settings."""
 
@@ -618,10 +665,7 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get the keyword arguments for instantiating the form."""
         kwargs = super().get_form_kwargs()
-        try:
-            security_config = SecurityConfig.objects.get(id=1)
-        except SecurityConfig.DoesNotExist:
-            security_config = SecurityConfig.objects.create()
+        security_config, _ = SecurityConfig.objects.get_or_create(pk=1)
         kwargs['instance'] = security_config
         return kwargs
 
@@ -680,32 +724,12 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
     def form_invalid(self, form: SecurityConfigForm) -> HttpResponse:
         """Handle invalid security form submission."""
         messages.error(self.request, _('Error saving the configuration'))
-        extra: dict[str, Any] = {'form': form}
-
-
         self.template_name = 'management/settings.html'
-        context = self.get_context_data(**extra)
-        context['active_tab'] = 'security'
+        settings_view = SettingsTabView()
+        settings_view.request = self.request
+        settings_view.setup(self.request)
+        context = settings_view.get_context_data(active_tab='security')
         context['security_form'] = form
-
-
-        internationalization_view = InternationalizationSettingsView()
-        internationalization_view.request = self.request
-        internationalization_view.setup(self.request)
-        context['internationalization_form'] = internationalization_view.get_form()
-
-        logging_view = LoggingSettingsView()
-        logging_view.request = self.request
-        logging_view.setup(self.request)
-        context['logging_form'] = logging_view.get_form()
-        context['loglevels'] = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-        context['current_loglevel'] = logging.getLevelName(logging.getLogger().getEffectiveLevel())
-
-        notification_view = NotificationSettingsView()
-        notification_view.request = self.request
-        notification_view.setup(self.request)
-        context['notification_form'] = notification_view.get_form()
-        context['notification_config'] = NotificationConfig.get()
 
         return self.render_to_response(context)
 
@@ -728,11 +752,14 @@ class LoggingSettingsView(SettingsFormViewMixin[LoggingConfigForm]):
         initial = super().get_initial()
         current_level_num = logging.getLogger().getEffectiveLevel()
         initial['loglevel'] = logging.getLevelName(current_level_num)
+        config = LoggingConfig.objects.first()
+        initial['crypto_backend_audit_enabled'] = bool(config and config.crypto_backend_audit_enabled)
         return initial
 
     def form_valid(self, form: LoggingConfigForm) -> HttpResponse:
         """Handle valid logging form submission."""
         level = form.cleaned_data['loglevel']
+        crypto_backend_audit_enabled = bool(form.cleaned_data.get('crypto_backend_audit_enabled'))
         self.logger.info('Changing log level to: %s', level)
 
         logger = logging.getLogger()
@@ -740,7 +767,10 @@ class LoggingSettingsView(SettingsFormViewMixin[LoggingConfigForm]):
 
         LoggingConfig.objects.update_or_create(
             id=1,
-            defaults={'log_level': level},
+            defaults={
+                'log_level': level,
+                'crypto_backend_audit_enabled': crypto_backend_audit_enabled,
+            },
         )
 
         self.logger.info('Log level successfully changed to: %s', level)

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Test cases for home app URL configuration."""
 
 from django.test import SimpleTestCase

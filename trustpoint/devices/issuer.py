@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Module for issuing and managing TLS and OPC UA credentials."""
 
 from __future__ import annotations
@@ -7,7 +10,7 @@ import re
 from typing import TYPE_CHECKING, NoReturn, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
@@ -311,9 +314,9 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
     _device: DeviceModel
     _domain: DomainModel
 
-    _credential: None | CredentialSerializer = None
-    _credential_model: None | CredentialModel = None
-    _issued_application_credential_model: None | IssuedCredentialModel = None
+    _credential: CredentialSerializer | None = None
+    _credential_model: CredentialModel | None = None
+    _issued_application_credential_model: IssuedCredentialModel | None = None
 
     def __init__(self, device: DeviceModel, domain: DomainModel) -> None:
         """Initializes the TLS Credential Issuer.
@@ -441,6 +444,19 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                 error_msg = 'Issuing CA does not have a credential'
                 self._raise_value_error(error_msg)
             issuer_certificate = issuing_credential.get_certificate()
+            issuer_public_key = issuer_certificate.public_key()
+            if not isinstance(
+                issuer_public_key,
+                (
+                    dsa.DSAPublicKey,
+                    rsa.RSAPublicKey,
+                    ec.EllipticCurvePublicKey,
+                    ed25519.Ed25519PublicKey,
+                    ed448.Ed448PublicKey,
+                ),
+            ):
+                err_msg = 'The issuing CA public key type cannot be used for an AuthorityKeyIdentifier extension.'
+                self._raise_type_error(err_msg)
             algorithm_identifier = SignatureSuite.from_certificate(
                 issuer_certificate
             ).algorithm_identifier
@@ -500,9 +516,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                     True,
                 ),
                 x509.AuthorityKeyIdentifier: (
-                    x509.AuthorityKeyIdentifier.from_issuer_public_key(
-                        issuing_credential.get_private_key_serializer().public_key_serializer.as_crypto()
-                    ),
+                    x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_public_key),
                     False,
                 ),
                 x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),
@@ -516,7 +530,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                 certificate_builder = certificate_builder.add_extension(ext, critical)
 
             certificate = certificate_builder.sign(
-                private_key=issuing_credential.get_private_key_serializer().as_crypto(),
+                private_key=issuing_credential.get_private_key(),
                 algorithm=allowed_hash_algorithm,
             )
 

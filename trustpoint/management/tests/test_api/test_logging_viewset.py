@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for LoggingViewSet API endpoints.
 
 The LoggingViewSet provides three custom actions (no standard CRUD):

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """To be added to trustpoint_core as trustpoint_core.oid.CertificateExtensionOid."""
 
 import enum

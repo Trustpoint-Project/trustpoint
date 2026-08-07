@@ -1,0 +1,17 @@
+{% extends "error_base.html" %}
+
+{% block title %}Not Authorized - Trustpoint{% endblock %}
+
+{% block content %}
+<div class="alert">
+    <h4 class="alert-heading">Not Authorized</h4>
+    <p>You are not authorized to access the page.</p>
+    <button
+    type="button"
+    id="BacktoDashboardButton"
+    onclick="window.location.href='/home/dashboard/';"
+    class="btn btn-primary w-100">
+    Back to Dashboard
+    </button>
+</div>
+{% endblock %}

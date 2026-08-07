@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for TlsViewSet API endpoints."""
 
 from __future__ import annotations
@@ -8,7 +11,6 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from management.models import KeyStorageConfig
 from pki.models import CredentialModel
 
 

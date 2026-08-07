@@ -6,6 +6,7 @@ Feature: Add and delete new Issuing CAs
 
   Background:
     Given the admin user is logged into TPC_Web
+    And the security option "Allow imported private keys" is "enabled"
     And the admin is on the "pki/issuing-cas" webpage
 
   Scenario: Add a new issuing CA by uploading a valid PKCS12 file
@@ -38,7 +39,7 @@ Feature: Add and delete new Issuing CAs
     Then the system should display a form page where a file can be uploaded
     When the admin uploads a duplicated PKCS12 issuing CA file
     And the admin clicks the "Add new issuing CA" button to add "test_CA_duplicate"
-    Then the response payload should include an error message stating "UNIQUE constraint failed"
+    Then the response payload should include an error message stating "Issuing CA test_CA is already configured"
     And the issuing CA "test_CA" "appears" in the list of available CAs
 
 

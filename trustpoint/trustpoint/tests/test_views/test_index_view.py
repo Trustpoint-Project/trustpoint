@@ -1,10 +1,14 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for the IndexView class."""
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from django.urls import resolve, reverse
 from home.views import IndexView
 
+User = get_user_model()
 
 class TestIndexView(TestCase):
     """Test cases for the IndexView."""

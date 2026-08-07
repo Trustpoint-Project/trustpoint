@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Presentation helpers shared by the Workflow 2 monitoring views."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Comprehensive tests for EST views.py module."""
 
 import base64
@@ -507,8 +510,9 @@ def test_est_cacerts_view_csrf_exempt():
     assert hasattr(EstCACertsView, 'dispatch')
 
 
+@patch('est.views.CaRolloverService')
 @patch.object(EstRequestedDomainExtractorMixin, 'extract_requested_domain')
-def test_est_cacerts_view_get_success(mock_extract_domain, request_factory, mock_domain):
+def test_est_cacerts_view_get_success(mock_extract_domain, mock_rollover_service, request_factory, mock_domain):
     """Test successful GET request to EstCACertsView."""
     # Setup mock domain with issuing CA
     mock_credential_serializer = Mock()
@@ -521,6 +525,7 @@ def test_est_cacerts_view_get_success(mock_extract_domain, request_factory, mock
     mock_domain.issuing_ca.credential.get_credential_serializer.return_value = mock_credential_serializer
     
     mock_extract_domain.return_value = (mock_domain, None)
+    mock_rollover_service.get_active_rollover.return_value = None
     
     view = EstCACertsView.as_view()
     request = request_factory.get('/est/cacerts/test_domain')
@@ -582,8 +587,9 @@ def test_est_cacerts_view_get_exception(mock_extract_domain, request_factory):
     assert b'Error retrieving CA certificates' in response.content
 
 
+@patch('est.views.CaRolloverService')
 @patch.object(EstRequestedDomainExtractorMixin, 'extract_requested_domain')
-def test_est_cacerts_view_get_base64_line_wrapping(mock_extract_domain, request_factory, mock_domain):
+def test_est_cacerts_view_get_base64_line_wrapping(mock_extract_domain, mock_rollover_service, request_factory, mock_domain):
     """Test that EstCACertsView properly wraps base64 output at 64 characters."""
     # Setup mock with long certificate data
     mock_credential_serializer = Mock()
@@ -596,6 +602,7 @@ def test_est_cacerts_view_get_base64_line_wrapping(mock_extract_domain, request_
     mock_domain.issuing_ca.credential.get_credential_serializer.return_value = mock_credential_serializer
     
     mock_extract_domain.return_value = (mock_domain, None)
+    mock_rollover_service.get_active_rollover.return_value = None
     
     view = EstCACertsView.as_view()
     request = request_factory.get('/est/cacerts/test_domain')
@@ -629,7 +636,8 @@ def test_est_cacerts_view_get_none_response_fallback(mock_extract_domain, reques
     assert response.status_code == 500
 
 
-def test_est_cacerts_view_get_headers_removed(request_factory, mock_domain):
+@patch('est.views.CaRolloverService')
+def test_est_cacerts_view_get_headers_removed(mock_rollover_service, request_factory, mock_domain):
     """Test that Vary and Content-Language headers are removed from response."""
     # Setup mock domain with issuing CA
     mock_credential_serializer = Mock()
@@ -639,6 +647,8 @@ def test_est_cacerts_view_get_headers_removed(request_factory, mock_domain):
     mock_chain_serializer.as_pkcs7_der.return_value = pkcs7_der
     mock_credential_serializer.get_full_chain_as_serializer.return_value = mock_chain_serializer
     mock_domain.issuing_ca.credential.get_credential_serializer.return_value = mock_credential_serializer
+    
+    mock_rollover_service.get_active_rollover.return_value = None
     
     # Patch to add headers to LoggedHttpResponse
     with patch.object(DomainModel.objects, 'get', return_value=mock_domain):

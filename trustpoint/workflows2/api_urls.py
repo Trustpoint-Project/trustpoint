@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """API routes for Workflow 2 DRF endpoints."""
 
 from rest_framework.routers import DefaultRouter

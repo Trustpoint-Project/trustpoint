@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Provides the 'EstAuthentication' class using the Composite pattern for modular EST authentication."""
 
 from typing import Never
@@ -33,7 +36,9 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
         password = context.est_password
 
         try:
-            device = DeviceModel.objects.select_related().filter(
+            device = DeviceModel.objects.select_related(
+                'onboarding_config', 'no_onboarding_config'
+            ).filter(
                 common_name=username
             ).first()
 

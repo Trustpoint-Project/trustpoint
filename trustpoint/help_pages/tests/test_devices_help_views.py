@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Test cases for devices help views."""
 import ipaddress
 from cryptography import x509
@@ -54,10 +57,11 @@ class BaseHelpViewTests(TestCase):
 
         self.view.object = mock_device
         request = self.factory.get('/')
-        request.META['SERVER_PORT'] = '8443'
         self.view.request = request
 
-        context = self.view._make_context('192.168.1.1')
+        with patch('help_pages.devices_help_views.settings') as mock_settings:
+            mock_settings.TP_HTTPS_PORT = '8443'
+            context = self.view._make_context('192.168.1.1')
 
         assert context.domain == mock_domain
         assert context.domain_unique_name == 'test-domain'
@@ -135,10 +139,11 @@ class BaseHelpViewTests(TestCase):
         self.view.page_category = 'devices'
         self.view.page_name = 'devices'
         request = self.factory.get('/')
-        request.META['SERVER_PORT'] = '443'
         self.view.request = request
 
-        context = self.view.get_context_data()
+        with patch('help_pages.devices_help_views.settings') as mock_settings:
+            mock_settings.TP_HTTPS_PORT = '443'
+            context = self.view.get_context_data()
 
         assert 'help_page' in context
         assert context['help_page'].heading == 'Test Heading'

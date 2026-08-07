@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Focused tests for request operation processors."""
 
 from __future__ import annotations
@@ -53,6 +56,8 @@ def test_local_ca_certificate_issue_processor_tolerates_request_without_meta() -
         operation='certification',
     )
 
-    url = LocalCaCertificateIssueProcessor()._get_crl_distribution_point_url(context, ca_id=7)  # noqa: SLF001
+    with patch('request.operation_processor.issue_cert.settings') as mock_settings:
+        mock_settings.TP_HTTP_PORT = '80'
+        url = LocalCaCertificateIssueProcessor()._get_crl_distribution_point_url(context, ca_id=7)  # noqa: SLF001
 
     assert url.endswith('/crl/7')

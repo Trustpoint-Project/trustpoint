@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Contains classes and helpers for forms that can be used in the whole project."""
 
 from typing import Any

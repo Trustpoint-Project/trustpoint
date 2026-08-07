@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for the CertificateModel class."""
 
 # ruff: noqa: F811  # ruff does not like pytest fixtures as arguments

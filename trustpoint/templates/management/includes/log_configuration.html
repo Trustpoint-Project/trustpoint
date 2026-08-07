@@ -6,7 +6,19 @@
         <form method="POST" action="{% url 'management:settings-logging' %}" id="loglevel_configuration">
             {% csrf_token %}
             <fieldset class="form-group tp-form-group">
-                {{ form.loglevel }}
+                <div class="mb-3">
+                    {{ form.loglevel.label_tag }}
+                    {{ form.loglevel }}
+                </div>
+                <div class="form-check form-switch mb-2">
+                    {{ form.crypto_backend_audit_enabled }}
+                    <label class="form-check-label" for="{{ form.crypto_backend_audit_enabled.id_for_label }}">
+                        {{ form.crypto_backend_audit_enabled.label }}
+                    </label>
+                </div>
+                {% if form.crypto_backend_audit_enabled.help_text %}
+                    <div class="form-text">{{ form.crypto_backend_audit_enabled.help_text }}</div>
+                {% endif %}
             </fieldset>
         </form>
     </div>

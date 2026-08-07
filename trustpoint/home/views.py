@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Contains views that handle HTTP requests and return appropriate responses for the application."""
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from django.core.management.base import CommandError
 from django.db.models import Case, CharField, Count, F, IntegerField, Q, QuerySet, Value, When
 from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils import dateparse, timezone
 from django.views.generic.base import RedirectView, TemplateView
 
@@ -31,6 +35,7 @@ from devices.dashboard_filters import (
     filter_pending_devices,
 )
 from devices.models import DeviceModel
+from management.models import UIConfig
 from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models import CaModel, CertificateModel, CertificateProfileModel, IssuedCredentialModel
 from trustpoint.logger import LoggerMixin
@@ -40,10 +45,17 @@ ERROR = 40
 
 
 class IndexView(RedirectView):
-    """Redirects authenticated users to the dashboard page."""
+    """Redirects authenticated users to the dashboard or simplified view based on UI config."""
 
     permanent = False
-    pattern_name = 'home:dashboard'
+
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str | None:
+        """Get the redirect URL based on UI configuration."""
+        del args, kwargs
+        ui_config = UIConfig.get_current()
+        if ui_config.is_simplified_mode:
+            return reverse('home:simplified_overview')
+        return reverse('home:dashboard')
 
 
 class DashboardView(TemplateView):
@@ -837,7 +849,11 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             )
 
             protocol_mapping = {key: str(value) for key, value in CaModel.CaTypeChoice.choices}
-            ca_type_counts = {protocol_mapping[item['ca_type']]: item['count'] for item in ca_type_qr}
+            ca_type_counts = {
+                protocol_mapping[item['ca_type']]: item['count']
+                for item in ca_type_qr
+                if item['ca_type'] is not None
+            }
 
         except Exception as exception:
             err_msg = f'Error occurred in ca counts by type query: {exception}'

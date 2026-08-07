@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Signature operation processor classes."""
 from typing import get_args
 
@@ -20,7 +23,7 @@ class GenericSigner(LoggerMixin):
     def sign(data: bytes, signer_credential: CredentialModel) -> bytes:
         """Sign the provided data with the given signer credential."""
         signature_suite = SignatureSuite.from_certificate(signer_credential.get_certificate())
-        private_key = signer_credential.get_private_key_serializer().as_crypto()
+        private_key = signer_credential.get_private_key()
 
         hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
         if hash_algorithm_enum is None:

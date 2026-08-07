@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
 import datetime

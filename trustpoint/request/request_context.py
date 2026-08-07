@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains the RequestContext class for managing request-specific named attributes."""
 from __future__ import annotations
 

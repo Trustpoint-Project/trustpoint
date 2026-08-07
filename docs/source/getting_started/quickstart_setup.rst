@@ -3,266 +3,314 @@
 Quickstart Setup Guide
 ======================
 
-This guide provides an introduction to Trustpoint and instructions for setting up the Trustpoint using Docker and Docker Compose.
+This guide covers setting up Trustpoint using Docker and Docker Compose.
 
-Prerequisites 
----------------
-Make sure you have the following installed:
+Prerequisites
+-------------
 
-1. **Docker**: Version 20.10 or higher.
-2. **Docker Compose**: Version v2.32.4 or higher.
-3. **Git**: To clone the Trustpoint repository.
+- **Docker** 20.10 or higher
+- **Docker Compose** v2.32.4 or higher
+- **Git**
 
 Getting started with the Trustpoint Wizard script
----------------------------------------------------
+--------------------------------------------------
 
-The ``tp_wizard.sh`` offers a convenient guided CLI for setting up a Docker container environment.
+The ``tp_wizard.sh`` script provides a guided CLI for setting up a Docker environment.
+This requires a Linux host.
 
-1. **Clone** the Trustpoint repository
+.. code-block:: bash
 
-   First, clone the Trustpoint source code from the official repository:
+    git clone https://github.com/Trustpoint-Project/trustpoint.git
+    cd trustpoint
+    ./tp_wizard.sh
 
-   .. code-block:: bash
+Convenience commands:
 
-       git clone https://github.com/Trustpoint-Project/trustpoint.git
-       cd trustpoint
-
-2. **Interactively configure** the Trustpoint environment using the script
-
-   This requires a Linux host.
-
-   .. code-block:: bash
-   
-       ./tp_wizard.sh
-
-| For testing, you can use ``./tp_wizard.sh up`` to directly start the Trustpoint and integrated postgres DB container with default testing credentials.  
-| Strictly for testing use only, use ``./tp_wizard.sh up demo`` to additionally start SFTP and mailpit demo servers.  
-| Use ``./tp_wizard.sh down`` to stop and remove all containers.  
-| To completely remove the Trustpoint volume and delete all stored data, you can use ``./tp_wizard.sh nuke``.  
+- ``./tp_wizard.sh up`` — start Trustpoint and Postgres with default testing credentials (testing only).
+- ``./tp_wizard.sh up demo`` — additionally start SFTP and mailpit demo servers (testing only).
+- ``./tp_wizard.sh down`` — stop and remove all containers.
+- ``./tp_wizard.sh nuke`` — remove all containers and delete all stored data.
 
 Getting started with Docker Compose
---------------------------------------
+------------------------------------
 
-Step-by-Step Setup (Load from Dockerhub)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-1. **Download** `docker-compose.yml <https://raw.githubusercontent.com/Trustpoint-Project/trustpoint/refs/heads/main/docker-compose.yml>`_
+The .env file
+^^^^^^^^^^^^^
 
-2. **Pull and run the Trustpoint and Postgres Containers**
+.. warning::
 
-    You can pull the images and start Trustpoint and Postgres containers with following command:
+   Trustpoint **requires** a ``.env`` file to start. If no ``.env`` file is present, startup will fail with an error.
+
+Docker Compose and ``tp_wizard.sh`` read the ``.env`` file in the project root.
+The repository contains development defaults. For production-like deployments,
+copy the example and replace at least the database password:
+
+.. code-block:: bash
+
+    cp .env.example .env
+
+The following variables are supported:
+
+.. list-table::
+   :widths: 30 10 60
+   :header-rows: 1
+
+   * - Variable
+     - Required
+     - Description
+   * - ``DATABASE_USER``
+     - No
+     - PostgreSQL username. Defaults to ``admin`` for local testing.
+   * - ``DATABASE_PASSWORD``
+     - No
+     - PostgreSQL password. Defaults to ``testing321`` for local testing. Generate a strong value for production-like deployments: ``openssl rand -base64 32``
+   * - ``POSTGRES_DB``
+     - No
+     - Database name. Defaults to ``trustpoint_db``.
+   * - ``DATABASE_HOST``
+     - No
+     - Database host used by the Trustpoint containers. Defaults to ``postgres``.
+   * - ``DATABASE_PORT``
+     - No
+     - Database port used by the Trustpoint containers. Defaults to ``5432``.
+   * - ``TP_TLS_IPV4_ADDRESSES``
+     - No
+     - Comma-separated IPv4 addresses where Trustpoint is reachable. Used for TLS certificate SANs and Django ``ALLOWED_HOSTS``. Defaults to ``127.0.0.1``.
+   * - ``TP_TLS_IPV6_ADDRESSES``
+     - No
+     - Comma-separated IPv6 addresses where Trustpoint is reachable. Used for TLS certificate SANs and Django ``ALLOWED_HOSTS``. Defaults to ``::1``.
+   * - ``TP_TLS_DNS_NAMES``
+     - No
+     - Comma-separated DNS names where Trustpoint is reachable. Used for TLS certificate SANs and Django ``ALLOWED_HOSTS``. Defaults to ``localhost``.
+   * - ``TP_HTTP_PORT``
+     - No
+     - HTTP port for external access. Used in ``CSRF_TRUSTED_ORIGINS`` and Docker port mapping. Defaults to ``80``.
+   * - ``TP_HTTPS_PORT``
+     - No
+     - HTTPS port for external access. Used in ``CSRF_TRUSTED_ORIGINS`` and Docker port mapping. Defaults to ``443``.
+   * - ``DEFAULT_FROM_EMAIL``
+     - No
+     - Sender address for Trustpoint emails. Defaults to ``no-reply@trustpoint.de``.
+   * - ``EMAIL_HOST``
+     - No
+     - SMTP host. Leave empty to use Django's console backend.
+
+Auto-Setup from Environment Variables
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Trustpoint can be configured to skip the interactive setup wizard and auto-configure from environment variables.
+This is useful for automated deployments, CI/CD pipelines, or headless installations.
+
+.. important::
+
+   When ``TP_AUTO_SETUP=true``, the ``TP_ADMIN_USERNAME`` and ``TP_ADMIN_PASSWORD`` variables become **required**.
+
+To enable auto-setup, add the following variables to your ``.env`` file:
+
+.. list-table::
+   :widths: 30 10 60
+   :header-rows: 1
+
+   * - Variable
+     - Required
+     - Description
+   * - ``TP_AUTO_SETUP``
+     - Yes
+     - Set to ``true`` to enable automatic setup. Default: ``false``
+   * - ``TP_ADMIN_USERNAME``
+     - Yes*
+     - Initial superuser username. *Required when auto-setup is enabled.
+   * - ``TP_ADMIN_PASSWORD``
+     - Yes*
+     - Initial superuser password. *Required when auto-setup is enabled.
+   * - ``TP_INJECT_DEMO_DATA``
+     - No
+     - Set to ``true`` to inject demo domains and devices for testing. Default: ``false``
+
+.. note::
+
+   The TLS certificate SANs (``TP_TLS_IPV4_ADDRESSES``, ``TP_TLS_IPV6_ADDRESSES``, ``TP_TLS_DNS_NAMES``) 
+   are also used to configure Django's ``ALLOWED_HOSTS`` and ``CSRF_TRUSTED_ORIGINS``, ensuring consistency
+   between your TLS certificate and Django security settings.
+
+Auto-setup ``.env`` example:
+
+.. code-block:: bash
+
+    # Database configuration
+    POSTGRES_DB=trustpoint_db
+    DATABASE_USER=admin
+    DATABASE_PASSWORD=correct-horse-battery-staple
+    DATABASE_HOST=postgres
+    DATABASE_PORT=5432
+
+    # TLS/Network configuration
+    TP_TLS_IPV4_ADDRESSES=10.0.0.5
+    TP_TLS_DNS_NAMES=trustpoint.local
+
+    # Auto-setup configuration
+    TP_AUTO_SETUP=true
+    TP_ADMIN_USERNAME=admin
+    TP_ADMIN_PASSWORD=secure_admin_password_here
+    TP_INJECT_DEMO_DATA=false
+
+Setup (Load from Docker Hub)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+1. Download `docker-compose.yml <https://raw.githubusercontent.com/Trustpoint-Project/trustpoint/refs/heads/main/docker-compose.yml>`_
+   and `.env.example <https://raw.githubusercontent.com/Trustpoint-Project/trustpoint/refs/heads/main/.env.example>`_.
+
+2. Create the ``.env`` file as described above.
+
+3. Start all containers:
 
    .. code-block:: bash
 
        docker compose up -d
 
-  - **-d**: Runs the container in detached mode.
+   .. note::
 
-  .. note::
+   If the specified ports are already in use, adjust the port mappings in ``docker-compose.yml``.
 
-   If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
+Setup (Build from source)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Step-by-Step Setup (Build container) 
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-1. **Clone the Trustpoint Repository**
-
-   First, clone the Trustpoint source code from the official repository:
+1. Clone the repository:
 
    .. code-block:: bash
 
        git clone https://github.com/Trustpoint-Project/trustpoint.git
        cd trustpoint
 
-   This command downloads the Trustpoint source code to your local machine and navigates into the project directory.
+2. Create the ``.env`` file as described above.
 
-   .. note::
-      The database connection between the containers uses default credentials for testing. THIS IS INSECURE.
-      It is highly encouraged to change the default credentials in the `docker-compose.yml` file before building the containers.
-
-2. **Edit the .env file to specify allowed URLs**
-
-   Open the `.env` file in the project root and set the `TP_URLS` variable to include the URLs you will use to access Trustpoint. For example:
-
-   .. code-block:: bash
-
-       TP_URLS=trustpoint.myfactory.local,localhost:8443
-
-3. **Build the Trustpoint and Postgres Docker Images**
-
-   Use docker compose to build the Trustpoint and Postgres images from the source:
+3. Build the images:
 
    .. code-block:: bash
 
        docker compose build
 
-4. **Run the Trustpoint and Postgres Containers** 
-
-   Start the Trustpoint and Postgres containers using the images you just built:
+4. Start all containers:
 
    .. code-block:: bash
 
        docker compose up -d
 
-   - **-d**: Runs the container in detached mode.
-
    .. note::
 
-      If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
-
+      If the specified ports are already in use, adjust the port mappings in ``docker-compose.yml``.
 
 Getting Started with Docker
 ----------------------------
 
-Step-by-Step Setup (Load from Dockerhub)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Setup (Load from Docker Hub)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. **Pull the Trustpoint Docker Image**
-
-   First, pull the Trustpoint and Postgres docker images from Docker Hub. This command will download the pre-built container images directly:
+1. Pull the images:
 
    .. code-block:: bash
 
-        docker pull trustpointproject/trustpoint:latest
-        docker pull trustpointproject/postgres:latest
+       docker pull trustpointproject/trustpoint:latest
+       docker pull trustpointproject/postgres:latest
 
-   These commands pull the latest versions of the Trustpoint and Postgres images.
-
-2. **Run the Trustpoint and Postgres Containers with a Custom Name and Port Mappings**
-
-   Once the images are downloaded, you can start containers with custom names and ports mappings:
+2. Run the containers:
 
    .. code-block:: bash
 
-       docker run -d --name postgres<version> -v "postgres_data<version>":/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest
-       docker run -d --name trustpoint<version> -p 80:80 -p 443:443 trustpointproject/trustpoint:latest
+       docker run -d --name postgres-<version> \
+           -v postgres_data-<version>:/var/lib/postgresql \
+           -p 127.0.0.1:5432:5432 \
+           -e POSTGRES_USER=<db-user> \
+           -e POSTGRES_PASSWORD=<db-password> \
+           -e POSTGRES_DB=trustpoint_db \
+           trustpointproject/postgres:latest
 
-   ``E.g.: docker run -d --name postgres-v2.0.0 -v "postgres-v2.0.0":/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest``
-
-   - **-d**: Runs the container in detached mode.
-   - **--name trustpoint**: Names the Trustpoint container `trustpoint`.
-   - **--name postgres**: Names the Postgres container `postgres`.
-   - **-p 80:80**: Maps the Trustpoint container's HTTP port to your local machine's port 80.
-   - **-p 443:443**: Maps the Trustpoint container's HTTPs port to your local machine's port 443.
-   - **-p 5432:5432**: Maps the Postgres container's TCP port to your local machine's port 5432.
-   - **-v postgres_data:/var/lib/postgresql/data**: Creates a volume for Postgres to persist data.
+       docker run -d --name trustpoint-<version> \
+           --link postgres-<version> \
+           -p 80:80 -p 443:443 \
+           -e POSTGRES_DB=trustpoint_db \
+           -e DATABASE_USER=<db-user> \
+           -e DATABASE_PASSWORD=<db-password> \
+           -e DATABASE_HOST=postgres-<version> \
+           -e DATABASE_PORT=5432 \
+           trustpointproject/trustpoint:latest
 
    .. note::
 
-      If the specified ports are already in use on your system, modify the port mapping in the command accordingly.
+      PostgreSQL 18+ stores data under ``/var/lib/postgresql/18/main``.
+      Mount the volume at ``/var/lib/postgresql``, not ``/var/lib/postgresql/data``.
 
-Step-by-Step Setup (Build container)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Setup (Build from source)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. **Clone the Trustpoint Repository**
-
-   First, clone the Trustpoint source code from the official repository:
+1. Clone the repository and build the images:
 
    .. code-block:: bash
 
        git clone https://github.com/Trustpoint-Project/trustpoint.git
        cd trustpoint
-
-   This command downloads the Trustpoint source code to your local machine and navigates into the project directory.
-
-2. **Build the Postgres and Trustpoint Docker Images**
-
-   Use Docker to build the Postgres and Trustpoint images:
-
-   .. code-block:: bash
-
        docker build -t trustpointproject/postgres:latest -f docker/db/Dockerfile .
        docker build -t trustpointproject/trustpoint:latest -f docker/trustpoint/Dockerfile .
 
-   - **-t**: Tags the image with the name `trustpoint` / `postgres`.
-   - **-f**: specifies the filepath of the `dockerfile`.`
-   - **.**: Specifies the current directory as the build context.
-
-3. **Run the Trustpoint Container with a Custom Name and Port Mappings** 
-
-   Start the database and Trustpoint container using the images you just built, with custom names and both port mappings:
+2. Run the containers (replace ``<db-user>`` and ``<db-password>`` with strong values):
 
    .. code-block:: bash
 
-       docker run -d --name postgres<version> -p5432:5432 -v"postgres_data<version>":/var/lib/postgresql/data -ePOSTGRES_USER=admin -ePOSTGRES_PASSWORD=testing321 -ePOSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
-       docker run -d --name trustpoint<version> --link postgres<version> -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST="postgres<version>" -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
+       docker run -d --name postgres-<version> \
+           -v postgres_data-<version>:/var/lib/postgresql \
+           -p 127.0.0.1:5432:5432 \
+           -e POSTGRES_USER=<db-user> \
+           -e POSTGRES_PASSWORD=<db-password> \
+           -e POSTGRES_DB=trustpoint_db \
+           trustpointproject/postgres:latest
 
-   **E.g.:**
+       docker run -d --name trustpoint-<version> \
+           --link postgres-<version> \
+           -p 80:80 -p 443:443 \
+           -e POSTGRES_DB=trustpoint_db \
+           -e DATABASE_USER=<db-user> \
+           -e DATABASE_PASSWORD=<db-password> \
+           -e DATABASE_HOST=postgres-<version> \
+           -e DATABASE_PORT=5432 \
+           trustpointproject/trustpoint:latest
 
-   .. code-block:: bash
+Verify the Setup
+----------------
 
-       docker run -d --name postgres-v2.0.0 -p5432:5432 -vpostgres_data-v2.0.0:/var/lib/postgresql/data -ePOSTGRES_USER=admin -ePOSTGRES_PASSWORD=testing321 -ePOSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
-       docker run -d --name trustpoint-v2.0.0 --link postgres-v2.0.0 -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres-v2.0.0 -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
+Once the containers are running:
 
-   - **-d**: Runs the container in detached mode.
-   - **--name**: Names the Trustpoint container `trustpoint` / `postgres`.
-   - **-p**: Maps the container's port to your local machine's port.
-   - **-v**: Creates a volume to persist data.
-   - **-e**: Sets environment variables.
+- Open ``http://localhost`` in your browser to access the Trustpoint setup wizard.
+- The wizard generates a TLS certificate on first run. After that, only HTTPS connections are accepted. You may need to accept a self-signed certificate in your browser.
+- Set a strong password for the admin user when prompted.
 
+Change the Admin User Password
+-------------------------------
 
-Verify the Setup 🔍
--------------------
+- Go to ``https://localhost/admin``.
+- Click **Users**, select the **admin** user.
+- Click the "change password" link, enter a new password, and click **Save**.
 
-Once the containers are running, you can verify the setup:
-
-- **Web Interface**: Open `http://localhost` in your browser to access the Trustpoint setup wizard.
-- **TLS Connection**: As the first step of the wizard, a TLS server certificate is generated. After this, only HTTPs connections will be accepted.
-
-.. note::
-   You may need to accept a self-signed certificate in your browser to proceed.
-
-- **Set Credentials**: Be sure to choose a strong password for the admin user during the setup wizard.
-
-.. admonition:: 🥳 CONGRATULATIONS!
-   :class: tip
-
-   You’ve successfully set up Trustpoint! Your environment is now ready to securely manage digital identities for your industrial devices. You can start registering devices, issuing certificates, and building a trusted network.
-
-Change the Current Admin User Password
----------------------------------------
-
-To secure your Trustpoint setup, it may be important to change the default admin user password:
-
-- Go to https://localhost/admin
-- Click on the **Users** section in the Django admin dashboard.
-- Select the **admin** user from the list.
-- Scroll down to the **password field** and click the "change password" link.
-- Enter and confirm the new password.
-- Click **Save** to update the password.
-
-Tips and Troubleshooting 
+Tips and Troubleshooting
 -------------------------
 
-- **View Logs**: For troubleshooting, view logs with:
+**View logs:**
 
-  .. code-block:: bash
+.. code-block:: bash
 
-      docker logs -f trustpoint
-      docker logs -f postgres
-      docker compose logs trustpoint -f
-      docker compose logs postgres -f
+    docker compose logs trustpoint -f
+    docker compose logs postgres -f
 
-- **Stop and Remove the Container**: Stop and remove the container with:
+**Stop and remove containers and volumes:**
 
-  .. code-block:: bash
+.. code-block:: bash
 
-      docker stop trustpoint-container postgres && docker rm trustpoint-container postgres
-      docker compose down -v
-
-      
- - **-v**: Removes the volume.
-
+    docker compose down -v
 
 What to Do Next
 ----------------
 
-After setting up and Trustpoint, here are some recommended next steps to explore the full capabilities of the platform:
+1. **Explore with test data**: Navigate to **Home > Notifications > Populate Test Data** in the Trustpoint interface.
 
-1. **Explore Trustpoint with test data** 🧪:
-   Familiarize yourself with Trustpoint’s functionalities by running it with sample test data. To populate test data, navigate to **Home > Notifications > Populate Test Data** in the Trustpoint interface.
+2. **Use the Trustpoint Client**: Install the `Trustpoint Client <https://trustpoint-client.readthedocs.io>`_ on end devices for streamlined certificate issuance.
 
-2. **Use the Trustpoint in conjunction with the Trustpoint Client** 💻:
-   The easiest way to fully utilize Trustpoint is by pairing it with the associated Trustpoint Client, which is installed on end devices. The client enables streamlined identity management and certificate issuance. For more details, visit the `Trustpoint-Client Documentation <https://trustpoint-client.readthedocs.io>`_.
-
-3. **Issue your first certificate for an end device** 🛡️:
-   To do this, you need an Issuing CA certificate, a domain and a device that you must define in Trustpoint. Therefore follow the steps described in :ref:`quickstart-operation-guide`
+3. **Issue your first certificate**: Follow the steps in :ref:`quickstart-operation-guide`.

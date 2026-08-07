@@ -1,4 +1,4 @@
-name: Trustpoint pipeline
+name: CI/CD / Main Pipeline
 
 on:
   push:

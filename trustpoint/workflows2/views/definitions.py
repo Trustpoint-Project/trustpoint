@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Workflow definition list and editor views for Workflow 2."""
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from django.views import View
 from django.views.generic import ListView
 
 from trustpoint.page_context import PageContextMixin
+from trustpoint.views.base import UserPermissionRequiredMixin
 from workflows2.forms import Workflow2DefinitionForm
 from workflows2.models import Workflow2Definition
 from workflows2.services.definitions import WorkflowDefinitionService
@@ -23,7 +27,15 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class Workflow2DefinitionListView(PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
+class WF2DefPermReqMixin(UserPermissionRequiredMixin):
+    """Mixin requiring the user to have the 'users.manage_workflow' permission."""
+
+    permission_required = 'users.manage_workflow'
+    raise_exception = True
+
+
+class Workflow2DefinitionListView(
+    WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
     """Show saved Workflow 2 definitions."""
 
     page_category = 'workflows2'
@@ -38,7 +50,7 @@ class Workflow2DefinitionListView(PageContextMixin, LoginRequiredMixin, ListView
         return Workflow2Definition.objects.order_by('-created_at')
 
 
-class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2DefinitionCreateView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Create a new Workflow 2 definition from YAML."""
 
     page_category = 'workflows2'
@@ -143,7 +155,7 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
         return redirect('workflows2:definitions_edit', pk=obj.id)
 
 
-class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2DefinitionEditView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Edit an existing Workflow 2 definition."""
 
     page_category = 'workflows2'

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Sets up a Trustpoint test environment for AOKI IDevID-based onboarding testing."""
 
 from __future__ import annotations
@@ -8,13 +11,14 @@ from typing import TYPE_CHECKING
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.ed448 import Ed448PrivateKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from trustpoint_core.serializer import CredentialSerializer
 
+from aoki.management.commands.aoki_gen_test_certs import AokiTestCertGenerator
 from pki.management.commands.base_commands import CertificateCreationCommandMixin
 from pki.models import CaModel, CertificateModel, DevIdRegistration, DomainModel
 from pki.models.credential import OwnerCredentialModel
@@ -29,11 +33,15 @@ CERTS_DIR = (Path(__file__).resolve().parents[2] / 'tests' / 'certs').resolve()
 IDEVID_CA_CERT_PATH = CERTS_DIR / 'idevid_ca.pem'
 OWNER_ID_CERT_PATH = CERTS_DIR / 'owner_id.pem'
 OWNER_ID_KEY_PATH = CERTS_DIR / 'owner_id_pk.pem'
+DOMAIN_BASED_OWNER_ID_CERT_PATH = CERTS_DIR / 'domain_ca_owner_id.pem'
+DOMAIN_BASED_OWNER_ID_KEY_PATH = CERTS_DIR / 'domain_ca_owner_id_pk.pem'
 OWNER_CA_CERT_PATH = CERTS_DIR / 'ownerid_ca.pem'
+OWNER_CA_KEY_PATH = CERTS_DIR / 'ownerid_ca_pk.pem'
 
 IDEVID_TRUSTSTORE_UNIQUE_NAME = 'AokiIDevIDTruststore'
 DEVID_REGISTRATION_UNIQUE_NAME = 'AokiIDevIDRegistration'
 OWNER_CRED_UNIQUE_NAME = 'AokiOwnerCred'
+DOMAIN_BASED_OWNER_CRED_UNIQUE_NAME = 'DomainBasedAokiOwnerCred'
 
 ISSUING_CA_UNIQUE_NAME = 'aoki-issuing-ca'
 DOMAIN_UNIQUE_NAME = 'aoki'
@@ -76,18 +84,31 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
 
         issuing_ca = self._get_or_create_issuing_ca()
         domain = self._get_or_create_domain(issuing_ca)
+        self._get_or_create_domain_ca_owner_id_cert(domain_ca=issuing_ca)
         truststore = self._get_or_create_idevid_truststore()
         self._get_or_create_devid_registration(truststore, domain)
-        self._get_or_create_owner_credential()
+        self._get_or_create_owner_credential(
+            unique_name=OWNER_CRED_UNIQUE_NAME,
+            cert_path=OWNER_ID_CERT_PATH,
+            key_path=OWNER_ID_KEY_PATH,
+            ca_cert_path=OWNER_CA_CERT_PATH
+        )
+        self._get_or_create_owner_credential(
+            unique_name=DOMAIN_BASED_OWNER_CRED_UNIQUE_NAME,
+            cert_path=DOMAIN_BASED_OWNER_ID_CERT_PATH,
+            key_path=DOMAIN_BASED_OWNER_ID_KEY_PATH,
+            ca_cert_path=OWNER_CA_CERT_PATH
+        )
 
         self.log_and_stdout('\n=== AOKI IDevID test environment ready ===')
-        self.log_and_stdout(f'  Issuing CA:              {ISSUING_CA_UNIQUE_NAME}')
-        self.log_and_stdout(f'  Domain:                  {DOMAIN_UNIQUE_NAME}')
-        self.log_and_stdout(f'  IDevID Truststore:       {IDEVID_TRUSTSTORE_UNIQUE_NAME}')
-        self.log_and_stdout(f'  DevID Registration:      {DEVID_REGISTRATION_UNIQUE_NAME}')
-        self.log_and_stdout(f'    Serial number pattern: {SERIAL_NUMBER_PATTERN}')
-        self.log_and_stdout(f'    Domain:                {domain.unique_name}')
-        self.log_and_stdout(f'  Owner Credential:        {OWNER_CRED_UNIQUE_NAME}')
+        self.log_and_stdout(f'  Issuing CA:               {ISSUING_CA_UNIQUE_NAME}')
+        self.log_and_stdout(f'  Domain:                   {DOMAIN_UNIQUE_NAME}')
+        self.log_and_stdout(f'  IDevID Truststore:        {IDEVID_TRUSTSTORE_UNIQUE_NAME}')
+        self.log_and_stdout(f'  DevID Registration:       {DEVID_REGISTRATION_UNIQUE_NAME}')
+        self.log_and_stdout(f'    Serial number pattern:  {SERIAL_NUMBER_PATTERN}')
+        self.log_and_stdout(f'    Domain:                 {domain.unique_name}')
+        self.log_and_stdout(f'  Owner Credential:         {OWNER_CRED_UNIQUE_NAME}')
+        self.log_and_stdout(f'  Domain-based Owner Cred.: {DOMAIN_BASED_OWNER_CRED_UNIQUE_NAME}')
 
     def _ensure_certs_exist(self) -> None:
         """Run ``aoki_gen_test_certs`` if any required certificate file is missing."""
@@ -96,6 +117,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             OWNER_ID_CERT_PATH,
             OWNER_ID_KEY_PATH,
             OWNER_CA_CERT_PATH,
+            OWNER_CA_KEY_PATH,
         ]
         if not all(f.exists() for f in required_files):
             self.log_and_stdout('Test certificates not found - running aoki_gen_test_certs...')
@@ -114,8 +136,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             )
             return CaModel.objects.get(unique_name=ISSUING_CA_UNIQUE_NAME)
 
-        root_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        issuing_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        root_key = self.create_backend_rsa_private_key(alias=f'{ISSUING_CA_UNIQUE_NAME}-root', key_size=2048)
+        issuing_key = self.create_backend_rsa_private_key(alias=ISSUING_CA_UNIQUE_NAME, key_size=2048)
 
         root_cn = f'{ISSUING_CA_UNIQUE_NAME} Root CA'
         root_cert, _ = self.create_root_ca(
@@ -151,6 +173,22 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         else:
             self.log_and_stdout(f'Domain "{DOMAIN_UNIQUE_NAME}" already exists, skipping creation.')
         return domain
+
+    def _get_or_create_domain_ca_owner_id_cert(self, domain_ca: CaModel) -> None:
+        """Generates a domain-based DevOwnerID, pinning the certificate of the domain CA."""
+        if DOMAIN_BASED_OWNER_ID_CERT_PATH.exists() and DOMAIN_BASED_OWNER_ID_KEY_PATH.exists():
+            self.log_and_stdout('Domain-based DevOwnerID certificate files already exist, skipping generation.')
+            return
+
+        domain_ca_cert = domain_ca.get_certificate()
+        owner_ca_cert = x509.load_pem_x509_certificate(OWNER_CA_CERT_PATH.read_bytes())
+        owner_ca_key = load_pem_private_key(OWNER_CA_KEY_PATH.read_bytes(), password=None)
+
+        AokiTestCertGenerator.generate_domain_ca_owner_id_cert(
+            domain_ca_cert=domain_ca_cert,
+            owner_ca_cert=owner_ca_cert,
+            owner_ca_key=owner_ca_key,
+        )
 
     def _get_or_create_idevid_truststore(self) -> TruststoreModel:
         """Return an existing IDevID truststore or create one from the generated IDevID CA cert."""
@@ -200,17 +238,17 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         )
         return registration
 
-    def _get_or_create_owner_credential(self) -> OwnerCredentialModel:
+    def _get_or_create_owner_credential(self, unique_name: str, cert_path: Path, key_path: Path, ca_cert_path: Path) -> OwnerCredentialModel:
         """Return an existing owner credential or create one from the generated DevOwnerID files."""
-        if OwnerCredentialModel.objects.filter(unique_name=OWNER_CRED_UNIQUE_NAME).exists():
+        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
             self.log_and_stdout(
-                f'Owner credential "{OWNER_CRED_UNIQUE_NAME}" already exists, skipping creation.'
+                f'Owner credential "{unique_name}" already exists, skipping creation.'
             )
-            return OwnerCredentialModel.objects.get(unique_name=OWNER_CRED_UNIQUE_NAME)
+            return OwnerCredentialModel.objects.get(unique_name=unique_name)
 
-        owner_cert = x509.load_pem_x509_certificate(OWNER_ID_CERT_PATH.read_bytes())
-        raw_key = load_pem_private_key(OWNER_ID_KEY_PATH.read_bytes(), password=None)
-        owner_ca_cert = x509.load_pem_x509_certificate(OWNER_CA_CERT_PATH.read_bytes())
+        owner_cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+        raw_key = load_pem_private_key(key_path.read_bytes(), password=None)
+        owner_ca_cert = x509.load_pem_x509_certificate(ca_cert_path.read_bytes())
 
         if not isinstance(
             raw_key,
@@ -226,10 +264,10 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         )
 
         owner_credential = OwnerCredentialModel.create_new_owner_credential(
-            unique_name=OWNER_CRED_UNIQUE_NAME,
+            unique_name=unique_name,
             credential_serializer=credential_serializer,
         )
-        self.log_and_stdout(f'Created owner credential "{OWNER_CRED_UNIQUE_NAME}".')
+        self.log_and_stdout(f'Created owner credential "{unique_name}".')
         return owner_credential
 
     @staticmethod

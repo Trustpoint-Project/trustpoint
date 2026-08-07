@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
@@ -53,7 +56,7 @@ INVALID_YAML = """\
 schema: trustpoint.workflow.v2
 name: Bad
 workflow:
-  start: 
+  start:
 """
 
 

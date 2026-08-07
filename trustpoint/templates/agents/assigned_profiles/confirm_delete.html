@@ -1,0 +1,36 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-0">{% trans "Remove Profile Assignments" %}</h1>
+    </div>
+    <div class="card-body">
+        <p class="text-danger">
+            {% blocktrans count count=assigned_profiles.count %}
+                Are you sure you want to remove {{ count }} profile assignment?
+            {% plural %}
+                Are you sure you want to remove {{ count }} profile assignments?
+            {% endblocktrans %}
+        </p>
+        <ul>
+            {% for assignment in assigned_profiles %}
+                <li>{{ assignment.workflow_definition.name }}</li>
+            {% endfor %}
+        </ul>
+
+        <form method="post">
+            {% csrf_token %}
+            {{ form.pks }}
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-danger">{% trans "Confirm Remove" %}</button>
+                <a href="{% url 'agents:assigned-profiles-list' agent_id=agent.pk %}"
+                   class="btn btn-outline-secondary">
+                    {% trans "Cancel" %}
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock content %}

@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to check for not onboarded devices."""
 
 from __future__ import annotations
@@ -35,7 +38,9 @@ class Command(BaseCommand):
 
     def _check_non_onboarded_devices(self) -> None:
         """Task to create an info notification if a device is not onboarded."""
-        non_onboarded_devices = DeviceModel.objects.filter(onboarding_config__onboarding_status=OnboardingStatus.PENDING)
+        non_onboarded_devices = DeviceModel.objects.filter(
+            onboarding_config__onboarding_status=OnboardingStatus.PENDING
+        ).select_related('domain')
 
         for device in non_onboarded_devices:
             if not NotificationModel.objects.filter(event='DEVICE_NOT_ONBOARDED', device=device).exists():
@@ -45,6 +50,7 @@ class Command(BaseCommand):
                 message_data = {'device': device_name, 'domain': unique_name}
 
                 notification = NotificationModel.objects.create(
+                    domain=device.domain,
                     device=device,
                     created_at=timezone.now(),
                     notification_source=NotificationModel.NotificationSource.DEVICE,

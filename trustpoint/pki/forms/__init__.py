@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Django forms for PKI management in Trustpoint."""
 
 from .cert_profiles import CertificateIssuanceForm, CertProfileConfigForm, ProfileBasedFormFieldBuilder
@@ -12,7 +15,6 @@ from .issuing_cas import (
     IssuingCaCrlCycleForm,
     IssuingCaFileTypeSelectForm,
     IssuingCaTruststoreAssociationForm,
-    get_private_key_location_from_config,
 )
 from .owner_credential import (
     OwnerCredentialAddRequestEstNoOnboardingForm,
@@ -45,5 +47,4 @@ __all__ = [
     'ProfileBasedFormFieldBuilder',
     'TruststoreAddForm',
     'TruststoreDownloadForm',
-    'get_private_key_location_from_config',
 ]

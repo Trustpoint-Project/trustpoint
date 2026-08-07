@@ -1,6 +1,11 @@
-# Sphinx configuration file for the Trustpoint documentation.  # noqa: D100, INP001
-# For full details, see:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
+"""Sphinx configuration file for the Trustpoint documentation.
+
+For full details, see:
+https://www.sphinx-doc.org/en/master/usage/configuration.html
+"""
 
 import os
 import sys
@@ -8,7 +13,7 @@ from pathlib import Path
 
 import django
 
-BUILD_AUTODOCS = True
+BUILD_AUTODOCS = False
 
 # -- Path setup -------------------------------------------------------------
 # Ensures Sphinx can find the project's modules for autodoc and autoapi.
@@ -35,15 +40,44 @@ plantuml = f'java -jar {PLANTUML_PATH}'
 project = 'Trustpoint'
 copyright = '2026, Trustpoint Project'  # noqa: A001
 author = 'Trustpoint Project'
-release = '0.6.0.dev1'  # Project version
+release = '0.6.0'  # Project version
 
 # -- General configuration --------------------------------------------------
 extensions = [
     'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
     'sphinx.ext.viewcode',  # Adds links to highlighted source code
     'sphinxcontrib.plantuml',  # Enables PlantUML diagrams
-    'sphinxcontrib.openapi' #  Generate APIs docs
+    'sphinxcontrib.openapi',  # Generate APIs docs
+    'sphinxcontrib.mermaid',  # Enables Mermaid diagrams
+    'myst_parser',  # Supports Markdown files
 ]
+
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
+
+# -- Markdown configuration  ------------------------------------------------
+
+myst_enable_extensions = [
+    'strikethrough',   # Enables ~~strikethrough~~ syntax
+    'tasklist',        # Enables - [ ] and - [x] checkboxes
+    'linkify',         # Turns URLs (like [www.example.com](https://www.example.com)) into clickable links
+    'gfm_autolink',    # Replicates GitHub's advanced literal URL parsing rules
+    'alert',           # Enables GitHub-style blockquote callouts (> [!NOTE], > [!WARNING])
+    'attrs_block',     # Allows block-level attributes (e.g., {#id .class key=val} or {.text-center})
+    'colon_fence',     # Enables ::: directive syntax for better extension integration
+]
+
+# Mirror GitHub Markdown behavior
+myst_strikethrough_single_tilde = True  # Allows single tilde (~strikethrough~) support
+myst_heading_anchors = 4                # Generates slug anchors for H1-H4 headers (e.g., #my-header)
+
+# Do NOT add 'mermaid' to myst_fence_as_directive - it causes HTML escaping issues
+# Instead, use the {mermaid} directive syntax in Markdown files
+
+
+# -- Autodoc Configuration --------------------------------------------------
 
 if BUILD_AUTODOCS:
     autodoc_extensions = [
@@ -91,6 +125,44 @@ exclude_patterns = [
     '../../trustpoint/.venv'
 ]
 
+# -- Mermaid Configuration --------------------------------------------------
+# Configure Mermaid diagram rendering
+mermaid_version = '11.4.0'  # Use stable version
+
+# Configure mermaid.initialize() with JSON (not JavaScript)
+mermaid_init_config = {
+    'startOnLoad': True,
+    'theme': 'default',
+    'flowchart': {
+        'useMaxWidth': True,
+        'htmlLabels': True,
+        'curve': 'basis'
+    },
+    'securityLevel': 'loose'
+}
+
+# Use 'raw' format for HTML output (client-side rendering)
+mermaid_output_format = 'raw'
+mermaid_d3_zoom = False
+
 # -- HTML output options ----------------------------------------------------
 html_theme = 'furo'  # Modern, responsive theme
 html_static_path = ['_static']  # Directory for static assets
+
+# Furo theme options for better sidebar navigation
+html_theme_options = {
+    'navigation_with_keys': True,
+    'sidebar_hide_name': False,
+}
+
+# Control sidebar depth - shows all levels defined in toctrees
+html_sidebars = {
+    '**': [
+        'sidebar/scroll-start.html',
+        'sidebar/brand.html',
+        'sidebar/search.html',
+        'sidebar/navigation.html',
+        'sidebar/ethical-ads.html',
+        'sidebar/scroll-end.html',
+    ]
+}

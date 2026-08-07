@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to check for devices with revoked certificates."""
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ class Command(BaseCommand):
         # Find devices that have at least one revoked certificate
         devices_with_revoked_certs = DeviceModel.objects.filter(
             issued_credentials__credential__certificate__revoked_certificate__isnull=False,
-        ).distinct()
+        ).distinct().select_related('domain')
 
         for device in devices_with_revoked_certs:
             event = f'DEVICE_CERT_REVOKED_{device.pk}'
@@ -47,6 +50,7 @@ class Command(BaseCommand):
                 message_data = {'device': device_name}
 
                 notification = NotificationModel.objects.create(
+                    domain=device.domain,
                     device=device,
                     created_at=timezone.now(),
                     notification_source=NotificationModel.NotificationSource.DEVICE,

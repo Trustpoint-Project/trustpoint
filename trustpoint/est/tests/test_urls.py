@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Comprehensive tests for EST urls.py module."""
 
 from django.urls import resolve, reverse

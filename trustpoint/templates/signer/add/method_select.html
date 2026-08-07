@@ -13,8 +13,9 @@
             </div>
             <div class="card-body">
                 <div class="tp-card-centered-content">
-                    <h2>{% trans 'Import new Signer from file' %}</h2>
+                    <h2>{% trans 'Create Signer' %}</h2>
                     <hr class="mb-4">
+                    <a href="{% url 'signer:signer-add-generate' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Generate With Crypto Backend' %}</a>
                     <a href="{% url 'signer:signer-add-file_import-file_type_select' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Import From File' %}</a>
                 </div>
             </div>

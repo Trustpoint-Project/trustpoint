@@ -1,4 +1,4 @@
-name: ZAP Baseline Scan
+name: Security / ZAP Baseline Scan
 
 on:
   push:
@@ -19,6 +19,9 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+
+      - name: Setup .env file
+        run: cp .env.example .env
 
       - name: Start Trustpoint via docker-compose
         run: |

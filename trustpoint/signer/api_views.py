@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """API Views for Signer-related endpoints.
 
 Provides REST API views for signer operations including hash signing.

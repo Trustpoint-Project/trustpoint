@@ -1,0 +1,112 @@
+{% load i18n %}
+
+{% block table_filter %}
+
+  <div class="card-body pb-0 d-flex gap-2 align-items-center">
+
+    {# --- Filters dropdown --- #}
+    <div class="dropdown mb-1">
+      <button class="btn btn-sm {% if filters_active %}btn-primary{% else %}btn-outline-secondary{% endif %} dropdown-toggle"
+              type="button"
+              id="tp-filter-dropdown-btn"
+              data-bs-toggle="dropdown"
+              data-bs-auto-close="outside"
+              aria-expanded="{% if filters_active %}true{% else %}false{% endif %}">
+        {% trans 'Filters' %}{% if filters_active %} <span class="badge bg-white text-primary ms-1">{% trans 'active' %}</span>{% endif %}
+      </button>
+      <div class="dropdown-menu p-3" id="tp-filter-dropdown-menu" style="min-width: 22rem;">
+        <form method="get" class="d-flex flex-column gap-2">
+
+          <div>
+            <label for="id_ip_address" class="form-label mb-1 fw-semibold">
+              {% trans "IP Address" %}
+            </label>
+            <input type="text" name="ip_address" id="id_ip_address" class="form-control form-control-sm" value="{{ request.GET.ip_address }}">
+          </div>
+
+          <div>
+            <label for="id_hostname" class="form-label mb-1 fw-semibold">
+              {% trans "Hostname" %}
+            </label>
+            <input type="text" name="hostname" id="id_hostname" class="form-control form-control-sm" value="{{ request.GET.hostname }}">
+          </div>
+
+          <div>
+            <label for="id_ssl_status" class="form-label mb-1 fw-semibold">
+              {% trans "SSL Status" %}
+            </label>
+            <select name="ssl_status" id="id_ssl_status" class="form-select form-select-sm">
+              <option value="">{% trans "All" %}</option>
+              <option value="self_signed" {% if request.GET.ssl_status == "self_signed" %}selected{% endif %}>{% trans "Self-Signed" %}</option>
+              <option value="pki_linked" {% if request.GET.ssl_status == "pki_linked" %}selected{% endif %}>{% trans "PKI Linked" %}</option>
+              <option value="none" {% if request.GET.ssl_status == "none" %}selected{% endif %}>{% trans "None" %}</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="id_port" class="form-label mb-1 fw-semibold">
+              {% trans "Port" %}
+            </label>
+            <input type="number" name="port" id="id_port" class="form-control form-control-sm" placeholder="e.g. 443" value="{{ request.GET.port }}">
+          </div>
+
+          <div class="d-flex gap-2 mt-1">
+            <button type="submit" class="btn btn-primary btn-sm flex-fill">
+              {% trans 'Apply' %}
+            </button>
+            <a href="{% url 'discovery:device_list' %}" class="btn btn-outline-secondary btn-sm flex-fill">
+              {% trans 'Reset' %}
+            </a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+    {# --- Column visibility dropdown --- #}
+    <div class="dropdown mb-1">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+              data-bs-toggle="dropdown" aria-expanded="false"
+              data-bs-auto-close="outside">
+        {% trans 'Columns' %}
+      </button>
+      <ul class="dropdown-menu" id="tp-column-toggle-menu">
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="ip_address" checked> {% trans 'IP Address' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="hostname" checked> {% trans 'Hostname' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="ports" checked> {% trans 'Ports Found' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="ssl_status" checked> {% trans 'SSL Status' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="last_seen"> {% trans 'Last Seen' %}
+          </label>
+        </li>
+      </ul>
+    </div>
+
+    {# --- CSV export button --- #}
+    <div class="mb-1">
+      <a href="{% url 'discovery:export_csv' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-download me-1"></i>
+        {% trans "Export" %}
+      </a>
+    </div>
+
+  </div>
+
+{% endblock table_filter %}

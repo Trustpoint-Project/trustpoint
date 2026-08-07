@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Compile Workflow 2 condition trees into IR fragments."""
 
 from __future__ import annotations

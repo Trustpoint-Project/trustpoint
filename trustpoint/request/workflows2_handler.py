@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Route request-context events into the Workflow 2 dispatch layer."""
 
 from __future__ import annotations

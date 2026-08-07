@@ -1,0 +1,60 @@
+{% load i18n %}
+{% block discovery_devices_table %}
+<table class="table" id="discovery-devices-table">
+    <thead>
+    <tr>
+        <th class="text-nowrap" data-col="ip_address">
+            {% trans 'IP Address' %}
+        </th>
+        <th class="text-nowrap" data-col="hostname">
+            {% trans 'Hostname' %}
+        </th>
+        <th class="text-nowrap" data-col="ports">
+            {% trans 'Ports Found' %}
+        </th>
+        <th class="text-nowrap" data-col="ssl_status">
+            {% trans 'SSL Status' %}
+        </th>
+        <th class="text-nowrap" data-col="last_seen">
+            {% trans 'Last Seen' %}
+        </th>
+        <th class="text-nowrap">{% trans 'Actions' %}</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for d in devices %}
+    <tr>
+        <td data-col="ip_address">
+            <a href="{% url 'discovery:device_detail' d.id %}">{{ d.ip_address }}</a>
+        </td>
+        <td data-col="hostname">{{ d.hostname|default:"—" }}</td>
+        <td data-col="ports">
+            {% for port in d.open_ports %}
+                <span class="badge bg-secondary me-1">{{ port }}</span>
+            {% empty %}
+                —
+            {% endfor %}
+        </td>
+        <td data-col="ssl_status">
+            {% if d.certificate_record.is_self_signed %}
+                <span class="badge bg-warning text-dark">{% trans "Self-Signed" %}</span>
+            {% elif d.certificate_record %}
+                <span class="badge bg-success">{% trans "PKI Linked" %}</span>
+            {% else %}
+                <span class="text-muted">{% trans "None" %}</span>
+            {% endif %}
+        </td>
+        <td data-col="last_seen">{{ d.last_seen|date:"Y-m-d H:i" }}</td>
+        <td>
+            <a href="{% url 'discovery:device_detail' d.id %}" class="btn btn-sm btn-primary">{% trans "Details" %}</a>
+        </td>
+    </tr>
+    {% empty %}
+    <tr>
+        <td colspan="6" class="text-center p-5 text-muted">{% trans "No assets discovered in inventory." %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endblock discovery_devices_table %}

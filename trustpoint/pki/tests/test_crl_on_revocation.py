@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for auto-issuing CRLs after certificate revocation."""
 
 from __future__ import annotations
@@ -9,6 +12,7 @@ from django.utils import timezone
 from django_q.models import Schedule  # type: ignore[import-untyped]
 
 from pki.models import CertificateModel, RevokedCertificateModel
+from pki.tests.managed_ca_helpers import create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 
 
@@ -135,7 +139,7 @@ def test_revocation_signal_creates_one_schedule_per_ca(issuing_ca_instance: dict
 
     Schedule.objects.all().delete()
 
-    other_cert, other_key = CertificateGenerator.create_root_ca('Other Root CA')
+    other_cert, other_key = create_managed_root_ca('Other Root CA')
     other_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=other_cert,
         private_key=other_key,
