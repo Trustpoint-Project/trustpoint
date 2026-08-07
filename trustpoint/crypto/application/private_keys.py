@@ -243,11 +243,7 @@ class ManagedMLDSAPrivateKey:
         return self._crypto_backend.sign(
             key=self._key_ref,
             data=data,
-            request=SignRequest(
-                signature_algorithm=SignatureAlgorithm.MLDSA,
-                hash_algorithm=None,
-                prehashed=False,
-            ),
+            request=SignRequest.mldsa_pure(),
         )
 
     @property

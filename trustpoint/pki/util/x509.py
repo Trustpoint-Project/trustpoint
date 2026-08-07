@@ -10,7 +10,7 @@ import itertools
 import logging
 import urllib.parse
 from datetime import UTC
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
@@ -219,12 +219,12 @@ class CertificateGenerator:
 
         if isinstance(issuer_private_key, ManagedMLDSAPrivateKey):
             certificate = builder.sign(
-                private_key=actual_issuer_key,
+                private_key=cast('PrivateKey', actual_issuer_key),
                 algorithm=None,
             )
         else:
             certificate = builder.sign(
-                private_key=actual_issuer_key,
+                private_key=cast('PrivateKey', actual_issuer_key),
                 algorithm=hash_algorithm,
             )
         return certificate, private_key
@@ -292,14 +292,14 @@ class CertificateGenerator:
             builder = builder.add_extension(ext, critical=critical)
 
         actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(actual_issuer_key)
+        hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(cast('PrivateKey', actual_issuer_key))
         # For ML-DSA keys, hash_algorithm will be None, which is correct
         if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
             err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
             raise TypeError(err_msg)
 
         certificate = builder.sign(
-            private_key=actual_issuer_key,
+            private_key=cast('PrivateKey', actual_issuer_key),
             algorithm=hash_algorithm,
         )
         return certificate, private_key
@@ -730,7 +730,7 @@ class CertificateVerifier:
                     cert.signature,
                     cert.tbs_certificate_bytes,
                     padding.PKCS1v15(),
-                    hash_algorithm,
+                    hash_algorithm,  # type: ignore[arg-type]
                 )
             except Exception as e:
                 err_msg = f'Certificate signature verification failed: {e}'
@@ -740,14 +740,14 @@ class CertificateVerifier:
                 issuer_public_key.verify(
                     cert.signature,
                     cert.tbs_certificate_bytes,
-                    ec.ECDSA(hash_algorithm),
+                    ec.ECDSA(hash_algorithm),  # type: ignore[arg-type]
                 )
             except Exception as e:
                 err_msg = f'Certificate signature verification failed: {e}'
                 raise ValueError(err_msg) from e
         elif is_mldsa:
             try:
-                issuer_public_key.verify(
+                issuer_public_key.verify(  # type: ignore[union-attr,call-arg]
                     signature=cert.signature,
                     data=cert.tbs_certificate_bytes,
                 )

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import TYPE_CHECKING, NoReturn, get_args
+from typing import TYPE_CHECKING, NoReturn, cast, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, mldsa, rsa
@@ -26,7 +26,7 @@ from workflows2.integrations.certificates import emit_certificate_issued_for_rec
 if TYPE_CHECKING:
     import ipaddress
 
-    from trustpoint_core.crypto_types import PublicKey
+    from trustpoint_core.crypto_types import PrivateKey, PublicKey
 
     from devices.models import DeviceModel
     from pki.models.domain import DomainModel
@@ -478,7 +478,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                     )
                     self._raise_type_error(err_msg)
 
-                allowed_hash_algorithm: AllowedCertSignHashAlgos = hash_algorithm
+                allowed_hash_algorithm = hash_algorithm
 
             one_day = datetime.timedelta(days=1)
 
@@ -539,7 +539,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
 
 
             certificate = certificate_builder.sign(
-                private_key=actual_issuer_key,
+                private_key=cast('PrivateKey', actual_issuer_key),
                 algorithm=allowed_hash_algorithm,
             )
 

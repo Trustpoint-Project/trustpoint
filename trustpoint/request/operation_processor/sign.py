@@ -14,6 +14,7 @@ except ImportError:
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
+from crypto.application.private_keys import ManagedMLDSAPrivateKey
 from pki.models import CredentialModel
 from request.request_context import BaseRequestContext
 from trustpoint.logger import LoggerMixin
@@ -33,11 +34,11 @@ class GenericSigner(LoggerMixin):
         hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
 
         if hash_algorithm_enum is None:
-            if mldsa and isinstance(private_key, (
+            if isinstance(private_key, ManagedMLDSAPrivateKey) or (mldsa and isinstance(private_key, (
                 mldsa.MLDSA44PrivateKey,
                 mldsa.MLDSA65PrivateKey,
                 mldsa.MLDSA87PrivateKey,
-            )):
+            ))):
                 signature = private_key.sign(data)
             else:
                 exc_msg = 'Cannot sign: hash algorithm is None but key is not ML-DSA.'

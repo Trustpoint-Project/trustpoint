@@ -131,7 +131,7 @@ class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
         tagged_subject['rdnSequence'] = subject_asn1.getComponent()
         cert_template['subject'] = tagged_subject
 
-        public_key_der = public_key.public_bytes(
+        public_key_der = public_key.public_bytes(  # type: ignore[union-attr]
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
@@ -251,11 +251,11 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
         )):
             signature = private_key.sign(encoded_cert_request)
             if isinstance(private_key, mldsa.MLDSA44PrivateKey):
-                algorithm_oid = AlgorithmIdentifier.MLDSA44.dotted_string
+                algorithm_oid = AlgorithmIdentifier.ML_DSA_44.dotted_string
             elif isinstance(private_key, mldsa.MLDSA65PrivateKey):
-                algorithm_oid = AlgorithmIdentifier.MLDSA65.dotted_string
+                algorithm_oid = AlgorithmIdentifier.ML_DSA_65.dotted_string
             else:  # MLDSA87PrivateKey
-                algorithm_oid = AlgorithmIdentifier.MLDSA87.dotted_string
+                algorithm_oid = AlgorithmIdentifier.ML_DSA_87.dotted_string
         else:
             msg = f'Unsupported private key type: {type(private_key)}'
             raise CmpMessageBuilderError(msg)

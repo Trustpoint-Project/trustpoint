@@ -152,7 +152,7 @@ class AutoGenPki(LoggerMixin):
                 root_private_key = cls._generate_private_key(key_alg, f'{root_ca_name}_{unique_suffix}')
                 root_cert, _ = CertificateGenerator.create_root_ca(
                     root_ca_name,
-                    private_key=root_private_key,
+                    private_key=root_private_key,  # type: ignore[arg-type]
                 )
                 root_ca = cls._save_managed_issuing_ca(
                     certificate=root_cert,
@@ -170,7 +170,7 @@ class AutoGenPki(LoggerMixin):
                 root_1_key,
                 root_ca_name,
                 issuing_ca_unique_name,
-                private_key=issuing_private_key,
+                private_key=issuing_private_key,  # type: ignore[arg-type]
                 validity_days=50,
             )
 

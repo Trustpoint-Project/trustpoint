@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -28,6 +28,7 @@ except ImportError:
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric import ec, rsa
     from cryptography.x509 import CertificateRevocationList
+    from trustpoint_core.crypto_types import PrivateKey
 
     from pki.models.ca import CaModel
 
@@ -55,12 +56,13 @@ def generate_empty_crl(
 
     # For ML-DSA keys, hash_algorithm must be None
     is_mldsa = (
-        (ManagedMLDSAPrivateKey and isinstance(private_key, ManagedMLDSAPrivateKey)) or
-        (mldsa and isinstance(actual_private_key, (
+        ManagedMLDSAPrivateKey is not None and isinstance(private_key, ManagedMLDSAPrivateKey)
+    ) or (
+        mldsa is not None and isinstance(actual_private_key, (
             mldsa.MLDSA44PrivateKey,
             mldsa.MLDSA65PrivateKey,
             mldsa.MLDSA87PrivateKey,
-        )))
+        ))
     )
 
     # Set default hash algorithm only for non-ML-DSA keys
@@ -140,4 +142,4 @@ def generate_crl_with_revoked_certs(
     priv_k = issuing_ca.credential.get_private_key()
     actual_priv_k = _unwrap_mldsa_managed_key(priv_k)
 
-    return crl_builder.sign(private_key=actual_priv_k, algorithm=hash_algorithm)
+    return crl_builder.sign(private_key=cast('PrivateKey', actual_priv_k), algorithm=hash_algorithm)

@@ -156,7 +156,7 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
 class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
     """Parses the context to fetch the CSR and verifies its signature using the public key contained in the CSR."""
 
-    def parse(self, context: BaseRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0912
         """Validates the signature of the CSR stored in the context."""
         if not isinstance(context, EstCertificateRequestContext):
             exc_msg = 'EstCsrSignatureVerification requires an EstCertificateRequestContext.'
@@ -202,17 +202,17 @@ class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
                     signature=csr.signature,
                     data=csr.tbs_certrequest_bytes,
                     padding=padding.PKCS1v15(),
-                    algorithm=signature_hash_algorithm,
+                    algorithm=signature_hash_algorithm,  # type: ignore[arg-type]
                 )
-                hash_info = f' with {signature_hash_algorithm.name} hash'
+                hash_info = f' with {signature_hash_algorithm.name}' if signature_hash_algorithm else ''
             elif isinstance(public_key, ec.EllipticCurvePublicKey):
                 key_type = 'EC'
                 public_key.verify(
                     signature=csr.signature,
                     data=csr.tbs_certrequest_bytes,
-                    signature_algorithm=ec.ECDSA(signature_hash_algorithm),
+                    signature_algorithm=ec.ECDSA(signature_hash_algorithm),  # type: ignore[arg-type]
                 )
-                hash_info = f' with {signature_hash_algorithm.name} hash'
+                hash_info = f' with {signature_hash_algorithm.name}' if signature_hash_algorithm else ''
             elif is_mldsa:
                 if isinstance(public_key, mldsa.MLDSA44PublicKey):
                     key_type = 'ML-DSA-44'
@@ -220,14 +220,14 @@ class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
                     key_type = 'ML-DSA-65'
                 else:  # MLDSA87PublicKey
                     key_type = 'ML-DSA-87'
-                public_key.verify(
+                public_key.verify(  # type: ignore[union-attr,call-arg]
                     signature=csr.signature,
                     data=csr.tbs_certrequest_bytes,
                 )
                 hash_info = ''  # ML-DSA is a pure signature scheme
             else:
                 error_message = 'Unsupported key type for signature verification.'
-                raise TypeError(error_message)
+                raise TypeError(error_message)  # noqa: TRY301
 
             self.logger.info('EST CSR signature verification successful: %s key%s',
                              key_type, hash_info)

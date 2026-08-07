@@ -41,6 +41,7 @@ from .base import AbstractOperationProcessor
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
+    from trustpoint_core.crypto_types import PrivateKey
 
     from devices.models import DeviceModel
     from pki.models.domain import DomainModel
@@ -311,7 +312,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
                 True,
             ),
             x509.AuthorityKeyIdentifier: (
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_public_key),
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_public_key),  # type: ignore[arg-type]
                 False,
             ),
             x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),
@@ -332,8 +333,8 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
 
         signed_cert = certificate_builder.sign(
-            private_key=actual_issuer_key,
-            algorithm=hash_algorithm,
+            private_key=cast('PrivateKey', actual_issuer_key),
+            algorithm=hash_algorithm,  # type: ignore[arg-type]
         )
         self._save_credential(context, signed_cert, issuing_credential)
 

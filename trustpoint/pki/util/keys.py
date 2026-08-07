@@ -142,9 +142,9 @@ class CryptographyUtils:
             The hash algorithm to use, or None for ML-DSA keys.
         """
         # Check for ML-DSA keys first
-        if ManagedMLDSAPrivateKey and isinstance(private_key, ManagedMLDSAPrivateKey):
+        if ManagedMLDSAPrivateKey is not None and isinstance(private_key, ManagedMLDSAPrivateKey):
             return None
-        if mldsa and isinstance(private_key, (
+        if mldsa is not None and isinstance(private_key, (
             mldsa.MLDSA44PrivateKey,
             mldsa.MLDSA65PrivateKey,
             mldsa.MLDSA87PrivateKey,

@@ -351,7 +351,7 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
         """Return the dotted-string OID for a hash algorithm name (e.g. ``'sha256'``), or ``None``."""
         return cls._HASH_OID_MAP.get(hash_name.lower().replace('-', ''))
 
-    def _check_key_constraints(
+    def _check_key_constraints(  # noqa: C901, PLR0912
         self,
         csr: _CertRequest | None,
         cfg: SecurityConfig,
@@ -398,13 +398,13 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
             not_permitted_mldsa: list[str] = cfg.not_permitted_mldsa_variant_oids or []
             if not_permitted_mldsa:
                 if isinstance(public_key, mldsa.MLDSA44PublicKey):
-                    variant_oid = AlgorithmIdentifier.MLDSA44.dotted_string
+                    variant_oid = AlgorithmIdentifier.ML_DSA_44.dotted_string
                     variant_name = 'ML-DSA-44'
                 elif isinstance(public_key, mldsa.MLDSA65PublicKey):
-                    variant_oid = AlgorithmIdentifier.MLDSA65.dotted_string
+                    variant_oid = AlgorithmIdentifier.ML_DSA_65.dotted_string
                     variant_name = 'ML-DSA-65'
                 else:  # MLDSA87PublicKey
-                    variant_oid = AlgorithmIdentifier.MLDSA87.dotted_string
+                    variant_oid = AlgorithmIdentifier.ML_DSA_87.dotted_string
                     variant_name = 'ML-DSA-87'
 
                 if variant_oid in not_permitted_mldsa:
