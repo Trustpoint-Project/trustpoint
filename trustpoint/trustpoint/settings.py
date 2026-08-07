@@ -535,6 +535,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# Authentication backends
+# https://docs.djangoproject.com/en/5.0/ref/settings/#authentication-backends
+AUTHENTICATION_BACKENDS = [
+    'users.authentication.ServiceAccountBackend',  # Service account authentication
+    'django.contrib.auth.backends.ModelBackend',    # Default Django authentication
+]
+
 
 def _bootstrap_database_path() -> Path:
     """Return the private SQLite database path used only by bootstrap mode."""
