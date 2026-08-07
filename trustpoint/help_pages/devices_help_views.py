@@ -8,7 +8,7 @@ from __future__ import annotations
 import ipaddress
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 from cryptography import x509
 from django.conf import settings
@@ -263,6 +263,20 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
 class CmpRevocationStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding CMP shared-secret help page."""
 
+    REASON_CODE_MAPPING: ClassVar[dict[str, int]] = {
+        'unspecified': 0,
+        'keyCompromise': 1,
+        'cACompromise': 2,
+        'affiliationChanged': 3,
+        'superseded': 4,
+        'cessationOfOperation': 5,
+        'certificateHold': 6,
+        # value 7 is not used
+        'removeFromCRL': 8,
+        'privilegeWithdrawn': 9,
+        'aACompromise': 10,
+    }
+
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
@@ -317,6 +331,33 @@ class CmpRevocationStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
+        cred_number_input_html = (
+            '<div class="alert alert-info" role="alert">'
+            '<strong>Note:</strong> Trustpoint cannot automatically determine which credential files '
+            'you are using locally. Please specify the credential number that matches your local file names '
+            '(e.g., certificate-<strong>1</strong>.pem, key-<strong>1</strong>.pem).'
+            '</div>'
+            '<label for="cred-number-input" class="form-label">Credential Number</label>'
+            '<input type="number" id="cred-number-input" class="form-control mb-3" '
+            f'value="{cred}" min="1" style="max-width: 200px;" '
+            'onchange="updateRevocationCommand()">\n'
+            '<p class="text-muted">This number will be used in the file names: '
+            'certificate-<span id="cred-display-1">' + str(cred) + '</span>.pem, '
+            'key-<span id="cred-display-2">' + str(cred) + '</span>.pem, '
+            'full-chain-<span id="cred-display-3">' + str(cred) + '</span>.pem</p>'
+        )
+
+        credential_number_section = HelpSection(
+            _non_lazy('Credential Files'),
+            [
+                HelpRow(
+                    _non_lazy('Configure File Names'),
+                    mark_safe(cred_number_input_html),  # noqa: S308
+                    ValueRenderType.HTML,
+                ),
+            ],
+        )
+
         reason_options_html = (
             '<select id="revreason-select" class="form-select mb-3" '
             'onchange="updateRevocationCommand()">\n'
@@ -340,7 +381,7 @@ class CmpRevocationStrategy(HelpPageStrategy):
             ],
         )
 
-        sections = [summary, revocation_reason_section]
+        sections = [summary, credential_number_section, revocation_reason_section]
 
         try:
             base_cmd = CmpSharedSecretCommandBuilder.get_app_cert_self_revoke_command(
@@ -360,7 +401,8 @@ class CmpRevocationStrategy(HelpPageStrategy):
             return sections, _non_lazy('Help - Revoke CMP Application Credential Certificate')
 
         for idx, reason_code in enumerate(RevokedCertificateModel.ReasonCode):
-            cmd_with_reason = base_cmd.replace('-revreason 0', f'-revreason {reason_code.value}')
+            numeric_code = self.REASON_CODE_MAPPING.get(reason_code.value, 0)
+            cmd_with_reason = base_cmd.replace('-revreason 0', f'-revreason {numeric_code}')
 
             sect = HelpSection(
                 _non_lazy('Revocation Request for an application Certificate'),
