@@ -6,6 +6,51 @@
 
 {% block head %}
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
+    <script>
+        function updateRevocationCommand() {
+            const selectedReason = document.getElementById('revreason-select');
+            const credNumberInput = document.getElementById('cred-number-input');
+            
+            // Update reason code section visibility
+            if (selectedReason) {
+                const reasonValue = selectedReason.value;
+
+                const allSections = document.querySelectorAll('[id^="rr-"]');
+                allSections.forEach(section => {
+                    section.hidden = true;
+                });
+
+                const targetSection = document.getElementById('rr-' + reasonValue);
+                if (targetSection) {
+                    targetSection.hidden = false;
+                }
+            }
+            
+            // Update credential number in commands and display text
+            if (credNumberInput) {
+                const credNumber = credNumberInput.value || '1';
+                
+                // Update display spans
+                document.querySelectorAll('[id^="cred-display-"]').forEach(span => {
+                    span.textContent = credNumber;
+                });
+                
+                // Update all revocation commands - preserve HTML structure
+                document.querySelectorAll('[id^="rr-"]').forEach(section => {
+                    const codeBlock = section.querySelector('code');
+                    if (codeBlock) {
+                        // Use innerHTML to preserve formatting
+                        let commandHtml = codeBlock.innerHTML;
+                        // Replace certificate-X.pem, key-X.pem, full-chain-X.pem patterns
+                        commandHtml = commandHtml.replace(/certificate-\d+\.pem/g, 'certificate-' + credNumber + '.pem');
+                        commandHtml = commandHtml.replace(/key-\d+\.pem/g, 'key-' + credNumber + '.pem');
+                        commandHtml = commandHtml.replace(/full-chain-\d+\.pem/g, 'full-chain-' + credNumber + '.pem');
+                        codeBlock.innerHTML = commandHtml;
+                    }
+                });
+            }
+        }
+    </script>
 {% endblock head %}
 
 {% block content %}
