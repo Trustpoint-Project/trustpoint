@@ -828,6 +828,25 @@ class IDevIDReferenceModel(models.Model):
         except IndexError:
             return ''
 
+    @property
+    def domain_ca_sha256_fingerprint(self) -> str:
+        """Return the pinned domain CA SHA256 fingerprint from a ``dev-owner:ca:<sha256_hex>`` reference."""
+        if not self.idevid_ref.startswith('dev-owner:ca:'):
+            return ''
+        return self.idevid_ref.removeprefix('dev-owner:ca:')
+
+    @property
+    def sha256_fingerprint_display(self) -> str:
+        """Returns the SHA256 Fingerprint for display purposes.
+
+        This property returns the SHA256 Fingerprint of the IDevID if available, otherwise that of the domain CA.
+        """
+        if fingerprint := self.idevid_sha256_fingerprint:
+            return fingerprint
+        if domain_fp := self.domain_ca_sha256_fingerprint:
+            return f'Pinned CA: {domain_fp}'
+        return ''
+
 
 class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
     """Device owner credential model.
