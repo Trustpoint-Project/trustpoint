@@ -84,7 +84,7 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
         if not domain:
             raise Http404(_('No domain is configured for this device.'))
 
-        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', settings.ADVERTISED_PORT)
+        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'ADVERTISED_PORT', '443'))
         host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
         cred_count = IssuedCredentialModel.objects.filter(device=device).count()
 
@@ -174,6 +174,10 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         no_onboarding_config = getattr(device, 'no_onboarding_config', None)
         if not no_onboarding_config:
             raise Http404(_('Onboarding is configured for this device.'))
@@ -192,7 +196,7 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
                 HelpRow(_non_lazy('Key Identifier (KID)'), str(device.pk), ValueRenderType.CODE),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(_non_lazy('Shared-Secret'), cmp_shared_secret, ValueRenderType.CODE),
@@ -278,6 +282,10 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         no_onboarding_config = getattr(device, 'no_onboarding_config', None)
         if not no_onboarding_config:
             raise Http404(_('Onboarding is configured for this device.'))
@@ -298,7 +306,7 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -475,6 +483,10 @@ class OnboardingDomainCredentialCmpSharedSecretStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -493,7 +505,7 @@ class OnboardingDomainCredentialCmpSharedSecretStrategy(HelpPageStrategy):
                 HelpRow(_non_lazy('Key Identifier (KID)'), str(device.pk), ValueRenderType.CODE),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(_non_lazy('Shared-Secret'), cmp_shared_secret, ValueRenderType.CODE),
@@ -543,6 +555,10 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -561,7 +577,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -588,7 +604,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         enroll_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_domain_credential_command(
             est_username=device.common_name,
             est_password=est_password,
-            host=f'{base}/{help_context.domain.get_domain_credential_profile_name()}/simpleenroll/',
+            host=f'{base}/{domain.get_domain_credential_profile_name()}/simpleenroll/',
         )
 
         enroll_cmd_row = HelpRow(
@@ -648,6 +664,10 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -664,7 +684,7 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
             ],
@@ -686,7 +706,7 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
 
         sections = [
             summary,
-            build_cmp_signer_trust_store_section(domain=help_context.domain),
+            build_cmp_signer_trust_store_section(domain=domain),
             build_keygen_section(help_context, file_name=''),
             build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
         ]
@@ -746,6 +766,10 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -765,7 +789,7 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
             ],
@@ -869,6 +893,10 @@ class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         no_onboarding_config = getattr(device, 'no_onboarding_config', None)
         if not no_onboarding_config:
             raise Http404(_('Onboarding is configured for this device.'))
@@ -889,7 +917,7 @@ class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -995,13 +1023,17 @@ class OnboardingDomainCredentialRestUsernamePasswordStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
         est_password = onboarding_config.est_password
         host_base = help_context.host_base
         domain_name = help_context.domain_unique_name
-        domain_cred_profile = help_context.domain.get_domain_credential_profile_name()
+        domain_cred_profile = domain.get_domain_credential_profile_name()
         enroll_url = f'{host_base}/rest/{domain_name}/{domain_cred_profile}/enroll/'
 
         summary = HelpSection(
@@ -1014,7 +1046,7 @@ class OnboardingDomainCredentialRestUsernamePasswordStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -1078,6 +1110,10 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -1105,7 +1141,7 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -1244,6 +1280,10 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
 
     def _build_summary_section(self, help_context: HelpContext) -> HelpSection:
         """Build the summary section with basic device information."""
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         return HelpSection(
             _non_lazy('Summary'),
             [
@@ -1264,7 +1304,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
             ],
@@ -1870,7 +1910,11 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
         )
 
         aoki_init_cmd = AokiEstIDevIDCommandBuilder.get_aoki_init_command(help_context.host_base)
-        domain_cred_profile_name = help_context.domain.get_domain_credential_profile_name()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
+        domain_cred_profile_name = domain.get_domain_credential_profile_name()
         aoki_response = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(domain_cred_profile_name)
         keygen_cmd = AokiEstIDevIDCommandBuilder.get_keygen_command()
         csr_cmd = AokiEstIDevIDCommandBuilder.get_csr_command()
@@ -1941,7 +1985,7 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
         except DomainModel.DoesNotExist as exc:
             raise Http404(_('No domains configured in the system.')) from exc
 
-        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', settings.ADVERTISED_PORT)
+        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'ADVERTISED_PORT', '443'))
         host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
 
         public_key_info = domain.public_key_info
@@ -2026,7 +2070,7 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
         except DomainModel.DoesNotExist as exc:
             raise Http404(_('No domains configured in the system.')) from exc
 
-        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', settings.ADVERTISED_PORT)
+        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'ADVERTISED_PORT', '443'))
         host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
 
         public_key_info = domain.public_key_info

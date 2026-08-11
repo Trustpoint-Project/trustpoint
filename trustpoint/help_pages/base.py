@@ -41,16 +41,21 @@ class HelpPageStrategy(abc.ABC):
 class HelpContext:
     """Holds shared context data."""
 
-    domain: DomainModel
-    domain_unique_name: str
-    allowed_app_profiles: list[DomainAllowedCertificateProfileModel]
-    public_key_info: oid.PublicKeyInfo
-    host_base: str  # https://IP:PORT
-    host_cmp_path: str  # {host_base}/.well-known/cmp/p/{domain.unique_name}
-    host_est_path: str  # {host_base}/.well-known/est/{domain.unique_name}
-    cred_count: int  # Running number to avoid overriding files on the client side
+    domain: DomainModel | None = None
+    domain_unique_name: str = ''
+    allowed_app_profiles: list[DomainAllowedCertificateProfileModel] = None  # type: ignore[assignment]
+    public_key_info: oid.PublicKeyInfo | None = None
+    host_base: str = ''  # https://IP:PORT
+    host_cmp_path: str = ''  # {host_base}/.well-known/cmp/p/{domain.unique_name}
+    host_est_path: str = ''  # {host_base}/.well-known/est/{domain.unique_name}
+    cred_count: int = 0  # Running number to avoid overriding files on the client side
     device: None | DeviceModel = None
     devid_registration: None | DevIdRegistration = None
+    page_name: str | None = None
+    help_sections: list[HelpSection] | None = None
+    issued_credential: None | object = None
+    owner_credential: None | object = None
+    ca: None | object = None
 
     def get_device_or_http_404(self) -> DeviceModel:
         """Gets the device or throws an HTTP404 error.
@@ -94,6 +99,9 @@ def build_keygen_section(help_context: HelpContext, file_name: str) -> HelpSecti
     Returns:
         The key-generation section.
     """
+    if help_context.public_key_info is None:
+        err_msg = 'public_key_info is required for key generation'
+        raise ValueError(err_msg)
     cmd = KeyGenCommandBuilder.get_key_gen_command(
         public_key_info=help_context.public_key_info, cred_number=help_context.cred_count, key_name=file_name
     )

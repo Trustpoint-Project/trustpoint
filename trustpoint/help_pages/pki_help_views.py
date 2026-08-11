@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.conf import settings
 from django.http import Http404
 from django.urls import reverse
 from django.utils.html import format_html
@@ -24,13 +23,12 @@ from help_pages.base import (
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import TlsSettings
 from pki.models import CaModel, DevIdRegistration, DomainModel, IssuedCredentialModel, OwnerCredentialModel
-from trustpoint.settings import ADVERTISED_PORT
 
 PKI_PAGE_DOMAIN_SUBCATEGORY = 'pki:domain'
 PKI_PAGE_TRUSTSTORES_SUBCATEGORY = 'pki:truststores'
 
 
-class BaseHelpView(DetailView):
+class BaseHelpView(DetailView[DevIdRegistration]):
     """Base help view for PKI help pages."""
 
     template_name = 'help/help_page.html'
@@ -49,7 +47,7 @@ class BaseHelpView(DetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
         public_key_info = domain.public_key_info
@@ -85,25 +83,28 @@ class OnboardingCmpIdevIdDomainCredentialStrategy(HelpPageStrategy):
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         """Build sections for CMP onboarding help page."""
         domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required for CMP onboarding'
+            raise ValueError(err_msg)
 
         summary_section = HelpSection(
-            heading=_('Summary'),
+            heading=str(_('Summary')),
             rows=[
                 HelpRow(
                     key=_non_lazy('Protocol'),
                     value=_non_lazy('CMP'),
-                    value_render_type=ValueRenderType.TEXT,
+                    value_render_type=ValueRenderType.PLAIN,
                 ),
                 HelpRow(
                     key=_non_lazy('Authentication'),
                     value=_non_lazy('IDevID with Domain Credential'),
-                    value_render_type=ValueRenderType.TEXT,
+                    value_render_type=ValueRenderType.PLAIN,
                 ),
             ],
         )
 
         keygen_section = build_keygen_section(
-            public_key_info=help_context.public_key_info,
+            help_context=help_context,
             file_name='idevid',
         )
 
@@ -123,23 +124,23 @@ class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         """Build sections for EST onboarding help page."""
         summary_section = HelpSection(
-            heading=_('Summary'),
+            heading=str(_('Summary')),
             rows=[
                 HelpRow(
                     key=_non_lazy('Protocol'),
                     value=_non_lazy('EST'),
-                    value_render_type=ValueRenderType.TEXT,
+                    value_render_type=ValueRenderType.PLAIN,
                 ),
                 HelpRow(
                     key=_non_lazy('Authentication'),
                     value=_non_lazy('IDevID with Domain Credential'),
-                    value_render_type=ValueRenderType.TEXT,
+                    value_render_type=ValueRenderType.PLAIN,
                 ),
             ],
         )
 
         keygen_section = build_keygen_section(
-            public_key_info=help_context.public_key_info,
+            help_context=help_context,
             file_name='idevid',
         )
 
@@ -164,7 +165,7 @@ class OnboardingEstIdevidRegistrationHelpView(BaseHelpView):
     strategy = OnboardingEstIdevIdDomainCredentialStrategy()
 
 
-class DevIdRegistrationDetailView(DetailView):
+class DevIdRegistrationDetailView(DetailView[DevIdRegistration]):
     """View to display details of a DevIdRegistration."""
 
     model = DevIdRegistration
@@ -182,7 +183,7 @@ class DevIdRegistrationDetailView(DetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
         public_key_info = domain.public_key_info
@@ -196,6 +197,9 @@ class DevIdRegistrationDetailView(DetailView):
             domain_unique_name=domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
             help_sections=[],
         )
@@ -231,30 +235,34 @@ class DevIdRegistrationHelpView(DevIdRegistrationDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
         public_key_info = domain.public_key_info
         if not public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
-        keygen_section = build_keygen_section(
+        help_context = HelpContext(
+            devid_registration=devid_registration,
+            allowed_app_profiles=[],
+            domain=domain,
+            domain_unique_name=domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
         )
 
-        issuing_ca_cert_section = build_issuing_ca_cert_section(
-            domain=domain,
-            host_base=host_base,
-            page_name=self.page_name,
+        keygen_section = build_keygen_section(
+            help_context=help_context,
+            file_name='idevid',
         )
 
-        tls_trust_store_section = build_tls_trust_store_section(
-            domain=domain,
-            host_base=host_base,
-            page_name=self.page_name,
-        )
+        issuing_ca_cert_section = build_issuing_ca_cert_section(domain=domain)
+
+        tls_trust_store_section = build_tls_trust_store_section()
 
         return HelpContext(
             devid_registration=devid_registration,
@@ -263,25 +271,19 @@ class DevIdRegistrationHelpView(DevIdRegistrationDetailView):
             domain_unique_name=domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
             help_sections=[
-                HelpSection(
-                    title=_('Key Generation'),
-                    rows=keygen_section,
-                ),
-                HelpSection(
-                    title=_('Issuing CA Certificate'),
-                    rows=issuing_ca_cert_section,
-                ),
-                HelpSection(
-                    title=_('TLS Trust Store'),
-                    rows=tls_trust_store_section,
-                ),
+                keygen_section,
+                issuing_ca_cert_section,
+                tls_trust_store_section,
             ],
         )
 
 
-class DomainDetailView(DetailView):
+class DomainDetailView(DetailView[DomainModel]):
     """View to display details of a Domain."""
 
     model = DomainModel
@@ -296,7 +298,7 @@ class DomainDetailView(DetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
         public_key_info = domain.public_key_info
@@ -304,11 +306,14 @@ class DomainDetailView(DetailView):
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
         return HelpContext(
-            allowed_app_profiles=domain.get_allowed_cert_profiles(),
+            allowed_app_profiles=list(domain.get_allowed_cert_profiles()),
             domain=domain,
             domain_unique_name=domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
             help_sections=[],
         )
@@ -342,56 +347,53 @@ class DomainHelpView(DomainDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
         public_key_info = domain.public_key_info
         if not public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
-        keygen_section = build_keygen_section(
-            public_key_info=public_key_info,
-            host_base=host_base,
-            page_name=self.page_name,
-        )
-
-        issuing_ca_cert_section = build_issuing_ca_cert_section(
-            domain=domain,
-            host_base=host_base,
-            page_name=self.page_name,
-        )
-
-        tls_trust_store_section = build_tls_trust_store_section(
-            domain=domain,
-            host_base=host_base,
-            page_name=self.page_name,
-        )
-
-        return HelpContext(
-            allowed_app_profiles=domain.get_allowed_cert_profiles(),
+        help_context = HelpContext(
+            allowed_app_profiles=list(domain.get_allowed_cert_profiles()),
             domain=domain,
             domain_unique_name=domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{domain.unique_name}',
+            cred_count=0,
+            page_name=self.page_name,
+        )
+
+        keygen_section = build_keygen_section(
+            help_context=help_context,
+            file_name='app_cert',
+        )
+
+        issuing_ca_cert_section = build_issuing_ca_cert_section(domain=domain)
+
+        tls_trust_store_section = build_tls_trust_store_section()
+
+        return HelpContext(
+            allowed_app_profiles=list(domain.get_allowed_cert_profiles()),
+            domain=domain,
+            domain_unique_name=domain.unique_name,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
             help_sections=[
-                HelpSection(
-                    title=_('Key Generation'),
-                    rows=keygen_section,
-                ),
-                HelpSection(
-                    title=_('Issuing CA Certificate'),
-                    rows=issuing_ca_cert_section,
-                ),
-                HelpSection(
-                    title=_('TLS Trust Store'),
-                    rows=tls_trust_store_section,
-                ),
+                keygen_section,
+                issuing_ca_cert_section,
+                tls_trust_store_section,
             ],
         )
 
 
-class IssuedCredentialDetailView(DetailView):
+class IssuedCredentialDetailView(DetailView[IssuedCredentialModel]):
     """View to display details of an IssuedCredential."""
 
     model = IssuedCredentialModel
@@ -409,7 +411,7 @@ class IssuedCredentialDetailView(DetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
         public_key_info = device.public_key_info
@@ -424,6 +426,9 @@ class IssuedCredentialDetailView(DetailView):
             domain_unique_name=device.domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
             help_sections=[],
         )
@@ -461,30 +466,35 @@ class IssuedCredentialHelpView(IssuedCredentialDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
         public_key_info = device.public_key_info
         if not public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
-        keygen_section = build_keygen_section(
+        help_context = HelpContext(
+            device=device,
+            issued_credential=issued_credential,
+            allowed_app_profiles=[],
+            domain=device.domain,
+            domain_unique_name=device.domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
         )
 
-        issuing_ca_cert_section = build_issuing_ca_cert_section(
-            domain=device.domain,
-            host_base=host_base,
-            page_name=self.page_name,
+        keygen_section = build_keygen_section(
+            help_context=help_context,
+            file_name='app_cert',
         )
 
-        tls_trust_store_section = build_tls_trust_store_section(
-            domain=device.domain,
-            host_base=host_base,
-            page_name=self.page_name,
-        )
+        issuing_ca_cert_section = build_issuing_ca_cert_section(domain=device.domain)
+
+        tls_trust_store_section = build_tls_trust_store_section()
 
         return HelpContext(
             device=device,
@@ -494,25 +504,19 @@ class IssuedCredentialHelpView(IssuedCredentialDetailView):
             domain_unique_name=device.domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
             help_sections=[
-                HelpSection(
-                    title=_('Key Generation'),
-                    rows=keygen_section,
-                ),
-                HelpSection(
-                    title=_('Issuing CA Certificate'),
-                    rows=issuing_ca_cert_section,
-                ),
-                HelpSection(
-                    title=_('TLS Trust Store'),
-                    rows=tls_trust_store_section,
-                ),
+                keygen_section,
+                issuing_ca_cert_section,
+                tls_trust_store_section,
             ],
         )
 
 
-class OwnerCredentialDetailView(DetailView):
+class OwnerCredentialDetailView(DetailView[OwnerCredentialModel]):
     """View to display details of an OwnerCredential."""
 
     model = OwnerCredentialModel
@@ -530,7 +534,7 @@ class OwnerCredentialDetailView(DetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
         public_key_info = device.public_key_info
@@ -545,6 +549,9 @@ class OwnerCredentialDetailView(DetailView):
             domain_unique_name=device.domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
             help_sections=[],
         )
@@ -582,30 +589,35 @@ class OwnerCredentialHelpView(OwnerCredentialDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
         public_key_info = device.public_key_info
         if not public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
-        keygen_section = build_keygen_section(
+        help_context = HelpContext(
+            device=device,
+            owner_credential=owner_credential,
+            allowed_app_profiles=[],
+            domain=device.domain,
+            domain_unique_name=device.domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
         )
 
-        issuing_ca_cert_section = build_issuing_ca_cert_section(
-            domain=device.domain,
-            host_base=host_base,
-            page_name=self.page_name,
+        keygen_section = build_keygen_section(
+            help_context=help_context,
+            file_name='owner_cert',
         )
 
-        tls_trust_store_section = build_tls_trust_store_section(
-            domain=device.domain,
-            host_base=host_base,
-            page_name=self.page_name,
-        )
+        issuing_ca_cert_section = build_issuing_ca_cert_section(domain=device.domain)
+
+        tls_trust_store_section = build_tls_trust_store_section()
 
         return HelpContext(
             device=device,
@@ -615,25 +627,19 @@ class OwnerCredentialHelpView(OwnerCredentialDetailView):
             domain_unique_name=device.domain.unique_name,
             public_key_info=public_key_info,
             host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
+            cred_count=0,
             page_name=self.page_name,
             help_sections=[
-                HelpSection(
-                    title=_('Key Generation'),
-                    rows=keygen_section,
-                ),
-                HelpSection(
-                    title=_('Issuing CA Certificate'),
-                    rows=issuing_ca_cert_section,
-                ),
-                HelpSection(
-                    title=_('TLS Trust Store'),
-                    rows=tls_trust_store_section,
-                ),
+                keygen_section,
+                issuing_ca_cert_section,
+                tls_trust_store_section,
             ],
         )
 
 
-class CaDetailView(DetailView):
+class CaDetailView(DetailView[CaModel]):
     """View to display details of a CA."""
 
     model = CaModel
@@ -648,14 +654,24 @@ class CaDetailView(DetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
+        # Create a minimal HelpContext for CA views
+        # CA views don't need domain/public_key_info, but HelpContext requires them
+        # We'll use placeholder values
         return HelpContext(
             ca=ca,
             host_base=host_base,
             page_name=self.page_name,
             help_sections=[],
+            domain=None,
+            domain_unique_name='',
+            allowed_app_profiles=[],
+            public_key_info=None,
+            host_cmp_path='',
+            host_est_path='',
+            cred_count=0,
         )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -684,40 +700,43 @@ class CaHelpView(CaDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
 
-        ca_cert_section = [
-            HelpRow(
-                _non_lazy('CA Certificate'),
-                _non_lazy('Download the CA certificate in PEM format.'),
-                ValueRenderType.CODE,
-                format_html(
-                    '<a href="{}">Download CA Certificate (PEM)</a>',
-                    reverse('pki:ca-cert-download', kwargs={'pk': ca.pk}),
+        ca_cert_section = HelpSection(
+            heading=_non_lazy('CA Certificate'),
+            rows=[
+                HelpRow(
+                    key=_non_lazy('CA Certificate'),
+                    value=format_html(
+                        '<a href="{}">Download CA Certificate (PEM)</a>',
+                        reverse('pki:ca-cert-download', kwargs={'pk': ca.pk}),
+                    ),
+                    value_render_type=ValueRenderType.HTML,
                 ),
-            ),
-            HelpRow(
-                _non_lazy('CA Certificate Chain'),
-                _non_lazy('Download the complete CA certificate chain in PEM format.'),
-                ValueRenderType.CODE,
-                format_html(
-                    '<a href="{}">Download CA Certificate Chain (PEM)</a>',
-                    reverse('pki:ca-cert-chain-download', kwargs={'pk': ca.pk}),
+                HelpRow(
+                    key=_non_lazy('CA Certificate Chain'),
+                    value=format_html(
+                        '<a href="{}">Download CA Certificate Chain (PEM)</a>',
+                        reverse('pki:ca-cert-chain-download', kwargs={'pk': ca.pk}),
+                    ),
+                    value_render_type=ValueRenderType.HTML,
                 ),
-            ),
-        ]
+            ],
+        )
 
         return HelpContext(
             ca=ca,
             host_base=host_base,
             page_name=self.page_name,
-            help_sections=[
-                HelpSection(
-                    title=_('CA Certificate'),
-                    rows=ca_cert_section,
-                ),
-            ],
+            help_sections=[ca_cert_section],
+            domain=None,
+            domain_unique_name='',
+            allowed_app_profiles=[],
+            public_key_info=None,
+            host_cmp_path='',
+            host_est_path='',
+            cred_count=0,
         )
 
 
@@ -734,7 +753,7 @@ class CrlDownloadHelpView(CaDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", ADVERTISED_PORT)}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
         )
         crl_endpoint = f'{host_base}/crl/{ca.pk}/'
 
@@ -744,44 +763,40 @@ class CrlDownloadHelpView(CaDetailView):
         if has_crl and ca.last_crl_issued_at:
             crl_status_rows.append(
                 HelpRow(
-                    _non_lazy('CRL Status'),
-                    _non_lazy('Available'),
-                    ValueRenderType.TEXT,
-                    _non_lazy('A CRL is available for download.'),
+                    key=_non_lazy('CRL Status'),
+                    value=_non_lazy('Available'),
+                    value_render_type=ValueRenderType.PLAIN,
                 )
             )
             crl_status_rows.append(
                 HelpRow(
-                    _non_lazy('Last CRL Issued At'),
-                    _non_lazy('Timestamp'),
-                    ValueRenderType.TEXT,
-                    ca.last_crl_issued_at.isoformat(),
+                    key=_non_lazy('Last CRL Issued At'),
+                    value=ca.last_crl_issued_at.isoformat(),
+                    value_render_type=ValueRenderType.PLAIN,
                 )
             )
             crl_status_rows.append(
                 HelpRow(
-                    _non_lazy('CRL Download'),
-                    _non_lazy('Download the CRL in PEM format.'),
-                    ValueRenderType.CODE,
-                    format_html(
+                    key=_non_lazy('CRL Download'),
+                    value=format_html(
                         '<a href="{}">Download CRL (PEM)</a>',
                         reverse('pki:ca-crl-download', kwargs={'pk': ca.pk}),
                     ),
+                    value_render_type=ValueRenderType.HTML,
                 )
             )
         else:
             crl_status_rows.append(
                 HelpRow(
-                    _non_lazy('CRL Status'),
-                    _non_lazy('Not Available'),
-                    ValueRenderType.TEXT,
-                    _non_lazy('No CRL is available for download.'),
+                    key=_non_lazy('CRL Status'),
+                    value=_non_lazy('Not Available'),
+                    value_render_type=ValueRenderType.PLAIN,
                 )
             )
 
         context['help_sections'] = [
             HelpSection(
-                title=_('CRL Status'),
+                heading=_non_lazy('CRL Status'),
                 rows=crl_status_rows,
             ),
         ]
