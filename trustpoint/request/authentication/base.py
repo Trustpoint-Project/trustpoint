@@ -260,48 +260,109 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
     def _resolve_request_ip(self, context: BaseRequestContext) -> str | None:
         """Resolve the client IP address from an HTTP-based request context."""
         if not isinstance(context, HttpBaseRequestContext) or not context.raw_message:
+            self.logger.debug('IP resolution skipped: context is not HttpBaseRequestContext or missing raw_message')
             return None
 
         meta = getattr(context.raw_message, 'META', None)
         if not isinstance(meta, dict):
+            self.logger.debug('IP resolution skipped: META is not a dict')
             return None
 
         import ipaddress  # noqa: PLC0415
 
-        # Prefer the original client address when running behind a reverse proxy.
+        real_ip = meta.get('HTTP_X_REAL_IP')
         forwarded_for = meta.get('HTTP_X_FORWARDED_FOR')
+        remote_addr = meta.get('REMOTE_ADDR')
+        self.logger.debug(
+            'IP resolution: checking headers for client IP address',
+            extra={
+                'has_x_real_ip': real_ip is not None,
+                'x_real_ip': real_ip,
+                'has_x_forwarded_for': forwarded_for is not None,
+                'x_forwarded_for': forwarded_for,
+                'remote_addr': remote_addr,
+            },
+        )
         if isinstance(forwarded_for, str) and forwarded_for.strip():
             candidate = forwarded_for.split(',', 1)[0].strip()
             try:
-                return str(ipaddress.ip_address(candidate))
+                resolved_ip = str(ipaddress.ip_address(candidate))
             except ValueError:
-                pass
+                self.logger.warning(
+                    'Invalid IP in X-Forwarded-For header',
+                    extra={'forwarded_for': forwarded_for},
+                )
+            else:
+                self.logger.info(
+                    'Resolved client IP from X-Forwarded-For header: %s (raw: %s)',
+                    resolved_ip,
+                    forwarded_for,
+                    extra={'ip_address': resolved_ip, 'raw_forwarded_for': forwarded_for},
+                )
+                return resolved_ip
 
         remote_addr = meta.get('REMOTE_ADDR')
         if isinstance(remote_addr, str) and remote_addr.strip():
             candidate = remote_addr.strip()
             try:
-                return str(ipaddress.ip_address(candidate))
+                resolved_ip = str(ipaddress.ip_address(candidate))
             except ValueError:
+                self.logger.warning(
+                    'Invalid IP in REMOTE_ADDR',
+                    extra={'remote_addr': remote_addr},
+                )
                 return None
+            else:
+                self.logger.info(
+                    'Resolved client IP from REMOTE_ADDR: %s',
+                    resolved_ip,
+                    extra={'ip_address': resolved_ip},
+                )
+                return resolved_ip
 
+        self.logger.warning('No valid IP address found in request headers')
         return None
 
     def _update_device_ip_from_request(self, context: BaseRequestContext) -> None:
         """Update the authenticated device IP address from the incoming request."""
         if context.device is None:
+            self.logger.debug('Device IP update skipped: no device in context')
             return
 
         resolved_ip = self._resolve_request_ip(context)
-        if not resolved_ip or context.device.ip_address == resolved_ip:
+        if not resolved_ip:
+            self.logger.debug(
+                'Device IP update skipped: could not resolve IP from request',
+                extra={'device_common_name': context.device.common_name},
+            )
             return
 
+        if context.device.ip_address == resolved_ip:
+            self.logger.debug(
+                'Device IP update skipped: IP unchanged (device=%s, ip=%s)',
+                context.device.common_name,
+                resolved_ip,
+                extra={
+                    'device_common_name': context.device.common_name,
+                    'ip_address': resolved_ip,
+                },
+            )
+            return
+
+        old_ip = context.device.ip_address
         try:
             context.device.ip_address = resolved_ip
             context.device.save(update_fields=['ip_address'])
             self.logger.info(
-                'Updated authenticated device IP address from request',
-                extra={'device_common_name': context.device.common_name, 'ip_address': resolved_ip},
+                'Updated authenticated device IP address from request (device=%s, old_ip=%s, new_ip=%s)',
+                context.device.common_name,
+                old_ip,
+                resolved_ip,
+                extra={
+                    'device_common_name': context.device.common_name,
+                    'old_ip_address': old_ip,
+                    'new_ip_address': resolved_ip,
+                },
             )
         except Exception:
             # Authentication already succeeded, ignore failed IP update
