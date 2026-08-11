@@ -35,17 +35,15 @@
                     span.textContent = credNumber;
                 });
                 
-                // Update all revocation commands - preserve HTML structure
                 document.querySelectorAll('[id^="rr-"]').forEach(section => {
                     const codeBlock = section.querySelector('code');
                     if (codeBlock) {
-                        // Use innerHTML to preserve formatting
-                        let commandHtml = codeBlock.innerHTML;
+                        let commandText = codeBlock.textContent;
                         // Replace certificate-X.pem, key-X.pem, full-chain-X.pem patterns
-                        commandHtml = commandHtml.replace(/certificate-\d+\.pem/g, 'certificate-' + credNumber + '.pem');
-                        commandHtml = commandHtml.replace(/key-\d+\.pem/g, 'key-' + credNumber + '.pem');
-                        commandHtml = commandHtml.replace(/full-chain-\d+\.pem/g, 'full-chain-' + credNumber + '.pem');
-                        codeBlock.innerHTML = commandHtml;
+                        commandText = commandText.replace(/certificate-\d+\.pem/g, 'certificate-' + credNumber + '.pem');
+                        commandText = commandText.replace(/key-\d+\.pem/g, 'key-' + credNumber + '.pem');
+                        commandText = commandText.replace(/full-chain-\d+\.pem/g, 'full-chain-' + credNumber + '.pem');
+                        codeBlock.textContent = commandText;
                     }
                 });
             }
