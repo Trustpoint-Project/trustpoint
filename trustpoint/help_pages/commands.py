@@ -86,34 +86,6 @@ class CmpSharedSecretCommandBuilder:
         )
 
     @staticmethod
-    def get_app_cert_domain_revoke_command(
-        host: str, cred_number: int) -> str:
-        """Gets the command for CMP application credential revocation req. using domain credential authentication.
-
-        Only for CMP with Domain Credential (onboarding)
-
-        Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
-            pk: The primary key of the device in question used as Key Identifier (KID).
-            shared_secret: The shared secret.
-            cred_number: The credential number - counter of issued credentials.
-            sample_request: The sample certificate request in JSON format.
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            'openssl cmp \\\n'
-            '-cmd rr \\\n'
-            f'-server {host} \\\n'
-            f'-cert domain-credential-certificate-{cred_number}.pem \\\n'
-            f'-key domain-credential-key-{cred_number}.pem \\\n'
-            f'-oldcert certificate-{cred_number}.pem \\\n'
-            f'-revreason 0 \\\n'
-            f'-trusted domain-credential-full-chain-{cred_number}.pem \\\n'
-        )
-
-    @staticmethod
     def get_app_cert_self_revoke_command(
         host: str, cred_number: int) -> str:
         """Gets the command for CMP application credential self-revocation request.
@@ -139,33 +111,6 @@ class CmpSharedSecretCommandBuilder:
             f'-trusted full-chain-{cred_number}.pem'
         )
 
-    @staticmethod
-    def get_domain_credential_self_revoke_command(
-                host: str, cred_number: int) -> str:
-        """Gets the command for CMP domain credential self-revocation request.
-
-        Only for revoking domain credentials (onboarding)
-
-        Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
-            pk: The primary key of the device in question used as Key Identifier (KID).
-            shared_secret: The shared secret.
-            cred_number: The credential number - counter of issued credentials.
-            sample_request: The sample certificate request in JSON format.
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            'openssl cmp \\\n'
-            '-cmd rr \\\n'
-            f'-server {host} \\\n'
-            f'-cert domain-credential-certificate-{cred_number}.pem \\\n'
-            f'-key domain-credential-key-{cred_number}.pem \\\n'
-            f'-oldcert domain-credential-certificate-{cred_number}.pem \\\n'
-            f'-revreason 0 \\\n'
-            f'-trusted domain-credential-full-chain-{cred_number}.pem \\\n'
-        )
 
     @staticmethod
     def get_domain_credential_profile_command(host: str, pk: int, shared_secret: str) -> str:
@@ -175,7 +120,6 @@ class CmpSharedSecretCommandBuilder:
             host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             pk: The primary key of the device in question used as Key Identifier (KID).
             shared_secret: The shared secret.
-            domain_name: The name of the domain will be used in the file names to mitigate overriding other files.
 
         Returns:
             The constructed command.
