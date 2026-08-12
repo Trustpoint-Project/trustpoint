@@ -131,6 +131,26 @@ class DomainModel(models.Model):
             return None
 
     @property
+    def signature_suite_display(self) -> str:
+        """Get a safe string representation of the signature suite."""
+        try:
+            ss = self.signature_suite
+            if ss is None:
+                return '-'
+            if hasattr(ss, 'signature_algorithm') and ss.signature_algorithm:
+                sig_alg = ss.signature_algorithm
+                if hasattr(sig_alg, 'value'):
+                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_44.dotted_string:
+                        return 'ML-DSA-44'
+                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_65.dotted_string:
+                        return 'ML-DSA-65'
+                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_87.dotted_string:
+                        return 'ML-DSA-87'
+            return str(ss)
+        except ValueError:
+            return '-'
+
+    @property
     def public_key_info(self) -> oid.PublicKeyInfo | None:
         """Get the public key info for the domain (based on its Issuing CA).
 

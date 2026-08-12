@@ -9,6 +9,11 @@ from typing import TYPE_CHECKING, Any, Never, cast, override
 
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
@@ -216,12 +221,88 @@ class ManagedECPrivateKey(ec.EllipticCurvePrivateKey):
         return self
 
 
-def managed_private_key_for_ref(key_ref: ManagedKeyRef) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
+class ManagedMLDSAPrivateKey:
+    """ML-DSA private-key facade backed by Trustpoint's managed crypto backend."""
+
+    def __init__(
+        self,
+        *,
+        key_ref: ManagedKeyRef,
+        crypto_backend: TrustpointCryptoBackend | None = None,
+    ) -> None:
+        """Initialize the managed ML-DSA key facade."""
+        if key_ref.algorithm is not KeyAlgorithm.MLDSA:
+            msg = f'Managed key {key_ref.alias!r} is not an ML-DSA key.'
+            raise TypeError(msg)
+        self._key_ref = key_ref
+        self._crypto_backend = crypto_backend or TrustpointCryptoBackend()
+        self._public_key: object | None = None
+
+    def sign(self, data: bytes) -> bytes:
+        """Sign data through the configured backend."""
+        return self._crypto_backend.sign(
+            key=self._key_ref,
+            data=data,
+            request=SignRequest.mldsa_pure(),
+        )
+
+    @property
+    def managed_key_ref(self) -> ManagedKeyRef:
+        """Return the stable application-facing managed key reference."""
+        return self._key_ref
+
+    @property
+    def key_size(self) -> int:
+        """Return the key size for ML-DSA keys.
+
+        ML-DSA keys don't have a traditional key_size like RSA/EC.
+        Returns 0 to indicate this is not applicable for ML-DSA.
+        """
+        return 0
+
+    def public_key(self) -> object:
+        """Return the managed key public key."""
+        if self._public_key is None:
+            public_key = self._crypto_backend.get_public_key(self._key_ref)
+            if mldsa and not isinstance(public_key, (
+                mldsa.MLDSA44PublicKey,
+                mldsa.MLDSA65PublicKey,
+                mldsa.MLDSA87PublicKey,
+            )):
+                msg = f'Managed key {self._key_ref.alias!r} resolved to a non-ML-DSA public key.'
+                raise TypeError(msg)
+            self._public_key = public_key
+        return self._public_key
+
+    def private_bytes(
+        self,
+        encoding: Any,
+        fmt: Any,
+        encryption_algorithm: Any,
+    ) -> bytes:
+        """Private key material is intentionally non-exportable."""
+        msg = 'Managed Trustpoint ML-DSA private keys cannot be exported.'
+        raise NotImplementedError(msg)
+
+    def __copy__(self) -> ManagedMLDSAPrivateKey:
+        """Return this immutable facade when copied by cryptography callers."""
+        return self
+
+    def __deepcopy__(self, memo: dict[Any, Any]) -> ManagedMLDSAPrivateKey:
+        """Return this immutable facade when deep-copied by cryptography callers."""
+        return self
+
+
+def managed_private_key_for_ref(
+    key_ref: ManagedKeyRef,
+) -> ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey:
     """Build a cryptography-compatible managed private-key facade."""
     if key_ref.algorithm is KeyAlgorithm.RSA:
         return ManagedRSAPrivateKey(key_ref=key_ref)
     if key_ref.algorithm is KeyAlgorithm.EC:
         return ManagedECPrivateKey(key_ref=key_ref)
+    if key_ref.algorithm is KeyAlgorithm.MLDSA:
+        return ManagedMLDSAPrivateKey(key_ref=key_ref)
     msg = f'Unsupported managed key algorithm {key_ref.algorithm!r}.'
     raise TypeError(msg)
 
@@ -231,7 +312,7 @@ def generate_managed_signing_private_key(
     alias: str,
     key_spec: KeySpec,
     crypto_backend: TrustpointCryptoBackend | None = None,
-) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
+) -> ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey:
     """Generate a non-exportable signing key through the active crypto backend."""
     backend = crypto_backend or TrustpointCryptoBackend()
     key_ref = backend.generate_managed_key(
