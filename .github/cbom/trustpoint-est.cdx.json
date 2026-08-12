@@ -1,0 +1,187 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:6bba5ae3-1b07-4f9f-83e5-d0ad39bf8122",
+  "version": 1,
+  "metadata": {
+    "properties": [
+      {
+        "name": "trustpoint:cbom:source",
+        "value": "Manually maintained protocol inventory"
+      },
+      {
+        "name": "trustpoint:cbom:scope",
+        "value": "Trustpoint EST implementation capability; no deployment-specific TLS cipher suites, keys, certificates, passwords, or customer configuration"
+      },
+      {
+        "name": "trustpoint:cbom:review-note",
+        "value": "TLS versions, cipher suites, server certificates, client certificates, and CA signature algorithms are deployment-specific and must be added by an operational CBOM if required."
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "application",
+      "bom-ref": "trustpoint:application",
+      "group": "Trustpoint-Project",
+      "name": "trustpoint",
+      "description": "Open-source certificate lifecycle management and PKI application for industrial environments.",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/TrustPoint-Project/trustpoint"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:protocol:est-rfc7030",
+      "name": "Enrollment over Secure Transport (EST)",
+      "version": "RFC 7030",
+      "description": "Server-side EST implementation provided by Trustpoint for CA certificate retrieval, initial certificate enrollment, and certificate re-enrollment over HTTPS.",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "other",
+          "version": "RFC 7030",
+          "cryptoRefArray": [
+            "urn:trustpoint:crypto:protocol:tls-transport"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "trustpoint:est:standard",
+          "value": "RFC 7030"
+        },
+        {
+          "name": "trustpoint:est:role",
+          "value": "EST server endpoint"
+        },
+        {
+          "name": "trustpoint:est:base-path",
+          "value": "/.well-known/est/"
+        },
+        {
+          "name": "trustpoint:est:transport",
+          "value": "HTTPS using TLS; concrete TLS versions and cipher suites are deployment-configured"
+        },
+        {
+          "name": "trustpoint:est:operation",
+          "value": "cacerts: supported; unauthenticated GET; returns a base64-encoded PKCS#7 CA certificate chain"
+        },
+        {
+          "name": "trustpoint:est:operation",
+          "value": "simpleenroll: supported; authenticated POST with a base64-encoded PKCS#10 certification request"
+        },
+        {
+          "name": "trustpoint:est:operation",
+          "value": "simplereenroll: supported; authenticated POST with a base64-encoded PKCS#10 certification request"
+        },
+        {
+          "name": "trustpoint:est:operation",
+          "value": "csrattrs: endpoint route exists but is not supported and returns HTTP 404"
+        },
+        {
+          "name": "trustpoint:est:request-media-type",
+          "value": "application/pkcs10"
+        },
+        {
+          "name": "trustpoint:est:response-media-type",
+          "value": "application/pkcs7-mime"
+        },
+        {
+          "name": "trustpoint:est:content-transfer-encoding",
+          "value": "base64"
+        },
+        {
+          "name": "trustpoint:est:authentication",
+          "value": "HTTP Basic username/password authentication for initial enrollment when configured"
+        },
+        {
+          "name": "trustpoint:est:authentication",
+          "value": "TLS client-certificate authentication for certificate-based enrollment and re-enrollment"
+        },
+        {
+          "name": "trustpoint:est:authentication",
+          "value": "IDevID-based TLS client-certificate authentication for zero-touch initial enrollment"
+        },
+        {
+          "name": "trustpoint:est:certificate-output",
+          "value": "X.509 certificate or CA chain encapsulated as PKCS#7/CMS"
+        },
+        {
+          "name": "trustpoint:est:algorithm-selection",
+          "value": "Certificate public-key and signature algorithms are determined by the submitted CSR, Trustpoint certificate profile, issuing CA, and configured crypto backend"
+        },
+        {
+          "name": "trustpoint:est:deployment-mode",
+          "value": "Certificate issuance can be handled by a Trustpoint issuing CA or an EST registration-authority configuration"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://www.rfc-editor.org/rfc/rfc7030.html"
+        },
+        {
+          "type": "documentation",
+          "url": "https://www.rfc-editor.org/rfc/rfc2986.html"
+        },
+        {
+          "type": "documentation",
+          "url": "https://www.rfc-editor.org/rfc/rfc5652.html"
+        },
+        {
+          "type": "documentation",
+          "url": "https://trustpoint.readthedocs.io/en/latest/features/apis/est.html"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/TrustPoint-Project/trustpoint/tree/main/trustpoint/est"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/TrustPoint-Project/trustpoint/blob/main/trustpoint/request/authentication/est.py"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "urn:trustpoint:crypto:protocol:tls-transport",
+      "name": "TLS transport for Trustpoint enrollment endpoints",
+      "description": "TLS protects EST transport and provides server authentication and, where configured, client-certificate authentication. Protocol versions, cipher suites, and certificate assets are deployment-specific.",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "tls"
+        }
+      },
+      "properties": [
+        {
+          "name": "trustpoint:tls:scope",
+          "value": "Generic application capability only; this asset does not assert a concrete enabled TLS version or cipher suite"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "trustpoint:application",
+      "provides": [
+        "urn:trustpoint:crypto:protocol:est-rfc7030"
+      ]
+    },
+    {
+      "ref": "urn:trustpoint:crypto:protocol:est-rfc7030",
+      "dependsOn": [
+        "urn:trustpoint:crypto:protocol:tls-transport"
+      ]
+    },
+    {
+      "ref": "urn:trustpoint:crypto:protocol:tls-transport",
+      "dependsOn": []
+    }
+  ]
+}
