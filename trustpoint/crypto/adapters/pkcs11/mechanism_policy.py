@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """PKCS#11 sign-operation resolution based on provider capabilities and per-key policy."""
 
 from __future__ import annotations

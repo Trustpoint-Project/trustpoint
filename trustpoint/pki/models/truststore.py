@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module defines models for managing trustpoints, including server credentials and truststores."""
 
 from __future__ import annotations

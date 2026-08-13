@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to generate CRLs for CAs with enabled cycles."""
 
 from __future__ import annotations

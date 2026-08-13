@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Sets up a Trustpoint test environment for DevOwnerID EST onboarding enrollment testing.
 
 This command creates an environment where the device first needs onboarding (obtaining a

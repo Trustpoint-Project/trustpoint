@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Output wrapper for Django management commands.
 
 Provides an adapter between Django's CommandStyle and our OutputWriter protocol.

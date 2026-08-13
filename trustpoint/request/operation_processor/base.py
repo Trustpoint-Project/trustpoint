@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Carries out the requested operation after authentication and authorization."""
 from abc import ABC, abstractmethod
 

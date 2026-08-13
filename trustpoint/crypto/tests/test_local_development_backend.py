@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for local sqlite development crypto defaults."""
 
 from __future__ import annotations

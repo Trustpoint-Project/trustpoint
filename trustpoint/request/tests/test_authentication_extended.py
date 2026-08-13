@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Extended tests for request/authentication.py to increase coverage."""
 
 from typing import Any

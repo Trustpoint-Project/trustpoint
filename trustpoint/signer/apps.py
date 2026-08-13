@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Apps configuration for the Signer app."""
 from django.apps import AppConfig
 

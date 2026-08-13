@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Internal backend-adapter protocols used by the application service."""
 
 from __future__ import annotations

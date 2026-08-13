@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains forms for the setup wizard app."""
 
 from __future__ import annotations

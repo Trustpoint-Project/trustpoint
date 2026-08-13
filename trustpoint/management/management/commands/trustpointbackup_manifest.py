@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command for Trustpoint backup manifest sidecars."""
 
 from __future__ import annotations

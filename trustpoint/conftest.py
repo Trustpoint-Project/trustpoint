@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """pytest configuration for the tests in the PKI app."""
 import base64
 from typing import Any

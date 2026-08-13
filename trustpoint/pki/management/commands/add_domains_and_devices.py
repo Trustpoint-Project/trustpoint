@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Adds Issuing CAs, Domains and Devices with different onboarding protocols."""
 
 # ruff: noqa: T201  # print is fine in management commands
@@ -266,6 +269,7 @@ class Command(BaseCommand, LoggerMixin):
         onboarding_protocols.remove(OnboardingProtocol.CMP_IDEVID)
         onboarding_protocols.remove(OnboardingProtocol.EST_IDEVID)
         onboarding_protocols.remove(OnboardingProtocol.OPC_GDS_PUSH)
+        onboarding_protocols.remove(OnboardingProtocol.AGENT)
 
         self.log_and_stdout('Starting the process of adding domains and devices...\n')
 

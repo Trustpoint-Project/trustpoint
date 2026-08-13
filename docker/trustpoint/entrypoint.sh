@@ -9,8 +9,8 @@ WWW_DATA_HOME="${WWW_DATA_HOME:-/tmp/trustpoint-www-data-home}"
 
 load_operational_env() {
   if [ -f "$OPERATIONAL_ENV_FILE" ]; then
-    # shellcheck disable=SC1090
     set -a
+    # shellcheck source=/dev/null
     . "$OPERATIONAL_ENV_FILE"
     set +a
   fi
@@ -74,7 +74,8 @@ repair_bootstrap_sqlite_file() {
   [ -e "$BOOTSTRAP_DB_PATH" ] || return 0
 
   local repaired_path="${BOOTSTRAP_DB_PATH}.repair"
-  local stale_path="${BOOTSTRAP_DB_PATH}.readonly.$(date +%s)"
+  local stale_path
+  stale_path="${BOOTSTRAP_DB_PATH}.readonly.$(date +%s)"
 
   cp "$BOOTSTRAP_DB_PATH" "$repaired_path"
   chown www-data:www-data "$repaired_path"
@@ -219,7 +220,7 @@ if [ "$PHASE" = "bootstrap" ]; then
   
   configure_web_edge
   start_gunicorn
-  trap "kill $GUNICORN_PID 2>/dev/null; exit 0" SIGTERM SIGINT
+  trap 'kill $GUNICORN_PID 2>/dev/null; exit 0' SIGTERM SIGINT
   start_nginx_foreground
 fi
 
@@ -254,6 +255,6 @@ fi
 
 start_gunicorn
 
-trap "kill $QCLUSTER_PID $GUNICORN_PID 2>/dev/null; exit 0" SIGTERM SIGINT
+trap 'kill $QCLUSTER_PID $GUNICORN_PID 2>/dev/null; exit 0' SIGTERM SIGINT
 
 start_nginx_foreground

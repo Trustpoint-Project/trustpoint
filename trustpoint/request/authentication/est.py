@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Provides the 'EstAuthentication' class using the Composite pattern for modular EST authentication."""
 
 from typing import Never

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for signer.views module."""
 
 from unittest.mock import Mock, patch

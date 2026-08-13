@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Contains custom filter sets to filter model data based on various criteria."""
 
 from datetime import timedelta

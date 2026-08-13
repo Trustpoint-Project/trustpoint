@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to reset the database and migrations."""
 
 from __future__ import annotations
@@ -86,6 +89,8 @@ class Command(BaseCommand):
             AppVersion.objects.get_or_create(version=settings.APP_VERSION)
             # Add default certificate profiles
             call_command('create_default_cert_profiles')
+            # Add default agent profile definitions
+            call_command('create_default_agent_profile_definitions')
             call_command('seed_discovery_ports')
 
         # Create organization

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for Certificate Lifecycle Management (CLM) Device forms."""
 
 from typing import Any

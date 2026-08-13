@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Logic managing the security level setting of the Trustpoint."""
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ class SecurityManager(LoggerMixin):
     """Manages the security level setting of the Trustpoint."""
 
     def is_feature_allowed(
-        self, feature: type[SecurityFeature] | SecurityFeature, target_level: None | str = None
+        self, feature: type[SecurityFeature] | SecurityFeature, target_level: str | None = None
     ) -> bool:
         """Checks if the specified feature is allowed under the given security level.
 

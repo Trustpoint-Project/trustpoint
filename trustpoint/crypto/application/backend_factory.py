@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Backend-adapter factory for provider profiles."""
 
 from __future__ import annotations

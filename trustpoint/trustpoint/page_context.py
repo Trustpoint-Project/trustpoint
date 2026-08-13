@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains page category objects providing the corresponding subcategories."""
 
 from typing import Any, cast
@@ -7,6 +10,7 @@ DEVICES_PAGE_DEVICES_SUBCATEGORY = 'devices'
 DEVICES_PAGE_OPC_UA_SUBCATEGORY = 'opc_ua_gds'
 DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY = 'opc_ua_gds_push'
 DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY = 'zero_touch_credentials'
+DEVICES_PAGE_AGENTS_SUBCATEGORY = 'agents'
 
 PKI_PAGE_CATEGORY = 'pki'
 PKI_PAGE_CERTIFICATES_SUBCATEGORY = 'certificates'
@@ -46,5 +50,6 @@ class PageContextMixin:
         context['DEVICES_PAGE_OPC_UA_SUBCATEGORY'] = DEVICES_PAGE_OPC_UA_SUBCATEGORY
         context['DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY'] = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
         context['DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY'] = DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
+        context['DEVICES_PAGE_AGENTS_SUBCATEGORY'] = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
         return context

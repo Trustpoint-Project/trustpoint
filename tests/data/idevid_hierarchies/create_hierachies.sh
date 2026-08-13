@@ -3,13 +3,16 @@
 # ============================================================
 # Config
 # ============================================================
+ # shellcheck disable=SC2034
 ROOT_CN="Trustpoint Demo IDevID Hierarchy - Root CA"
 ISSUING_CN="Trustpoint Demo IDevID Hierarchy - Issuing CA"
 PROFILE="ecc3"
 curve=ec_paramgen_curve:secp521r1
 
 # Issuing CA validity
+ # shellcheck disable=SC2034
 ISSUING_NOT_BEFORE="20250216170500Z"  # Feb 16 17:05:00 2025 GMT
+ # shellcheck disable=SC2034
 ISSUING_NOT_AFTER="20280217170500Z"   # Feb 17 17:05:00 2028 GMT
 
 # End-entity cert validity
@@ -158,7 +161,7 @@ openssl pkcs12 -export \
   -out "$PROFILE/${PROFILE}_321.p12" \
   -passout pass:
 
-cd "$PROFILE"
+cd "$PROFILE" || exit
 
 # keep only ecc2_123.p12, ecc2_321.p12, ecc2_chain.pem
 find . -maxdepth 1 -type f ! -name "${PROFILE}_123.p12" ! -name "${PROFILE}_321.p12" ! -name "${PROFILE}_chain.pem" -delete

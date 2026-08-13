@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to create some certificates for testing and verifying them using OpenSSL."""
 
 # ruff: noqa: T201  # print is fine in management commands

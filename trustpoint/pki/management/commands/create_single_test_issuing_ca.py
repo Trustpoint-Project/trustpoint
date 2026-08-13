@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Django management command for adding issuing CA test data."""
 
 from __future__ import annotations

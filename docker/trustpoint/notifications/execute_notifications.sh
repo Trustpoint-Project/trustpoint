@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Go to project directory
-cd /var/www/html/trustpoint/trustpoint/
+cd /var/www/html/trustpoint/trustpoint/ || exit
 
 export DJANGO_SETTINGS_MODULE=trustpoint.settings
 

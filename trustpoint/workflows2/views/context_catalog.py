@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 # workflows2/views/context_catalog.py
 """Serve the editor context catalog used by the Workflow 2 frontend."""
 

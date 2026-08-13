@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Django management command to run all notification-related checks sequentially."""
 
 from __future__ import annotations

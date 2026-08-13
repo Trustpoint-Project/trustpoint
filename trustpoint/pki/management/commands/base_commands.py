@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Contains common functionality for PKI management commands."""
 
 # ruff: noqa: T201  # print is fine in management commands

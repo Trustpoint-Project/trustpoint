@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Serializers for Workflow 2 API endpoints."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Business logic for certificate operations."""
 
 from django.db.models.query import QuerySet
