@@ -19,6 +19,9 @@ RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
         opensc \
+        pcscd \
+        pcsc-tools \
+        libccid \
         sudo \
         apt-utils \
         nginx \
@@ -146,6 +149,7 @@ COPY ./docker/trustpoint/nginx/trustpoint-nginx-https.conf /etc/nginx/sites-avai
 RUN chmod +x /etc/trustpoint/wizard/transition/*.sh \
              /etc/trustpoint/wizard/configure_nginx.sh \
              /etc/trustpoint/wizard/install_pkcs11_assets.sh \
+             /etc/trustpoint/wizard/manage_pcscd.sh \
              /etc/trustpoint/wizard/switch_to_operational.sh \
              /etc/trustpoint/wizard/update_tls.sh \
              /etc/trustpoint/wizard/update_tls_nginx.sh \

@@ -123,6 +123,8 @@ def build_operational_environment(config_model: SetupWizardConfigModel) -> dict[
             env_values[pkcs11_config_env_var] = str(configured_config_path)
         else:
             env_values[pkcs11_config_env_var] = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
+    if (config_model.fresh_install_pkcs11_module_path or '').strip() == str(settings.HSM_OPENSC_PKCS11_MODULE_PATH):
+        env_values['TRUSTPOINT_START_PCSCD'] = '1'
     return env_values
 
 

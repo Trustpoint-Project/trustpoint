@@ -701,6 +701,7 @@ HSM_DEFAULT_SO_PIN_FILE = HSM_CONFIG_DIR / 'so-pin.txt'
 HSM_DEFAULT_TOKEN_SERIAL_FILE = HSM_CONFIG_DIR / 'token-serial.txt'
 HSM_DEFAULT_TOKEN_LABEL = os.getenv('TRUSTPOINT_PKCS11_TOKEN_LABEL', 'Trustpoint-SoftHSM')
 HSM_DEFAULT_PKCS11_MODULE_PATH_FILE = HSM_CONFIG_DIR / 'pkcs11-module-path.txt'
+HSM_OPENSC_PKCS11_MODULE_PATH = Path(os.getenv('TRUSTPOINT_OPENSC_PKCS11_MODULE_PATH', '/usr/lib/opensc-pkcs11.so'))
 
 
 def _read_optional_text_file(path: Path) -> str | None:

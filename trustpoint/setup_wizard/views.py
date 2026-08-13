@@ -142,6 +142,7 @@ logger = logging.getLogger(__name__)
 STATE_FILE_DIR = Path('/etc/trustpoint/wizard/')
 UPDATE_TLS_NGINX = STATE_FILE_DIR / Path('update_tls_nginx.sh')
 INSTALL_PKCS11_ASSETS = STATE_FILE_DIR / Path('install_pkcs11_assets.sh')
+MANAGE_PCSCD = STATE_FILE_DIR / Path('manage_pcscd.sh')
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-provider.cfg'
@@ -641,6 +642,91 @@ def _persist_local_dev_pkcs11_config_if_available(
             update_fields.append('fresh_install_pkcs11_config_env_var')
 
 
+def _persist_pkcs11_module_from_form(form: FreshInstallBackendConfigModelForm, update_fields: list[str]) -> None:
+    """Persist the selected or uploaded PKCS#11 module path from the setup form."""
+    uploaded_module = form.cleaned_data.get('pkcs11_module_upload')
+    current_staged_module = existing_wizard_pkcs11_staged_file(form.instance.fresh_install_pkcs11_module_path)
+    current_module_path = (form.instance.fresh_install_pkcs11_module_path or '').strip()
+    current_module_exists = bool(current_module_path and Path(current_module_path).is_file())
+
+    if form.uses_opensc_pkcs11_module():
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
+        form.instance.fresh_install_pkcs11_module_path = str(form.opensc_pkcs11_module_path)
+        update_fields.append('fresh_install_pkcs11_module_path')
+        return
+
+    if uploaded_module is not None:
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
+        form.instance.fresh_install_pkcs11_module_path = stage_uploaded_pkcs11_module(uploaded_module)
+        update_fields.append('fresh_install_pkcs11_module_path')
+        return
+
+    if current_staged_module is None and local_dev_pkcs11_handoff_available():
+        local_dev_module = str(local_dev_pkcs11_module_path())
+        if not current_module_path or current_module_path == local_dev_module or not current_module_exists:
+            cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
+            form.instance.fresh_install_pkcs11_module_path = local_dev_module
+            update_fields.append('fresh_install_pkcs11_module_path')
+
+
+def _persist_pkcs11_provider_config_from_form(
+    form: FreshInstallBackendConfigModelForm,
+    update_fields: list[str],
+) -> None:
+    """Persist or clear the optional provider config from the setup form."""
+    uploaded_config = form.cleaned_data.get('pkcs11_config_upload')
+    current_staged_config = existing_wizard_pkcs11_staged_file(form.instance.fresh_install_pkcs11_config_path)
+    current_config_path = (form.instance.fresh_install_pkcs11_config_path or '').strip()
+    current_config_exists = bool(current_config_path and Path(current_config_path).is_file())
+
+    if form.uses_opensc_pkcs11_module():
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
+        form.instance.fresh_install_pkcs11_config_path = ''
+        form.instance.fresh_install_pkcs11_config_env_var = ''
+        update_fields.extend(['fresh_install_pkcs11_config_path', 'fresh_install_pkcs11_config_env_var'])
+        return
+
+    if uploaded_config is not None:
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
+        form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
+        update_fields.append('fresh_install_pkcs11_config_path')
+        return
+
+    _persist_local_dev_pkcs11_config_if_available(
+        form,
+        update_fields,
+        current_staged_config=current_staged_config,
+        current_config_path=current_config_path,
+        current_config_exists=current_config_exists,
+    )
+
+
+def _uses_opensc_pkcs11_module(config_model: SetupWizardConfigModel) -> bool:
+    """Return whether the staged PKCS#11 configuration uses the built-in OpenSC module."""
+    module_path = (config_model.fresh_install_pkcs11_module_path or '').strip()
+    return module_path == str(settings.HSM_OPENSC_PKCS11_MODULE_PATH)
+
+
+def configure_pkcs11_runtime_services(config_model: SetupWizardConfigModel) -> None:
+    """Start or stop container-local runtime services needed by the staged PKCS#11 configuration."""
+    action = 'start' if _uses_opensc_pkcs11_module(config_model) else 'stop'
+    try:
+        execute_shell_script(MANAGE_PCSCD, action)
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or '').strip()
+        if action == 'start':
+            err_msg = 'Could not start the USB smart-card service inside the Trustpoint container.'
+            if detail:
+                err_msg = f'{err_msg} {detail}'
+            raise DjangoValidationError(err_msg) from exc
+        logger.warning('Could not stop pcscd after selecting a non-USB PKCS#11 backend: %s', detail or exc)
+    except (FileNotFoundError, ValueError) as exc:
+        if action == 'start':
+            err_msg = 'The USB smart-card service helper is not installed in this Trustpoint container.'
+            raise DjangoValidationError(err_msg) from exc
+        logger.warning('Could not locate pcscd helper while selecting a non-USB PKCS#11 backend: %s', exc)
+
+
 def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelForm) -> None:
     """Persist staged PKCS#11 wizard inputs without advancing the wizard."""
     if form.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
@@ -664,20 +750,7 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
         'fresh_install_pkcs11_enforce_app_secret_protection'
     ]
 
-    uploaded_module = form.cleaned_data.get('pkcs11_module_upload')
-    current_staged_module = existing_wizard_pkcs11_staged_file(form.instance.fresh_install_pkcs11_module_path)
-    current_module_path = (form.instance.fresh_install_pkcs11_module_path or '').strip()
-    current_module_exists = bool(current_module_path and Path(current_module_path).is_file())
-    if uploaded_module is not None:
-        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
-        form.instance.fresh_install_pkcs11_module_path = stage_uploaded_pkcs11_module(uploaded_module)
-        update_fields.append('fresh_install_pkcs11_module_path')
-    elif current_staged_module is None and local_dev_pkcs11_handoff_available():
-        local_dev_module = str(local_dev_pkcs11_module_path())
-        if not current_module_path or current_module_path == local_dev_module or not current_module_exists:
-            cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
-            form.instance.fresh_install_pkcs11_module_path = local_dev_module
-            update_fields.append('fresh_install_pkcs11_module_path')
+    _persist_pkcs11_module_from_form(form, update_fields)
 
     user_pin = form.cleaned_data.get('pkcs11_user_pin') or ''
     if user_pin:
@@ -685,22 +758,7 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
         form.instance.fresh_install_pkcs11_auth_source_ref = stage_pkcs11_user_pin(user_pin)
         update_fields.append('fresh_install_pkcs11_auth_source_ref')
 
-    uploaded_config = form.cleaned_data.get('pkcs11_config_upload')
-    current_staged_config = existing_wizard_pkcs11_staged_file(form.instance.fresh_install_pkcs11_config_path)
-    current_config_path = (form.instance.fresh_install_pkcs11_config_path or '').strip()
-    current_config_exists = bool(current_config_path and Path(current_config_path).is_file())
-    if uploaded_config is not None:
-        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
-        form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
-        update_fields.append('fresh_install_pkcs11_config_path')
-    else:
-        _persist_local_dev_pkcs11_config_if_available(
-            form,
-            update_fields,
-            current_staged_config=current_staged_config,
-            current_config_path=current_config_path,
-            current_config_exists=current_config_exists,
-        )
+    _persist_pkcs11_provider_config_from_form(form, update_fields)
 
     if (
         form.instance.fresh_install_pkcs11_token_label != previous_token_label
@@ -778,6 +836,7 @@ def _stage_and_probe_pkcs11_connection(
     profile_name: str,
 ) -> Pkcs11Capabilities:
     """Install staged PKCS#11 assets and run the isolated token probe."""
+    configure_pkcs11_runtime_services(form.instance)
     FreshInstallSummaryView.install_staged_pkcs11_assets(form.instance)
     form.refresh_pkcs11_state()
     return probe_staged_pkcs11_config_isolated(form.instance, profile_name=profile_name)
@@ -2392,6 +2451,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
     @classmethod
     def _configure_pkcs11_backend(cls, config_model: SetupWizardConfigModel) -> None:  # noqa: C901
         """Configure the PKCS#11 backend for the instance from wizard-staged values."""
+        configure_pkcs11_runtime_services(config_model)
         cls._install_staged_pkcs11_assets(config_model)
 
         module_path = Path(

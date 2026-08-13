@@ -105,7 +105,9 @@ have(){ command -v "$1" >/dev/null 2>&1; }
 exists(){ docker ps -a --format '{{.Names}}' | grep -Fxq "$1"; }
 running(){ docker ps --format '{{.Names}}' | grep -Fxq "$1"; }
 ensure_network(){ docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null; }
-ensure_volumes(){ docker volume inspect "$VOL_DB" >/dev/null 2>&1 || docker volume create "$VOL_DB" >/dev/null; }
+ensure_volumes(){
+  docker volume inspect "$VOL_DB" >/dev/null 2>&1 || docker volume create "$VOL_DB" >/dev/null
+}
 stop_one(){ local n="$1"; exists "$n" || return 0; running "$n" && docker stop "$n" >/dev/null || true; docker rm "$n" >/dev/null || true; }
 remove_one(){ local n="$1"; exists "$n" || return 0; docker rm -f "$n" >/dev/null 2>&1 || true; }
 container_state(){ local n="$1"; exists "$n" || { echo "absent"; return; }; docker inspect -f '{{.State.Status}}' "$n" 2>/dev/null || echo "unknown"; }
@@ -162,7 +164,6 @@ collect_project_volumes(){
   local c p
   {
     echo "$VOL_DB"
-
     while IFS= read -r c; do
       [[ -n "$c" ]] || continue
       container_volume_names "$c"
@@ -822,7 +823,6 @@ configure_selected(){
       ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
     )
     $ASK_HSM_ON_UP && step_local_hsm
-
     if ! $EN_LOCAL_HSM && ! $NO_AUTO_HSM && [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
       warn "Local/dev HSM metadata exists; starting SoftHSM and mounting its token store for Trustpoint."
       EN_LOCAL_HSM=true
@@ -1016,14 +1016,12 @@ start_app(){
     )
   fi
 
-  if [[ -S /run/pcscd/pcscd.comm ]]; then
+  if [[ -d /dev/bus/usb ]]; then
     hsm_mounts+=(
-      -v "/run/pcscd:/run/pcscd"
+      -v "/dev/bus/usb:/dev/bus/usb"
+      --device-cgroup-rule "c 189:* rwm"
     )
-    ok "PC/SC socket will be mounted for hardware HSM access."
-  else
-    warn "PC/SC socket not found: /run/pcscd/pcscd.comm"
-    warn "A USB smart-card HSM will not be accessible inside Trustpoint."
+    ok "USB bus will be available if the setup wizard selects a USB smart-card HSM."
   fi
 
   docker run -d --name "$name" --network "$NET" \
@@ -1093,13 +1091,6 @@ start_workflows2_worker(){
       -e "TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR=SOFTHSM2_CONF"
       -e "TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF=${LOCAL_HSM_CONTAINER_SOFTHSM2_CONF}"
     )
-  fi
-
-  if [[ -S /run/pcscd/pcscd.comm ]]; then
-    hsm_mounts+=(
-      -v "/run/pcscd:/run/pcscd"
-    )
-    ok "PC/SC socket will be mounted for hardware HSM access in the worker."
   fi
 
   if $EN_MAILPIT; then
@@ -1893,6 +1884,8 @@ Commands:
   help
 
 Also supported (legacy): --only trustpoint|db|mail|hsm|sftp|worker|demo
+
+USB smart-card HSM access is selected in the Trustpoint setup wizard.
 EOF2
 }
 

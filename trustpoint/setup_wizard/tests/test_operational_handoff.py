@@ -36,3 +36,19 @@ def test_build_operational_environment_preserves_local_softhsm_config(monkeypatc
     env_values = build_operational_environment(config_model)
 
     assert env_values['SOFTHSM2_CONF'] == softhsm_config_path
+
+
+def test_build_operational_environment_starts_pcscd_for_opensc(settings: object) -> None:
+    """USB smart-card HSM setups restart container-local pcscd in operational mode."""
+    config_model = SetupWizardConfigModel(
+        operational_db_host='postgres',
+        operational_db_port=5432,
+        operational_db_name='trustpoint_db',
+        operational_db_user='admin',
+        operational_db_password='testing321',  # noqa: S106
+        fresh_install_pkcs11_module_path=str(settings.HSM_OPENSC_PKCS11_MODULE_PATH),
+    )
+
+    env_values = build_operational_environment(config_model)
+
+    assert env_values['TRUSTPOINT_START_PCSCD'] == '1'

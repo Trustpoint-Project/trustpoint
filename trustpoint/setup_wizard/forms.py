@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-provider.cfg'
+OPENSC_PKCS11_MODULE_PATH = Path(settings.HSM_OPENSC_PKCS11_MODULE_PATH)
 
 MIN_TCP_PORT = 1
 MAX_TCP_PORT = 65535
@@ -71,6 +72,13 @@ TLS_CONFIG_OPTION_DESCRIPTIONS = {
 
 TLS_CONFIG_TYPE_CHOICES = tuple(
     (choice.value, choice.label) for choice in SetupWizardConfigModel.FreshInstallTlsConfigType
+)
+
+PKCS11_CONNECTION_TYPE_USB = 'usb'
+PKCS11_CONNECTION_TYPE_NETWORK = 'network'
+PKCS11_CONNECTION_TYPE_CHOICES = (
+    (PKCS11_CONNECTION_TYPE_NETWORK, gettext_lazy('Network HSM')),
+    (PKCS11_CONNECTION_TYPE_USB, gettext_lazy('USB HSM')),
 )
 
 MAX_DNS_NAME_LENGTH = 253
@@ -364,18 +372,25 @@ class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
 class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
     """Form for configuring the selected backend during setup."""
 
+    pkcs11_connection_type = forms.ChoiceField(
+        required=False,
+        label=gettext_lazy('HSM connection'),
+        choices=PKCS11_CONNECTION_TYPE_CHOICES,
+        initial=PKCS11_CONNECTION_TYPE_NETWORK,
+        help_text=gettext_lazy(
+            'USB smart-card HSMs use the built-in OpenSC driver; network HSMs use an uploaded PKCS#11 module.'
+        ),
+    )
     pkcs11_module_upload = forms.FileField(
         required=False,
         label=gettext_lazy('PKCS#11 library upload'),
-        help_text=gettext_lazy('Upload the PKCS#11 shared library that Trustpoint should install for this instance.'),
+        help_text=gettext_lazy('Required for network HSMs. Not used for USB HSMs.'),
     )
     pkcs11_user_pin = forms.CharField(
         required=False,
         label=gettext_lazy('User PIN'),
         strip=False,
-        help_text=gettext_lazy(
-            'Enter the user PIN once. Trustpoint creates the protected user-pin.txt file during setup.'
-        ),
+        help_text=gettext_lazy('Stored as a protected PIN file during setup.'),
         widget=forms.PasswordInput(
             attrs={
                 'autocomplete': 'new-password',
@@ -386,17 +401,13 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
     pkcs11_config_upload = forms.FileField(
         required=False,
         label=gettext_lazy('Provider config file'),
-        help_text=gettext_lazy(
-            'Optional. Upload the PKCS#11 provider configuration file when the selected module requires one.'
-        ),
+        help_text=gettext_lazy('Optional network HSM config. Not used for USB HSMs.'),
     )
     pkcs11_config_env_var = forms.CharField(
         required=False,
         label=gettext_lazy('Provider config env var'),
         initial='',
-        help_text=gettext_lazy(
-            'Environment variable used by this PKCS#11 module to find the uploaded provider config file.'
-        ),
+        help_text=gettext_lazy('Required only when uploading a provider config file.'),
     )
     MAX_PKCS11_LIBRARY_UPLOAD_BYTES = 32 * 1024 * 1024
     MAX_PKCS11_CONFIG_UPLOAD_BYTES = 256 * 1024
@@ -440,6 +451,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
         if selected_backend != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             for field_name in (
+                'pkcs11_connection_type',
                 'pkcs11_module_upload',
                 'pkcs11_config_upload',
                 'pkcs11_config_env_var',
@@ -452,6 +464,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
                 self.fields[field_name].required = False
             return
 
+        self.fields['pkcs11_connection_type'].widget.attrs.update({'class': 'form-select'})
         self.fields['pkcs11_module_upload'].widget.attrs.update({'class': 'form-control'})
         self.fields['pkcs11_config_upload'].widget.attrs.update({'class': 'form-control'})
         self.fields['pkcs11_config_env_var'].widget.attrs.update(
@@ -480,6 +493,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
     def _apply_pkcs11_defaults(self) -> None:
         """Prefill the PKCS#11 step with staged values or current installation defaults."""
+        self.initial['pkcs11_connection_type'] = self._initial_pkcs11_connection_type()
         self.initial['fresh_install_pkcs11_token_label'] = (
             self.instance.fresh_install_pkcs11_token_label or getattr(settings, 'HSM_DEFAULT_TOKEN_LABEL', '')
         )
@@ -494,6 +508,28 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         )
         self.has_existing_pkcs11_pin = self._existing_pkcs11_pin_file() is not None
         self.staged_pkcs11_config_name = self._staged_pkcs11_config_name()
+        self.pkcs11_connection_type_value = self._current_pkcs11_connection_type()
+        self.uses_usb_pkcs11_connection = self.pkcs11_connection_type_value == PKCS11_CONNECTION_TYPE_USB
+        self.opensc_pkcs11_module_path = str(OPENSC_PKCS11_MODULE_PATH)
+
+    def _initial_pkcs11_connection_type(self) -> str:
+        """Infer the connection type from the already staged module path."""
+        configured_module = str(self.instance.fresh_install_pkcs11_module_path or '').strip()
+        if configured_module == str(OPENSC_PKCS11_MODULE_PATH):
+            return PKCS11_CONNECTION_TYPE_USB
+        return PKCS11_CONNECTION_TYPE_NETWORK
+
+    def _current_pkcs11_connection_type(self) -> str:
+        """Return the selected PKCS#11 connection type for bound and unbound forms."""
+        if self.is_bound:
+            value = str(self.data.get(self.add_prefix('pkcs11_connection_type')) or '').strip()
+            if value in {PKCS11_CONNECTION_TYPE_USB, PKCS11_CONNECTION_TYPE_NETWORK}:
+                return value
+        return str(self.initial.get('pkcs11_connection_type') or PKCS11_CONNECTION_TYPE_NETWORK)
+
+    def uses_opensc_pkcs11_module(self) -> bool:
+        """Return whether this submission should use the container OpenSC module."""
+        return self._current_pkcs11_connection_type() == PKCS11_CONNECTION_TYPE_USB
 
     def refresh_pkcs11_state(self) -> None:
         """Refresh public PKCS#11 helper attributes after staging files changed."""
@@ -513,6 +549,11 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
     def _existing_pkcs11_module_file(self) -> Path | None:
         """Return the currently staged or installed PKCS#11 module file for this wizard state."""
+        if self.uses_opensc_pkcs11_module():
+            opensc_module = _safe_existing_file(OPENSC_PKCS11_MODULE_PATH)
+            if opensc_module is not None:
+                return opensc_module
+
         staged_module = existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_module_path)
         if staged_module is not None:
             return staged_module
@@ -605,6 +646,16 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             return False
         return bool(self.cleaned_data.get('fresh_install_pkcs11_enforce_app_secret_protection'))
 
+    def clean_pkcs11_connection_type(self) -> str:
+        """Normalize the selected PKCS#11 connection type."""
+        if self.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            return PKCS11_CONNECTION_TYPE_NETWORK
+        value = str(self.cleaned_data.get('pkcs11_connection_type') or PKCS11_CONNECTION_TYPE_NETWORK)
+        if value not in {PKCS11_CONNECTION_TYPE_USB, PKCS11_CONNECTION_TYPE_NETWORK}:
+            err_msg = gettext_lazy('Select a valid HSM connection type.')
+            raise forms.ValidationError(err_msg)
+        return value
+
     def _validate_pkcs11_module_upload(self, uploaded_module: Any) -> None:
         """Validate the uploaded PKCS#11 shared library."""
         if uploaded_module is None:
@@ -663,9 +714,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         config_upload = cleaned_data.get('pkcs11_config_upload')
         config_env_var = str(cleaned_data.get('pkcs11_config_env_var') or '').strip()
         user_pin = cleaned_data.get('pkcs11_user_pin') or ''
+        uses_opensc = cleaned_data.get('pkcs11_connection_type') == PKCS11_CONNECTION_TYPE_USB
         existing_module = self._existing_pkcs11_module_file()
         existing_pin = self._existing_pkcs11_pin_file()
-        existing_config = self._existing_pkcs11_config_file()
+        existing_config = None if uses_opensc else self._existing_pkcs11_config_file()
         token_label = cleaned_data.get('fresh_install_pkcs11_token_label') or ''
         slot_id = cleaned_data.get('fresh_install_pkcs11_slot_id')
 
@@ -678,7 +730,13 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         except forms.ValidationError as exception:
             self.add_error('pkcs11_config_upload', exception)
 
-        if (config_upload is not None or existing_config is not None) and not config_env_var:
+        if uses_opensc and existing_module is None:
+            self.add_error(
+                'pkcs11_connection_type',
+                gettext_lazy('The OpenSC PKCS#11 module is not available in this Trustpoint container.'),
+            )
+
+        if not uses_opensc and (config_upload is not None or existing_config is not None) and not config_env_var:
             self.add_error(
                 'pkcs11_config_env_var',
                 gettext_lazy('Enter the environment variable expected by this PKCS#11 provider config file.'),

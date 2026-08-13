@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 STATE_FILE_DIR = Path('/etc/trustpoint/wizard/')
 UPDATE_TLS_NGINX = STATE_FILE_DIR / 'update_tls_nginx.sh'
 INSTALL_PKCS11_ASSETS = STATE_FILE_DIR / 'install_pkcs11_assets.sh'
+MANAGE_PCSCD = STATE_FILE_DIR / 'manage_pcscd.sh'
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-provider.cfg'
@@ -83,6 +84,26 @@ class OperationalBootstrapApplier:
             error.stdout = completed_process.stdout
             error.stderr = completed_process.stderr
             raise error
+
+    @classmethod
+    def _configure_pkcs11_runtime_services(cls, module_path: Path) -> None:
+        """Start or stop runtime services needed by the selected PKCS#11 module."""
+        action = 'start' if str(module_path) == str(settings.HSM_OPENSC_PKCS11_MODULE_PATH) else 'stop'
+        try:
+            cls.execute_shell_script(MANAGE_PCSCD, action)
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or exc.stdout or '').strip()
+            if action == 'start':
+                msg = 'Could not start the USB smart-card service inside the Trustpoint container.'
+                if detail:
+                    msg = f'{msg} {detail}'
+                raise DjangoValidationError(msg) from exc
+            logger.warning('Could not stop pcscd after selecting a non-USB PKCS#11 backend: %s', detail or exc)
+        except (FileNotFoundError, ValueError) as exc:
+            if action == 'start':
+                msg = 'The USB smart-card service helper is not installed in this Trustpoint container.'
+                raise DjangoValidationError(msg) from exc
+            logger.warning('Could not locate pcscd helper while selecting a non-USB PKCS#11 backend: %s', exc)
 
     @staticmethod
     def _load_existing_backend_profile(backend_kind: BackendKind) -> CryptoProviderProfileModel | None:
@@ -322,6 +343,7 @@ class OperationalBootstrapApplier:
         fallback_module_path = Path(settings.HSM_DEFAULT_PKCS11_MODULE_PATH)
         if not module_path.exists() and fallback_module_path.exists():
             module_path = fallback_module_path
+        self._configure_pkcs11_runtime_services(module_path)
 
         slot_id = self.fresh_install.get('pkcs11_slot_id')
         token_label = (self.fresh_install['pkcs11_token_label'] or '').strip() or None

@@ -60,6 +60,34 @@ echo "=== Trustpoint phase: ${PHASE} ==="
 echo "=== Django settings: ${DJANGO_SETTINGS_MODULE} ==="
 
 mkdir -p /var/log/trustpoint
+
+start_pcscd_if_requested() {
+  if [ "${TRUSTPOINT_START_PCSCD:-0}" != "1" ]; then
+    return 0
+  fi
+
+  if ! command -v pcscd >/dev/null 2>&1; then
+    echo "ERROR: TRUSTPOINT_START_PCSCD=1 was requested, but pcscd is not installed."
+    exit 1
+  fi
+
+  mkdir -p /run/pcscd
+  rm -f /run/pcscd/pcscd.comm
+
+  echo "Starting container-local pcscd for USB smart-card HSM access..."
+  pcscd --foreground > /var/log/trustpoint/pcscd.log 2>&1 &
+  PCSCD_PID=$!
+  sleep 1
+
+  if ! kill -0 "$PCSCD_PID" 2>/dev/null; then
+    echo "ERROR: pcscd failed to start. Check /var/log/trustpoint/pcscd.log"
+    cat /var/log/trustpoint/pcscd.log
+    exit 1
+  fi
+}
+
+start_pcscd_if_requested
+
 BOOTSTRAP_STATE_DIR="$(dirname "$OPERATIONAL_ENV_FILE")"
 BOOTSTRAP_READY_DIR="$(dirname "$OPERATIONAL_READY_FILE")"
 BOOTSTRAP_DB_PATH="${TRUSTPOINT_BOOTSTRAP_DB_PATH:-/var/lib/trustpoint/bootstrap/bootstrap.sqlite3}"
