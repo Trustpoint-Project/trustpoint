@@ -16,6 +16,7 @@ from django.db import DatabaseError, transaction
 from django.db.models import ProtectedError
 
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
+from management.models.prometheus import PrometheusConfig
 from appsecrets.models import (
     AppSecretBackendKind,
     AppSecretBackendModel,
@@ -223,6 +224,7 @@ class Command(BaseCommand):
             email = self._env_value('TP_ADMIN_EMAIL', required=False, default='') or ''
 
             inject_demo_data = self._env_bool('TP_INJECT_DEMO_DATA', default=False)
+            enable_metrics = self._env_bool('TP_ENABLE_PROMETHEUS_METRICS', default=False)
 
             tls_ipv4_raw = self._env_value('TP_TLS_IPV4_ADDRESSES', required=False, default='') or ''
             tls_ipv6_raw = self._env_value('TP_TLS_IPV6_ADDRESSES', required=False, default='') or ''
@@ -246,6 +248,10 @@ class Command(BaseCommand):
                 self._create_superuser(username, password, email)
 
                 self._configure_storage()
+
+                metrics_config = PrometheusConfig.get()
+                metrics_config.enabled = enable_metrics
+                metrics_config.save(update_fields=['enabled'])
 
                 self.stdout.write('Creating default certificate profiles...')
                 call_command('create_default_cert_profiles')
