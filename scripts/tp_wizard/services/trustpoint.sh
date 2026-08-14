@@ -10,7 +10,7 @@ start_trustpoint() {
   build_trustpoint
   remove_compose_service trustpoint
   remove_container trustpoint
-  start_container trustpoint --add-host host.docker.internal:host-gateway \
+  start_container trustpoint --network-alias trustpoint.local --add-host host.docker.internal:host-gateway \
     -p "${TP_HTTP_PORT}:80" -p "${TP_HTTPS_PORT}:443" \
     -e TRUSTPOINT_PHASE=auto -e POSTGRES_DB="$DB_NAME" -e DATABASE_USER="$DB_USER" \
     -e DATABASE_PASSWORD="$DB_PASS" -e DATABASE_HOST=postgres -e DATABASE_PORT=5432 \

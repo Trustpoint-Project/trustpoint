@@ -35,6 +35,7 @@ runtime_start() {
     esac
   done
   for service in "${SERVICES[@]}"; do runtime_wait "$service"; done
+  [[ " ${SERVICES[*]} " == *' monitoring '* ]] && monitoring_wait_target
 }
 
 runtime_stop() {
