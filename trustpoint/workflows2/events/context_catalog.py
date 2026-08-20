@@ -77,6 +77,14 @@ DEVICE_CONTEXT = ctx(
         example='ABC123456',
     ),
     ContextVar(
+        'event.device.ip_address',
+        'string',
+        _('Device IP address.'),
+        title=_('Device IP address'),
+        group='event.device',
+        example='192.168.1.1',
+    ),
+    ContextVar(
         'event.device.domain_id',
         'int',
         _('Domain ID of the device.'),

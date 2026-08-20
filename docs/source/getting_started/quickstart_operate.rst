@@ -114,6 +114,9 @@ Devices are the end nodes that will receive digital certificates. Follow these s
    - Click **Download credentials**
    - Click **Download PKCS12**
 
+   Before deploying the credential, follow :ref:`inspect-certificate` to
+   confirm the certificate identity, issuer, validity period, and algorithms.
+
 .. note::
 
       trustpoint offers different onboarding mechanisms. For more information see :ref:`onboarding-mechanisms`. `Trustpoint-Client <https://trustpoint-client.readthedocs.io>`_ is the easiest and preferred way of consuming Trustpoint.

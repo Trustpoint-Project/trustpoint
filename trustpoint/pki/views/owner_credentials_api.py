@@ -222,6 +222,11 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
     )
     def create(self, request: Request) -> Response:
         """Dispatch DevOwnerID creation to the appropriate sub-serializer based on ``method``."""
+        if not isinstance(request.data, dict):
+            return Response(
+                {'detail': 'Invalid request data format. Expected a JSON object.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         method = request.data.get('method')
         if method == 'file_import':
             return self._create_file_import(request)

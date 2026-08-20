@@ -134,6 +134,8 @@ def workflow_definition(db: Any) -> AgentProfileDefinition:
         is_active=True,
     )
 
+
+
 @pytest.fixture
 def assigned_profile(
     db: Any,

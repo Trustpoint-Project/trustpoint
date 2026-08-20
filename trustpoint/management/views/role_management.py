@@ -11,14 +11,21 @@ cannot be deleted or renamed.
 from typing import Any
 
 from django.contrib import messages
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.forms import BaseModelForm
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import extend_schema
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.request import Request
+from rest_framework.response import Response
 
+from management.permissions import IsSuperUser
+from management.serializer.role import PermissionSerializer, RoleSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin, SuperuserRequiredMixin
 from users.form import GroupPermissionForm
@@ -121,12 +128,27 @@ class RoleEditView(
     def form_valid(self, form: BaseModelForm[Group]) -> HttpResponse:
         """Save permission changes and show a success message.
 
+        Refuses to rename a protected (built-in) role, even if the
+        request bypasses the template's read-only field.
+
         Args:
             form: The validated group form.
 
         Returns:
-            Redirect to the role management list.
+            Redirect to the role management list on success, or
+            back to the form with an error message if a protected
+            role's name was changed.
         """
+        original_name = self.get_object().name
+        new_name = form.cleaned_data['name']
+
+        if original_name in _PROTECTED_GROUP_NAMES and new_name != original_name:
+            messages.error(
+                self.request,
+                _('Cannot rename "%(name)s": this is a built-in role.') % {'name': original_name},
+            )
+            return self.render_to_response(self.get_context_data(form=form))
+
         response = super().form_valid(form)
         messages.success(
             self.request,
@@ -188,3 +210,49 @@ class RoleDeleteView(
             _('Role "%(name)s" deleted successfully.') % {'name': self.object.name},
         )
         return super().form_valid(form)
+
+
+@extend_schema(tags=['Role Management'])
+class RoleViewSet(viewsets.ModelViewSet[Group]):
+    """API view for listing, creating, updating, and deleting roles."""
+
+    queryset = Group.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = (IsSuperUser,)
+
+    def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Update the role, refusing to rename a protected (built-in) role."""
+        instance = self.get_object()
+        new_name = request.data.get('name')
+        if (
+            instance.name in _PROTECTED_GROUP_NAMES
+            and new_name is not None
+            and str(new_name) != instance.name
+        ):
+            return Response(
+                {'detail': 'Cannot rename this role: it is a built-in role.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Delete the role, refusing protected roles or roles still assigned to users."""
+        instance = self.get_object()
+        if instance.name in _PROTECTED_GROUP_NAMES:
+            return Response(
+                {'detail': 'Cannot delete this role: it is a built-in role.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if instance.trustpoint_users.exists():
+            return Response(
+                {'detail': 'Cannot delete this role: there are still users assigned to it.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=['get'], url_path='available-permissions')
+    def available_permissions(self, _request: Request) -> Response:
+        """List the permissions that can be assigned to a role."""
+        permissions = Permission.objects.filter(content_type__model='apppermission')
+        serializer = PermissionSerializer(permissions, many=True)
+        return Response(serializer.data)
