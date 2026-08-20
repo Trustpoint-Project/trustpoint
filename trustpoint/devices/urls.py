@@ -430,6 +430,18 @@ urlpatterns = [
         views.DeviceBrowserCredentialDownloadView.as_view(),
         name='browser_domain_credential_download',
     ),
+    # QR code download view
+    path(
+        'credentials/<int:pk>/qr-download/',
+        views.QRCodeCredentialDownloadView.as_view(),
+        name='qr_code_credential_download',
+    ),
+    # QR code API endpoint for dynamic generation
+    path(
+        'credentials/<int:pk>/generate-qr/',
+        views.GenerateQRCodeAPIView.as_view(),
+        name='generate_qr_code_api',
+    ),
     # Revokation views
     path(
         'revoke/<int:pk>/',

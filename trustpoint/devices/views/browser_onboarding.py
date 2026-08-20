@@ -87,6 +87,9 @@ class AbstractBrowserOnboardingOTPView(PageContextMixin, DetailView[IssuedCreden
             }
         )
 
+        # No QR code on OTP view - it will be on the download page instead
+        context['qr_code_available'] = False
+
         context['cred_download_url'] = f'devices:{self.page_name}_credential-download'
         context['browser_cancel'] = f'devices:{self.page_name}_browser_cancel'
 
