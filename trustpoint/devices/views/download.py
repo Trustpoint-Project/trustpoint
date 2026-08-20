@@ -25,6 +25,7 @@ from devices.forms import (
 
 # noinspection PyUnresolvedReferences
 from devices.models import RemoteDeviceCredentialDownloadModel
+from devices.qr_code import QRCODE_AVAILABLE, generate_pkcs12_qr_data, generate_qr_code
 from pki.models import IssuedCredentialModel
 from pki.models.credential import CredentialModel
 from trustpoint.page_context import (
@@ -143,6 +144,45 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
 
         context['browser_otp_url'] = f'devices:{self.page_name}_browser_otp_view'
         context['clm_url'] = f'devices:{self.page_name}_certificate_lifecycle_management'
+
+        # Add QR code with embedded PKCS#12 data for browser downloads
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f'QR Code Debug: is_browser_download={self.is_browser_download}, QRCODE_AVAILABLE={QRCODE_AVAILABLE}')
+        
+        if self.is_browser_download and QRCODE_AVAILABLE:
+            # Use the same suggested password that's shown in the UI
+            suggested_password = context['suggested_password']
+            password_bytes = suggested_password.encode('utf-8')
+
+            credential_model = issued_credential.credential
+            credential_serializer = credential_model.get_credential_serializer()
+
+            try:
+                # Generate PKCS#12 data with the suggested password
+                logger.info('Generating PKCS#12 data for QR code...')
+                pkcs12_data = credential_serializer.as_pkcs12(password=password_bytes)
+                logger.info(f'PKCS#12 data size: {len(pkcs12_data)} bytes')
+
+                # Create data URI for PKCS#12
+                pkcs12_data_uri = generate_pkcs12_qr_data(pkcs12_data)
+                logger.info(f'Data URI size: {len(pkcs12_data_uri)} bytes')
+
+                # Generate QR code
+                context['qr_code_pkcs12'] = generate_qr_code(pkcs12_data_uri)
+                context['qr_code_available'] = True
+                context['qr_code_password'] = suggested_password
+                logger.info('QR code generated successfully!')
+            except ValueError as e:
+                # PKCS#12 too large for QR code - disable QR code
+                logger.warning(f'QR code generation failed: {e}')
+                context['qr_code_available'] = False
+            except Exception as e:
+                logger.error(f'Unexpected error generating QR code: {e}', exc_info=True)
+                context['qr_code_available'] = False
+        else:
+            logger.info('QR code generation skipped')
+            context['qr_code_available'] = False
 
         return context
 

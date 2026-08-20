@@ -64,6 +64,12 @@ from .download import (
     OpcUaGdsPushCertificateDownloadView,
     OpcUaGdsPushDownloadPageDispatcherView,
 )
+from .qr_download import (
+    QRCodeCredentialDownloadView,
+)
+from .qr_api import (
+    GenerateQRCodeAPIView,
+)
 from .gds_push import (
     OpcUaGdsPushCertRenewalSettingsView,
     OpcUaGdsPushUpdateServerCertificateView,
@@ -142,5 +148,7 @@ __all__ = [
     'OpcUaGdsSelectCertificateProfileNewApplicationCredentialView',
     'OpcUaGdsTableView',
     'PublicKeyInfoMissingErrorMsg',
+    'QRCodeCredentialDownloadView',
+    'GenerateQRCodeAPIView',
     'TrustBundleDownloadView',
 ]
