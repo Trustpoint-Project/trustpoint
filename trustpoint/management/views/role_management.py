@@ -223,7 +223,7 @@ class RoleViewSet(viewsets.ModelViewSet[Group]):
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Update the role, refusing to rename a protected (built-in) role."""
         instance = self.get_object()
-        new_name = request.data.get('name')
+        new_name = request.data.get('name') if isinstance(request.data, dict) else None
         if (
             instance.name in _PROTECTED_GROUP_NAMES
             and new_name is not None
