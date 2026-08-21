@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Classes for handling IDevID certificates according to IEEE 802.1AR."""
 
 from __future__ import annotations

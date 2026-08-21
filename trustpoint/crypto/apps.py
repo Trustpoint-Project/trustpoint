@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Application configuration for the new crypto backend."""
 
 from django.apps import AppConfig

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to seed the discovery app with default scan ports."""
 
 from __future__ import annotations

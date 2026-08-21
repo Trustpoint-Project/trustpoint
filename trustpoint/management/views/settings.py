@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Settings views with dedicated views for each setting type."""
 
 from __future__ import annotations
@@ -662,10 +665,7 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get the keyword arguments for instantiating the form."""
         kwargs = super().get_form_kwargs()
-        try:
-            security_config = SecurityConfig.objects.get(id=1)
-        except SecurityConfig.DoesNotExist:
-            security_config = SecurityConfig.objects.create()
+        security_config, _ = SecurityConfig.objects.get_or_create(pk=1)
         kwargs['instance'] = security_config
         return kwargs
 

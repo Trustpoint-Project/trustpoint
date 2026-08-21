@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """CMP Mock Server that integrates CMP factory and key generation factory."""
 
 import binascii

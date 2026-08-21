@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Test suite for the BackupOptionsForm."""
 from django.test import TestCase
 from management.forms import BackupOptionsForm

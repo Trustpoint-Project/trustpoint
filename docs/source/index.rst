@@ -22,6 +22,7 @@ Welcome to Trustpoint's documentation!
    getting_started/introduction
    getting_started/quickstart_setup
    getting_started/quickstart_operate
+   getting_started/inspect_certificate
    getting_started/usage_guide
    getting_started/community_support
    getting_started/faq
@@ -38,6 +39,7 @@ Welcome to Trustpoint's documentation!
    features/aoki/mdns
 
    features/devices/onboarding
+   features/devices/agents
 
    features/pki/index
 
@@ -64,11 +66,7 @@ Welcome to Trustpoint's documentation!
    :caption: Development
 
    development/index
-   development/architecture/generated/index
-   development/architecture/credentials
-   development/architecture/backup_restore
-   development/architecture/crypto_redesign
-   development/architecture/crypto_implementation_plan
+   development/architecture/index
    development/auto_restore
    development/sbom
    development/pipeline

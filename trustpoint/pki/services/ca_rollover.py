@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Service layer for Issuing CA rollover operations."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Helpers for building JSON-safe Workflow 2 event payloads."""
 
 from __future__ import annotations
@@ -14,7 +17,6 @@ DEVICE_TRACKED_FIELDS: tuple[str, ...] = (
     'serial_number',
 
     'domain_id',
-    'ip_address',
     'opc_server_port',
     'device_type',
     'onboarding_config_id',
@@ -53,6 +55,7 @@ def build_device_snapshot(device: Any) -> dict[str, Any]:
     snapshot: dict[str, Any] = {
         'id': _json_scalar(getattr(device, 'id', None)),
         'uuid': device.rfc_4122_uuid_str if hasattr(device, 'rfc_4122_uuid_str') else None,
+        'ip_address': str(ip) if (ip := getattr(device, 'ip_address', None)) is not None else None,
     }
     for field_name in DEVICE_TRACKED_FIELDS:
         snapshot[field_name] = _json_scalar(getattr(device, field_name, None))

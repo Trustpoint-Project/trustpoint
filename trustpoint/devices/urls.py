@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """URL configuration for the devices' application."""
 
 from django.urls import path, re_path
@@ -5,6 +8,7 @@ from django.urls import path, re_path
 from devices.views import owner_credentials as ztc_views
 from help_pages import devices_help_views
 from trustpoint.page_context import (
+    DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
 )
@@ -17,6 +21,13 @@ urlpatterns = [
     # Main Pages
     path('', views.DeviceTableView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}'),
     path('opc-ua-gds/', views.OpcUaGdsTableView.as_view(), name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'),
+    path('agents/', views.AgentTableView.as_view(), name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}'),
+    # Agent Create Views
+    path(
+        'agents/create/1-to-1/',
+        views.AgentCreateOneToOneOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_one',
+    ),
     # Create Views
     path(
         'create/', views.DeviceCreateChooseOnboardingView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
@@ -24,7 +35,7 @@ urlpatterns = [
     path(
         'new-onboarding/',
         views.DeviceCreateAddOnboardingTypeView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_new_onboarding'
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_new_onboarding',
     ),
     path(
         'opc-ua-gds/create/',
@@ -99,6 +110,11 @@ urlpatterns = [
         'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/cmp-shared-secret/',
         devices_help_views.DeviceNoOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_cmp_shared_secret_help',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/revoke/cmp/',
+        devices_help_views.DeviceCmpRevokeHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_revoke_cmp_help',
     ),
     path(
         (
@@ -213,6 +229,22 @@ urlpatterns = [
             f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'
             '_certificate_lifecycle_management_issue_domain_credential_rest_username_password'
         ),
+    ),
+    # Agent setup profile help & download
+    path(
+        'certificate-lifecycle-management/<int:pk>/agent/setup-profile/',
+        devices_help_views.AgentDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_agent_setup_profile_help',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/agent/setup-profile/download/',
+        devices_help_views.AgentSetupProfileDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_agent_setup_profile_download',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/agent/setup-profile/download-script/',
+        devices_help_views.AgentSetupScriptDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_agent_setup_script_download',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/',
@@ -427,7 +459,12 @@ urlpatterns = [
     re_path(
         r'^opc-ua-gds-push/revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
         views.DeviceBulkRevokeView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_revoke',
+        name='opc_ua_gds_push_device_revoke',
+    ),
+    re_path(
+        r'^agents/revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.DeviceBulkRevokeView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_device_revoke',
     ),
     re_path(
         r'^delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
@@ -443,6 +480,11 @@ urlpatterns = [
         r'^opc-ua-gds-push/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
         views.DeviceBulkDeleteView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_delete',
+    ),
+    re_path(
+        r'^agents/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.AgentsBulkDeleteView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_device_delete',
     ),
 
     path(

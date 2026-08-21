@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for the users application."""
 
 from __future__ import annotations
@@ -848,7 +851,7 @@ def _pkcs11_connection_test_error_response(
     exception: Exception,
 ) -> HttpResponse:
     """Render a PKCS#11 connection-test failure on the current step."""
-    view.logger.exception('PKCS#11 setup-wizard connection test failed.')
+    view.logger.error('PKCS#11 setup-wizard connection test failed.')
     if isinstance(exception, DjangoValidationError):
         error_detail = '; '.join(exception.messages)
     else:
@@ -2075,7 +2078,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         """Reject mixing backend kinds within one Trustpoint instance."""
         existing_kinds = set(CryptoProviderProfileModel.objects.values_list('backend_kind', flat=True))
         if existing_kinds and backend_kind.value not in existing_kinds:
-            configured_backend_kind = sorted(existing_kinds)[0]
+            configured_backend_kind = min(existing_kinds)
             err_msg = (
                 'This Trustpoint instance already contains crypto backend '
                 f'configuration for {configured_backend_kind!r}.'
@@ -2328,7 +2331,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             )
 
         if script_error_detail:
-            logger.exception('PKCS#11 install script failed: %s', script_error_detail)
+            logger.error('PKCS#11 install script failed: %s', script_error_detail)
 
         raise DjangoValidationError(err_msg) from exc
 
@@ -2570,7 +2573,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
     ) -> HttpResponse:
         """Handle validation errors raised while applying the summary step."""
         self._add_form_validation_errors(form, exception)
-        self.logger.exception(log_message)
+        self.logger.error(log_message)
         return self.form_invalid(form)
 
     def _handle_summary_exception(
@@ -2581,7 +2584,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         """Handle non-validation errors raised while applying the summary step."""
         error_message = str(exception) or 'Error applying fresh-install summary configuration.'
         form.add_error(None, error_message)
-        self.logger.exception('Error applying fresh-install summary configuration.')
+        self.logger.error('Error applying fresh-install summary configuration.')
         return self.form_invalid(form)
 
     def _handle_tls_apply_error(
@@ -2592,7 +2595,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         """Handle TLS apply script failures."""
         error_message = self._map_tls_apply_exit_code_to_message(exception.returncode)
         form.add_error(None, f'Error applying TLS Server Credential: {error_message}')
-        self.logger.exception('Error applying fresh-install TLS server credential.')
+        self.logger.error('Error applying fresh-install TLS server credential.')
         return self.form_invalid(form)
 
     def _apply_bootstrap_summary_configuration(self) -> tuple[Any | None, Any]:
@@ -2662,6 +2665,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             self._configure_instance_crypto_backend(config_model)
             self._configure_app_secret_backend(config_model)
             call_command('create_default_cert_profiles')
+            call_command('create_default_agent_profile_definitions')
             call_command('seed_discovery_ports')
             if config_model.inject_demo_data:
                 call_command('add_domains_and_devices')

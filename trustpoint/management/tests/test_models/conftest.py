@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Fixtures for the NotificationModel model and related functionality in the notifications app."""
 
 import typing

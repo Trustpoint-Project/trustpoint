@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Persist and advance Workflow 2 runtime state."""
 from __future__ import annotations
 

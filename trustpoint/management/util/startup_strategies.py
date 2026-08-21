@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Startup helpers for Trustpoint bootstrap TLS and operational runtime startup."""
 
 from __future__ import annotations

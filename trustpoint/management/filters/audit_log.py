@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """FilterSet for the audit log list view."""
 
 from __future__ import annotations

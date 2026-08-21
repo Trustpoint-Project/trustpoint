@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Serializer package for pki app."""
 from .certificate import CertificateSerializer
 from .devid_registration import DevIdRegistrationDetailSerializer, DevIdRegistrationSerializer

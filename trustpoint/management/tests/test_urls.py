@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for settings app URL configuration."""
 
 from django.contrib.auth import get_user_model

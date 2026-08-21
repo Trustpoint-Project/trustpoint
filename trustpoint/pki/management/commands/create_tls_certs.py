@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Django management command for creating a self-signed TLS server credential."""
 
 from __future__ import annotations

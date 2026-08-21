@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Defines URL patterns for the Home application, mapping views to URLs."""
 
 from django.urls import path

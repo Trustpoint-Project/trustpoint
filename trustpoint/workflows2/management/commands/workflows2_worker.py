@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Run the Workflow 2 background worker via Django's management command entrypoint."""
 
 from __future__ import annotations

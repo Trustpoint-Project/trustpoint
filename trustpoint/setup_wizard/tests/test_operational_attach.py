@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for operational attach compatibility reporting."""
 
 # ruff: noqa: D103, S106, S107

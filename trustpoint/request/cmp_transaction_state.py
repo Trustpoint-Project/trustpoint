@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Small helpers for CMP transaction persistence and state transitions."""
 
 from __future__ import annotations

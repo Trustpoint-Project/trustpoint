@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Security-policy authorization checks for PKI objects (CAs and certificates)."""
 from __future__ import annotations
 

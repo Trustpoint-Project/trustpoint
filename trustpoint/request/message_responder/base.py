@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Responds to the PKI message according to the original request protocol."""
 from abc import ABC, abstractmethod
 

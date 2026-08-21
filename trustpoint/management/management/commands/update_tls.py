@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Command to update the Nginx TLS configuration to the current active TLS server credential."""
 
 from __future__ import annotations

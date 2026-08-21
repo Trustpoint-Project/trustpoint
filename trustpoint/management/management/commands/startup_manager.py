@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Operational startup manager for Trustpoint."""
 
 from __future__ import annotations

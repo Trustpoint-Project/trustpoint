@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Helpers for PKI tests that need backend-managed CA keys."""
 
 import uuid

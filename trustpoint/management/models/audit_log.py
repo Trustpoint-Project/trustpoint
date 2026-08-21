@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Audit log model for recording important changes to managed objects."""
 
 from __future__ import annotations

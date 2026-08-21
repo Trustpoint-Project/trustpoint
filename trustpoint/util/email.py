@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Email utility classes and functions for rendering and sending templates."""
 
 from __future__ import annotations

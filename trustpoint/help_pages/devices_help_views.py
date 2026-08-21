@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains all views concerning the help pages used within the devices app."""
 
 from __future__ import annotations
@@ -5,16 +8,17 @@ from __future__ import annotations
 import ipaddress
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 from cryptography import x509
 from django.conf import settings
 from django.contrib import messages
 from django.core.management import call_command
-from django.http import FileResponse, Http404, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.safestring import SafeString
+from django.utils.html import format_html
+from django.utils.safestring import SafeString, mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import TemplateView, View
@@ -45,9 +49,11 @@ from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from pki.models import IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
+from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from trustpoint.page_context import (
+    DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
@@ -199,9 +205,7 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, profile_name: str, cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
@@ -256,11 +260,175 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
         return sections, _non_lazy('Help - Issue Application Certificates using CMP with a shared-secret (HMAC)')
 
 
+class CmpRevocationStrategy(HelpPageStrategy):
+    """Strategy for building the no-onboarding CMP shared-secret help page."""
+
+    REASON_CODE_MAPPING: ClassVar[dict[str, int]] = {
+        'unspecified': 0,
+        'keyCompromise': 1,
+        'cACompromise': 2,
+        'affiliationChanged': 3,
+        'superseded': 4,
+        'cessationOfOperation': 5,
+        'certificateHold': 6,
+        # value 7 is not used
+        'removeFromCRL': 8,
+        'privilegeWithdrawn': 9,
+        'aACompromise': 10,
+    }
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        no_onboarding_config = getattr(device, 'no_onboarding_config', None)
+        if not no_onboarding_config:
+            raise Http404(_('Onboarding is configured for this device.'))
+        operation = 'revocation'
+        base = help_context.host_cmp_path
+
+        app_credentials = IssuedCredentialModel.objects.filter(
+            device=device,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
+        ).select_related('credential__certificate', 'domain')
+
+        credential_rows = []
+        for app_cred in app_credentials:
+            cert = app_cred.credential.certificate_or_error
+            cert_url = reverse('pki:certificate-detail', kwargs={'pk': cert.pk})
+            credential_link = format_html(
+                '<a href="{}" target="_blank">{}</a>',
+                cert_url,
+                app_cred.common_name
+            )
+            credential_rows.append(
+                HelpRow(
+                    _non_lazy(f'Credential #{app_cred.id}'),
+                    credential_link,
+                    ValueRenderType.HTML,
+                )
+            )
+
+        if not credential_rows:
+            credential_rows.append(
+                HelpRow(
+                    _non_lazy('No Credentials'),
+                    _non_lazy('No application credentials found for this device'),
+                    ValueRenderType.PLAIN,
+                )
+            )
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Certificate Revocation URL'),
+                    f'{base}/{operation}',
+                    ValueRenderType.CODE,
+                ),
+                *credential_rows,
+            ],
+        )
+
+        cred = help_context.cred_count
+
+        cred_number_input_html = (
+            '<div class="alert alert-info" role="alert">'
+            '<strong>Note:</strong> Trustpoint cannot automatically determine which credential files '
+            'you are using locally. Please specify the credential number that matches your local file names '
+            '(e.g., certificate-<strong>1</strong>.pem, key-<strong>1</strong>.pem).'
+            '</div>'
+            '<label for="cred-number-input" class="form-label">Credential Number</label>'
+            '<input type="number" id="cred-number-input" class="form-control mb-3" '
+            f'value="{cred}" min="1" style="max-width: 200px;" '
+            'onchange="updateRevocationCommand()">\n'
+            '<p class="text-muted">This number will be used in the file names: '
+            'certificate-<span id="cred-display-1">' + str(cred) + '</span>.pem, '
+            'key-<span id="cred-display-2">' + str(cred) + '</span>.pem, '
+            'full-chain-<span id="cred-display-3">' + str(cred) + '</span>.pem</p>'
+        )
+
+        credential_number_section = HelpSection(
+            _non_lazy('Credential Files'),
+            [
+                HelpRow(
+                    _non_lazy('Configure File Names'),
+                    mark_safe(cred_number_input_html),  # noqa: S308
+                    ValueRenderType.HTML,
+                ),
+            ],
+        )
+
+        reason_options_html = (
+            '<select id="revreason-select" class="form-select mb-3" '
+            'onchange="updateRevocationCommand()">\n'
+        )
+        for reason_code in RevokedCertificateModel.ReasonCode:
+            reason_options_html += f'  <option value="{reason_code.name.lower()}">{reason_code.label}</option>\n'
+        reason_options_html += '</select>\n'
+        reason_options_html += (
+            '<p class="text-muted">Select the revocation reason and the OpenSSL command below '
+            'will update automatically.</p>'
+        )
+
+        revocation_reason_section = HelpSection(
+            _non_lazy('Revocation Reason'),
+            [
+                HelpRow(
+                    _non_lazy('Select Reason'),
+                    mark_safe(reason_options_html),  # noqa: S308
+                    ValueRenderType.HTML,
+                ),
+            ],
+        )
+
+        sections = [summary, credential_number_section, revocation_reason_section]
+
+        try:
+            base_cmd = CmpSharedSecretCommandBuilder.get_app_cert_self_revoke_command(
+                host=f'{base}/{operation}',
+                cred_number=cred,
+            )
+        except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
+            err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
+            err_sect = HelpSection(
+                _non_lazy('Revocation Request for an application Certificate'),
+                [
+                    HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
+                ],
+                css_id='error',
+            )
+            sections.append(err_sect)
+            return sections, _non_lazy('Help - Revoke CMP Application Credential Certificate')
+
+        for idx, reason_code in enumerate(RevokedCertificateModel.ReasonCode):
+            numeric_code = self.REASON_CODE_MAPPING.get(reason_code.value, 0)
+            cmd_with_reason = base_cmd.replace('-revreason 0', f'-revreason {numeric_code}')
+
+            sect = HelpSection(
+                _non_lazy('Revocation Request for an application Certificate'),
+                [
+                    HelpRow(_non_lazy('OpenSSL Command'), cmd_with_reason, ValueRenderType.CODE),
+                ],
+                css_id=f'rr-{reason_code.name.lower()}',
+                hidden=(idx != 0),  # Hide all except the first one initially
+            )
+            sections.append(sect)
+
+        return sections, _non_lazy('Help - Revoke CMP Application Credential Certificate')
+
+
 class DeviceNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
     """Help view for the case of no onboarding using CMP shared-secret for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     strategy = NoOnboardingCmpSharedSecretStrategy()
+
+
+class DeviceCmpRevokeHelpView(BaseHelpView):
+    """Help view for the case of revocation of CMP Application Credential for generic device abstractions."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = CmpRevocationStrategy()
 
 
 class OpcUaGdsNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
@@ -314,9 +482,7 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
@@ -487,7 +653,6 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         operation = 'simpleenroll'
         base = help_context.host_est_path
 
-
         summary = HelpSection(
             _non_lazy('Summary'),
             [
@@ -609,9 +774,7 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
@@ -710,9 +873,7 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
@@ -814,14 +975,14 @@ class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
         domain_name = help_context.domain_unique_name
 
         def _get_enroll_path(cert_profile_name: str) -> str:
-            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/enroll/'
+            return f'{host_base}/rest/{domain_name}/{cert_profile_name}/enroll/'
 
         summary = HelpSection(
             _non_lazy('Summary'),
             [
                 HelpRow(
                     _non_lazy('Certificate Enrollment URL'),
-                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/enroll/',
+                    f'{host_base}/rest/{domain_name}/<certificate_profile>/enroll/',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -844,9 +1005,7 @@ class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, cert_profile_name: str, csr_cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, csr_cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
@@ -891,20 +1050,24 @@ class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
                 )
             except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
                 err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
-                sections.append(HelpSection(
-                    _non_lazy(f'Certificate Request for a {title} Certificate'),
-                    [HelpRow(_non_lazy('Generate CSR'), err_msg, ValueRenderType.PLAIN)],
-                    css_id=name,
-                    hidden=(i > 0),
-                ))
+                sections.append(
+                    HelpSection(
+                        _non_lazy(f'Certificate Request for a {title} Certificate'),
+                        [HelpRow(_non_lazy('Generate CSR'), err_msg, ValueRenderType.PLAIN)],
+                        css_id=name,
+                        hidden=(i > 0),
+                    )
+                )
                 continue
 
-            sections.append(_build_section(
-                _non_lazy(f'Certificate Request for a {title} Certificate'),
-                name,
-                csr_cmd,
-                hidden=(i > 0),
-            ))
+            sections.append(
+                _build_section(
+                    _non_lazy(f'Certificate Request for a {title} Certificate'),
+                    name,
+                    csr_cmd,
+                    hidden=(i > 0),
+                )
+            )
 
         return sections, _non_lazy('Help - Issue Application Certificates using REST with username and password')
 
@@ -1022,22 +1185,22 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
         domain_name = help_context.domain_unique_name
 
         def _get_enroll_path(cert_profile_name: str) -> str:
-            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/enroll/'
+            return f'{host_base}/rest/{domain_name}/{cert_profile_name}/enroll/'
 
         def _get_reenroll_path(cert_profile_name: str) -> str:
-            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/reenroll/'
+            return f'{host_base}/rest/{domain_name}/{cert_profile_name}/reenroll/'
 
         summary = HelpSection(
             _non_lazy('Summary'),
             [
                 HelpRow(
                     _non_lazy('Initial Enrollment URL'),
-                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/enroll/',
+                    f'{host_base}/rest/{domain_name}/<certificate_profile>/enroll/',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
                     _non_lazy('Renewal URL'),
-                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/reenroll/',
+                    f'{host_base}/rest/{domain_name}/<certificate_profile>/reenroll/',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -1060,9 +1223,7 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, cert_profile_name: str, csr_cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, csr_cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
@@ -1098,9 +1259,7 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
                     ),
                     HelpRow(
                         _non_lazy('Extract certificate chain from JSON response'),
-                        value=RestClientCertificateCommandBuilder.get_extract_cert_chain_command(
-                            cred_number=cred
-                        ),
+                        value=RestClientCertificateCommandBuilder.get_extract_cert_chain_command(cred_number=cred),
                         value_render_type=ValueRenderType.CODE,
                     ),
                 ],
@@ -1128,20 +1287,24 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
                 )
             except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
                 err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
-                sections.append(HelpSection(
-                    _non_lazy(f'Certificate Request for a {title} Certificate'),
-                    [HelpRow(_non_lazy('Generate CSR'), err_msg, ValueRenderType.PLAIN)],
-                    css_id=name,
-                    hidden=(i > 0),
-                ))
+                sections.append(
+                    HelpSection(
+                        _non_lazy(f'Certificate Request for a {title} Certificate'),
+                        [HelpRow(_non_lazy('Generate CSR'), err_msg, ValueRenderType.PLAIN)],
+                        css_id=name,
+                        hidden=(i > 0),
+                    )
+                )
                 continue
 
-            sections.append(_build_section(
-                _non_lazy(f'Certificate Request for a {title} Certificate'),
-                name,
-                csr_cmd,
-                hidden=(i > 0),
-            ))
+            sections.append(
+                _build_section(
+                    _non_lazy(f'Certificate Request for a {title} Certificate'),
+                    name,
+                    csr_cmd,
+                    hidden=(i > 0),
+                )
+            )
 
         return sections, _non_lazy('Help - Issue Application Certificates using REST with a Domain Credential')
 
@@ -1210,14 +1373,10 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
     def _build_actions_section(self, device: DeviceModel) -> HelpSection:
         """Build the actions section with available operations."""
         has_domain_credential = IssuedCredentialModel.objects.filter(
-            device=device,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+            device=device, issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
         ).exists()
 
-        discover_server_url = reverse(
-            'devices:devices_discover_server',
-            kwargs={'pk': device.pk}
-        )
+        discover_server_url = reverse('devices:devices_discover_server', kwargs={'pk': device.pk})
 
         discover_html = (
             '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
@@ -1229,14 +1388,8 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         )
 
         if has_domain_credential:
-            update_trustlist_url = reverse(
-                'devices:devices_update_trustlist',
-                kwargs={'pk': device.pk}
-            )
-            update_cert_url = reverse(
-                'devices:devices_update_server_certificate',
-                kwargs={'pk': device.pk}
-            )
+            update_trustlist_url = reverse('devices:devices_update_trustlist', kwargs={'pk': device.pk})
+            update_cert_url = reverse('devices:devices_update_server_certificate', kwargs={'pk': device.pk})
 
             trustlist_html = (
                 '<form method="post" action="' + update_trustlist_url + '" style="display: inline;">'
@@ -1304,10 +1457,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         Returns:
             Tuple of (hierarchy_html, has_missing_crl).
         """
-        hierarchy_html = (
-            '<div style="font-family: monospace;">'
-            '<strong>Certificate Authority Hierarchy:</strong><br>'
-        )
+        hierarchy_html = '<div style="font-family: monospace;"><strong>Certificate Authority Hierarchy:</strong><br>'
 
         has_missing_crl = False
         for idx, ca in enumerate(ca_chain):
@@ -1342,8 +1492,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                 ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
                 indent = '&nbsp;' * (idx * 4)
                 hierarchy_html += (
-                    f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> '
-                    f'[{crl_link}{crl_status}]<br>'
+                    f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> [{crl_link}{crl_status}]<br>'
                 )
 
             except (ValueError, TypeError, AttributeError):
@@ -1373,7 +1522,6 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             hierarchy_html, has_missing_crl = self._build_ca_hierarchy_html(ca_chain)
 
             rows = [
-
                 HelpRow(
                     _non_lazy('Certificate Chain'),
                     hierarchy_html,
@@ -1415,10 +1563,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
     def _build_download_section(self, device: DeviceModel) -> HelpSection:
         """Build the download section for trust bundle."""
         if device.domain and device.domain.issuing_ca:
-            download_url = reverse(
-                'devices:trust_bundle_download',
-                kwargs={'pk': device.domain.issuing_ca.pk}
-            )
+            download_url = reverse('devices:trust_bundle_download', kwargs={'pk': device.domain.issuing_ca.pk})
             download_html = (
                 f'<a href="{download_url}" class="btn btn-primary">Download Trust Bundle</a>'
                 '<p class="text-muted mt-2">Download a ZIP file containing all CA certificates '
@@ -1458,10 +1603,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         :param device: The OPC UA GDS Push device instance.
         :return: A HelpSection containing the renewal configuration form.
         """
-        renewal_url = reverse(
-            'devices:devices_cert_renewal_settings',
-            kwargs={'pk': device.pk}
-        )
+        renewal_url = reverse('devices:devices_cert_renewal_settings', kwargs={'pk': device.pk})
 
         enabled = device.opc_gds_push_enable_periodic_update
         interval = device.opc_gds_push_renewal_interval
@@ -1557,6 +1699,7 @@ class OpcUaGdsPushOnboardingHelpView(BaseHelpView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     strategy = OpcUaGdsPushOnboardingStrategy()
 
+
 class AokiCmpIDevIDStrategy(HelpPageStrategy):
     """Strategy for building the AOKI CMP with IDevID help page."""
 
@@ -1602,8 +1745,7 @@ class AokiCmpIDevIDStrategy(HelpPageStrategy):
             [
                 HelpRow(
                     _non_lazy('DevOwnerID Configuration'),
-                    'A DevOwnerID must be configured in Trustpoint with the corresponding certificate and '
-                    'private key.',
+                    'A DevOwnerID must be configured in Trustpoint with the corresponding certificate and private key.',
                     ValueRenderType.PLAIN,
                 ),
                 HelpRow(
@@ -1669,9 +1811,7 @@ class AokiCmpIDevIDStrategy(HelpPageStrategy):
         )
 
         keygen_cmd = AokiCmpIDevIDCommandBuilder.get_keygen_command()
-        cmp_ir_cmd = AokiCmpIDevIDCommandBuilder.get_cmp_ir_command(
-            help_context.host_cmp_path
-        )
+        cmp_ir_cmd = AokiCmpIDevIDCommandBuilder.get_cmp_ir_command(help_context.host_cmp_path)
 
         example_commands = HelpSection(
             _non_lazy('Example Commands'),
@@ -1740,8 +1880,7 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
             [
                 HelpRow(
                     _non_lazy('DevOwnerID Configuration'),
-                    'A DevOwnerID must be configured in Trustpoint with the corresponding certificate and '
-                    'private key.',
+                    'A DevOwnerID must be configured in Trustpoint with the corresponding certificate and private key.',
                     ValueRenderType.PLAIN,
                 ),
                 HelpRow(
@@ -1774,7 +1913,6 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
                 ),
             ],
         )
-
 
         how_it_works = HelpSection(
             _non_lazy('How AOKI with EST Works'),
@@ -2026,7 +2164,6 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
         return context
 
 
-
 _AOKI_DEMO_CERT_FILES: list[tuple[str, str]] = [
     ('idevid.pem', 'IDevID Certificate'),
     ('idevid_pk.pem', 'IDevID Private Key'),
@@ -2034,11 +2171,11 @@ _AOKI_DEMO_CERT_FILES: list[tuple[str, str]] = [
     ('owner_id.pem', 'DevOwnerID Certificate'),
     ('owner_id_pk.pem', 'DevOwnerID Private Key'),
     ('ownerid_ca.pem', 'Owner CA Certificate'),
+    ('domain_ca_owner_id.pem', 'DevOwnerID (domain-based) Certificate'),
+    ('domain_ca_owner_id_pk.pem', 'DevOwnerID (domain-based) Private Key'),
 ]
 
-_AOKI_DEMO_CERTS_DIR: Path = (
-    Path(__file__).resolve().parents[1] / 'aoki' / 'tests' / 'certs'
-)
+_AOKI_DEMO_CERTS_DIR: Path = Path(__file__).resolve().parents[1] / 'aoki' / 'tests' / 'certs'
 
 _AOKI_DEMO_ALLOWED_FILES: frozenset[str] = frozenset(name for name, _ in _AOKI_DEMO_CERT_FILES)
 
@@ -2145,4 +2282,208 @@ class AokiDemoDownloadView(PageContextMixin, View):
             file_path.open('rb'),
             as_attachment=True,
             filename=filename,
+        )
+
+
+def _agent_get_est_password(device: DeviceModel) -> str:
+    """Return the EST/REST password from whichever config the agent device has."""
+    onboarding_config = getattr(device, 'onboarding_config', None)
+    if onboarding_config and onboarding_config.est_password:
+        return str(onboarding_config.est_password)
+    no_onboarding_config = getattr(device, 'no_onboarding_config', None)
+    if no_onboarding_config and no_onboarding_config.est_password:
+        return str(no_onboarding_config.est_password)
+    raise Http404(_('No REST password is configured for this agent device.'))
+
+
+class AgentSetupProfileStrategy(HelpPageStrategy):
+    """Strategy for building the agent setup-profile help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        est_password = _agent_get_est_password(device)
+
+        host_base = help_context.host_base
+        domain_name = help_context.domain_unique_name
+        enroll_path = f'/rest/{domain_name}/domain_credential/enroll/'
+        enroll_url = f'{host_base}{enroll_path}'
+        download_url = reverse(
+            'devices:devices_agent_setup_profile_download',
+            kwargs={'pk': device.pk},
+        )
+        host_ip = host_base.split('://')[-1].split(':')[0]
+        download_url_with_ip = f'{download_url}?host_ip={host_ip}'
+
+        script_download_url = reverse(
+            'devices:devices_agent_setup_script_download',
+            kwargs={'pk': device.pk},
+        )
+
+        download_btn = format_html(
+            '<a class="btn btn-primary w-100" href="{}">{}</a>',
+            download_url_with_ip,
+            _non_lazy('Download agent_setup.json'),
+        )
+
+        script_download_btn = format_html(
+            '<a class="btn btn-primary w-100" href="{}">{}</a>',
+            script_download_url,
+            _non_lazy('Download agent.py'),
+        )
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Enrollment URL'),
+                    enroll_url,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('REST Username'),
+                    device.common_name,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('REST Password'),
+                    est_password,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Download pre-filled Agent Setup Profile'),
+                    download_btn,
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Download Agent Setup Script'),
+                    script_download_btn,
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Usage'),
+                    'python agent.py --profile agent_setup.json',
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        return [summary], _non_lazy(
+            'Help - Issue a Domain Credential for Agent'
+        )
+
+
+class AgentDomainCredentialHelpView(BaseHelpView):
+    """Help view for agent domain credential issuance via the agent_setup.json profile."""
+
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
+    strategy = AgentSetupProfileStrategy()
+
+    @override
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Override to use the correct CLM URL for agents."""
+        context = super().get_context_data(**kwargs)
+        # Agents use the devices CLM URL, not an agents-specific one
+        context['clm_url'] = f'{self.page_category}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management'
+        return context
+
+
+class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
+    """Generate and serve a pre-filled agent_setup.json for an agent device."""
+
+    http_method_names = ('get',)
+    model = DeviceModel
+    context_object_name = 'device'
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Build and return the filled agent_setup.json profile as a file download."""
+        del args, kwargs
+        device: DeviceModel = self.get_object()
+        if not device.domain:
+            raise Http404(_('No domain is configured for this device.'))
+
+        from agents.models import TrustpointAgent  # noqa: PLC0415
+        agent = TrustpointAgent.objects.filter(device=device).first()
+        if not agent:
+            raise Http404(_('No agent found for this device.'))
+
+        est_password = _agent_get_est_password(device)
+
+        tls = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if not tls or not tls.credential:
+            raise Http404(_('No active Trustpoint TLS server credential found.'))
+        root_cert_model = tls.credential.get_last_in_chain()
+        if not root_cert_model:
+            raise Http404(_('TLS trust store root certificate is missing.'))
+        tls_cert_pem: str = root_cert_model.get_certificate_serializer().as_pem().decode('utf-8')
+
+        host_ip = request.GET.get('host_ip', '127.0.0.1')
+        host_base = f'https://{host_ip}:443'
+        domain_name: str = device.domain.unique_name
+        enroll_path = f'/rest/{domain_name}/domain_credential/enroll/'
+
+        profile_template = Path(__file__).parent.parent / 'agents' / 'default' / 'agent_setup.json'
+        with profile_template.open(encoding='utf-8') as fh:
+            raw: dict[str, Any] = json.load(fh)
+
+        profile = raw['profile']
+        os_path = agent.os_path
+        cert_profile = profile['certificate_request']['certificate_profile']
+
+        profile['local_storage']['os_path'] = os_path
+        profile['local_storage']['certificate_path'] = f'{os_path}/{cert_profile}-certificate.pem'
+        profile['local_storage']['certificate_chain_path'] = f'{os_path}/{cert_profile}-full-chain.pem'
+        profile['local_storage']['csr_path'] = f'{os_path}/{cert_profile}-csr.pem'
+        profile['local_storage']['private_key_path'] = f'{os_path}/{cert_profile}-key.pem'
+        profile['local_storage']['crl_path'] = f'{os_path}/{cert_profile}-crl.pem'
+        profile['local_storage']['tls_cert_path'] = f'{os_path}/trustpoint-tls.pem'
+
+        profile['onboarding']['device'] = device.common_name
+        profile['onboarding']['secret'] = est_password
+        profile['onboarding']['tls_cert_pem'] = tls_cert_pem
+
+        profile['certificate_request']['url'] = host_base
+        profile['certificate_request']['path'] = enroll_path
+        profile['certificate_request']['certificate_profile'] = cert_profile
+
+        cert_req = profile['certificate_request']
+        for optional_field in ('subject', 'subject_alt_name', 'public_key_algorithm_oid', 'key_parameter'):
+            cert_req.pop(optional_field, None)
+
+        filled_bytes = json.dumps(raw, indent=2).encode('utf-8')
+
+        import io  # noqa: PLC0415
+        return FileResponse(  # type: ignore[return-value]
+            io.BytesIO(filled_bytes),
+            as_attachment=True,
+            filename='agent_setup.json',
+            content_type='application/json',
+        )
+
+
+class AgentSetupScriptDownloadView(PageContextMixin, DetailView[DeviceModel]):
+    """Serve the agent.py script as a file download."""
+
+    http_method_names = ('get',)
+    model = DeviceModel
+    context_object_name = 'device'
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Return the agent.py script as a file download."""
+        del request, args, kwargs
+        script_path = Path(__file__).parent.parent / 'agents' / 'examples' / 'agent.py'
+
+        with script_path.open(mode='rb') as fh:
+            script_bytes = fh.read()
+
+        import io  # noqa: PLC0415
+        return FileResponse(  # type: ignore[return-value]
+            io.BytesIO(script_bytes),
+            as_attachment=True,
+            filename='agent.py',
+            content_type='text/x-python',
         )

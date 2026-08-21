@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Serializer package for management app."""
 from .backup import BackupSerializer
 from .credential import CredentialSerializer

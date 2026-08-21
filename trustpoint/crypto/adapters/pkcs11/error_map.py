@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Translate raw PKCS#11 failures into crypto-domain errors."""
 
 from __future__ import annotations

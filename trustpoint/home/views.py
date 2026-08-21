@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Contains views that handle HTTP requests and return appropriate responses for the application."""
 
 from __future__ import annotations
@@ -846,7 +849,11 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             )
 
             protocol_mapping = {key: str(value) for key, value in CaModel.CaTypeChoice.choices}
-            ca_type_counts = {protocol_mapping[item['ca_type']]: item['count'] for item in ca_type_qr}
+            ca_type_counts = {
+                protocol_mapping[item['ca_type']]: item['count']
+                for item in ca_type_qr
+                if item['ca_type'] is not None
+            }
 
         except Exception as exception:
             err_msg = f'Error occurred in ca counts by type query: {exception}'

@@ -1,6 +1,12 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for the devices application."""
 
-
+from .agents import (
+    AgentCreateOneToOneOnboardingView,
+    AgentTableView,
+)
 from .browser_onboarding import (
     DeviceBrowserOnboardingCancelView,
     DeviceBrowserOnboardingOTPView,
@@ -28,6 +34,7 @@ from .credential_issuance import (
     OpcUaGdsSelectCertificateProfileNewApplicationCredentialView,
 )
 from .delete import (
+    AgentsBulkDeleteView,
     DeviceBulkDeleteView,
     OpcUaGdsBulkDeleteView,
     OpcUaGdsPushBulkDeleteView,
@@ -77,6 +84,9 @@ from .tables import (
 )
 
 __all__ = [
+    'AgentCreateOneToOneOnboardingView',
+    'AgentTableView',
+    'AgentsBulkDeleteView',
     'DeviceBrowserCredentialDownloadView',
     'DeviceBrowserOnboardingCancelView',
     'DeviceBrowserOnboardingOTPView',

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Canonical step type identifiers for Workflow 2."""
 
 from __future__ import annotations
