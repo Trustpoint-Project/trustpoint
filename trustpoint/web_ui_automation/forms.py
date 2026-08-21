@@ -248,11 +248,14 @@ class EnableAutomaticRenewalForm(forms.Form):
             self.assignment.validate_automatic_renewal_eligibility()
         except ValidationError as e:
             if hasattr(e, 'error_dict'):
-                for field_errors in e.error_dict.values():
+                for field, field_errors in e.error_dict.items():
                     for error in field_errors:
-                        self.add_error(None, error)
+                        self.add_error(field, error)
+            elif hasattr(e, 'error_list'):
+                for error in e.error_list:
+                    self.add_error(None, error)
             else:
-                raise
+                self.add_error(None, e)
         return cleaned_data or {}
 
 

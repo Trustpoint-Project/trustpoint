@@ -8,7 +8,7 @@
     "firmware_hint": "Adapt selectors before use",
     "description": "Example profile for onboarding and renewing a management HTTPS certificate."
   },
-  "certificate_profile": "firewall-management-tls",
+  "certificate_profile": "tls_server",
   "key_generation": "trustpoint",
   "encoding": "PEM",
   "paths": {

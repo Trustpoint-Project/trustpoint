@@ -8,7 +8,7 @@
     "firmware_hint": "Adapt to your device",
     "description": "Minimal profile template for Web UI automation"
   },
-  "certificate_profile": "default",
+  "certificate_profile": "tls_server",
   "key_generation": "trustpoint",
   "encoding": "PEM",
   "paths": {

@@ -1,0 +1,291 @@
+{
+  "schema": "trustpoint.web-automation.v1",
+  "name": "Siemens SCALANCE S615 HTTPS Certificate",
+  "version": "1.1.5",
+  "metadata": {
+    "vendor": "Siemens",
+    "device_family": "SCALANCE S615",
+    "firmware_hint": "Selectors tested against SCALANCE S615 Web UI; firmware-specific adaptations may be required",
+    "description": "Configures the HTTPS certificate password, uploads a Trustpoint-issued PKCS#12 certificate and confirms the upload, which triggers the SCALANCE S615 restart required to activate the certificate."
+  },
+  "certificate_profile": "tls_server",
+  "key_generation": "trustpoint",
+  "encoding": "PKCS12",
+  "paths": {
+    "login": "/"
+  },
+  "inputs": {
+    "device_username": {
+      "type": "secret",
+      "source": "device_credentials",
+      "required": true
+    },
+    "device_password": {
+      "type": "secret",
+      "source": "device_credentials",
+      "required": true
+    },
+    "private_key_password": {
+      "type": "secret",
+      "source": "device_credentials",
+      "required": true,
+      "description": "Password protecting the PKCS#12 container and configured on the SCALANCE device."
+    }
+  },
+  "operations": {
+    "onboard": {
+      "steps": [
+        {
+          "id": "open-login",
+          "action": "goto",
+          "path_ref": "login",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-login-form",
+          "action": "wait_for",
+          "selector": "#bigLoginName",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "enter-username",
+          "action": "fill",
+          "selector": "#bigLoginName",
+          "value": "{{ device_username }}",
+          "sensitive": true
+        },
+        {
+          "id": "enter-password",
+          "action": "fill",
+          "selector": "#bigPassword",
+          "value": "{{ device_password }}",
+          "sensitive": true
+        },
+        {
+          "id": "submit-login",
+          "action": "click",
+          "selector": "#loginLink",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-navigation-menu",
+          "action": "wait_for",
+          "selector": "#navigation_group1",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "expand-system-menu",
+          "action": "click",
+          "selector": "li.treeFolder[link='system.mwp'] > table label a",
+          "timeout_ms": 10000
+        },
+        {
+          "id": "wait-for-load-and-save-link",
+          "action": "wait_for",
+          "selector": "a[href='?newtab=loadandsave.mwp']",
+          "state": "visible",
+          "timeout_ms": 10000
+        },
+        {
+          "id": "open-load-and-save",
+          "action": "click",
+          "selector": "a[href='?newtab=loadandsave.mwp']",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-passwords-tab",
+          "action": "wait_for",
+          "selector": "#tab_area a[href='?newtab=loadandsave_pass.mwp']",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "open-passwords-tab",
+          "action": "click",
+          "selector": "#tab_area a[href='?newtab=loadandsave_pass.mwp']",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-https-certificate-password-row",
+          "action": "wait_for",
+          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert'])",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "enable-https-certificate-password",
+          "action": "check",
+          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert']) td:nth-child(3) input[type='checkbox']",
+          "timeout_ms": 10000
+        },
+        {
+          "id": "enter-certificate-password",
+          "action": "fill",
+          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert']) td:nth-child(4) input[type='password']",
+          "value": "{{ private_key_password }}",
+          "sensitive": true,
+          "timeout_ms": 10000
+        },
+        {
+          "id": "confirm-certificate-password",
+          "action": "fill",
+          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert']) td:nth-child(5) input[type='password']",
+          "value": "{{ private_key_password }}",
+          "sensitive": true,
+          "timeout_ms": 10000
+        },
+        {
+          "id": "commit-certificate-password-input",
+          "action": "press",
+          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert']) td:nth-child(5) input[type='password']",
+          "key": "Tab"
+        },
+        {
+          "id": "wait-for-set-values-enabled",
+          "action": "wait_for",
+          "selector": "#btnWrite:not([disabled])",
+          "state": "visible",
+          "timeout_ms": 10000
+        },
+        {
+          "id": "set-password-values",
+          "action": "click",
+          "selector": "#btnWrite",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-http-tab",
+          "action": "wait_for",
+          "selector": "#tab_area a[href='?newtab=loadandsave_http.mwp']",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "open-http-tab",
+          "action": "click",
+          "selector": "#tab_area a[href='?newtab=loadandsave_http.mwp']",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-https-certificate-upload",
+          "action": "wait_for",
+          "selector": "#EvWbmLoadSaveHttpLoadButton_9_48_54_54_50_53_43_65_72_74_file",
+          "state": "attached",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "upload-pkcs12-certificate",
+          "action": "upload",
+          "selector": "#EvWbmLoadSaveHttpLoadButton_9_48_54_54_50_53_43_65_72_74_file",
+          "artifact": "{{ pkcs12_p12 }}",
+          "sensitive": true
+        },
+        {
+          "id": "wait-for-upload-result",
+          "action": "wait_for",
+          "selector": "#divMsgBox",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "confirm-upload-and-restart",
+          "action": "reboot_device",
+          "selector": "#btnOk",
+          "timeout_ms": 30000
+        }
+      ]
+    },
+    "renew": {
+      "steps": [
+        {
+          "id": "open-login",
+          "action": "goto",
+          "path_ref": "login",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-login-form",
+          "action": "wait_for",
+          "selector": "#bigLoginName",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "enter-username",
+          "action": "fill",
+          "selector": "#bigLoginName",
+          "value": "{{ device_username }}",
+          "sensitive": true
+        },
+        {
+          "id": "enter-password",
+          "action": "fill",
+          "selector": "#bigPassword",
+          "value": "{{ device_password }}",
+          "sensitive": true
+        },
+        {
+          "id": "submit-login",
+          "action": "click",
+          "selector": "#loginLink",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-navigation-menu",
+          "action": "wait_for",
+          "selector": "#navigation_group1",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "expand-system-menu",
+          "action": "click",
+          "selector": "li.treeFolder[link='system.mwp'] > table label a",
+          "timeout_ms": 10000
+        },
+        {
+          "id": "wait-for-load-and-save-link",
+          "action": "wait_for",
+          "selector": "a[href='?newtab=loadandsave.mwp']",
+          "state": "visible",
+          "timeout_ms": 10000
+        },
+        {
+          "id": "open-load-and-save",
+          "action": "click",
+          "selector": "a[href='?newtab=loadandsave.mwp']",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-https-certificate-upload",
+          "action": "wait_for",
+          "selector": "#EvWbmLoadSaveHttpLoadButton_9_48_54_54_50_53_43_65_72_74_file",
+          "state": "attached",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "upload-renewed-pkcs12-certificate",
+          "action": "upload",
+          "selector": "#EvWbmLoadSaveHttpLoadButton_9_48_54_54_50_53_43_65_72_74_file",
+          "artifact": "{{ pkcs12_p12 }}",
+          "sensitive": true
+        },
+        {
+          "id": "wait-for-upload-result",
+          "action": "wait_for",
+          "selector": "#divMsgBox",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "confirm-upload-and-restart",
+          "action": "reboot_device",
+          "selector": "#btnOk",
+          "timeout_ms": 30000
+        }
+      ]
+    }
+  }
+}

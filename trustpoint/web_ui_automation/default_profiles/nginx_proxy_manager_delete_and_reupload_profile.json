@@ -8,7 +8,7 @@
     "firmware_hint": "2.15.1",
     "description": "Uploads a custom PEM certificate during onboarding. During renewal, deletes the previous custom certificate and uploads the renewed certificate using the same Trustpoint-managed private key. The new certificate must subsequently be assigned to the Proxy Host."
   },
-  "certificate_profile": "nginx-proxy-manager-test-tls",
+  "certificate_profile": "tls_server",
   "key_generation": "trustpoint",
   "encoding": "PEM",
   "paths": {

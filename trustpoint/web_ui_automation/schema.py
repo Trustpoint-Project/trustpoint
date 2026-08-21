@@ -78,6 +78,8 @@ STEP_SCHEMA: dict[str, Any] = {
         'expected': {'type': ['string', 'number', 'boolean']},
         'attribute': {'type': 'string'},
         'state': {'type': 'string'},
+        'force': {'type': 'boolean'},
+        'description': {'type': 'string'},
     },
     'additionalProperties': False,
 }
@@ -123,7 +125,7 @@ PROFILE_SCHEMA: dict[str, Any] = {
         },
         'certificate_profile': {'type': 'string', 'minLength': 1, 'maxLength': 255},
         'key_generation': {'const': 'trustpoint'},
-        'encoding': {'const': 'PEM'},
+        'encoding': {'enum': ['PEM', 'PKCS12']},
         'paths': {
             'type': 'object',
             'minProperties': 1,

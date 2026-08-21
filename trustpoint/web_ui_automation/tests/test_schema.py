@@ -66,3 +66,18 @@ def test_checksum_is_stable_across_key_order(valid_profile: dict[str, object]) -
     """Produce the same checksum for semantically identical JSON key order."""
     reordered = dict(reversed(list(valid_profile.items())))
     assert calculate_profile_checksum(valid_profile) == calculate_profile_checksum(reordered)
+
+
+def test_pkcs12_encoding_is_accepted(valid_profile: dict[str, object]) -> None:
+    """Accept PKCS12 as a valid encoding."""
+    profile = copy.deepcopy(valid_profile)
+    profile['encoding'] = 'PKCS12'
+    validate_profile_schema(profile)
+
+
+def test_invalid_encoding_is_rejected(valid_profile: dict[str, object]) -> None:
+    """Reject invalid encoding values."""
+    profile = copy.deepcopy(valid_profile)
+    profile['encoding'] = 'INVALID'
+    with pytest.raises(ValidationError):
+        validate_profile_schema(profile)

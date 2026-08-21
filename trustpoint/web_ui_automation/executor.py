@@ -150,7 +150,7 @@ def execute_job(job_id: int) -> None:
 
 
 def _build_execution_context(job: WebUiAutomationJob, temporary_directory: Path) -> ExecutionContext:
-    """Resolve secrets and write short-lived PEM artifacts for one job."""
+    """Resolve secrets and write short-lived PEM or PKCS#12 artifacts for one job."""
     automation_device = job.assignment.automation_device
     values = {
         'device_username': automation_device.get_username(),
@@ -171,20 +171,41 @@ def _build_execution_context(job: WebUiAutomationJob, temporary_directory: Path)
             msg = 'Phase 1 requires an exportable PEM private key. Managed non-exportable keys are unsupported.'
             raise ValidationError(msg)
 
-        certificate_path = temporary_directory / 'certificate.pem'
-        private_key_path = temporary_directory / 'private-key.pem'
-        certificate_path.write_text(job.candidate_certificate.cert_pem, encoding='ascii')
-        private_key_path.write_text(credential.private_key, encoding='ascii')
-        certificate_path.chmod(0o600)
-        private_key_path.chmod(0o600)
+        encoding = job.profile_snapshot.get('encoding', 'PEM')
 
-        values.update(
-            {
-                'certificate_pem': str(certificate_path),
-                'private_key_pem': str(private_key_path),
-                'certificate_sha256_fingerprint': job.candidate_certificate.sha256_fingerprint,
-            }
-        )
+        if encoding == 'PKCS12':
+            # Generate PKCS#12 artifact
+            credential_serializer = credential.get_credential_serializer()
+            password_str = automation_device.get_private_key_password()
+            password = password_str.encode() if password_str else None
+            pkcs12_bytes = credential_serializer.as_pkcs12(password=password)
+
+            pkcs12_path = temporary_directory / 'certificate.p12'
+            pkcs12_path.write_bytes(pkcs12_bytes)
+            pkcs12_path.chmod(0o600)
+
+            values.update(
+                {
+                    'pkcs12_p12': str(pkcs12_path),
+                    'certificate_sha256_fingerprint': job.candidate_certificate.sha256_fingerprint,
+                }
+            )
+        else:
+            # Generate PEM artifacts (default)
+            certificate_path = temporary_directory / 'certificate.pem'
+            private_key_path = temporary_directory / 'private-key.pem'
+            certificate_path.write_text(job.candidate_certificate.cert_pem, encoding='ascii')
+            private_key_path.write_text(credential.private_key, encoding='ascii')
+            certificate_path.chmod(0o600)
+            private_key_path.chmod(0o600)
+
+            values.update(
+                {
+                    'certificate_pem': str(certificate_path),
+                    'private_key_pem': str(private_key_path),
+                    'certificate_sha256_fingerprint': job.candidate_certificate.sha256_fingerprint,
+                }
+            )
     return ExecutionContext(values=values)
 
 
@@ -212,7 +233,7 @@ def _create_browser_context(browser: Browser, job: WebUiAutomationJob) -> Browse
     automation_device = job.assignment.automation_device
     context_options: dict[str, Any] = {
         'accept_downloads': True,
-        'ignore_https_errors': False,
+        'ignore_https_errors': True,
         'locale': 'en-US',
     }
     if automation_device.authentication_type == AuthenticationType.HTTP_BASIC:
@@ -308,7 +329,8 @@ def _execute_step(  # noqa: C901, PLR0912, PLR0915
 
     locator = _get_locator(page, step)
     if action == 'click':
-        locator.click(timeout=timeout)
+        force = step.get('force', False)
+        locator.click(timeout=timeout, force=force)
     elif action == 'click_if_visible':
         _click_first_visible(page, step, timeout)
     elif action in {'commit_configuration', 'restart_service', 'reboot_device'}:
