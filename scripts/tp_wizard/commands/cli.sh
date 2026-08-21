@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034 # CLI assignments update shared runtime state.
 
 cli_help() {
   printf '%s\n' 'Usage:' './tp_wizard.sh' './tp_wizard.sh demo [light|full] [--skip-setup|--no-skip-setup] [--nowait]' './tp_wizard.sh up trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring' './tp_wizard.sh down ...' './tp_wizard.sh logs [service]' './tp_wizard.sh status' './tp_wizard.sh nuke'

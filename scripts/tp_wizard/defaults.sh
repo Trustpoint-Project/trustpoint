@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034 # Shared configuration is consumed by sourced modules.
 
 PROJECT="trustpoint"
 NET="trustpoint-net"

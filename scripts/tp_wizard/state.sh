@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034 # Runtime state is intentionally shared across sourced modules.
 
 MODE=""
 NOWAIT=false
