@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2034 # Shared configuration is consumed by sourced modules.
+
+PROJECT="trustpoint"
+NET="trustpoint-net"
+ROOT_DIR="${ROOT_DIR:-$(cd "${TP_WIZARD_ROOT}/../.." && pwd)}"
+ENV_FILE="${ENV_FILE:-${ROOT_DIR}/.env}"
+ENV_OVERLAY="${TP_WIZARD_ENV_FILE:-${ROOT_DIR}/.env.tp_wizard}"
+GENERATED_ROOT="${ROOT_DIR}/.tp_wizard"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+fi
+
+APP_IMAGE="${APP_IMAGE:-trustpoint:local}"
+TP_DOCKERFILE="${ROOT_DIR}/docker/trustpoint/Dockerfile"
+PG_IMAGE="${PG_IMAGE:-postgres:15.14}"
+MAILPIT_IMAGE="${MAILPIT_IMAGE:-axllent/mailpit:v1.27}"
+SFTPGO_IMAGE="${SFTPGO_IMAGE:-drakkan/sftpgo:2.6.x-slim}"
+SOFTHSM_IMAGE="${SOFTHSM_IMAGE:-trustpoint:softhsm-local}"
+
+TP_HTTP_PORT="${TP_HTTP_PORT:-80}"
+TP_HTTPS_PORT="${TP_HTTPS_PORT:-443}"
+DB_PORT="${DB_PORT:-5432}"
+MAILPIT_SMTP_PORT="${MAILPIT_SMTP_PORT:-1025}"
+MAILPIT_UI_PORT="${MAILPIT_UI_PORT:-8025}"
+SFTPGO_SFTP_PORT="${SFTPGO_SFTP_PORT:-2222}"
+SFTPGO_WEB_PORT="${SFTPGO_WEB_PORT:-8080}"
+
+DB_NAME="${POSTGRES_DB:-trustpoint_db}"
+DB_USER="${DATABASE_USER:-admin}"
+DB_PASS="${DATABASE_PASSWORD:-testing321}"
+TP_ADMIN_USERNAME="${TP_ADMIN_USERNAME:-admin}"
+TP_ADMIN_PASSWORD="${TP_ADMIN_PASSWORD:-testing321}"
+TP_ADMIN_EMAIL="${TP_ADMIN_EMAIL:-admin@trustpoint.local}"
+TP_TLS_DNS_NAMES="${TP_TLS_DNS_NAMES:-trustpoint.local}"
+TP_TLS_IPV4_ADDRESSES="${TP_TLS_IPV4_ADDRESSES:-}"
+TP_TLS_IPV6_ADDRESSES="${TP_TLS_IPV6_ADDRESSES:-}"
+TP_AUTO_SETUP="${TP_AUTO_SETUP:-true}"
+TP_INJECT_DEMO_DATA="${TP_INJECT_DEMO_DATA:-true}"
+TRUSTPOINT_SKIP_SETUP_ENV_KEY="${TRUSTPOINT_SKIP_SETUP_ENV_KEY:-TP_AUTO_SETUP}"
+
+SFTPGO_ROOT="${ROOT_DIR}/sftpgo-data"
+WF2_ROOT="${ROOT_DIR}/workflow2Folder"
+LOCAL_HSM_ROOT="${ROOT_DIR}/var/hsm"
+WF2_WORKER_NAME="trustpoint-worker"
+SOFTHSM_NAME="softhsm"
+PROMETHEUS_NAME="prometheus"
+GRAFANA_NAME="grafana"
+GRAFANA_ADMIN_USER="${GRAFANA_ADMIN_USER:-admin}"
+GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD:-testing321}"
+
+readonly PROJECT NET ROOT_DIR ENV_FILE ENV_OVERLAY GENERATED_ROOT
