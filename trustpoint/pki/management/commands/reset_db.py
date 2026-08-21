@@ -91,6 +91,7 @@ class Command(BaseCommand):
             call_command('create_default_cert_profiles')
             # Add default agent profile definitions
             call_command('create_default_agent_profile_definitions')
+            call_command('create_default_web_ui_profile_definitions')
             call_command('seed_discovery_ports')
 
         # Create organization

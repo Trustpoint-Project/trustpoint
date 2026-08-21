@@ -11,6 +11,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='devicemodel',
             name='device_type',
-            field=models.IntegerField(choices=[(0, 'Generic Device'), (1, 'OPC UA GDS'), (2, 'OPC UA GDS Push'), (3, 'Agent (1-to-1)')], default=0, verbose_name='Device Type'),
+            field=models.IntegerField(choices=[(0, 'Generic Device'), (1, 'OPC UA GDS'), (2, 'OPC UA GDS Push'), (3, 'Agent (1-to-1)'), (4, 'Web UI Automation')], default=0, verbose_name='Device Type'),
         ),
     ]

@@ -232,7 +232,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
-            'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
+            'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32, 64],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
         },
         # ----------------------------------------------------------------
@@ -248,7 +248,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
-            'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
+            'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32, 64],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
         },
         # ----------------------------------------------------------------
@@ -270,7 +270,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
-            'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
+            'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32, 64],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
         },
         # ----------------------------------------------------------------
