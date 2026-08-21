@@ -17,6 +17,7 @@ from .views import (
     logging,
     notifications,
     role_management,
+    service_accounts,
     settings,
     tls,
     user_management,
@@ -126,5 +127,41 @@ urlpatterns = [
     path('organization/', organization.OrganizationTableView.as_view(), name='organization'),
     path('organization/add/', organization.OrganizationCreateView.as_view(), name='add_organization'),
     path('organization/<int:pk>/edit/', organization.OrganizationEditView.as_view(), name='edit_organization'),
-    path('organization/<int:pk>/delete/', organization.OrganizationDeleteView.as_view(), name='delete_organization'),
+    path(
+        'organization/<int:pk>/delete/',
+        organization.OrganizationDeleteView.as_view(),
+        name='delete_organization'
+    ),
+    # Service Accounts
+    path('service-accounts/', service_accounts.ServiceAccountListView.as_view(), name='service_account_list'),
+    path(
+        'service-accounts/create/',
+        service_accounts.ServiceAccountCreateView.as_view(),
+        name='service_account_create'
+    ),
+    path(
+        'service-accounts/created/',
+        service_accounts.service_account_created_view,
+        name='service_account_created'
+    ),
+    path(
+        'service-accounts/<int:pk>/',
+        service_accounts.ServiceAccountDetailView.as_view(),
+        name='service_account_detail'
+    ),
+    path(
+        'service-accounts/<int:pk>/generate-credential/',
+        service_accounts.generate_credential_view,
+        name='generate_credential'
+    ),
+    path(
+        'service-accounts/<int:pk>/delete/',
+        service_accounts.ServiceAccountDeleteView.as_view(),
+        name='delete_service_account'
+    ),
+    path(
+        'service-accounts/credentials/<int:pk>/revoke/',
+        service_accounts.revoke_credential_view,
+        name='revoke_credential'
+    ),
 ]
