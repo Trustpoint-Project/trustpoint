@@ -108,52 +108,65 @@
           "timeout_ms": 30000
         },
         {
-          "id": "wait-for-https-certificate-password-row",
-          "action": "wait_for",
-          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert'])",
-          "state": "visible",
-          "timeout_ms": 30000
+        "id": "wait-for-https-certificate-password-row",
+        "action": "wait_for",
+        "selector": "#gridLoadSavePasswordsd9_48_54_54_50_53_43_65_72_74",
+        "state": "visible",
+        "timeout_ms": 30000
         },
         {
-          "id": "enable-https-certificate-password",
-          "action": "check",
-          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert']) td:nth-child(3) input[type='checkbox']",
-          "timeout_ms": 10000
+        "id": "enable-https-certificate-password",
+        "action": "click",
+        "selector": "#gridLoadSavePasswordsd9_48_54_54_50_53_43_65_72_74 > td:nth-child(3) input[type='checkbox']",
+        "timeout_ms": 10000
         },
         {
-          "id": "enter-certificate-password",
-          "action": "fill",
-          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert']) td:nth-child(4) input[type='password']",
-          "value": "{{ private_key_password }}",
-          "sensitive": true,
-          "timeout_ms": 10000
+        "id": "wait-for-https-certificate-setting-enabled",
+        "action": "wait_for",
+        "selector": "#gridLoadSavePasswordsd9_48_54_54_50_53_43_65_72_74 > td:nth-child(3) input[type='checkbox'][value='1']",
+        "state": "attached",
+        "timeout_ms": 10000
         },
         {
-          "id": "confirm-certificate-password",
-          "action": "fill",
-          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert']) td:nth-child(5) input[type='password']",
-          "value": "{{ private_key_password }}",
-          "sensitive": true,
-          "timeout_ms": 10000
+        "id": "enter-certificate-password",
+        "action": "type",
+        "selector": "#gridLoadSavePasswordsd9_48_54_54_50_53_43_65_72_74 > td:nth-child(4) input[type='password']",
+        "value": "{{ private_key_password }}",
+        "sensitive": true,
+        "delay_ms": 50
         },
         {
-          "id": "commit-certificate-password-input",
-          "action": "press",
-          "selector": "#gridLoadSavePasswords tr:has(input[value='HTTPSCert']) td:nth-child(5) input[type='password']",
-          "key": "Tab"
+        "id": "commit-certificate-password",
+        "action": "press",
+        "selector": "#gridLoadSavePasswordsd9_48_54_54_50_53_43_65_72_74 > td:nth-child(4) input[type='password']",
+        "key": "Tab"
         },
         {
-          "id": "wait-for-set-values-enabled",
-          "action": "wait_for",
-          "selector": "#btnWrite:not([disabled])",
-          "state": "visible",
-          "timeout_ms": 10000
+        "id": "confirm-certificate-password",
+        "action": "type",
+        "selector": "#gridLoadSavePasswordsd9_48_54_54_50_53_43_65_72_74 > td:nth-child(5) input[type='password']",
+        "value": "{{ private_key_password }}",
+        "sensitive": true,
+        "delay_ms": 50
         },
         {
-          "id": "set-password-values",
-          "action": "click",
-          "selector": "#btnWrite",
-          "timeout_ms": 30000
+        "id": "commit-certificate-password-confirmation",
+        "action": "press",
+        "selector": "#gridLoadSavePasswordsd9_48_54_54_50_53_43_65_72_74 > td:nth-child(5) input[type='password']",
+        "key": "Tab"
+        },
+        {
+        "id": "wait-for-set-values-enabled",
+        "action": "wait_for",
+        "selector": "#btnWrite:not([disabled])",
+        "state": "visible",
+        "timeout_ms": 10000
+        },
+        {
+        "id": "set-password-values",
+        "action": "click",
+        "selector": "#btnWrite",
+        "timeout_ms": 30000
         },
         {
           "id": "wait-for-http-tab",

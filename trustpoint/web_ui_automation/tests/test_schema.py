@@ -81,3 +81,100 @@ def test_invalid_encoding_is_rejected(valid_profile: dict[str, object]) -> None:
     profile['encoding'] = 'INVALID'
     with pytest.raises(ValidationError):
         validate_profile_schema(profile)
+
+
+def test_type_action_is_accepted(valid_profile: dict[str, object]) -> None:
+    """Accept type action with valid parameters."""
+    profile = copy.deepcopy(valid_profile)
+    profile['operations']['onboard']['steps'].append(
+        {
+            'id': 'type-password',
+            'action': 'type',
+            'selector': '#password',
+            'value': '{{ device_password }}',
+            'sensitive': True,
+        }
+    )
+    validate_profile_schema(profile)
+
+
+def test_type_action_with_delay_is_accepted(valid_profile: dict[str, object]) -> None:
+    """Accept type action with custom delay_ms."""
+    profile = copy.deepcopy(valid_profile)
+    profile['operations']['onboard']['steps'].append(
+        {
+            'id': 'type-password',
+            'action': 'type',
+            'selector': '#password',
+            'value': '{{ device_password }}',
+            'sensitive': True,
+            'delay_ms': 100,
+        }
+    )
+    validate_profile_schema(profile)
+
+
+def test_type_action_with_zero_delay_is_accepted(valid_profile: dict[str, object]) -> None:
+    """Accept type action with zero delay."""
+    profile = copy.deepcopy(valid_profile)
+    profile['operations']['onboard']['steps'].append(
+        {
+            'id': 'type-username',
+            'action': 'type',
+            'selector': '#username',
+            'value': '{{ device_username }}',
+            'sensitive': True,
+            'delay_ms': 0,
+        }
+    )
+    validate_profile_schema(profile)
+
+
+def test_type_action_with_invalid_delay_is_rejected(valid_profile: dict[str, object]) -> None:
+    """Reject type action with invalid delay_ms (negative)."""
+    profile = copy.deepcopy(valid_profile)
+    profile['operations']['onboard']['steps'].append(
+        {
+            'id': 'type-password',
+            'action': 'type',
+            'selector': '#password',
+            'value': '{{ device_password }}',
+            'sensitive': True,
+            'delay_ms': -1,
+        }
+    )
+    with pytest.raises(ValidationError):
+        validate_profile_schema(profile)
+
+
+def test_type_action_with_excessive_delay_is_rejected(valid_profile: dict[str, object]) -> None:
+    """Reject type action with excessive delay_ms."""
+    profile = copy.deepcopy(valid_profile)
+    profile['operations']['onboard']['steps'].append(
+        {
+            'id': 'type-password',
+            'action': 'type',
+            'selector': '#password',
+            'value': '{{ device_password }}',
+            'sensitive': True,
+            'delay_ms': 20000,
+        }
+    )
+    with pytest.raises(ValidationError):
+        validate_profile_schema(profile)
+
+
+def test_type_sensitive_literal_is_rejected(valid_profile: dict[str, object]) -> None:
+    """Reject literal values in type steps marked as sensitive."""
+    profile = copy.deepcopy(valid_profile)
+    profile['operations']['onboard']['steps'].append(
+        {
+            'id': 'type-password',
+            'action': 'type',
+            'selector': '#password',
+            'value': 'plaintext-password',
+            'sensitive': True,
+        }
+    )
+    with pytest.raises(ValidationError):
+        validate_profile_schema(profile)

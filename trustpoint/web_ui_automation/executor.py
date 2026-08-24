@@ -337,6 +337,12 @@ def _execute_step(  # noqa: C901, PLR0912, PLR0915
         locator.click(timeout=timeout, no_wait_after=True)
     elif action == 'fill':
         locator.fill(str(runtime.resolve(step['value'])), timeout=timeout)
+    elif action == 'type':
+        rendered_value = str(runtime.resolve(step['value']))
+        delay_ms = step.get('delay_ms', 50)
+        locator.click(timeout=timeout)
+        locator.press('ControlOrMeta+A', timeout=timeout)
+        page.keyboard.type(rendered_value, delay=delay_ms)
     elif action == 'select':
         locator.select_option(str(runtime.resolve(step['value'])), timeout=timeout)
     elif action == 'check':
