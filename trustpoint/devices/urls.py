@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """URL configuration for the devices' application."""
 
 from django.urls import path, re_path
@@ -21,16 +24,6 @@ urlpatterns = [
     path('agents/', views.AgentTableView.as_view(), name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}'),
     # Agent Create Views
     path(
-        'agents/create/',
-        views.AgentCreateChooseTypeView.as_view(),
-        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create',
-    ),
-    path(
-        'agents/create/1-to-n/',
-        views.AgentCreateOneToNOnboardingView.as_view(),
-        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_n',
-    ),
-    path(
         'agents/create/1-to-1/',
         views.AgentCreateOneToOneOnboardingView.as_view(),
         name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_one',
@@ -42,7 +35,7 @@ urlpatterns = [
     path(
         'new-onboarding/',
         views.DeviceCreateAddOnboardingTypeView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_new_onboarding'
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_new_onboarding',
     ),
     path(
         'opc-ua-gds/create/',
@@ -117,6 +110,11 @@ urlpatterns = [
         'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/cmp-shared-secret/',
         devices_help_views.DeviceNoOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_cmp_shared_secret_help',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/revoke/cmp/',
+        devices_help_views.DeviceCmpRevokeHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_revoke_cmp_help',
     ),
     path(
         (

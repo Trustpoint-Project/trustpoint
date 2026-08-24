@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Nginx TLS configuration paths."""
 
 from pathlib import Path

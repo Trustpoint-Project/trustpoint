@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Context processors for Workflow 2 navigation badges."""
 
 from __future__ import annotations

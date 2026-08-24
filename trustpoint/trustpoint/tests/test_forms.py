@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for forms module."""
 from django import forms
 from django.test import TestCase

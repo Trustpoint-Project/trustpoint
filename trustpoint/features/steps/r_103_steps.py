@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Python steps file for R_103."""
 
 from behave import given, runner, then, when

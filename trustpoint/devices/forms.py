@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Forms exclusively used in the device application."""
 
 from __future__ import annotations
@@ -1141,7 +1144,7 @@ class OpcUaGdsPushTruststoreAssociationForm(forms.Form):
 
 
 class ClmAgentDeviceForm(forms.Form):
-    """CLM form for agent devices (1-to-1 and 1-to-n agents)."""
+    """CLM form for agent devices."""
 
     common_name = forms.CharField(max_length=100, validators=[UniqueNameValidator()])
     serial_number = forms.CharField(max_length=100, required=False)

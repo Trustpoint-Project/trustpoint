@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for encrypted field wrappers over the app-secret subsystem."""
 
 from unittest.mock import patch

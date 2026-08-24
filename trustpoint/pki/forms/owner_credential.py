@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Django forms for owner credential management."""
 
 from __future__ import annotations
@@ -152,7 +155,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
 
         return certificate_serializer
 
-    def clean_certificate_chain(self) -> None | CertificateCollectionSerializer:
+    def clean_certificate_chain(self) -> CertificateCollectionSerializer | None:
         """Validates and parses the uploaded certificate chain file.
 
         This method checks if the optional certificate chain file is provided.

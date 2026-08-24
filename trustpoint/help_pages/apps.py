@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Configures the help_pages application and its settings for inclusion in the Django project."""
 
 from django.apps import AppConfig

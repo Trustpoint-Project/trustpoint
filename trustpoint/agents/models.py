@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Models for the agents application."""
 
 from __future__ import annotations
@@ -73,7 +76,6 @@ class TrustpointAgent(models.Model):
         blank=True,
         help_text=_(
             'For 1-to-1 agents: the device that IS the agent (standalone). '
-            'For 1-to-n agents: the agent-process device that holds only the domain credential. '
             'Application certificates are issued to separate managed-device records.'
         ),
     )
@@ -157,8 +159,6 @@ class TrustpointAgent(models.Model):
 
         _agent_types = (
             DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-            DeviceModel.DeviceType.AGENT_ONE_TO_N,
-            DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
         )
         if device.device_type not in _agent_types:
             raise ValidationError({'device': 'The associated device must be of an agent type.'})

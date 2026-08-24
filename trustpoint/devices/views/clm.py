@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for certificate lifecycle management (CLM)."""
 
 import abc
@@ -239,11 +242,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             and self.object.domain
             and self.object.no_onboarding_config
             and self.object.no_onboarding_config.get_pki_protocols()
-            and self.object.device_type not in (
-                DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-                DeviceModel.DeviceType.AGENT_ONE_TO_N,
-                DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
-            )
+            and self.object.device_type != DeviceModel.DeviceType.AGENT_ONE_TO_ONE
         ):
             context['issue_app_cred_no_onboarding_url'] = (
                 f'{self.page_category}:{self.page_name}_no_onboarding_clm_issue_application_credential'
@@ -275,11 +274,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             self.object.domain
             and self.object.onboarding_config
             and self.object.onboarding_config.get_pki_protocols()
-            and self.object.device_type not in (
-                DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-                DeviceModel.DeviceType.AGENT_ONE_TO_N,
-                DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
-            )
+            and self.object.device_type != DeviceModel.DeviceType.AGENT_ONE_TO_ONE
         ):
             context['issue_app_cred_onboarding_url'] = (
                 f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential'
@@ -300,13 +295,10 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['OnboardingPkiProtocol'] = OnboardingPkiProtocol
         context['NoOnboardingPkiProtocol'] = NoOnboardingPkiProtocol
         context['OnboardingStatus'] = OnboardingStatus
-        context['is_agent_managed_device'] = (
-            self.object.device_type == DeviceModel.DeviceType.AGENT_MANAGED_DEVICE
-        )
+
 
         _agent_device_types = (
             DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-            DeviceModel.DeviceType.AGENT_ONE_TO_N,
         )
         is_agent_device = self.object.device_type in _agent_device_types
         context['is_agent_device'] = is_agent_device
@@ -413,7 +405,6 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         # Check if this is an agent device
         _agent_device_types = (
             DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-            DeviceModel.DeviceType.AGENT_ONE_TO_N,
         )
         if self.object.device_type in _agent_device_types:
             return ClmAgentDeviceForm(initial=self.get_agent_initial(), instance=self.object)
@@ -511,7 +502,6 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
         _agent_device_types = (
             DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-            DeviceModel.DeviceType.AGENT_ONE_TO_N,
         )
 
         form: ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm | ClmAgentDeviceForm
@@ -542,8 +532,6 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
 
     _AGENT_DEVICE_TYPES = (
         DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-        DeviceModel.DeviceType.AGENT_ONE_TO_N,
-        DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
     )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:

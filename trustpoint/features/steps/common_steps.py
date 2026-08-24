@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """File for steps which are used more often across multiple feature files."""
 
 import logging
@@ -5,6 +8,7 @@ import logging
 from behave import given, runner, step, then, when
 from django.contrib.auth.models import User
 from django.test import Client
+from management.models.security import SecurityConfig
 from pki.models.domain import DomainModel
 from users.models import TrustpointUser
 
@@ -210,6 +214,35 @@ def step_navigate_add_device(context: runner.Context, page_name: str) -> None:  
         raise AssertionError(msg)
     assert context.response.status_code == 200, f"Failed to load {page_name} page"
 
+@given('the security option "{opt_name}" is "{opt_value}"')
+def step_security_option_configure(context: runner.Context, opt_name: str, opt_value: str) -> None:  # noqa: ARG001
+    """Navigates to the given page.
+
+    Args:
+        context (runner.Context): Behave context.
+        opt_name (str): Option name.
+        opt_value (str): Option value.
+    """
+    if opt_name == 'Allow imported private keys':
+        response = context.authenticated_client.get('/management/settings/?tab=security')
+        assert response.status_code == 200, f'Failed to load settings security tab'
+
+        assert SecurityConfig.objects.filter(id=1).exists(), 'SecurityConfig does not exist'
+        form = response.context['security_form']
+        data = form.initial.copy()
+
+        data['max_cert_validity_days'] = 1825
+        data['max_crl_validity_days'] = 365
+        data['permitted_no_onboarding_pki_protocols'] = [1,4,16,32]
+        if opt_value == 'enabled':
+            data['allow_imported_private_keys'] = 'on'
+        else:
+            data['allow_imported_private_keys'] = 'off'
+
+        response = context.authenticated_client.post('/management/settings/security/', data, follow=True)
+        html = response.content
+
+        assert b'Your changes were saved successfully' in html, 'Changes are not saved'
         
     
 

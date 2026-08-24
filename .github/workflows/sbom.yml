@@ -1,4 +1,4 @@
-name: Generate and Publish SBOMs
+name: Security / SBOM
 
 on:
   push:

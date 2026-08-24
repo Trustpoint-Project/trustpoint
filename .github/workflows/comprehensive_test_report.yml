@@ -1,4 +1,4 @@
-name: Comprehensive Test Report
+name: Tests / Comprehensive Report
 
 on:
   push:

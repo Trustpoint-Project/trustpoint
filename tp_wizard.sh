@@ -1407,6 +1407,7 @@ wait_tls_fingerprint(){
   done
 
   echo
+   # shellcheck disable=SC2034
   TLS_FP_ELAPSED=$(( $(date +%s) - start ))
   return 1
 }
@@ -1472,7 +1473,8 @@ probe_mailpit_from_container(){
 
   exists "$container" || return 0
 
-  local subject="trustpoint wizard ${label} mailpit probe $(date +%s)"
+  local subject
+  subject="trustpoint wizard ${label} mailpit probe $(date +%s)"
   log "Sending Mailpit probe email from ${label} container..."
 
   if ! docker exec -e "PROBE_SUBJECT=${subject}" "$container" bash -lc \
@@ -1678,7 +1680,10 @@ final_summary(){
   local token_label
   local user_pin
 
+  local containers
   containers="$(summary_container_list)"
+  export containers
+  local bootstrap_login
   bootstrap_login="$(summary_bootstrap_login || true)"
 
   echo

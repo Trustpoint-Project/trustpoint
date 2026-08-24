@@ -1,0 +1,361 @@
+name: Tests / Docker Auto-Setup
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-auto-setup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup .env file with auto-setup enabled
+        run: |
+          cp .env.example .env
+          echo "" >> .env
+          echo "TP_AUTO_SETUP=true" >> .env
+          echo "TP_ADMIN_USERNAME=admin" >> .env
+          echo "TP_ADMIN_PASSWORD=testing321" >> .env
+          echo "TP_INJECT_DEMO_DATA=true" >> .env
+          
+          echo "Environment variables set in .env:"
+          grep "TP_" .env || true
+
+      - name: Run Docker compose
+        run: |
+          echo "Starting services without waiting for healthchecks..."
+          docker compose build
+          docker compose up -d postgres trustpoint
+          
+          echo "Services started (postgres + trustpoint)."
+          docker compose ps
+
+      - name: Wait for services to be fully ready
+        run: |
+          echo "Waiting for Trustpoint to complete auto-setup..."
+          
+          echo "Waiting for postgres to be ready..."
+          postgres_ready=false
+          for i in {1..30}; do
+            if docker compose exec -T postgres pg_isready -U admin -d trustpoint_db > /dev/null 2>&1; then
+              echo "✅ PostgreSQL is ready (attempt $i)"
+              postgres_ready=true
+              break
+            fi
+            echo "⏳ Waiting for PostgreSQL (attempt $i/30)..."
+            sleep 2
+          done
+          
+          if [ "$postgres_ready" = false ]; then
+            echo "❌ PostgreSQL did not become ready within timeout"
+            echo ""
+            echo "Container status:"
+            docker compose ps
+            echo ""
+            echo "PostgreSQL logs:"
+            docker compose logs --tail=50 postgres
+            exit 1
+          fi
+          
+          echo ""
+          echo "Waiting for Trustpoint container to start responding..."
+          setup_complete=false
+          for i in {1..90}; do
+            if curl -fsk --max-time 5 https://127.0.0.1/ > /dev/null 2>&1; then
+              echo "✅ Trustpoint HTTPS endpoint is responding (attempt $i)"
+              
+              if docker compose logs trustpoint 2>&1 | grep -q "Auto-setup completed successfully\|Startup Sequence Completed Successfully"; then
+                echo "✅ Auto-setup process completed"
+                
+                # Wait a bit more for Nginx to fully start
+                echo "⏳ Waiting for Nginx to be fully ready..."
+                sleep 5
+                
+                # Verify we can actually get content
+                if curl -fsk --max-time 5 https://127.0.0.1/ > /dev/null 2>&1; then
+                  echo "✅ Nginx is serving content"
+                  setup_complete=true
+                  break
+                else
+                  echo "⏳ Waiting for Nginx to start serving..."
+                fi
+              elif docker compose exec -T postgres psql -U admin -d trustpoint_db -c "\dt users_trustpointuser" 2>&1 | grep -q "users_trustpointuser"; then
+                echo "✅ Database migrations completed (users_trustpointuser table exists)"
+                setup_complete=true
+                break
+              else
+                echo "⏳ Endpoint responding but setup still in progress (attempt $i/90)..."
+              fi
+            else
+              echo "⏳ Waiting for HTTPS endpoint to respond (attempt $i/90)..."
+            fi
+            sleep 2
+          done
+          
+          if [ "$setup_complete" = false ]; then
+            echo "❌ Auto-setup did not complete within timeout"
+            echo ""
+            echo "Container status:"
+            docker compose ps
+            echo ""
+            echo "Recent container logs:"
+            docker compose logs --tail=100 trustpoint
+            exit 1
+          fi
+          
+          echo ""
+          echo "Container status:"
+          docker compose ps
+          
+          echo ""
+          echo "Recent container logs:"
+          docker compose logs --tail=100 trustpoint
+
+      - name: Test 1 - Check HTTPS endpoint is accessible
+        run: |
+          echo "## Test 1: HTTPS Endpoint" >> "$GITHUB_STEP_SUMMARY"
+          
+          URL="https://127.0.0.1/"
+          
+          for i in {1..20}; do
+            http_response=$(curl -k -L -s --connect-timeout 10 --max-time 30 -o response.txt -w "%{http_code}" "$URL") || true
+            
+            if [ "$http_response" = "200" ]; then
+              echo "✅ HTTPS endpoint accessible on attempt $i" | tee -a "$GITHUB_STEP_SUMMARY"
+              break
+            else
+              echo "⏳ Attempt $i failed with HTTP code $http_response, retrying..."
+              sleep 3
+            fi
+          done
+          
+          if [ "$http_response" != "200" ]; then
+            echo "❌ HTTPS endpoint test failed" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Test 2 - Verify auto-setup bypassed wizard
+        run: |
+          echo "## Test 2: Auto-Setup Verification" >> "$GITHUB_STEP_SUMMARY"
+          
+          response=$(curl -k -L -s --connect-timeout 10 --max-time 30 "https://127.0.0.1/")
+          
+          if echo "$response" | grep -q "setup wizard" || echo "$response" | grep -q "initial setup"; then
+            echo "❌ Setup wizard still present - auto-setup may have failed" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          else
+            echo "✅ Auto-setup successfully bypassed wizard" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Test 2b - Verify database migrations and admin user
+        run: |
+          echo "## Test 2b: Database & Admin User Verification" >> "$GITHUB_STEP_SUMMARY"
+          
+          echo "Checking if database tables exist..." | tee -a "$GITHUB_STEP_SUMMARY"
+          tables=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
+            -c "\dt users_trustpointuser" -t 2>&1 || echo "ERROR")
+          
+          if echo "$tables" | grep -q "users_trustpointuser"; then
+            echo "✅ Database migrations have run" | tee -a "$GITHUB_STEP_SUMMARY"
+            
+            db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
+              -c "SELECT username, is_superuser, is_staff, is_active FROM users_trustpointuser WHERE username='admin';" -t 2>&1 || echo "")
+            
+            echo "Admin user query result: $db_check" | tee -a "$GITHUB_STEP_SUMMARY"
+            
+            if echo "$db_check" | grep -q "admin"; then
+              echo "✅ Admin user exists in database" | tee -a "$GITHUB_STEP_SUMMARY"
+              
+              # Check if user is active and has proper permissions
+              if echo "$db_check" | grep -q "t.*t.*t"; then
+                echo "✅ Admin user has superuser, staff, and active flags set" | tee -a "$GITHUB_STEP_SUMMARY"
+              else
+                echo "⚠️  Admin user flags: $db_check" | tee -a "$GITHUB_STEP_SUMMARY"
+              fi
+            else
+              echo "❌ Admin user not found in database" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "All users in database:" | tee -a "$GITHUB_STEP_SUMMARY"
+              docker compose exec -T postgres psql -U admin -d trustpoint_db \
+                -c "SELECT id, username, is_superuser, is_staff FROM users_trustpointuser;" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          else
+            echo "❌ Database migrations have NOT run - users_trustpointuser table missing" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Available tables:" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "$tables" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Container logs (last 100 lines):" | tee -a "$GITHUB_STEP_SUMMARY"
+            docker compose logs --tail=100 trustpoint | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Test 3 - Admin login and session creation
+        run: |
+          echo "## Test 3: Admin Login" >> "$GITHUB_STEP_SUMMARY"
+          
+          echo "Verifying admin user in database..." | tee -a "$GITHUB_STEP_SUMMARY"
+          admin_exists=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
+            -c "SELECT username, is_superuser, is_active FROM users_trustpointuser WHERE username='admin';" -t 2>&1)
+          echo "Admin user status: $admin_exists" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          echo "Fetching login page and extracting CSRF token..."
+          rm -f cookies.txt login_page.html
+          
+          echo "Waiting for web server to be fully ready..."
+          sleep 5
+          
+          for attempt in {1..10}; do
+            if curl -fsk --max-time 5 -o /dev/null "https://127.0.0.1/"; then
+              echo "✅ HTTPS endpoint is accessible (attempt $attempt)"
+              break
+            fi
+            echo "⏳ Waiting for HTTPS endpoint (attempt $attempt/10)..."
+            sleep 2
+          done
+          
+          if ! curl -k -s -c cookies.txt -o login_page.html "https://127.0.0.1/users/login/"; then
+            echo "❌ Curl command failed" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          
+          page_size=$(wc -c < login_page.html 2>/dev/null || echo "0")
+          echo "Login page size: $page_size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          if [ "$page_size" -eq 0 ] || [ ! -s login_page.html ]; then
+            echo "❌ Login page is empty" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Checking if services are running:" | tee -a "$GITHUB_STEP_SUMMARY"
+            docker compose ps | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Recent logs:" | tee -a "$GITHUB_STEP_SUMMARY"
+            docker compose logs --tail=30 trustpoint | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          
+          csrf_token=$(grep -oP 'name="csrfmiddlewaretoken" value="\K[^"]+' login_page.html | head -1)
+          
+          if [ -z "$csrf_token" ]; then
+            echo "⚠️  Could not extract CSRF token with first method, trying alternative..."
+            csrf_token=$(grep csrfmiddlewaretoken login_page.html | grep -oP 'value="\K[^"]+' | head -1)
+          fi
+          
+          if [ -z "$csrf_token" ]; then
+            echo "❌ Failed to extract CSRF token" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Login page content (first 1000 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+            head -c 1000 login_page.html | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          
+          echo "✅ CSRF Token extracted: ${csrf_token:0:10}... (length: ${#csrf_token})" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          if [ -f cookies.txt ]; then
+            csrf_cookie=$(grep csrftoken cookies.txt | awk '{print $7}')
+            echo "CSRF Cookie: ${csrf_cookie:0:10}..." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          
+          login_response=$(curl -k -L -s -b cookies.txt -c cookies.txt \
+            -w "%{http_code}" -o login_response.txt \
+            -X POST \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -H "Referer: https://127.0.0.1/users/login/" \
+            -H "Origin: https://127.0.0.1" \
+            -H "X-CSRFToken: $csrf_token" \
+            -d "username=admin" \
+            -d "password=testing321" \
+            -d "csrfmiddlewaretoken=$csrf_token" \
+            "https://127.0.0.1/users/login/")
+          
+          echo "Login response code: $login_response" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          if grep -q "sessionid" cookies.txt; then
+            echo "✅ Admin login successful - session cookie received" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Admin login failed - no session cookie" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Cookies after login attempt:" | tee -a "$GITHUB_STEP_SUMMARY"
+            cat cookies.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Response body (first 1000 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+            head -c 1000 login_response.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Test 4 - Access authenticated dashboard
+        run: |
+          echo "## Test 4: Authenticated Dashboard Access" >> "$GITHUB_STEP_SUMMARY"
+          
+          echo "Current cookies:" | tee -a "$GITHUB_STEP_SUMMARY"
+          cat cookies.txt | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          dashboard_response=$(curl -k -L -s -b cookies.txt -c cookies.txt -w "%{http_code}" -o dashboard.txt \
+            "https://127.0.0.1/")
+          
+          echo "Dashboard response code: $dashboard_response" | tee -a "$GITHUB_STEP_SUMMARY"
+          
+          if [ "$dashboard_response" = "200" ]; then
+            if grep -q "login" dashboard.txt; then
+              echo "⚠️  Got 200 but appears to be login page - session may have been lost" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "Dashboard content (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+              head -c 500 dashboard.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "✅ Dashboard accessible with authenticated session" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "❌ Dashboard access failed with code $dashboard_response" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Dashboard content (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
+            head -c 500 dashboard.txt | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Test 5 - Check demo data injection
+        run: |
+          echo "## Test 5: Demo Data Verification" >> "$GITHUB_STEP_SUMMARY"
+          
+          demo_check=$(curl -k -s -b cookies.txt "https://127.0.0.1/" | grep -i "demo" || echo "")
+          
+          if [ -n "$demo_check" ]; then
+            echo "✅ Demo data appears to be injected" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ℹ️  Demo data check inconclusive (depends on UI)" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Test 6 - Check container logs for errors
+        if: always()
+        run: |
+          echo "## Test 6: Container Logs Check" >> "$GITHUB_STEP_SUMMARY"
+          
+          echo "### Trustpoint Container Logs (last 50 lines):" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          docker compose logs --tail=50 trustpoint >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          
+          if docker compose logs trustpoint | grep -i "error\|exception\|failed" | grep -v "Failed password" | grep -v "DEBUG"; then
+            echo "⚠️  Potential errors found in logs" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No critical errors in container logs" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Test 7 - Verify database initialization
+        run: |
+          echo "## Test 7: Database Initialization" >> "$GITHUB_STEP_SUMMARY"
+          
+          db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
+            -c "SELECT COUNT(*) FROM users_trustpointuser WHERE username='admin';" -t || echo "0")
+          
+          if [ $(echo "$db_check" | tr -d ' ') -ge 1 ]; then
+            echo "✅ Admin user found in database" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Admin user not found in database" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v

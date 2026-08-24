@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Views for revoking device certificates."""
 
 import datetime
@@ -24,6 +27,7 @@ from devices.models import (
 )
 from devices.revocation import DeviceCredentialRevocation
 from management.models.audit_log import AuditLog
+from onboarding.models import NoOnboardingPkiProtocol
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import CertificateModel
 from trustpoint.logger import LoggerMixin
@@ -71,6 +75,17 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
         context['revoke_form'] = self.form_class()
         context['cert'] = self.object.credential.certificate
         context['cred_revoke_url'] = f'{self.page_category}:{self.page_name}_credential_revoke'
+
+        device = self.object.device
+        if device and device.no_onboarding_config:
+            if device.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
+                context['cmp_revoke_help_url'] = f'{self.page_category}:{self.page_name}_device_revoke_cmp_help'
+                context['show_cmp_revoke_help'] = True
+            else:
+                context['show_cmp_revoke_help'] = False
+        else:
+            context['show_cmp_revoke_help'] = False
+
         return context
 
     def post(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:

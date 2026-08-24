@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """DRF API views for the Trustpoint agent job-polling endpoint."""
 
 from __future__ import annotations

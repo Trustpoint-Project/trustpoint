@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Serializers for Owner Credential (DevOwnerID) API endpoints."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Lightweight schema linting for Workflow 2 YAML."""
 
 from __future__ import annotations

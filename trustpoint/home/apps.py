@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Configures the Home application and its settings for inclusion in the Django project."""
 
 from django.apps import AppConfig

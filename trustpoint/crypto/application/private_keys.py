@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Cryptography-compatible private-key wrappers for managed backend keys."""
 
 from __future__ import annotations

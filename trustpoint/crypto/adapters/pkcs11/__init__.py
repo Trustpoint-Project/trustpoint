@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """PKCS#11 adapter implementation for the redesigned crypto layer."""
 
 from crypto.adapters.pkcs11.backend import Pkcs11Backend

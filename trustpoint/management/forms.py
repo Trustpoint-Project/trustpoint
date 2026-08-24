@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Forms definition."""
 
 from __future__ import annotations
@@ -777,7 +780,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return certificate_serializer
 
-    def clean_tls_certificate_chain(self) -> None | CertificateCollectionSerializer:
+    def clean_tls_certificate_chain(self) -> CertificateCollectionSerializer | None:
         """Validates and parses the uploaded TLS certificate chain file."""
         tls_certificate_chain = self.cleaned_data['tls_certificate_chain']
 

@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Logging setting specific views."""
 
 from __future__ import annotations
@@ -134,7 +137,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
     @staticmethod
     def _get_first_and_last_entry_date(
         log_file_path: Path,
-    ) -> tuple[None | datetime.datetime, None | datetime.datetime]:
+    ) -> tuple[datetime.datetime | None, datetime.datetime | None]:
         log_file = log_file_path.read_text(encoding='utf-8', errors='backslashreplace')
 
         date_regex = re.compile(r'\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\b')

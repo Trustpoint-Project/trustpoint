@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains cli commands which are displayed in the help pages."""
 
 from typing import Any
@@ -83,6 +86,33 @@ class CmpSharedSecretCommandBuilder:
         )
 
     @staticmethod
+    def get_app_cert_self_revoke_command(
+        host: str, cred_number: int) -> str:
+        """Gets the command for CMP application credential self-revocation request.
+
+        Usable for revoking application credentials for both onboarding and no-onboarding,
+        only if app credential private key is available
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'openssl cmp \\\n'
+            '-cmd rr \\\n'
+            f'-server {host} \\\n'
+            f'-cert certificate-{cred_number}.pem \\\n'
+            f'-key key-{cred_number}.pem \\\n'
+            f'-oldcert certificate-{cred_number}.pem \\\n'
+            f'-revreason 0 \\\n'
+            f'-trusted full-chain-{cred_number}.pem'
+        )
+
+
+    @staticmethod
     def get_domain_credential_profile_command(host: str, pk: int, shared_secret: str) -> str:
         """Get the domain credential profile command.
 
@@ -90,7 +120,6 @@ class CmpSharedSecretCommandBuilder:
             host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             pk: The primary key of the device in question used as Key Identifier (KID).
             shared_secret: The shared secret.
-            domain_name: The name of the domain will be used in the file names to mitigate overriding other files.
 
         Returns:
             The constructed command.

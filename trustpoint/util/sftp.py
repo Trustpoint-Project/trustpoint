@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 # util/sftp.py
 """Wrapper around Paramiko SFTP functionality and related exceptions."""
 

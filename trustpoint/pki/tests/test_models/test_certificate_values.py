@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests that verify the correctness of certificate property values."""
 
 # ruff: noqa: F401  # keep the unused imports for future test use

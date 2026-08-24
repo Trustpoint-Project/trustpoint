@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for auto-issuing CRLs after certificate revocation."""
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 (trustpoint-agents)=
 # Trustpoint Agents
 
-Trustpoint Agents enable automated certificate lifecycle management for devices in industrial environments. Agents can manage certificates for standalone devices (1-to-1) or handle multiple devices within a production cell (1-to-n).
+Trustpoint Agents enable automated certificate lifecycle management for devices in industrial environments. Agents can manage certificates for standalone devices (1-to-1).
 
 ## Overview
 
@@ -10,7 +10,7 @@ Agents are lightweight Python (as of now) applications that run within productio
 ### Key Features
 
 - **Automated Certificate Renewal**: Agents poll Trustpoint for due certificate renewals and automatically execute the renewal workflow
-- **Flexible Deployment**: Support for both 1-to-1 (single device) and 1-to-n (multiple managed devices) architectures
+- **Flexible Deployment**: Support for 1-to-1 (single device) architectures
 - **Secure Communication**: All API communication uses mutual TLS (mTLS) with domain credentials
 - **Workflow Automation**: Execute custom workflows for certificate deployment, including web-based management (WBM) interactions
 - **Resilient Operation**: Built-in retry logic and error handling for transient failures
@@ -111,7 +111,7 @@ Before an agent can start managing certificates, it must be onboarded to Trustpo
 
 ## Assigned Profiles
 
-For each agent (or managed device for 1-to-n agents), you can assign one or more workflow profiles that define which certificates should be managed and when they should be renewed.
+For each agent, you can assign one or more workflow profiles that define which certificates should be managed and when they should be renewed.
 
 ### Profile Assignment
 

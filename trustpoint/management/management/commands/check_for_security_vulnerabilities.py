@@ -1,3 +1,6 @@
+# Copyright (c) 2024 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management command to check for known security vulnerabilities."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Contained PKCS#11 adapter implementation."""
 
 from __future__ import annotations

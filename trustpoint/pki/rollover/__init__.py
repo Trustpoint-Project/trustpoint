@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Rollover strategy package.
 
 Provides the strategy pattern implementation for CA rollovers.

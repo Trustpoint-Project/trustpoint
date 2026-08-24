@@ -1,6 +1,11 @@
-# Sphinx configuration file for the Trustpoint documentation.  # noqa: D100, INP001
-# For full details, see:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
+"""Sphinx configuration file for the Trustpoint documentation.
+
+For full details, see:
+https://www.sphinx-doc.org/en/master/usage/configuration.html
+"""
 
 import os
 import sys
@@ -35,7 +40,7 @@ plantuml = f'java -jar {PLANTUML_PATH}'
 project = 'Trustpoint'
 copyright = '2026, Trustpoint Project'  # noqa: A001
 author = 'Trustpoint Project'
-release = '0.6.0.dev1'  # Project version
+release = '0.6.0'  # Project version
 
 # -- General configuration --------------------------------------------------
 extensions = [

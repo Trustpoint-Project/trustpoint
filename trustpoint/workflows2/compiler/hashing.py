@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Deterministic hashing helpers for Workflow 2 artifacts."""
 
 from __future__ import annotations

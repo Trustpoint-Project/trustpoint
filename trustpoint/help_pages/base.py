@@ -1,3 +1,6 @@
+# Copyright (c) 2025 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """This module contains classes and functions used by all help pages."""
 
 from __future__ import annotations
