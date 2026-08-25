@@ -3,7 +3,7 @@
 
 """Provides the 'CmpAuthentication' class using the Composite pattern for modular CMP authentication."""
 
-from typing import Never, get_args
+from typing import Never
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -12,7 +12,6 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.serialization import Encoding
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
-from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
 from devices.models import DeviceModel
@@ -35,6 +34,17 @@ from request.request_context import (
 from trustpoint.logger import LoggerMixin
 
 from .base import AuthenticationComponent, ClientCertificateAuthentication, CompositeAuthentication
+
+CERTCONF_ALLOWED_DIGESTS: dict[HashAlgorithm, type[hashes.HashAlgorithm]] = {
+    HashAlgorithm.SHA224: hashes.SHA224,
+    HashAlgorithm.SHA256: hashes.SHA256,
+    HashAlgorithm.SHA384: hashes.SHA384,
+    HashAlgorithm.SHA512: hashes.SHA512,
+    HashAlgorithm.SHA3_224: hashes.SHA3_224,
+    HashAlgorithm.SHA3_256: hashes.SHA3_256,
+    HashAlgorithm.SHA3_384: hashes.SHA3_384,
+    HashAlgorithm.SHA3_512: hashes.SHA3_512,
+}
 
 
 class CmpAuthenticationBase(AuthenticationComponent, LoggerMixin):
@@ -786,11 +796,11 @@ class CmpCertConfAuthentication(CmpAuthenticationBase):
             msg = f'certConf hashAlg OID {context.cert_hash_algorithm_oid!r} is unsupported.'
             raise ValueError(msg) from exc
 
-        digest = hash_algorithm.hash_algorithm()
-        if not isinstance(digest, get_args(AllowedCertSignHashAlgos)):
+        digest_factory = CERTCONF_ALLOWED_DIGESTS.get(hash_algorithm)
+        if digest_factory is None:
             msg = f'certConf hashAlg OID {context.cert_hash_algorithm_oid!r} is not permitted.'
             raise TypeError(msg)
-        return digest
+        return digest_factory()
 
     def _resolve_issued_credential_by_cert_hash(
         self,
@@ -799,7 +809,12 @@ class CmpCertConfAuthentication(CmpAuthenticationBase):
         hash_algorithm: hashes.HashAlgorithm,
     ) -> IssuedCredentialModel | None:
         """Resolve the issued credential by certHash using the declared digest algorithm."""
-        cert_hash_hex = context.cert_hash.hex().upper()
+        cert_hash = context.cert_hash
+        if cert_hash is None:
+            msg = 'certConf message is missing certHash — cannot resolve domain.'
+            raise ValueError(msg)
+
+        cert_hash_hex = cert_hash.hex().upper()
 
         if isinstance(hash_algorithm, hashes.SHA256):
             issued_cred = (
@@ -827,7 +842,7 @@ class CmpCertConfAuthentication(CmpAuthenticationBase):
             certificate_der = certificate.public_bytes(Encoding.DER)
             digest_ctx = hashes.Hash(hash_algorithm)
             digest_ctx.update(certificate_der)
-            if digest_ctx.finalize() == context.cert_hash:
+            if digest_ctx.finalize() == cert_hash:
                 return issued_cred
         return None
 

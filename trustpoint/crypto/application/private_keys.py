@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Never, cast, override
+from typing import TYPE_CHECKING, Any, Never, Self, cast, override
 
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 
@@ -303,11 +303,11 @@ class ManagedMLDSAPrivateKey:
         msg = 'Managed Trustpoint ML-DSA private keys cannot be exported.'
         raise NotImplementedError(msg)
 
-    def __copy__(self) -> ManagedMLDSAPrivateKey:
+    def __copy__(self) -> Self:
         """Return this immutable facade when copied by cryptography callers."""
         return self
 
-    def __deepcopy__(self, memo: dict[Any, Any]) -> ManagedMLDSAPrivateKey:
+    def __deepcopy__(self, memo: dict[Any, Any]) -> Self:
         """Return this immutable facade when deep-copied by cryptography callers."""
         return self
 

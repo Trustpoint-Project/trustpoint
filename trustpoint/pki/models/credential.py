@@ -5,9 +5,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric import mldsa
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
@@ -19,7 +20,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from crypto.application.private_keys import managed_private_key_for_ref
+from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey, managed_private_key_for_ref
 from crypto.models import CryptoManagedKeyModel
 from pki.models import CertificateModel
 from pki.models.issued_credential import RemoteIssuedCredentialModel
@@ -29,8 +30,6 @@ from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
     from trustpoint_core.crypto_types import PrivateKey
@@ -463,7 +462,13 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             return PrivateKeySerializer.from_pem(self.private_key.encode()).as_crypto()
 
         if self.managed_private_key:
-            return cast('PrivateKey', managed_private_key_for_ref(self.managed_private_key.to_managed_key_ref()))
+            managed_key = managed_private_key_for_ref(self.managed_private_key.to_managed_key_ref())
+            if isinstance(managed_key, (ManagedRSAPrivateKey, ManagedECPrivateKey)):
+                return managed_key
+            if isinstance(managed_key, (mldsa.MLDSA44PrivateKey, mldsa.MLDSA65PrivateKey, mldsa.MLDSA87PrivateKey)):
+                return managed_key
+            err_msg = f'Unsupported managed private key type: {type(managed_key)!r}.'
+            raise RuntimeError(err_msg)
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
@@ -483,13 +488,18 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         if self.managed_private_key:
             try:
                 managed_key = managed_private_key_for_ref(self.managed_private_key.to_managed_key_ref())
-                return PrivateKeySerializer(managed_key)
+                return self._private_key_serializer_from_key(managed_key)
             except Exception as e:
                 err_msg = f'Failed to get managed private key: {e}'
                 raise RuntimeError(err_msg) from e
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
+
+    @staticmethod
+    def _private_key_serializer_from_key(key: Any) -> PrivateKeySerializer:
+        """Build a private-key serializer from a key object or managed key facade."""
+        return PrivateKeySerializer(key)
 
     def get_certificate(self) -> x509.Certificate:
         """Gets the credential certificate as x509.Certificate instance.
