@@ -179,7 +179,6 @@ class InitTrustpointCommandTest(TestCase):
 class StartupManagerCommandTest(TestCase):
     """Test suite for startup_manager command."""
 
-    @patch('management.management.commands.startup_manager.Path')
     @patch('management.management.commands.startup_manager.call_command')
     @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
     @patch('management.management.commands.startup_manager.StartupContextBuilder')
@@ -188,12 +187,10 @@ class StartupManagerCommandTest(TestCase):
         mock_builder: MagicMock,
         mock_strategy_class: MagicMock,
         mock_call_command: MagicMock,
-        mock_path: MagicMock,
     ) -> None:
-        """Test startup_manager executes the operational startup path."""
+        """Test operational startup does not depend on a repository .env file."""
         with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             mock_first.return_value = None
-            mock_path.return_value.exists.return_value = True
 
             mock_context = Mock()
             mock_context.is_wizard_completed = True
@@ -215,7 +212,6 @@ class StartupManagerCommandTest(TestCase):
             mock_strategy_class.assert_called_once_with()
             mock_strategy.execute.assert_called_once_with(mock_context)
 
-    @patch('management.management.commands.startup_manager.Path')
     @patch('management.management.commands.startup_manager.call_command')
     @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
     @patch('management.management.commands.startup_manager.StartupContextBuilder')
@@ -224,12 +220,10 @@ class StartupManagerCommandTest(TestCase):
         mock_builder: MagicMock,
         mock_strategy_class: MagicMock,
         mock_call_command: MagicMock,
-        mock_path: MagicMock,
     ) -> None:
         """Test startup_manager reports operational dependency failures clearly."""
         with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             mock_first.return_value = None
-            mock_path.return_value.exists.return_value = True
 
             mock_context = Mock()
             mock_builder_instance = Mock()

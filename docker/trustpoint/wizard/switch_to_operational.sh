@@ -103,7 +103,7 @@ run_startup_manager() {
 }
 
 apply_operational_tls_files() {
-    log INFO "Applying operational TLS files to nginx"
+    log INFO "Ensuring operational TLS files are installed for nginx"
     /etc/trustpoint/wizard/update_tls.sh
 }
 
