@@ -192,7 +192,8 @@ class SignerModel(CustomDeleteActionModel):
             .add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)  # type: ignore[arg-type]
             .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key), critical=False)  # type: ignore[arg-type]
         )
-        return builder.sign(private_key=private_key, algorithm=hashes.SHA256())  # type: ignore[arg-type]
+        signing_algorithm = None if isinstance(private_key, ManagedMLDSAPrivateKey) else hashes.SHA256()
+        return builder.sign(private_key=private_key, algorithm=signing_algorithm)  # type: ignore[arg-type]
 
 
 class SignedMessageModel(models.Model):

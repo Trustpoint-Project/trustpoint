@@ -475,17 +475,15 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             PrivateKeySerializer: The credential private key serializer.
 
         Raises:
-            RuntimeError: If no private key information is available.
+            RuntimeError: If no private key information is available or if the key is backend-managed.
         """
         if self.private_key:
             return PrivateKeySerializer.from_pem(self.private_key.encode())
 
         if self.managed_private_key:
             try:
-                from pki.util.x509 import _unwrap_mldsa_managed_key  # noqa: PLC0415
                 managed_key = managed_private_key_for_ref(self.managed_private_key.to_managed_key_ref())
-                actual_key = _unwrap_mldsa_managed_key(managed_key)
-                return PrivateKeySerializer(actual_key)  # type: ignore[arg-type]
+                return PrivateKeySerializer(managed_key)
             except Exception as e:
                 err_msg = f'Failed to get managed private key: {e}'
                 raise RuntimeError(err_msg) from e
@@ -564,7 +562,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def get_credential_serializer(self) -> CredentialSerializer:
         """Gets the serializer for this credential."""
         return CredentialSerializer(
-            private_key=self.get_private_key_serializer().as_crypto(),
+            private_key=self.get_private_key(),
             certificate=self.get_certificate_serializer().as_crypto(),
             additional_certificates=self.get_certificate_chain_serializer().as_crypto()
         )

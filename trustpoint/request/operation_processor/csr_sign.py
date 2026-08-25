@@ -73,14 +73,11 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
         if signing_credential.certificate:
             signature_suite = SignatureSuite.from_certificate(signing_credential.get_certificate())
             hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
-            if hash_algorithm_enum is None:
-                err_msg = 'Failed to get hash algorithm from signing certificate.'
-                raise ValueError(err_msg)
-            hash_algorithm = hash_algorithm_enum.hash_algorithm()
+            hash_algorithm = None if hash_algorithm_enum is None else hash_algorithm_enum.hash_algorithm()
         else:
             hash_algorithm = hashes.SHA256()
 
-        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+        if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
             err_msg = (
                 f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
                 f'but found {type(hash_algorithm)}'

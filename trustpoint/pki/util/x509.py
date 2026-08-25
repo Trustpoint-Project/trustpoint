@@ -60,7 +60,13 @@ def _unwrap_mldsa_managed_key(private_key: object) -> object:
         logger.debug('_unwrap_mldsa_managed_key: not a managed key, returning unchanged')
         return private_key
 
-    logger.debug('_unwrap_mldsa_managed_key: is managed key, unwrapping...')
+    # RSA/EC managed facades are already cryptography-compatible and must keep using
+    # backend-managed sign operations (including PKCS#11-backed keys).
+    if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey)):
+        logger.debug('_unwrap_mldsa_managed_key: managed RSA/EC key, returning facade unchanged')
+        return private_key
+
+    logger.debug('_unwrap_mldsa_managed_key: managed ML-DSA key, evaluating unwrap path...')
 
     try:
         managed_key_model = CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
@@ -71,7 +77,7 @@ def _unwrap_mldsa_managed_key(private_key: object) -> object:
         raise ValueError(msg) from exc
 
     if backend_kind != 'software':
-        msg = f'Only software-backed managed keys can be used for certificate signing, got {backend_kind!r}.'
+        msg = f'Only software-backed managed ML-DSA keys can be unwrapped, got {backend_kind!r}.'
         raise NotImplementedError(msg)
 
     software_config = CryptoProviderSoftwareConfigModel.objects.get(
@@ -376,7 +382,7 @@ class CertificateGenerator:
         Returns:
             CaModel: The created CA model.
         """
-        if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey)):
+        if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey, ManagedMLDSAPrivateKey)):
             CaModel._validate_ca_certificate(issuing_ca_cert)  # noqa: SLF001
             CaModel._validate_ca_type(ca_type)  # noqa: SLF001
             credential = CredentialModel.save_managed_key_credential(

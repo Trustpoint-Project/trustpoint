@@ -14,6 +14,8 @@ from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyp
 from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210, rfc5280  # type: ignore[import-untyped]
+from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
+from trustpoint_core.oid import HashAlgorithm
 
 from cmp.util import NameParser
 from request.request_context import (
@@ -615,8 +617,25 @@ class CmpCertConfBodyValidation(LoggerMixin):
 
     def parse_certconf_body(self, context: CmpCertConfRequestContext, pki_body: rfc4210.PKIBody) -> None:
         """Extract and validate the CertStatus elements from a certConf PKIBody."""
-        cert_conf = pki_body['certConf']
+        cert_status = self._extract_single_cert_status(pki_body)
 
+        if not cert_status['certHash'].hasValue():
+            self._raise_value_error('certHash is REQUIRED in CertStatus per RFC 9483.')
+        context.cert_hash = bytes(cert_status['certHash'])
+
+        context.cert_req_id = self._parse_cert_req_id(cert_status)
+        self._parse_cert_conf_status(cert_status, context)
+        context.cert_hash_algorithm_oid = self._parse_cert_hash_algorithm_oid(cert_status)
+
+        self.logger.info(
+            'certConf body parsed: certReqId=%d, status=%s',
+            context.cert_req_id,
+            'accepted' if context.cert_conf_status == 0 else 'rejection',
+        )
+
+    def _extract_single_cert_status(self, pki_body: rfc4210.PKIBody) -> Any:
+        """Return the single CertStatus element expected by RFC 9483."""
+        cert_conf = pki_body['certConf']
         if len(cert_conf) > 1:
             self._raise_value_error(
                 'certConf MUST contain exactly one CertStatus element per RFC 9483, but found more than one.'
@@ -625,13 +644,10 @@ class CmpCertConfBodyValidation(LoggerMixin):
             self._raise_value_error(
                 'certConf MUST contain exactly one CertStatus element per RFC 9483, but found none.'
             )
+        return cert_conf[0]
 
-        cert_status = cert_conf[0]
-
-        if not cert_status['certHash'].hasValue():
-            self._raise_value_error('certHash is REQUIRED in CertStatus per RFC 9483.')
-        context.cert_hash = bytes(cert_status['certHash'])
-
+    def _parse_cert_req_id(self, cert_status: Any) -> int:
+        """Validate certReqId from CertStatus and return it."""
         if not cert_status['certReqId'].hasValue():
             self._raise_value_error('certReqId is REQUIRED in CertStatus per RFC 9483.')
         cert_req_id = int(cert_status['certReqId'])
@@ -639,28 +655,41 @@ class CmpCertConfBodyValidation(LoggerMixin):
             self._raise_value_error(
                 f'certReqId in certConf MUST be 0 per RFC 9483, but got {cert_req_id}.'
             )
-        context.cert_req_id = cert_req_id
+        return cert_req_id
 
-        if cert_status['statusInfo'].hasValue():
-            status_info = cert_status['statusInfo']
-            status_val = int(status_info['status'])
-            # Only 'accepted' (0) and 'rejection' (2) are allowed per RFC 9483.
-            if status_val not in (0, 2):
-                self._raise_value_error(
-                    f'statusInfo.status in certConf MUST be "accepted" (0) or "rejection" (2), '
-                    f'but got {status_val}.'
-                )
-            context.cert_conf_status = status_val
-            if status_info['statusString'].hasValue() and len(status_info['statusString']) > 0:
-                context.cert_conf_status_string = str(status_info['statusString'][0])
-        else:
+    def _parse_cert_conf_status(self, cert_status: Any, context: CmpCertConfRequestContext) -> None:
+        """Parse optional statusInfo and store normalized values on context."""
+        if not cert_status['statusInfo'].hasValue():
             context.cert_conf_status = 0
+            return
 
-        self.logger.info(
-            'certConf body parsed: certReqId=%d, status=%s',
-            context.cert_req_id,
-            'accepted' if context.cert_conf_status == 0 else 'rejection',
-        )
+        status_info = cert_status['statusInfo']
+        status_val = int(status_info['status'])
+        if status_val not in (0, 2):
+            self._raise_value_error(
+                f'statusInfo.status in certConf MUST be "accepted" (0) or "rejection" (2), '
+                f'but got {status_val}.'
+            )
+        context.cert_conf_status = status_val
+        if status_info['statusString'].hasValue() and len(status_info['statusString']) > 0:
+            context.cert_conf_status_string = str(status_info['statusString'][0])
+
+    def _parse_cert_hash_algorithm_oid(self, cert_status: Any) -> str | None:
+        """Parse and validate optional RFC 9480 hashAlg and return its OID."""
+        if not cert_status['hashAlg'].hasValue():
+            return None
+
+        hash_alg_oid = cert_status['hashAlg']['algorithm'].prettyPrint()
+        try:
+            hash_algorithm = HashAlgorithm.from_dotted_string(hash_alg_oid)
+        except ValueError as exc:
+            msg = f'Unsupported certConf hashAlg OID: {hash_alg_oid!r}.'
+            raise ValueError(msg) from exc
+
+        hash_algorithm_impl = hash_algorithm.hash_algorithm()
+        if not isinstance(hash_algorithm_impl, get_args(AllowedCertSignHashAlgos)):
+            self._raise_value_error(f'certConf hashAlg OID {hash_alg_oid!r} is not permitted.')
+        return hash_algorithm.dotted_string
 
     def _raise_value_error(self, message: str) -> Never:
         """Helper function to raise a ValueError with the given message."""

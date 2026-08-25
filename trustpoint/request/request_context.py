@@ -252,6 +252,9 @@ class CmpCertConfRequestContext(CmpBaseRequestContext, BaseRevocationRequestCont
     cert_hash: bytes | None = None
     """DER-encoded hash over the confirmed certificate (certHash field)."""
 
+    cert_hash_algorithm_oid: str | None = None
+    """Optional hashAlg.algorithm OID from CertStatus (RFC 9480)."""
+
     cert_req_id: int | None = None
     """certReqId from the CertStatus structure (MUST be 0 per RFC 9483)."""
 
