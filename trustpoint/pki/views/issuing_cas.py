@@ -13,11 +13,6 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
-
-try:
-    from cryptography.hazmat.primitives.asymmetric import mldsa
-except ImportError:
-    mldsa = None  # type: ignore[assignment]
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError

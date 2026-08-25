@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import TYPE_CHECKING, NoReturn, cast, get_args
+from typing import TYPE_CHECKING, NoReturn, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, mldsa, rsa
@@ -19,18 +19,17 @@ from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models.credential import CredentialModel
 from pki.models.issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
 from pki.util.keys import KeyGenerator
-from pki.util.x509 import _unwrap_mldsa_managed_key
+from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
 from trustpoint.logger import LoggerMixin
 from workflows2.integrations.certificates import emit_certificate_issued_for_record
 
 if TYPE_CHECKING:
     import ipaddress
 
-    from trustpoint_core.crypto_types import PrivateKey, PublicKey
+    from trustpoint_core.crypto_types import PublicKey
 
     from devices.models import DeviceModel
     from pki.models.domain import DomainModel
-
 
 class SaveCredentialToDbMixin(LoggerMixin):
     """Mixin to handle saving credentials to the database."""
@@ -536,10 +535,10 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
 
             issuer_private_key = issuing_credential.get_private_key()
             actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
-
+            actual_issuer_key = validate_certificate_signing_private_key(actual_issuer_key)
 
             certificate = certificate_builder.sign(
-                private_key=cast('PrivateKey', actual_issuer_key),
+                private_key=actual_issuer_key,
                 algorithm=allowed_hash_algorithm,
             )
 

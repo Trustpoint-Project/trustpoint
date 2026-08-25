@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import pytest
-from cryptography.hazmat.primitives.asymmetric import mldsa
 
 from crypto.application.private_keys import ManagedMLDSAPrivateKey
 from crypto.application.service import TrustpointCryptoBackend

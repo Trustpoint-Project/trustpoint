@@ -10,7 +10,7 @@ import itertools
 import logging
 import urllib.parse
 from datetime import UTC
-from typing import TYPE_CHECKING, cast, get_args
+from typing import TYPE_CHECKING, TypeGuard, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509 import load_pem_x509_certificate
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
-from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
+from trustpoint_core.crypto_types import AllowedCertSignHashAlgos, PrivateKey
 from trustpoint_core.oid import NamedCurve
 
 from crypto.application.private_keys import ManagedECPrivateKey, ManagedMLDSAPrivateKey, ManagedRSAPrivateKey
@@ -36,9 +36,24 @@ from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
-    from trustpoint_core.crypto_types import PrivateKey
 
 logger = logging.getLogger(__name__)
+
+CertificateSigningPrivateKey = PrivateKey
+
+
+def is_certificate_signing_private_key(key: object) -> TypeGuard[CertificateSigningPrivateKey]:
+    """Return whether a key is supported for certificate signing."""
+    return isinstance(key, get_args(CertificateSigningPrivateKey))
+
+
+def validate_certificate_signing_private_key(key: object) -> CertificateSigningPrivateKey:
+    """Return a certificate-signing private key or raise TypeError for unsupported types."""
+    if is_certificate_signing_private_key(key):
+        return key
+
+    err_msg = f'Unsupported private key type for certificate signing: {type(key)}.'
+    raise TypeError(err_msg)
 
 
 def _unwrap_mldsa_managed_key(private_key: object) -> object:
@@ -222,15 +237,16 @@ class CertificateGenerator:
         )
 
         actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
+        actual_issuer_key = validate_certificate_signing_private_key(actual_issuer_key)
 
         if isinstance(issuer_private_key, ManagedMLDSAPrivateKey):
             certificate = builder.sign(
-                private_key=cast('PrivateKey', actual_issuer_key),
+                private_key=actual_issuer_key,
                 algorithm=None,
             )
         else:
             certificate = builder.sign(
-                private_key=cast('PrivateKey', actual_issuer_key),
+                private_key=actual_issuer_key,
                 algorithm=hash_algorithm,
             )
         return certificate, private_key
@@ -298,14 +314,15 @@ class CertificateGenerator:
             builder = builder.add_extension(ext, critical=critical)
 
         actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(cast('PrivateKey', actual_issuer_key))
+        actual_issuer_key = validate_certificate_signing_private_key(actual_issuer_key)
+        hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(actual_issuer_key)
         # For ML-DSA keys, hash_algorithm will be None, which is correct
         if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
             err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
             raise TypeError(err_msg)
 
         certificate = builder.sign(
-            private_key=cast('PrivateKey', actual_issuer_key),
+            private_key=actual_issuer_key,
             algorithm=hash_algorithm,
         )
         return certificate, private_key
