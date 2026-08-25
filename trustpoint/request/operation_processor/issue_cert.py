@@ -26,7 +26,7 @@ from pki.models.ca_rollover import CaRolloverState
 from pki.models.credential import CredentialModel
 from pki.services.ca_rollover import CaRolloverService
 from pki.util.keys import is_supported_public_key
-from pki.util.x509 import _unwrap_mldsa_managed_key
+from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
 from request.clients.est_client import EstClient
 from request.request_context import (
     BaseCertificateRequestContext,
@@ -41,7 +41,6 @@ from .base import AbstractOperationProcessor
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
-    from trustpoint_core.crypto_types import PrivateKey
 
     from devices.models import DeviceModel
     from pki.models.domain import DomainModel
@@ -331,9 +330,10 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
 
         issuer_private_key = issuing_credential.get_private_key()
         actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
+        actual_issuer_key = validate_certificate_signing_private_key(actual_issuer_key)
 
         signed_cert = certificate_builder.sign(
-            private_key=cast('PrivateKey', actual_issuer_key),
+            private_key=actual_issuer_key,
             algorithm=hash_algorithm,  # type: ignore[arg-type]
         )
         self._save_credential(context, signed_cert, issuing_credential)

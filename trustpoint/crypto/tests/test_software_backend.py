@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, mldsa, rsa
 from crypto.adapters.software.backend import SoftwareBackend
 from crypto.adapters.software.config import SoftwareProviderProfile
 from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
-from crypto.domain.errors import MechanismUnsupportedError, UnsupportedKeySpecError
+from crypto.domain.errors import MechanismUnsupportedError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import EcKeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec, SignRequest
