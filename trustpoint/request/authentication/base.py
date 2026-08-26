@@ -270,6 +270,7 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
 
         import ipaddress  # noqa: PLC0415
 
+        # Prefer the original client address when running behind a reverse proxy.
         real_ip = meta.get('HTTP_X_REAL_IP')
         forwarded_for = meta.get('HTTP_X_FORWARDED_FOR')
         remote_addr = meta.get('REMOTE_ADDR')
