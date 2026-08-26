@@ -52,13 +52,13 @@ class HelpContext:
     host_cmp_path: str = ''  # {host_base}/.well-known/cmp/p/{domain.unique_name}
     host_est_path: str = ''  # {host_base}/.well-known/est/{domain.unique_name}
     cred_count: int = 0  # Running number to avoid overriding files on the client side
-    device: None | DeviceModel = None
-    devid_registration: None | DevIdRegistration = None
+    device: DeviceModel | None = None
+    devid_registration: DevIdRegistration | None = None
     page_name: str | None = None
     help_sections: list[HelpSection] | None = None
-    issued_credential: None | object = None
-    owner_credential: None | object = None
-    ca: None | object = None
+    issued_credential: object | None = None
+    owner_credential: object | None = None
+    ca: object | None = None
 
     def get_device_or_http_404(self) -> DeviceModel:
         """Gets the device or throws an HTTP404 error.
