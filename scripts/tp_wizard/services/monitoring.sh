@@ -11,15 +11,15 @@ write_monitoring_files() {
 start_monitoring() {
   write_monitoring_files
   remove_container "$PROMETHEUS_NAME"
-  start_container "$PROMETHEUS_NAME" -p 9090:9090 -v "$GENERATED_ROOT/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" prom/prometheus:latest --config.file=/etc/prometheus/prometheus.yml
+  start_container "$PROMETHEUS_NAME" -p "${PROMETHEUS_PORT}:9090" -v "$GENERATED_ROOT/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" prom/prometheus:latest --config.file=/etc/prometheus/prometheus.yml
   remove_container "$GRAFANA_NAME"
-  start_container "$GRAFANA_NAME" -p 3000:3000 -v "$GENERATED_ROOT/grafana/provisioning:/etc/grafana/provisioning:ro" -v "$GENERATED_ROOT/grafana/dashboards:/var/lib/grafana/dashboards:ro" -e GF_SECURITY_ADMIN_USER="$GRAFANA_ADMIN_USER" -e GF_SECURITY_ADMIN_PASSWORD="$GRAFANA_ADMIN_PASSWORD" grafana/grafana:latest
+  start_container "$GRAFANA_NAME" -p "${GRAFANA_PORT}:3000" -v "$GENERATED_ROOT/grafana/provisioning:/etc/grafana/provisioning:ro" -v "$GENERATED_ROOT/grafana/dashboards:/var/lib/grafana/dashboards:ro" -e GF_SECURITY_ADMIN_USER="$GRAFANA_ADMIN_USER" -e GF_SECURITY_ADMIN_PASSWORD="$GRAFANA_ADMIN_PASSWORD" grafana/grafana:latest
   ok 'Prometheus and Grafana started'
 }
 
 monitoring_wait_target() {
   $NOWAIT && return 0
-  local query='http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22trustpoint%22%7D'
+  local query="http://127.0.0.1:${PROMETHEUS_PORT}/api/v1/query?query=up%7Bjob%3D%22trustpoint%22%7D"
   for ((i=0; i<60; i++)); do
     if curl -fsS "$query" 2>/dev/null | grep -q '"value":\[[^]]*,"1"\]'; then
       ok 'Prometheus is scraping Trustpoint'
@@ -27,5 +27,5 @@ monitoring_wait_target() {
     fi
     sleep 1
   done
-  warn 'Prometheus is running, but Trustpoint is not scraped yet; check http://localhost:9090/targets'
+  warn "Prometheus is running, but Trustpoint is not scraped yet; check http://localhost:${PROMETHEUS_PORT}/targets"
 }

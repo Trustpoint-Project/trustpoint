@@ -74,6 +74,8 @@ TP_HTTPS_PORT=8443
 DB_NAME=trustpoint_db
 DB_USER=admin
 DB_PASS=password
+APP_DB_HOST=postgres
+APP_DB_PORT=5432
 TP_ADMIN_USERNAME=admin
 TP_ADMIN_PASSWORD=password
 TP_ADMIN_EMAIL=admin@example.test
@@ -87,6 +89,7 @@ APP_IMAGE=trustpoint:test
 build_trustpoint() {{ :; }}
 remove_compose_service() {{ :; }}
 remove_container() {{ :; }}
+state_has() {{ return 1; }}
 ok() {{ :; }}
 start_container() {{ printf '<%s>\\n' "$@"; }}
 start_trustpoint

@@ -35,7 +35,14 @@ runtime_start() {
     esac
   done
   for service in "${SERVICES[@]}"; do runtime_wait "$service"; done
-  [[ " ${SERVICES[*]} " == *' monitoring '* ]] && monitoring_wait_target
+  state_has trustpoint && summary_wait_trustpoint_details
+  if [[ " ${SERVICES[*]} " == *' monitoring '* ]]; then
+    if state_has trustpoint && [[ "$TP_AUTO_SETUP" != true ]]; then
+      warn 'Prometheus is provisioned. Enable metrics after completing the Trustpoint setup wizard.'
+    else
+      monitoring_wait_target
+    fi
+  fi
 }
 
 runtime_stop() {
