@@ -205,7 +205,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Update the user, refusing to change the role of the last remaining admin."""
         instance = self.get_object()
-        new_role = request.data.get('role')
+        new_role = request.data.get('role') if isinstance(request.data, dict) else None
         if _is_last_admin(instance) and new_role is not None and str(new_role) != str(instance.role_id):
             return Response(
                 {'detail': 'Cannot change role of this user: at least one admin must remain.'},
