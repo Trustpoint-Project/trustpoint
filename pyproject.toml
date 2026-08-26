@@ -1,6 +1,6 @@
 [project]
 name = "trustpoint"
-version = "0.6.0"
+version = "1.0.dev0"
 description = "Trustpoint Server Software"
 authors = [{ name = "Trustpoint-Project" }]
 requires-python = ">=3.13.0"
