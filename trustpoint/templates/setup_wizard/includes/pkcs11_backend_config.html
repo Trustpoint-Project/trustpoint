@@ -1,0 +1,176 @@
+{% load i18n %}
+<div class="tp-backend-setup" data-pkcs11-connection-controller>
+    <section class="tp-backend-section">
+        <div class="tp-backend-section-kicker">PKCS#11</div>
+        <h3 class="tp-backend-section-title">{% trans "HSM Connection" %}</h3>
+        <div class="tp-hsm-transport-options" role="radiogroup" aria-label="{{ form.pkcs11_connection_type.label }}">
+            {% for option in form.pkcs11_connection_type %}
+                <label class="tp-hsm-transport-option" for="{{ option.id_for_label }}">
+                    {{ option.tag }}
+                    <span>
+                        <strong>{{ option.choice_label }}</strong>
+                        {% if option.data.value == 'usb' %}
+                            <small>{% trans "Discover a locally attached smart-card HSM through OpenSC." %}</small>
+                        {% else %}
+                            <small>{% trans "Load the PKCS#11 library and optional configuration supplied for the HSM." %}</small>
+                        {% endif %}
+                    </span>
+                </label>
+            {% endfor %}
+        </div>
+        {% if form.pkcs11_connection_type.errors %}
+            <div class="text-danger mt-2">{{ form.pkcs11_connection_type.errors }}</div>
+        {% endif %}
+    </section>
+
+    <section class="tp-backend-section" data-pkcs11-connection-panel="usb"{% if not form.uses_usb_pkcs11_connection %} hidden{% endif %}>
+        <div class="tp-backend-section-kicker">{% trans "USB HSM" %}</div>
+        <h3 class="tp-backend-section-title">{% trans "Discover Token" %}</h3>
+        <p class="tp-backend-section-copy">
+            {% trans "Trustpoint uses its bundled OpenSC driver. No library or provider configuration upload is needed." %}
+        </p>
+        <button class="btn tp-setup-form-secondary" type="submit" name="wizard_action" value="discover_usb_hsm" formnovalidate>
+            {% trans "Discover USB HSM" %}
+        </button>
+
+        {% if usb_hsm_discovery %}
+            {% if usb_hsm_discovery.status == 'found' %}
+                <div class="tp-usb-discovery-results" aria-live="polite">
+                    <p class="tp-backend-section-copy mb-2">{{ usb_hsm_discovery.detail }}</p>
+                    {% for token in usb_hsm_discovery.tokens %}
+                        <div class="tp-usb-token-row">
+                            <div>
+                                <strong>{{ token.label|default:"Unlabelled token" }}</strong>
+                                <small>
+                                    {% if token.manufacturer %}{{ token.manufacturer }}{% endif %}
+                                    {% if token.model %} {{ token.model }}{% endif %}
+                                    · {% trans "slot" %} {{ token.slot_id }}
+                                    {% if token.serial %} · {% trans "serial" %} {{ token.serial }}{% endif %}
+                                </small>
+                            </div>
+                            {% if usb_hsm_discovery.selected_index == forloop.counter0 %}
+                                <span class="badge text-bg-success">{% trans "Selected" %}</span>
+                            {% else %}
+                                <button class="btn btn-sm tp-setup-form-secondary" type="submit" name="wizard_action" value="select_usb_hsm:{{ forloop.counter0 }}" formnovalidate>
+                                    {% trans "Use" %}
+                                </button>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-warning mt-3 mb-0 text-start" role="status">
+                    <strong>{% trans "No USB HSM is available to Trustpoint." %}</strong>
+                    <p class="mb-2">{{ usb_hsm_discovery.detail }}</p>
+                    <details>
+                        <summary>{% trans "Show Docker USB passthrough guide" %}</summary>
+                        <p class="mt-2 mb-2">
+                            {% trans "Expose the host USB bus to the Trustpoint container, then restart the container and discover again." %}
+                        </p>
+                        <div class="tp-backend-command">--mount type=bind,source=/dev/bus/usb,target=/dev/bus/usb<br>--device-cgroup-rule='c 189:* rwm'</div>
+                        <p class="mt-2 mb-1">{% trans "Docker Compose:" %}</p>
+                        <div class="tp-backend-command">volumes:<br>&nbsp;&nbsp;- /dev/bus/usb:/dev/bus/usb<br>device_cgroup_rules:<br>&nbsp;&nbsp;- 'c 189:* rwm'</div>
+                        <p class="mt-2 mb-0">
+                            {% trans "The appliance host must expose /dev/bus/usb. Stop any host smart-card service that exclusively owns the reader before retrying." %}
+                        </p>
+                    </details>
+                </div>
+            {% endif %}
+        {% endif %}
+    </section>
+
+    <section class="tp-backend-section" data-pkcs11-connection-panel="network"{% if form.uses_usb_pkcs11_connection %} hidden{% endif %}>
+        <div class="tp-backend-section-kicker">{% trans "Network HSM" %}</div>
+        <h3 class="tp-backend-section-title">{% trans "Provider Files" %}</h3>
+        {% if form.local_dev_pkcs11_handoff_available %}
+            <p class="tp-backend-section-copy">{% trans "The local SoftHSM demo can use its prepared PKCS#11 provider." %}</p>
+        {% endif %}
+        <div class="tp-backend-grid">
+            <div class="tp-backend-field">
+                <label class="tp-backend-field-label" for="{{ form.pkcs11_module_upload.id_for_label }}">{{ form.pkcs11_module_upload.label }}</label>
+                {{ form.pkcs11_module_upload }}
+                {% if form.pkcs11_module_upload.errors %}<div class="text-danger mt-2">{{ form.pkcs11_module_upload.errors }}</div>{% endif %}
+            </div>
+            <div class="tp-backend-field">
+                <label class="tp-backend-field-label" for="{{ form.pkcs11_config_upload.id_for_label }}">{{ form.pkcs11_config_upload.label }}</label>
+                {{ form.pkcs11_config_upload }}
+                {% if form.pkcs11_config_upload.errors %}<div class="text-danger mt-2">{{ form.pkcs11_config_upload.errors }}</div>{% endif %}
+            </div>
+            <div class="tp-backend-field">
+                <label class="tp-backend-field-label" for="{{ form.pkcs11_config_env_var.id_for_label }}">{{ form.pkcs11_config_env_var.label }}</label>
+                {{ form.pkcs11_config_env_var }}
+                {% if form.pkcs11_config_env_var.errors %}<div class="text-danger mt-2">{{ form.pkcs11_config_env_var.errors }}</div>{% endif %}
+            </div>
+        </div>
+        {% if form.staged_pkcs11_module_name %}
+            <div class="tp-backend-state-pill">
+                <span>{% trans "Current library:" %} {{ form.staged_pkcs11_module_name }}</span>
+                <button type="submit" name="wizard_action" value="clear_module" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove wizard library" title="Remove wizard library">×</button>
+            </div>
+        {% endif %}
+        {% if form.staged_pkcs11_config_name %}
+            <div class="tp-backend-state-pill">
+                <span>{% trans "Current provider config:" %} {{ form.staged_pkcs11_config_name }}</span>
+                <button type="submit" name="wizard_action" value="clear_pkcs11_config" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove provider config" title="Remove provider config">×</button>
+            </div>
+        {% endif %}
+    </section>
+
+    <section class="tp-backend-section">
+        <div class="tp-backend-section-kicker">{% trans "Access" %}</div>
+        <h3 class="tp-backend-section-title">{% trans "Token and Policy" %}</h3>
+        <div class="tp-backend-grid">
+            <div class="tp-backend-field">
+                <label class="tp-backend-field-label" for="{{ form.fresh_install_pkcs11_token_label.id_for_label }}">{{ form.fresh_install_pkcs11_token_label.label }}</label>
+                {{ form.fresh_install_pkcs11_token_label }}
+                {% if form.fresh_install_pkcs11_token_label.help_text %}<div class="form-text">{{ form.fresh_install_pkcs11_token_label.help_text }}</div>{% endif %}
+                {% if form.fresh_install_pkcs11_token_label.errors %}<div class="text-danger mt-2">{{ form.fresh_install_pkcs11_token_label.errors }}</div>{% endif %}
+            </div>
+            <div class="tp-backend-field">
+                <label class="tp-backend-field-label" for="{{ form.fresh_install_pkcs11_slot_id.id_for_label }}">{{ form.fresh_install_pkcs11_slot_id.label }}</label>
+                {{ form.fresh_install_pkcs11_slot_id }}
+                {% if form.fresh_install_pkcs11_slot_id.help_text %}<div class="form-text">{{ form.fresh_install_pkcs11_slot_id.help_text }}</div>{% endif %}
+                {% if form.fresh_install_pkcs11_slot_id.errors %}<div class="text-danger mt-2">{{ form.fresh_install_pkcs11_slot_id.errors }}</div>{% endif %}
+            </div>
+            <div class="tp-backend-field">
+                <label class="tp-backend-field-label" for="{{ form.pkcs11_user_pin.id_for_label }}">{{ form.pkcs11_user_pin.label }}</label>
+                {{ form.pkcs11_user_pin }}
+                {% if form.has_staged_pkcs11_pin %}
+                    <div class="tp-backend-state-pill">
+                        <span>{% trans "A user PIN is available for this wizard session." %}</span>
+                        <button type="submit" name="wizard_action" value="clear_pin" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove user PIN" title="Remove user PIN">×</button>
+                    </div>
+                {% endif %}
+                {% if form.pkcs11_user_pin.help_text %}<div class="form-text">{{ form.pkcs11_user_pin.help_text }}</div>{% endif %}
+                {% if form.pkcs11_user_pin.errors %}<div class="text-danger mt-2">{{ form.pkcs11_user_pin.errors }}</div>{% endif %}
+            </div>
+            <div class="tp-backend-field tp-backend-policy-field">
+                <div class="form-check text-start">
+                    {{ form.fresh_install_pkcs11_enforce_app_secret_protection }}
+                    <label class="form-check-label" for="{{ form.fresh_install_pkcs11_enforce_app_secret_protection.id_for_label }}">{{ form.fresh_install_pkcs11_enforce_app_secret_protection.label }}</label>
+                    {% if form.fresh_install_pkcs11_enforce_app_secret_protection.errors %}<div class="text-danger mt-2">{{ form.fresh_install_pkcs11_enforce_app_secret_protection.errors }}</div>{% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+<script>
+    (() => {
+        const controller = document.querySelector('[data-pkcs11-connection-controller]');
+        if (!controller) return;
+        const radios = controller.querySelectorAll('input[name="{{ form.pkcs11_connection_type.html_name }}"]');
+        const panels = controller.querySelectorAll('[data-pkcs11-connection-panel]');
+        const updatePanels = () => {
+            const selected = Array.from(radios).find((radio) => radio.checked)?.value || 'network';
+            panels.forEach((panel) => {
+                const inactive = panel.dataset.pkcs11ConnectionPanel !== selected;
+                panel.hidden = inactive;
+                panel.querySelectorAll('input, select, textarea, button').forEach((control) => {
+                    control.disabled = inactive;
+                });
+            });
+        };
+        radios.forEach((radio) => radio.addEventListener('change', updatePanels));
+        updatePanels();
+    })();
+</script>

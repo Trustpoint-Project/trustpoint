@@ -12,8 +12,9 @@ from django.test import TestCase
 
 from setup_wizard.forms import (
     CRYPTO_BACKEND_TYPE_CHOICES,
-    FreshInstallBackendConfigModelForm,
+    PKCS11_CONNECTION_TYPE_NETWORK,
     PKCS11_CONNECTION_TYPE_USB,
+    FreshInstallBackendConfigModelForm,
 )
 from setup_wizard.models import SetupWizardConfigModel
 
@@ -67,6 +68,32 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
                 self.assertTrue(form.is_valid(), form.errors)
                 self.assertTrue(form.uses_opensc_pkcs11_module())
                 self.assertEqual(form.staged_pkcs11_module_name, 'opensc-pkcs11.so')
+
+    def test_switching_from_usb_to_network_requires_a_network_provider(self) -> None:
+        """OpenSC must not silently satisfy a Network HSM provider upload."""
+        """The built-in OpenSC module must not leak into Network HSM configuration."""
+        with TemporaryDirectory() as temp_dir:
+            opensc_module = Path(temp_dir) / 'opensc-pkcs11.so'
+            opensc_module.write_bytes(b'\x7fELFpkcs11-bytes')
+            config_model = SetupWizardConfigModel.get_singleton()
+            config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+            config_model.fresh_install_pkcs11_module_path = str(opensc_module)
+
+            with (
+                patch('setup_wizard.forms.OPENSC_PKCS11_MODULE_PATH', opensc_module),
+                patch('setup_wizard.forms.local_dev_pkcs11_handoff_available', return_value=False),
+            ):
+                form = FreshInstallBackendConfigModelForm(
+                    data={
+                        'pkcs11_connection_type': PKCS11_CONNECTION_TYPE_NETWORK,
+                        'fresh_install_pkcs11_token_label': 'Network HSM',
+                        'pkcs11_user_pin': '1234',
+                    },
+                    instance=config_model,
+                )
+
+                self.assertFalse(form.is_valid())
+                self.assertIn('pkcs11_module_upload', form.errors)
 
     def test_software_backend_choice_uses_neutral_label(self) -> None:
         choices = dict(CRYPTO_BACKEND_TYPE_CHOICES)

@@ -380,6 +380,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         label=gettext_lazy('HSM connection'),
         choices=PKCS11_CONNECTION_TYPE_CHOICES,
         initial=PKCS11_CONNECTION_TYPE_NETWORK,
+        widget=forms.RadioSelect,
         help_text=gettext_lazy(
             'USB smart-card HSMs use the built-in OpenSC driver; network HSMs use an uploaded PKCS#11 module.'
         ),
@@ -467,7 +468,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
                 self.fields[field_name].required = False
             return
 
-        self.fields['pkcs11_connection_type'].widget.attrs.update({'class': 'form-select'})
+        self.fields['pkcs11_connection_type'].widget.attrs.update({'class': 'form-check-input'})
         self.fields['pkcs11_module_upload'].widget.attrs.update({'class': 'form-control'})
         self.fields['pkcs11_config_upload'].widget.attrs.update({'class': 'form-control'})
         self.fields['pkcs11_config_env_var'].widget.attrs.update(
@@ -566,7 +567,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             return local_dev_module
 
         configured_module = _safe_existing_file_from_value(self.instance.fresh_install_pkcs11_module_path)
-        if configured_module is not None:
+        if configured_module is not None and configured_module != OPENSC_PKCS11_MODULE_PATH:
             return configured_module
 
         return _safe_existing_file(FINAL_WIZARD_PKCS11_MODULE_PATH)

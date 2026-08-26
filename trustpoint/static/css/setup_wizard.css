@@ -852,6 +852,68 @@
     margin: 0;
 }
 
+.tp-fresh-install-shell [data-pkcs11-connection-panel][hidden] {
+    display: none !important;
+}
+
+.tp-fresh-install-shell .tp-hsm-transport-options {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tp-fresh-install-shell .tp-hsm-transport-option {
+    align-items: flex-start;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    cursor: pointer;
+    display: flex;
+    gap: 0.7rem;
+    min-height: 5rem;
+    padding: 0.8rem;
+}
+
+.tp-fresh-install-shell .tp-hsm-transport-option:has(input:checked) {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--bs-primary) 12%, transparent);
+}
+
+.tp-fresh-install-shell .tp-hsm-transport-option span {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.tp-fresh-install-shell .tp-hsm-transport-option small,
+.tp-fresh-install-shell .tp-usb-token-row small {
+    color: var(--bs-secondary-color);
+    display: block;
+    line-height: 1.4;
+}
+
+.tp-fresh-install-shell .tp-usb-discovery-results {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.2rem;
+}
+
+.tp-fresh-install-shell .tp-usb-token-row {
+    align-items: center;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    min-height: 4rem;
+    padding: 0.7rem 0.8rem;
+}
+
+.tp-fresh-install-shell .tp-backend-policy-field {
+    align-content: center;
+    min-height: 2.85rem;
+}
+
 .tp-fresh-install-shell .tp-backend-grid {
     display: grid;
     gap: 1rem;
@@ -972,6 +1034,12 @@
 @media (min-width: 768px) {
     .tp-fresh-install-shell .tp-backend-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .tp-fresh-install-shell .tp-hsm-transport-options {
+        grid-template-columns: 1fr;
     }
 }
 

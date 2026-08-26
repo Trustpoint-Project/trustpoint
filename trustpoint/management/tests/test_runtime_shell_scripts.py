@@ -105,3 +105,49 @@ start_trustpoint
     assert '<8443:443>' in result.stdout
     assert '<TP_HTTP_PORT=8080>' in result.stdout
     assert '<TP_HTTPS_PORT=8443>' in result.stdout
+
+
+def test_trustpoint_launcher_exposes_available_usb_bus(tmp_path: Path) -> None:
+    """The common launcher makes USB available without selecting a different startup mode."""
+    usb_bus = tmp_path / 'usb'
+    usb_bus.mkdir()
+    harness = f"""
+set -euo pipefail
+source "{TRUSTPOINT_SERVICE_SCRIPT}"
+BUILD_LOCAL=false
+TP_USB_BUS_PATH="{usb_bus}"
+TP_HTTP_PORT=8080
+TP_HTTPS_PORT=8443
+DB_NAME=trustpoint_db
+DB_USER=admin
+DB_PASS=password
+APP_DB_HOST=postgres
+APP_DB_PORT=5432
+TP_ADMIN_USERNAME=admin
+TP_ADMIN_PASSWORD=password
+TP_ADMIN_EMAIL=admin@example.test
+TP_AUTO_SETUP=false
+TP_INJECT_DEMO_DATA=false
+TP_TLS_DNS_NAMES=trustpoint.local
+TP_TLS_IPV4_ADDRESSES=
+TP_TLS_IPV6_ADDRESSES=
+ENABLE_METRICS=false
+APP_IMAGE=trustpoint:test
+build_trustpoint() {{ :; }}
+remove_compose_service() {{ :; }}
+remove_container() {{ :; }}
+state_has() {{ return 1; }}
+ok() {{ :; }}
+start_container() {{ printf '<%s>\n' "$@"; }}
+start_trustpoint
+"""
+
+    result = subprocess.run(  # noqa: S603
+        ['/bin/bash', '-c', harness],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert f'<type=bind,source={usb_bus},target=/dev/bus/usb>' in result.stdout
+    assert '<c 189:* rwm>' in result.stdout

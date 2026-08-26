@@ -27,6 +27,43 @@ Physical HSM
 - **Status**: Provider-specific configuration files are treated as opaque input and passed to the uploaded module through an operator-provided environment variable.
 - **Use Case**: High-security production deployments
 
+USB smart-card HSMs
+~~~~~~~~~~~~~~~~~~~
+
+Trustpoint includes OpenSC for compatible USB smart-card HSMs. Start
+Trustpoint normally, select **USB HSM** in the setup wizard, and choose
+**Discover USB HSM**. Discovery reads only public token identity information;
+the user PIN is requested separately for authenticated operations.
+
+The same USB flow is available during a fresh installation, when attaching an
+existing Trustpoint database, and when restoring a backup. A restored or moved
+instance must still have access to the original token when that token contains
+managed keys or the application-secret KEK.
+
+USB discovery requires the container to see the host USB bus. The standard
+Trustpoint launcher and Compose configuration expose ``/dev/bus/usb`` when it
+is available. For another container deployment, use the equivalent of:
+
+.. code-block:: yaml
+
+   volumes:
+     - /dev/bus/usb:/dev/bus/usb
+   device_cgroup_rules:
+     - 'c 189:* rwm'
+
+Trustpoint starts its container-local smart-card service only after USB HSM
+access is selected. Network HSM and software deployments use the same startup
+command and do not activate that service.
+
+Network HSMs
+~~~~~~~~~~~~
+
+Select **Network HSM** when the HSM requires its own Linux PKCS#11 module.
+Upload the module and, if required by that provider, its configuration file and
+the environment-variable name through which the module locates that file.
+Trustpoint treats provider configuration as opaque data and does not assume a
+specific HSM vendor.
+
 Supported Cryptographic Operations
 -----------------------------------
 

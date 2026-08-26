@@ -284,6 +284,8 @@
                             </div>
                         </div>
                     {% elif form.is_pkcs11_backend_config %}
+                        {% include 'setup_wizard/includes/pkcs11_backend_config.html' %}
+                        {% comment %}
                         <div class="tp-backend-setup">
                             <section class="tp-backend-section">
                                 <div class="tp-backend-section-kicker">PKCS#11</div>
@@ -465,6 +467,7 @@
                                 </div>
                             </section>
                         </div>
+                        {% endcomment %}
                     {% elif form.is_software_backend_config %}
                         <div class="tp-backend-setup">
                             <section class="tp-backend-section">

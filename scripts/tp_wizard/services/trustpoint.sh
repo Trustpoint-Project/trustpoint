@@ -11,8 +11,12 @@ start_trustpoint() {
   remove_compose_service trustpoint
   remove_container trustpoint
   local usb_hsm_args=()
-  if [[ -d /dev/bus/usb ]]; then
-    usb_hsm_args+=(--device /dev/bus/usb --device-cgroup-rule 'c 189:* rwm')
+  local host_usb_bus="${TP_USB_BUS_PATH:-/dev/bus/usb}"
+  if [[ -d "$host_usb_bus" ]]; then
+    usb_hsm_args+=(
+      --mount "type=bind,source=${host_usb_bus},target=/dev/bus/usb"
+      --device-cgroup-rule 'c 189:* rwm'
+    )
   fi
   local mail_args=()
   if state_has mail; then

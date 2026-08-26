@@ -55,6 +55,7 @@ from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
+from crypto.adapters.pkcs11.discovery import DiscoveredPkcs11Token
 from crypto.adapters.software.backend import SoftwareBackend
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
 from crypto.adapters.software.config import SoftwareProviderProfile
@@ -151,7 +152,9 @@ FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-provider.cfg'
 MAX_RESTORE_OUTPUT_LENGTH = 4000
 MAX_PKCS11_PROBE_OUTPUT_LENGTH = 4000
+USB_HSM_DISCOVERY_TIMEOUT_SECONDS = 20
 GPG_EXECUTABLE = '/usr/bin/gpg'
+USB_HSM_DISCOVERY_SESSION_KEY = 'setup_wizard_usb_hsm_discovery'
 
 
 def restore_backup_staging_root() -> Path:
@@ -536,6 +539,189 @@ def is_pkcs11_test_connection_submission(request: HttpRequest) -> bool:
     return request.POST.get('wizard_action') == 'test_connection'
 
 
+def is_discover_usb_hsm_submission(request: HttpRequest) -> bool:
+    """Return whether the current POST requests USB HSM discovery."""
+    return request.POST.get('wizard_action') == 'discover_usb_hsm'
+
+
+def selected_usb_hsm_index(request: HttpRequest) -> int | None:
+    """Return the selected session discovery index, if this is a selection POST."""
+    action = request.POST.get('wizard_action', '')
+    prefix = 'select_usb_hsm:'
+    if not action.startswith(prefix):
+        return None
+    try:
+        index = int(action.removeprefix(prefix))
+    except ValueError:
+        return None
+    return index if index >= 0 else None
+
+
+def _usb_hsm_discovery_result(
+    *,
+    status: str,
+    detail: str,
+    tokens: tuple[DiscoveredPkcs11Token, ...] = (),
+) -> dict[str, Any]:
+    """Build session-safe USB discovery state for all setup flows."""
+    return {
+        'status': status,
+        'detail': detail,
+        'tokens': [token.to_json_dict() for token in tokens],
+    }
+
+
+def discover_usb_hsms_isolated() -> dict[str, Any]:  # noqa: PLR0911 - each failure needs distinct UI guidance.
+    """Discover OpenSC tokens in a subprocess so provider crashes cannot kill the web worker."""
+    usb_bus_path = Path('/dev/bus/usb')
+    module_path = Path(settings.HSM_OPENSC_PKCS11_MODULE_PATH)
+    if not usb_bus_path.is_dir():
+        return _usb_hsm_discovery_result(
+            status='unavailable',
+            detail='The container cannot see the host USB bus at /dev/bus/usb.',
+        )
+    if not module_path.is_file():
+        return _usb_hsm_discovery_result(
+            status='error',
+            detail=f'The bundled OpenSC module is unavailable at {module_path}.',
+        )
+
+    try:
+        execute_shell_script(MANAGE_PCSCD, 'start')
+    except (FileNotFoundError, ValueError, subprocess.CalledProcessError) as exc:
+        if isinstance(exc, subprocess.CalledProcessError):
+            detail = (exc.stderr or exc.stdout or '').strip()
+        else:
+            detail = str(exc)
+        suffix = f' {detail}' if detail else ''
+        return _usb_hsm_discovery_result(
+            status='error',
+            detail=f'The container smart-card service could not be started.{suffix}',
+        )
+
+    try:
+        completed_process = subprocess.run(  # noqa: S603
+            [sys.executable, str(settings.BASE_DIR / 'manage.py'), 'discover_setup_wizard_usb_hsm'],
+            cwd=str(settings.REPO_ROOT),
+            env=os.environ.copy(),
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=USB_HSM_DISCOVERY_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return _usb_hsm_discovery_result(
+            status='error',
+            detail='USB HSM discovery timed out. Check the device connection and smart-card service, then retry.',
+        )
+    if completed_process.returncode != 0:
+        failure = (
+            f'signal {-completed_process.returncode}'
+            if completed_process.returncode < 0
+            else f'exit code {completed_process.returncode}'
+        )
+        output = _format_pkcs11_probe_process_output(completed_process)
+        detail = f'USB HSM discovery failed with {failure}.'
+        if output:
+            detail = f'{detail} {output}'
+        return _usb_hsm_discovery_result(status='error', detail=detail)
+
+    output_lines = [line for line in completed_process.stdout.splitlines() if line.strip()]
+    try:
+        payload = json.loads(output_lines[-1])
+        tokens = tuple(DiscoveredPkcs11Token.from_json_dict(item) for item in payload['tokens'])
+    except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        logger.warning('USB HSM discovery returned invalid output: %s', exc)
+        return _usb_hsm_discovery_result(
+            status='error',
+            detail='USB HSM discovery returned an invalid response. Check the Trustpoint log for details.',
+        )
+
+    if not tokens:
+        return _usb_hsm_discovery_result(
+            status='empty',
+            detail='No PKCS#11 token was discovered through OpenSC.',
+        )
+    token_suffix = 's' if len(tokens) != 1 else ''
+    return _usb_hsm_discovery_result(
+        status='found',
+        detail=f'Discovered {len(tokens)} USB HSM token{token_suffix}.',
+        tokens=tokens,
+    )
+
+
+def configure_wizard_usb_hsm(
+    config_model: SetupWizardConfigModel,
+    *,
+    token: DiscoveredPkcs11Token | None = None,
+) -> None:
+    """Select the built-in OpenSC transport and optionally persist a discovered token selector."""
+    opensc_path = str(settings.HSM_OPENSC_PKCS11_MODULE_PATH)
+    switching_to_usb = (config_model.fresh_install_pkcs11_module_path or '').strip() != opensc_path
+    if switching_to_usb:
+        cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_module_path)
+        cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_config_path)
+
+    config_model.fresh_install_pkcs11_module_path = opensc_path
+    config_model.fresh_install_pkcs11_config_path = ''
+    config_model.fresh_install_pkcs11_config_env_var = ''
+    update_fields = [
+        'fresh_install_pkcs11_module_path',
+        'fresh_install_pkcs11_config_path',
+        'fresh_install_pkcs11_config_env_var',
+    ]
+    if switching_to_usb or token is not None:
+        config_model.fresh_install_pkcs11_token_label = (token.label or '') if token is not None else ''
+        config_model.fresh_install_pkcs11_token_serial = (token.serial or '') if token is not None else ''
+        config_model.fresh_install_pkcs11_slot_id = token.slot_id if token is not None else None
+        update_fields.extend(
+            [
+                'fresh_install_pkcs11_token_label',
+                'fresh_install_pkcs11_token_serial',
+                'fresh_install_pkcs11_slot_id',
+            ]
+        )
+    config_model.save(update_fields=update_fields)
+
+
+def handle_usb_hsm_wizard_action(
+    request: HttpRequest,
+    *,
+    config_model: SetupWizardConfigModel,
+    redirect_name: str,
+) -> HttpResponse | None:
+    """Handle shared discovery and selection actions for fresh, attach, and restore flows."""
+    if is_discover_usb_hsm_submission(request):
+        configure_wizard_usb_hsm(config_model)
+        result = discover_usb_hsms_isolated()
+        tokens = tuple(DiscoveredPkcs11Token.from_json_dict(item) for item in result['tokens'])
+        if len(tokens) == 1:
+            configure_wizard_usb_hsm(config_model, token=tokens[0])
+            result['selected_index'] = 0
+            token_name = tokens[0].label or tokens[0].serial or 'token'
+            messages.success(request, f'USB HSM {token_name!r} selected.')
+        request.session[USB_HSM_DISCOVERY_SESSION_KEY] = result
+        return redirect(redirect_name)
+
+    token_index = selected_usb_hsm_index(request)
+    if token_index is None:
+        return None
+    result = request.session.get(USB_HSM_DISCOVERY_SESSION_KEY, {})
+    raw_tokens = result.get('tokens', []) if isinstance(result, dict) else []
+    try:
+        token = DiscoveredPkcs11Token.from_json_dict(raw_tokens[token_index])
+    except (IndexError, KeyError, TypeError, ValueError):
+        messages.error(request, 'The selected USB HSM result is no longer available. Discover again.')
+        return redirect(redirect_name)
+
+    configure_wizard_usb_hsm(config_model, token=token)
+    result['selected_index'] = token_index
+    request.session[USB_HSM_DISCOVERY_SESSION_KEY] = result
+    token_name = token.label or token.serial or 'token'
+    messages.success(request, f'USB HSM {token_name!r} selected.')
+    return redirect(redirect_name)
+
+
 def is_clear_pkcs11_module_submission(request: HttpRequest) -> bool:
     """Return whether the current POST requests staged library removal."""
     return request.POST.get('wizard_action') == 'clear_module'
@@ -666,7 +852,12 @@ def _persist_pkcs11_module_from_form(form: FreshInstallBackendConfigModelForm, u
 
     if current_staged_module is None and local_dev_pkcs11_handoff_available():
         local_dev_module = str(local_dev_pkcs11_module_path())
-        if not current_module_path or current_module_path == local_dev_module or not current_module_exists:
+        opensc_module = str(settings.HSM_OPENSC_PKCS11_MODULE_PATH)
+        if (
+            not current_module_path
+            or current_module_path in {local_dev_module, opensc_module}
+            or not current_module_exists
+        ):
             cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
             form.instance.fresh_install_pkcs11_module_path = local_dev_module
             update_fields.append('fresh_install_pkcs11_module_path')
@@ -839,7 +1030,6 @@ def _stage_and_probe_pkcs11_connection(
     profile_name: str,
 ) -> Pkcs11Capabilities:
     """Install staged PKCS#11 assets and run the isolated token probe."""
-    configure_pkcs11_runtime_services(form.instance)
     FreshInstallSummaryView.install_staged_pkcs11_assets(form.instance)
     form.refresh_pkcs11_state()
     return probe_staged_pkcs11_config_isolated(form.instance, profile_name=profile_name)
@@ -1165,6 +1355,7 @@ def probe_staged_pkcs11_config_isolated(
     profile_name: str,
 ) -> Pkcs11Capabilities:
     """Run the staged PKCS#11 probe in a subprocess so native crashes cannot kill the web worker."""
+    configure_pkcs11_runtime_services(config_model)
     command = [
         sys.executable,
         str(settings.BASE_DIR / 'manage.py'),
@@ -1714,6 +1905,7 @@ class FreshInstallCryptoStorageView(FreshInstallModelFormBaseView[FreshInstallCr
         selected_storage = form.cleaned_data['crypto_storage']
         if selected_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             self._reset_staged_pkcs11_backend(form)
+            self.request.session.pop(USB_HSM_DISCOVERY_SESSION_KEY, None)
         else:
             previous_storage = (
                 SetupWizardConfigModel.objects.filter(pk=form.instance.pk)
@@ -1735,6 +1927,12 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
     step_state = SetupWizardConfigModel.FreshInstallCurrentStep.BACKEND_CONFIG
     back_url = reverse_lazy('setup_wizard:fresh_install_crypto_storage')
     body_heading = 'Configure Backend'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add shared USB HSM discovery state to the backend step."""
+        context = super().get_context_data(**kwargs)
+        context['usb_hsm_discovery'] = self.request.session.get(USB_HSM_DISCOVERY_SESSION_KEY)
+        return context
 
     @staticmethod
     def _is_test_connection_submission(request: HttpRequest) -> bool:
@@ -1775,6 +1973,13 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
         """Handle staged PKCS#11 asset removal before running normal form validation."""
         config_model = SetupWizardConfigModel.get_singleton()
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            usb_response = handle_usb_hsm_wizard_action(
+                request,
+                config_model=config_model,
+                redirect_name='setup_wizard:fresh_install_backend_config',
+            )
+            if usb_response is not None:
+                return usb_response
             if self._is_clear_module_submission(request):
                 self._clear_staged_pkcs11_module(config_model)
                 messages.success(request, 'The PKCS#11 library was removed for this wizard session.')
@@ -1832,6 +2037,8 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
         """Persist wizard backend configuration using one-time PKCS#11 staging files."""
         if form.instance.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             self._persist_pkcs11_backend_config(form)
+            if not form.uses_opensc_pkcs11_module():
+                self.request.session.pop(USB_HSM_DISCOVERY_SESSION_KEY, None)
             if self._is_test_connection_submission(self.request):
                 return self._test_pkcs11_connection(form)
 
@@ -2922,6 +3129,7 @@ class ConnectExistingCryptoStorageView(ConnectExistingWizardMixin[FreshInstallCr
         """Persist the backend kind and clear stale PKCS#11 staging when needed."""
         if form.cleaned_data['crypto_storage'] != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             FreshInstallCryptoStorageView._reset_staged_pkcs11_backend(form)  # noqa: SLF001 - shared wizard helper.
+            self.request.session.pop(USB_HSM_DISCOVERY_SESSION_KEY, None)
         form.save()
         config_model = SetupWizardConfigModel.get_singleton()
         config_model.mark_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE)
@@ -2937,6 +3145,12 @@ class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBa
     step_name = 'backend-config'
     back_url = reverse_lazy('setup_wizard:connect_existing_crypto_storage')
     body_heading = 'Configure Backend'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add shared USB HSM discovery state to attach and restore backend steps."""
+        context = super().get_context_data(**kwargs)
+        context['usb_hsm_discovery'] = self.request.session.get(USB_HSM_DISCOVERY_SESSION_KEY)
+        return context
 
     @staticmethod
     def _stage_uploaded_pkcs11_module(uploaded_module: Any) -> str:
@@ -2957,6 +3171,14 @@ class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBa
         """Handle staged PKCS#11 asset removal before normal form validation."""
         config_model = SetupWizardConfigModel.get_singleton()
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            redirect_name = f"setup_wizard:{self.step_url_names['backend-config']}"
+            usb_response = handle_usb_hsm_wizard_action(
+                request,
+                config_model=config_model,
+                redirect_name=redirect_name,
+            )
+            if usb_response is not None:
+                return usb_response
             if is_clear_pkcs11_module_submission(request):
                 clear_staged_pkcs11_module(config_model)
                 messages.success(request, 'The PKCS#11 library was removed for this wizard session.')
@@ -2990,6 +3212,8 @@ class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBa
         """Persist backend configuration or keep the user on this step for tests."""
         if form.instance.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             self._persist_pkcs11_backend_config(form)
+            if not form.uses_opensc_pkcs11_module():
+                self.request.session.pop(USB_HSM_DISCOVERY_SESSION_KEY, None)
             if is_pkcs11_test_connection_submission(self.request):
                 return self._test_pkcs11_connection(form)
 
