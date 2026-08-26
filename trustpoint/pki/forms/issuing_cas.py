@@ -67,20 +67,14 @@ class IssuingCaImportMixin:
         Raises:
             ValidationError: Always raised with the provided message.
         """
-        raise ValidationError(message)
+        raise ValidationError(str(message))
 
     def _validate_ca_certificate(self, cert_crypto: x509.Certificate) -> None:
-        """Validates that the certificate is a CA certificate with required extensions."""
-        if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
-            self._raise_validation_error('The provided certificate is not a CA certificate.')
+        """Validate a CA certificate through the canonical model-level CA checks."""
         try:
-            key_usage_ext = cert_crypto.extensions.get_extension_for_class(x509.KeyUsage)
-            if not key_usage_ext.value.key_cert_sign:
-                self._raise_validation_error('The provided certificate must have keyCertSign usage enabled.')
-            if not key_usage_ext.value.crl_sign:
-                self._raise_validation_error('The provided certificate must have cRLSign usage enabled.')
-        except x509.ExtensionNotFound:
-            self._raise_validation_error('KeyUsage extension is required for CA certificates.')
+            CaModel._validate_ca_certificate(cert_crypto)  # noqa: SLF001
+        except ValidationError as exc:
+            self._raise_validation_error(str(exc))
 
     def _check_duplicate_issuing_ca(self, cert_crypto: x509.Certificate) -> None:
         """Checks if the certificate is already used by an existing Issuing CA."""
@@ -177,15 +171,19 @@ class IssuingCaImportMixin:
     def _create_protected_import_issuing_ca(
         self,
         *,
-        unique_name: str,
+        unique_name: str | None,
         cert: x509.Certificate,
         credential_serializer: CredentialSerializer,
         chain: list[x509.Certificate],
+        backend_class: type[TrustpointCryptoBackend] | None = None,
     ) -> CaModel:
         """Create an issuing CA whose imported key is managed by the crypto backend."""
         ca_type = get_ca_type_from_config()
         CaModel._validate_ca_certificate(cert)  # noqa: SLF001
         CaModel._validate_ca_type(ca_type)  # noqa: SLF001
+
+        if unique_name is None:
+            unique_name = CaModel._generate_unique_name(cert)  # noqa: SLF001
 
         private_key = credential_serializer.private_key
         if private_key is None:
@@ -193,7 +191,8 @@ class IssuingCaImportMixin:
         if not isinstance(private_key, (rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)):
             self._raise_validation_error('Only RSA and elliptic-curve CA private keys can be imported.')
 
-        key_ref = TrustpointCryptoBackend().import_managed_private_key(
+        backend_impl = (backend_class or TrustpointCryptoBackend)()
+        key_ref = backend_impl.import_managed_private_key(
             alias=unique_name,
             private_key=private_key,
             policy=KeyPolicy.managed_signing_key(

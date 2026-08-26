@@ -567,6 +567,32 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
                 )
             )
 
+        try:
+            key_usage_extension = ca_cert.extensions.get_extension_for_class(x509.KeyUsage)
+        except x509.ExtensionNotFound as e:
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid CA certificate; '
+                    'it does not contain a KeyUsage extension.'
+                )
+            ) from e
+
+        key_usage = key_usage_extension.value
+        if not key_usage.key_cert_sign:
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid CA certificate; '
+                    'it does not have keyCertSign enabled.'
+                )
+            )
+        if not key_usage.crl_sign:
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid CA certificate; '
+                    'it does not have cRLSign enabled.'
+                )
+            )
+
     @classmethod
     def _generate_unique_name(cls, ca_cert: x509.Certificate) -> str:
         """Generate a unique name from the CA certificate.
