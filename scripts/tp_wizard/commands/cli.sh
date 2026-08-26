@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034 # CLI assignments update shared runtime state.
 
 cli_help() {
-  printf '%s\n' 'Usage:' './tp_wizard.sh' './tp_wizard.sh demo [light|full] [--skip-setup|--no-skip-setup] [--nowait]' './tp_wizard.sh up trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring' './tp_wizard.sh down ...' './tp_wizard.sh logs [service]' './tp_wizard.sh status' './tp_wizard.sh nuke'
+  printf '%s\n' 'Usage:' './tp_wizard.sh' './tp_wizard.sh demo [light|full] [--skip-wizard] [--nowait]' './tp_wizard.sh up trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring [--skip-wizard] [--nowait]' './tp_wizard.sh down ...' './tp_wizard.sh logs [service]' './tp_wizard.sh status' './tp_wizard.sh nuke' '' '--skip-wizard enables automatic Trustpoint setup. --skip-setup remains an alias.'
 }
 
 demo_help() {
@@ -16,26 +16,27 @@ Demo presets:
       Trustpoint, PostgreSQL, Mailpit, and SFTPGo.
 
   demo full
-      The standard demo plus Prometheus and Grafana. Prometheus scrapes
-      Trustpoint at /prometheus/metrics and metrics are enabled automatically.
+      The standard demo plus provisioned Prometheus and Grafana. With
+      --skip-wizard, Trustpoint metrics are enabled automatically.
 
   worker
       Is never started by a demo preset. Add it explicitly with:
       ./tp_wizard.sh up worker
 
-All demo presets build the local Trustpoint image by default. Use --nowait to
-return immediately after containers are started. Use --no-skip-setup to leave
-Trustpoint in its normal bootstrap/setup flow.
+All demo presets build the local Trustpoint image and leave the Trustpoint
+in-app setup wizard enabled by default. Use --skip-wizard for automatic setup,
+or --nowait to return immediately after containers are started.
 
 Examples:
   ./tp_wizard.sh demo light
   ./tp_wizard.sh demo
-  ./tp_wizard.sh demo full --skip-setup
+  ./tp_wizard.sh demo full --skip-wizard
 EOF
 }
 
 demo_config() {
   state_reset
+  TP_INJECT_DEMO_DATA=true
   case "${1:-demo}" in
     light) state_add db; state_add trustpoint ;;
     demo) state_add db; state_add trustpoint; state_add mail; state_add sftp ;;
@@ -50,7 +51,12 @@ cli_demo() {
   [[ "${1:-}" != --* && $# -gt 0 ]] && preset="$1" && shift
   demo_config "$preset"
   while (($#)); do
-    case "$1" in --nowait) NOWAIT=true ;; --skip-setup) TP_AUTO_SETUP=true ;; --no-skip-setup) TP_AUTO_SETUP=false; SKIP_SETUP=false ;; *) die "Unknown demo option: $1" ;; esac
+    case "$1" in
+      --nowait) NOWAIT=true ;;
+      --skip-wizard|--skip-setup) TP_AUTO_SETUP=true ;;
+      --no-skip-wizard|--no-skip-setup) TP_AUTO_SETUP=false ;;
+      *) die "Unknown demo option: $1" ;;
+    esac
     shift
   done
   runtime_start; summary
@@ -68,8 +74,8 @@ cli_up() {
       worker) state_add worker ;;
       prometheus|grafana|monitoring) ENABLE_METRICS=true; state_add monitoring ;;
       --nowait) NOWAIT=true ;;
-      --skip-setup) TP_AUTO_SETUP=true ;;
-      --no-skip-setup) TP_AUTO_SETUP=false ;;
+      --skip-wizard|--skip-setup) TP_AUTO_SETUP=true ;;
+      --no-skip-wizard|--no-skip-setup) TP_AUTO_SETUP=false ;;
       *) die "Unknown up target: $1" ;;
     esac
     shift

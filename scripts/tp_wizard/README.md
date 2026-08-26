@@ -10,13 +10,17 @@
 - `lib/`: small shell helpers
 
 The repository `.env` is read as input. Wizard-generated values are written to `.env.tp_wizard`.
+The interactive command prompts for service configuration and keeps Trustpoint's
+in-app setup wizard enabled by default. Automatic setup is opt-in with
+`--skip-wizard` or the corresponding interactive question. The older
+`--skip-setup` spelling remains an alias.
 
 Examples:
 
 ```bash
 ./tp_wizard.sh
-./tp_wizard.sh demo full --skip-setup
-./tp_wizard.sh up trustpoint db
+./tp_wizard.sh demo full --skip-wizard
+./tp_wizard.sh up trustpoint db --skip-wizard
 ./tp_wizard.sh up worker
 ./tp_wizard.sh status
 ```
