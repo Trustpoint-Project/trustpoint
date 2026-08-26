@@ -4,6 +4,7 @@
 NOWAIT=false
 BUILD_LOCAL=true
 ENABLE_METRICS=false
+ENABLE_USB_PASSTHROUGH=false
 STATUS_ONLY=false
 SERVICES=()
 
@@ -12,6 +13,7 @@ state_reset() {
   NOWAIT=false
   BUILD_LOCAL=true
   ENABLE_METRICS=false
+  ENABLE_USB_PASSTHROUGH=false
   STATUS_ONLY=false
   TP_AUTO_SETUP=false
   TP_INJECT_DEMO_DATA=false

@@ -67,6 +67,9 @@
                         <p class="mt-2 mb-2">
                             {% trans "Expose the host USB bus to the Trustpoint container, then restart the container and discover again." %}
                         </p>
+                        <p class="mb-1">{% trans "Trustpoint setup script:" %}</p>
+                        <div class="tp-backend-command">./tp_wizard.sh up trustpoint --usb-hsm</div>
+                        <p class="mt-2 mb-1">{% trans "Raw Docker options:" %}</p>
                         <div class="tp-backend-command">--mount type=bind,source=/dev/bus/usb,target=/dev/bus/usb<br>--device-cgroup-rule='c 189:* rwm'</div>
                         <p class="mt-2 mb-1">{% trans "Docker Compose:" %}</p>
                         <div class="tp-backend-command">volumes:<br>&nbsp;&nbsp;- /dev/bus/usb:/dev/bus/usb<br>device_cgroup_rules:<br>&nbsp;&nbsp;- 'c 189:* rwm'</div>
@@ -85,12 +88,12 @@
         {% if form.local_dev_pkcs11_handoff_available %}
             <p class="tp-backend-section-copy">{% trans "The local SoftHSM demo can use its prepared PKCS#11 provider." %}</p>
         {% endif %}
+        <div class="tp-backend-field">
+            <label class="tp-backend-field-label" for="{{ form.pkcs11_module_upload.id_for_label }}">{{ form.pkcs11_module_upload.label }}</label>
+            {{ form.pkcs11_module_upload }}
+            {% if form.pkcs11_module_upload.errors %}<div class="text-danger mt-2">{{ form.pkcs11_module_upload.errors }}</div>{% endif %}
+        </div>
         <div class="tp-backend-grid">
-            <div class="tp-backend-field">
-                <label class="tp-backend-field-label" for="{{ form.pkcs11_module_upload.id_for_label }}">{{ form.pkcs11_module_upload.label }}</label>
-                {{ form.pkcs11_module_upload }}
-                {% if form.pkcs11_module_upload.errors %}<div class="text-danger mt-2">{{ form.pkcs11_module_upload.errors }}</div>{% endif %}
-            </div>
             <div class="tp-backend-field">
                 <label class="tp-backend-field-label" for="{{ form.pkcs11_config_upload.id_for_label }}">{{ form.pkcs11_config_upload.label }}</label>
                 {{ form.pkcs11_config_upload }}

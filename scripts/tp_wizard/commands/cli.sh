@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034 # CLI assignments update shared runtime state.
 
 cli_help() {
-  printf '%s\n' 'Usage:' './tp_wizard.sh' './tp_wizard.sh demo [light|full] [--skip-wizard] [--nowait]' './tp_wizard.sh up trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring [--skip-wizard] [--nowait]' './tp_wizard.sh down ...' './tp_wizard.sh logs [service]' './tp_wizard.sh status' './tp_wizard.sh nuke' '' '--skip-wizard enables automatic Trustpoint setup. --skip-setup remains an alias.'
+  printf '%s\n' 'Usage:' './tp_wizard.sh' './tp_wizard.sh demo [light|full] [--usb-hsm] [--skip-wizard] [--nowait]' './tp_wizard.sh up trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring [--usb-hsm] [--skip-wizard] [--nowait]' './tp_wizard.sh down ...' './tp_wizard.sh logs [service]' './tp_wizard.sh status' './tp_wizard.sh nuke' '' '--usb-hsm exposes the host USB bus to Trustpoint for USB HSM discovery.' '--skip-wizard enables automatic Trustpoint setup. --skip-setup remains an alias.'
 }
 
 demo_help() {
@@ -29,6 +29,7 @@ or --nowait to return immediately after containers are started.
 
 Examples:
   ./tp_wizard.sh demo light
+  ./tp_wizard.sh demo light --usb-hsm
   ./tp_wizard.sh demo
   ./tp_wizard.sh demo full --skip-wizard
 EOF
@@ -53,6 +54,8 @@ cli_demo() {
   while (($#)); do
     case "$1" in
       --nowait) NOWAIT=true ;;
+      --usb-hsm) ENABLE_USB_PASSTHROUGH=true ;;
+      --no-usb-hsm) ENABLE_USB_PASSTHROUGH=false ;;
       --skip-wizard|--skip-setup) TP_AUTO_SETUP=true ;;
       --no-skip-wizard|--no-skip-setup) TP_AUTO_SETUP=false ;;
       *) die "Unknown demo option: $1" ;;
@@ -73,6 +76,8 @@ cli_up() {
       sftp) state_add sftp ;;
       worker) state_add worker ;;
       prometheus|grafana|monitoring) ENABLE_METRICS=true; state_add monitoring ;;
+      --usb-hsm) ENABLE_USB_PASSTHROUGH=true ;;
+      --no-usb-hsm) ENABLE_USB_PASSTHROUGH=false ;;
       --nowait) NOWAIT=true ;;
       --skip-wizard|--skip-setup) TP_AUTO_SETUP=true ;;
       --no-skip-wizard|--no-skip-setup) TP_AUTO_SETUP=false ;;
@@ -80,6 +85,9 @@ cli_up() {
     esac
     shift
   done
+  if $ENABLE_USB_PASSTHROUGH && ! state_has trustpoint; then
+    die '--usb-hsm requires the trustpoint service.'
+  fi
   runtime_start; summary
 }
 

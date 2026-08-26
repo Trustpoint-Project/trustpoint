@@ -10,6 +10,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 UPDATE_TLS_SCRIPT = REPO_ROOT / 'docker/trustpoint/wizard/update_tls.sh'
 TRUSTPOINT_SERVICE_SCRIPT = REPO_ROOT / 'scripts/tp_wizard/services/trustpoint.sh'
+TP_WIZARD_STATE_SCRIPT = REPO_ROOT / 'scripts/tp_wizard/state.sh'
+TP_WIZARD_CLI_SCRIPT = REPO_ROOT / 'scripts/tp_wizard/commands/cli.sh'
 MISSING_CREDENTIAL_EXIT_CODE = 5
 
 
@@ -85,6 +87,7 @@ TP_TLS_DNS_NAMES=trustpoint.local
 TP_TLS_IPV4_ADDRESSES=
 TP_TLS_IPV6_ADDRESSES=
 ENABLE_METRICS=false
+ENABLE_USB_PASSTHROUGH=false
 APP_IMAGE=trustpoint:test
 build_trustpoint() {{ :; }}
 remove_compose_service() {{ :; }}
@@ -132,6 +135,7 @@ TP_TLS_DNS_NAMES=trustpoint.local
 TP_TLS_IPV4_ADDRESSES=
 TP_TLS_IPV6_ADDRESSES=
 ENABLE_METRICS=false
+ENABLE_USB_PASSTHROUGH=true
 APP_IMAGE=trustpoint:test
 build_trustpoint() {{ :; }}
 remove_compose_service() {{ :; }}
@@ -151,3 +155,73 @@ start_trustpoint
 
     assert f'<type=bind,source={usb_bus},target=/dev/bus/usb>' in result.stdout
     assert '<c 189:* rwm>' in result.stdout
+
+
+def test_trustpoint_launcher_does_not_expose_usb_without_opt_in(tmp_path: Path) -> None:
+    """USB access is absent unless the setup-script option is selected."""
+    usb_bus = tmp_path / 'usb'
+    usb_bus.mkdir()
+    harness = f"""
+set -euo pipefail
+source "{TRUSTPOINT_SERVICE_SCRIPT}"
+BUILD_LOCAL=false
+ENABLE_USB_PASSTHROUGH=false
+TP_USB_BUS_PATH="{usb_bus}"
+TP_HTTP_PORT=8080
+TP_HTTPS_PORT=8443
+DB_NAME=trustpoint_db
+DB_USER=admin
+DB_PASS=password
+APP_DB_HOST=postgres
+APP_DB_PORT=5432
+TP_ADMIN_USERNAME=admin
+TP_ADMIN_PASSWORD=password
+TP_ADMIN_EMAIL=admin@example.test
+TP_AUTO_SETUP=false
+TP_INJECT_DEMO_DATA=false
+TP_TLS_DNS_NAMES=trustpoint.local
+TP_TLS_IPV4_ADDRESSES=
+TP_TLS_IPV6_ADDRESSES=
+ENABLE_METRICS=false
+APP_IMAGE=trustpoint:test
+build_trustpoint() {{ :; }}
+remove_compose_service() {{ :; }}
+remove_container() {{ :; }}
+state_has() {{ return 1; }}
+ok() {{ :; }}
+start_container() {{ printf '<%s>\n' "$@"; }}
+start_trustpoint
+"""
+
+    result = subprocess.run(  # noqa: S603
+        ['/bin/bash', '-c', harness],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert '/dev/bus/usb' not in result.stdout
+    assert '<TP_USB_HSM_PASSTHROUGH=false>' in result.stdout
+
+
+def test_cli_up_usb_hsm_option_enables_passthrough() -> None:
+    """Command mode exposes an explicit USB HSM passthrough option."""
+    harness = f"""
+set -euo pipefail
+source "{TP_WIZARD_STATE_SCRIPT}"
+runtime_start() {{ :; }}
+summary() {{ :; }}
+die() {{ printf '%s\n' "$1" >&2; return 1; }}
+source "{TP_WIZARD_CLI_SCRIPT}"
+cli_up trustpoint db --usb-hsm
+$ENABLE_USB_PASSTHROUGH
+state_has trustpoint
+state_has db
+"""
+
+    subprocess.run(  # noqa: S603
+        ['/bin/bash', '-c', harness],
+        check=True,
+        capture_output=True,
+        text=True,
+    )

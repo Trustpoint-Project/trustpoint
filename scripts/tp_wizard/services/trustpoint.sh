@@ -12,7 +12,9 @@ start_trustpoint() {
   remove_container trustpoint
   local usb_hsm_args=()
   local host_usb_bus="${TP_USB_BUS_PATH:-/dev/bus/usb}"
-  if [[ -d "$host_usb_bus" ]]; then
+  if $ENABLE_USB_PASSTHROUGH; then
+    [[ -d "$host_usb_bus" ]] || die \
+      "USB HSM passthrough requested, but the host USB bus is unavailable at ${host_usb_bus}."
     usb_hsm_args+=(
       --mount "type=bind,source=${host_usb_bus},target=/dev/bus/usb"
       --device-cgroup-rule 'c 189:* rwm'
@@ -37,6 +39,7 @@ start_trustpoint() {
     -e TP_ADMIN_EMAIL="$TP_ADMIN_EMAIL" -e TP_AUTO_SETUP="$TP_AUTO_SETUP" \
     -e TP_INJECT_DEMO_DATA="$TP_INJECT_DEMO_DATA" -e TP_TLS_DNS_NAMES="$TP_TLS_DNS_NAMES" \
     -e TP_HTTP_PORT="$TP_HTTP_PORT" -e TP_HTTPS_PORT="$TP_HTTPS_PORT" \
+    -e TP_USB_HSM_PASSTHROUGH="$ENABLE_USB_PASSTHROUGH" \
     -e TP_ENABLE_PROMETHEUS_METRICS="$ENABLE_METRICS" \
     -e TP_TLS_IPV4_ADDRESSES="$TP_TLS_IPV4_ADDRESSES" -e TP_TLS_IPV6_ADDRESSES="$TP_TLS_IPV6_ADDRESSES" \
     "${mail_args[@]}" \

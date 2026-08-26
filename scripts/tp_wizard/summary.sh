@@ -52,8 +52,12 @@ summary_wait_trustpoint_details() {
 }
 
 summary_trustpoint_configuration() {
-  local username password fingerprint
+  local username password fingerprint usb_hsm_access
   fingerprint="$(summary_tls_fingerprint)"
+  usb_hsm_access="$ENABLE_USB_PASSTHROUGH"
+  if container_exists trustpoint; then
+    usb_hsm_access="$(container_env trustpoint TP_USB_HSM_PASSTHROUGH)"
+  fi
 
   if summary_trustpoint_auto_setup; then
     username="$(container_env trustpoint TP_ADMIN_USERNAME)"
@@ -71,6 +75,7 @@ summary_trustpoint_configuration() {
     printf '  %-18s %s\n' 'Setup mode:' 'in-app setup wizard'
     printf '  %-18s %s\n' 'Next step:' "open https://localhost:${TP_HTTPS_PORT}"
   fi
+  printf '  %-18s %s\n' 'USB HSM access:' "$([[ "${usb_hsm_access,,}" == true ]] && printf enabled || printf disabled)"
   printf '  %-18s %s\n' 'TLS SHA-256:' "${fingerprint:-not found in logs yet}"
 }
 

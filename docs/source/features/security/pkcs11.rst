@@ -40,9 +40,21 @@ existing Trustpoint database, and when restoring a backup. A restored or moved
 instance must still have access to the original token when that token contains
 managed keys or the application-secret KEK.
 
+With the Trustpoint setup script, enable passthrough explicitly:
+
+.. code-block:: bash
+
+   ./tp_wizard.sh up trustpoint db --usb-hsm
+
+To recreate only an already-running Trustpoint container with passthrough, run
+``./tp_wizard.sh up trustpoint --usb-hsm``.
+
+The interactive setup script offers the same choice as
+**Enable USB HSM passthrough?**.
+
 USB discovery requires the container to see the host USB bus. The standard
-Trustpoint launcher and Compose configuration expose ``/dev/bus/usb`` when it
-is available. For another container deployment, use the equivalent of:
+Compose configuration exposes ``/dev/bus/usb``. For another container
+deployment, use the equivalent of:
 
 .. code-block:: yaml
 
@@ -62,7 +74,8 @@ Select **Network HSM** when the HSM requires its own Linux PKCS#11 module.
 Upload the module and, if required by that provider, its configuration file and
 the environment-variable name through which the module locates that file.
 Trustpoint treats provider configuration as opaque data and does not assume a
-specific HSM vendor.
+specific HSM vendor. A PKCS#11 module is native executable code; install files
+only from the HSM vendor or another trusted source.
 
 Supported Cryptographic Operations
 -----------------------------------
