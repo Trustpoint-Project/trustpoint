@@ -9,6 +9,8 @@ from django.urls import resolve, reverse
 from setup_wizard import urls
 from setup_wizard.views import (
     FreshInstallAdminUserView,
+    FreshInstallApplyProgressView,
+    FreshInstallApplyStatusView,
     FreshInstallBackendConfigView,
     FreshInstallCancelView,
     FreshInstallCryptoStorageView,
@@ -81,6 +83,16 @@ class SetupWizardUrlsTestCase(TestCase):
                 FreshInstallTlsConfigView,
             ),
             ('setup_wizard:fresh_install_summary', '/setup-wizard/fresh-install/summary/', FreshInstallSummaryView),
+            (
+                'setup_wizard:fresh_install_apply_progress',
+                '/setup-wizard/fresh-install/apply/',
+                FreshInstallApplyProgressView,
+            ),
+            (
+                'setup_wizard:fresh_install_apply_status',
+                '/setup-wizard/fresh-install/apply/status/',
+                FreshInstallApplyStatusView,
+            ),
             ('setup_wizard:fresh_install_cancel', '/setup-wizard/fresh-install/cancel/', FreshInstallCancelView),
         ]
 

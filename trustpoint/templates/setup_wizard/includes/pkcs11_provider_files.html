@@ -1,0 +1,33 @@
+{% load i18n %}
+<p class="tp-backend-section-copy">
+    {% trans "PKCS#11 libraries are native code. Upload middleware only from the HSM vendor or another trusted source." %}
+</p>
+<div class="tp-backend-field">
+    <label class="tp-backend-field-label" for="{{ form.pkcs11_module_upload.id_for_label }}">{{ form.pkcs11_module_upload.label }}</label>
+    {{ form.pkcs11_module_upload }}
+    {% if form.pkcs11_module_upload.errors %}<div class="text-danger mt-2">{{ form.pkcs11_module_upload.errors }}</div>{% endif %}
+</div>
+<div class="tp-backend-grid">
+    <div class="tp-backend-field">
+        <label class="tp-backend-field-label" for="{{ form.pkcs11_config_upload.id_for_label }}">{{ form.pkcs11_config_upload.label }}</label>
+        {{ form.pkcs11_config_upload }}
+        {% if form.pkcs11_config_upload.errors %}<div class="text-danger mt-2">{{ form.pkcs11_config_upload.errors }}</div>{% endif %}
+    </div>
+    <div class="tp-backend-field">
+        <label class="tp-backend-field-label" for="{{ form.pkcs11_config_env_var.id_for_label }}">{{ form.pkcs11_config_env_var.label }}</label>
+        {{ form.pkcs11_config_env_var }}
+        {% if form.pkcs11_config_env_var.errors %}<div class="text-danger mt-2">{{ form.pkcs11_config_env_var.errors }}</div>{% endif %}
+    </div>
+</div>
+{% if form.staged_pkcs11_module_name %}
+    <div class="tp-backend-state-pill">
+        <span>{% trans "Current library:" %} {{ form.staged_pkcs11_module_name }}</span>
+        <button type="submit" name="wizard_action" value="clear_module" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove wizard library" title="Remove wizard library">×</button>
+    </div>
+{% endif %}
+{% if form.staged_pkcs11_config_name %}
+    <div class="tp-backend-state-pill">
+        <span>{% trans "Current provider config:" %} {{ form.staged_pkcs11_config_name }}</span>
+        <button type="submit" name="wizard_action" value="clear_pkcs11_config" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove provider config" title="Remove provider config">×</button>
+    </div>
+{% endif %}

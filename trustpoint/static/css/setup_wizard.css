@@ -1412,3 +1412,22 @@ html[data-bs-theme="light"] .tp-fresh-install-shell .tp-summary-loading-card::be
     box-shadow: 0 0.9rem 1.8rem color-mix(in srgb, var(--tp-fresh-install-accent) 14%, transparent);
     transform: translateY(-1px);
 }
+.tp-apply-progress-card {
+    max-width: 760px;
+    margin: 2rem auto;
+}
+
+.tp-apply-activity {
+    margin: 0;
+    padding-left: 1.25rem;
+    color: var(--bs-secondary-color);
+}
+
+.tp-apply-activity li {
+    padding: 0.2rem 0;
+}
+
+.tp-apply-activity li.is-current {
+    color: var(--bs-body-color);
+    font-weight: 600;
+}

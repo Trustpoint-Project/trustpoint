@@ -31,7 +31,7 @@ from django.core.management import CommandError, call_command
 from django.db import DatabaseError, transaction
 from django.db.models import ProtectedError
 from django.forms import BaseForm
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -92,9 +92,7 @@ from setup_wizard.operational_attach import (
     OperationalTargetInspector,
 )
 from setup_wizard.operational_handoff import (
-    refresh_pending_operational_env,
     run_operational_attach_handoff,
-    run_operational_handoff,
     run_operational_runtime_switch,
 )
 from setup_wizard.pkcs11_local_dev import (
@@ -109,6 +107,7 @@ from setup_wizard.pkcs11_staging import (
     existing_wizard_pkcs11_staged_file,
     wizard_pkcs11_staging_root,
 )
+from setup_wizard.setup_apply_progress import read_setup_apply_status, start_setup_apply_job
 from setup_wizard.tls_credential import (
     TlsServerCredentialFileParser,
     TlsServerCredentialGenerator,
@@ -121,6 +120,7 @@ from setup_wizard.tls_credential import (
 from trustpoint.logger import LoggerMixin
 
 from .forms import (
+    PKCS11_USB_PROVIDER_OPENSC,
     EmptyForm,
     FreshInstallAdminUserModelForm,
     FreshInstallBackendConfigModelForm,
@@ -663,10 +663,16 @@ def configure_wizard_usb_hsm(
         cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_config_path)
 
     config_model.fresh_install_pkcs11_module_path = opensc_path
+    config_model.fresh_install_pkcs11_connection_type = (
+        SetupWizardConfigModel.FreshInstallPkcs11ConnectionType.USB
+    )
+    config_model.fresh_install_pkcs11_start_pcscd = True
     config_model.fresh_install_pkcs11_config_path = ''
     config_model.fresh_install_pkcs11_config_env_var = ''
     update_fields = [
         'fresh_install_pkcs11_module_path',
+        'fresh_install_pkcs11_connection_type',
+        'fresh_install_pkcs11_start_pcscd',
         'fresh_install_pkcs11_config_path',
         'fresh_install_pkcs11_config_env_var',
     ]
@@ -815,7 +821,7 @@ def _persist_local_dev_pkcs11_config_if_available(
     current_config_exists: bool,
 ) -> None:
     """Persist the local-dev PKCS#11 provider config when tp_wizard exposed one."""
-    if current_staged_config is not None or not local_dev_pkcs11_config_available():
+    if form.uses_usb_pkcs11_connection or current_staged_config is not None or not local_dev_pkcs11_config_available():
         return
 
     local_dev_config = str(local_dev_pkcs11_config_path())
@@ -850,7 +856,11 @@ def _persist_pkcs11_module_from_form(form: FreshInstallBackendConfigModelForm, u
         update_fields.append('fresh_install_pkcs11_module_path')
         return
 
-    if current_staged_module is None and local_dev_pkcs11_handoff_available():
+    if (
+        not form.uses_usb_pkcs11_connection
+        and current_staged_module is None
+        and local_dev_pkcs11_handoff_available()
+    ):
         local_dev_module = str(local_dev_pkcs11_module_path())
         opensc_module = str(settings.HSM_OPENSC_PKCS11_MODULE_PATH)
         if (
@@ -895,15 +905,9 @@ def _persist_pkcs11_provider_config_from_form(
     )
 
 
-def _uses_opensc_pkcs11_module(config_model: SetupWizardConfigModel) -> bool:
-    """Return whether the staged PKCS#11 configuration uses the built-in OpenSC module."""
-    module_path = (config_model.fresh_install_pkcs11_module_path or '').strip()
-    return module_path == str(settings.HSM_OPENSC_PKCS11_MODULE_PATH)
-
-
 def configure_pkcs11_runtime_services(config_model: SetupWizardConfigModel) -> None:
     """Start or stop container-local runtime services needed by the staged PKCS#11 configuration."""
-    action = 'start' if _uses_opensc_pkcs11_module(config_model) else 'stop'
+    action = 'start' if config_model.fresh_install_pkcs11_start_pcscd else 'stop'
     try:
         execute_shell_script(MANAGE_PCSCD, action)
     except subprocess.CalledProcessError as exc:
@@ -927,6 +931,8 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
         return
 
     update_fields = [
+        'fresh_install_pkcs11_connection_type',
+        'fresh_install_pkcs11_start_pcscd',
         'fresh_install_pkcs11_token_label',
         'fresh_install_pkcs11_token_serial',
         'fresh_install_pkcs11_slot_id',
@@ -937,6 +943,8 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
 
     previous_token_label = form.instance.fresh_install_pkcs11_token_label
     previous_slot_id = form.instance.fresh_install_pkcs11_slot_id
+    form.instance.fresh_install_pkcs11_connection_type = form.cleaned_data['pkcs11_connection_type']
+    form.instance.fresh_install_pkcs11_start_pcscd = form.cleaned_data['pkcs11_start_pcscd']
     form.instance.fresh_install_pkcs11_token_label = form.cleaned_data['fresh_install_pkcs11_token_label']
     form.instance.fresh_install_pkcs11_slot_id = form.cleaned_data.get('fresh_install_pkcs11_slot_id')
     form.instance.fresh_install_pkcs11_config_env_var = form.cleaned_data.get('pkcs11_config_env_var') or ''
@@ -966,6 +974,33 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
     form.refresh_pkcs11_state()
 
 
+def _persist_valid_pkcs11_connection_type(
+    form: FreshInstallBackendConfigModelForm,
+    update_fields: list[str],
+) -> None:
+    """Retain a valid physical HSM connection choice from an otherwise invalid form."""
+    connection_type = str(form.data.get('pkcs11_connection_type', '')).strip()
+    if connection_type not in {
+        SetupWizardConfigModel.FreshInstallPkcs11ConnectionType.NETWORK,
+        SetupWizardConfigModel.FreshInstallPkcs11ConnectionType.USB,
+    }:
+        return
+    form.instance.fresh_install_pkcs11_connection_type = connection_type
+    update_fields.append('fresh_install_pkcs11_connection_type')
+
+    if 'pkcs11_start_pcscd' not in form.errors:
+        uses_opensc = (
+            connection_type == SetupWizardConfigModel.FreshInstallPkcs11ConnectionType.USB
+            and str(form.data.get('pkcs11_usb_provider') or PKCS11_USB_PROVIDER_OPENSC)
+            == PKCS11_USB_PROVIDER_OPENSC
+        )
+        form.instance.fresh_install_pkcs11_start_pcscd = uses_opensc or (
+            connection_type == SetupWizardConfigModel.FreshInstallPkcs11ConnectionType.USB
+            and form.data.get('pkcs11_start_pcscd') in {'on', 'true', 'True', '1'}
+        )
+        update_fields.append('fresh_install_pkcs11_start_pcscd')
+
+
 def persist_valid_pkcs11_fields_from_invalid_form(
     form: FreshInstallBackendConfigModelForm,
 ) -> None:
@@ -974,6 +1009,8 @@ def persist_valid_pkcs11_fields_from_invalid_form(
         return
 
     update_fields: list[str] = []
+
+    _persist_valid_pkcs11_connection_type(form, update_fields)
 
     uploaded_module = form.files.get('pkcs11_module_upload')
     if uploaded_module is not None and 'pkcs11_module_upload' not in form.errors:
@@ -2805,59 +2842,15 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         self.logger.error('Error applying fresh-install TLS server credential.')
         return self.form_invalid(form)
 
-    def _apply_bootstrap_summary_configuration(self) -> tuple[Any | None, Any]:
-        """Apply bootstrap configuration and attempt the runtime switch."""
-        config_model = SetupWizardConfigModel.get_singleton()
-
-        if config_model.operational_config_applied:
-            result = refresh_pending_operational_env(config_model)
-            switch_result = run_operational_runtime_switch(result.pending_env_file)
-            return result, switch_result
-
-        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            probe_staged_pkcs11_config_isolated(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
-            validate_staged_pkcs11_app_secret_protection_if_required(
-                config_model,
-                profile_name='setup-wizard-pkcs11-pre-apply-app-secret',
-            )
-
-        result = run_operational_handoff(config_model)
-        config_model.mark_step_submitted(self.step_state)
-        config_model.operational_config_applied = True
-        config_model.save(update_fields=['fresh_install_summary_submitted', 'operational_config_applied'])
-        switch_result = run_operational_runtime_switch(result.pending_env_file)
-        return result, switch_result
-
-    def _handle_bootstrap_switch_result(self, result: Any | None, switch_result: Any) -> HttpResponse:
-        """Return the response for a completed bootstrap runtime switch attempt."""
-        if switch_result.switched:
-            return redirect('/users/login/', permanent=False)
-
-        handoff_marker_message = ''
-        if result is not None:
-            handoff_marker_message = f'The handoff marker was written to {result.env_file}. '
-
-        messages.success(
-            self.request,
-            (
-                'Operational configuration was applied successfully. '
-                f'{handoff_marker_message}{switch_result.detail}'
-            ),
-        )
-        return redirect('setup_wizard:fresh_install_summary')
-
     def _handle_bootstrap_summary_submission(self, form: FreshInstallSummaryModelForm) -> HttpResponse:
-        """Apply the summary step while running in bootstrap mode."""
+        """Start the detached operational handoff and show its progress."""
         try:
-            result, switch_result = self._apply_bootstrap_summary_configuration()
-        except DjangoValidationError as exception:
-            return self._handle_summary_validation_error(
-                form,
-                exception,
-                log_message='Error applying bootstrap configuration to operational runtime.',
-            )
-
-        return self._handle_bootstrap_switch_result(result, switch_result)
+            start_setup_apply_job()
+        except OSError as exception:
+            form.add_error(None, f'Could not start setup: {exception}')
+            self.logger.exception('Could not start the setup apply process.')
+            return self.form_invalid(form)
+        return redirect('setup_wizard:fresh_install_apply_progress')
 
     def _apply_direct_summary_configuration(self, form: FreshInstallSummaryModelForm) -> HttpResponse:
         """Apply the summary step directly in the current runtime."""
@@ -2911,6 +2904,40 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             return self._handle_bootstrap_summary_submission(form)
 
         return self._handle_direct_summary_submission(form)
+
+
+class FreshInstallApplyProgressView(LoginRequiredMixin, TemplateView):
+    """Show live progress for the detached bootstrap-to-operational handoff."""
+
+    template_name = 'setup_wizard/apply_progress.html'
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Return to the summary when no apply job has ever been started."""
+        if read_setup_apply_status() is None:
+            return redirect('setup_wizard:fresh_install_summary')
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Provide polling and operational login targets to the progress page."""
+        context = super().get_context_data(**kwargs)
+        context['status_url'] = reverse('setup_wizard:fresh_install_apply_status')
+        context['login_url'] = reverse('users:login')
+        context['summary_url'] = reverse('setup_wizard:fresh_install_summary')
+        return context
+
+
+class FreshInstallApplyStatusView(LoginRequiredMixin, View):
+    """Return the current setup apply status as a short non-streaming response."""
+
+    http_method_names = ('get',)
+
+    def get(self, _request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        """Return current progress without allowing intermediary caching."""
+        del args, kwargs
+        status = read_setup_apply_status()
+        response = JsonResponse({'state': 'missing'}, status=404) if status is None else JsonResponse(status)
+        response['Cache-Control'] = 'no-store'
+        return response
 
 
 class FreshInstallSummaryTruststoreDownloadView(LoginRequiredMixin, LoggerMixin, View):

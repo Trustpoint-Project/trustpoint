@@ -83,6 +83,12 @@ PKCS11_CONNECTION_TYPE_CHOICES = (
     (PKCS11_CONNECTION_TYPE_NETWORK, gettext_lazy('Network HSM')),
     (PKCS11_CONNECTION_TYPE_USB, gettext_lazy('USB HSM')),
 )
+PKCS11_USB_PROVIDER_OPENSC = 'opensc'
+PKCS11_USB_PROVIDER_CUSTOM = 'custom'
+PKCS11_USB_PROVIDER_CHOICES = (
+    (PKCS11_USB_PROVIDER_OPENSC, gettext_lazy('Bundled OpenSC')),
+    (PKCS11_USB_PROVIDER_CUSTOM, gettext_lazy('Custom provider')),
+)
 
 MAX_DNS_NAME_LENGTH = 253
 
@@ -381,14 +387,25 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         choices=PKCS11_CONNECTION_TYPE_CHOICES,
         initial=PKCS11_CONNECTION_TYPE_NETWORK,
         widget=forms.RadioSelect,
-        help_text=gettext_lazy(
-            'USB smart-card HSMs use the built-in OpenSC driver; network HSMs use an uploaded PKCS#11 module.'
-        ),
+        help_text=gettext_lazy('Select how the PKCS#11 provider reaches the HSM.'),
+    )
+    pkcs11_usb_provider = forms.ChoiceField(
+        required=False,
+        label=gettext_lazy('USB provider'),
+        choices=PKCS11_USB_PROVIDER_CHOICES,
+        initial=PKCS11_USB_PROVIDER_OPENSC,
+        widget=forms.RadioSelect,
+        help_text=gettext_lazy('Use bundled OpenSC or upload middleware supplied by the USB HSM vendor.'),
+    )
+    pkcs11_start_pcscd = forms.BooleanField(
+        required=False,
+        label=gettext_lazy('Use the PC/SC smart-card service'),
+        help_text=gettext_lazy('Enable this only when the custom provider communicates through PC/SC.'),
     )
     pkcs11_module_upload = forms.FileField(
         required=False,
         label=gettext_lazy('PKCS#11 library upload'),
-        help_text=gettext_lazy('Required for network HSMs. Not used for USB HSMs.'),
+        help_text=gettext_lazy('Required for network HSMs and USB HSMs using custom middleware.'),
     )
     pkcs11_user_pin = forms.CharField(
         required=False,
@@ -405,7 +422,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
     pkcs11_config_upload = forms.FileField(
         required=False,
         label=gettext_lazy('Provider config file'),
-        help_text=gettext_lazy('Optional network HSM config. Not used for USB HSMs.'),
+        help_text=gettext_lazy('Optional configuration expected by the uploaded PKCS#11 provider.'),
     )
     pkcs11_config_env_var = forms.CharField(
         required=False,
@@ -456,6 +473,8 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         if selected_backend != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             for field_name in (
                 'pkcs11_connection_type',
+                'pkcs11_usb_provider',
+                'pkcs11_start_pcscd',
                 'pkcs11_module_upload',
                 'pkcs11_config_upload',
                 'pkcs11_config_env_var',
@@ -469,6 +488,8 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             return
 
         self.fields['pkcs11_connection_type'].widget.attrs.update({'class': 'form-check-input'})
+        self.fields['pkcs11_usb_provider'].widget.attrs.update({'class': 'form-check-input'})
+        self.fields['pkcs11_start_pcscd'].widget.attrs.update({'class': 'form-check-input'})
         self.fields['pkcs11_module_upload'].widget.attrs.update({'class': 'form-control'})
         self.fields['pkcs11_config_upload'].widget.attrs.update({'class': 'form-control'})
         self.fields['pkcs11_config_env_var'].widget.attrs.update(
@@ -498,6 +519,8 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
     def _apply_pkcs11_defaults(self) -> None:
         """Prefill the PKCS#11 step with staged values or current installation defaults."""
         self.initial['pkcs11_connection_type'] = self._initial_pkcs11_connection_type()
+        self.initial['pkcs11_usb_provider'] = self._initial_pkcs11_usb_provider()
+        self.initial['pkcs11_start_pcscd'] = self._initial_pkcs11_start_pcscd()
         self.initial['fresh_install_pkcs11_token_label'] = (
             self.instance.fresh_install_pkcs11_token_label or getattr(settings, 'HSM_DEFAULT_TOKEN_LABEL', '')
         )
@@ -514,14 +537,34 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         self.staged_pkcs11_config_name = self._staged_pkcs11_config_name()
         self.pkcs11_connection_type_value = self._current_pkcs11_connection_type()
         self.uses_usb_pkcs11_connection = self.pkcs11_connection_type_value == PKCS11_CONNECTION_TYPE_USB
+        self.pkcs11_usb_provider_value = self._current_pkcs11_usb_provider()
+        self.uses_custom_usb_provider = (
+            self.uses_usb_pkcs11_connection and self.pkcs11_usb_provider_value == PKCS11_USB_PROVIDER_CUSTOM
+        )
         self.opensc_pkcs11_module_path = str(OPENSC_PKCS11_MODULE_PATH)
 
     def _initial_pkcs11_connection_type(self) -> str:
-        """Infer the connection type from the already staged module path."""
+        """Return the persisted physical HSM connection type."""
         configured_module = str(self.instance.fresh_install_pkcs11_module_path or '').strip()
         if configured_module == str(OPENSC_PKCS11_MODULE_PATH):
             return PKCS11_CONNECTION_TYPE_USB
+        value = str(self.instance.fresh_install_pkcs11_connection_type or '').strip()
+        if value in {PKCS11_CONNECTION_TYPE_USB, PKCS11_CONNECTION_TYPE_NETWORK}:
+            return value
         return PKCS11_CONNECTION_TYPE_NETWORK
+
+    def _initial_pkcs11_usb_provider(self) -> str:
+        """Infer whether a USB setup uses bundled OpenSC or an uploaded provider."""
+        configured_module = str(self.instance.fresh_install_pkcs11_module_path or '').strip()
+        if configured_module and configured_module != str(OPENSC_PKCS11_MODULE_PATH):
+            return PKCS11_USB_PROVIDER_CUSTOM
+        return PKCS11_USB_PROVIDER_OPENSC
+
+    def _initial_pkcs11_start_pcscd(self) -> bool:
+        """Use PC/SC automatically for OpenSC and preserve the custom-provider choice."""
+        if self._initial_pkcs11_usb_provider() == PKCS11_USB_PROVIDER_OPENSC:
+            return True
+        return bool(self.instance.fresh_install_pkcs11_start_pcscd)
 
     def _current_pkcs11_connection_type(self) -> str:
         """Return the selected PKCS#11 connection type for bound and unbound forms."""
@@ -533,7 +576,18 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
     def uses_opensc_pkcs11_module(self) -> bool:
         """Return whether this submission should use the container OpenSC module."""
-        return self._current_pkcs11_connection_type() == PKCS11_CONNECTION_TYPE_USB
+        return (
+            self._current_pkcs11_connection_type() == PKCS11_CONNECTION_TYPE_USB
+            and self._current_pkcs11_usb_provider() == PKCS11_USB_PROVIDER_OPENSC
+        )
+
+    def _current_pkcs11_usb_provider(self) -> str:
+        """Return the selected USB provider source for bound and unbound forms."""
+        if self.is_bound:
+            value = str(self.data.get(self.add_prefix('pkcs11_usb_provider')) or '').strip()
+            if value in {PKCS11_USB_PROVIDER_OPENSC, PKCS11_USB_PROVIDER_CUSTOM}:
+                return value
+        return str(self.initial.get('pkcs11_usb_provider') or PKCS11_USB_PROVIDER_OPENSC)
 
     def refresh_pkcs11_state(self) -> None:
         """Refresh public PKCS#11 helper attributes after staging files changed."""
@@ -541,7 +595,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
     def _existing_local_dev_pkcs11_module_file(self) -> Path | None:
         """Return the local development PKCS#11 module file when this wizard uses it."""
-        if not self.local_dev_pkcs11_handoff_available:
+        if (
+            not self.local_dev_pkcs11_handoff_available
+            or self._current_pkcs11_connection_type() == PKCS11_CONNECTION_TYPE_USB
+        ):
             return None
 
         local_dev_module = local_dev_pkcs11_module_path()
@@ -574,7 +631,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
     def _existing_local_dev_pkcs11_config_file(self) -> Path | None:
         """Return the local development PKCS#11 provider config file when this wizard uses it."""
-        if not self.local_dev_pkcs11_handoff_available:
+        if (
+            not self.local_dev_pkcs11_handoff_available
+            or self._current_pkcs11_connection_type() == PKCS11_CONNECTION_TYPE_USB
+        ):
             return None
 
         local_dev_config = local_dev_pkcs11_config_path()
@@ -660,6 +720,22 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             raise forms.ValidationError(err_msg)
         return value
 
+    def clean_pkcs11_usb_provider(self) -> str:
+        """Normalize the provider source used for a USB HSM."""
+        value = str(self.cleaned_data.get('pkcs11_usb_provider') or PKCS11_USB_PROVIDER_OPENSC)
+        if value not in {PKCS11_USB_PROVIDER_OPENSC, PKCS11_USB_PROVIDER_CUSTOM}:
+            err_msg = gettext_lazy('Select a valid USB HSM provider.')
+            raise forms.ValidationError(err_msg)
+        return value
+
+    def clean_pkcs11_start_pcscd(self) -> bool:
+        """Resolve PC/SC service activation from transport and provider choice."""
+        if self._current_pkcs11_connection_type() != PKCS11_CONNECTION_TYPE_USB:
+            return False
+        if self._current_pkcs11_usb_provider() == PKCS11_USB_PROVIDER_OPENSC:
+            return True
+        return bool(self.cleaned_data.get('pkcs11_start_pcscd'))
+
     def _validate_pkcs11_module_upload(self, uploaded_module: Any) -> None:
         """Validate the uploaded PKCS#11 shared library."""
         if uploaded_module is None:
@@ -718,7 +794,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         config_upload = cleaned_data.get('pkcs11_config_upload')
         config_env_var = str(cleaned_data.get('pkcs11_config_env_var') or '').strip()
         user_pin = cleaned_data.get('pkcs11_user_pin') or ''
-        uses_opensc = cleaned_data.get('pkcs11_connection_type') == PKCS11_CONNECTION_TYPE_USB
+        uses_opensc = (
+            cleaned_data.get('pkcs11_connection_type') == PKCS11_CONNECTION_TYPE_USB
+            and cleaned_data.get('pkcs11_usb_provider') != PKCS11_USB_PROVIDER_CUSTOM
+        )
         existing_module = self._existing_pkcs11_module_file()
         existing_pin = self._existing_pkcs11_pin_file()
         existing_config = None if uses_opensc else self._existing_pkcs11_config_file()
@@ -749,7 +828,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         if (
             module_upload is None
             and existing_module is None
-            and not self.local_dev_pkcs11_handoff_available
+            and not (
+                self.local_dev_pkcs11_handoff_available
+                and cleaned_data.get('pkcs11_connection_type') == PKCS11_CONNECTION_TYPE_NETWORK
+            )
         ):
             self.add_error(
                 'pkcs11_module_upload',

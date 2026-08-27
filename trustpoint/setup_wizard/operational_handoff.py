@@ -18,6 +18,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_config_path
+from setup_wizard.setup_apply_progress import report_setup_apply_progress
 
 if TYPE_CHECKING:
     from setup_wizard.models import SetupWizardConfigModel
@@ -126,7 +127,7 @@ def build_operational_environment(config_model: SetupWizardConfigModel) -> dict[
             env_values[pkcs11_config_env_var] = str(configured_config_path)
         else:
             env_values[pkcs11_config_env_var] = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
-    if (config_model.fresh_install_pkcs11_module_path or '').strip() == str(settings.HSM_OPENSC_PKCS11_MODULE_PATH):
+    if config_model.fresh_install_pkcs11_start_pcscd:
         env_values['TRUSTPOINT_START_PCSCD'] = '1'
     return env_values
 
@@ -149,6 +150,8 @@ def build_apply_payload(config_model: SetupWizardConfigModel) -> dict[str, Any]:
             'crypto_storage': int(config_model.crypto_storage),
             'inject_demo_data': bool(config_model.inject_demo_data),
             'pkcs11_module_path': config_model.fresh_install_pkcs11_module_path,
+            'pkcs11_connection_type': config_model.fresh_install_pkcs11_connection_type,
+            'pkcs11_start_pcscd': config_model.fresh_install_pkcs11_start_pcscd,
             'pkcs11_token_label': config_model.fresh_install_pkcs11_token_label,
             'pkcs11_token_serial': config_model.fresh_install_pkcs11_token_serial,
             'pkcs11_slot_id': config_model.fresh_install_pkcs11_slot_id,
@@ -257,7 +260,9 @@ def run_operational_handoff(config_model: SetupWizardConfigModel) -> Operational
 
     clear_operational_ready_file(ready_file)
     write_apply_payload(payload, payload_file)
+    report_setup_apply_progress('migrations', 'Applying operational database migrations.', 15)
     _run_operational_manage_command(['migrate', '--noinput'], env_values)
+    report_setup_apply_progress('operational-configuration', 'Applying the operational configuration.', 20)
     _run_operational_manage_command(['apply_bootstrap_config', '--config', str(payload_file)], env_values)
     write_operational_env_file(env_values, pending_env_file)
 

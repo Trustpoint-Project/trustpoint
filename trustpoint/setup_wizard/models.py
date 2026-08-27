@@ -319,6 +319,23 @@ class SetupWizardConfigModel(models.Model):
         FILE = 'file', gettext_lazy('PIN file')
         ENV = 'env', gettext_lazy('Environment variable')
 
+    class FreshInstallPkcs11ConnectionType(models.TextChoices):
+        """Enumerate how the PKCS#11 provider reaches its HSM."""
+
+        NETWORK = 'network', gettext_lazy('Network HSM')
+        USB = 'usb', gettext_lazy('USB HSM')
+
+    fresh_install_pkcs11_connection_type = models.CharField(
+        max_length=16,
+        choices=FreshInstallPkcs11ConnectionType.choices,
+        default=FreshInstallPkcs11ConnectionType.NETWORK,
+        help_text='Physical connection used by the staged PKCS#11 provider.',
+    )
+    fresh_install_pkcs11_start_pcscd = models.BooleanField(
+        default=False,
+        help_text='Whether the operational runtime starts its local PC/SC smart-card service.',
+    )
+
     fresh_install_pkcs11_module_path = models.TextField(
         blank=True,
         default='',

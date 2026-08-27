@@ -10,7 +10,7 @@
                     <span>
                         <strong>{{ option.choice_label }}</strong>
                         {% if option.data.value == 'usb' %}
-                            <small>{% trans "Discover a locally attached smart-card HSM through OpenSC." %}</small>
+                            <small>{% trans "Use a locally attached HSM with bundled or vendor middleware." %}</small>
                         {% else %}
                             <small>{% trans "Load the PKCS#11 library and optional configuration supplied for the HSM." %}</small>
                         {% endif %}
@@ -25,99 +25,98 @@
 
     <section class="tp-backend-section" data-pkcs11-connection-panel="usb"{% if not form.uses_usb_pkcs11_connection %} hidden{% endif %}>
         <div class="tp-backend-section-kicker">{% trans "USB HSM" %}</div>
-        <h3 class="tp-backend-section-title">{% trans "Discover Token" %}</h3>
-        <p class="tp-backend-section-copy">
-            {% trans "Trustpoint uses its bundled OpenSC driver. No library or provider configuration upload is needed." %}
-        </p>
-        <button class="btn tp-setup-form-secondary" type="submit" name="wizard_action" value="discover_usb_hsm" formnovalidate>
-            {% trans "Discover USB HSM" %}
-        </button>
+        <h3 class="tp-backend-section-title">{% trans "Provider" %}</h3>
+        <div class="tp-hsm-transport-options mb-3" role="radiogroup" aria-label="{{ form.pkcs11_usb_provider.label }}">
+            {% for option in form.pkcs11_usb_provider %}
+                <label class="tp-hsm-transport-option" for="{{ option.id_for_label }}">
+                    {{ option.tag }}
+                    <span>
+                        <strong>{{ option.choice_label }}</strong>
+                        {% if option.data.value == 'opensc' %}
+                            <small>{% trans "Works with SmartCard-HSM and other OpenSC-supported devices." %}</small>
+                        {% else %}
+                            <small>{% trans "Use the PKCS#11 middleware supplied by the USB HSM vendor." %}</small>
+                        {% endif %}
+                    </span>
+                </label>
+            {% endfor %}
+        </div>
 
-        {% if usb_hsm_discovery %}
-            {% if usb_hsm_discovery.status == 'found' %}
-                <div class="tp-usb-discovery-results" aria-live="polite">
-                    <p class="tp-backend-section-copy mb-2">{{ usb_hsm_discovery.detail }}</p>
-                    {% for token in usb_hsm_discovery.tokens %}
-                        <div class="tp-usb-token-row">
-                            <div>
-                                <strong>{{ token.label|default:"Unlabelled token" }}</strong>
-                                <small>
-                                    {% trans "Provider identity:" %}
-                                    {% if token.manufacturer %}{{ token.manufacturer }}{% endif %}
-                                    {% if token.model %} {{ token.model }}{% endif %}
-                                    · {% trans "slot" %} {{ token.slot_id }}
-                                    {% if token.serial %} · {% trans "serial" %} {{ token.serial }}{% endif %}
-                                </small>
+        <div data-pkcs11-usb-provider-panel="opensc"{% if form.uses_custom_usb_provider %} hidden{% endif %}>
+            <button class="btn tp-setup-form-secondary" type="submit" name="wizard_action" value="discover_usb_hsm" formnovalidate>
+                {% trans "Discover USB HSM" %}
+            </button>
+
+            {% if usb_hsm_discovery %}
+                {% if usb_hsm_discovery.status == 'found' %}
+                    <div class="tp-usb-discovery-results" aria-live="polite">
+                        <p class="tp-backend-section-copy mb-2">{{ usb_hsm_discovery.detail }}</p>
+                        {% for token in usb_hsm_discovery.tokens %}
+                            <div class="tp-usb-token-row">
+                                <div>
+                                    <strong>{{ token.label|default:"Unlabelled token" }}</strong>
+                                    <small>
+                                        {% trans "Provider identity:" %}
+                                        {% if token.manufacturer %}{{ token.manufacturer }}{% endif %}
+                                        {% if token.model %} {{ token.model }}{% endif %}
+                                        · {% trans "slot" %} {{ token.slot_id }}
+                                        {% if token.serial %} · {% trans "serial" %} {{ token.serial }}{% endif %}
+                                    </small>
+                                </div>
+                                {% if usb_hsm_discovery.selected_index == forloop.counter0 %}
+                                    <span class="badge text-bg-success">{% trans "Selected" %}</span>
+                                {% else %}
+                                    <button class="btn btn-sm tp-setup-form-secondary" type="submit" name="wizard_action" value="select_usb_hsm:{{ forloop.counter0 }}" formnovalidate>
+                                        {% trans "Use" %}
+                                    </button>
+                                {% endif %}
                             </div>
-                            {% if usb_hsm_discovery.selected_index == forloop.counter0 %}
-                                <span class="badge text-bg-success">{% trans "Selected" %}</span>
-                            {% else %}
-                                <button class="btn btn-sm tp-setup-form-secondary" type="submit" name="wizard_action" value="select_usb_hsm:{{ forloop.counter0 }}" formnovalidate>
-                                    {% trans "Use" %}
-                                </button>
-                            {% endif %}
-                        </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <div class="alert alert-warning mt-3 mb-0 text-start" role="status">
-                    <strong>{% trans "No USB HSM is available to Trustpoint." %}</strong>
-                    <p class="mb-2">{{ usb_hsm_discovery.detail }}</p>
-                    <details>
-                        <summary>{% trans "Show Docker USB passthrough guide" %}</summary>
-                        <p class="mt-2 mb-2">
-                            {% trans "Expose the host USB bus to the Trustpoint container, then restart the container and discover again." %}
-                        </p>
-                        <p class="mb-1">{% trans "Trustpoint setup script:" %}</p>
-                        <div class="tp-backend-command">./tp_wizard.sh up trustpoint --usb-hsm</div>
-                        <p class="mt-2 mb-1">{% trans "Raw Docker options:" %}</p>
-                        <div class="tp-backend-command">--mount type=bind,source=/dev/bus/usb,target=/dev/bus/usb<br>--device-cgroup-rule='c 189:* rwm'</div>
-                        <p class="mt-2 mb-1">{% trans "Docker Compose:" %}</p>
-                        <div class="tp-backend-command">volumes:<br>&nbsp;&nbsp;- /dev/bus/usb:/dev/bus/usb<br>device_cgroup_rules:<br>&nbsp;&nbsp;- 'c 189:* rwm'</div>
-                        <p class="mt-2 mb-0">
-                            {% trans "The appliance host must expose /dev/bus/usb. Stop any host smart-card service that exclusively owns the reader before retrying." %}
-                        </p>
-                    </details>
-                </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning mt-3 mb-0 text-start" role="status">
+                        <strong>{% trans "No USB HSM is available to Trustpoint." %}</strong>
+                        <p class="mb-2">{{ usb_hsm_discovery.detail }}</p>
+                        <details>
+                            <summary>{% trans "Show Docker USB passthrough guide" %}</summary>
+                            <p class="mt-2 mb-2">
+                                {% trans "Expose the host USB bus to the Trustpoint container, then restart the container and discover again." %}
+                            </p>
+                            <p class="mb-1">{% trans "Trustpoint setup script:" %}</p>
+                            <div class="tp-backend-command">./tp_wizard.sh up trustpoint --usb-hsm</div>
+                            <p class="mt-2 mb-1">{% trans "Raw Docker options:" %}</p>
+                            <div class="tp-backend-command">--mount type=bind,source=/dev/bus/usb,target=/dev/bus/usb<br>--device-cgroup-rule='c 189:* rwm'</div>
+                            <p class="mt-2 mb-1">{% trans "Docker Compose:" %}</p>
+                            <div class="tp-backend-command">volumes:<br>&nbsp;&nbsp;- /dev/bus/usb:/dev/bus/usb<br>device_cgroup_rules:<br>&nbsp;&nbsp;- 'c 189:* rwm'</div>
+                            <p class="mt-2 mb-0">
+                                {% trans "The appliance host must expose /dev/bus/usb. Stop any host smart-card service that exclusively owns the reader before retrying." %}
+                            </p>
+                        </details>
+                    </div>
+                {% endif %}
             {% endif %}
-        {% endif %}
+        </div>
+
+        <div data-pkcs11-usb-provider-panel="custom"{% if not form.uses_custom_usb_provider %} hidden{% endif %}>
+            <p class="tp-backend-section-copy mb-0">
+                {% trans "Upload the Linux PKCS#11 provider and any required configuration below." %}
+            </p>
+            <div class="form-check text-start mt-3">
+                {{ form.pkcs11_start_pcscd }}
+                <label class="form-check-label" for="{{ form.pkcs11_start_pcscd.id_for_label }}">{{ form.pkcs11_start_pcscd.label }}</label>
+                {% if form.pkcs11_start_pcscd.help_text %}<div class="form-text">{{ form.pkcs11_start_pcscd.help_text }}</div>{% endif %}
+                {% if form.pkcs11_start_pcscd.errors %}<div class="text-danger mt-2">{{ form.pkcs11_start_pcscd.errors }}</div>{% endif %}
+            </div>
+        </div>
     </section>
 
-    <section class="tp-backend-section" data-pkcs11-connection-panel="network"{% if form.uses_usb_pkcs11_connection %} hidden{% endif %}>
-        <div class="tp-backend-section-kicker">{% trans "Network HSM" %}</div>
+    <section class="tp-backend-section" data-pkcs11-custom-provider-panel{% if form.uses_usb_pkcs11_connection and not form.uses_custom_usb_provider %} hidden{% endif %}>
+        <div class="tp-backend-section-kicker">{% trans "PKCS#11 Provider" %}</div>
         <h3 class="tp-backend-section-title">{% trans "Provider Files" %}</h3>
         {% if form.local_dev_pkcs11_handoff_available %}
             <p class="tp-backend-section-copy">{% trans "The local SoftHSM demo can use its prepared PKCS#11 provider." %}</p>
         {% endif %}
-        <div class="tp-backend-field">
-            <label class="tp-backend-field-label" for="{{ form.pkcs11_module_upload.id_for_label }}">{{ form.pkcs11_module_upload.label }}</label>
-            {{ form.pkcs11_module_upload }}
-            {% if form.pkcs11_module_upload.errors %}<div class="text-danger mt-2">{{ form.pkcs11_module_upload.errors }}</div>{% endif %}
-        </div>
-        <div class="tp-backend-grid">
-            <div class="tp-backend-field">
-                <label class="tp-backend-field-label" for="{{ form.pkcs11_config_upload.id_for_label }}">{{ form.pkcs11_config_upload.label }}</label>
-                {{ form.pkcs11_config_upload }}
-                {% if form.pkcs11_config_upload.errors %}<div class="text-danger mt-2">{{ form.pkcs11_config_upload.errors }}</div>{% endif %}
-            </div>
-            <div class="tp-backend-field">
-                <label class="tp-backend-field-label" for="{{ form.pkcs11_config_env_var.id_for_label }}">{{ form.pkcs11_config_env_var.label }}</label>
-                {{ form.pkcs11_config_env_var }}
-                {% if form.pkcs11_config_env_var.errors %}<div class="text-danger mt-2">{{ form.pkcs11_config_env_var.errors }}</div>{% endif %}
-            </div>
-        </div>
-        {% if form.staged_pkcs11_module_name %}
-            <div class="tp-backend-state-pill">
-                <span>{% trans "Current library:" %} {{ form.staged_pkcs11_module_name }}</span>
-                <button type="submit" name="wizard_action" value="clear_module" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove wizard library" title="Remove wizard library">×</button>
-            </div>
-        {% endif %}
-        {% if form.staged_pkcs11_config_name %}
-            <div class="tp-backend-state-pill">
-                <span>{% trans "Current provider config:" %} {{ form.staged_pkcs11_config_name }}</span>
-                <button type="submit" name="wizard_action" value="clear_pkcs11_config" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove provider config" title="Remove provider config">×</button>
-            </div>
-        {% endif %}
+        {% include 'setup_wizard/includes/pkcs11_provider_files.html' %}
     </section>
 
     <section class="tp-backend-section">
@@ -164,6 +163,19 @@
         if (!controller) return;
         const radios = controller.querySelectorAll('input[name="{{ form.pkcs11_connection_type.html_name }}"]');
         const panels = controller.querySelectorAll('[data-pkcs11-connection-panel]');
+        const usbProviderRadios = controller.querySelectorAll('input[name="{{ form.pkcs11_usb_provider.html_name }}"]');
+        const usbProviderPanels = controller.querySelectorAll('[data-pkcs11-usb-provider-panel]');
+        const customProviderPanel = controller.querySelector('[data-pkcs11-custom-provider-panel]');
+        const updateUsbProviderPanels = () => {
+            const selected = Array.from(usbProviderRadios).find((radio) => radio.checked)?.value || 'opensc';
+            usbProviderPanels.forEach((panel) => {
+                const inactive = panel.dataset.pkcs11UsbProviderPanel !== selected;
+                panel.hidden = inactive;
+                panel.querySelectorAll('input, select, textarea, button').forEach((control) => {
+                    control.disabled = inactive;
+                });
+            });
+        };
         const updatePanels = () => {
             const selected = Array.from(radios).find((radio) => radio.checked)?.value || 'network';
             panels.forEach((panel) => {
@@ -173,8 +185,16 @@
                     control.disabled = inactive;
                 });
             });
+            updateUsbProviderPanels();
+            const usbProvider = Array.from(usbProviderRadios).find((radio) => radio.checked)?.value || 'opensc';
+            const customProviderInactive = selected === 'usb' && usbProvider !== 'custom';
+            customProviderPanel.hidden = customProviderInactive;
+            customProviderPanel.querySelectorAll('input, select, textarea, button').forEach((control) => {
+                control.disabled = customProviderInactive;
+            });
         };
         radios.forEach((radio) => radio.addEventListener('change', updatePanels));
+        usbProviderRadios.forEach((radio) => radio.addEventListener('change', updatePanels));
         updatePanels();
     })();
 </script>

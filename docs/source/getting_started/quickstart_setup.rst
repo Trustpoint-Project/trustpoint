@@ -38,6 +38,13 @@ Demo presets:
 The same option works for explicit service startup, for example
 ``./tp_wizard.sh up trustpoint db --skip-wizard``.
 
+When the in-app wizard applies its summary, Trustpoint runs database setup,
+crypto initialization, optional demo-data generation, and the operational
+runtime switch in a background process. The browser shows live stage progress
+instead of keeping one long HTTP request open. This prevents reverse-proxy
+timeouts during slower HSM key generation. A failed or stalled operation stays
+visible with guidance to inspect the Trustpoint log before retrying.
+
 Workflows2 is not started by any demo preset. Start it explicitly when needed:
 
 .. code-block:: bash

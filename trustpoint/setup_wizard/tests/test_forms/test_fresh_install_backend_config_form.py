@@ -14,6 +14,7 @@ from setup_wizard.forms import (
     CRYPTO_BACKEND_TYPE_CHOICES,
     PKCS11_CONNECTION_TYPE_NETWORK,
     PKCS11_CONNECTION_TYPE_USB,
+    PKCS11_USB_PROVIDER_CUSTOM,
     FreshInstallBackendConfigModelForm,
 )
 from setup_wizard.models import SetupWizardConfigModel
@@ -67,7 +68,68 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
 
                 self.assertTrue(form.is_valid(), form.errors)
                 self.assertTrue(form.uses_opensc_pkcs11_module())
+                self.assertTrue(form.cleaned_data['pkcs11_start_pcscd'])
                 self.assertEqual(form.staged_pkcs11_module_name, 'opensc-pkcs11.so')
+
+    def test_pkcs11_usb_connection_accepts_custom_provider_upload(self) -> None:
+        """A USB transport may use vendor middleware instead of bundled OpenSC."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+        module = SimpleUploadedFile('vendor-pkcs11.so', b'\x7fELFprovider')
+        form = FreshInstallBackendConfigModelForm(
+            data={
+                'pkcs11_connection_type': PKCS11_CONNECTION_TYPE_USB,
+                'pkcs11_usb_provider': PKCS11_USB_PROVIDER_CUSTOM,
+                'fresh_install_pkcs11_token_label': 'Vendor USB HSM',
+                'pkcs11_user_pin': '123456',
+            },
+            files={'pkcs11_module_upload': module},
+            instance=config_model,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertFalse(form.uses_opensc_pkcs11_module())
+        self.assertFalse(form.cleaned_data['pkcs11_start_pcscd'])
+
+    def test_custom_usb_provider_can_enable_pcscd(self) -> None:
+        """Vendor USB middleware may explicitly request the container PC/SC service."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+        form = FreshInstallBackendConfigModelForm(
+            data={
+                'pkcs11_connection_type': PKCS11_CONNECTION_TYPE_USB,
+                'pkcs11_usb_provider': PKCS11_USB_PROVIDER_CUSTOM,
+                'pkcs11_start_pcscd': 'on',
+                'fresh_install_pkcs11_token_label': 'Vendor USB HSM',
+                'pkcs11_user_pin': '123456',
+            },
+            files={'pkcs11_module_upload': SimpleUploadedFile('vendor-pkcs11.so', b'\x7fELFprovider')},
+            instance=config_model,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.cleaned_data['pkcs11_start_pcscd'])
+
+    def test_custom_usb_provider_does_not_reuse_local_softhsm_module(self) -> None:
+        """The prepared demo provider must not satisfy a vendor USB upload."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+        with (
+            patch('setup_wizard.forms.local_dev_pkcs11_handoff_available', return_value=True),
+            patch('setup_wizard.forms.FINAL_WIZARD_PKCS11_MODULE_PATH', Path('/missing/vendor-pkcs11.so')),
+        ):
+            form = FreshInstallBackendConfigModelForm(
+                data={
+                    'pkcs11_connection_type': PKCS11_CONNECTION_TYPE_USB,
+                    'pkcs11_usb_provider': PKCS11_USB_PROVIDER_CUSTOM,
+                    'fresh_install_pkcs11_token_label': 'Vendor USB HSM',
+                    'pkcs11_user_pin': '123456',
+                },
+                instance=config_model,
+            )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('pkcs11_module_upload', form.errors)
 
     def test_switching_from_usb_to_network_requires_a_network_provider(self) -> None:
         """OpenSC must not silently satisfy a Network HSM provider upload."""

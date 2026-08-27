@@ -45,6 +45,7 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.models import SetupWizardConfigModel
 from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
 from setup_wizard.pkcs11_staging import cleanup_wizard_pkcs11_staged_path, existing_wizard_pkcs11_staged_file
+from setup_wizard.setup_apply_progress import report_setup_apply_progress
 from setup_wizard.tls_credential import clear_staged_tls_credential, load_staged_tls_credential
 from users.models import Role
 
@@ -89,9 +90,9 @@ class OperationalBootstrapApplier:
             raise error
 
     @classmethod
-    def _configure_pkcs11_runtime_services(cls, module_path: Path) -> None:
-        """Start or stop runtime services needed by the selected PKCS#11 module."""
-        action = 'start' if str(module_path) == str(settings.HSM_OPENSC_PKCS11_MODULE_PATH) else 'stop'
+    def _configure_pkcs11_runtime_services(cls, *, start_pcscd: bool) -> None:
+        """Start or stop runtime services needed by the physical HSM connection."""
+        action = 'start' if start_pcscd else 'stop'
         try:
             cls.execute_shell_script(MANAGE_PCSCD, action)
         except subprocess.CalledProcessError as exc:
@@ -346,7 +347,12 @@ class OperationalBootstrapApplier:
         fallback_module_path = Path(settings.HSM_DEFAULT_PKCS11_MODULE_PATH)
         if not module_path.exists() and fallback_module_path.exists():
             module_path = fallback_module_path
-        self._configure_pkcs11_runtime_services(module_path)
+        connection_type = str(self.fresh_install.get('pkcs11_connection_type') or '').strip()
+        start_pcscd = bool(self.fresh_install.get('pkcs11_start_pcscd')) or (
+            'pkcs11_start_pcscd' not in self.fresh_install
+            and (connection_type == 'usb' or str(module_path) == str(settings.HSM_OPENSC_PKCS11_MODULE_PATH))
+        )
+        self._configure_pkcs11_runtime_services(start_pcscd=start_pcscd)
 
         slot_id = self.fresh_install.get('pkcs11_slot_id')
         token_label = (self.fresh_install['pkcs11_token_label'] or '').strip() or None
@@ -499,16 +505,24 @@ class OperationalBootstrapApplier:
 
     def apply(self) -> None:
         """Apply the full bootstrap payload to the operational runtime."""
+        report_setup_apply_progress('crypto-backend', 'Configuring the managed crypto backend.', 25)
         self._configure_instance_crypto_backend()
+        report_setup_apply_progress('capabilities', 'Checking the crypto backend capabilities.', 35)
         self._probe_and_record_crypto_capabilities()
+        report_setup_apply_progress('application-secrets', 'Configuring application-secret encryption.', 45)
         self._configure_app_secret_backend()
+        report_setup_apply_progress('defaults', 'Creating operational defaults.', 55)
         call_command('create_default_cert_profiles')
         call_command('create_default_agent_profile_definitions')
         call_command('seed_discovery_ports')
         if self.fresh_install['inject_demo_data']:
+            report_setup_apply_progress('demo-data', 'Generating demo data and keys.', 65)
             call_command('add_domains_and_devices')
+        report_setup_apply_progress('notifications', 'Preparing system notifications.', 78)
         call_command('execute_all_notifications')
+        report_setup_apply_progress('tls', 'Applying the TLS server credential.', 84)
         self._apply_staged_tls_credential()
+        report_setup_apply_progress('administrator', 'Creating the administrator account.', 88)
         call_command('create_admin_group')
         self._create_operational_admin()
 

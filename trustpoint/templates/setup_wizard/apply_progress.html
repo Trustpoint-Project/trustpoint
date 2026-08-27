@@ -1,0 +1,111 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
+{% endblock head %}
+
+{% block content %}
+<section class="tp-setup-form-shell tp-fresh-install-shell">
+    <div class="card tp-card-setup-wizard tp-apply-progress-card" aria-live="polite">
+        <div class="card-body">
+            <div class="d-flex align-items-center gap-3 mb-3">
+                <div class="spinner-border text-primary" role="status" data-apply-spinner>
+                    <span class="visually-hidden">{% trans "Applying setup" %}</span>
+                </div>
+                <div>
+                    <h1 class="tp-wizard-heading mb-1">{% trans "Applying Configuration" %}</h1>
+                    <p class="text-muted mb-0" data-apply-detail>{% trans "Starting setup..." %}</p>
+                </div>
+            </div>
+
+            <div class="progress mb-4" role="progressbar" aria-label="{% trans 'Setup progress' %}" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-bar" data-apply-progress style="width: 0%">0%</div>
+            </div>
+
+            <h2 class="h6">{% trans "Activity" %}</h2>
+            <ol class="tp-apply-activity" data-apply-history></ol>
+
+            <div class="alert alert-warning mt-4 mb-0" data-apply-stalled hidden>
+                {% trans "No progress update has been received for five minutes. The operation is still being monitored; check the Trustpoint log before retrying." %}
+            </div>
+            <div class="alert alert-danger mt-4 mb-0" data-apply-error hidden></div>
+            <div class="mt-3" data-apply-failed-actions hidden>
+                <a href="{{ summary_url }}" class="btn tp-setup-form-back">{% trans "Return to Summary" %}</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    (() => {
+        const statusUrl = "{{ status_url|escapejs }}";
+        const loginUrl = "{{ login_url|escapejs }}";
+        const detail = document.querySelector('[data-apply-detail]');
+        const progress = document.querySelector('[data-apply-progress]');
+        const history = document.querySelector('[data-apply-history]');
+        const spinner = document.querySelector('[data-apply-spinner]');
+        const stalled = document.querySelector('[data-apply-stalled]');
+        const error = document.querySelector('[data-apply-error]');
+        const failedActions = document.querySelector('[data-apply-failed-actions]');
+        let runtimeSwitching = false;
+        let finished = false;
+
+        const renderHistory = (entries, current) => {
+            history.replaceChildren();
+            [...entries, current].filter((entry) => entry?.detail).forEach((entry, index, items) => {
+                const item = document.createElement('li');
+                item.textContent = entry.detail;
+                if (index === items.length - 1) item.classList.add('is-current');
+                history.append(item);
+            });
+        };
+
+        const render = (status) => {
+            const percentage = Number(status.progress || 0);
+            detail.textContent = status.detail || 'Applying configuration...';
+            progress.style.width = `${percentage}%`;
+            progress.textContent = `${percentage}%`;
+            renderHistory(status.history || [], {detail: status.detail});
+            runtimeSwitching = status.state === 'switching';
+
+            const updatedAt = Date.parse(status.updated_at || '');
+            stalled.hidden = !Number.isFinite(updatedAt) || Date.now() - updatedAt < 300000;
+
+            if (status.state === 'failed') {
+                finished = true;
+                spinner.hidden = true;
+                progress.classList.add('bg-danger');
+                error.textContent = status.detail || 'Setup failed.';
+                error.hidden = false;
+                failedActions.hidden = false;
+            } else if (status.state === 'complete') {
+                finished = true;
+                window.location.assign(loginUrl);
+            }
+        };
+
+        const poll = async () => {
+            if (finished) return;
+            try {
+                const response = await fetch(statusUrl, {cache: 'no-store', headers: {'Accept': 'application/json'}});
+                if (response.redirected || !response.ok) {
+                    if (runtimeSwitching) window.location.assign(loginUrl);
+                    throw new Error('Progress endpoint is temporarily unavailable.');
+                }
+                render(await response.json());
+            } catch (pollError) {
+                if (runtimeSwitching) {
+                    window.location.assign(loginUrl);
+                    return;
+                }
+            }
+            window.setTimeout(poll, 1000);
+        };
+
+        poll();
+    })();
+</script>
+{% endblock content %}

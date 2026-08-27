@@ -50,8 +50,46 @@ def test_build_operational_environment_starts_pcscd_for_opensc(settings: object)
         operational_db_user='admin',
         operational_db_password='testing321',  # noqa: S106
         fresh_install_pkcs11_module_path=str(settings.HSM_OPENSC_PKCS11_MODULE_PATH),
+        fresh_install_pkcs11_connection_type=SetupWizardConfigModel.FreshInstallPkcs11ConnectionType.USB,
+        fresh_install_pkcs11_start_pcscd=True,
     )
 
     env_values = build_operational_environment(config_model)
 
     assert env_values['TRUSTPOINT_START_PCSCD'] == '1'
+
+
+def test_build_operational_environment_starts_pcscd_for_custom_usb_provider_when_requested() -> None:
+    """Custom USB middleware can explicitly request the PC/SC service."""
+    config_model = SetupWizardConfigModel(
+        operational_db_host='postgres',
+        operational_db_port=5432,
+        operational_db_name='trustpoint_db',
+        operational_db_user='admin',
+        operational_db_password='testing321',  # noqa: S106
+        fresh_install_pkcs11_module_path='/opt/vendor/libvendor-pkcs11.so',
+        fresh_install_pkcs11_connection_type=SetupWizardConfigModel.FreshInstallPkcs11ConnectionType.USB,
+        fresh_install_pkcs11_start_pcscd=True,
+    )
+
+    env_values = build_operational_environment(config_model)
+
+    assert env_values['TRUSTPOINT_START_PCSCD'] == '1'
+
+
+def test_build_operational_environment_does_not_force_pcscd_for_direct_usb_provider() -> None:
+    """Direct-USB vendor middleware can run without a competing PC/SC service."""
+    config_model = SetupWizardConfigModel(
+        operational_db_host='postgres',
+        operational_db_port=5432,
+        operational_db_name='trustpoint_db',
+        operational_db_user='admin',
+        operational_db_password='testing321',  # noqa: S106
+        fresh_install_pkcs11_module_path='/opt/vendor/libvendor-pkcs11.so',
+        fresh_install_pkcs11_connection_type=SetupWizardConfigModel.FreshInstallPkcs11ConnectionType.USB,
+        fresh_install_pkcs11_start_pcscd=False,
+    )
+
+    env_values = build_operational_environment(config_model)
+
+    assert 'TRUSTPOINT_START_PCSCD' not in env_values

@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
 
 from appsecrets.models import (
     AppSecretBackendKind,
@@ -73,6 +74,21 @@ class FreshInstallSummaryTruststoreDownloadViewTests(SimpleTestCase):
 
         self.assertEqual(content, b'der')
         self.assertEqual(content_type, 'application/pkix-cert')
+
+
+@override_settings(ROOT_URLCONF='trustpoint.urls_bootstrap')
+class FreshInstallSummaryApplyTests(SimpleTestCase):
+    """Tests for launching final setup outside the web request."""
+
+    def test_bootstrap_summary_starts_background_job_and_redirects_to_progress(self) -> None:
+        """The summary response returns immediately instead of waiting for demo generation."""
+        view = FreshInstallSummaryView()
+        with patch('setup_wizard.views.start_setup_apply_job', return_value=({}, True)) as start_job:
+            response = view._handle_bootstrap_summary_submission(Mock())
+
+        start_job.assert_called_once_with()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('setup_wizard:fresh_install_apply_progress'))
 
 
 class FreshInstallSummaryBackendConfigurationTests(TestCase):

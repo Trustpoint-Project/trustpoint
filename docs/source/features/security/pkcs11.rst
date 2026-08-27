@@ -61,11 +61,13 @@ To recreate only an already-running Trustpoint container with passthrough, run
 The interactive setup script offers the same choice as
 **Enable USB HSM passthrough?**.
 
-The USB flow uses the OpenSC module bundled in the Trustpoint image, so it does
-not require a library or provider configuration upload. The network HSM flow
-keeps those upload fields because network and appliance HSMs commonly require
-their vendor's architecture-specific PKCS#11 module and an optional provider
-configuration. Trustpoint treats that configuration as opaque provider input.
+For devices supported by OpenSC, choose **Bundled OpenSC**; no provider upload
+is required. Some USB HSMs instead require architecture-specific middleware
+from their vendor. Choose **Custom provider** to upload that Linux PKCS#11
+module and its optional provider configuration. Only install native provider
+libraries obtained from a trusted HSM vendor. Network HSMs use the same custom
+provider upload because their middleware and configuration are also
+vendor-specific.
 
 USB discovery requires the container to see the host USB bus. The standard
 Compose configuration exposes ``/dev/bus/usb``. For another container
@@ -78,9 +80,12 @@ deployment, use the equivalent of:
    device_cgroup_rules:
      - 'c 189:* rwm'
 
-Trustpoint starts its container-local smart-card service only after USB HSM
-access is selected. Network HSM and software deployments use the same startup
-command and do not activate that service.
+Trustpoint persists the physical connection independently from the selected
+provider. Bundled OpenSC automatically starts the container-local PC/SC
+smart-card service. For custom USB middleware, enable **Use the PC/SC
+smart-card service** only when the vendor module requires it; direct-USB
+providers can leave it disabled. Network HSM and software deployments do not
+activate that service.
 
 Network HSMs
 ~~~~~~~~~~~~

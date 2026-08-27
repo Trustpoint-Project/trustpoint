@@ -97,6 +97,16 @@ urlpatterns = [
     ),
     path('fresh-install/summary/', views.FreshInstallSummaryView.as_view(), name='fresh_install_summary'),
     path(
+        'fresh-install/apply/',
+        views.FreshInstallApplyProgressView.as_view(),
+        name='fresh_install_apply_progress',
+    ),
+    path(
+        'fresh-install/apply/status/',
+        views.FreshInstallApplyStatusView.as_view(),
+        name='fresh_install_apply_status',
+    ),
+    path(
         'fresh-install/summary/truststore/<str:file_format>/',
         views.FreshInstallSummaryTruststoreDownloadView.as_view(),
         name='fresh_install_summary_truststore_download',
