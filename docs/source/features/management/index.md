@@ -46,7 +46,10 @@ The **Backups** page is used to create and manage backups of the Trustpoint inst
 
 ## Crypto Backend
 
-The **Crypto Backend** page contains settings for cryptographic operations. Use it to configure how Trustpoint handles keys and cryptographic material.
+The **Crypto Backend** page shows the active provider, provider-reported token
+identity, supported mechanisms, managed-key aliases and PKCS#11 ``CKA_ID``
+locations, and the application-secret DEK/KEK algorithms. Private key material,
+PINs, and plaintext application-secret keys are never displayed.
 
 ## Notifications
 

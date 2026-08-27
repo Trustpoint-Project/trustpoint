@@ -5,7 +5,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from django.contrib.messages import get_messages
@@ -14,8 +14,17 @@ from django.http import Http404
 from django.test import RequestFactory, TestCase
 from django.views.generic import TemplateView
 
+from appsecrets.models import (
+    AppSecretBackendKind,
+    AppSecretBackendModel,
+    AppSecretPkcs11AuthSource,
+    AppSecretPkcs11ConfigModel,
+)
+from appsecrets.service import PKCS11_RSA_OAEP_SHA256_DEK_PREFIX
 from crypto.models import (
     BackendKind,
+    CryptoManagedKeyModel,
+    CryptoManagedKeyPkcs11BindingModel,
     CryptoProviderCapabilityPkcs11DetailModel,
     CryptoProviderCapabilitySnapshotModel,
     CryptoProviderPkcs11ConfigModel,
@@ -25,7 +34,17 @@ from crypto.models import (
     ProbeStatus,
     SoftwareKeyEncryptionSource,
 )
-from management.views.backend_configuration import BackendConfigurationPkcs11AssetDownloadView, BackendConfigurationView
+from management.views.backend_configuration import (
+    BackendConfigurationPkcs11AssetDownloadView,
+    BackendConfigurationView,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from django.contrib.sessions.backends.base import SessionBase
+    from django.http import FileResponse
+
 
 class BackendConfigurationViewTest(TestCase):
     """Test suite for BackendConfigurationView."""
@@ -214,6 +233,55 @@ class BackendConfigurationViewTest(TestCase):
         assert context['pkcs11_token_serial_display'] == 'serial-1'  # noqa: S105
         assert context['pkcs11_slot_id_display'] == 1
 
+    def test_get_context_data_describes_rsa_app_secret_protection_and_managed_keys(self) -> None:
+        """Test the backend page exposes non-secret PKCS#11 key locations and app-secret algorithms."""
+        profile = CryptoProviderProfileModel.objects.create(
+            name='physical-pkcs11',
+            backend_kind=BackendKind.PKCS11,
+            active=True,
+        )
+        CryptoProviderPkcs11ConfigModel.objects.create(
+            profile=profile,
+            module_path='/usr/lib/opensc-pkcs11.so',
+            token_label='SmartCard-HSM',  # noqa: S106
+            token_serial='DENK0402227',  # noqa: S106
+            slot_id=0,
+            auth_source=Pkcs11AuthSource.FILE,
+            auth_source_ref='/var/lib/trustpoint/pin',
+        )
+        backend = AppSecretBackendModel.get_singleton()
+        backend.backend_kind = AppSecretBackendKind.PKCS11
+        backend.save(update_fields=['backend_kind'])
+        AppSecretPkcs11ConfigModel.objects.create(
+            backend=backend,
+            module_path='/usr/lib/opensc-pkcs11.so',
+            token_label='SmartCard-HSM',  # noqa: S106
+            token_serial='DENK0402227',  # noqa: S106
+            slot_id=0,
+            auth_source=AppSecretPkcs11AuthSource.FILE,
+            auth_source_ref='/var/lib/trustpoint/pin',
+            wrapped_dek=PKCS11_RSA_OAEP_SHA256_DEK_PREFIX + b'ciphertext',
+        )
+        managed_key = CryptoManagedKeyModel.objects.create(
+            alias='issuing-ca',
+            provider_label='issuing-ca',
+            provider_profile=profile,
+            algorithm='rsa',
+            public_key_fingerprint_sha256='a' * 64,
+        )
+        binding = CryptoManagedKeyPkcs11BindingModel.objects.create(
+            managed_key=managed_key,
+            provider_profile=profile,
+            key_id_hex='01020304',
+        )
+
+        context = self.view.get_context_data()
+
+        assert context['app_secret_summary']['field_encryption'] == 'AES-256-GCM'
+        assert context['app_secret_summary']['protection'] == 'RSA-OAEP (SHA-256, MGF1-SHA-256)'
+        assert 'trustpoint-app-secret-kek' in context['app_secret_summary']['kek']
+        assert list(context['pkcs11_managed_key_bindings']) == [binding]
+
     def test_get_context_data_groups_pkcs11_mechanisms_without_empty_key_size_columns(self) -> None:
         """Test PKCS#11 mechanism display metadata is grouped and omits empty key-size columns."""
         profile = CryptoProviderProfileModel.objects.create(
@@ -237,6 +305,11 @@ class BackendConfigurationViewTest(TestCase):
         profile.save(update_fields=['current_capability_snapshot'])
         CryptoProviderCapabilityPkcs11DetailModel.objects.create(
             snapshot=snapshot,
+            token_label='SmartCard-HSM',  # noqa: S106
+            token_serial='DENK0402227',  # noqa: S106
+            token_model='PKCS#15 emulated',  # noqa: S106
+            token_manufacturer='www.CardContact.de',  # noqa: S106
+            slot_id=0,
             snapshot_payload={
                 'derived_features': {},
                 'mechanisms': {
@@ -265,6 +338,8 @@ class BackendConfigurationViewTest(TestCase):
         assert groups['rsa']['mechanisms'][0]['key_size_range'] == '2048 - 4096'
         assert not groups['hash']['has_key_size_ranges']
         assert groups['hash']['mechanisms'][0]['key_size_range'] == ''
+        assert context['pkcs11_token_manufacturer_display'] == 'www.CardContact.de'  # noqa: S105
+        assert context['pkcs11_token_model_display'] == 'PKCS#15 emulated'  # noqa: S105
 
     def test_get_context_data_with_hsm_but_no_config_reference(self) -> None:
         """Test get_context_data with PKCS#11 profile but missing config relation."""

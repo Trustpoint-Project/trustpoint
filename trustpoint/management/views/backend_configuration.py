@@ -17,15 +17,80 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import TemplateView
 
-from appsecrets.models import AppSecretBackendModel
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
+from appsecrets.service import (
+    PKCS11_CWRAP_DEK_PREFIX,
+    PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX,
+    PKCS11_ENCRYPTED_DEK_CBC_PREFIX,
+    PKCS11_RSA_OAEP_SHA256_DEK_PREFIX,
+)
 from crypto.application.capabilities import BackendCapabilityReport, get_active_backend_capability_report
-from crypto.models import BackendKind, CryptoProviderProfileModel
+from crypto.models import BackendKind, CryptoManagedKeyPkcs11BindingModel, CryptoProviderProfileModel
 from pki.util.keys import supported_auto_gen_pki_key_algorithms
 
 PKCS11_ASSET_DOWNLOADS = {
     'module': ('module_path', 'application/octet-stream'),
     'provider-config': ('provider_config_path', 'text/plain'),
 }
+
+
+def _app_secret_summary(backend: AppSecretBackendModel | None) -> dict[str, Any] | None:
+    """Return non-secret application-secret key and algorithm metadata for display."""
+    if backend is None:
+        return None
+    summary: dict[str, Any] = {
+        'field_encryption': 'AES-256-GCM',
+        'dek': _('256-bit data-encryption key (DEK)'),
+    }
+    if backend.backend_kind == AppSecretBackendKind.SOFTWARE:
+        summary.update(
+            {
+                'protection': _('Software backend'),
+                'kek': None,
+                'location': _('DEK stored in the software backend configuration'),
+            }
+        )
+        return summary
+
+    try:
+        config = backend.pkcs11_config
+    except ObjectDoesNotExist:
+        summary.update(
+            {
+                'protection': _('Pending initialization'),
+                'kek': None,
+                'location': _('No PKCS#11 app-secret configuration found'),
+            }
+        )
+        return summary
+
+    wrapped_dek = bytes(config.wrapped_dek or b'')
+    protection: Any
+    kek_type: Any
+    if wrapped_dek.startswith(PKCS11_RSA_OAEP_SHA256_DEK_PREFIX):
+        protection = 'RSA-OAEP (SHA-256, MGF1-SHA-256)'
+        kek_type = _('RSA private KEK (3072-bit preferred, 2048-bit minimum)')
+    elif wrapped_dek.startswith(PKCS11_CWRAP_DEK_PREFIX):
+        protection = _('PKCS#11 AES key wrap (provider-negotiated)')
+        kek_type = _('AES-256 secret KEK')
+    elif wrapped_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX):
+        protection = 'PKCS#11 AES-CBC-PAD'
+        kek_type = _('AES-256 secret KEK')
+    elif wrapped_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PREFIX):
+        protection = 'PKCS#11 AES-CBC'
+        kek_type = _('AES-256 secret KEK')
+    else:
+        protection = _('Pending initialization')
+        kek_type = _('PKCS#11 KEK')
+
+    summary.update(
+        {
+            'protection': protection,
+            'kek': f'{kek_type}: {config.kek_label}',
+            'location': _('KEK on the configured PKCS#11 token; protected DEK envelope in the database'),
+        }
+    )
+    return summary
 
 
 def _capability_status(report: BackendCapabilityReport | None) -> tuple[str, Any, Any]:
@@ -161,6 +226,39 @@ def _active_pkcs11_config() -> Any | None:
     return getattr(profile, 'pkcs11_config', None) if profile is not None else None
 
 
+def _add_pkcs11_display_context(
+    context: dict[str, Any],
+    *,
+    crypto_profile: CryptoProviderProfileModel | None,
+    probe_detail: Any | None,
+) -> None:
+    """Add provider identity, asset, and managed-key display metadata."""
+    pkcs11_config = context['pkcs11_config']
+    context['pkcs11_token_serial_display'] = (
+        getattr(probe_detail, 'token_serial', None) or getattr(pkcs11_config, 'token_serial', None) or '-'
+    )
+    context['pkcs11_token_label_display'] = (
+        getattr(probe_detail, 'token_label', None) or getattr(pkcs11_config, 'token_label', None) or '-'
+    )
+    context['pkcs11_token_manufacturer_display'] = getattr(probe_detail, 'token_manufacturer', None) or '-'
+    context['pkcs11_token_model_display'] = getattr(probe_detail, 'token_model', None) or '-'
+    context['pkcs11_module_download_available'] = _path_is_downloadable(getattr(pkcs11_config, 'module_path', None))
+    context['pkcs11_provider_config_download_available'] = _path_is_downloadable(
+        getattr(pkcs11_config, 'provider_config_path', None)
+    )
+    probed_slot_id = getattr(probe_detail, 'slot_id', None)
+    configured_slot_id = getattr(pkcs11_config, 'slot_id', None)
+    selected_slot_id = probed_slot_id if probed_slot_id is not None else configured_slot_id
+    context['pkcs11_slot_id_display'] = selected_slot_id if selected_slot_id is not None else '-'
+    context['pkcs11_managed_key_bindings'] = (
+        CryptoManagedKeyPkcs11BindingModel.objects.filter(provider_profile=crypto_profile)
+        .select_related('managed_key')
+        .order_by('managed_key__alias')
+        if crypto_profile is not None and crypto_profile.backend_kind == BackendKind.PKCS11
+        else ()
+    )
+
+
 class BackendConfigurationPkcs11AssetDownloadView(View):
     """Download installed PKCS#11 provider files for the active backend."""
 
@@ -248,6 +346,7 @@ class BackendConfigurationView(TemplateView):
 
         context['crypto_profile'] = crypto_profile
         context['app_secret_backend'] = app_secret_backend
+        context['app_secret_summary'] = _app_secret_summary(app_secret_backend)
         context['pkcs11_config'] = getattr(crypto_profile, 'pkcs11_config', None) if crypto_profile else None
         context['software_config'] = getattr(crypto_profile, 'software_config', None) if crypto_profile else None
         context['rest_config'] = getattr(crypto_profile, 'rest_config', None) if crypto_profile else None
@@ -280,24 +379,7 @@ class BackendConfigurationView(TemplateView):
         context['is_pkcs11_backend'] = bool(crypto_profile and crypto_profile.backend_kind == BackendKind.PKCS11)
         context['is_software_backend'] = bool(crypto_profile and crypto_profile.backend_kind == BackendKind.SOFTWARE)
         context['is_rest_backend'] = bool(crypto_profile and crypto_profile.backend_kind == BackendKind.REST)
-        context['pkcs11_token_serial_display'] = (
-            getattr(pkcs11_probe_detail, 'token_serial', None)
-            or getattr(context['pkcs11_config'], 'token_serial', None)
-            or '-'
-        )
-        pkcs11_config = context['pkcs11_config']
-        context['pkcs11_module_download_available'] = _path_is_downloadable(
-            getattr(pkcs11_config, 'module_path', None)
-        )
-        context['pkcs11_provider_config_download_available'] = _path_is_downloadable(
-            getattr(pkcs11_config, 'provider_config_path', None)
-        )
-        pkcs11_slot_id = (
-            getattr(pkcs11_probe_detail, 'slot_id', None)
-            if getattr(pkcs11_probe_detail, 'slot_id', None) is not None
-            else getattr(context['pkcs11_config'], 'slot_id', None)
-        )
-        context['pkcs11_slot_id_display'] = pkcs11_slot_id if pkcs11_slot_id is not None else '-'
+        _add_pkcs11_display_context(context, crypto_profile=crypto_profile, probe_detail=pkcs11_probe_detail)
 
         if crypto_profile is None:
             messages.warning(self.request, _('No configured crypto backend profile was found.'))

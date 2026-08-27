@@ -38,6 +38,12 @@ Trustpoint normally, select **USB HSM** in the setup wizard, and choose
 **Discover USB HSM**. Discovery reads only public token identity information;
 the user PIN is requested separately for authenticated operations.
 
+The manufacturer, model, slot, and serial shown by discovery come from the
+PKCS#11 token information returned by OpenSC. For SmartCard-HSM devices,
+OpenSC may report the model as ``PKCS#15 emulated``. This describes OpenSC's
+PKCS#15 compatibility representation; it does not mean that Trustpoint stores
+the HSM keys in software.
+
 The same USB flow is available during a fresh installation, when attaching an
 existing Trustpoint database, and when restoring a backup. A restored or moved
 instance must still have access to the original token when that token contains
@@ -54,6 +60,12 @@ To recreate only an already-running Trustpoint container with passthrough, run
 
 The interactive setup script offers the same choice as
 **Enable USB HSM passthrough?**.
+
+The USB flow uses the OpenSC module bundled in the Trustpoint image, so it does
+not require a library or provider configuration upload. The network HSM flow
+keeps those upload fields because network and appliance HSMs commonly require
+their vendor's architecture-specific PKCS#11 module and an optional provider
+configuration. Trustpoint treats that configuration as opaque provider input.
 
 USB discovery requires the container to see the host USB bus. The standard
 Compose configuration exposes ``/dev/bus/usb``. For another container
@@ -133,6 +145,19 @@ AES Key Operations
 - Trustpoint stores database secrets encrypted with an application-secret DEK.
 - Trustpoint prefers a non-exportable AES KEK on tokens that expose suitable AES mechanisms.
 - Signing-focused tokens can instead use a dedicated non-exportable RSA private KEK with RSA-OAEP SHA-256.
+
+The application-secret keys are:
+
+- a random 256-bit DEK used by Trustpoint for AES-256-GCM field encryption;
+- one non-exportable KEK on the selected token, labelled
+  ``trustpoint-app-secret-kek``;
+- either an AES-256 secret KEK or a dedicated RSA private KEK (3072 bits when
+  supported, with a 2048-bit minimum).
+
+With the RSA flow, Trustpoint encrypts the DEK using the public key and
+RSA-OAEP with SHA-256/MGF1-SHA-256. Only the private HSM object can recover the
+DEK. The protected DEK envelope is stored in PostgreSQL, while the plaintext
+DEK exists only in process memory while Trustpoint is running.
 
 **Encryption/Decryption Operations**:
 - DEK protection with standard PKCS#11 AES key wrap/unwrap mechanisms when available

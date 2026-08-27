@@ -49,6 +49,12 @@ When PKCS#11 application-secret protection is enabled:
 4. Trustpoint protects the DEK with supported AES mechanisms or RSA-OAEP SHA-256
 5. The protected DEK is stored in the application-secret PKCS#11 config row
 
+The RSA fallback solves the common case where a signing-oriented smart-card
+provider exposes RSA key generation and RSA-OAEP decryption but no PKCS#11 AES
+mechanisms. It does not move the DEK into the HSM: the dedicated private RSA KEK
+remains non-exportable on the token, and only the OAEP-protected DEK is stored
+in the database.
+
 Runtime Key Management
 ----------------------
 

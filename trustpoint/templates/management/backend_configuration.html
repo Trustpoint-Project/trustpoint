@@ -95,6 +95,30 @@
                                     <div>{% trans 'Backend' %}</div>
                                     <div>{{ app_secret_backend.get_backend_kind_display }}</div>
                                 </li>
+                                {% if app_secret_summary %}
+                                    <li>
+                                        <div>{% trans 'Field Encryption' %}</div>
+                                        <div>{{ app_secret_summary.field_encryption }}</div>
+                                    </li>
+                                    <li>
+                                        <div>{% trans 'DEK' %}</div>
+                                        <div>{{ app_secret_summary.dek }}</div>
+                                    </li>
+                                    <li>
+                                        <div>{% trans 'DEK Protection' %}</div>
+                                        <div>{{ app_secret_summary.protection }}</div>
+                                    </li>
+                                    {% if app_secret_summary.kek %}
+                                        <li>
+                                            <div>{% trans 'KEK Object' %}</div>
+                                            <div><code class="p-0">{{ app_secret_summary.kek }}</code></div>
+                                        </li>
+                                    {% endif %}
+                                    <li>
+                                        <div>{% trans 'Key Location' %}</div>
+                                        <div>{{ app_secret_summary.location }}</div>
+                                    </li>
+                                {% endif %}
                             </ul>
                         {% else %}
                             <div class="alert alert-warning mb-0">
@@ -228,7 +252,20 @@
                         {% endif %}
                         <li>
                             <div>{% trans 'Token Label' %}</div>
-                            <div>{{ pkcs11_config.token_label|default:"-" }}</div>
+                            <div>{{ pkcs11_token_label_display }}</div>
+                        </li>
+                        <li>
+                            <div>{% trans 'Token Manufacturer' %}</div>
+                            <div>{{ pkcs11_token_manufacturer_display }}</div>
+                        </li>
+                        <li>
+                            <div>{% trans 'Token Model' %}</div>
+                            <div>
+                                {{ pkcs11_token_model_display }}
+                                {% if pkcs11_token_model_display != '-' %}
+                                    <span class="text-muted small">{% trans '(provider-reported)' %}</span>
+                                {% endif %}
+                            </div>
                         </li>
                         <li>
                             <div>{% trans 'Token Serial' %}</div>
@@ -239,6 +276,46 @@
                             <div>{{ pkcs11_slot_id_display }}</div>
                         </li>
                     </ul>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header d-flex align-items-center justify-content-between gap-3">
+                    <h5 class="mb-0">{% trans 'Managed HSM Keys' %}</h5>
+                    <span class="badge text-bg-secondary">{{ pkcs11_managed_key_bindings|length }}</span>
+                </div>
+                <div class="card-body p-0">
+                    {% if pkcs11_managed_key_bindings %}
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>{% trans 'Alias' %}</th>
+                                        <th>{% trans 'Algorithm' %}</th>
+                                        <th>{% trans 'HSM Location' %}</th>
+                                        <th>{% trans 'Status' %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for binding in pkcs11_managed_key_bindings %}
+                                        <tr>
+                                            <td>{{ binding.managed_key.alias }}</td>
+                                            <td>{{ binding.managed_key.algorithm|upper }}</td>
+                                            <td>
+                                                <code class="p-0">CKA_ID={{ binding.key_id_hex }}</code>
+                                                <div class="text-muted small">
+                                                    {{ pkcs11_token_label_display }} · {% trans 'slot' %} {{ pkcs11_slot_id_display }}
+                                                </div>
+                                            </td>
+                                            <td>{{ binding.managed_key.get_status_display }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-muted p-3">{% trans 'No managed signing keys have been created on this token yet.' %}</div>
+                    {% endif %}
                 </div>
             </div>
 
