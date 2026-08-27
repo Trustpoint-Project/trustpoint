@@ -16,7 +16,7 @@ Key Management Architecture
 The encryption system follows this key structure:
 
 1. **Data Encryption Key (DEK)** - A 256-bit key used for field encryption
-2. **Key Encryption Key (KEK)** - Optional PKCS#11 AES key used to protect the DEK
+2. **Key Encryption Key (KEK)** - Optional non-exportable PKCS#11 AES or RSA key used to protect the DEK
 3. **Field Encryption** - Individual database fields encrypted using the DEK with AES-256-GCM
 
 Key Generation Process
@@ -33,9 +33,10 @@ Trustpoint supports two application-secret backend modes:
    signing/key-generation operations.
 
 **PKCS#11 app-secret backend**
-   Trustpoint generates or locates a non-extractable AES KEK on the PKCS#11
-   token and stores only the protected DEK in the database. The token must
-   support the standard AES flows that Trustpoint probes during setup.
+   Trustpoint generates or locates a non-extractable KEK on the PKCS#11 token
+   and stores only the protected DEK in the database. AES KEKs are preferred.
+   Tokens without suitable AES mechanisms can use a dedicated RSA private KEK
+   when they support RSA key generation and RSA-OAEP SHA-256 decryption.
 
 PKCS#11 KEK Handling
 ~~~~~~~~~~~~~~~~~~~~
@@ -45,7 +46,7 @@ When PKCS#11 application-secret protection is enabled:
 1. Trustpoint opens a session with the configured PKCS#11 token
 2. The application-secret KEK is created or resolved on that token
 3. The KEK is marked non-extractable where the provider supports those attributes
-4. Trustpoint protects the DEK using supported AES key-wrap or AES encryption/decryption mechanisms
+4. Trustpoint protects the DEK with supported AES mechanisms or RSA-OAEP SHA-256
 5. The protected DEK is stored in the application-secret PKCS#11 config row
 
 Runtime Key Management
@@ -56,7 +57,7 @@ Container Startup
 
 When the Trustpoint container starts:
 
-1. The system attempts to retrieve the cached DEK from Django's cache
+1. The system attempts to retrieve the DEK from the process-local cache
 2. If not cached, it resolves the configured app-secret backend:
    
    - software backend: load the configured software DEK
@@ -71,7 +72,7 @@ DEK Caching Strategy
 
 - **Cache Key**: application-secret backend specific
 - **Cache Duration**: Indefinite (``None`` timeout)
-- **Cache Backend**: Django's configured cache
+- **Cache Backend**: Process-local memory
 - **Security**: DEK can be manually cleared using the app-secret cache clearing helper
 
 Database Field Encryption

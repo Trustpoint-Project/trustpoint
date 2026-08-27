@@ -1261,7 +1261,7 @@ def validate_pkcs11_app_secret_protection_support(profile: Pkcs11ProviderProfile
         auth_source=auth_source,
         auth_source_ref=auth_source_ref,
     )
-    Pkcs11AppSecretService(app_secret_config).verify_temporary_dek_protection_support()
+    Pkcs11AppSecretService(app_secret_config).verify_dek_protection_support()
 
 
 def build_staged_pkcs11_probe_profile(

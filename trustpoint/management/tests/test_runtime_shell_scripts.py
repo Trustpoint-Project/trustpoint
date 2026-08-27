@@ -9,6 +9,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 UPDATE_TLS_SCRIPT = REPO_ROOT / 'docker/trustpoint/wizard/update_tls.sh'
+MANAGE_PCSCD_SCRIPT = REPO_ROOT / 'docker/trustpoint/wizard/manage_pcscd.sh'
+TRUSTPOINT_ENTRYPOINT_SCRIPT = REPO_ROOT / 'docker/trustpoint/entrypoint.sh'
 TRUSTPOINT_SERVICE_SCRIPT = REPO_ROOT / 'scripts/tp_wizard/services/trustpoint.sh'
 TP_WIZARD_STATE_SCRIPT = REPO_ROOT / 'scripts/tp_wizard/state.sh'
 TP_WIZARD_CLI_SCRIPT = REPO_ROOT / 'scripts/tp_wizard/commands/cli.sh'
@@ -63,6 +65,19 @@ def test_update_tls_rejects_missing_credentials(tmp_path: Path) -> None:
 
     assert result.returncode == MISSING_CREDENTIAL_EXIT_CODE
     assert 'No complete staged or installed TLS credential is available' in result.stdout
+
+
+def test_container_pcscd_startup_does_not_require_polkit() -> None:
+    """Bootstrap and operational PC/SC daemons accept container-local clients."""
+    for script in (MANAGE_PCSCD_SCRIPT, TRUSTPOINT_ENTRYPOINT_SCRIPT):
+        commands = [
+            line.strip()
+            for line in script.read_text(encoding='utf-8').splitlines()
+            if line.strip().startswith('pcscd ')
+        ]
+
+        assert commands
+        assert all('--disable-polkit' in command for command in commands)
 
 
 def test_trustpoint_launcher_passes_public_ports_into_container() -> None:

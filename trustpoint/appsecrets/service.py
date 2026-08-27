@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Protocol, cast
 
 import pkcs11
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from appsecrets.models import (
@@ -35,6 +37,14 @@ AAD_CONTEXT: Final[bytes] = b'trustpoint-app-secrets-v1'
 PKCS11_CWRAP_DEK_PREFIX: Final[bytes] = b'tpsec:pkcs11:cwrap:v1:'
 PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-cbc-pad:v1:'
 PKCS11_ENCRYPTED_DEK_CBC_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-cbc:v1:'
+PKCS11_RSA_OAEP_SHA256_DEK_PREFIX: Final[bytes] = b'tpsec:pkcs11:rsa-oaep-sha256:v1:'
+PKCS11_RSA_OAEP_PARAMS: Final[tuple[pkcs11.Mechanism, pkcs11.MGF, None]] = (
+    pkcs11.Mechanism.SHA256,
+    pkcs11.MGF.SHA256,
+    None,
+)
+RSA_KEK_PREFERRED_BITS: Final[int] = 3072
+RSA_KEK_MINIMUM_BITS: Final[int] = 2048
 APP_SECRET_KEK_BASE_TEMPLATE: Final[dict[pkcs11.Attribute, object]] = {
     pkcs11.Attribute.TOKEN: True,
     pkcs11.Attribute.PRIVATE: True,
@@ -143,14 +153,20 @@ class AppSecretConfigurationError(AppSecretError):
     """Raised when the app-secret subsystem is not configured correctly."""
 
 
-class _Pkcs11Kek(Protocol):
+class _Pkcs11KeyObject(Protocol):
+    def __getitem__(self, attribute: pkcs11.Attribute) -> object:
+        """Return a PKCS#11 object attribute value."""
+        raise NotImplementedError
+
+    def destroy(self) -> None:
+        """Destroy the PKCS#11 object."""
+        raise NotImplementedError
+
+
+class _Pkcs11Kek(_Pkcs11KeyObject, Protocol):
     @property
     def session(self) -> pkcs11.Session:
         """Return the session that owns this key object."""
-        raise NotImplementedError
-
-    def __getitem__(self, attribute: pkcs11.Attribute) -> object:
-        """Return a PKCS#11 object attribute value."""
         raise NotImplementedError
 
     def wrap_key(self, key: _Pkcs11DekKey, *, mechanism: pkcs11.Mechanism) -> bytes | bytearray | memoryview:
@@ -191,11 +207,6 @@ class _Pkcs11Kek(Protocol):
         """Unwrap a wrapped DEK into a temporary key object."""
         raise NotImplementedError
 
-    def destroy(self) -> None:
-        """Destroy a temporary KEK key object."""
-        raise NotImplementedError
-
-
 class _Pkcs11DekKey(Protocol):
     def __getitem__(self, attribute: pkcs11.Attribute) -> object:
         """Return a PKCS#11 object attribute value."""
@@ -205,6 +216,22 @@ class _Pkcs11DekKey(Protocol):
         """Destroy the temporary DEK key object."""
         raise NotImplementedError
 
+
+class _Pkcs11RsaPublicKek(_Pkcs11KeyObject, Protocol):
+    """Public half of an RSA app-secret KEK pair."""
+
+
+class _Pkcs11RsaPrivateKek(_Pkcs11KeyObject, Protocol):
+
+    def decrypt(
+        self,
+        ciphertext: bytes,
+        *,
+        mechanism: pkcs11.Mechanism,
+        mechanism_param: tuple[pkcs11.Mechanism, pkcs11.MGF, None],
+    ) -> bytes | bytearray | memoryview:
+        """Decrypt an RSA-OAEP protected DEK."""
+        raise NotImplementedError
 
 class _Pkcs11Slot(Protocol):
     slot_id: int
@@ -356,11 +383,17 @@ class Pkcs11AppSecretService(BaseAppSecretService):
 
         with self._open_session() as session:
             kek = self._find_existing_kek(session)
-            if kek is None:
-                _kek, _dek, protected_dek = self._create_kek_with_protected_dek(session)
-            else:
+            if kek is not None:
                 self._validate_kek_policy(kek)
                 _dek, protected_dek = self._generate_protected_dek(session=session, kek=kek)
+            else:
+                rsa_pair = self._find_existing_rsa_kek_pair(session)
+                if rsa_pair is not None:
+                    public_kek, private_kek = rsa_pair
+                    self._validate_rsa_kek_policy(private_kek)
+                    _dek, protected_dek = self._generate_rsa_protected_dek(public_kek)
+                else:
+                    protected_dek = self._create_preferred_kek_with_protected_dek(session)[2]
 
         self._config.wrapped_dek = protected_dek
         self._config.full_clean()
@@ -382,8 +415,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                 raise AppSecretConfigurationError(msg)
 
             with self._open_session() as session:
-                kek = self._load_existing_kek(session)
-                dek = self._recover_dek(kek=kek, protected_dek=protected_dek)
+                dek = self._recover_configured_dek(session=session, protected_dek=protected_dek)
 
             if len(dek) != DEK_LENGTH_BYTES:
                 msg = f'Invalid recovered DEK length: {len(dek)} bytes.'
@@ -401,8 +433,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             raise AppSecretConfigurationError(msg)
 
         with self._open_session(rw=False) as session:
-            kek = self._load_existing_kek(session)
-            dek = self._recover_dek(kek=kek, protected_dek=protected_dek)
+            dek = self._recover_configured_dek(session=session, protected_dek=protected_dek)
 
         if len(dek) != DEK_LENGTH_BYTES:
             msg = f'Invalid recovered DEK length: {len(dek)} bytes.'
@@ -410,11 +441,36 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         return dek
 
     def _find_existing_kek(self, session: pkcs11.Session) -> _Pkcs11Kek | None:
-        """Return the persistent HSM KEK when it already exists."""
+        """Return the persistent AES KEK when it already exists."""
         try:
-            return cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
+            return cast(
+                '_Pkcs11Kek',
+                session.get_key(
+                    object_class=pkcs11.ObjectClass.SECRET_KEY,
+                    label=self._config.kek_label,
+                    key_type=pkcs11.KeyType.AES,
+                ),
+            )
         except pkcs11.NoSuchKey:
             return None
+
+    def _create_preferred_kek_with_protected_dek(
+        self,
+        session: pkcs11.Session,
+    ) -> tuple[_Pkcs11KeyObject, bytes, bytes]:
+        """Create an AES KEK when possible, otherwise create a dedicated RSA-OAEP KEK pair."""
+        try:
+            return self._create_kek_with_protected_dek(session)
+        except AppSecretConfigurationError as aes_error:
+            try:
+                _public_kek, private_kek, dek, protected_dek = self._create_rsa_kek_with_protected_dek(session)
+            except AppSecretConfigurationError as rsa_error:
+                msg = (
+                    'PKCS#11 app-secret backend could not create a supported KEK. '
+                    f'AES attempt: {aes_error} RSA-OAEP attempt: {rsa_error}'
+                )
+                raise AppSecretConfigurationError(msg) from rsa_error
+            return private_kek, dek, protected_dek
 
     def _create_kek_with_protected_dek(self, session: pkcs11.Session) -> tuple[_Pkcs11Kek, bytes, bytes]:
         """Create a persistent KEK using the least broad standard profile that can protect a DEK."""
@@ -448,17 +504,41 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         raise AppSecretConfigurationError(msg)
 
     def _load_existing_kek(self, session: pkcs11.Session) -> _Pkcs11Kek:
-        """Load the persistent HSM KEK without creating missing material."""
+        """Load the persistent AES KEK without creating missing material."""
         try:
-            kek = cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
+            kek = cast(
+                '_Pkcs11Kek',
+                session.get_key(
+                    object_class=pkcs11.ObjectClass.SECRET_KEY,
+                    label=self._config.kek_label,
+                    key_type=pkcs11.KeyType.AES,
+                ),
+            )
         except pkcs11.NoSuchKey as exception:
-            msg = f'PKCS#11 app-secret KEK {self._config.kek_label!r} was not found on the configured token.'
+            msg = f'PKCS#11 AES app-secret KEK {self._config.kek_label!r} was not found on the configured token.'
             raise AppSecretConfigurationError(msg) from exception
         self._validate_kek_policy(kek)
         return kek
 
-    def verify_temporary_dek_protection_support(self) -> None:
-        """Verify the token supports app-secret DEK protection without storing key material."""
+    def verify_dek_protection_support(self) -> None:
+        """Verify that the token can protect and recover an app-secret DEK."""
+        try:
+            self._verify_temporary_aes_dek_protection_support()
+        except AppSecretConfigurationError as aes_error:
+            try:
+                self._verify_disposable_rsa_dek_protection_support()
+            except AppSecretConfigurationError as rsa_error:
+                msg = (
+                    'PKCS#11 app-secret protection self-test failed. The token must support either an AES KEK '
+                    'with standard wrap/encryption mechanisms or a non-exportable RSA KEK with RSA-OAEP SHA-256. '
+                    f'AES attempt: {aes_error} RSA-OAEP attempt: {rsa_error}'
+                )
+                raise AppSecretConfigurationError(msg) from rsa_error
+        else:
+            return
+
+    def _verify_temporary_aes_dek_protection_support(self) -> None:
+        """Verify AES DEK protection using non-persistent session objects."""
         attempt_errors: list[str] = []
         with self._open_session() as session:
             for profile_name, capabilities, template in APP_SECRET_KEK_PROFILES:
@@ -490,11 +570,276 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                     self._destroy_kek_best_effort(kek)
 
         msg = (
-            'PKCS#11 app-secret protection self-test failed. The token must support temporary AES KEK generation '
-            'plus either AES key wrap/unwrap or AES encrypt/decrypt for DEK protection.'
+            'Temporary AES KEK protection is unavailable.'
             f'{self._format_pkcs11_attempts(attempt_errors)}'
         )
         raise AppSecretConfigurationError(msg)
+
+    def _find_existing_rsa_kek_pair(
+        self,
+        session: pkcs11.Session,
+    ) -> tuple[_Pkcs11RsaPublicKek, _Pkcs11RsaPrivateKek] | None:
+        """Return the persistent RSA KEK pair when its private half exists."""
+        try:
+            private_kek = cast(
+                '_Pkcs11RsaPrivateKek',
+                session.get_key(
+                    object_class=pkcs11.ObjectClass.PRIVATE_KEY,
+                    key_type=pkcs11.KeyType.RSA,
+                    label=self._config.kek_label,
+                ),
+            )
+        except pkcs11.NoSuchKey:
+            return None
+        return self._load_rsa_public_kek(session=session, private_kek=private_kek), private_kek
+
+    def _load_existing_rsa_private_kek(self, session: pkcs11.Session) -> _Pkcs11RsaPrivateKek:
+        """Load the persistent RSA private KEK without creating key material."""
+        try:
+            private_kek = cast(
+                '_Pkcs11RsaPrivateKek',
+                session.get_key(
+                    object_class=pkcs11.ObjectClass.PRIVATE_KEY,
+                    key_type=pkcs11.KeyType.RSA,
+                    label=self._config.kek_label,
+                ),
+            )
+        except pkcs11.NoSuchKey as exception:
+            msg = f'PKCS#11 RSA app-secret KEK {self._config.kek_label!r} was not found on the configured token.'
+            raise AppSecretConfigurationError(msg) from exception
+        self._validate_rsa_kek_policy(private_kek)
+        return private_kek
+
+    def _load_rsa_public_kek(
+        self,
+        *,
+        session: pkcs11.Session,
+        private_kek: _Pkcs11RsaPrivateKek,
+    ) -> _Pkcs11RsaPublicKek:
+        """Load the public half bound to an RSA private KEK by CKA_ID when available."""
+        key_id = self._optional_bytes_attribute(private_kek, pkcs11.Attribute.ID)
+        try:
+            if key_id:
+                key = session.get_key(
+                    object_class=pkcs11.ObjectClass.PUBLIC_KEY,
+                    key_type=pkcs11.KeyType.RSA,
+                    id=key_id,
+                )
+            else:
+                key = session.get_key(
+                    object_class=pkcs11.ObjectClass.PUBLIC_KEY,
+                    key_type=pkcs11.KeyType.RSA,
+                    label=self._config.kek_label,
+                )
+        except pkcs11.NoSuchKey as exception:
+            msg = f'Public half of PKCS#11 RSA app-secret KEK {self._config.kek_label!r} was not found.'
+            raise AppSecretConfigurationError(msg) from exception
+        return cast('_Pkcs11RsaPublicKek', key)
+
+    def _create_rsa_kek_with_protected_dek(
+        self,
+        session: pkcs11.Session,
+    ) -> tuple[_Pkcs11RsaPublicKek, _Pkcs11RsaPrivateKek, bytes, bytes]:
+        """Create a persistent RSA-OAEP KEK pair and protect a new DEK."""
+        public_kek: _Pkcs11RsaPublicKek | None = None
+        private_kek: _Pkcs11RsaPrivateKek | None = None
+        try:
+            public_kek, private_kek = self._generate_rsa_kek_pair(
+                session=session,
+                label=self._config.kek_label,
+            )
+            self._validate_rsa_kek_policy(private_kek)
+            dek, protected_dek = self._generate_rsa_protected_dek(public_kek)
+        except (AppSecretConfigurationError, AttributeError, TypeError, ValueError, pkcs11.PKCS11Error) as exception:
+            self._destroy_rsa_keypair_best_effort(public_kek=public_kek, private_kek=private_kek)
+            msg = f'RSA-OAEP KEK creation failed: {self._format_pkcs11_attempt_error(exception)}'
+            raise AppSecretConfigurationError(msg) from exception
+        return public_kek, private_kek, dek, protected_dek
+
+    def _generate_rsa_kek_pair(
+        self,
+        *,
+        session: pkcs11.Session,
+        label: str,
+    ) -> tuple[_Pkcs11RsaPublicKek, _Pkcs11RsaPrivateKek]:
+        """Generate a non-exportable RSA key pair dedicated to DEK recovery."""
+        key_id = os.urandom(16)
+        key_size = self._select_rsa_kek_size(session)
+        public_kek, private_kek = session.generate_keypair(
+            pkcs11.KeyType.RSA,
+            key_size,
+            id=key_id,
+            label=label,
+            store=True,
+            capabilities=pkcs11.MechanismFlag.DECRYPT,
+            mechanism=pkcs11.Mechanism.RSA_PKCS_KEY_PAIR_GEN,
+            public_template={
+                pkcs11.Attribute.ID: key_id,
+                pkcs11.Attribute.LABEL: label,
+                pkcs11.Attribute.TOKEN: True,
+                pkcs11.Attribute.PRIVATE: False,
+            },
+            private_template={
+                pkcs11.Attribute.ID: key_id,
+                pkcs11.Attribute.LABEL: label,
+                pkcs11.Attribute.TOKEN: True,
+                pkcs11.Attribute.PRIVATE: True,
+                pkcs11.Attribute.SENSITIVE: True,
+                pkcs11.Attribute.EXTRACTABLE: False,
+                pkcs11.Attribute.DECRYPT: True,
+            },
+        )
+        return cast('_Pkcs11RsaPublicKek', public_kek), cast('_Pkcs11RsaPrivateKek', private_kek)
+
+    @staticmethod
+    def _select_rsa_kek_size(session: pkcs11.Session) -> int:
+        """Select a modern RSA size within the provider's advertised generation range."""
+        try:
+            info = session.token.slot.get_mechanism_info(pkcs11.Mechanism.RSA_PKCS_KEY_PAIR_GEN)
+        except (AttributeError, pkcs11.PKCS11Error):
+            return RSA_KEK_PREFERRED_BITS
+
+        minimum = info.min_key_length or 0
+        maximum = info.max_key_length or RSA_KEK_PREFERRED_BITS
+        if minimum <= RSA_KEK_PREFERRED_BITS <= maximum:
+            return RSA_KEK_PREFERRED_BITS
+        if minimum <= RSA_KEK_MINIMUM_BITS <= maximum:
+            return RSA_KEK_MINIMUM_BITS
+        msg = (
+            'PKCS#11 token does not advertise a supported RSA KEK size; '
+            f'reported range is {minimum}..{maximum} bits.'
+        )
+        raise AppSecretConfigurationError(msg)
+
+    def _generate_rsa_protected_dek(self, public_kek: _Pkcs11RsaPublicKek) -> tuple[bytes, bytes]:
+        """Generate a random DEK and protect it with the RSA KEK public key."""
+        dek = os.urandom(DEK_LENGTH_BYTES)
+        return dek, self._protect_dek_with_rsa(public_kek=public_kek, dek=dek)
+
+    def _protect_dek_with_rsa(self, *, public_kek: _Pkcs11RsaPublicKek, dek: bytes) -> bytes:
+        """Protect a DEK using RSA-OAEP SHA-256 and public token metadata."""
+        modulus = self._positive_integer_attribute(public_kek, pkcs11.Attribute.MODULUS)
+        public_exponent = self._positive_integer_attribute(public_kek, pkcs11.Attribute.PUBLIC_EXPONENT)
+        try:
+            public_key = rsa.RSAPublicNumbers(public_exponent, modulus).public_key()
+        except ValueError as exception:
+            msg = 'PKCS#11 RSA app-secret KEK exposes invalid public-key attributes.'
+            raise AppSecretConfigurationError(msg) from exception
+        if public_key.key_size < RSA_KEK_MINIMUM_BITS:
+            msg = f'PKCS#11 RSA app-secret KEK is too small ({public_key.key_size} bits).'
+            raise AppSecretConfigurationError(msg)
+        ciphertext = public_key.encrypt(
+            dek,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+        return PKCS11_RSA_OAEP_SHA256_DEK_PREFIX + ciphertext
+
+    def _recover_rsa_protected_dek(
+        self,
+        *,
+        private_kek: _Pkcs11RsaPrivateKek,
+        protected_dek: bytes,
+    ) -> bytes:
+        """Recover a DEK using HSM-backed RSA-OAEP SHA-256 decryption."""
+        ciphertext = protected_dek[len(PKCS11_RSA_OAEP_SHA256_DEK_PREFIX) :]
+        if not ciphertext:
+            msg = 'Stored PKCS#11 RSA-OAEP protected DEK payload is empty.'
+            raise AppSecretConfigurationError(msg)
+        try:
+            dek = bytes(
+                private_kek.decrypt(
+                    ciphertext,
+                    mechanism=pkcs11.Mechanism.RSA_PKCS_OAEP,
+                    mechanism_param=PKCS11_RSA_OAEP_PARAMS,
+                )
+            )
+        except (AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
+            msg = 'PKCS#11 RSA app-secret KEK could not decrypt the DEK with RSA-OAEP SHA-256.'
+            raise AppSecretConfigurationError(msg) from exception
+        if len(dek) != DEK_LENGTH_BYTES:
+            msg = f'Invalid RSA-OAEP recovered DEK length: {len(dek)} bytes.'
+            raise AppSecretConfigurationError(msg)
+        return dek
+
+    def _recover_configured_dek(self, *, session: pkcs11.Session, protected_dek: bytes) -> bytes:
+        """Recover a DEK using the key type identified by its versioned envelope."""
+        if protected_dek.startswith(PKCS11_RSA_OAEP_SHA256_DEK_PREFIX):
+            private_kek = self._load_existing_rsa_private_kek(session)
+            return self._recover_rsa_protected_dek(private_kek=private_kek, protected_dek=protected_dek)
+        kek = self._load_existing_kek(session)
+        return self._recover_dek(kek=kek, protected_dek=protected_dek)
+
+    def _verify_disposable_rsa_dek_protection_support(self) -> None:
+        """Round-trip a DEK with a uniquely labelled RSA pair and remove the pair afterwards."""
+        label = f'tp-appsec-test-{os.urandom(6).hex()}'
+        public_kek: _Pkcs11RsaPublicKek | None = None
+        private_kek: _Pkcs11RsaPrivateKek | None = None
+        with self._open_session() as session:
+            try:
+                public_kek, private_kek = self._generate_rsa_kek_pair(session=session, label=label)
+                self._validate_rsa_kek_policy(private_kek)
+                dek, protected_dek = self._generate_rsa_protected_dek(public_kek)
+                recovered_dek = self._recover_rsa_protected_dek(
+                    private_kek=private_kek,
+                    protected_dek=protected_dek,
+                )
+                self._assert_dek_round_trip(dek=dek, recovered_dek=recovered_dek)
+            except (
+                AppSecretConfigurationError,
+                AttributeError,
+                TypeError,
+                ValueError,
+                pkcs11.PKCS11Error,
+            ) as exception:
+                msg = self._format_pkcs11_attempt_error(exception)
+                raise AppSecretConfigurationError(msg) from exception
+            finally:
+                self._destroy_rsa_keypair_best_effort(public_kek=public_kek, private_kek=private_kek)
+
+    @staticmethod
+    def _assert_dek_round_trip(*, dek: bytes, recovered_dek: bytes) -> None:
+        """Require a self-test recovery operation to return the original DEK."""
+        if recovered_dek != dek:
+            msg = 'RSA-OAEP protected-DEK recovery returned a different DEK.'
+            raise AppSecretConfigurationError(msg)
+
+    @staticmethod
+    def _destroy_rsa_keypair_best_effort(
+        *,
+        public_kek: _Pkcs11RsaPublicKek | None,
+        private_kek: _Pkcs11RsaPrivateKek | None,
+    ) -> None:
+        """Best-effort removal of both objects in an RSA KEK pair."""
+        for key in (private_kek, public_kek):
+            if key is not None:
+                with contextlib.suppress(pkcs11.PKCS11Error, AttributeError):
+                    key.destroy()
+
+    @staticmethod
+    def _positive_integer_attribute(key: _Pkcs11KeyObject, attribute: pkcs11.Attribute) -> int:
+        """Read a positive PKCS#11 integer attribute represented as bytes or an integer."""
+        value = key[attribute]
+        if isinstance(value, bytes | bytearray | memoryview):
+            value = int.from_bytes(value, 'big')
+        if not isinstance(value, int) or value <= 0:
+            msg = f'PKCS#11 attribute {attribute.name} is not a positive integer.'
+            raise AppSecretConfigurationError(msg)
+        return value
+
+    @staticmethod
+    def _optional_bytes_attribute(key: _Pkcs11KeyObject, attribute: pkcs11.Attribute) -> bytes | None:
+        """Return a readable bytes attribute, or None when unavailable."""
+        try:
+            value = key[attribute]
+        except (KeyError, TypeError, pkcs11.PKCS11Error):
+            return None
+        if isinstance(value, bytes | bytearray | memoryview):
+            return bytes(value)
+        return None
 
     @staticmethod
     def _destroy_kek_best_effort(kek: _Pkcs11Kek | None) -> None:
@@ -833,7 +1178,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             raise AppSecretConfigurationError(msg)
         return dek
 
-    def _validate_kek_policy(self, kek: _Pkcs11Kek) -> None:
+    def _validate_kek_policy(self, kek: _Pkcs11KeyObject) -> None:
         """Reject KEKs whose visible PKCS#11 attributes are unsafe for app-secret protection."""
         expected_attributes = {
             pkcs11.Attribute.EXTRACTABLE: False,
@@ -850,8 +1195,16 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             )
             raise AppSecretConfigurationError(msg)
 
+    def _validate_rsa_kek_policy(self, private_kek: _Pkcs11RsaPrivateKek) -> None:
+        """Require a non-exportable private RSA key that is usable for DEK recovery."""
+        self._validate_kek_policy(private_kek)
+        can_decrypt = self._optional_bool_attribute(private_kek, pkcs11.Attribute.DECRYPT)
+        if can_decrypt is False:
+            msg = f'PKCS#11 RSA app-secret KEK {self._config.kek_label!r} does not permit decryption.'
+            raise AppSecretConfigurationError(msg)
+
     @staticmethod
-    def _optional_bool_attribute(kek: _Pkcs11Kek, attribute: pkcs11.Attribute) -> bool | None:
+    def _optional_bool_attribute(kek: _Pkcs11KeyObject, attribute: pkcs11.Attribute) -> bool | None:
         """Return a readable boolean PKCS#11 attribute, or None when the provider hides it."""
         try:
             value = kek[attribute]

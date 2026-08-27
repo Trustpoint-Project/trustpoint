@@ -17,7 +17,10 @@ SoftHSM
 - **Library Path**: ``/usr/lib/libsofthsm2.so`` in the Trustpoint container, which points to the packaged SoftHSM module.
 - **Use Case**: Development and CI validation. Use a production-grade HSM for production deployments.
 
-The local ``tp_wizard.sh`` SoftHSM setup mounts the SoftHSM token directory into the Trustpoint container and uses the SoftHSM PKCS#11 module directly. This is intentional: the direct module exposes the AES key-wrap and AES-CBC mechanisms required for HSM-backed application-secret protection.
+The local ``tp_wizard.sh`` SoftHSM setup mounts the SoftHSM token directory into
+the Trustpoint container and uses the SoftHSM PKCS#11 module directly. The
+direct module exposes the AES mechanisms used by Trustpoint's preferred
+application-secret protection flow.
 
 Physical HSM
 ~~~~~~~~~~~~
@@ -128,11 +131,13 @@ AES Key Operations
 **Application Secret Protection**:
 - HSM-backed application-secret protection is the default for PKCS#11 fresh installs.
 - Trustpoint stores database secrets encrypted with an application-secret DEK.
-- When PKCS#11 app-secret protection is enabled, that DEK is protected by a non-exportable AES KEK on the token.
+- Trustpoint prefers a non-exportable AES KEK on tokens that expose suitable AES mechanisms.
+- Signing-focused tokens can instead use a dedicated non-exportable RSA private KEK with RSA-OAEP SHA-256.
 
 **Encryption/Decryption Operations**:
 - DEK protection with standard PKCS#11 AES key wrap/unwrap mechanisms when available
 - Fallback DEK protection with AES-CBC-PAD or AES-CBC C_Encrypt/C_Decrypt
+- Fallback DEK protection with software-side RSA-OAEP SHA-256 encryption and token-side C_Decrypt
 
 General HSM Operations
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -217,7 +222,7 @@ Key Components
 
 **Key Management**:
 - KEK stored in HSM, marked as non-extractable (SENSITIVE=True, EXTRACTABLE=False)
-- DEK protected by the KEK using PKCS#11 AES key wrap or AES encryption and cached in-process
+- DEK protected by an AES KEK or dedicated RSA-OAEP KEK and cached in-process
 - Database fields encrypted with AES-256-GCM
 
 Fresh-install wizard behavior
@@ -227,7 +232,7 @@ Selecting the PKCS#11 crypto backend in the setup wizard configures managed
 signing keys on the PKCS#11 token. By default, Trustpoint also requires the
 token to protect the application-secret DEK. Setup is refused when the token can
 authenticate and generate signing keys but cannot protect and recover the DEK
-with supported PKCS#11 AES flows.
+with either the supported AES flows or RSA-OAEP SHA-256.
 
 Operators can disable this policy in the wizard when the token should only
 manage signing keys. In that mode, application secrets use Trustpoint's software

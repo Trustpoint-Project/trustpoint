@@ -75,7 +75,9 @@ start_pcscd_if_requested() {
   rm -f /run/pcscd/pcscd.comm
 
   echo "Starting container-local pcscd for USB smart-card HSM access..."
-  pcscd --foreground > /var/log/trustpoint/pcscd.log 2>&1 &
+  # The container has no polkit service, so pcscd must authorize clients through
+  # the container boundary instead of desktop-session policy.
+  pcscd --foreground --disable-polkit > /var/log/trustpoint/pcscd.log 2>&1 &
   PCSCD_PID=$!
   sleep 1
 

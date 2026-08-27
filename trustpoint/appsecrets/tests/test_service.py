@@ -10,11 +10,16 @@ from typing import Any
 
 import pkcs11
 import pytest
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from appsecrets.service import (
     DEK_LENGTH_BYTES,
     PKCS11_CWRAP_DEK_PREFIX,
     PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX,
+    PKCS11_RSA_OAEP_PARAMS,
+    PKCS11_RSA_OAEP_SHA256_DEK_PREFIX,
+    RSA_KEK_PREFERRED_BITS,
     AppSecretConfigurationError,
     Pkcs11AppSecretService,
 )
@@ -47,6 +52,15 @@ class _FakeSession:
         self.generated_keks: list[_FakeKek] = []
         self.fail_generation = False
         self.reject_wrap_kek_profile = False
+        self.generated_rsa_pairs: list[tuple[_FakeRsaPublicKek, _FakeRsaPrivateKek]] = []
+        self.token = SimpleNamespace(
+            slot=SimpleNamespace(
+                get_mechanism_info=lambda _mechanism: SimpleNamespace(
+                    min_key_length=1024,
+                    max_key_length=4096,
+                )
+            )
+        )
 
     def create_object(self, attrs: dict[pkcs11.Attribute, object]) -> _FakeDekKey:
         key = _FakeDekKey(bytes(attrs[pkcs11.Attribute.VALUE]))
@@ -95,6 +109,128 @@ class _FakeSession:
         key = _FakeDekKey(value)
         self.generated_keys.append(key)
         return key
+
+    def generate_keypair(
+        self,
+        key_type: pkcs11.KeyType,
+        key_length: int,
+        **kwargs: Any,
+    ) -> tuple[_FakeRsaPublicKek, _FakeRsaPrivateKek]:
+        key_id = kwargs['id']
+        label = kwargs['label']
+        public_template = kwargs['public_template']
+        private_template = kwargs['private_template']
+        assert isinstance(key_id, bytes)
+        assert isinstance(label, str)
+        assert isinstance(public_template, dict)
+        assert isinstance(private_template, dict)
+        assert key_type is pkcs11.KeyType.RSA
+        assert key_length == RSA_KEK_PREFERRED_BITS
+        assert kwargs['store'] is True
+        assert kwargs['capabilities'] == pkcs11.MechanismFlag.DECRYPT
+        assert kwargs['mechanism'] is pkcs11.Mechanism.RSA_PKCS_KEY_PAIR_GEN
+        assert public_template[pkcs11.Attribute.PRIVATE] is False
+        assert private_template[pkcs11.Attribute.SENSITIVE] is True
+        assert private_template[pkcs11.Attribute.EXTRACTABLE] is False
+        assert private_template[pkcs11.Attribute.DECRYPT] is True
+
+        software_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_kek = _FakeRsaPublicKek(
+            private_key=software_private_key,
+            key_id=key_id,
+            label=label,
+        )
+        private_kek = _FakeRsaPrivateKek(
+            private_key=software_private_key,
+            key_id=key_id,
+            label=label,
+        )
+        self.generated_rsa_pairs.append((public_kek, private_kek))
+        return public_kek, private_kek
+
+    def get_key(
+        self,
+        object_class: pkcs11.ObjectClass | None = None,
+        key_type: pkcs11.KeyType | None = None,
+        label: str | None = None,
+        **kwargs: Any,
+    ) -> _FakeRsaPublicKek | _FakeRsaPrivateKek:
+        key_id = kwargs.get('id')
+        if key_type is not pkcs11.KeyType.RSA:
+            raise pkcs11.NoSuchKey
+        for public_kek, private_kek in reversed(self.generated_rsa_pairs):
+            key = public_kek if object_class is pkcs11.ObjectClass.PUBLIC_KEY else private_kek
+            if key.destroyed:
+                continue
+            if label is not None and key.label != label:
+                continue
+            if key_id is not None and key.key_id != key_id:
+                continue
+            return key
+        raise pkcs11.NoSuchKey
+
+
+class _FakeRsaPublicKek:
+    """RSA public-key object backed by a cryptography test key."""
+
+    def __init__(self, *, private_key: rsa.RSAPrivateKey, key_id: bytes, label: str) -> None:
+        self._public_numbers = private_key.public_key().public_numbers()
+        self.key_id = key_id
+        self.label = label
+        self.destroyed = False
+
+    def __getitem__(self, attribute: pkcs11.Attribute) -> object:
+        if attribute is pkcs11.Attribute.MODULUS:
+            return self._public_numbers.n
+        if attribute is pkcs11.Attribute.PUBLIC_EXPONENT:
+            return self._public_numbers.e
+        if attribute is pkcs11.Attribute.ID:
+            return self.key_id
+        raise KeyError(attribute)
+
+    def destroy(self) -> None:
+        self.destroyed = True
+
+
+class _FakeRsaPrivateKek:
+    """RSA private-key object that records OAEP parameters used by the service."""
+
+    def __init__(self, *, private_key: rsa.RSAPrivateKey, key_id: bytes, label: str) -> None:
+        self._private_key = private_key
+        self.key_id = key_id
+        self.label = label
+        self.destroyed = False
+        self.decrypt_calls: list[tuple[pkcs11.Mechanism, object]] = []
+
+    def __getitem__(self, attribute: pkcs11.Attribute) -> object:
+        attributes = {
+            pkcs11.Attribute.ID: self.key_id,
+            pkcs11.Attribute.EXTRACTABLE: False,
+            pkcs11.Attribute.SENSITIVE: True,
+            pkcs11.Attribute.PRIVATE: True,
+            pkcs11.Attribute.DECRYPT: True,
+        }
+        return attributes[attribute]
+
+    def decrypt(
+        self,
+        ciphertext: bytes,
+        *,
+        mechanism: pkcs11.Mechanism,
+        mechanism_param: object,
+    ) -> bytes:
+        self.decrypt_calls.append((mechanism, mechanism_param))
+        return self._private_key.decrypt(
+            ciphertext,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+
+    def destroy(self) -> None:
+        self.destroyed = True
 
 
 class _FakeKek:
@@ -239,8 +375,8 @@ def test_pkcs11_app_secret_generate_protected_dek_falls_back_to_imported_key() -
     assert kek.session.created_keys[0].destroyed
 
 
-def test_pkcs11_app_secret_temporary_protection_self_test_round_trips(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The non-persistent PKCS#11 self-test verifies temporary KEK/DEK protection and recovery."""
+def test_pkcs11_app_secret_aes_protection_self_test_round_trips(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The PKCS#11 self-test prefers non-persistent AES KEK protection when supported."""
     service = _service()
     session = _FakeSession()
 
@@ -256,10 +392,74 @@ def test_pkcs11_app_secret_temporary_protection_self_test_round_trips(monkeypatc
 
     monkeypatch.setattr(service, '_open_session', open_session)
 
-    service.verify_temporary_dek_protection_support()
+    service.verify_dek_protection_support()
 
     assert len(session.generated_keys) == 1
     assert session.generated_keys[0].destroyed
+
+
+def test_pkcs11_app_secret_self_test_falls_back_to_disposable_rsa(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Signing-focused tokens can pass the app-secret self-test through RSA-OAEP."""
+    service = _service()
+    session = _FakeSession()
+    session.fail_generation = True
+
+    class _SessionContext:
+        def __enter__(self) -> _FakeSession:
+            return session
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(service, '_open_session', _SessionContext)
+
+    service.verify_dek_protection_support()
+
+    assert len(session.generated_rsa_pairs) == 1
+    public_kek, private_kek = session.generated_rsa_pairs[0]
+    assert public_kek.destroyed
+    assert private_kek.destroyed
+    assert private_kek.decrypt_calls == [(pkcs11.Mechanism.RSA_PKCS_OAEP, PKCS11_RSA_OAEP_PARAMS)]
+
+
+def test_pkcs11_app_secret_rsa_oaep_round_trip_uses_versioned_envelope() -> None:
+    """RSA fallback protects the DEK in software and recovers it only through the private HSM key."""
+    service = _service()
+    session = _FakeSession()
+    public_kek, private_kek = service._generate_rsa_kek_pair(  # noqa: SLF001
+        session=session,
+        label='trustpoint-test-kek',
+    )
+
+    dek, protected_dek = service._generate_rsa_protected_dek(public_kek)  # noqa: SLF001
+    recovered_dek = service._recover_rsa_protected_dek(  # noqa: SLF001
+        private_kek=private_kek,
+        protected_dek=protected_dek,
+    )
+
+    assert protected_dek.startswith(PKCS11_RSA_OAEP_SHA256_DEK_PREFIX)
+    assert recovered_dek == dek
+    assert private_kek.decrypt_calls == [(pkcs11.Mechanism.RSA_PKCS_OAEP, PKCS11_RSA_OAEP_PARAMS)]
+
+
+def test_pkcs11_app_secret_recovers_rsa_envelope_without_public_key() -> None:
+    """Restore-time DEK recovery needs only the persistent private RSA KEK."""
+    service = _service()
+    session = _FakeSession()
+    public_kek, private_kek = service._generate_rsa_kek_pair(  # noqa: SLF001
+        session=session,
+        label='trustpoint-test-kek',
+    )
+    dek, protected_dek = service._generate_rsa_protected_dek(public_kek)  # noqa: SLF001
+    public_kek.destroy()
+
+    recovered_dek = service._recover_configured_dek(  # noqa: SLF001
+        session=session,
+        protected_dek=protected_dek,
+    )
+
+    assert recovered_dek == dek
+    assert not private_kek.destroyed
 
 
 def test_pkcs11_app_secret_kek_creation_falls_back_to_encrypt_profile() -> None:

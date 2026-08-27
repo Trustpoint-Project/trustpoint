@@ -23,7 +23,9 @@ start_pcscd() {
     fi
 
     log INFO "Starting pcscd for USB smart-card HSM access."
-    pcscd
+    # The container has no polkit service, so pcscd must authorize clients through
+    # the container boundary instead of desktop-session policy.
+    pcscd --disable-polkit
     sleep 1
 
     if ! pgrep -x pcscd >/dev/null 2>&1; then
