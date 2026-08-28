@@ -2756,7 +2756,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pydeps", specifier = ">=3.0.1" },
     { name = "python-pkcs11", specifier = ">=0.8.1" },
-    { name = "trustpoint-core", specifier = "==0.3.1" },
+    { name = "trustpoint-core", specifier = "==0.4.1" },
     { name = "types-paramiko", specifier = ">=3.5.0.20250516" },
     { name = "types-requests", specifier = ">=2.32.4.20260324" },
     { name = "zeroconf", specifier = ">=0.150,<0.151" },
@@ -2802,15 +2802,15 @@ docs = [
 
 [[package]]
 name = "trustpoint-core"
-version = "0.3.1"
+version = "0.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "hatchling" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1e/29/d77675f7dcb0a878f6900744bc84592d9809512bd1eba743f9db48a6f380/trustpoint_core-0.3.1.tar.gz", hash = "sha256:a2ee890b8433aae452bc426fc2b83801636dbf97608096771d208fed3fad0c1b", size = 68250, upload-time = "2026-02-18T09:15:45.499Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/e0/89ef3eaf1280c2cad5e73bed68326f0421c5162a161689ce8b461a3530cc/trustpoint_core-0.4.1.tar.gz", hash = "sha256:c2eb664af867799b647f3879ce98200d114805488fe98252d33b1b320f7cb5c0", size = 73574, upload-time = "2026-08-28T12:15:06.883Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/b9/30ee170d3f158a66fef6f0d9bdf9f7e9c7f0bc6237e87604e4ff6c7d2482/trustpoint_core-0.3.1-py3-none-any.whl", hash = "sha256:ac0d772966105c40f26bdbfe325056baa8eccd1cf8ca5a9b3a8c59e89cc5e3f1", size = 22206, upload-time = "2026-02-18T09:15:44.215Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/c2/35db97ead79c2f673e9792d6791a2a3e2788c7ce9c6ef1152b03007b09cf/trustpoint_core-0.4.1-py3-none-any.whl", hash = "sha256:c856b5a4b17cb017bb0fc823f6cec5594ffbc5008f765ecab690eedea4f8814c", size = 22854, upload-time = "2026-08-28T12:15:05.874Z" },
 ]
 
 [[package]]
