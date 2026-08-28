@@ -3,6 +3,7 @@
 
 """Provides base authentication class using the Composite pattern for modular authentication."""
 
+import ipaddress
 from abc import ABC, abstractmethod
 from typing import Never
 
@@ -268,7 +269,6 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
             self.logger.debug('IP resolution skipped: META is not a dict')
             return None
 
-        import ipaddress  # noqa: PLC0415
 
         # Prefer the original client address when running behind a reverse proxy.
         real_ip = meta.get('HTTP_X_REAL_IP')

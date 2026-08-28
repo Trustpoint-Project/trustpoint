@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -37,7 +37,7 @@ class RolloverStrategy(ABC):
         self,
         old_ca: CaModel,
         data: Mapping[str, object] | None = None,
-        files: MultiValueDict[str, UploadedFile] | None = None,
+        files: MultiValueDict[str, UploadedFile[Any]] | None = None,
     ) -> forms.Form:
         """Return the form used to plan a rollover with this strategy."""
 
@@ -49,7 +49,7 @@ class RolloverStrategy(ABC):
         self,
         rollover: CaRolloverModel,  # noqa: ARG002
         data: Mapping[str, object] | None = None,  # noqa: ARG002
-        files: MultiValueDict[str, UploadedFile] | None = None,  # noqa: ARG002
+        files: MultiValueDict[str, UploadedFile[Any]] | None = None,  # noqa: ARG002
     ) -> forms.Form | None:
         """Return a form for the AWAITING_NEW_CA state, if applicable."""
         return None
