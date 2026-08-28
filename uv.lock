@@ -2646,7 +2646,7 @@ wheels = [
 
 [[package]]
 name = "trustpoint"
-version = "0.6.0"
+version = "1.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
