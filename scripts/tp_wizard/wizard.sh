@@ -35,7 +35,10 @@ wizard_configure_trustpoint() {
   ask_port 'Trustpoint HTTP host port' "$TP_HTTP_PORT"; TP_HTTP_PORT="$REPLY"
   ask_port 'Trustpoint HTTPS host port' "$TP_HTTPS_PORT"; TP_HTTPS_PORT="$REPLY"
 
-  if ask_yes_no 'Enable USB HSM passthrough?' n; then
+  if ask_yes_no 'Start and connect the local demo SoftHSM?' n; then
+    state_add softhsm
+    ENABLE_USB_PASSTHROUGH=false
+  elif ask_yes_no 'Enable USB HSM passthrough?' n; then
     ENABLE_USB_PASSTHROUGH=true
   else
     ENABLE_USB_PASSTHROUGH=false
@@ -107,6 +110,7 @@ wizard_show_plan() {
     printf 'Trustpoint setup: %s\n' "$([[ "$TP_AUTO_SETUP" == true ]] && printf automatic || printf 'in-app wizard')"
     printf 'Trustpoint URL: https://localhost:%s\n' "$TP_HTTPS_PORT"
     printf 'Database target: %s:%s/%s (%s)\n' "$APP_DB_HOST" "$APP_DB_PORT" "$DB_NAME" "$DB_USER"
+    printf 'Local SoftHSM: %s\n' "$(state_has softhsm && printf enabled || printf disabled)"
     printf 'USB HSM passthrough: %s\n' "$([[ "$ENABLE_USB_PASSTHROUGH" == true ]] && printf enabled || printf disabled)"
   fi
   printf 'Runtime env: %s\n\n' "$ENV_OVERLAY"

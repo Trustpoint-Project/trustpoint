@@ -10,6 +10,23 @@ start_trustpoint() {
   build_trustpoint
   remove_compose_service trustpoint
   remove_container trustpoint
+  local soft_hsm_args=()
+  if state_has softhsm; then
+    soft_hsm_args+=(
+      -v "$LOCAL_HSM_CONFIG_DIR:$LOCAL_HSM_CONTAINER_CONFIG_DIR"
+      -v "$LOCAL_HSM_TOKEN_DIR:$LOCAL_HSM_CONTAINER_TOKEN_DIR"
+      -e TRUSTPOINT_HSM_ROOT="$LOCAL_HSM_CONTAINER_ROOT"
+      -e SOFTHSM2_CONF="$LOCAL_HSM_CONTAINER_SOFTHSM2_CONF"
+      -e TRUSTPOINT_LOCAL_HSM_ENABLED=1
+      -e TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL="$LOCAL_HSM_TOKEN_LABEL"
+      -e TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
+      -e TRUSTPOINT_LOCAL_HSM_PROFILE_NAME="$LOCAL_HSM_PROFILE_NAME"
+      -e TRUSTPOINT_LOCAL_HSM_MODULE_PATH="$LOCAL_HSM_CONTAINER_MODULE_PATH"
+      -e TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE="$LOCAL_HSM_CONTAINER_CONFIG_DIR/user-pin.txt"
+      -e TRUSTPOINT_LOCAL_HSM_CONFIG_ENV_VAR=SOFTHSM2_CONF
+      -e TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF="$LOCAL_HSM_CONTAINER_SOFTHSM2_CONF"
+    )
+  fi
   local usb_hsm_args=()
   local host_usb_bus="${TP_USB_BUS_PATH:-/dev/bus/usb}"
   if $ENABLE_USB_PASSTHROUGH; then
@@ -31,6 +48,7 @@ start_trustpoint() {
     )
   fi
   start_container trustpoint --network-alias trustpoint.local --add-host host.docker.internal:host-gateway \
+    "${soft_hsm_args[@]}" \
     "${usb_hsm_args[@]}" \
     -p "${TP_HTTP_PORT}:80" -p "${TP_HTTPS_PORT}:443" \
     -e TRUSTPOINT_PHASE=auto -e POSTGRES_DB="$DB_NAME" -e DATABASE_USER="$DB_USER" \

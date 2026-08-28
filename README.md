@@ -104,6 +104,7 @@ For repeatable demo environments:
 ./tp_wizard.sh demo light
 ./tp_wizard.sh demo
 ./tp_wizard.sh demo full --skip-wizard
+./tp_wizard.sh demo --soft-hsm
 ```
 
 `demo light` starts Trustpoint and PostgreSQL. `demo` adds Mailpit and SFTPGo.
@@ -229,7 +230,9 @@ Trustpoint supports multiple operating models:
 
 Trustpoint supports **PKCS#11-based HSM integration** for cryptographic key storage and operations.
 
-For local development, Trustpoint can use a dedicated SoftHSM container through the setup wizard.
+For local development, Trustpoint can use a dedicated SoftHSM container through
+the setup wizard. Start it with `./tp_wizard.sh demo --soft-hsm` or add
+`--soft-hsm` to an explicit Trustpoint `up` command.
 
 ### APIs and headless integration
 

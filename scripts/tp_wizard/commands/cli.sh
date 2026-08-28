@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034 # CLI assignments update shared runtime state.
 
 cli_help() {
-  printf '%s\n' 'Usage:' './tp_wizard.sh' './tp_wizard.sh demo [light|full] [--usb-hsm] [--skip-wizard] [--nowait]' './tp_wizard.sh up trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring [--usb-hsm] [--skip-wizard] [--nowait]' './tp_wizard.sh down ...' './tp_wizard.sh logs [service]' './tp_wizard.sh status' './tp_wizard.sh nuke' '' '--usb-hsm exposes the host USB bus to Trustpoint for USB HSM discovery.' '--skip-wizard enables automatic Trustpoint setup. --skip-setup remains an alias.'
+  printf '%s\n' 'Usage:' './tp_wizard.sh' './tp_wizard.sh demo [light|full] [--soft-hsm|--usb-hsm] [--skip-wizard] [--nowait]' './tp_wizard.sh up trustpoint|db|mail|sftp|worker|prometheus|grafana|monitoring [--soft-hsm|--usb-hsm] [--skip-wizard] [--nowait]' './tp_wizard.sh down ...' './tp_wizard.sh logs [service]' './tp_wizard.sh status' './tp_wizard.sh nuke' '' '--soft-hsm starts and connects the local demo SoftHSM.' '--usb-hsm exposes the host USB bus to Trustpoint for USB HSM discovery.' '--skip-wizard enables automatic Trustpoint setup. --skip-setup remains an alias.'
 }
 
 demo_help() {
@@ -26,9 +26,11 @@ Demo presets:
 All demo presets build the local Trustpoint image and leave the Trustpoint
 in-app setup wizard enabled by default. Use --skip-wizard for automatic setup,
 or --nowait to return immediately after containers are started.
+Use --soft-hsm to make the local demo SoftHSM available to Trustpoint.
 
 Examples:
   ./tp_wizard.sh demo light
+  ./tp_wizard.sh demo light --soft-hsm
   ./tp_wizard.sh demo light --usb-hsm
   ./tp_wizard.sh demo
   ./tp_wizard.sh demo full --skip-wizard
@@ -54,6 +56,7 @@ cli_demo() {
   while (($#)); do
     case "$1" in
       --nowait) NOWAIT=true ;;
+      --soft-hsm) state_add softhsm ;;
       --usb-hsm) ENABLE_USB_PASSTHROUGH=true ;;
       --no-usb-hsm) ENABLE_USB_PASSTHROUGH=false ;;
       --skip-wizard|--skip-setup) TP_AUTO_SETUP=true ;;
@@ -62,6 +65,7 @@ cli_demo() {
     esac
     shift
   done
+  state_has softhsm && $ENABLE_USB_PASSTHROUGH && die '--soft-hsm and --usb-hsm cannot be combined.'
   runtime_start; summary
 }
 
@@ -76,6 +80,7 @@ cli_up() {
       sftp) state_add sftp ;;
       worker) state_add worker ;;
       prometheus|grafana|monitoring) ENABLE_METRICS=true; state_add monitoring ;;
+      --soft-hsm) state_add softhsm ;;
       --usb-hsm) ENABLE_USB_PASSTHROUGH=true ;;
       --no-usb-hsm) ENABLE_USB_PASSTHROUGH=false ;;
       --nowait) NOWAIT=true ;;
@@ -88,11 +93,15 @@ cli_up() {
   if $ENABLE_USB_PASSTHROUGH && ! state_has trustpoint; then
     die '--usb-hsm requires the trustpoint service.'
   fi
+  if state_has softhsm && ! state_has trustpoint && ! state_has worker; then
+    die '--soft-hsm requires the trustpoint or worker service.'
+  fi
+  state_has softhsm && $ENABLE_USB_PASSTHROUGH && die '--soft-hsm and --usb-hsm cannot be combined.'
   runtime_start; summary
 }
 
-cli_down() { [[ $# -gt 0 ]] || set -- trustpoint db mail sftp worker monitoring; runtime_stop "$@"; }
-cli_logs() { preflight; local name="${1:-trustpoint}"; case "$name" in db) name=postgres ;; mail) name=mailpit ;; sftp) name=sftpgo ;; worker) name="$WF2_WORKER_NAME" ;; monitoring) name="$PROMETHEUS_NAME" ;; esac; docker logs -f "$name"; }
+cli_down() { [[ $# -gt 0 ]] || set -- trustpoint db mail sftp worker softhsm monitoring; runtime_stop "$@"; }
+cli_logs() { preflight; local name="${1:-trustpoint}"; case "$name" in db) name=postgres ;; mail) name=mailpit ;; sftp) name=sftpgo ;; worker) name="$WF2_WORKER_NAME" ;; hsm|soft-hsm) name="$SOFTHSM_NAME" ;; monitoring) name="$PROMETHEUS_NAME" ;; esac; docker logs -f "$name"; }
 cli_status() {
   preflight
   state_reset

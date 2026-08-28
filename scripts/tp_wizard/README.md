@@ -20,10 +20,16 @@ Examples:
 ```bash
 ./tp_wizard.sh
 ./tp_wizard.sh demo full --skip-wizard
+./tp_wizard.sh demo --soft-hsm
 ./tp_wizard.sh up trustpoint db --skip-wizard
+./tp_wizard.sh up trustpoint db --soft-hsm
 ./tp_wizard.sh up worker
 ./tp_wizard.sh status
 ```
 
 Demo presets do not start a workflows2 worker. Add it explicitly with
 `./tp_wizard.sh up worker` when needed.
+
+`--soft-hsm` starts the local demo SoftHSM and exposes its initialized token to
+Trustpoint's in-app setup wizard. `--usb-hsm` instead exposes the host USB bus;
+the two options are mutually exclusive.

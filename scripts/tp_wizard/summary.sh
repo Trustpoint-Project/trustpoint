@@ -52,11 +52,13 @@ summary_wait_trustpoint_details() {
 }
 
 summary_trustpoint_configuration() {
-  local username password fingerprint usb_hsm_access
+  local username password fingerprint usb_hsm_access soft_hsm_access
   fingerprint="$(summary_tls_fingerprint)"
   usb_hsm_access="$ENABLE_USB_PASSTHROUGH"
+  soft_hsm_access=0
   if container_exists trustpoint; then
     usb_hsm_access="$(container_env trustpoint TP_USB_HSM_PASSTHROUGH)"
+    soft_hsm_access="$(container_env trustpoint TRUSTPOINT_LOCAL_HSM_ENABLED)"
   fi
 
   if summary_trustpoint_auto_setup; then
@@ -73,8 +75,8 @@ summary_trustpoint_configuration() {
       printf '  %-18s %s\n' 'Setup login:' 'not found in logs yet'
     fi
     printf '  %-18s %s\n' 'Setup mode:' 'in-app setup wizard'
-    printf '  %-18s %s\n' 'Next step:' "open https://localhost:${TP_HTTPS_PORT}"
   fi
+  printf '  %-18s %s\n' 'SoftHSM handoff:' "$([[ "$soft_hsm_access" == 1 ]] && printf available || printf disabled)"
   printf '  %-18s %s\n' 'USB HSM access:' "$([[ "${usb_hsm_access,,}" == true ]] && printf enabled || printf disabled)"
   printf '  %-18s %s\n' 'TLS SHA-256:' "${fingerprint:-not found in logs yet}"
 }
@@ -92,7 +94,7 @@ summary() {
       mail) summary_service_row 'Mailpit' mailpit "http://localhost:${MAILPIT_UI_PORT}" ;;
       sftp) summary_service_row 'SFTPGo' sftpgo "http://localhost:${SFTPGO_WEB_PORT}/web/admin" ;;
       worker) summary_service_row 'Worker' "$WF2_WORKER_NAME" 'workflows2_worker' ;;
-      softhsm) summary_service_row 'SoftHSM' "$SOFTHSM_NAME" 'network-only' ;;
+      softhsm) summary_service_row 'SoftHSM' "$SOFTHSM_NAME" 'local PKCS#11' ;;
       monitoring)
         summary_service_row 'Prometheus' "$PROMETHEUS_NAME" "http://localhost:${PROMETHEUS_PORT}"
         summary_service_row 'Grafana' "$GRAFANA_NAME" "http://localhost:${GRAFANA_PORT}"
@@ -102,6 +104,14 @@ summary() {
 
   printf '\nConfiguration\n'
   state_has trustpoint && summary_trustpoint_configuration
+  if state_has softhsm; then
+    local hsm_serial hsm_user_pin
+    hsm_serial="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
+    hsm_user_pin="$(local_hsm_user_pin)"
+    printf '  %-18s %s\n' 'HSM token:' "${LOCAL_HSM_TOKEN_LABEL}${hsm_serial:+ ($hsm_serial)}"
+    printf '  %-18s %s\n' 'HSM user PIN:' "${hsm_user_pin:-not available yet}"
+    printf '  %-18s %s\n' 'PKCS#11 module:' "$LOCAL_HSM_CONTAINER_MODULE_PATH"
+  fi
   if ! $STATUS_ONLY; then
     if state_has monitoring; then
       if summary_trustpoint_auto_setup; then

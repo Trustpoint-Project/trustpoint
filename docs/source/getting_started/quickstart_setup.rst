@@ -38,6 +38,12 @@ Demo presets:
 The same option works for explicit service startup, for example
 ``./tp_wizard.sh up trustpoint db --skip-wizard``.
 
+Add ``--soft-hsm`` to a demo or explicit Trustpoint start to build and attach
+the local development SoftHSM, for example ``./tp_wizard.sh demo --soft-hsm``
+or ``./tp_wizard.sh up trustpoint db --soft-hsm``. The initialized token is then
+available in Trustpoint's in-app setup wizard. ``--soft-hsm`` and ``--usb-hsm``
+cannot be combined.
+
 When the in-app wizard applies its summary, Trustpoint runs database setup,
 crypto initialization, optional demo-data generation, and the operational
 runtime switch in a background process. The browser shows live stage progress
