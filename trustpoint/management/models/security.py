@@ -205,7 +205,8 @@ class SecurityConfig(models.Model):
         help_text=_(
             'JSON list of allowed OnboardingProtocol integer values '
             '(MANUAL=0, CMP_IDEVID=1, CMP_SHARED_SECRET=2, EST_IDEVID=3, '
-            'EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7, REST_USERNAME_PASSWORD=8).'
+            'EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7, '
+            'REST_USERNAME_PASSWORD=8, AGENT=9).'
         ),
     )
 

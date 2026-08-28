@@ -526,7 +526,7 @@ class OnboardingCreateForm(forms.Form):
 
         all_protocol_values = {proto[0] for proto in permitted_protocols}
         disabled_options = [
-            proto for proto in [
+            str(proto.value) for proto in [
                 OnboardingProtocol.MANUAL,
                 OnboardingProtocol.AOKI,
                 OnboardingProtocol.BRSKI,
@@ -648,7 +648,7 @@ class OnboardingCreateForm(forms.Form):
 class AgentOnboardingCreateForm(OnboardingCreateForm):
     """Specialised onboarding form for agent devices.
 
-    The onboarding protocol is fixed to EST - Username & Password and the PKI
+    The onboarding protocol is fixed to REST - Username & Password and the PKI
     protocol is fixed to REST.  Both values are submitted as hidden fields so
     form.save() can read them via cleaned_data without exposing the choices to
     the user.
