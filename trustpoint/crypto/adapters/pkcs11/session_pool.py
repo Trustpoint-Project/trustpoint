@@ -85,6 +85,8 @@ class Pkcs11SessionPool(LoggerMixin):
                 break
             try:
                 session.close()
+            except PKCS11Error as exc:
+                self.logger.warning('Failed to close an idle PKCS#11 session: %s', type(exc).__name__)
             finally:
                 closed_count += 1
 
@@ -131,6 +133,8 @@ class Pkcs11SessionPool(LoggerMixin):
         if discard:
             try:
                 session.close()
+            except PKCS11Error as exc:
+                self.logger.warning('Failed to close a discarded PKCS#11 session: %s', type(exc).__name__)
             finally:
                 with self._lock:
                     self._created_sessions = max(0, self._created_sessions - 1)
@@ -141,6 +145,8 @@ class Pkcs11SessionPool(LoggerMixin):
         except Full:
             try:
                 session.close()
+            except PKCS11Error as exc:
+                self.logger.warning('Failed to close an excess PKCS#11 session: %s', type(exc).__name__)
             finally:
                 with self._lock:
                     self._created_sessions = max(0, self._created_sessions - 1)

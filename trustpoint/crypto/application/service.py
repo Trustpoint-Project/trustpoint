@@ -10,7 +10,8 @@ from time import perf_counter
 from typing import TYPE_CHECKING, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import DatabaseError
+from django.db import DatabaseError, router, transaction
+from django.db.models.deletion import Collector
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
 from appsecrets.service import get_app_secret_service
@@ -32,9 +33,16 @@ from crypto.application.protected_import import (
     encrypt_imported_private_key,
     imported_key_algorithm,
 )
-from crypto.domain.errors import CryptoError, KeyNotFoundError, ProviderConfigurationError, UnsupportedKeySpecError
+from crypto.domain.errors import (
+    CryptoError,
+    KeyNotFoundError,
+    KeyPolicyViolationError,
+    ManagedKeyUnavailableError,
+    ProviderConfigurationError,
+    UnsupportedKeySpecError,
+)
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
-from crypto.models import BackendKind, CryptoManagedKeyModel, CryptoProviderProfileModel
+from crypto.models import BackendKind, CryptoManagedKeyModel, CryptoProviderProfileModel, ManagedKeyStatus
 from crypto.repositories import CryptoManagedKeyRepository, CryptoProviderProfileRepository, ManagedKeyBinding
 from trustpoint.logger import LoggerMixin
 
@@ -261,9 +269,7 @@ class TrustpointCryptoBackend(LoggerMixin):
                 try:
                     adapter_verification = adapter.verify_managed_key(binding)
                     verification_status = adapter_verification.status
-                    resolved_public_key_fingerprint_sha256 = (
-                        adapter_verification.resolved_public_key_fingerprint_sha256
-                    )
+                    resolved_public_key_fingerprint_sha256 = adapter_verification.resolved_public_key_fingerprint_sha256
                 finally:
                     adapter.close()
         except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
@@ -354,6 +360,7 @@ class TrustpointCryptoBackend(LoggerMixin):
         started_at = perf_counter()
         details = sign_request_audit_details(request, data_length=len(data))
         try:
+            self._validate_managed_key_for_signing(managed_key)
             binding = self._managed_key_repository.build_backend_binding(managed_key)
             if isinstance(binding, ProtectedImportManagedKeyBinding):
                 signature = self._protected_import_operations.sign(key=binding, data=data, request=request)
@@ -400,13 +407,31 @@ class TrustpointCryptoBackend(LoggerMixin):
         target_display = self._managed_key_target_display(managed_key)
         started_at = perf_counter()
         try:
-            binding = self._managed_key_repository.build_backend_binding(managed_key)
-            if not isinstance(binding, ProtectedImportManagedKeyBinding):
-                adapter = self._build_adapter(managed_key.provider_profile)
-                try:
-                    adapter.destroy_managed_key(binding)
-                finally:
-                    adapter.close()
+            with transaction.atomic():
+                managed_key = (
+                    CryptoManagedKeyModel.objects.select_for_update()
+                    .select_related('provider_profile')
+                    .get(pk=managed_key.pk)
+                )
+                self._ensure_managed_key_is_unreferenced(managed_key)
+                binding = self._managed_key_repository.build_backend_binding(managed_key)
+                if not isinstance(binding, ProtectedImportManagedKeyBinding):
+                    adapter = self._build_adapter(managed_key.provider_profile)
+                    try:
+                        adapter.destroy_managed_key(binding)
+                    finally:
+                        adapter.close()
+
+                audit_crypto_backend_operation(
+                    operation='destroy_managed_key',
+                    target=managed_key,
+                    target_display=target_display,
+                    started_at=started_at,
+                    status='success',
+                    profile=profile,
+                    managed_key=managed_key,
+                )
+                managed_key.delete()
         except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
             audit_crypto_backend_operation(
                 operation='destroy_managed_key',
@@ -419,17 +444,28 @@ class TrustpointCryptoBackend(LoggerMixin):
                 error=exc,
             )
             raise
-        else:
-            audit_crypto_backend_operation(
-                operation='destroy_managed_key',
-                target=managed_key,
-                target_display=target_display,
-                started_at=started_at,
-                status='success',
-                profile=profile,
-                managed_key=managed_key,
+
+    @staticmethod
+    def _ensure_managed_key_is_unreferenced(managed_key: CryptoManagedKeyModel) -> None:
+        """Run Django's deletion collector before changing provider-side state."""
+        collector = Collector(using=router.db_for_write(CryptoManagedKeyModel, instance=managed_key))
+        collector.collect([managed_key])
+
+    @staticmethod
+    def _validate_managed_key_for_signing(managed_key: CryptoManagedKeyModel) -> None:
+        """Require an active key whose persisted policy permits signing."""
+        if managed_key.status != ManagedKeyStatus.ACTIVE:
+            msg = (
+                f'Managed key {managed_key.alias!r} is not active '
+                f'(status={managed_key.status!r}); verify or repair the binding before signing.'
             )
-        managed_key.delete()
+            raise ManagedKeyUnavailableError(msg)
+
+        usages = managed_key.policy_snapshot.get('usages')
+        signing_usages = {'sign', 'certificate_sign', 'crl_sign'}
+        if not isinstance(usages, list) or not signing_usages.intersection(usages):
+            msg = f'Managed key {managed_key.alias!r} is not authorized for signing by its persisted policy.'
+            raise KeyPolicyViolationError(msg)
 
     @staticmethod
     def _validate_protected_import_policy(profile: CryptoProviderProfileModel) -> None:

@@ -8,6 +8,7 @@ from unittest.mock import Mock
 from django.test import TestCase
 from packaging.version import Version
 
+from crypto.models import BackendKind
 from management.util.startup_strategies import (
     CompletedRuntimeStartupStrategy,
     StartupContext,
@@ -86,3 +87,11 @@ class CompletedRuntimeStartupStrategyTest(TestCase):
         strategy._ensure_appsecrets_ready.assert_called_once_with(context)
         tls_strategy.apply.assert_called_once_with(context)
         runtime_initialization.initialize.assert_called_once_with(context)
+
+    def test_pkcs11_crypto_accepts_software_appsecret_backend(self) -> None:
+        """Signing-only HSM deployments may use independent software application secrets."""
+        context = Mock(
+            backend_kind=BackendKind.PKCS11,
+            appsecrets_configured=True,
+        )
+        CompletedRuntimeStartupStrategy._validate_appsecret_backend_selection(context)

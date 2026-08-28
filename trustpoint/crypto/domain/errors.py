@@ -32,6 +32,14 @@ class KeyAlreadyExistsError(CryptoError):
     """Raised when attempting to create a key with a duplicate identity."""
 
 
+class KeyPolicyViolationError(CryptoError):
+    """Raised when a managed-key operation is forbidden by its persisted policy."""
+
+
+class ManagedKeyUnavailableError(CryptoError):
+    """Raised when a managed key is not in a usable verified state."""
+
+
 class UnsupportedKeySpecError(CryptoError):
     """Raised when the caller requests an unsupported key specification."""
 

@@ -75,6 +75,21 @@ def test_token_selector_falls_back_to_label_when_slot_is_stale() -> None:
     )
 
 
+def test_token_selector_does_not_use_label_to_override_serial_mismatch() -> None:
+    """A matching label must not select a different token when a serial is configured."""
+    selector = Pkcs11TokenSelector(
+        slot_id=7,
+        token_serial='expected-serial',
+        token_label='shared-label',
+    )
+
+    assert not selector.matches(
+        slot_id=8,
+        token_label='shared-label',
+        token_serial='different-serial',
+    )
+
+
 def test_provider_profile_requires_exactly_one_pin_source(tmp_path: Path) -> None:
     pin_file = tmp_path / 'user-pin.txt'
     pin_file.write_text('secret-pin', encoding='utf-8')

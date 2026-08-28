@@ -8,6 +8,7 @@ and their associated permissions.  Only the Admin group is protected and
 cannot be deleted or renamed.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
 from django.contrib import messages
@@ -199,7 +200,8 @@ class RoleDeleteView(
         if self.object.trustpoint_users.exists():
             messages.error(
                 self.request,
-                _('Cannot delete "%(name)s": there are still users assigned to this role.') % {
+                _('Cannot delete "%(name)s": there are still users assigned to this role.')
+                % {
                     'name': self.object.name,
                 },
             )
@@ -223,12 +225,8 @@ class RoleViewSet(viewsets.ModelViewSet[Group]):
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Update the role, refusing to rename a protected (built-in) role."""
         instance = self.get_object()
-        new_name = request.data.get('name')
-        if (
-            instance.name in _PROTECTED_GROUP_NAMES
-            and new_name is not None
-            and str(new_name) != instance.name
-        ):
+        new_name = request.data.get('name') if isinstance(request.data, Mapping) else None
+        if instance.name in _PROTECTED_GROUP_NAMES and new_name is not None and str(new_name) != instance.name:
             return Response(
                 {'detail': 'Cannot rename this role: it is a built-in role.'},
                 status=status.HTTP_400_BAD_REQUEST,

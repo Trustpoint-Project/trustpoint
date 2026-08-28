@@ -301,7 +301,7 @@ class CompletedRuntimeStartupStrategy(StartupStrategy):
         return backend
 
     @staticmethod
-    def _validate_appsecret_backend_selection(context: StartupContext, backend: AppSecretBackendModel) -> None:
+    def _validate_appsecret_backend_selection(context: StartupContext) -> None:
         """Validate that crypto and app-secret backend selections are compatible."""
         if context.backend_kind is None:
             msg = 'The setup wizard is complete, but no managed crypto backend profile is configured.'
@@ -311,12 +311,9 @@ class CompletedRuntimeStartupStrategy(StartupStrategy):
             msg = 'The setup wizard is complete, but the application-secret backend is not configured.'
             raise RuntimeError(msg)
 
-        if backend.backend_kind != context.backend_kind.value:
-            msg = (
-                'The setup wizard is complete, but the managed crypto backend '
-                f'({context.backend_kind.value}) and application-secret backend ({backend.backend_kind}) disagree.'
-            )
-            raise RuntimeError(msg)
+        # Managed-key custody and application-secret protection are independent
+        # selections. A signing-only PKCS#11 token may intentionally be paired
+        # with the software app-secret backend.
 
     @staticmethod
     def _ensure_pkcs11_appsecret_dek(backend: AppSecretBackendModel) -> None:
@@ -365,7 +362,7 @@ class CompletedRuntimeStartupStrategy(StartupStrategy):
         """Require that the application-secret subsystem is configured and usable."""
         context.output.write('Checking application-secret readiness...')
         backend = cls._get_appsecret_backend()
-        cls._validate_appsecret_backend_selection(context, backend)
+        cls._validate_appsecret_backend_selection(context)
         cls._ensure_appsecret_dek(backend)
         cls._ensure_appsecret_service_ready()
         context.output.write(context.output.success('Application-secret backend is ready.'))

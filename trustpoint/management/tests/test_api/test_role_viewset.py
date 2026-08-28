@@ -146,13 +146,22 @@ class TestRoleViewSetUpdate:
         assert admin_group.name == 'Admin'
 
     def test_updating_admin_role_permissions_without_renaming_is_allowed(
-        self, superuser_client: APIClient, admin_group: Group,
+        self,
+        superuser_client: APIClient,
+        admin_group: Group,
     ) -> None:
         """Non-rename updates to the Admin role (e.g. permissions) are still allowed."""
         perm_id = Permission.objects.filter(content_type__model='apppermission').first().pk
         url = reverse('roles-detail', args=[admin_group.pk])
         response = superuser_client.patch(url, {'permissions': [perm_id]}, format='json')
         assert response.status_code == status.HTTP_200_OK, response.data
+
+    def test_update_with_list_payload_returns_400(self, superuser_client: APIClient) -> None:
+        """A non-object JSON payload is rejected instead of raising an application error."""
+        group, _ = Group.objects.get_or_create(name='Custom')
+        response = superuser_client.patch(reverse('roles-detail', args=[group.pk]), [], format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import base64
 from types import SimpleNamespace
 from typing import Any
 
@@ -14,17 +15,38 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from appsecrets.service import (
+    CIPHERTEXT_PREFIX,
     DEK_LENGTH_BYTES,
     PKCS11_CWRAP_DEK_PREFIX,
-    PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX,
     PKCS11_RSA_OAEP_PARAMS,
     PKCS11_RSA_OAEP_SHA256_DEK_PREFIX,
     RSA_KEK_PREFERRED_BITS,
     AppSecretConfigurationError,
     Pkcs11AppSecretService,
+    SoftwareAppSecretService,
 )
 
 pytestmark = pytest.mark.django_db
+
+
+def test_app_secret_rejects_malformed_base64() -> None:
+    """Malformed ciphertext encoding is reported as a stable configuration error."""
+    service = SoftwareAppSecretService(SimpleNamespace(backend_id=1, raw_dek=b'k' * DEK_LENGTH_BYTES))
+
+    with pytest.raises(AppSecretConfigurationError, match='not valid Base64'):
+        service.decrypt_text(CIPHERTEXT_PREFIX + '%%%')
+
+
+def test_app_secret_rejects_tampered_ciphertext() -> None:
+    """Authenticated encryption rejects modified ciphertext."""
+    service = SoftwareAppSecretService(SimpleNamespace(backend_id=1, raw_dek=b'k' * DEK_LENGTH_BYTES))
+    encrypted = service.encrypt_text('secret')
+    payload = bytearray(base64.b64decode(encrypted[len(CIPHERTEXT_PREFIX) :]))
+    payload[-1] ^= 1
+    tampered = CIPHERTEXT_PREFIX + base64.b64encode(payload).decode('ascii')
+
+    with pytest.raises(AppSecretConfigurationError, match='authentication failed'):
+        service.decrypt_text(tampered)
 
 
 class _FakeDekKey:
@@ -462,51 +484,29 @@ def test_pkcs11_app_secret_recovers_rsa_envelope_without_public_key() -> None:
     assert not private_kek.destroyed
 
 
-def test_pkcs11_app_secret_kek_creation_falls_back_to_encrypt_profile() -> None:
-    """A token can use an encrypt/decrypt KEK profile when wrap/unwrap cannot protect DEKs."""
+def test_pkcs11_app_secret_kek_creation_requires_key_wrap_profile() -> None:
+    """AES KEK creation fails when the token rejects authenticated key wrapping."""
     service = _service()
     session = _FakeSession()
     session.reject_wrap_kek_profile = True
 
-    kek, dek, protected_dek = service._create_kek_with_protected_dek(session)  # noqa: SLF001
+    with pytest.raises(AppSecretConfigurationError, match='persistent KEK'):
+        service._create_kek_with_protected_dek(session)  # noqa: SLF001
 
-    assert dek == b'g' * 32
-    assert protected_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX)
-    expected_kek_profile_attempts = 2
-    assert len(session.generated_keks) == expected_kek_profile_attempts
+    assert len(session.generated_keks) == 1
     assert session.generated_keks[0].destroyed
-    assert session.generated_keks[1] is kek
 
 
-def test_pkcs11_app_secret_generate_protected_dek_falls_back_to_encrypt_when_wrap_is_unsupported() -> None:
-    """Providers without AES key-wrap mechanisms can protect the DEK with PKCS#11 AES encryption."""
+def test_pkcs11_app_secret_rejects_aes_without_key_wrap() -> None:
+    """Confidentiality-only AES encryption is not accepted for DEK protection."""
     service = _service()
     kek = _FakeKek()
     kek.fail_wrap = True
 
-    dek, protected_dek = service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
-
-    assert dek == b'g' * 32
-    assert protected_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX)
-    assert len(kek.encrypt_calls) == 1
-    plaintext, mechanism, mechanism_param = kek.encrypt_calls[0]
-    assert plaintext == dek
-    assert mechanism == pkcs11.Mechanism.AES_CBC_PAD
-    assert isinstance(mechanism_param, bytes)
-
-
-def test_pkcs11_app_secret_rejects_tokens_with_only_ecb_encryption() -> None:
-    """Tokens without key-wrap or CBC encryption cannot protect the app-secret DEK."""
-    service = _service()
-    kek = _FakeKek()
-    kek.fail_wrap = True
-    kek.fail_cbc_encrypt = True
-
-    with pytest.raises(AppSecretConfigurationError, match='standard PKCS#11 AES flows') as exc_info:
+    with pytest.raises(AppSecretConfigurationError, match='AES key-wrap flows'):
         service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
 
-    assert 'AES_ECB' not in str(exc_info.value)
-    assert all(mechanism is not pkcs11.Mechanism.AES_ECB for _, mechanism, _ in kek.encrypt_calls)
+    assert not kek.encrypt_calls
 
 
 def test_pkcs11_app_secret_recover_dek_uses_key_unwrap_operation() -> None:
@@ -526,23 +526,18 @@ def test_pkcs11_app_secret_recover_dek_uses_key_unwrap_operation() -> None:
     assert kek.unwrapped_keys[0].destroyed
 
 
-def test_pkcs11_app_secret_decrypts_encrypted_dek_envelope() -> None:
-    """Encrypted DEK envelopes are recovered with PKCS#11 C_Decrypt."""
+def test_pkcs11_app_secret_rejects_cbc_encrypted_dek_envelope() -> None:
+    """Unauthenticated legacy CBC envelopes are not accepted."""
     service = _service()
     kek = _FakeKek()
-    iv = b'i' * 16
 
-    dek = service._recover_dek(  # noqa: SLF001
-        kek=kek,
-        protected_dek=PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX + iv + b'encrypted:' + (b'c' * 32),
-    )
+    with pytest.raises(AppSecretConfigurationError, match='supported protected-DEK envelope format'):
+        service._recover_dek(  # noqa: SLF001
+            kek=kek,
+            protected_dek=b'tpsec:pkcs11:enc-cbc-pad:v1:' + b'encrypted:' + (b'c' * 32),
+        )
 
-    assert dek == b'c' * 32
-    assert len(kek.decrypt_calls) == 1
-    ciphertext, mechanism, mechanism_param = kek.decrypt_calls[0]
-    assert ciphertext == b'encrypted:' + (b'c' * 32)
-    assert mechanism == pkcs11.Mechanism.AES_CBC_PAD
-    assert mechanism_param == iv
+    assert not kek.decrypt_calls
 
 
 def test_pkcs11_app_secret_rejects_ecb_encrypted_dek_envelope() -> None:

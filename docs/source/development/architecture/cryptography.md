@@ -16,7 +16,7 @@ flowchart TB
     PROVIDER_PROFILE --> ADAPTER{Crypto adapter}
     
     ADAPTER -->|Production| PKCS11_ADAPTER["PKCS#11 adapter / generic PKCS#11 module"]
-    ADAPTER -->|Development| SOFTWARE_ADAPTER["Software adapter / in-memory keys"]
+    ADAPTER -->|Demo/testing| SOFTWARE_ADAPTER["Software adapter / encrypted database bindings"]
     ADAPTER -->|Future| FUTURE_ADAPTER[REST, KMS, other providers]
     
     PKCS11_ADAPTER --> MODULE["PKCS#11 module / libsofthsm2.so or hardware HSM"]
@@ -29,7 +29,7 @@ flowchart TB
 
 ## Architectural Rules
 
-1. **Private keys never leave the HSM in production:** Keys are generated in the PKCS#11 token and used for signing operations. The private-key bytes are never exported to Trustpoint's database or filesystem.
+1. **Generated PKCS#11 keys never leave the HSM:** Keys are generated in the token and used there for signing. Optional imported credentials are a separate, explicitly enabled flow: their private keys are encrypted by the application-secret subsystem and stored in PostgreSQL rather than injected into the token.
 
 2. **Metadata separation:** Certificate objects, device records, and domain configuration are stored in PostgreSQL. Private-key metadata (key ID, token serial, public key) is stored in `CryptoManagedKeyModel` and `CryptoManagedKeyPkcs11BindingModel`.
 
@@ -49,7 +49,7 @@ flowchart TB
 
 **Supported HSMs:**
 - SoftHSM (development and testing)
-- Hardware HSMs: Thales, Utimaco, Gemalto, YubiHSM, etc.
+- Hardware HSMs that expose the required standard PKCS#11 mechanisms
 - Cloud HSMs with PKCS#11 interface
 - PKCS#11 proxies (e.g., for remote HSMs)
 
@@ -57,9 +57,9 @@ flowchart TB
 - `module_path`: Path to PKCS#11 library (e.g., `/usr/lib/libsofthsm2.so`)
 - `token_serial`: Token serial number
 - `token_label`: Token label
-- `slot_index`: Token slot index
-- `auth_source`: PIN authentication source (`file`, `environment`, `prompt`)
-- `pin_file`: Path to PIN file (if `auth_source=file`)
+- `slot_id`: Optional token slot identifier
+- `auth_source`: PIN authentication source (`file` or `env`)
+- `auth_source_ref`: PIN file path or environment-variable name
 
 **Token selection:**
 - By serial number (preferred for production)
@@ -68,13 +68,14 @@ flowchart TB
 
 ### Software Provider
 
-**Purpose:** In-memory keys for development and testing
+**Purpose:** Durable software keys for development, demos, and testing
 
 **Module:** `trustpoint/crypto/adapters/software/`
 
 **Characteristics:**
-- Keys generated in memory
-- Private keys stored in Python objects
+- Keys are generated in application memory
+- Encrypted PKCS#8 key bindings are stored in PostgreSQL
+- The configured software-backend secret decrypts those bindings at runtime
 - No hardware protection
 - **Not secure for production**
 
@@ -85,9 +86,8 @@ flowchart TB
 - Quick prototyping
 
 **Limitations:**
-- Keys lost on process restart
-- No multi-process key sharing
-- No audit trail for key operations
+- No hardware-backed key isolation
+- Security depends on protecting the software-backend secret and database backup
 
 ## Key Generation
 

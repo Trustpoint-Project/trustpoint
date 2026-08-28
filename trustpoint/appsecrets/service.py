@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import contextlib
 import os
 import threading
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Protocol, cast
 
 import pkcs11
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -31,12 +33,9 @@ if TYPE_CHECKING:
 DEK_LENGTH_BYTES: Final[int] = 32
 AES_GCM_NONCE_BYTES: Final[int] = 12
 AES_GCM_TAG_BYTES: Final[int] = 16
-AES_BLOCK_BYTES: Final[int] = 16
 CIPHERTEXT_PREFIX: Final[str] = 'tpsec:v1:'
 AAD_CONTEXT: Final[bytes] = b'trustpoint-app-secrets-v1'
 PKCS11_CWRAP_DEK_PREFIX: Final[bytes] = b'tpsec:pkcs11:cwrap:v1:'
-PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-cbc-pad:v1:'
-PKCS11_ENCRYPTED_DEK_CBC_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-cbc:v1:'
 PKCS11_RSA_OAEP_SHA256_DEK_PREFIX: Final[bytes] = b'tpsec:pkcs11:rsa-oaep-sha256:v1:'
 PKCS11_RSA_OAEP_PARAMS: Final[tuple[pkcs11.Mechanism, pkcs11.MGF, None]] = (
     pkcs11.Mechanism.SHA256,
@@ -61,46 +60,15 @@ APP_SECRET_KEK_PROFILES: Final[tuple[tuple[str, pkcs11.MechanismFlag, dict[pkcs1
             pkcs11.Attribute.UNWRAP: True,
         },
     ),
-    (
-        'encrypt-decrypt',
-        pkcs11.MechanismFlag.ENCRYPT | pkcs11.MechanismFlag.DECRYPT,
-        {
-            **APP_SECRET_KEK_BASE_TEMPLATE,
-            pkcs11.Attribute.ENCRYPT: True,
-            pkcs11.Attribute.DECRYPT: True,
-        },
-    ),
-    (
-        'combined',
-        (
-            pkcs11.MechanismFlag.ENCRYPT
-            | pkcs11.MechanismFlag.DECRYPT
-            | pkcs11.MechanismFlag.WRAP
-            | pkcs11.MechanismFlag.UNWRAP
-        ),
-        {
-            **APP_SECRET_KEK_BASE_TEMPLATE,
-            pkcs11.Attribute.ENCRYPT: True,
-            pkcs11.Attribute.DECRYPT: True,
-            pkcs11.Attribute.WRAP: True,
-            pkcs11.Attribute.UNWRAP: True,
-        },
-    ),
 )
 APP_SECRET_DEK_WRAP_MECHANISMS: Final[tuple[pkcs11.Mechanism, ...]] = (
     pkcs11.Mechanism.AES_KEY_WRAP,
     pkcs11.Mechanism.AES_KEY_WRAP_PAD,
     pkcs11.Mechanism.AES_KEY_WRAP_KWP,
 )
-APP_SECRET_DEK_ENCRYPT_MECHANISMS: Final[tuple[tuple[pkcs11.Mechanism, bytes], ...]] = (
-    (pkcs11.Mechanism.AES_CBC_PAD, PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX),
-    (pkcs11.Mechanism.AES_CBC, PKCS11_ENCRYPTED_DEK_CBC_PREFIX),
-)
 PKCS11_ATTEMPT_HEAD_LIMIT: Final[int] = 6
 PKCS11_ATTEMPT_TAIL_LIMIT: Final[int] = 4
-APP_SECRET_DEK_CAPABILITIES: Final[pkcs11.MechanismFlag] = (
-    pkcs11.MechanismFlag.ENCRYPT | pkcs11.MechanismFlag.DECRYPT
-)
+APP_SECRET_DEK_CAPABILITIES: Final[pkcs11.MechanismFlag] = pkcs11.MechanismFlag.ENCRYPT | pkcs11.MechanismFlag.DECRYPT
 APP_SECRET_DEK_KEY_TEMPLATES: Final[tuple[tuple[str, dict[pkcs11.Attribute, object]], ...]] = (
     (
         'private-readable-session',
@@ -173,26 +141,6 @@ class _Pkcs11Kek(_Pkcs11KeyObject, Protocol):
         """Wrap a temporary DEK key object with this KEK."""
         raise NotImplementedError
 
-    def encrypt(
-        self,
-        plaintext: bytes,
-        *,
-        mechanism: pkcs11.Mechanism,
-        mechanism_param: bytes | None = None,
-    ) -> bytes | bytearray | memoryview:
-        """Encrypt raw DEK bytes with this KEK."""
-        raise NotImplementedError
-
-    def decrypt(
-        self,
-        ciphertext: bytes,
-        *,
-        mechanism: pkcs11.Mechanism,
-        mechanism_param: bytes | None = None,
-    ) -> bytes | bytearray | memoryview:
-        """Decrypt raw DEK bytes with this KEK."""
-        raise NotImplementedError
-
     def unwrap_key(  # noqa: PLR0913 - mirrors python-pkcs11's unwrap_key API.
         self,
         object_class: pkcs11.ObjectClass,
@@ -206,6 +154,7 @@ class _Pkcs11Kek(_Pkcs11KeyObject, Protocol):
     ) -> _Pkcs11DekKey:
         """Unwrap a wrapped DEK into a temporary key object."""
         raise NotImplementedError
+
 
 class _Pkcs11DekKey(Protocol):
     def __getitem__(self, attribute: pkcs11.Attribute) -> object:
@@ -222,7 +171,6 @@ class _Pkcs11RsaPublicKek(_Pkcs11KeyObject, Protocol):
 
 
 class _Pkcs11RsaPrivateKek(_Pkcs11KeyObject, Protocol):
-
     def decrypt(
         self,
         ciphertext: bytes,
@@ -232,6 +180,7 @@ class _Pkcs11RsaPrivateKek(_Pkcs11KeyObject, Protocol):
     ) -> bytes | bytearray | memoryview:
         """Decrypt an RSA-OAEP protected DEK."""
         raise NotImplementedError
+
 
 class _Pkcs11Slot(Protocol):
     slot_id: int
@@ -292,7 +241,11 @@ class BaseAppSecretService:
             raise AppSecretConfigurationError(msg)
 
         payload_b64 = ciphertext[len(CIPHERTEXT_PREFIX) :]
-        payload = base64.b64decode(payload_b64.encode('ascii'))
+        try:
+            payload = base64.b64decode(payload_b64.encode('ascii'), validate=True)
+        except (UnicodeEncodeError, binascii.Error) as exc:
+            msg = 'Stored ciphertext payload is not valid Base64.'
+            raise AppSecretConfigurationError(msg) from exc
         if len(payload) < AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES:
             msg = 'Stored ciphertext payload is truncated.'
             raise AppSecretConfigurationError(msg)
@@ -305,8 +258,16 @@ class BaseAppSecretService:
         cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce, tag))
         decryptor = cipher.decryptor()
         decryptor.authenticate_additional_data(AAD_CONTEXT)
-        plaintext = decryptor.update(encrypted) + decryptor.finalize()
-        return plaintext.decode('utf-8')
+        try:
+            plaintext = decryptor.update(encrypted) + decryptor.finalize()
+        except InvalidTag as exc:
+            msg = 'Stored ciphertext authentication failed.'
+            raise AppSecretConfigurationError(msg) from exc
+        try:
+            return plaintext.decode('utf-8')
+        except UnicodeDecodeError as exc:
+            msg = 'Stored ciphertext does not contain valid UTF-8 plaintext.'
+            raise AppSecretConfigurationError(msg) from exc
 
     def ensure_backend_ready(self) -> None:
         """Initialize any missing backend state."""
@@ -530,7 +491,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             except AppSecretConfigurationError as rsa_error:
                 msg = (
                     'PKCS#11 app-secret protection self-test failed. The token must support either an AES KEK '
-                    'with standard wrap/encryption mechanisms or a non-exportable RSA KEK with RSA-OAEP SHA-256. '
+                    'with standard key-wrap mechanisms or a non-exportable RSA KEK with RSA-OAEP SHA-256. '
                     f'AES attempt: {aes_error} RSA-OAEP attempt: {rsa_error}'
                 )
                 raise AppSecretConfigurationError(msg) from rsa_error
@@ -569,10 +530,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                 finally:
                     self._destroy_kek_best_effort(kek)
 
-        msg = (
-            'Temporary AES KEK protection is unavailable.'
-            f'{self._format_pkcs11_attempts(attempt_errors)}'
-        )
+        msg = f'Temporary AES KEK protection is unavailable.{self._format_pkcs11_attempts(attempt_errors)}'
         raise AppSecretConfigurationError(msg)
 
     def _find_existing_rsa_kek_pair(
@@ -705,10 +663,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             return RSA_KEK_PREFERRED_BITS
         if minimum <= RSA_KEK_MINIMUM_BITS <= maximum:
             return RSA_KEK_MINIMUM_BITS
-        msg = (
-            'PKCS#11 token does not advertise a supported RSA KEK size; '
-            f'reported range is {minimum}..{maximum} bits.'
-        )
+        msg = f'PKCS#11 token does not advertise a supported RSA KEK size; reported range is {minimum}..{maximum} bits.'
         raise AppSecretConfigurationError(msg)
 
     def _generate_rsa_protected_dek(self, public_kek: _Pkcs11RsaPublicKek) -> tuple[bytes, bytes]:
@@ -951,12 +906,9 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         )
         if protected_dek is not None:
             return dek, protected_dek
-        encrypted_dek = self._try_encrypt_dek(kek=kek, dek=dek, attempt_errors=attempt_errors)
-        if encrypted_dek is not None:
-            return dek, encrypted_dek
 
         msg = (
-            'PKCS#11 app-secret backend could not protect a DEK with standard PKCS#11 AES flows.'
+            'PKCS#11 app-secret backend could not protect a DEK with standard PKCS#11 AES key-wrap flows.'
             f'{self._format_pkcs11_attempts(attempt_errors)}'
         )
         raise AppSecretConfigurationError(msg)
@@ -998,13 +950,9 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                     )
                     if protected_dek is not None:
                         return dek, protected_dek
-                    encrypted_dek = self._try_encrypt_dek(kek=kek, dek=dek, attempt_errors=attempt_errors)
-                    if encrypted_dek is not None:
-                        return dek, encrypted_dek
                 except (AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
                     attempt_errors.append(
-                        f'generate/{template_name}/{capabilities_name}: '
-                        f'{self._format_pkcs11_attempt_error(exception)}'
+                        f'generate/{template_name}/{capabilities_name}: {self._format_pkcs11_attempt_error(exception)}'
                     )
                 finally:
                     self._destroy_temporary_dek_key(dek_key)
@@ -1056,7 +1004,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         return None
 
     def _protect_dek(self, *, kek: _Pkcs11Kek, dek: bytes) -> bytes:
-        """Protect an existing DEK with PKCS#11 C_WrapKey or C_Encrypt."""
+        """Protect an existing DEK with PKCS#11 C_WrapKey."""
         attempt_errors: list[str] = []
         session = kek.session
         protected_dek = self._try_import_and_protect_dek(
@@ -1067,32 +1015,15 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         )
         if protected_dek is not None:
             return protected_dek
-        encrypted_dek = self._try_encrypt_dek(kek=kek, dek=dek, attempt_errors=attempt_errors)
-        if encrypted_dek is not None:
-            return encrypted_dek
 
         msg = (
-            'PKCS#11 app-secret KEK could not protect the DEK with PKCS#11 C_WrapKey or C_Encrypt.'
+            'PKCS#11 app-secret KEK could not protect the DEK with PKCS#11 C_WrapKey.'
             f'{self._format_pkcs11_attempts(attempt_errors)}'
         )
         raise AppSecretConfigurationError(msg)
 
     def _recover_dek(self, *, kek: _Pkcs11Kek, protected_dek: bytes) -> bytes:
         """Recover a DEK protected by a PKCS#11 KEK."""
-        if protected_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX):
-            return self._decrypt_dek(
-                kek=kek,
-                protected_dek=protected_dek,
-                prefix=PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX,
-                mechanism=pkcs11.Mechanism.AES_CBC_PAD,
-            )
-        if protected_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PREFIX):
-            return self._decrypt_dek(
-                kek=kek,
-                protected_dek=protected_dek,
-                prefix=PKCS11_ENCRYPTED_DEK_CBC_PREFIX,
-                mechanism=pkcs11.Mechanism.AES_CBC,
-            )
         if not protected_dek.startswith(PKCS11_CWRAP_DEK_PREFIX):
             msg = 'Stored PKCS#11 app-secret DEK is not in a supported protected-DEK envelope format.'
             raise AppSecretConfigurationError(msg)
@@ -1140,43 +1071,6 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             f'{self._format_pkcs11_attempts(attempt_errors)}'
         )
         raise AppSecretConfigurationError(msg)
-
-    def _try_encrypt_dek(self, *, kek: _Pkcs11Kek, dek: bytes, attempt_errors: list[str]) -> bytes | None:
-        """Try protecting raw DEK bytes with PKCS#11 C_Encrypt."""
-        for mechanism, prefix in APP_SECRET_DEK_ENCRYPT_MECHANISMS:
-            iv = os.urandom(AES_BLOCK_BYTES)
-            try:
-                ciphertext = bytes(kek.encrypt(dek, mechanism=mechanism, mechanism_param=iv))
-            except (AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
-                attempt_errors.append(f'encrypt/{mechanism.name}: {self._format_pkcs11_attempt_error(exception)}')
-                continue
-            return prefix + iv + ciphertext
-        return None
-
-    def _decrypt_dek(
-        self,
-        *,
-        kek: _Pkcs11Kek,
-        protected_dek: bytes,
-        prefix: bytes,
-        mechanism: pkcs11.Mechanism,
-    ) -> bytes:
-        """Decrypt a DEK protected by PKCS#11 C_Encrypt."""
-        payload = protected_dek[len(prefix) :]
-        if len(payload) <= AES_BLOCK_BYTES:
-            msg = 'Stored PKCS#11 app-secret encrypted DEK payload is truncated.'
-            raise AppSecretConfigurationError(msg)
-        iv = payload[:AES_BLOCK_BYTES]
-        ciphertext = payload[AES_BLOCK_BYTES:]
-        try:
-            dek = bytes(kek.decrypt(ciphertext, mechanism=mechanism, mechanism_param=iv))
-        except (AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
-            msg = f'PKCS#11 app-secret KEK could not decrypt the DEK with {mechanism.name}.'
-            raise AppSecretConfigurationError(msg) from exception
-        if len(dek) != DEK_LENGTH_BYTES:
-            msg = f'Invalid decrypted DEK length: {len(dek)} bytes.'
-            raise AppSecretConfigurationError(msg)
-        return dek
 
     def _validate_kek_policy(self, kek: _Pkcs11KeyObject) -> None:
         """Reject KEKs whose visible PKCS#11 attributes are unsafe for app-secret protection."""

@@ -31,39 +31,37 @@ class KeygenScenario:
 
 SCENARIOS = (
     KeygenScenario(
-        name="rsa_2048",
+        name='rsa_2048',
         key_spec=RsaKeySpec(key_size=2048),
-        required_features=frozenset({"can_generate_rsa"}),
+        required_features=frozenset({'can_generate_rsa'}),
         expected_public_key_type=rsa.RSAPublicKey,
     ),
     KeygenScenario(
-        name="ec_p256",
+        name='ec_p256',
         key_spec=EcKeySpec(curve=EllipticCurveName.SECP256R1),
-        required_features=frozenset({"can_generate_ec"}),
+        required_features=frozenset({'can_generate_ec'}),
         expected_public_key_type=ec.EllipticCurvePublicKey,
     ),
 )
 
 
 def _require_features(capabilities, *, scenario_name: str, required_features: frozenset[str]) -> None:
-    missing = sorted(
-        feature for feature in required_features if not capabilities.derived_features.get(feature, False)
-    )
+    missing = sorted(feature for feature in required_features if not capabilities.derived_features.get(feature, False))
     if missing:
-        pytest.skip(
-            f"Skipping {scenario_name}: provider lacks required capabilities: {', '.join(missing)}."
-        )
+        pytest.skip(f'Skipping {scenario_name}: provider lacks required capabilities: {", ".join(missing)}.')
 
 
-@pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda scenario: scenario.name)
-def test_generate_managed_key_and_fetch_public_key(live_pkcs11_backend, live_pkcs11_capabilities, scenario: KeygenScenario) -> None:
+@pytest.mark.parametrize('scenario', SCENARIOS, ids=lambda scenario: scenario.name)
+def test_generate_managed_key_and_fetch_public_key(
+    live_pkcs11_backend, live_pkcs11_capabilities, scenario: KeygenScenario
+) -> None:
     _require_features(
         live_pkcs11_capabilities,
         scenario_name=scenario.name,
         required_features=scenario.required_features,
     )
 
-    alias = f"pytest-{scenario.name}-{secrets.token_hex(6)}"
+    alias = f'pytest-{scenario.name}-{secrets.token_hex(6)}'
     binding = live_pkcs11_backend.generate_managed_key(
         alias=alias,
         key_spec=scenario.key_spec,
@@ -74,6 +72,9 @@ def test_generate_managed_key_and_fetch_public_key(live_pkcs11_backend, live_pkc
         ),
     )
 
-    public_key = live_pkcs11_backend.get_public_key(binding)
-    assert public_key is not None
-    assert isinstance(public_key, scenario.expected_public_key_type)
+    try:
+        public_key = live_pkcs11_backend.get_public_key(binding)
+        assert public_key is not None
+        assert isinstance(public_key, scenario.expected_public_key_type)
+    finally:
+        live_pkcs11_backend.destroy_managed_key(binding)

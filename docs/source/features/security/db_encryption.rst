@@ -127,14 +127,17 @@ Device Model Fields
 Credential Model Fields
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-- ``private_key`` (EncryptedCharField, max_length=65536) - PEM-encoded private keys for credentials created in Trustpoint
+- ``private_key`` (EncryptedCharField, max_length=9500) - PEM-encoded private keys for credentials created in Trustpoint
 
 Crypto Managed-Key Fields
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - ``encrypted_private_key_pkcs8_der_b64`` - PKCS#8 DER material for protected imported keys, encrypted before it is stored
 
-Protected imported keys are only available when **Allow imported private keys** is enabled under **Management > Settings > Security** and the instance uses both a PKCS#11 crypto backend and PKCS#11-backed application-secret protection. They are not imported into the HSM token.
+Protected imported keys are only available when **Allow imported private keys**
+is enabled under **Management > Settings > Security** and a software or PKCS#11
+crypto backend plus a usable application-secret backend is configured. Imported
+keys are encrypted in PostgreSQL; they are not injected into a PKCS#11 token.
 
 UML Sequence Diagram
 --------------------

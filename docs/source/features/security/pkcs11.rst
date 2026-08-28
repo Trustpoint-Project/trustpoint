@@ -165,8 +165,7 @@ DEK. The protected DEK envelope is stored in PostgreSQL, while the plaintext
 DEK exists only in process memory while Trustpoint is running.
 
 **Encryption/Decryption Operations**:
-- DEK protection with standard PKCS#11 AES key wrap/unwrap mechanisms when available
-- Fallback DEK protection with AES-CBC-PAD or AES-CBC C_Encrypt/C_Decrypt
+- DEK protection with standard authenticated AES key-wrap mechanisms when available
 - Fallback DEK protection with software-side RSA-OAEP SHA-256 encryption and token-side C_Decrypt
 
 General HSM Operations
@@ -280,12 +279,12 @@ crypto backend. Existing private-key credentials can be imported only when the
 operator explicitly enables **Allow imported private keys** under
 **Management > Settings > Security**.
 
-Protected imported keys require both the PKCS#11 crypto backend and PKCS#11
-application-secret protection. The imported private key is encrypted with the
-application-secret DEK and stored in the Trustpoint database as a managed-key
-binding. It is not imported into the HSM token. Trustpoint accesses it only
-through the crypto backend service API, so PKI code uses the same managed-key
-interface for generated and protected imported keys.
+Protected imported keys require a software or PKCS#11 crypto backend and a
+usable software or PKCS#11 application-secret backend. The imported private key
+is encrypted with the application-secret DEK and stored in the Trustpoint
+database as a managed-key binding. It is not imported into the HSM token.
+Trustpoint accesses it only through the crypto backend service API, so PKI code
+uses the same managed-key interface for generated and protected imported keys.
 
 Docker Integration
 ------------------

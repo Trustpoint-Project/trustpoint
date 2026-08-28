@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from django.db.models.deletion import ProtectedError
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
 from crypto.adapters.pkcs11.bindings import (
@@ -19,7 +20,7 @@ from crypto.adapters.pkcs11.bindings import (
 )
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import KeyAlgorithm
-from crypto.domain.errors import ProviderConfigurationError
+from crypto.domain.errors import KeyPolicyViolationError, ManagedKeyUnavailableError, ProviderConfigurationError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import RsaKeySpec, SignRequest
@@ -36,6 +37,7 @@ from crypto.models import (
     SoftwareKeyEncryptionSource,
 )
 from management.models import AuditLog, LoggingConfig, SecurityConfig
+from pki.models import CredentialModel
 
 
 @dataclass
@@ -230,6 +232,107 @@ def test_sign_routes_through_persisted_pkcs11_binding() -> None:
     assert binding.provider_label == 'signer/rsa'
     assert payload == b'payload'
     assert request.signature_algorithm is SignRequest.rsa_pkcs1v15_sha256().signature_algorithm
+
+
+@pytest.mark.django_db
+def test_sign_rejects_inactive_managed_key_before_provider_call() -> None:
+    """A failed binding verification must prevent subsequent signing."""
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+    public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
+    adapter = FakeAdapter(
+        public_key=public_key,
+        generated_binding=Pkcs11ManagedKeyBinding(key_id=b'\xaa', algorithm=KeyAlgorithm.RSA),
+    )
+    managed_key = CryptoManagedKeyModel.objects.create(
+        alias='signer/missing',
+        provider_label='signer/missing',
+        provider_profile=profile,
+        algorithm='rsa',
+        public_key_fingerprint_sha256='b' * 64,
+        policy_snapshot={'usages': ['sign']},
+        status=ManagedKeyStatus.MISSING,
+    )
+    CryptoManagedKeyPkcs11BindingModel.objects.create(
+        managed_key=managed_key,
+        provider_profile=profile,
+        key_id_hex='aa',
+    )
+
+    with pytest.raises(ManagedKeyUnavailableError, match='is not active'):
+        _backend_with_adapter(adapter).sign(
+            key=managed_key.to_managed_key_ref(),
+            data=b'payload',
+            request=SignRequest.rsa_pkcs1v15_sha256(),
+        )
+
+    assert adapter.sign_calls == []
+
+
+@pytest.mark.django_db
+def test_sign_enforces_persisted_key_usage_policy() -> None:
+    """Signing cannot bypass the usage policy persisted with a managed key."""
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+    public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
+    adapter = FakeAdapter(
+        public_key=public_key,
+        generated_binding=Pkcs11ManagedKeyBinding(key_id=b'\xaa', algorithm=KeyAlgorithm.RSA),
+    )
+    managed_key = CryptoManagedKeyModel.objects.create(
+        alias='encryption-only',
+        provider_label='encryption-only',
+        provider_profile=profile,
+        algorithm='rsa',
+        public_key_fingerprint_sha256='b' * 64,
+        policy_snapshot={'usages': ['decrypt']},
+    )
+    CryptoManagedKeyPkcs11BindingModel.objects.create(
+        managed_key=managed_key,
+        provider_profile=profile,
+        key_id_hex='aa',
+    )
+
+    with pytest.raises(KeyPolicyViolationError, match='not authorized for signing'):
+        _backend_with_adapter(adapter).sign(
+            key=managed_key.to_managed_key_ref(),
+            data=b'payload',
+            request=SignRequest.rsa_pkcs1v15_sha256(),
+        )
+
+    assert adapter.sign_calls == []
+
+
+@pytest.mark.django_db
+def test_destroy_referenced_key_does_not_change_provider_state() -> None:
+    """Database references are checked before a provider-side key is destroyed."""
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+    public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
+    adapter = FakeAdapter(
+        public_key=public_key,
+        generated_binding=Pkcs11ManagedKeyBinding(key_id=b'\xaa', algorithm=KeyAlgorithm.RSA),
+    )
+    managed_key = CryptoManagedKeyModel.objects.create(
+        alias='issuing-ca',
+        provider_label='issuing-ca',
+        provider_profile=profile,
+        algorithm='rsa',
+        public_key_fingerprint_sha256='b' * 64,
+        policy_snapshot={'usages': ['certificate_sign']},
+    )
+    CryptoManagedKeyPkcs11BindingModel.objects.create(
+        managed_key=managed_key,
+        provider_profile=profile,
+        key_id_hex='aa',
+    )
+    CredentialModel.objects.create(
+        credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+        managed_private_key=managed_key,
+    )
+
+    with pytest.raises(ProtectedError):
+        _backend_with_adapter(adapter).destroy_managed_key(managed_key.to_managed_key_ref())
+
+    assert adapter.destroy_calls == []
+    assert CryptoManagedKeyModel.objects.filter(pk=managed_key.pk).exists()
 
 
 @pytest.mark.django_db

@@ -3,6 +3,7 @@
 
 """Views for the User Management section of the management app."""
 
+from collections.abc import Mapping
 from typing import Any
 
 from django.contrib import messages
@@ -38,10 +39,7 @@ def _is_last_admin(user: TrustpointUser) -> bool:
     Returns:
         True when the user has the ADMIN role and no other admin exists.
     """
-    return (
-        user.role.name == Role.ADMIN
-        and get_user_model().objects.filter(role__name=Role.ADMIN).count() == 1
-    )
+    return user.role.name == Role.ADMIN and get_user_model().objects.filter(role__name=Role.ADMIN).count() == 1
 
 
 class UserContextMixin(ContextDataMixin):
@@ -185,9 +183,11 @@ class UserChangeRoleView(
         )
         return response
 
+
 @extend_schema(tags=['User Management'])
 class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
     """API view for user."""
+
     queryset = get_user_model().objects.all()
     serializer_class = UserSerializer
     permission_classes = (IsSuperUser,)
@@ -205,11 +205,10 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Update the user, refusing to change the role of the last remaining admin."""
         instance = self.get_object()
-        new_role = request.data.get('role')
+        new_role = request.data.get('role') if isinstance(request.data, Mapping) else None
         if _is_last_admin(instance) and new_role is not None and str(new_role) != str(instance.role_id):
             return Response(
                 {'detail': 'Cannot change role of this user: at least one admin must remain.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().update(request, *args, **kwargs)
-

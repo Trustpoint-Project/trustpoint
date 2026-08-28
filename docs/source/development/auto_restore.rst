@@ -1,110 +1,39 @@
 .. _auto_restore:
 
-Auto Restore Workflow
-======================
+Application-Secret Recovery
+===========================
 
-Overview
---------
+Trustpoint does not reconstruct missing HSM keys from a database backup. A
+database restore can recover the protected application-secret DEK, but the KEK
+needed to recover that DEK remains in the configured PKCS#11 token.
 
-The auto restore workflow is triggered when a Trustpoint container with HSM-based storage (SoftHSM or Physical HSM) is restarted and the database contains encrypted data, but the HSM's Key Encryption Key (KEK) is not available. This process ensures that encrypted private keys can be recovered using a backup password, even if the HSM's volatile KEK is lost.
+PKCS#11-backed deployments
+--------------------------
 
-**Key Point:** For SOFTWARE storage type, no auto restore is needed - the container restarts normally.
+For PKCS#11 application-secret protection, disaster recovery therefore requires
+all of the following:
 
-Workflow Process
-----------------
+* the Trustpoint database backup;
+* access to the same token key objects, or an HSM backup restored with the
+  vendor's supported procedure;
+* the matching PKCS#11 module, provider configuration, token selector, and PIN.
 
-HSM-Based Storage (SoftHSM or Physical HSM)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+On startup, Trustpoint resolves the configured token and KEK, recovers the DEK,
+and then restores encrypted TLS material from PostgreSQL. If the token or KEK
+is unavailable, startup fails closed. There is currently no backup-password
+workflow that can replace a lost KEK.
 
-The auto restore workflow varies depending on what HSM components are available:
+Software-backed deployments
+----------------------------
 
-**Scenario 1: KEK Lost, Token Exists**
+The software application-secret DEK is stored in the database configuration.
+A complete database backup therefore contains the material required to decrypt
+encrypted fields after restore. This is operationally simpler but does not
+provide hardware-rooted protection.
 
-.. code-block:: text
+Operational guidance
+--------------------
 
-    Container Restart (SOFTHSM + WIZARD_COMPLETED + encrypted DB)
-        ↓
-    managestartup.py detects KEK lost but token exists
-        ↓
-    WIZARD_AUTO_RESTORE_PASSWORD state created
-        ↓
-    entrypoint.sh detects state → skips unwrap/config
-        ↓
-    User accesses web → /setup-wizard/auto_restore_password/
-        ↓
-    BackupAutoRestorePasswordView
-        ↓
-    DEK recovery + TLS extraction
-        ↓
-    sudo wizard_auto_restore_success.sh
-        ↓
-    NGINX & TLS config → WIZARD_COMPLETED
-        ↓
-    Done!
-
-**Scenario 2: HSM Completely Lost (New HSM Installation)**
-
-.. code-block:: text
-
-    Container Restart (SOFTHSM + WIZARD_COMPLETED + encrypted DB)
-        ↓
-    managestartup.py detects new KEK scenario (token missing)
-        ↓
-    WIZARD_SETUP_HSM_AUTORESTORE state created
-        ↓
-    entrypoint.sh detects state → skips unwrap/config
-        ↓
-    User accesses web → /setup-wizard/auto-restore-hsm-setup/<hsm_type>/
-        ↓
-    AutoRestoreHsmSetupView
-        ↓
-    sudo wizard_setup_hsm.sh <module> <slot> <label> auto_restore_setup
-        ↓
-    HSM token initialized → WIZARD_AUTO_RESTORE_PASSWORD state created
-        ↓
-    User accesses web → /setup-wizard/auto_restore_password/
-        ↓
-    BackupAutoRestorePasswordView
-        ↓
-    DEK recovery + TLS extraction + CA deactivation
-        ↓
-    sudo wizard_auto_restore_success.sh
-        ↓
-    NGINX & TLS config → WIZARD_COMPLETED
-        ↓
-    Done!
-
-**Scenario 3: KEK Available (Normal Restart)**
-
-.. code-block:: text
-
-    Container Restart (SOFTHSM + WIZARD_COMPLETED + encrypted DB)
-        ↓
-    managestartup.py detects KEK available
-        ↓
-    Normal startup continues
-        ↓
-    DEK unwrapped using existing KEK
-        ↓
-    NGINX & TLS config → WIZARD_COMPLETED
-        ↓
-    Done!
-
-SOFTWARE Storage Type
-~~~~~~~~~~~~~~~~~~~~~
-
-For SOFTWARE storage type:
-
-.. code-block:: text
-
-    Container Restart (SOFTWARE + WIZARD_COMPLETED)
-        ↓
-    managestartup.py
-        ↓
-    No auto restore needed
-        ↓
-    Normal container startup continues
-        ↓
-    Done!
-
-
+Test database and HSM recovery together. Never assume that a successful
+database restore is sufficient for a PKCS#11-backed installation, and use only
+the HSM vendor's supported key-backup and replication process.

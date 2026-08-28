@@ -92,8 +92,7 @@ class IssuingCaImportMixin:
             if issuing_ca_qs.exists():
                 ca_in_db = issuing_ca_qs[0]
                 err_msg = (
-                    f'Issuing CA {ca_in_db.unique_name} is already configured '
-                    'with the same Issuing CA certificate.'
+                    f'Issuing CA {ca_in_db.unique_name} is already configured with the same Issuing CA certificate.'
                 )
                 self._raise_validation_error(err_msg)
 
@@ -131,12 +130,13 @@ class IssuingCaImportMixin:
                 untrusted_intermediates=untrusted_intermediates,
             )
         except ValueError as e:
-            self._raise_validation_error(
-                f'CA certificate verification failed: {e}'
-            )
+            self._raise_validation_error(f'CA certificate verification failed: {e}')
 
     def _finalize_issuing_ca_creation(
-        self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer,
+        self,
+        unique_name: str | None,
+        cert: x509.Certificate,
+        credential_serializer: CredentialSerializer,
         chain: list[x509.Certificate] | None = None,
     ) -> CaModel:
         """Finalizes the creation of an imported Issuing CA after validation."""
@@ -584,6 +584,7 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
         chain = list(credential_serializer.additional_certificates or [])
         self._finalize_issuing_ca_creation(unique_name, cert, credential_serializer, chain)
 
+
 class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
 
@@ -598,9 +599,15 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
 
     class Meta:
         """Meta class for IssuingCaAddRequestMixin."""
+
         model = CaModel
         fields: ClassVar[list[str]] = [
-            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'est_username', 'ca_type'
+            'unique_name',
+            'remote_host',
+            'remote_port',
+            'remote_path',
+            'est_username',
+            'ca_type',
         ]
 
     key_type = forms.ChoiceField(
@@ -670,26 +677,55 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         key_type = self.cleaned_data['key_type']
         key_spec = self._key_spec_for_key_type(key_type)
 
-        key_ref = TrustpointCryptoBackend().generate_managed_key(
+        backend = TrustpointCryptoBackend()
+        key_ref = backend.generate_managed_key(
             alias=self.cleaned_data['unique_name'],
             key_spec=key_spec,
             policy=KeyPolicy.managed_signing_key(
                 signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
             ),
         )
-        return CredentialModel.save_managed_private_key_credential(
-            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
-            managed_key=CryptoManagedKeyModel.objects.get(pk=key_ref.id),
-        )
+        try:
+            return CredentialModel.save_managed_private_key_credential(
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+                managed_key=CryptoManagedKeyModel.objects.get(pk=key_ref.id),
+            )
+        except Exception:
+            try:
+                backend.destroy_managed_key(key_ref)
+            except Exception:
+                self.logger.exception('Failed to clean up a managed key after credential creation failed.')
+            raise
+
+    def _cleanup_generated_credential(self, credential: CredentialModel) -> None:
+        """Best-effort cleanup of a generated credential and its provider key."""
+        managed_key = credential.managed_private_key
+        key_ref = managed_key.to_managed_key_ref() if managed_key is not None else None
+        try:
+            credential.delete()
+        except Exception:
+            self.logger.exception('Failed to remove a generated credential after CA creation failed.')
+            return
+
+        if key_ref is not None:
+            try:
+                TrustpointCryptoBackend().destroy_managed_key(key_ref)
+            except Exception:
+                self.logger.exception('Failed to remove a generated provider key after CA creation failed.')
 
     def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
         """Save the form and create the CA model with configuration."""
         instance = super().save(commit=False)
+        if not commit:
+            return instance
 
-        instance.credential = self._create_credential()
-
-        if commit:
+        credential = self._create_credential()
+        instance.credential = credential
+        try:
             instance.save()
+        except Exception:
+            self._cleanup_generated_credential(credential)
+            raise
         return instance
 
 
@@ -698,9 +734,16 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
 
     class Meta:
         """Meta class for IssuingCaAddRequestEstForm."""
+
         model = CaModel
         fields: ClassVar[list[str]] = [
-            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'est_username', 'est_password', 'ca_type'
+            'unique_name',
+            'remote_host',
+            'remote_port',
+            'remote_path',
+            'est_username',
+            'est_password',
+            'ca_type',
         ]
 
     est_username = forms.CharField(
@@ -730,30 +773,36 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
 
         If is_ra_mode is True, create a REMOTE_EST_RA (Registration Authority) instead of REMOTE_ISSUING_EST.
         """
+        instance = super().save(commit=False)
+        credential: CredentialModel | None = None
         if is_ra_mode:
-            instance = super().save(commit=False)
             instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
             instance.credential = None
             instance.certificate = None  # Will be set from truststore later
         else:
-            instance = super().save(commit=False)
             instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
-            instance.credential = self._create_credential()
+            credential = self._create_credential()
+            instance.credential = credential
 
-        no_onboarding_config = NoOnboardingConfigModel.objects.create(
-            pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
-            est_password=self.cleaned_data['est_password'],
-            trust_store=None,  # Will be set later via truststore association
-        )
-        instance.no_onboarding_config = no_onboarding_config
-        instance.est_username = self.cleaned_data['est_username']
+        try:
+            with transaction.atomic():
+                no_onboarding_config = NoOnboardingConfigModel.objects.create(
+                    pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+                    est_password=self.cleaned_data['est_password'],
+                    trust_store=None,  # Will be set later via truststore association
+                )
+                instance.no_onboarding_config = no_onboarding_config
+                instance.est_username = self.cleaned_data['est_username']
 
-        PermittedProtocolsAuthorization().check(instance)
-        PkiSecurityAuthorization().check(instance)
+                PermittedProtocolsAuthorization().check(instance)
+                PkiSecurityAuthorization().check(instance)
 
-        instance.save()
+                instance.save()
+        except Exception:
+            if credential is not None:
+                self._cleanup_generated_credential(credential)
+            raise
         return instance
-
 
 
 class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
@@ -769,10 +818,9 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
 
     class Meta:
         """Meta class for IssuingCaAddRequestCmpForm."""
+
         model = CaModel
-        fields: ClassVar[list[str]] = [
-            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type'
-        ]
+        fields: ClassVar[list[str]] = ['unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type']
 
     cmp_shared_secret = forms.CharField(
         label=_('CMP Shared Secret'),
@@ -794,33 +842,39 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
 
         If is_ra_mode is True, create a REMOTE_CMP_RA (Registration Authority) instead of REMOTE_ISSUING_CMP.
         """
+        instance = super().save(commit=False)
+        credential: CredentialModel | None = None
         if is_ra_mode:
-            instance = super(IssuingCaAddRequestMixin, self).save(commit=False)
             instance.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
             instance.credential = None
             instance.certificate = None  # Will be set from truststore later
         else:
-            instance = super().save(commit=False)
             instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
-            instance.credential = self._create_credential()
+            credential = self._create_credential()
+            instance.credential = credential
 
-        no_onboarding_config = NoOnboardingConfigModel.objects.create(
-            pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
-            cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
-            trust_store=None,  # Will be set later via truststore association
-        )
-        instance.no_onboarding_config = no_onboarding_config
+        try:
+            with transaction.atomic():
+                no_onboarding_config = NoOnboardingConfigModel.objects.create(
+                    pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
+                    cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
+                    trust_store=None,  # Will be set later via truststore association
+                )
+                instance.no_onboarding_config = no_onboarding_config
 
-        PermittedProtocolsAuthorization().check(instance)
-        PkiSecurityAuthorization().check(instance)
+                PermittedProtocolsAuthorization().check(instance)
+                PkiSecurityAuthorization().check(instance)
 
-        instance.save()
+                instance.save()
+        except Exception:
+            if credential is not None:
+                self._cleanup_generated_credential(credential)
+            raise
         return instance
 
 
 class IssuingCaTruststoreAssociationForm(forms.Form):
     """Form for associating a truststore with an Issuing CA."""
-
 
     trust_store = forms.ModelChoiceField(
         queryset=TruststoreModel.objects.none(),  # Set in __init__
@@ -859,9 +913,7 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
             trust_store_field.queryset = TruststoreModel.objects.filter(
                 intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
             )
-            trust_store_field.help_text = _(
-                'CMP: Only "Issuing CA Chain" truststores can be associated.'
-            )
+            trust_store_field.help_text = _('CMP: Only "Issuing CA Chain" truststores can be associated.')
         else:
             trust_store_field.queryset = TruststoreModel.objects.filter(
                 intended_usage=TruststoreModel.IntendedUsage.TLS
@@ -941,9 +993,7 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
             cleaned_data = {}
 
         if self.instance and self.instance.pk and not self.instance.is_active:
-            raise ValidationError(
-                _('Cannot configure CRL settings: CA is deactivated.')
-            )
+            raise ValidationError(_('Cannot configure CRL settings: CA is deactivated.'))
 
         return cleaned_data
 
@@ -955,6 +1005,7 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
         validity_float = float(validity)
 
         from management.models import SecurityConfig  # noqa: PLC0415
+
         try:
             cfg = SecurityConfig.objects.get()
         except SecurityConfig.DoesNotExist:
@@ -973,7 +1024,8 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
                     _(
                         'CRL validity of %(hours).2f hours (%(days).1f days) exceeds the maximum of '
                         '%(max_days)d days permitted by the active security policy.'
-                    ) % {
+                    )
+                    % {
                         'hours': validity_float,
                         'days': validity_float / 24,
                         'max_days': max_days,

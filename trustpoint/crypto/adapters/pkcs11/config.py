@@ -63,12 +63,11 @@ class Pkcs11TokenSelector:
         normalized_serial = _normalize_pkcs11_text(token_serial)
 
         if self.slot_id is not None and self.slot_id == slot_id:
-            return (
-                (self.token_serial is None or self.token_serial == normalized_serial)
-                and (self.token_label is None or self.token_label == normalized_label)
+            return (self.token_serial is None or self.token_serial == normalized_serial) and (
+                self.token_label is None or self.token_label == normalized_label
             )
-        if self.token_serial is not None and self.token_serial == normalized_serial:
-            return True
+        if self.token_serial is not None:
+            return self.token_serial == normalized_serial
         return bool(self.token_label is not None and self.token_label == normalized_label)
 
 

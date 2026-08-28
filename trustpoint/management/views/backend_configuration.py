@@ -20,8 +20,6 @@ from django.views.generic import TemplateView
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
 from appsecrets.service import (
     PKCS11_CWRAP_DEK_PREFIX,
-    PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX,
-    PKCS11_ENCRYPTED_DEK_CBC_PREFIX,
     PKCS11_RSA_OAEP_SHA256_DEK_PREFIX,
 )
 from crypto.application.capabilities import BackendCapabilityReport, get_active_backend_capability_report
@@ -72,12 +70,6 @@ def _app_secret_summary(backend: AppSecretBackendModel | None) -> dict[str, Any]
         kek_type = _('RSA private KEK (3072-bit preferred, 2048-bit minimum)')
     elif wrapped_dek.startswith(PKCS11_CWRAP_DEK_PREFIX):
         protection = _('PKCS#11 AES key wrap (provider-negotiated)')
-        kek_type = _('AES-256 secret KEK')
-    elif wrapped_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX):
-        protection = 'PKCS#11 AES-CBC-PAD'
-        kek_type = _('AES-256 secret KEK')
-    elif wrapped_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PREFIX):
-        protection = 'PKCS#11 AES-CBC'
         kek_type = _('AES-256 secret KEK')
     else:
         protection = _('Pending initialization')
@@ -359,9 +351,7 @@ class BackendConfigurationView(TemplateView):
         context['supported_key_capabilities'] = _supported_key_capabilities(capability_report)
         context['supported_auto_gen_pki_algorithms'] = supported_auto_gen_pki_key_algorithms()
         pkcs11_capability_payload = (
-            getattr(pkcs11_probe_detail, 'snapshot_payload', None)
-            if pkcs11_probe_detail is not None
-            else None
+            getattr(pkcs11_probe_detail, 'snapshot_payload', None) if pkcs11_probe_detail is not None else None
         )
         context['pkcs11_capability_payload'] = pkcs11_capability_payload
         context['pkcs11_derived_features'] = (

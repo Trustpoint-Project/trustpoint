@@ -147,7 +147,10 @@ class TestUserViewSetUpdate:
     """Tests for PATCH /api/users/{id}/."""
 
     def test_update_role_success(
-        self, superuser_client: APIClient, regular_user, admin_group: Group,
+        self,
+        superuser_client: APIClient,
+        regular_user,
+        admin_group: Group,
     ) -> None:
         """A superuser can change another user's role."""
         url = reverse('users-detail', args=[regular_user.pk])
@@ -158,7 +161,10 @@ class TestUserViewSetUpdate:
         assert regular_user.is_superuser is True
 
     def test_downgrade_last_admin_is_blocked(
-        self, superuser_client: APIClient, superuser, plain_group: Group,
+        self,
+        superuser_client: APIClient,
+        superuser,
+        plain_group: Group,
     ) -> None:
         """Changing the sole admin's role away from Admin is rejected."""
         url = reverse('users-detail', args=[superuser.pk])
@@ -166,6 +172,12 @@ class TestUserViewSetUpdate:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         superuser.refresh_from_db()
         assert superuser.is_superuser is True
+
+    def test_update_with_list_payload_returns_400(self, superuser_client: APIClient, regular_user) -> None:
+        """A non-object JSON payload is rejected instead of raising an application error."""
+        response = superuser_client.patch(reverse('users-detail', args=[regular_user.pk]), [], format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db
