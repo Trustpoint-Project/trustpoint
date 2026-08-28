@@ -151,7 +151,7 @@ def sd_notify(message: str) -> None:
         address = notify_socket
 
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:  # type: ignore[attr-defined]
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
             sock.connect(address)
             sock.sendall(message.encode('utf-8'))
     except OSError as exc:

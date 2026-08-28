@@ -389,8 +389,8 @@ class Pkcs11Backend(LoggerMixin):
             'module_exists': Path(module_path).is_file(),
             'module_readable': os.access(module_path, os.R_OK),
             'provider_config_envs': self._provider_config_envs(),
-            'uid': os.geteuid(),  # type: ignore[attr-defined]
-            'gid': os.getegid(),  # type: ignore[attr-defined]
+            'uid': os.geteuid(),
+            'gid': os.getegid(),
         }
 
     def diagnostic_summary(self) -> str:
