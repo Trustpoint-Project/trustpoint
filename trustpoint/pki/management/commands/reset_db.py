@@ -13,7 +13,9 @@ import psycopg
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand, call_command
+from django.db import connections
 
+from management.management.managepy_override import _add_copyright_headers, _check_migration_name_duplicates
 from management.models import AppVersion
 from management.models.organization import OrganizationModel
 
@@ -79,6 +81,8 @@ class Command(BaseCommand):
                 migration_name = 'initial'
             self.stdout.write('Running makemigrations...')
             call_command('makemigrations', '--no-header', name=migration_name)
+            _check_migration_name_duplicates(migration_name, base_path)
+            _add_copyright_headers(migration_name, base_path)
         self.stdout.write('Running migrate...')
         call_command('migrate')
         call_command('create_admin_group')
@@ -137,6 +141,7 @@ class Command(BaseCommand):
         db_path = base_path / 'db.sqlite3'
         if db_path.exists():
             try:
+                connections.close_all()
                 Path(db_path).unlink()
                 self.stdout.write('SQLite database file deleted.')
             except Exception as e:

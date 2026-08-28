@@ -1,6 +1,6 @@
 [project]
 name = "trustpoint"
-version = "0.6.0"
+version = "1.0.dev0"
 description = "Trustpoint Server Software"
 authors = [{ name = "Trustpoint-Project" }]
 requires-python = ">=3.13.0"
@@ -95,6 +95,9 @@ allow-direct-references = true
 
 [tool.uv]
 required-version = ">=0.8.20"
+override-dependencies = [
+    "sqlparse>=0.6.0",
+]
 
 [tool.ruff]
 line-length = 120

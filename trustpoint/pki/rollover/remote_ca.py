@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pki.models.ca_rollover import CaRolloverStrategyType
 from pki.rollover.base import RolloverStrategy
@@ -44,7 +44,7 @@ class RemoteCaRolloverStrategy(RolloverStrategy):
         self,
         old_ca: CaModel,
         data: Mapping[str, object] | None = None,
-        files: MultiValueDict[str, UploadedFile] | None = None,
+        files: MultiValueDict[str, UploadedFile[Any]] | None = None,
     ) -> forms.Form:
         """Return the form for configuring remote CA endpoint."""
         msg = 'RemoteCaRolloverStrategy is not yet implemented.'
