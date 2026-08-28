@@ -15,8 +15,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_q.models import Schedule  # type: ignore[import-untyped]
-from django_q.tasks import schedule  # type: ignore[import-untyped]
+from django_q.models import Schedule
+from django_q.tasks import schedule
 from trustpoint_core import oid
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel

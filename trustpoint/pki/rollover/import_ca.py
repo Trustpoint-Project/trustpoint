@@ -155,7 +155,7 @@ class ImportCaRolloverStrategy(RolloverStrategy):
         self,
         old_ca: CaModel,  # noqa: ARG002
         data: Mapping[str, object] | None = None,
-        files: MultiValueDict[str, UploadedFile] | None = None,
+        files: MultiValueDict[str, UploadedFile[Any]] | None = None,
     ) -> ImportCaRolloverForm:
         """Return the PKCS#12 import form."""
         return ImportCaRolloverForm(data=data, files=files)

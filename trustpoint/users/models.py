@@ -8,7 +8,7 @@ Defines a ``Role`` enum whose values are human-readable group names
 is a foreign key to ``django.contrib.auth.models.Group``.
 """
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from django.apps import apps
 from django.contrib.auth.models import AbstractUser, Group, UserManager
@@ -71,7 +71,7 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
 
     def _get_default_org(self) -> 'OrganizationModel':
         """Create default organization."""
-        org_model = cast('type[OrganizationModel]', apps.get_model('management', 'OrganizationModel'))
+        org_model = apps.get_model('management', 'OrganizationModel')
         org, _created = org_model.objects.get_or_create(pk=1, name='trustpoint', organization='trustpoint')
         return org
 

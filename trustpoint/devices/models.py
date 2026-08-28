@@ -15,7 +15,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_q.tasks import schedule  # type: ignore[import-untyped]
+from django_q.tasks import schedule
 from django_stubs_ext.db.models import TypedModelMeta
 
 from onboarding.models import (

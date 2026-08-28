@@ -23,6 +23,7 @@ from devices.models import (
     OnboardingPkiProtocol,
     OnboardingProtocol,
 )
+from management.models import SecurityConfig
 
 
 @pytest.mark.django_db
@@ -176,6 +177,26 @@ class TestNoOnboardingCreateForm:
 @pytest.mark.django_db
 class TestOnboardingCreateForm:
     """Tests for OnboardingCreateForm."""
+
+    def test_protocol_choices_follow_security_config(self) -> None:
+        """Test onboarding choices are filtered by the security configuration."""
+        SecurityConfig.objects.create(
+            permitted_onboarding_protocols=[OnboardingProtocol.CMP_SHARED_SECRET.value],
+        )
+
+        form = OnboardingCreateForm()
+
+        assert form.fields['onboarding_protocol'].choices == [
+            (OnboardingProtocol.CMP_SHARED_SECRET.value, OnboardingProtocol.CMP_SHARED_SECRET.label),
+        ]
+
+    def test_empty_permitted_protocols_block_all_choices(self) -> None:
+        """Test an empty security allow-list removes all onboarding choices."""
+        SecurityConfig.objects.create(permitted_onboarding_protocols=[])
+
+        form = OnboardingCreateForm()
+
+        assert list(form.fields['onboarding_protocol'].choices) == []
 
     def test_form_initialization(self) -> None:
         """Test OnboardingCreateForm initialization."""
