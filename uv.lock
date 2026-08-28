@@ -7,6 +7,9 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
+[manifest]
+overrides = [{ name = "sqlparse", specifier = ">=0.6.0" }]
+
 [[package]]
 name = "accessible-pygments"
 version = "0.0.5"
