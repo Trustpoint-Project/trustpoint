@@ -13,6 +13,7 @@ import psycopg
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand, call_command
+from django.db import connections
 
 from management.models import AppVersion
 from management.models.organization import OrganizationModel
@@ -137,6 +138,7 @@ class Command(BaseCommand):
         db_path = base_path / 'db.sqlite3'
         if db_path.exists():
             try:
+                connections.close_all()
                 Path(db_path).unlink()
                 self.stdout.write('SQLite database file deleted.')
             except Exception as e:
