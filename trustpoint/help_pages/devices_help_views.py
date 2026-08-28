@@ -48,7 +48,6 @@ from help_pages.commands import (
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from pki.models import IssuedCredentialModel
-from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError

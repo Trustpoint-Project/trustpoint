@@ -12,8 +12,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_q.models import Schedule  # type: ignore[import-untyped]
-from django_q.tasks import schedule  # type: ignore[import-untyped]
+from django_q.models import Schedule
+from django_q.tasks import schedule
 
 from trustpoint.logger import LoggerMixin
 
