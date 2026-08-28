@@ -274,12 +274,12 @@ class TestNoOnboardingCredentialSections:
 class TestDeviceCreateOnboardingProtocols:
     """Test device creation with different onboarding protocols."""
     
-    def test_create_device_with_manual_onboarding(
+    def test_create_device_with_manual_onboarding_is_rejected(
         self,
         admin_client: Client,
         domain_instance: dict[str, Any]
     ) -> None:
-        """Test creating device with MANUAL onboarding protocol."""
+        """Test MANUAL onboarding cannot be created from the onboarding create view."""
         domain = domain_instance['domain']
         
         from onboarding.models import OnboardingProtocol
@@ -295,11 +295,8 @@ class TestDeviceCreateOnboardingProtocols:
         url = reverse('devices:devices_create_onboarding')
         response = admin_client.post(url, data=post_data)
         
-        assert response.status_code == 302
-        
-        device = DeviceModel.objects.get(common_name='manual-onboarding-device')
-        assert device.onboarding_config is not None
-        assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.MANUAL
+        assert response.status_code == 200
+        assert not DeviceModel.objects.filter(common_name='manual-onboarding-device').exists()
 
 
 @pytest.mark.django_db
