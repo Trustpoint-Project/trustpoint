@@ -7,11 +7,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from django.contrib.auth import authenticate
 from django.utils.translation import gettext_lazy as _
 from rest_framework import exceptions
 from rest_framework.authentication import BaseAuthentication
 
+from .authentication import ServiceAccountBackend
 from .models import TrustpointUser
 
 if TYPE_CHECKING:
@@ -51,7 +51,14 @@ class ServiceAccountAuthentication(BaseAuthentication):
             msg = _('Invalid service account credentials format. Use: ServiceAccount <client_id>:<secret>')
             raise exceptions.AuthenticationFailed(msg) from exc
 
-        user = authenticate(request=request, client_id=client_id, secret=secret)
+        client_id = client_id.strip()
+        secret = secret.strip()
+        if not client_id or not secret:
+            msg = _('Invalid service account credentials format. Use: ServiceAccount <client_id>:<secret>')
+            raise exceptions.AuthenticationFailed(msg)
+
+        backend = ServiceAccountBackend()
+        user = backend.authenticate(request=request, client_id=client_id, secret=secret)
 
         if user is None:
             msg = _('Invalid service account credentials.')

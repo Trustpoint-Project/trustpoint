@@ -40,7 +40,7 @@ class ServiceAccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListVi
         """Return only service accounts."""
         return TrustpointUser.objects.filter(
             account_type=TrustpointUser.AccountType.SERVICE
-        ).select_related('role', 'organization').order_by('-date_joined')
+        ).select_related('role', 'organization').prefetch_related('service_credentials').order_by('-date_joined')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add page context."""

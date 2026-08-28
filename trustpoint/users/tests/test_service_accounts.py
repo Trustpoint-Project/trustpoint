@@ -181,11 +181,34 @@ class TestServiceAccountCredential:
         """Test recording credential usage."""
         credential, _ = service_credential
         assert credential.last_used is None
+        assert credential.usage_count == 0
 
         credential.record_usage()
         credential.refresh_from_db()
 
         assert credential.last_used is not None
+        assert credential.usage_count == 1
+
+    def test_is_expired_matches_expiration_window(
+        self,
+        service_account: TrustpointUser,
+    ) -> None:
+        """Expired credentials should report an expiration state for templates and UI logic."""
+        active_credential = ServiceAccountCredential.objects.create(
+            service_account=service_account,
+            client_id=ServiceAccountCredential.generate_client_id(),
+            hashed_secret=make_password('test_secret'),
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+        expired_credential = ServiceAccountCredential.objects.create(
+            service_account=service_account,
+            client_id=ServiceAccountCredential.generate_client_id(),
+            hashed_secret=make_password('test_secret'),
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+
+        assert not active_credential.is_expired()
+        assert expired_credential.is_expired()
 
     def test_credential_requires_service_account(
         self,
@@ -230,6 +253,34 @@ class TestServiceAccountBackend:
 
         assert user is not None
         assert user == credential.service_account
+
+    def test_authentication_accepts_django_request_keyword(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """The backend must accept the standard request kwarg used by Django auth."""
+        credential, secret = service_credential
+        backend = ServiceAccountBackend()
+
+        user = backend.authenticate(
+            request=object(),
+            client_id=credential.client_id,
+            secret=secret,
+        )
+
+        assert user == credential.service_account
+
+    def test_authentication_ignores_blank_whitespace_credentials(self) -> None:
+        """Whitespace-only credentials should fail cleanly instead of creating an auth edge case."""
+        backend = ServiceAccountBackend()
+
+        user = backend.authenticate(
+            request=None,
+            client_id='   ',
+            secret=' valid-secret ',
+        )
+
+        assert user is None
 
     def test_authentication_with_invalid_client_id(self) -> None:
         """Test authentication with invalid client ID."""
@@ -317,6 +368,23 @@ class TestServiceAccountBackend:
 
 
 @pytest.mark.django_db
+class TestServiceAccountConfiguration:
+    """Tests for service account configuration wiring."""
+
+    def test_service_account_middleware_is_enabled(self) -> None:
+        """Service accounts should be blocked from the Web UI when enabled in settings."""
+        from django.conf import settings
+
+        assert 'users.middleware.ServiceAccountMiddleware' in settings.MIDDLEWARE
+
+    def test_drf_uses_service_account_authentication(self) -> None:
+        """The API authentication stack should accept service-account credentials."""
+        from django.conf import settings
+
+        assert 'users.api_auth.ServiceAccountAuthentication' in settings.REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES']
+
+
+@pytest.mark.django_db
 class TestServiceAccountAPI:
     """Tests for service account API authentication."""
 
@@ -341,6 +409,19 @@ class TestServiceAccountAPI:
         assert 'token_type' in response.data
         assert response.data['token_type'] == 'Bearer'
 
+    def test_service_account_header_authenticates_api_requests(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """A valid ServiceAccount authorization header should authenticate real API calls."""
+        credential, secret = service_credential
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'ServiceAccount {credential.client_id}:{secret}')
+
+        response = client.get('/api/devices/')
+
+        assert response.status_code == status.HTTP_200_OK
+
     def test_api_authentication_with_invalid_format(self) -> None:
         """Test API authentication with invalid credentials."""
         client = APIClient()
@@ -352,6 +433,18 @@ class TestServiceAccountAPI:
         })
         # Should get authentication error
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_api_authentication_missing_service_credentials_returns_invalid_request(self) -> None:
+        """A client_credentials grant without both fields should return a proper OAuth2 invalid_request response."""
+        client = APIClient()
+
+        response = client.post('/api/token/', {
+            'grant_type': 'client_credentials',
+            'client_id': 'sa_valid_id',
+        })
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error'] == 'invalid_request'
 
     def test_api_authentication_missing_credentials(self) -> None:
         """Test API request without credentials."""

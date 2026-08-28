@@ -137,10 +137,18 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
     def post(self, request: Request, *args: tuple[Any, ...], **kwargs: dict[str, Any]) -> Response:
         """Handle token request for both human users and service accounts."""
         grant_type = request.data.get('grant_type')
-        client_id = request.data.get('client_id')
-        client_secret = request.data.get('client_secret')
+        client_id = (request.data.get('client_id') or '').strip()
+        client_secret = (request.data.get('client_secret') or '').strip()
 
-        if grant_type == 'client_credentials' and client_id and client_secret:
+        if grant_type == 'client_credentials':
+            if not client_id or not client_secret:
+                return Response(
+                    {
+                        'error': 'invalid_request',
+                        'error_description': 'client_id and client_secret are required for client_credentials',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             return self._handle_service_account(request, client_id, client_secret)
 
         return super().post(request, *args, **kwargs)

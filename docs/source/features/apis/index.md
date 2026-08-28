@@ -36,7 +36,7 @@ https://<trustpoint-host>/api/
 
 ### Authentication
 
-The Management API uses JWT (JSON Web Tokens) for authentication:
+The Management API uses JWT (JSON Web Tokens) for human-user authentication:
 
 ```bash
 # Obtain access token
@@ -48,6 +48,9 @@ curl -X POST https://trustpoint.example.com/api/token/ \
 curl -X GET https://trustpoint.example.com/api/domains/ \
   -H "Authorization: Bearer <access_token>"
 ```
+
+For API-only automation, Trustpoint also supports service accounts using OAuth 2.0 `client_credentials`.
+See the dedicated [Service Accounts guide](service_accounts.md) for setup and token examples.
 
 ### OpenAPI Documentation
 
@@ -64,4 +67,5 @@ est
 rest
 cmp
 rest_api
+service_accounts
 ```

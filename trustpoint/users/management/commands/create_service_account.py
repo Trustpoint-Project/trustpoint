@@ -110,8 +110,9 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(
                 '\n⚠️  IMPORTANT: Save the secret now! It cannot be retrieved later.'
             ))
-            self.stdout.write(self.style.SUCCESS('\nAuthentication Header Format:'))
-            self.stdout.write(f'  Authorization: ServiceAccount {credential.client_id}:{secret}')
+            self.stdout.write(self.style.SUCCESS('\nOAuth 2.0 client_credentials example:'))
+            self.stdout.write('  POST /api/token/')
+            self.stdout.write(f'  {{"grant_type": "client_credentials", "client_id": "{credential.client_id}", "client_secret": "{secret}"}}')
             self.stdout.write(self.style.SUCCESS('=' * 70 + '\n'))
 
         except Exception as e:

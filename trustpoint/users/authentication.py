@@ -41,6 +41,8 @@ class ServiceAccountBackend(BaseBackend):
         Returns:
             The authenticated TrustpointUser (service account) or None.
         """
+        client_id = (client_id or '').strip()
+        secret = (secret or '').strip()
         if not client_id or not secret:
             return None
 

@@ -467,6 +467,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'users.middleware.ServiceAccountMiddleware',
     'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
@@ -660,6 +661,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'users.api_auth.ServiceAccountAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_FILTER_BACKENDS': [

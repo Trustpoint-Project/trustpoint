@@ -323,12 +323,18 @@ class ServiceAccountCredential(models.Model):
             msg = _('Credentials can only be associated with service accounts.')
             raise ValidationError(msg)
 
+    def is_expired(self) -> bool:
+        """Check whether this credential has expired."""
+        if self.expires_at is None:
+            return False
+        return timezone.now() > self.expires_at
+
     def is_valid(self) -> bool:
         """Check if the credential is valid (active and not expired)."""
         if not self.is_active:
             return False
 
-        return not (self.expires_at and timezone.now() > self.expires_at)
+        return not self.is_expired()
 
     def record_usage(self) -> None:
         """Record the last usage time of this credential."""

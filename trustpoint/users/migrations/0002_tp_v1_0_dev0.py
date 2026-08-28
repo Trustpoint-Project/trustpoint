@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
