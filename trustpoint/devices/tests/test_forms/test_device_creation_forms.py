@@ -178,25 +178,55 @@ class TestNoOnboardingCreateForm:
 class TestOnboardingCreateForm:
     """Tests for OnboardingCreateForm."""
 
-    def test_protocol_choices_follow_security_config(self) -> None:
-        """Test onboarding choices are filtered by the security configuration."""
+    def test_protocol_choices_are_limited_to_supported_and_permitted_create_protocols(self) -> None:
+        """Test onboarding choices are limited to supported protocols allowed by security config."""
         SecurityConfig.objects.create(
-            permitted_onboarding_protocols=[OnboardingProtocol.CMP_SHARED_SECRET.value],
+            permitted_onboarding_protocols=[
+                OnboardingProtocol.CMP_SHARED_SECRET.value,
+                OnboardingProtocol.MANUAL.value,
+                OnboardingProtocol.REST_USERNAME_PASSWORD.value,
+            ],
         )
 
         form = OnboardingCreateForm()
 
         assert form.fields['onboarding_protocol'].choices == [
             (OnboardingProtocol.CMP_SHARED_SECRET.value, OnboardingProtocol.CMP_SHARED_SECRET.label),
+            (OnboardingProtocol.REST_USERNAME_PASSWORD.value, OnboardingProtocol.REST_USERNAME_PASSWORD.label),
         ]
+        rendered_field = str(form['onboarding_protocol'])
+        assert '<option value="2"' in rendered_field
+        assert '<option value="8"' in rendered_field
+        assert '<option value="0"' not in rendered_field
+        assert '<option value="4"' not in rendered_field
+        assert str(OnboardingProtocol.CMP_SHARED_SECRET.label) in rendered_field
 
-    def test_empty_permitted_protocols_block_all_choices(self) -> None:
-        """Test an empty security allow-list removes all onboarding choices."""
+    def test_empty_permitted_protocols_hide_create_protocols(self) -> None:
+        """Test empty security config onboarding protocols hides all create protocols."""
         SecurityConfig.objects.create(permitted_onboarding_protocols=[])
 
         form = OnboardingCreateForm()
 
         assert list(form.fields['onboarding_protocol'].choices) == []
+
+    def test_dropdown_does_not_render_protocols_disallowed_by_security_config(self) -> None:
+        """Test the rendered dropdown excludes protocols disallowed by security config."""
+        SecurityConfig.objects.create(
+            permitted_onboarding_protocols=[
+                OnboardingProtocol.CMP_SHARED_SECRET.value,
+                OnboardingProtocol.CMP_IDEVID.value,
+                OnboardingProtocol.MANUAL.value,
+            ],
+        )
+
+        form = OnboardingCreateForm()
+        rendered_field = str(form['onboarding_protocol'])
+
+        assert '<option value="2"' in rendered_field
+        assert '<option value="1"' not in rendered_field
+        assert '<option value="0"' not in rendered_field
+        assert '<option value="4"' not in rendered_field
+        assert '<option value="8"' not in rendered_field
 
     def test_form_initialization(self) -> None:
         """Test OnboardingCreateForm initialization."""
