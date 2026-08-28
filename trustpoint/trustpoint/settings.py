@@ -673,7 +673,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Trustpoint APIs',
     'DESCRIPTION': 'API documentation for Trustpoint project',
-    'VERSION': 'v0.0.5',
+    'VERSION': APP_VERSION,
 }
 
 SWAGGER_USE_COMPAT_RENDERERS = False

@@ -22,6 +22,7 @@ Welcome to Trustpoint's documentation!
    getting_started/introduction
    getting_started/quickstart_setup
    getting_started/quickstart_operate
+   getting_started/inspect_certificate
    getting_started/usage_guide
    getting_started/community_support
    getting_started/faq

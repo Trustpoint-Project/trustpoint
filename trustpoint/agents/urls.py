@@ -10,9 +10,6 @@ from agents.web_views import (
     AgentAssignedProfileEditView,
     AgentAssignedProfileForceUpdateView,
     AgentAssignedProfileTableView,
-    AgentManagedDeviceCreateView,
-    AgentManagedDeviceDeleteView,
-    AgentManagedDeviceTableView,
     AgentProfileDefinitionBulkDeleteConfirmView,
     AgentProfileDefinitionConfigView,
     AgentProfileDefinitionTableView,
@@ -28,23 +25,6 @@ urlpatterns = [
         r'^profiles/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         AgentProfileDefinitionBulkDeleteConfirmView.as_view(),
         name='profiles-delete_confirm',
-    ),
-
-    # Managed devices for 1-to-n agents
-    path(
-        '<int:agent_id>/targets/',
-        AgentManagedDeviceTableView.as_view(),
-        name='targets-list',
-    ),
-    path(
-        '<int:agent_id>/targets/create/',
-        AgentManagedDeviceCreateView.as_view(),
-        name='targets-create',
-    ),
-    re_path(
-        r'^(?P<agent_id>[0-9]+)/targets/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
-        AgentManagedDeviceDeleteView.as_view(),
-        name='targets-delete_confirm',
     ),
 
     # Assigned profiles for 1-to-1 agents

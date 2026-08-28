@@ -25,7 +25,7 @@ jobs:
         
       # Build and start Docker containers with docker-compose
       - name: Build and start Docker containers
-        uses: hoverkraft-tech/compose-action@v3.0.0
+        uses: hoverkraft-tech/compose-action@v3.1.0
         with:
           compose-file: "./docker-compose.yml"
           up-flags: "--build --wait"
@@ -81,7 +81,7 @@ jobs:
       
       # Install Python and dependencies for running behave tests
       - name: Install and setup uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"

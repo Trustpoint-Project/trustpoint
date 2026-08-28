@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import secrets
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from django import forms
@@ -19,6 +18,7 @@ from django.views import View
 from django.views.generic import FormView, ListView, UpdateView
 
 from agents.models import AgentAssignedProfile, AgentProfileDefinition, TrustpointAgent
+from agents.security import AgentSecurityMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_AGENTS_SUBCATEGORY, DEVICES_PAGE_CATEGORY, PageContextMixin
 from trustpoint.views.base import BulkDeleteView
@@ -26,10 +26,11 @@ from trustpoint.views.base import BulkDeleteView
 if TYPE_CHECKING:
     from django.db.models import QuerySet
 
-    from devices.models import DeviceModel
 
 
-class AgentProfileDefinitionTableView(PageContextMixin, LoggerMixin, ListView[AgentProfileDefinition]):
+class AgentProfileDefinitionTableView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, ListView[AgentProfileDefinition]
+):
     """View to list all Agent Profile Definitions."""
 
     http_method_names = ('get',)
@@ -45,7 +46,9 @@ class AgentProfileDefinitionTableView(PageContextMixin, LoggerMixin, ListView[Ag
         return AgentProfileDefinition.objects.all().order_by('name')
 
 
-class AgentProfileDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateView[AgentProfileDefinition, Any]):
+class AgentProfileDefinitionConfigView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, UpdateView[AgentProfileDefinition, Any]
+):
     """View to display and edit an Agent Profile Definition."""
 
     http_method_names = ('get', 'post')
@@ -128,7 +131,7 @@ class AgentProfileDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateView
         """Return a default workflow profile as JSON string."""
         default_profile = {
             'metadata': {
-                'agent_type': '1-to-n',
+                'agent_type': '1-to-1',
                 'version': '1.0',
                 'description': 'Description of the workflow',
             },
@@ -201,7 +204,7 @@ class AgentProfileDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateView
         return super().form_valid(form)
 
 
-class AgentProfileDefinitionBulkDeleteConfirmView(PageContextMixin, BulkDeleteView):
+class AgentProfileDefinitionBulkDeleteConfirmView(AgentSecurityMixin, PageContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple workflow definitions."""
 
     model = AgentProfileDefinition
@@ -235,183 +238,6 @@ class AgentProfileDefinitionBulkDeleteConfirmView(PageContextMixin, BulkDeleteVi
             f'Successfully deleted {deleted_count} workflow definition(s).',
         )
 
-        return response
-
-
-class AgentManagedDeviceTableView(PageContextMixin, LoggerMixin, ListView['DeviceModel']):
-    """List all AGENT_MANAGED_DEVICE devices in the same domain as a 1-to-n agent's device."""
-
-    http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
-    template_name = 'agents/targets/list.html'
-    context_object_name = 'devices'
-    paginate_by = 25
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
-
-    def _get_agent(self) -> TrustpointAgent:
-        """Return the 1-to-n agent identified by the URL kwarg, or 404."""
-        return get_object_or_404(TrustpointAgent, pk=self.kwargs['agent_id'])
-
-    def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Return all AGENT_MANAGED_DEVICE devices in the agent's domain."""
-        from devices.models import DeviceModel  # noqa: PLC0415
-
-        agent = self._get_agent()
-        if agent.device is None or agent.device.domain is None:
-            return DeviceModel.objects.none()
-        return (
-            DeviceModel.objects.filter(
-                domain=agent.device.domain,
-                device_type=DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
-            )
-            .select_related('domain')
-            .prefetch_related('agents')
-            .order_by('common_name')
-        )
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the agent to the template context."""
-        context = super().get_context_data(**kwargs)
-        context['agent'] = self._get_agent()
-        return context
-
-
-class ManagedDeviceCreateForm(forms.Form):
-    """Form for creating a new AGENT_MANAGED_DEVICE under a 1-to-n agent."""
-
-    common_name = forms.CharField(
-        max_length=100,
-        label='Common Name',
-        help_text='Unique name for this managed device.',
-    )
-    serial_number = forms.CharField(
-        max_length=100,
-        required=False,
-        label='Serial Number',
-    )
-    ip_address = forms.GenericIPAddressField(
-        required=False,
-        label='IP Address',
-        help_text='IPv4 or IPv6 address of the managed device.',
-    )
-
-
-class AgentManagedDeviceCreateView(PageContextMixin, LoggerMixin, FormView[ManagedDeviceCreateForm]):
-    """Create a new AGENT_MANAGED_DEVICE record under a 1-to-n agent."""
-
-    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
-    template_name = 'agents/targets/create.html'
-    form_class = ManagedDeviceCreateForm
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
-
-    def _get_agent(self) -> TrustpointAgent:
-        """Return the 1-to-n agent, or 404."""
-        return get_object_or_404(TrustpointAgent, pk=self.kwargs['agent_id'])
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the parent agent to context."""
-        context = super().get_context_data(**kwargs)
-        context['agent'] = self._get_agent()
-        return context
-
-    def get_success_url(self) -> str:
-        """Redirect to the managed-devices list after creation."""
-        return str(reverse_lazy('agents:targets-list', kwargs={'agent_id': self.kwargs['agent_id']}))
-
-    def form_valid(self, form: ManagedDeviceCreateForm) -> HttpResponse:
-        """Create the DeviceModel record, its NoOnboardingConfigModel, and a TrustpointAgent."""
-        import uuid  # noqa: PLC0415
-
-        from devices.models import DeviceModel  # noqa: PLC0415
-        from onboarding.enums import NoOnboardingPkiProtocol  # noqa: PLC0415
-        from onboarding.models import NoOnboardingConfigModel  # noqa: PLC0415
-
-        agent = self._get_agent()
-
-        # Build a NoOnboardingConfigModel with REST enabled (same as other agent devices).
-        no_onboarding_config = NoOnboardingConfigModel()
-        no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD)
-        no_onboarding_config.est_password = ''.join(
-            secrets.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
-            for _ in range(16)
-        )
-        no_onboarding_config.full_clean()
-        no_onboarding_config.save()
-
-        device = DeviceModel(
-            common_name=form.cleaned_data['common_name'],
-            serial_number=form.cleaned_data.get('serial_number') or '',
-            ip_address=form.cleaned_data.get('ip_address') or None,
-            domain=agent.device.domain if agent.device else None,
-            device_type=DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
-            no_onboarding_config=no_onboarding_config,
-        )
-        try:
-            device.full_clean()
-            device.save()
-        except Exception as exc:  # noqa: BLE001
-            no_onboarding_config.delete()
-            messages.error(self.request, f'Could not create device: {exc}')
-            return self.form_invalid(form)
-
-        # Create a TrustpointAgent for this managed device so that AgentAssignedProfiles
-        # can be assigned to it, exactly like a 1-to-1 agent.
-        device_uuid = uuid.uuid4().hex.upper()
-        TrustpointAgent.objects.create(
-            name=device.common_name,
-            agent_id=device_uuid,
-            device=device,
-        )
-
-        messages.success(self.request, f"Managed device '{device.common_name}' created.")
-        return HttpResponseRedirect(self.get_success_url())
-
-
-class AgentManagedDeviceDeleteView(PageContextMixin, BulkDeleteView):
-    """Confirm and bulk-delete AGENT_MANAGED_DEVICE records."""
-
-    template_name = 'agents/targets/confirm_delete.html'
-    context_object_name = 'devices'
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
-
-    @property
-    def model(self) -> type[DeviceModel]:  # type: ignore[override]
-        """Return DeviceModel, imported lazily to avoid circular imports."""
-        from devices.models import DeviceModel  # noqa: PLC0415
-
-        return DeviceModel
-
-    def get_success_url(self) -> str:
-        """Redirect back to the managed-devices list."""
-        return str(reverse_lazy('agents:targets-list', kwargs={'agent_id': self.kwargs['agent_id']}))
-
-    @property
-    def ignore_url(self) -> str:
-        """Return the list URL to go back without deleting."""
-        return str(reverse_lazy('agents:targets-list', kwargs={'agent_id': self.kwargs['agent_id']}))
-
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Show confirmation page, or redirect back if nothing selected."""
-        queryset = self.get_queryset()
-        if not queryset.exists():
-            messages.error(request, 'No devices selected for deletion.')
-            return HttpResponseRedirect(self.ignore_url)
-        return super().get(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the parent agent to context."""
-        context = super().get_context_data(**kwargs)
-        context['agent'] = get_object_or_404(TrustpointAgent, pk=self.kwargs['agent_id'])
-        return context
-
-    def form_valid(self, form: Any) -> HttpResponse:
-        """Delete selected devices and redirect."""
-        queryset = self.get_queryset()
-        deleted_count = queryset.count() if queryset else 0
-        response = super().form_valid(form)
-        messages.success(self.request, f'Successfully deleted {deleted_count} managed device(s).')
         return response
 
 
@@ -472,7 +298,9 @@ class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
         }
 
 
-class AgentAssignedProfileTableView(PageContextMixin, LoggerMixin, ListView[AgentAssignedProfile]):
+class AgentAssignedProfileTableView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, ListView[AgentAssignedProfile]
+):
     """List all workflow profiles assigned to a specific 1-to-1 agent."""
 
     http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
@@ -498,7 +326,9 @@ class AgentAssignedProfileTableView(PageContextMixin, LoggerMixin, ListView[Agen
         return context
 
 
-class AgentAssignedProfileCreateView(PageContextMixin, LoggerMixin, FormView[AgentAssignedProfileForm]):
+class AgentAssignedProfileCreateView(
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, FormView[AgentAssignedProfileForm]
+):
     """Assign a new workflow profile to a 1-to-1 agent."""
 
     http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
@@ -541,7 +371,7 @@ class AgentAssignedProfileCreateView(PageContextMixin, LoggerMixin, FormView[Age
 
 
 class AgentAssignedProfileEditView(
-    PageContextMixin, LoggerMixin, UpdateView[AgentAssignedProfile, AgentAssignedProfileEditForm]
+    AgentSecurityMixin, PageContextMixin, LoggerMixin, UpdateView[AgentAssignedProfile, AgentAssignedProfileEditForm]
 ):
     """Edit an existing AgentAssignedProfile (renewal_threshold_days, subject, subject_alt_name)."""
 
@@ -579,7 +409,7 @@ class AgentAssignedProfileEditView(
         return HttpResponseRedirect(self.get_success_url())
 
 
-class AgentAssignedProfileDeleteView(PageContextMixin, BulkDeleteView):
+class AgentAssignedProfileDeleteView(AgentSecurityMixin, PageContextMixin, BulkDeleteView):
     """Confirm and execute bulk deletion of AgentAssignedProfile records."""
 
     model = AgentAssignedProfile
@@ -624,7 +454,7 @@ class AgentAssignedProfileDeleteView(PageContextMixin, BulkDeleteView):
         return response
 
 
-class AgentAssignedProfileForceUpdateView(PageContextMixin, LoggerMixin, View):
+class AgentAssignedProfileForceUpdateView(AgentSecurityMixin, PageContextMixin, LoggerMixin, View):
     """Force an immediate certificate update by setting next_certificate_update_scheduled to now."""
 
     http_method_names: ClassVar[list[str]] = ['post']  # type: ignore[misc]

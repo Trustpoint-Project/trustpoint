@@ -4,8 +4,6 @@
 """Views for the devices application."""
 
 from .agents import (
-    AgentCreateChooseTypeView,
-    AgentCreateOneToNOnboardingView,
     AgentCreateOneToOneOnboardingView,
     AgentTableView,
 )
@@ -86,8 +84,6 @@ from .tables import (
 )
 
 __all__ = [
-    'AgentCreateChooseTypeView',
-    'AgentCreateOneToNOnboardingView',
     'AgentCreateOneToOneOnboardingView',
     'AgentTableView',
     'AgentsBulkDeleteView',

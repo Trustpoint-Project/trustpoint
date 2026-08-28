@@ -2,183 +2,335 @@
 
 <div align="center">
 
-**The open source trust anchor software for machines and factories to manage digital identities.**
+# Trustpoint
 
-[![Landing Page](https://img.shields.io/badge/Landing_Page-014BAD)](https://industrial-security.io)
-[![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-014BAD)](https://github.com/orgs/Trustpoint-Project/discussions)
+### Open-source machine identity management for industrial systems
+
+**Automate certificate onboarding, renewal, and lifecycle management for machines and industrial devices.**
+
+Trustpoint is an open-source PKI and machine identity platform built for operational technology (OT). It helps machine builders, operators, and integrators manage X.509 identities across long-lived, segmented, and heterogeneous industrial environments.
+
+[**Get Started**](#quickstart) · [**Documentation**](https://trustpoint.readthedocs.io/en/latest/) · [**Latest Release**](https://github.com/Trustpoint-Project/trustpoint/releases/latest) · [**Website**](https://industrial-security.io)
+
+[![GitHub stars](https://img.shields.io/github/stars/Trustpoint-Project/trustpoint?style=social)](https://github.com/Trustpoint-Project/trustpoint/stargazers)
+[![Status](https://img.shields.io/badge/status-technology%20preview-red)](https://github.com/Trustpoint-Project/trustpoint)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Read the Docs](https://img.shields.io/readthedocs/trustpoint)](https://trustpoint.readthedocs.io)
-[![Docker Automated](https://img.shields.io/docker/automated/trustpointproject/trustpoint)](https://hub.docker.com/r/trustpointproject/trustpoint)
-![Status](https://img.shields.io/badge/Status-Beta-red)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
+[![Docker](https://img.shields.io/docker/automated/trustpointproject/trustpoint)](https://hub.docker.com/r/trustpointproject/trustpoint)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11535/badge)](https://www.bestpractices.dev/projects/11535)
-[![Pytest Status](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml)
+
+[![Pytest](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml)
 [![codecov](https://codecov.io/gh/Trustpoint-Project/trustpoint/graph/badge.svg?token=0N31L1QWPE)](https://codecov.io/gh/Trustpoint-Project/trustpoint)
 [![MyPy](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml)
-[![Ruff Status](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml)
+[![Ruff](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml)
+
 </div>
 
+<p align="center">
+  <img src=".github-assets/trustpoint_demo.gif"
+       alt="Trustpoint machine identity demo"
+       width="900">
+</p>
+
 > [!CAUTION]
-> Trustpoint is currently in a **technology preview** (beta) state. Do not use it in production.
+> Trustpoint is currently a **technology preview (beta)** and is **not intended for production use**.
+
+<!--
+Recommended: add a short 15-30 second GIF here showing:
+1. Add/onboard a device
+2. Issue a certificate
+3. View it in the dashboard
+4. Show an automated renewal
+Example:
+<p align="center">
+  <img src=".github-assets/trustpoint_demo.gif" alt="Trustpoint machine identity demo" width="900">
+</p>
+-->
 
 ## Why Trustpoint?
 
-Industrial environments are becoming increasingly connected, intelligent, and automated — but secure identity management has not kept pace. In OT, many established IT security processes cannot be applied 1:1. Networks are highly segmented, devices are resource-constrained, and machine lifecycles often span 20+ years. These realities create major barriers to deploying and managing digital identities at scale.
+Industrial systems increasingly depend on digital identities, but certificate management in OT is often still manual, fragmented, and difficult to automate.
 
-The result is what many manufacturers face today:
-manual certificate handling, isolated certificate silos, self-signed certificatesd, vendor lock-in, and a growing security skill gap. These challenges frequently lead to digital identities being implemented inconsistently, inadequately, or not at all.
+Machines may remain in service for decades. Networks are segmented. Devices vary widely in capability. Existing IT-centric identity workflows do not always translate cleanly to the factory floor.
 
-**Trustpoint solves this.**
-It abstracts the complexity of PKI and certificate lifecycle management, providing an open, flexible, and automatable platform purpose-built for OT environments — from factory floors to field devices.
+Trustpoint provides a unified, open platform for **machine identity and certificate lifecycle management in OT**.
 
-Trustpoint enables machine builders, operators, and integrators to:
+| The challenge | With Trustpoint |
+| --- | --- |
+| Manual certificate provisioning | Automated onboarding, enrollment, renewal, and re-enrollment |
+| Fragmented certificate silos | Centralized identity and certificate lifecycle management |
+| Different device capabilities | Multiple enrollment protocols and authentication methods |
+| Vendor-specific workflows | Open standards, APIs, and an open-source foundation |
+| PKI complexity | Web-based workflows and abstractions for industrial users |
+| Long-lived devices | Lifecycle-oriented certificate management and renewal automation |
 
-* Deploy digital identities easily and securely — without requiring PKI or cryptography expertise
-* Automate certificate provisioning, renewal, and decommissioning across the device lifecycle
-* Use onboarding workflows that fit OT realities, including Zero-Touch onboarding, semi-automated flows, and operator-driven enrollment
-* Avoid vendor lock-in through open standards, an open-source foundation, and interoperable protocols
-* Reduce operational risk by consolidating fragmented certificate silos into a unified, manageable trust layer
+Trustpoint is designed to help you:
 
-## What are the features?
+- **Onboard machines securely** using zero-touch, semi-automated, or operator-driven workflows.
+- **Automate certificate lifecycles** from initial enrollment through renewal, rekeying, and revocation.
+- **Integrate with existing PKI** by operating as a Certificate Authority (CA) or Registration Authority (RA).
+- **Use open protocols** including EST, CMP, and OPC UA GDS Push.
+- **Automate industrial workflows** through REST APIs, agents, webhooks, and approval steps.
+- **Protect cryptographic keys** with PKCS#11-compatible HSM integration.
+- **Avoid vendor lock-in** through interoperable protocols and an MIT-licensed open-source codebase.
 
-### 1. Device Onboarding & Certificate Management
+## Quickstart
 
-Trustpoint supports a variety of PKI protocols and authentication methods for both device onboarding (initial LDevID issuance) and operational certificate management (TLS, authentication, signing certificates).
-The following options provide a complete lifecycle—from zero-touch onboarding to renewal and re-enrollment.
+The fastest way to explore Trustpoint is the guided setup wizard on a **Linux host**.
 
-Trustpoint supports multiple enrollment and onboarding methods:
+### Prerequisites
 
-**[AOKI](https://trustpoint.readthedocs.io/en/latest/devices/aoki.html)** (Zero-Touch Onboarding)
+- Docker 20.10+
+- Docker Compose 2.32.4+
+- Git
 
-A secure, automated onboarding protocol designed specifically for industrial environments.
-Zero-touch issuance of initial device credentials (LDevID)
+### Start Trustpoint
+
+```bash
+git clone https://github.com/Trustpoint-Project/trustpoint.git
+cd trustpoint
+./tp_wizard.sh
+```
+
+The wizard guides you through the Docker-based setup.
+
+
+
+Then open:
+
+```text
+http://localhost
+```
+
+The initial setup wizard generates a TLS certificate. 
+
+> [!NOTE]
+> You find the default initial credentials in the Docker logs.
+
+Want the full setup flow? See the **[Quickstart Setup Guide](https://trustpoint.readthedocs.io/en/latest/getting_started/quickstart_setup.html)**.
+
+## What can Trustpoint do?
+
+### Machine identity lifecycle
+
+Trustpoint manages digital identities and X.509 certificates across the device lifecycle:
+
+```text
+Device / Machine
+      │
+      ▼
+  Onboarding
+      │
+      ▼
+Initial Device Identity
+      │
+      ▼
+Application Certificates
+      │
+      ├──► Renewal / Rekeying
+      │
+      ├──► Revocation
+      │
+      └──► Decommissioning
+```
+
+### Enrollment and onboarding protocols
+
+| Method | Typical use | Authentication / trust | Lifecycle capabilities |
+| --- | --- | --- | --- |
+| **AOKI** *(proof of concept)* | Zero-touch industrial device onboarding | IDevID / DevOwnerID based trust | Initial device onboarding and identity establishment |
+| **EST** | Standards-based certificate enrollment | Username/password, IDevID, client certificate | Onboarding, application certificates, renewal, re-enrollment |
+| **CMP** | Flexible enrollment for industrial or constrained devices | Shared secret, IDevID, client certificate | Onboarding, enrollment, renewal, rekeying |
+| **OPC UA GDS Push** | OPC UA certificate and trust-list distribution | Secure device registration and certificate authentication | Server certificate and trust-anchor distribution, cyclic updates |
+| **Manual / remote download** | Operator-driven or browser-assisted issuance | Operator workflow / one-time password | PKCS#12 or PEM credential delivery |
+
+Learn more:
+
+- [AOKI — Automated Onboarding Key Infrastructure](https://trustpoint.readthedocs.io/en/latest/features/aoki/index.html)
+- [EST API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/est.html)
+- [CMP API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/cmp.html)
+- [OPC UA GDS Push specification](https://reference.opcfoundation.org/GDS/v105/docs/7.4)
+
+## Core capabilities
+
+### Automated certificate management
+
+- Certificate enrollment and issuance
+- Renewal and re-enrollment
+- Rekeying
+- Certificate revocation
+- Cyclic CRL generation
+- JSON-based certificate profiles
+- Certificate discovery
+
+### Trustpoint Agents
+
+Trustpoint Agents automate certificate lifecycle workflows on or near industrial devices.
+
+Agents can:
+
+- automate enrollment and renewal,
+- communicate with Trustpoint using mTLS,
+- execute reusable deployment workflows,
+- deploy renewed certificates to target systems, and
+- integrate with operational monitoring through structured logs.
+
+See the **[Trustpoint Agents documentation](https://trustpoint.readthedocs.io/en/latest/features/devices/agents.html)**.
+
+### PKI integration
+
+Trustpoint supports multiple operating models:
+
+**Certificate Authority mode**
+
+- Import an existing issuing CA
+- Create an auto-generated CA for testing
+- Provide CA certificates to devices through EST or CMP
+- Support CA rollover workflows
+
+**Registration Authority mode**
+
+- Forward EST enrollment requests to an external CA
+- Integrate Trustpoint workflows with an existing PKI
+
+### HSM and key protection
+
+Trustpoint supports **PKCS#11-based HSM integration** for cryptographic key storage and operations.
+
+For local development, Trustpoint can use a dedicated SoftHSM container through the setup wizard.
+
+### APIs and headless integration
+
+Trustpoint provides REST APIs for machine identity and certificate workflows, including:
+
+- certificate enrollment,
+- device and identity lifecycle operations,
+- onboarding configuration,
+- workflow definitions, and
+- system integration.
+
+This makes it possible to integrate Trustpoint into automation pipelines, MES/ERP systems, IAM processes, or custom industrial applications.
+
+### Workflow engine
+
+The workflow engine supports industrial processes that require more than a simple certificate request:
+
+- manual approval steps,
+- reusable workflow definitions,
+- webhook integrations,
+- email notifications, and
+- agent-driven certificate deployment.
+
+### Operations and observability
+
+Trustpoint includes:
+
+- web-based management UI,
+- dashboards,
+- audit logging,
+- users, roles, and organizations,
+- Prometheus metrics,
+- mDNS-based local service discovery,
+- Docker-based deployment, and
+- multi-language support.
+
+## Built for industrial environments
+
+Trustpoint focuses on the realities of operational technology:
+
+- long machine and device lifecycles,
+- segmented or locally connected networks,
+- mixed generations of equipment,
+- limited device resources,
+- different levels of automation,
+- existing enterprise PKI infrastructure, and
+- the need to introduce machine identities without coupling them to a single vendor.
+
+The goal is to make strong machine identities practical across brownfield and greenfield industrial environments.
+
+## Security and compliance engineering
+
+Security is a core part of the project.
+
+The repository includes:
+
+- a [Security Policy](SECURITY.md),
+- OpenSSF Best Practices tracking,
+- automated testing and static analysis,
+- HSM integration,
+- audit logging, and
+- documentation related to the EU Cyber Resilience Act, including a [CRA Conformity Assessment](https://trustpoint.readthedocs.io/en/latest/cra/CRA_COMPLIANCE.html), [Threat Model](https://trustpoint.readthedocs.io/en/latest/cra/THREAT_MODEL.html), [Risk Register](https://trustpoint.readthedocs.io/en/latest/cra/RISK_REGISTER.html), and [Security Controls](https://trustpoint.readthedocs.io/en/latest/cra/CONTROLS.html).
+
+
+
+See the **[Trustpoint documentation](https://trustpoint.readthedocs.io/en/latest/)** for the current security architecture and CRA-related material.
+
+## Documentation
+
+| Resource | Description |
+| --- | --- |
+| [Documentation](https://trustpoint.readthedocs.io/en/latest/) | Complete Trustpoint documentation |
+| [Quickstart Setup](https://trustpoint.readthedocs.io/en/latest/getting_started/quickstart_setup.html) | Install and start Trustpoint |
+| [Quickstart Operation](https://trustpoint.readthedocs.io/en/latest/getting_started/quickstart_operate.html) | Explore Trustpoint and issue a first certificate |
+| [Trustpoint Agents](https://trustpoint.readthedocs.io/en/latest/features/devices/agents.html) | Automated certificate lifecycle management |
+| [AOKI](https://trustpoint.readthedocs.io/en/latest/features/aoki/index.html) | Zero-touch device onboarding |
+| [Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) | Published Trustpoint container images |
+| [Releases](https://github.com/Trustpoint-Project/trustpoint/releases) | Release notes and project milestones |
+
+## Release highlights — v0.6.0
+
+Trustpoint v0.6.0 introduced major capabilities for machine identity automation and industrial deployment, including:
+
+- Trustpoint Agent v1
+- PKCS#11 HSM integration
+- CA rollover
+- users, roles, and organizations
+- audit logging
+- REST APIs and headless integration
+- Prometheus metrics
+- certificate discovery
+- mDNS support
+- redesigned workflow capabilities
+- improved automated setup and deployment
+
+See **[GitHub Releases](https://github.com/Trustpoint-Project/trustpoint/releases)** for the complete changelog.
+
+## Development
+
+Contributions are welcome.
+
+Start with:
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [SECURITY.md](SECURITY.md)
+- [Development documentation](https://trustpoint.readthedocs.io/en/latest/)
+
+If you are new to the project, check the current **[issues](https://github.com/Trustpoint-Project/trustpoint/issues)** and **[discussions](https://github.com/orgs/Trustpoint-Project/discussions)**.
+
+
+## Community and support
+
+Have a question, idea, use case, or integration proposal?
+
+- Join the **[Trustpoint Discord](https://discord.gg/6fyr3fGH)**
+- Contact us at **trustpoint@campus-schwarzwald.de**
+- Visit **[industrial-security.io](https://industrial-security.io)**
+
+We are especially interested in feedback from machine builders, factory operators, system integrators, PKI teams, security researchers, and developers working on industrial identity.
+
+## License
+
+Trustpoint is licensed under the **[MIT License](LICENSE)**.
 
 ---
 
-**EST** (Enrollment over Secure Transport) [[RFC 7030](https://datatracker.ietf.org/doc/html/rfc7030)]
+<div align="center">
 
-Supports both onboarding and application certificate enrollment.
+### Building machine identity infrastructure for the open industrial ecosystem.
 
-Authentication Methods:
-* Username + Password (operator-driven onboarding or enrollment)
-* IDevID-based authentication (secure manufacturer-anchored onboarding)
-* Client Certificate (mTLS) for renewal and re-enrollment
+If Trustpoint is useful to your work, **[star the repository](https://github.com/Trustpoint-Project/trustpoint)** to help other industrial security developers discover it.
 
-Capabilities:
-* Device onboarding (LDevID issuance)
-* Application certificate enrollment
-* Certificate renewal and re-enrollment
+**[⭐ Star Trustpoint](https://github.com/Trustpoint-Project/trustpoint)**
 
----
-
-**CMP** (Certificate Management Protocol) [[RFC 9483](https://datatracker.ietf.org/doc/rfc9483/)]
-
-Flexible onboarding and certificate management for constrained or industrial devices.
-
-Authentication Methods:
-* Shared Secret authentication (bootstrap or one-time enrollment)
-* IDevID-based authentication (manufacturer identity onboarding)
-* Client Certificate (mTLS) for operational certificate renewal and rekeying
-
-Capabilities:
-* Onboarding (LDevID issuance)
-* Application certificate enrollment
-* Automated renewal and rekeying
-
----
-
-**[OPC UA GDS Push](https://reference.opcfoundation.org/GDS/v105/docs/7.4)**
-
-A protocol for secure and efficient distribution of certificates, trust anchors and CRLs to OPC UA servers.
-
-Authentication Methods:
-* Secure device registration
-* Certificate-based authentication for updates
-
-Capabilities:
-* Distribution of server certificates and trust anchors
-* Cyclic updates of OPC UA server certificates
-
----
-
-**Additional Certificate Issuance Options**
-
-Manual Download
-* Trustpoint generates both the keypair and certificate
-* Downloadable in PKCS#12 and PEM formats
-
-Remote Credential Download
-* Device retrieves credentials directly via its browser
-* Secured with a one-time password (OTP)
-
-### 2. Operation Modes
-
-**Certificate Authorithy (CA)**
-
-- **Import Issuing CA**: Integrate with an existing PKI by importing external CAs.
-- **Auto-Generated CA**: Create a root and issuing CA for testing purposes.
-- **CA Certificate Retrieval**: Devices can request the CA certificate via EST or CMP protocols.
-- **Protected imported keys**: Optionally allow imported private-key credentials while keeping
-  the key material encrypted by Trustpoint application-secret protection instead of injecting it
-  into the configured PKCS#11 token.
-
-**Registration Authority**
-
-- **RA Mode with EST**: Act as a Registration Authority for EST-based enrollment, forwarding certificate requests to an external CA.
-
-### 3. Miscellaneous
-
-Trustpoint includes several supporting capabilities that enhance usability, integration, and operational workflows:
-* **RESTful API** for device management, certificate issuance, identity lifecycle operations, and system integration.
-* **Workflow Engine** with manual approval steps, webhook integrations (ERP, MES, IAM, etc.), and email notifications to fit seamlessly into existing operational processes.
-* **Signing Authority** (Hash & Sign) allowing devices or services to submit a hash and receive a signed artifact.
-* **Cyclic CRL Generation** for automated, scheduled certificate revocation list updates.
-* **Certificate Profile Definition** using JSON for flexible certificate issuance parameters and constraints.
-* **Security Levels** for configurable trust and authentication requirements across different operational contexts.
-* Additional Features including a **web-based UI**, **system dashboard**, **Docker deployment**, **certificate revocation management**, and **multi-language** support.
-
-## Who is developing Trustpoint?
-
-Trustpoint is currently being developed by a consortium of five organizations: Campus Schwarzwald, Keyfactor, achelos
-GmbH, Hamm-Lippstadt University of Applied Sciences and asvin GmbH. Several industrial companies are also part of the
-project as associated partners. These include ARBURG GmbH + Co KG, Belden Inc., Diebold Nixdorf, Homag GmbH, J. Schmalz
-GmbH, PHOENIX CONTACT GmbH & Co. KG and Siemens AG.
-
-Trustpoint is funded as part of a project sponsored by the German Federal Ministry of Education and Research. Questions
-can be asked in [Discord](https://discord.gg/6fyr3fGH) and will be answered by us. We
-look forward to hearing about your experiences with Trustpoint. You can send suggestions to
-trustpoint@campus-schwarzwald.de.
-
-## Documentation and Installation Instructions
-
-For more details see the full [Trustpoint Documentation](https://trustpoint.readthedocs.io/en/latest/).
-
-For a quick setup and first impression use
-our [Quickstart Setup Guide](https://trustpoint.readthedocs.io/en/latest/getting_started/quickstart_setup.html)
-
-### Docker Hub
-
-We are also providing the Trustpoint as a docker-container. Please see
-[Trustpoint on Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) or follow the
-instructions in our [Trustpoint Documentation](https://trustpoint.readthedocs.io/en/latest/) to build the
-container yourself.
-
-### Local PKCS#11 Dev
-
-The local/dev PKCS#11 path now uses a dedicated SoftHSM container plus the PKCS#11 proxy client
-library inside the Trustpoint app container. ``tp_wizard.sh`` can start that separate SoftHSM
-service, provision the local token state under ``./var/hsm``, and create the active local/dev
-provider profile for the new generic PKCS#11 backend.
-
-See ``docs/source/development/pkcs11_local_dev.rst`` for the local filesystem layout, exact
-Django-shell smoke commands, and the live PKCS#11 pytest integration test command.
-
-### Protected Imported Keys
-
-Trustpoint normally generates signing authority keys through the configured crypto backend. For
-deployments that must also import existing private-key credentials, enable **Allow imported private
-keys** under **Management > Settings > Security**.
-
-Protected imported keys require a PKCS#11 crypto backend and PKCS#11-backed application-secret
-protection. The imported key is stored encrypted in the Trustpoint database and is exposed to the
-application only through the crypto backend API. It is not imported into the HSM token.
+</div>

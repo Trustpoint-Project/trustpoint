@@ -13,7 +13,13 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import extend_schema
+from rest_framework import status, viewsets
+from rest_framework.request import Request
+from rest_framework.response import Response
 
+from management.permissions import IsSuperUser
+from management.serializer.user import UserSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin, SortableTableMixin, SuperuserRequiredMixin
 from users.form import TrustpointUserCreationForm, TrustpointUserRoleForm
@@ -178,3 +184,32 @@ class UserChangeRoleView(
             _('Role of "%(username)s" changed successfully.') % {'username': user.username},
         )
         return response
+
+@extend_schema(tags=['User Management'])
+class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
+    """API view for user."""
+    queryset = get_user_model().objects.all()
+    serializer_class = UserSerializer
+    permission_classes = (IsSuperUser,)
+
+    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Delete the user unless they are the last remaining admin."""
+        instance = self.get_object()
+        if _is_last_admin(instance):
+            return Response(
+                {'detail': 'Cannot delete this user: at least one admin must remain.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Update the user, refusing to change the role of the last remaining admin."""
+        instance = self.get_object()
+        new_role = request.data.get('role') if isinstance(request.data, dict) else None
+        if _is_last_admin(instance) and new_role is not None and str(new_role) != str(instance.role_id):
+            return Response(
+                {'detail': 'Cannot change role of this user: at least one admin must remain.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().update(request, *args, **kwargs)
+

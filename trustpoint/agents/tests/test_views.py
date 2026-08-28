@@ -42,7 +42,9 @@ from agents.api_views import (
 from agents.models import AgentAssignedProfile, AgentProfileDefinition, TrustpointAgent
 from agents.web_views import AgentProfileDefinitionConfigView, AgentProfileDefinitionTableView
 from devices.models import DeviceModel, DomainModel
+from management.models import SecurityConfig
 from pki.models import IssuedCredentialModel
+from onboarding.models import OnboardingProtocol
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractBaseUser
@@ -115,12 +117,11 @@ def agent(db: Any, device: DeviceModel) -> TrustpointAgent:
         poll_interval_seconds=300,
     )
 
-
 @pytest.fixture
 def workflow_definition(db: Any) -> AgentProfileDefinition:
     """Create a test workflow definition."""
     profile = {
-        'metadata': {'agent_type': '1-to-n', 'version': '1.0'},
+        'metadata': {'agent_type': '1-to-1', 'version': '1.0'},
         'device': {'vendor': 'TestVendor'},
         'certificate_request': {
             'certificate_profile': 'domain_credential',
@@ -134,6 +135,7 @@ def workflow_definition(db: Any) -> AgentProfileDefinition:
         profile=profile,
         is_active=True,
     )
+
 
 
 @pytest.fixture
@@ -400,13 +402,6 @@ class TestURLResolution:
         url = _resolve_enrollment_url(agent, 'domain_credential')
         assert url == '/rest/test-domain/domain_credential/enroll/'
 
-    def test_resolve_enrollment_url_one_to_n(self, agent: TrustpointAgent):
-        """Test enrollment URL is None for 1-to-n agents."""
-        agent.device.device_type = DeviceModel.DeviceType.AGENT_ONE_TO_N
-        agent.device.save()
-
-        url = _resolve_enrollment_url(agent, 'domain_credential')
-        assert url is None
 
     def test_resolve_enrollment_url_no_device(self, agent: TrustpointAgent):
         """Test enrollment URL is None when device is missing."""
@@ -553,6 +548,24 @@ class TestAgentJobsView:
     """Test AgentJobsView API endpoint."""
 
     @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_get_jobs_disabled_by_security_config(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+    ):
+        """Test GET is forbidden when the AGENT protocol is not permitted."""
+        mock_auth.return_value = (agent, None)
+        SecurityConfig.objects.create(permitted_onboarding_protocols=[])
+
+        response = api_client.get('/api/agents/jobs/')
+
+        assert response.status_code == 403
+        assert response.json()['detail'] == (
+            'Agent functionality is disabled by the current security configuration.'
+        )
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
     def test_get_jobs_no_pending(
         self,
         mock_auth: Mock,
@@ -569,38 +582,6 @@ class TestAgentJobsView:
         assert data['agent_id'] == 'test-agent-1'
         assert data['poll_interval_seconds'] == 300
         assert len(data['jobs']) == 0
-
-    @patch('agents.api_views._build_resolved_profile')
-    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
-    def test_get_jobs_with_pending(
-        self,
-        mock_auth: Mock,
-        mock_build_profile: Mock,
-        api_client: APIClient,
-        agent: TrustpointAgent,
-        assigned_profile: AgentAssignedProfile,
-    ):
-        """Test GET with pending jobs."""
-        mock_auth.return_value = (agent, None)
-        # Return a simplified resolved profile
-        mock_build_profile.return_value = {
-            'metadata': {'agent_type': '1-to-n', 'version': '1.0'},
-            'certificate_request': {'certificate_profile': 'domain_credential'},
-        }
-
-        response = api_client.get('/api/agents/jobs/')
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data['agent_id'] == 'test-agent-1'
-        assert len(data['jobs']) == 1
-
-        job = data['jobs'][0]
-        assert job['profile_id'] == assigned_profile.pk
-        assert job['workflow_definition_id'] == assigned_profile.workflow_definition.pk
-        assert job['workflow_definition_name'] == 'Test Workflow'
-        assert 'workflow_profile' in job
-        assert 'next_certificate_update' in job
 
     @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
     def test_get_jobs_updates_last_seen(
@@ -671,6 +652,29 @@ class TestAgentJobsView:
 @pytest.mark.django_db
 class TestAgentJobResultView:
     """Test AgentJobResultView API endpoint."""
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_post_result_disabled_by_security_config(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        """Test POST is forbidden when the AGENT protocol is not permitted."""
+        mock_auth.return_value = (agent, None)
+        SecurityConfig.objects.create(permitted_onboarding_protocols=[])
+
+        response = api_client.post(
+            '/api/agents/jobs/result/',
+            {'profile_id': assigned_profile.pk, 'success': True},
+            format='json',
+        )
+
+        assert response.status_code == 403
+        assert response.json()['detail'] == (
+            'Agent functionality is disabled by the current security configuration.'
+        )
 
     @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
     def test_post_result_success(
@@ -774,6 +778,15 @@ class TestAgentJobResultView:
 @pytest.mark.django_db
 class TestAgentProfileDefinitionTableView:
     """Test workflow definition list view."""
+
+    def test_get_list_disabled_by_security_config(self, web_client: Client):
+        """Test agent pages redirect when the AGENT protocol is not permitted."""
+        SecurityConfig.objects.create(permitted_onboarding_protocols=[])
+
+        response = web_client.get(reverse('agents:profiles'))
+
+        assert response.status_code == 302
+        assert response.url == reverse('devices:devices')
 
     def test_get_list(self, web_client: Client, workflow_definition: AgentProfileDefinition):
         """Test GET workflow definition list."""

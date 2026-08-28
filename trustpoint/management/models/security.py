@@ -205,7 +205,8 @@ class SecurityConfig(models.Model):
         help_text=_(
             'JSON list of allowed OnboardingProtocol integer values '
             '(MANUAL=0, CMP_IDEVID=1, CMP_SHARED_SECRET=2, EST_IDEVID=3, '
-            'EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7, REST_USERNAME_PASSWORD=8).'
+            'EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7, '
+            'REST_USERNAME_PASSWORD=8, AGENT=9).'
         ),
     )
 
@@ -214,9 +215,9 @@ class SecurityConfig(models.Model):
     # ------------------------------------------------------------------
 
     #: All OnboardingProtocol values
-    _ALL_ONBOARDING_PROTOCOLS: ClassVar[list[int]] = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    _ALL_ONBOARDING_PROTOCOLS: ClassVar[list[int]] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     #: All OnboardingProtocol values except MANUAL (0)
-    _ONBOARDING_PROTOCOLS_NO_MANUAL: ClassVar[list[int]] = [1, 2, 3, 4, 5, 6, 7, 8]
+    _ONBOARDING_PROTOCOLS_NO_MANUAL: ClassVar[list[int]] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     _MODE_DEFAULTS: ClassVar[dict[str, _SecurityModeDefaults]] = {
         # ----------------------------------------------------------------

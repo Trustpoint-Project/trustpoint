@@ -315,11 +315,7 @@ class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceMode
         """
         if record.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
             clm_url = reverse('devices:opc_ua_gds_push_certificate_lifecycle_management', kwargs={'pk': record.pk})
-        elif record.device_type in (
-            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-            DeviceModel.DeviceType.AGENT_ONE_TO_N,
-            DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
-        ):
+        elif record.device_type == DeviceModel.DeviceType.AGENT_ONE_TO_ONE:
             clm_url = reverse('devices:devices_certificate_lifecycle_management', kwargs={'pk': record.pk})
         else:
             clm_url = reverse(
@@ -516,17 +512,14 @@ class DeviceTableView(AbstractDeviceTableView):
         """Filter queryset to include generic, OPC UA GDS Push, and 1-to-1 agent devices.
 
         1-to-1 agents are shown here because the agent IS the device.
-        1-to-n agents and their managed devices are shown only on the Agents page.
 
         Returns:
-            Returns a queryset of DeviceModels, excluding OPC_UA_GDS, AGENT_ONE_TO_N,
-            and AGENT_MANAGED_DEVICE types, filtered by UI filters.
+            Returns a queryset of DeviceModels, excluding OPC_UA_GDS
+            types, filtered by UI filters.
         """
         base_qs = self.get_base_queryset().exclude(
             device_type__in=[
                 DeviceModel.DeviceType.OPC_UA_GDS,
-                DeviceModel.DeviceType.AGENT_ONE_TO_N,
-                DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
             ]
         )
         queryset = self.apply_filters(base_qs)
