@@ -7,7 +7,7 @@ Defines classes that handle validation and transformation
 of Truststore model instances to and from JSON.
 """
 
-from typing import ClassVar, cast
+from typing import Any, ClassVar, cast
 
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
@@ -44,7 +44,7 @@ class TruststoreSerializer(serializers.ModelSerializer[TruststoreModel]):
         fields: ClassVar[list[str]] = ['id', 'unique_name', 'intended_usage', 'created_at', 'trust_store_file']
         read_only_fields: ClassVar[list[str]] = ['id']
 
-    def validate_trust_store_file(self, file: UploadedFile) -> bytes:
+    def validate_trust_store_file(self, file: UploadedFile[Any]) -> bytes:
         """Validate uploaded truststore file."""
         if not file or not file.name:
             msg = 'Truststore file is required.'

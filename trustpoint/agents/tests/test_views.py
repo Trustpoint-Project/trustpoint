@@ -42,7 +42,9 @@ from agents.api_views import (
 from agents.models import AgentAssignedProfile, AgentProfileDefinition, TrustpointAgent
 from agents.web_views import AgentProfileDefinitionConfigView, AgentProfileDefinitionTableView
 from devices.models import DeviceModel, DomainModel
+from management.models import SecurityConfig
 from pki.models import IssuedCredentialModel
+from onboarding.models import OnboardingProtocol
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractBaseUser
@@ -546,6 +548,24 @@ class TestAgentJobsView:
     """Test AgentJobsView API endpoint."""
 
     @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_get_jobs_disabled_by_security_config(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+    ):
+        """Test GET is forbidden when the AGENT protocol is not permitted."""
+        mock_auth.return_value = (agent, None)
+        SecurityConfig.objects.create(permitted_onboarding_protocols=[])
+
+        response = api_client.get('/api/agents/jobs/')
+
+        assert response.status_code == 403
+        assert response.json()['detail'] == (
+            'Agent functionality is disabled by the current security configuration.'
+        )
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
     def test_get_jobs_no_pending(
         self,
         mock_auth: Mock,
@@ -632,6 +652,29 @@ class TestAgentJobsView:
 @pytest.mark.django_db
 class TestAgentJobResultView:
     """Test AgentJobResultView API endpoint."""
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_post_result_disabled_by_security_config(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        """Test POST is forbidden when the AGENT protocol is not permitted."""
+        mock_auth.return_value = (agent, None)
+        SecurityConfig.objects.create(permitted_onboarding_protocols=[])
+
+        response = api_client.post(
+            '/api/agents/jobs/result/',
+            {'profile_id': assigned_profile.pk, 'success': True},
+            format='json',
+        )
+
+        assert response.status_code == 403
+        assert response.json()['detail'] == (
+            'Agent functionality is disabled by the current security configuration.'
+        )
 
     @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
     def test_post_result_success(
@@ -735,6 +778,15 @@ class TestAgentJobResultView:
 @pytest.mark.django_db
 class TestAgentProfileDefinitionTableView:
     """Test workflow definition list view."""
+
+    def test_get_list_disabled_by_security_config(self, web_client: Client):
+        """Test agent pages redirect when the AGENT protocol is not permitted."""
+        SecurityConfig.objects.create(permitted_onboarding_protocols=[])
+
+        response = web_client.get(reverse('agents:profiles'))
+
+        assert response.status_code == 302
+        assert response.url == reverse('devices:devices')
 
     def test_get_list(self, web_client: Client, workflow_definition: AgentProfileDefinition):
         """Test GET workflow definition list."""
