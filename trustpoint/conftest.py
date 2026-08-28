@@ -47,8 +47,8 @@ def _is_db_less_django_simple_test(request: pytest.FixtureRequest) -> bool:
 
 @pytest.fixture(autouse=True)
 def set_advertised_port_for_tests(settings: Any) -> None:
-    """Set ADVERTISED_PORT in Django settings for tests that need it."""
-    settings.ADVERTISED_PORT = 8443
+    """Set TP_HTTPS_PORT in Django settings for tests that need it."""
+    settings.TP_HTTPS_PORT = '8443'
 
 
 @pytest.fixture(autouse=True)

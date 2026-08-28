@@ -161,18 +161,15 @@ class EstUsernamePasswordCommandBuilder:
         profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
         profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
 
-        # For better cross-platform usability (Linux shells and Windows cmd.exe),
-        # we avoid shell-specific line continuations here and emit a single-line
-        # command that can be pasted into either environment without modification.
-        sans_part = f'-addext "subjectAltName = {profile_sans}" ' if profile_sans else ''
+        sans_line = f'-addext "subjectAltName = {profile_sans}" \\\n' if profile_sans else ''
 
         return (
-            'openssl req '
-            '-new '
-            f'-key key-{cred_number}.pem '
-            '-outform DER '
-            f'-out csr-{cred_number}.der '
-            f'{sans_part}'
+            'openssl req \\\n'
+            '-new \\\n'
+            f'-key key-{cred_number}.pem \\\n'
+            '-outform DER \\\n'
+            f'-out csr-{cred_number}.der \\\n'
+            f'{sans_line}'
             f'-subj "{profile_subject_entries}"'
         )
 
@@ -189,16 +186,13 @@ class EstUsernamePasswordCommandBuilder:
         Returns:
             The constructed command.
         """
-        # Emit a single-line curl command so it can be pasted into both
-        # Linux shells and Windows cmd.exe without requiring line
-        # continuation characters.
         return (
-            'curl '
-            f'--user "{est_username}:{est_password}" '
-            '--cacert trustpoint-tls-trust-store.pem '
-            '--header "Content-Type: application/pkcs10" '
-            f'--data-binary "@csr-{cred_number}.der" '
-            f'-o certificate-{cred_number}.p7c '
+            'curl \\\n'
+            f'--user "{est_username}:{est_password}" \\\n'
+            '--cacert trustpoint-tls-trust-store.pem \\\n'
+            '--header "Content-Type: application/pkcs10" \\\n'
+            f'--data-binary "@csr-{cred_number}.der" \\\n'
+            f'-o certificate-{cred_number}.p7c \\\n'
             f'{host}'
         )
 

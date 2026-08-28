@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.conf import settings
 from django.http import Http404
 from django.urls import reverse
 from django.utils.html import format_html
@@ -23,6 +24,7 @@ from help_pages.base import (
     build_keygen_section,
     build_tls_trust_store_section,
 )
+from help_pages.commands import CmpClientCertificateCommandBuilder, EstClientCertificateCommandBuilder
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import TlsSettings
 from pki.models import CaModel, DevIdRegistration, DomainModel, IssuedCredentialModel, OwnerCredentialModel
@@ -50,7 +52,7 @@ class BaseHelpView(DetailView[DevIdRegistration]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         public_key_info = domain.public_key_info
@@ -72,6 +74,9 @@ class BaseHelpView(DetailView[DevIdRegistration]):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Get the context data for the help page."""
         context = super().get_context_data(**kwargs)
+        if not self.strategy:
+            err_msg = _('No strategy configured.')
+            raise RuntimeError(err_msg)
         help_context = self._make_context()
         sections, heading = self.strategy.build_sections(help_context)
         context['help_page'] = HelpPage(heading=heading, sections=sections)
@@ -90,34 +95,44 @@ class OnboardingCmpIdevIdDomainCredentialStrategy(HelpPageStrategy):
             err_msg = 'Domain is required for CMP onboarding'
             raise ValueError(err_msg)
 
+        operation = 'initialization'
         summary_section = HelpSection(
             heading=str(_('Summary')),
             rows=[
                 HelpRow(
-                    key=_non_lazy('Protocol'),
-                    value=_non_lazy('CMP'),
-                    value_render_type=ValueRenderType.PLAIN,
+                    key=_non_lazy('Domain Credential Request URL'),
+                    value=f'{help_context.host_cmp_path}/{operation}',
+                    value_render_type=ValueRenderType.CODE,
                 ),
                 HelpRow(
-                    key=_non_lazy('Authentication'),
-                    value=_non_lazy('IDevID with Domain Credential'),
-                    value_render_type=ValueRenderType.PLAIN,
+                    key=_non_lazy('Required Public Key Type'),
+                    value=str(domain.public_key_info),
+                    value_render_type=ValueRenderType.CODE,
                 ),
             ],
         )
-
-        keygen_section = build_keygen_section(
-            help_context=help_context,
-            file_name='idevid',
+        domain_cred_profile = domain.get_domain_credential_profile_name()
+        enroll_section = HelpSection(
+            heading=_non_lazy('Enroll Domain Credential'),
+            rows=[
+                HelpRow(
+                    key=_non_lazy('Enroll the Domain Credential with CMP'),
+                    value=CmpClientCertificateCommandBuilder.get_idevid_domain_credential_command(
+                        host=f'{help_context.host_cmp_path}/{domain_cred_profile}/{operation}'
+                    ),
+                    value_render_type=ValueRenderType.CODE,
+                ),
+            ],
         )
-
-        issuing_ca_section = build_issuing_ca_cert_section(domain=domain)
-
-        extract_section = build_extract_files_from_p12_section()
-
         return (
-            [summary_section, keygen_section, issuing_ca_section, extract_section],
-            'Help - Issue Application Certificates',
+            [
+                summary_section,
+                build_issuing_ca_cert_section(domain=domain),
+                build_keygen_section(help_context, file_name='domain-credential-key.pem'),
+                build_extract_files_from_p12_section(),
+                enroll_section,
+            ],
+            'Help - Issue Application Certificates using CMP with a Domain Credential',
         )
 
 
@@ -126,32 +141,78 @@ class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
 
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         """Build sections for EST onboarding help page."""
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required for EST onboarding'
+            raise ValueError(err_msg)
+
+        operation = 'simpleenroll'
         summary_section = HelpSection(
             heading=str(_('Summary')),
             rows=[
                 HelpRow(
-                    key=_non_lazy('Protocol'),
-                    value=_non_lazy('EST'),
-                    value_render_type=ValueRenderType.PLAIN,
+                    key=_non_lazy('Domain Credential Request URL'),
+                    value=f'{help_context.host_est_path}/{operation}',
+                    value_render_type=ValueRenderType.CODE,
                 ),
                 HelpRow(
-                    key=_non_lazy('Authentication'),
-                    value=_non_lazy('IDevID with Domain Credential'),
-                    value_render_type=ValueRenderType.PLAIN,
+                    key=_non_lazy('Required Public Key Type'),
+                    value=str(domain.public_key_info),
+                    value_render_type=ValueRenderType.CODE,
                 ),
             ],
         )
-
-        keygen_section = build_keygen_section(
-            help_context=help_context,
-            file_name='idevid',
+        domain_cred_profile = domain.get_domain_credential_profile_name()
+        enroll_section = HelpSection(
+            heading=_non_lazy('Enroll Domain Credential'),
+            rows=[
+                HelpRow(
+                    key=_non_lazy('Domain Credential CSR Generation'),
+                    value=EstClientCertificateCommandBuilder.get_idevid_gen_csr_command(),
+                    value_render_type=ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    key=_non_lazy('Enroll the Domain Credential with EST'),
+                    value=EstClientCertificateCommandBuilder.get_idevid_enroll_domain_credential_command(
+                        host=f'{help_context.host_est_path}/{domain_cred_profile}/{operation}'
+                    ),
+                    value_render_type=ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    key=_non_lazy('Convert DER to PEM'),
+                    value=EstClientCertificateCommandBuilder.get_idevid_der_pem_conversion_command(),
+                    value_render_type=ValueRenderType.CODE,
+                ),
+            ],
         )
-
-        tls_section = build_tls_trust_store_section()
-
-        extract_section = build_extract_files_from_p12_section()
-
-        return [summary_section, keygen_section, tls_section, extract_section], 'Help - Issue Application Certificates'
+        ca_cert_section = HelpSection(
+            heading=_non_lazy('CA Certificate Chain'),
+            rows=[
+                HelpRow(
+                    key=_non_lazy('Retrieve CA chain'),
+                    value=EstClientCertificateCommandBuilder.get_idevid_ca_certs_command(
+                        host=f'{help_context.host_est_path}/cacerts/'
+                    ),
+                    value_render_type=ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    key=_non_lazy('Convert PKCS7 to PEM'),
+                    value=EstClientCertificateCommandBuilder.get_idevid_pkcs7_pem_conversion_command(),
+                    value_render_type=ValueRenderType.CODE,
+                ),
+            ],
+        )
+        return (
+            [
+                summary_section,
+                build_tls_trust_store_section(),
+                build_keygen_section(help_context, file_name='domain-credential-key.pem'),
+                build_extract_files_from_p12_section(),
+                enroll_section,
+                ca_cert_section,
+            ],
+            'Help - Issue Application Certificates using CMP with a Domain Credential',
+        )
 
 
 class OnboardingCmpIdevidRegistrationHelpView(BaseHelpView):
@@ -186,7 +247,7 @@ class DevIdRegistrationDetailView(DetailView[DevIdRegistration]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         public_key_info = domain.public_key_info
@@ -238,7 +299,7 @@ class DevIdRegistrationHelpView(DevIdRegistrationDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         public_key_info = domain.public_key_info
@@ -301,7 +362,7 @@ class DomainDetailView(DetailView[DomainModel]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         public_key_info = domain.public_key_info
@@ -350,7 +411,7 @@ class DomainHelpView(DomainDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         public_key_info = domain.public_key_info
@@ -414,7 +475,7 @@ class IssuedCredentialDetailView(DetailView[IssuedCredentialModel]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         public_key_info = device.public_key_info
@@ -469,7 +530,7 @@ class IssuedCredentialHelpView(IssuedCredentialDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         public_key_info = device.public_key_info
@@ -537,7 +598,7 @@ class OwnerCredentialDetailView(DetailView[OwnerCredentialModel]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         public_key_info = device.public_key_info
@@ -592,7 +653,7 @@ class OwnerCredentialHelpView(OwnerCredentialDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         public_key_info = device.public_key_info
@@ -657,7 +718,7 @@ class CaDetailView(DetailView[CaModel]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         # Create a minimal HelpContext for CA views
@@ -703,7 +764,7 @@ class CaHelpView(CaDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
+            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
         )
 
         ca_cert_section = HelpSection(
@@ -754,10 +815,9 @@ class CrlDownloadHelpView(CaDetailView):
         context = super().get_context_data(**kwargs)
         ca = self.object
 
-        host_base = (
-            f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", "443")}'
-        )
+        https_port = settings.TP_HTTPS_PORT or '443'
+        first_ip = TlsSettings.get_first_ipv4_address()
+        host_base = f'https://{first_ip}:{https_port}' if https_port != '443' else f'https://{first_ip}'
         crl_endpoint = f'{host_base}/crl/{ca.pk}/'
 
         has_crl = bool(ca.crl_pem)
@@ -773,37 +833,87 @@ class CrlDownloadHelpView(CaDetailView):
             )
             crl_status_rows.append(
                 HelpRow(
-                    key=_non_lazy('Last CRL Issued At'),
-                    value=ca.last_crl_issued_at.isoformat(),
+                    key=_non_lazy('Last Generated'),
+                    value=ca.last_crl_issued_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
                     value_render_type=ValueRenderType.PLAIN,
-                )
-            )
-            crl_status_rows.append(
-                HelpRow(
-                    key=_non_lazy('CRL Download'),
-                    value=format_html(
-                        '<a href="{}">Download CRL (PEM)</a>',
-                        reverse('pki:ca-crl-download', kwargs={'pk': ca.pk}),
-                    ),
-                    value_render_type=ValueRenderType.HTML,
-                )
+                ),
             )
         else:
             crl_status_rows.append(
                 HelpRow(
                     key=_non_lazy('CRL Status'),
-                    value=_non_lazy('Not Available'),
+                    value=_non_lazy('Not Available - Generate a CRL first'),
                     value_render_type=ValueRenderType.PLAIN,
                 )
             )
 
-        context['help_sections'] = [
-            HelpSection(
-                heading=_non_lazy('CRL Status'),
-                rows=crl_status_rows,
-            ),
+        help_page_url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': ca.pk})
+        generate_url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': ca.pk})
+        generate_button = format_html(
+            '<a href="{}" class="btn btn-primary w-100">{}</a>',
+            f'{generate_url}?next={help_page_url}',
+            _non_lazy('Generate CRL'),
+        )
+        crl_status_rows.append(
+            HelpRow(
+                _non_lazy('Generate New CRL'),
+                generate_button,
+                ValueRenderType.PLAIN,
+            )
+        )
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(_non_lazy('CA'), ca.unique_name, ValueRenderType.PLAIN),
+                HelpRow(_non_lazy('CRL Download Endpoint'), crl_endpoint, ValueRenderType.CODE),
+            ],
+        )
+        download_pem_cmd = (
+            f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
+            f'  -o {ca.unique_name}.pem.crl \\\n'
+            f'  "{crl_endpoint}"'
+        )
+        download_der_cmd = (
+            f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
+            f'  -o {ca.unique_name}.der.crl \\\n'
+            f'  "{crl_endpoint}?encoding=der"'
+        )
+        download_section = HelpSection(
+            _non_lazy('Download CRL'),
+            [
+                HelpRow(_non_lazy('Download CRL in PEM Format'), download_pem_cmd, ValueRenderType.CODE),
+                HelpRow(_non_lazy('Download CRL in DER Format'), download_der_cmd, ValueRenderType.CODE),
+            ],
+        )
+        notes_section = HelpSection(
+            _non_lazy('Important Notes'),
+            [
+                HelpRow(
+                    _non_lazy('Public Access'),
+                    _non_lazy(
+                        'This endpoint does not require authentication and can be accessed by any client '
+                        'that needs to verify certificate revocation status.'
+                    ),
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+        sections = [
+            summary,
+            HelpSection(_non_lazy('CRL Status'), crl_status_rows),
+            build_tls_trust_store_section(),
+            download_section,
+            notes_section,
         ]
-        context['host_base'] = host_base
-        context['crl_endpoint'] = crl_endpoint
+
+        context['help_page'] = HelpPage(
+            heading=_non_lazy(f'Help - Download CRL for {ca.unique_name}'),
+            sections=sections,
+        )
+        context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
+        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
+        context['back_url'] = 'pki:issuing_cas-config'
+        context['back_button_text'] = _non_lazy('Back to Issuing CA Configuration')
 
         return context

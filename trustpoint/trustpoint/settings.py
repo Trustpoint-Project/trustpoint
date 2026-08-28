@@ -93,9 +93,6 @@ PUBLIC_PATHS = [
 
 WSGI_APPLICATION = 'trustpoint.wsgi.application'
 
-# Port advertised to clients (can be overridden by HTTP_X_FORWARDED_PORT header)
-ADVERTISED_PORT = 443
-
 DOCKER_CONTAINER = False
 
 
