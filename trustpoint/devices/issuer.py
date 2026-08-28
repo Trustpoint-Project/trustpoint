@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import TYPE_CHECKING, NoReturn, get_args
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Generic, NoReturn, TypeVar, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
@@ -24,11 +25,27 @@ from workflows2.integrations.certificates import emit_certificate_issued_for_rec
 
 if TYPE_CHECKING:
     import ipaddress
+    from collections.abc import Callable
 
     from trustpoint_core.crypto_types import PublicKey
 
     from devices.models import DeviceModel
     from pki.models.domain import DomainModel
+
+
+TKeylessSavedRecord = TypeVar('TKeylessSavedRecord', bound=object)
+
+
+@dataclass(frozen=True)
+class KeylessCredentialSaveConfig(Generic[TKeylessSavedRecord]):  # noqa: UP046
+    """Configuration for saving a keyless credential record."""
+
+    certificate: x509.Certificate
+    certificate_chain: list[x509.Certificate]
+    existing_records: Any
+    create_record: Callable[[], TKeylessSavedRecord]
+    issued_using_cert_profile: str
+    success_log: str
 
 
 class SaveCredentialToDbMixin(LoggerMixin):
@@ -104,6 +121,40 @@ class SaveCredentialToDbMixin(LoggerMixin):
             )
             return issued_credential_model
 
+    def _save_or_update_keyless_credential_record(
+        self,
+        save_config: KeylessCredentialSaveConfig[TKeylessSavedRecord],
+    ) -> TKeylessSavedRecord:
+        """Save or update a keyless credential record while preserving the existing record semantics."""
+        try:
+            existing_record = save_config.existing_records.first()
+            if existing_record is not None:
+                cred_model = existing_record.credential
+                cred_model.update_keyless_credential(save_config.certificate, save_config.certificate_chain)
+                cred_model.save()
+
+                if hasattr(existing_record, 'issued_using_cert_profile'):
+                    existing_record.issued_using_cert_profile = save_config.issued_using_cert_profile
+                    existing_record.save()
+                emit_certificate_issued_for_record(existing_record)
+                return existing_record  # type: ignore[no-any-return]
+
+            saved_record = save_config.create_record()
+        except Exception:
+            self.logger.exception(
+                "Failed to save keyless credential for device '%s' (ID: %s)",
+                self.device.common_name,
+                self.device.pk,
+            )
+            raise
+
+        self.logger.info(
+            save_config.success_log,
+            saved_record.pk,  # type: ignore[attr-defined]
+            self.device.common_name,
+        )
+        return saved_record
+
     def _save_keyless_credential(
         self,
         certificate: x509.Certificate,
@@ -125,27 +176,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
             issued_using_cert_profile,
         )
 
-        try:
-
-            existing_issued_credential = IssuedCredentialModel.objects.filter(
-                device=self.device,
-                domain=self.domain,
-                issued_credential_type=issued_credential_type,
-                common_name=common_name,
-            ).first()
-
-            if existing_issued_credential:
-                cred_model = existing_issued_credential.credential
-                cred_model.update_keyless_credential(certificate, certificate_chain)
-                cred_model.save()
-
-                existing_issued_credential.issued_using_cert_profile = issued_using_cert_profile
-                existing_issued_credential.save()
-                emit_certificate_issued_for_record(existing_issued_credential)
-
-                return existing_issued_credential
-
-            # Always create a new credential for this device
+        def create_record() -> IssuedCredentialModel:
             credential_model = CredentialModel.save_keyless_credential(
                 certificate=certificate,
                 certificate_chain=certificate_chain,
@@ -162,22 +193,23 @@ class SaveCredentialToDbMixin(LoggerMixin):
             )
 
             issued_credential_model.save()
+            return issued_credential_model
 
-        except Exception:
-            self.logger.exception(
-                "Failed to save keyless credential for device '%s' (ID: %s)",
-                self.device.common_name,
-                self.device.pk
+        return self._save_or_update_keyless_credential_record(
+            KeylessCredentialSaveConfig(
+                certificate=certificate,
+                certificate_chain=certificate_chain,
+                existing_records=IssuedCredentialModel.objects.filter(
+                    device=self.device,
+                    domain=self.domain,
+                    issued_credential_type=issued_credential_type,
+                    common_name=common_name,
+                ),
+                create_record=create_record,
+                issued_using_cert_profile=issued_using_cert_profile,
+                success_log="Successfully saved keyless IssuedCredentialModel (ID: %s) for device '%s'",
             )
-            raise
-
-        self.logger.info(
-            "Successfully saved keyless IssuedCredentialModel (ID: %s) for device '%s'",
-            issued_credential_model.pk,
-            self.device.common_name
         )
-        return issued_credential_model
-
 
 
 class CredentialSaver(SaveCredentialToDbMixin):
@@ -254,23 +286,8 @@ class CredentialSaver(SaveCredentialToDbMixin):
             common_name,
             issued_using_cert_profile,
         )
-        try:
-            existing = RemoteIssuedCredentialModel.objects.filter(
-                device=self._device,
-                domain=self._domain,
-                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
-                common_name=common_name,
-            ).first()
 
-            if existing:
-                cred_model = existing.credential
-                cred_model.update_keyless_credential(certificate, certificate_chain)
-                cred_model.save()
-                existing.issued_using_cert_profile = issued_using_cert_profile
-                existing.save()
-                emit_certificate_issued_for_record(existing)
-                return existing
-
+        def create_record() -> RemoteIssuedCredentialModel:
             credential_model = CredentialModel.save_keyless_credential(
                 certificate=certificate,
                 certificate_chain=certificate_chain,
@@ -285,21 +302,23 @@ class CredentialSaver(SaveCredentialToDbMixin):
                 domain=self._domain,
             )
             remote_issued.save()
+            return remote_issued
 
-        except Exception:
-            self.logger.exception(
-                "Failed to save remote keyless credential for device '%s' (ID: %s)",
-                self._device.common_name,
-                self._device.pk,
+        return self._save_or_update_keyless_credential_record(
+            KeylessCredentialSaveConfig(
+                certificate=certificate,
+                certificate_chain=certificate_chain,
+                existing_records=RemoteIssuedCredentialModel.objects.filter(
+                    device=self._device,
+                    domain=self._domain,
+                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
+                    common_name=common_name,
+                ),
+                create_record=create_record,
+                issued_using_cert_profile=issued_using_cert_profile,
+                success_log="Successfully saved RemoteIssuedCredentialModel (ID: %s) for device '%s'",
             )
-            raise
-
-        self.logger.info(
-            "Successfully saved RemoteIssuedCredentialModel (ID: %s) for device '%s'",
-            remote_issued.pk,
-            self._device.common_name,
         )
-        return remote_issued
 
 
 class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
