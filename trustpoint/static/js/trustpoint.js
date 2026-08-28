@@ -273,8 +273,9 @@ function togglePemSelectDisable() {
 
 const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_protocol');
 const idevidTrustStoreSelectWrapper = document.getElementById('id_idevid_trust_store_select_wrapper');
-const pkiProtocolEstSelect = document.getElementById('id_allowed_pki_protocols_0');
-const pkiProtocolCmpSelect = document.getElementById('id_allowed_pki_protocols_1');
+const onboardingPkiProtocolCmpSelect = document.getElementById('id_onboarding_pki_protocols_1');
+const onboardingPkiProtocolEstSelect = document.getElementById('id_onboarding_pki_protocols_2');
+const onboardingPkiProtocolRestSelect = document.getElementById('id_onboarding_pki_protocols_8');
 
 // const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_and_pki_configuration');
 
@@ -285,37 +286,50 @@ const allowedPkiProtocolsHeader = document.getElementById('id_allowed_pki_protoc
 const allowedPkiProtocolsHr = document.getElementById('id_allowed_pki_protocols_hr');
 const allowedPkiProtocolsWrapper = document.getElementById('id_allowed_pki_protocols_wrapper');
 
-onboardingAndPkiConfigurationSelect?.addEventListener('change', function(event) {
-   const selectedOptionValue = event.target.options[event.target.selectedIndex].value;
+function setOnboardingPkiProtocolSelections({ cmp = false, est = false, rest = false }) {
+    if (onboardingPkiProtocolCmpSelect) onboardingPkiProtocolCmpSelect.checked = cmp;
+    if (onboardingPkiProtocolEstSelect) onboardingPkiProtocolEstSelect.checked = est;
+    if (onboardingPkiProtocolRestSelect) onboardingPkiProtocolRestSelect.checked = rest;
+}
+
+function handleOnboardingProtocolChange(selectedOptionValue) {
+    addClassIfNotPresent(idevidTrustStoreSelectWrapper, 'd-none');
 
     switch (selectedOptionValue) {
-        case 'est_username_password':
-            addClassIfNotPresent(idevidTrustStoreSelectWrapper, 'd-none');
-            pkiProtocolEstSelect.checked = true;
-            pkiProtocolCmpSelect.checked = false;
+        case '0':
+            setOnboardingPkiProtocolSelections({ cmp: true, est: true });
             break;
-        case 'cmp_shared_secret':
-            addClassIfNotPresent(idevidTrustStoreSelectWrapper, 'd-none');
-            pkiProtocolEstSelect.checked = false;
-            pkiProtocolCmpSelect.checked = true;
-            break;
-        case 'manual':
-            addClassIfNotPresent(idevidTrustStoreSelectWrapper, 'd-none');
-            pkiProtocolEstSelect.checked = true;
-            pkiProtocolCmpSelect.checked = true;
-            break;
-        case 'est_idevid':
+        case '1':
             removeClassIfPresent(idevidTrustStoreSelectWrapper, 'd-none');
-            pkiProtocolEstSelect.checked = true;
-            pkiProtocolCmpSelect.checked = false;
+            setOnboardingPkiProtocolSelections({ cmp: true });
             break;
-        case 'cmp_idevid':
+        case '2':
+            setOnboardingPkiProtocolSelections({ cmp: true });
+            break;
+        case '3':
             removeClassIfPresent(idevidTrustStoreSelectWrapper, 'd-none');
-            pkiProtocolEstSelect.checked = false;
-            pkiProtocolCmpSelect.checked = true;
+            setOnboardingPkiProtocolSelections({ est: true });
+            break;
+        case '4':
+            setOnboardingPkiProtocolSelections({ est: true });
+            break;
+        case '7':
+            setOnboardingPkiProtocolSelections({});
+            break;
+        case '8':
+        case '9':
+            setOnboardingPkiProtocolSelections({ rest: true });
             break;
     }
+}
+
+onboardingAndPkiConfigurationSelect?.addEventListener('change', function(event) {
+   handleOnboardingProtocolChange(event.target.options[event.target.selectedIndex].value);
 });
+
+if (onboardingAndPkiConfigurationSelect) {
+    handleOnboardingProtocolChange(onboardingAndPkiConfigurationSelect.value);
+}
 
 function handleOnboardingCheckbox(checked) {
     if (checked) {
@@ -342,15 +356,17 @@ if (domainCredentialOnboardingCheckbox) {
 }
 
 function addClassIfNotPresent(element, className) {
-  if (!element.classList.contains(className)) {
-    element.classList.add(className);
-  }
+    if (!element) return;
+    if (!element.classList.contains(className)) {
+        element.classList.add(className);
+    }
 }
 
 function removeClassIfPresent(element, className) {
-  if (element.classList.contains(className)) {
-    element.classList.remove(className);
-  }
+    if (!element) return;
+    if (element.classList.contains(className)) {
+        element.classList.remove(className);
+    }
 }
 
 // -------------------------------------------- Help Pages - Hidden Toggle ---------------------------------------------
