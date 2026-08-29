@@ -73,6 +73,8 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
 
     WIZARD_COMPLETED_HOME_REVERSE = '/home/'
 
+    FRESH_INSTALL_APPLY_PATH_PREFIX = '/setup-wizard/fresh-install/apply/'
+
     ALLOWED_NO_USER_CREATED = (
         '/setup-wizard',
         '/setup-wizard/',
@@ -164,6 +166,11 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
             return None
 
         if path in {'/setup-wizard/fresh-install/cancel', '/setup-wizard/fresh-install/cancel/'}:
+            return None
+
+        # The summary starts a detached job before it can be marked submitted.
+        # Keep its progress page and polling endpoint reachable during that job.
+        if path.startswith(cls.FRESH_INSTALL_APPLY_PATH_PREFIX):
             return None
 
         step_paths = cls._get_fresh_install_step_paths()

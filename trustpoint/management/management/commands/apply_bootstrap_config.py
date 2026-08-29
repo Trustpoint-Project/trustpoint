@@ -52,7 +52,6 @@ from users.models import Role
 logger = logging.getLogger(__name__)
 
 STATE_FILE_DIR = Path('/etc/trustpoint/wizard/')
-UPDATE_TLS_NGINX = STATE_FILE_DIR / 'update_tls_nginx.sh'
 INSTALL_PKCS11_ASSETS = STATE_FILE_DIR / 'install_pkcs11_assets.sh'
 MANAGE_PCSCD = STATE_FILE_DIR / 'manage_pcscd.sh'
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
@@ -459,7 +458,7 @@ class OperationalBootstrapApplier:
             NGINX_CERT_CHAIN_PATH.unlink()
 
     def _apply_staged_tls_credential(self) -> None:
-        """Promote the staged TLS credential to active operational state."""
+        """Persist the TLS credential and stage its files for the runtime switch."""
         staged_tls_serializer = load_staged_tls_credential()
         if staged_tls_serializer is None:
             raise DjangoValidationError('No staged TLS Server Credential found.')
@@ -473,7 +472,6 @@ class OperationalBootstrapApplier:
         active_tls.save()
 
         self._write_pem_files(staged_tls_credential)
-        self.execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm')
         sha256_fingerprint = staged_tls_credential.get_certificate().fingerprint(hashes.SHA256())
         formatted_fingerprint = ':'.join(f'{byte:02X}' for byte in sha256_fingerprint)
         logger.info('TLS SHA256 fingerprint: %s', formatted_fingerprint)
@@ -518,6 +516,7 @@ class OperationalBootstrapApplier:
         if self.fresh_install['inject_demo_data']:
             report_setup_apply_progress('demo-data', 'Generating demo data and keys.', 65)
             call_command('add_domains_and_devices')
+            report_setup_apply_progress('demo-data-complete', 'Demo data and keys generated.', 75)
         report_setup_apply_progress('notifications', 'Preparing system notifications.', 78)
         call_command('execute_all_notifications')
         report_setup_apply_progress('tls', 'Applying the TLS server credential.', 84)

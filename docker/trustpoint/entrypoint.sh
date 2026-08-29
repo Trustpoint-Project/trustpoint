@@ -6,6 +6,8 @@ PHASE="${TRUSTPOINT_PHASE:-auto}"
 OPERATIONAL_ENV_FILE="${TRUSTPOINT_OPERATIONAL_ENV_FILE:-/var/lib/trustpoint/bootstrap/operational.env}"
 OPERATIONAL_READY_FILE="${TRUSTPOINT_OPERATIONAL_READY_FILE:-/var/lib/trustpoint/bootstrap/operational.ready}"
 WWW_DATA_HOME="${WWW_DATA_HOME:-/tmp/trustpoint-www-data-home}"
+BOOTSTRAP_GUNICORN_PORT=8000
+OPERATIONAL_GUNICORN_PORT=8001
 
 load_operational_env() {
   if [ -f "$OPERATIONAL_ENV_FILE" ]; then
@@ -173,7 +175,12 @@ configure_web_edge() {
 }
 
 start_gunicorn() {
-  echo "Starting Gunicorn server..."
+  local gunicorn_port="$BOOTSTRAP_GUNICORN_PORT"
+  if [ "$PHASE" = "operational" ]; then
+    gunicorn_port="$OPERATIONAL_GUNICORN_PORT"
+  fi
+
+  echo "Starting Gunicorn server on port ${gunicorn_port}..."
   mkdir -p "$WWW_DATA_HOME"
   chown www-data:www-data "$WWW_DATA_HOME"
   su -s /bin/bash www-data -c "cd /var/www/html/trustpoint/trustpoint && \
@@ -181,7 +188,7 @@ start_gunicorn() {
       export DJANGO_SETTINGS_MODULE='${DJANGO_SETTINGS_MODULE}' && \
       export HOME='${WWW_DATA_HOME}' && \
       /var/www/html/trustpoint/.venv/bin/gunicorn \
-      --bind 0.0.0.0:8000 \
+      --bind 0.0.0.0:${gunicorn_port} \
       --workers 4 \
       --timeout 300 \
       --user www-data \

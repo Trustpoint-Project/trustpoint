@@ -3,8 +3,6 @@
 
 """Adds Issuing CAs, Domains and Devices with different onboarding protocols."""
 
-# ruff: noqa: T201  # print is fine in management commands
-
 import random
 import secrets
 import string
@@ -34,6 +32,7 @@ from onboarding.models import (
 )
 from pki.models import CaModel, CredentialModel, DevIdRegistration, DomainModel, TruststoreModel
 from pki.util.x509 import CertificateGenerator
+from setup_wizard.setup_apply_progress import report_setup_apply_activity
 from signer.models import SignerModel
 from trustpoint.logger import LoggerMixin
 
@@ -180,6 +179,7 @@ class Command(BaseCommand, LoggerMixin):
         """
         log_method = getattr(self.logger, level, self.logger.info)
         log_method(message)
+        report_setup_apply_activity(message)
 
         if level == 'error':
             self.stdout.write(self.style.ERROR(message))
@@ -322,6 +322,7 @@ class Command(BaseCommand, LoggerMixin):
             signer_unique_name = f'signer-{domain_name}'
             if not SignerModel.objects.filter(unique_name=signer_unique_name).exists():
                 try:
+                    self.log_and_stdout(f"Generating signer key for domain '{domain_name}'...")
                     signer = create_signer_for_domain(domain_name, issuing_ca)
                     self.log_and_stdout(
                         f"Created signer '{signer.unique_name}' for domain '{domain_name}' "
@@ -356,9 +357,10 @@ class Command(BaseCommand, LoggerMixin):
                 if device_uses_onboarding:
 
                     onboarding_protocol = random.choice(onboarding_protocols)  # noqa: S311
-                    print(f"Creating device '{device_name}' in domain '{domain_name}' with:")
-                    print(f'  - Serial Number: {serial_number}')
-                    print(f'  - Onboarding Protocol: {onboarding_protocol}')
+                    self.log_and_stdout(
+                        f"Creating device '{device_name}' in domain '{domain_name}' "
+                        f'with onboarding protocol {onboarding_protocol.label}.'
+                    )
 
                     if onboarding_protocol == OnboardingProtocol.MANUAL:
                         onboarding_pki_protocols = get_random_onboarding_pki_protocols()
@@ -411,6 +413,8 @@ class Command(BaseCommand, LoggerMixin):
 
                     onboarding_config_model.save()
                     device_model.save()
+
+                    self.log_and_stdout(f"Created device '{device_name}' in domain '{domain_name}'.")
 
                     AuditLog.create_entry(
                         operation_type=AuditLog.OperationType.DEVICE_ADDED,

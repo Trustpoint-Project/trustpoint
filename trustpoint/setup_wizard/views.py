@@ -2927,7 +2927,7 @@ class FreshInstallApplyProgressView(LoginRequiredMixin, TemplateView):
 
 
 class FreshInstallApplyStatusView(LoginRequiredMixin, View):
-    """Return the current setup apply status as a short non-streaming response."""
+    """Return the current setup state and its bounded activity log."""
 
     http_method_names = ('get',)
 

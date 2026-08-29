@@ -27,6 +27,7 @@ from django.urls import include, path
 from django.utils import timezone
 from django.views.decorators.http import last_modified
 from django.views.decorators.vary import vary_on_cookie
+from django.views.generic import RedirectView
 from django.views.i18n import JavaScriptCatalog
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from drf_spectacular.views import (
@@ -43,6 +44,7 @@ from pki.views.issuing_cas import CrlDownloadView
 
 from .views import base
 from .views.prometheus import prometheus_metrics_view
+from .views.setup_apply_status import CompletedSetupApplyStatusView
 
 last_modified_date = timezone.now()
 
@@ -69,6 +71,16 @@ else:
 
 urlpatterns += [
     path('users/', include('users.urls')),
+    path(
+        'setup-wizard/fresh-install/apply/status/',
+        CompletedSetupApplyStatusView.as_view(),
+        name='completed-setup-apply-status',
+    ),
+    path(
+        'setup-wizard/fresh-install/apply/',
+        RedirectView.as_view(pattern_name='users:login', permanent=False),
+        name='completed-setup-apply',
+    ),
     path('signer/', include('signer.urls')),
     path('pki/', include('pki.urls')),
     path('crl/<int:pk>/', CrlDownloadView.as_view(), name='crl-download'),

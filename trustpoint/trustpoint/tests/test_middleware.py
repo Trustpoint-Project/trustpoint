@@ -219,6 +219,31 @@ class TestSetupWizardRedirectMiddleware:
         assert response.status_code == 302
         assert response['Location'] == '/setup-wizard/fresh-install/demo-data/'
 
+    @pytest.mark.parametrize(
+        'path',
+        [
+            '/setup-wizard/fresh-install/apply/',
+            '/setup-wizard/fresh-install/apply/status/',
+        ],
+    )
+    def test_authenticated_user_can_monitor_summary_apply_job(self, middleware, settings, path):
+        """Detached apply routes stay reachable while the summary is not yet submitted."""
+        settings.DOCKER_CONTAINER = True
+        user = User.objects.create_user(username='tester', password='secret123')
+        config = SetupWizardConfigModel.get_singleton()
+        config.fresh_install_admin_user_submitted = True
+        config.fresh_install_database_submitted = True
+        config.fresh_install_crypto_storage_submitted = True
+        config.fresh_install_backend_config_submitted = True
+        config.fresh_install_demo_data_submitted = True
+        config.fresh_install_tls_config_submitted = True
+        config.fresh_install_summary_submitted = False
+        config.save()
+
+        response = middleware(self._request(path, user))
+
+        assert response.status_code == 200
+
 
 @pytest.mark.django_db
 class TestWorkflow2InlineDrainMiddleware:

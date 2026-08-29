@@ -28,6 +28,7 @@ from management.models import SecurityConfig
 from management.models.audit_log import AuditLog
 from pki.models import CaModel, CredentialModel
 from pki.util.x509 import CertificateVerifier
+from setup_wizard.setup_apply_progress import report_setup_apply_activity
 from trustpoint.logger import LoggerMixin
 
 from .base_commands import CertificateCreationCommandMixin
@@ -55,6 +56,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         # Log the message
         log_method = getattr(self.logger, level, self.logger.info)
         log_method(message)
+        report_setup_apply_activity(message)
 
         # Write to stdout
         if level == 'error':
@@ -114,6 +116,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
     def _generate_demo_rsa_issuing_key(self, *, unique_name: str, key_size: int) -> rsa.RSAPrivateKey:
         """Generate a demo issuing-CA RSA key in the configured backend."""
         self._require_rsa_demo_support(key_size)
+        self.log_and_stdout(f"Generating RSA-{key_size} key for '{unique_name}'...")
         key_label = f'{unique_name}-{uuid.uuid4().hex[:12]}'
         return self._generate_managed_private_key(alias=key_label, key_spec=RsaKeySpec(key_size=key_size))
 
@@ -122,6 +125,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
     ) -> ec.EllipticCurvePrivateKey:
         """Generate a demo issuing-CA EC key in the configured backend."""
         self._require_ec_demo_support(curve)
+        self.log_and_stdout(f"Generating {curve.name} key for '{unique_name}'...")
         curve_name = normalize_curve_name(curve)
         if curve_name is None:
             msg = f'Unsupported demo EC curve {curve.name!r}.'

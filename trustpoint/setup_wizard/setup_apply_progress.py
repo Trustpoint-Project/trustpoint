@@ -22,6 +22,7 @@ APPLY_JOB_ID_ENV: Final[str] = 'TRUSTPOINT_SETUP_APPLY_JOB_ID'
 APPLY_STATUS_FILE_ENV: Final[str] = 'TRUSTPOINT_SETUP_APPLY_STATUS_FILE'
 ACTIVE_STATES: Final[frozenset[str]] = frozenset({'queued', 'running', 'switching'})
 MAX_HISTORY_ENTRIES: Final[int] = 24
+MAX_ACTIVITY_ENTRIES: Final[int] = 100
 QUEUED_GRACE_SECONDS: Final[int] = 30
 
 
@@ -66,11 +67,15 @@ def write_setup_apply_status(  # noqa: PLR0913 - explicit status fields keep per
     previous = read_setup_apply_status(status_path)
     now = _timestamp()
     history: list[dict[str, str]] = []
+    activity: list[dict[str, str]] = []
     started_at = now
     if previous and previous.get('job_id') == job_id:
         previous_history = previous.get('history')
         if isinstance(previous_history, list):
             history = [entry for entry in previous_history if isinstance(entry, dict)][-MAX_HISTORY_ENTRIES:]
+        previous_activity = previous.get('activity')
+        if isinstance(previous_activity, list):
+            activity = [entry for entry in previous_activity if isinstance(entry, dict)][-MAX_ACTIVITY_ENTRIES:]
         started_at = str(previous.get('started_at') or now)
         if previous.get('stage') != stage:
             history.append(
@@ -78,6 +83,14 @@ def write_setup_apply_status(  # noqa: PLR0913 - explicit status fields keep per
                     'stage': str(previous.get('stage') or ''),
                     'detail': str(previous.get('detail') or ''),
                     'completed_at': now,
+                }
+            )
+        elif previous.get('detail') != detail:
+            activity.append(
+                {
+                    'stage': stage,
+                    'detail': detail,
+                    'created_at': now,
                 }
             )
 
@@ -90,6 +103,7 @@ def write_setup_apply_status(  # noqa: PLR0913 - explicit status fields keep per
         'started_at': started_at,
         'updated_at': now,
         'history': history[-MAX_HISTORY_ENTRIES:],
+        'activity': activity[-MAX_ACTIVITY_ENTRIES:],
     }
     if pid is not None:
         payload['pid'] = pid
@@ -114,6 +128,24 @@ def report_setup_apply_progress(stage: str, detail: str, progress: int, *, state
         stage=stage,
         detail=detail,
         progress=progress,
+        pid=os.getpid(),
+    )
+
+
+def report_setup_apply_activity(detail: str) -> None:
+    """Publish detailed activity while preserving the current setup stage and percentage."""
+    job_id = os.getenv(APPLY_JOB_ID_ENV)
+    if not job_id or not detail.strip():
+        return
+    current = read_setup_apply_status()
+    if not current or current.get('job_id') != job_id or current.get('state') not in ACTIVE_STATES:
+        return
+    write_setup_apply_status(
+        job_id=job_id,
+        state=str(current['state']),
+        stage=str(current.get('stage') or 'running'),
+        detail=detail.strip(),
+        progress=int(current.get('progress') or 0),
         pid=os.getpid(),
     )
 

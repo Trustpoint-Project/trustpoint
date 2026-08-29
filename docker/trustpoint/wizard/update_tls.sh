@@ -23,6 +23,7 @@ staged_chain="$TLS_STAGING_DIR/nginx-tls-server-cert-chain.pem"
 installed_key="$NGINX_TLS_DIR/nginx-tls-server-key.key"
 installed_cert="$NGINX_TLS_DIR/nginx-tls-server-cert.pem"
 installed_chain="$NGINX_TLS_DIR/nginx-tls-server-cert-chain.pem"
+credential_changed=false
 
 if [ -e "$staged_key" ] || [ -e "$staged_cert" ]; then
     if [ ! -f "$staged_key" ] || [ ! -f "$staged_cert" ]; then
@@ -36,6 +37,7 @@ if [ -e "$staged_key" ] || [ -e "$staged_cert" ]; then
     if [ -f "$staged_chain" ]; then
         mv "$staged_chain" "$installed_chain"
     fi
+    credential_changed=true
 elif [ -f "$installed_key" ] && [ -f "$installed_cert" ]; then
     log INFO "No staged TLS credential found; using the installed credential"
 else
@@ -51,7 +53,7 @@ else
     exit 2
 fi
 
-if [ -f /run/nginx.pid ] && [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid)" 2>/dev/null; then
+if [ "$credential_changed" = true ] && [ -f /run/nginx.pid ] && [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid)" 2>/dev/null; then
     while [ "$RETRY_COUNT" -lt "$MAX_RETRIES" ]; do
         log INFO "Nginx is running - reloading configuration (graceful)"
         if "$NGINX_BIN" -s reload; then
@@ -66,8 +68,10 @@ if [ -f /run/nginx.pid ] && [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.p
         log ERROR "Failed to reload Nginx after $MAX_RETRIES attempts; certificates apply on next start"
     fi
     sleep "$DELAY"
-else
+elif [ "$credential_changed" = true ]; then
     log INFO "Nginx is not running yet - certificates will be loaded on startup"
+else
+    log INFO "TLS credential is already installed - nginx reload is not required"
 fi
 
 log INFO "TLS certificate update for nginx completed successfully"

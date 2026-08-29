@@ -9,7 +9,7 @@
 
 {% block content %}
 <section class="tp-setup-form-shell tp-fresh-install-shell">
-    <div class="card tp-card-setup-wizard tp-apply-progress-card" aria-live="polite">
+    <div class="card tp-card-setup-wizard tp-apply-progress-card">
         <div class="card-body">
             <div class="d-flex align-items-center gap-3 mb-3">
                 <div class="spinner-border text-primary" role="status" data-apply-spinner>
@@ -17,7 +17,9 @@
                 </div>
                 <div>
                     <h1 class="tp-wizard-heading mb-1">{% trans "Applying Configuration" %}</h1>
-                    <p class="text-muted mb-0" data-apply-detail>{% trans "Starting setup..." %}</p>
+                    <p class="text-muted mb-0" data-apply-detail role="status" aria-live="polite" aria-atomic="true">
+                        {% trans "Starting setup..." %}
+                    </p>
                 </div>
             </div>
 
@@ -27,6 +29,11 @@
 
             <h2 class="h6">{% trans "Activity" %}</h2>
             <ol class="tp-apply-activity" data-apply-history></ol>
+
+            <section class="tp-demo-activity-section mt-4" data-demo-activity-section hidden>
+                <h2 class="h6 mb-2">{% trans "Demo Data" %}</h2>
+                <ol class="tp-demo-activity" data-demo-activity></ol>
+            </section>
 
             <div class="alert alert-warning mt-4 mb-0" data-apply-stalled hidden>
                 {% trans "No progress update has been received for five minutes. The operation is still being monitored; check the Trustpoint log before retrying." %}
@@ -46,16 +53,46 @@
         const detail = document.querySelector('[data-apply-detail]');
         const progress = document.querySelector('[data-apply-progress]');
         const history = document.querySelector('[data-apply-history]');
+        const demoSection = document.querySelector('[data-demo-activity-section]');
+        const demoActivity = document.querySelector('[data-demo-activity]');
         const spinner = document.querySelector('[data-apply-spinner]');
         const stalled = document.querySelector('[data-apply-stalled]');
         const error = document.querySelector('[data-apply-error]');
         const failedActions = document.querySelector('[data-apply-failed-actions]');
-        let runtimeSwitching = false;
         let finished = false;
+        let pollTimer;
+        let activityJobId = null;
+        let renderedStageSignature = '';
+        const renderedActivityEntries = new Set();
 
-        const renderHistory = (entries, current) => {
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            window.clearTimeout(pollTimer);
+            window.location.replace(loginUrl);
+        };
+
+        const reloadAfterConnectionChange = () => {
+            if (finished) return;
+            finished = true;
+            window.clearTimeout(pollTimer);
+            window.location.reload();
+        };
+
+        const renderStages = (entries) => {
+            const visibleEntries = [];
+            entries.filter((entry) => entry?.detail).forEach((entry) => {
+                const normalized = entry.stage === 'demo-data'
+                    ? {...entry, detail: 'Generating demo data and keys.'}
+                    : entry;
+                if (visibleEntries.at(-1)?.stage === normalized.stage) return;
+                visibleEntries.push(normalized);
+            });
+            const stageSignature = visibleEntries.map((entry) => `${entry.stage}:${entry.detail}`).join('|');
+            if (stageSignature === renderedStageSignature) return;
+            renderedStageSignature = stageSignature;
             history.replaceChildren();
-            [...entries, current].filter((entry) => entry?.detail).forEach((entry, index, items) => {
+            visibleEntries.forEach((entry, index, items) => {
                 const item = document.createElement('li');
                 item.textContent = entry.detail;
                 if (index === items.length - 1) item.classList.add('is-current');
@@ -63,46 +100,77 @@
             });
         };
 
+        const renderDemoActivity = (status) => {
+            if (activityJobId !== status.job_id) {
+                activityJobId = status.job_id;
+                renderedActivityEntries.clear();
+                demoActivity.replaceChildren();
+            }
+
+            const demoEntries = (status.activity || []).filter((entry) => entry.stage === 'demo-data');
+            const remainingScroll = demoActivity.scrollHeight - demoActivity.scrollTop - demoActivity.clientHeight;
+            const keepAtLatest = remainingScroll < 48;
+
+            demoEntries.forEach((entry) => {
+                if (!entry?.detail) return;
+                const entryId = entry.created_at || entry.completed_at || `${entry.stage}:${entry.detail}`;
+                if (renderedActivityEntries.has(entryId)) return;
+                renderedActivityEntries.add(entryId);
+                const item = document.createElement('li');
+                item.textContent = entry.detail;
+                demoActivity.append(item);
+            });
+
+            demoSection.hidden = demoActivity.children.length === 0;
+            if (keepAtLatest) demoActivity.scrollTop = demoActivity.scrollHeight;
+        };
+
         const render = (status) => {
+            if (status.state === 'complete') {
+                finish();
+                return;
+            }
+
             const percentage = Number(status.progress || 0);
             detail.textContent = status.detail || 'Applying configuration...';
             progress.style.width = `${percentage}%`;
             progress.textContent = `${percentage}%`;
-            renderHistory(status.history || [], {detail: status.detail});
-            runtimeSwitching = status.state === 'switching';
-
+            renderStages([...(status.history || []), {stage: status.stage, detail: status.detail}]);
+            renderDemoActivity(status);
             const updatedAt = Date.parse(status.updated_at || '');
             stalled.hidden = !Number.isFinite(updatedAt) || Date.now() - updatedAt < 300000;
 
             if (status.state === 'failed') {
                 finished = true;
+                window.clearTimeout(pollTimer);
                 spinner.hidden = true;
                 progress.classList.add('bg-danger');
                 error.textContent = status.detail || 'Setup failed.';
                 error.hidden = false;
                 failedActions.hidden = false;
-            } else if (status.state === 'complete') {
-                finished = true;
-                window.location.assign(loginUrl);
             }
         };
 
         const poll = async () => {
             if (finished) return;
+            const controller = new AbortController();
+            const timeout = window.setTimeout(() => controller.abort(), 8000);
             try {
-                const response = await fetch(statusUrl, {cache: 'no-store', headers: {'Accept': 'application/json'}});
+                const response = await fetch(statusUrl, {
+                    cache: 'no-store',
+                    headers: {'Accept': 'application/json'},
+                    signal: controller.signal,
+                });
                 if (response.redirected || !response.ok) {
-                    if (runtimeSwitching) window.location.assign(loginUrl);
-                    throw new Error('Progress endpoint is temporarily unavailable.');
+                    throw new Error('Setup status endpoint is temporarily unavailable.');
                 }
                 render(await response.json());
             } catch (pollError) {
-                if (runtimeSwitching) {
-                    window.location.assign(loginUrl);
-                    return;
-                }
+                reloadAfterConnectionChange();
+            } finally {
+                window.clearTimeout(timeout);
+                if (!finished) pollTimer = window.setTimeout(poll, 1000);
             }
-            window.setTimeout(poll, 1000);
         };
 
         poll();

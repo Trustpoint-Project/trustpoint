@@ -6,9 +6,8 @@ DJANGO_APP_DIR="$APP_DIR/trustpoint"
 LOG_DIR="/var/log/trustpoint"
 TRUSTPOINT_LOG="$APP_DIR/trustpoint/media/log/trustpoint.log"
 OPERATIONAL_ENV_FILE="${1:-${TRUSTPOINT_OPERATIONAL_ENV_FILE:-/var/lib/trustpoint/bootstrap/operational.env}}"
-OPERATIONAL_PORT="${TRUSTPOINT_OPERATIONAL_GUNICORN_PORT:-8001}"
-BOOTSTRAP_PORT="${TRUSTPOINT_BOOTSTRAP_GUNICORN_PORT:-8000}"
-NGINX_SITE="/etc/nginx/sites-available/trustpoint"
+OPERATIONAL_PORT=8001
+BOOTSTRAP_PORT=8000
 OPERATIONAL_GUNICORN_PID_FILE="/run/trustpoint-operational-gunicorn.pid"
 OPERATIONAL_QCLUSTER_PID_FILE="/run/trustpoint-operational-qcluster.pid"
 UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/trustpoint-uv-cache}"
@@ -188,35 +187,6 @@ wait_for_operational_http() {
     log INFO "Operational HTTP endpoint is reachable"
 }
 
-switch_nginx_proxy() {
-    if [ ! -f "$NGINX_SITE" ]; then
-        log ERROR "Nginx site config not found: $NGINX_SITE"
-        exit 7
-    fi
-
-    if ! grep -Eq 'proxy_pass http://127\.0\.0\.1:[0-9]+;' "$NGINX_SITE"; then
-        log ERROR "Could not find the Trustpoint proxy_pass line in $NGINX_SITE"
-        exit 8
-    fi
-
-    log INFO "Switching nginx upstream to operational Gunicorn on port $OPERATIONAL_PORT"
-    sed -i -E "s#proxy_pass http://127\.0\.0\.1:[0-9]+;#proxy_pass http://127.0.0.1:${OPERATIONAL_PORT};#" "$NGINX_SITE"
-
-    if ! nginx -t; then
-        log ERROR "Nginx rejected the operational proxy configuration"
-        sed -i -E "s#proxy_pass http://127\.0\.0\.1:[0-9]+;#proxy_pass http://127.0.0.1:${BOOTSTRAP_PORT};#" "$NGINX_SITE"
-        nginx -t >/dev/null 2>&1 || true
-        exit 9
-    fi
-
-    if [ -f /run/nginx.pid ] && [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid)" 2>/dev/null; then
-        nginx -s reload
-        log INFO "Nginx reloaded on operational runtime"
-    else
-        log INFO "Nginx is not running; operational proxy config will be used on next nginx start"
-    fi
-}
-
 schedule_bootstrap_gunicorn_shutdown() {
     log INFO "Scheduling bootstrap Gunicorn shutdown on port $BOOTSTRAP_PORT"
     nohup bash -c "sleep 10; ps -eo pid=,args= | awk '/gunicorn/ && /0\\.0\\.0\\.0:${BOOTSTRAP_PORT}/ && !/awk/ {print \$1}' | xargs -r kill -TERM" >/dev/null 2>&1 &
@@ -230,7 +200,6 @@ apply_operational_tls_files
 start_qcluster
 start_operational_gunicorn
 wait_for_operational_http
-switch_nginx_proxy
 schedule_bootstrap_gunicorn_shutdown
 
-log INFO "Trustpoint runtime switched to operational mode without container restart"
+log INFO "Trustpoint operational runtime is ready; nginx will select it without reloading"
