@@ -7,6 +7,11 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 from cryptography.hazmat.primitives.hashes import SHA256
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
 from django.db import IntegrityError
 from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
 
@@ -18,7 +23,7 @@ from crypto.models import (
     CryptoProviderSoftwareConfigModel,
     SoftwareKeyEncryptionSource,
 )
-from crypto.domain.specs import RsaKeySpec
+from crypto.domain.specs import MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from pki.models.credential import CredentialModel
 from signer.models import SignedMessageModel, SignerModel
 
@@ -311,6 +316,23 @@ class TestSignerModel:
         digest = bytes.fromhex('ab' * 32)
         signature = private_key.sign(digest, padding.PKCS1v15(), utils.Prehashed(SHA256()))
         private_key.public_key().verify(signature, digest, padding.PKCS1v15(), utils.Prehashed(SHA256()))
+
+    @pytest.mark.skipif(mldsa is None, reason='cryptography ML-DSA classes unavailable')
+    def test_create_backend_managed_mldsa_signer(self, software_crypto_backend):
+        """Managed ML-DSA signer creation should succeed with an ML-DSA self-signed cert."""
+        signer = SignerModel.create_backend_managed_signer(
+            unique_name='managed-mldsa-signer',
+            key_spec=MlDsaKeySpec(variant=MlDsaVariant.MLDSA44),
+        )
+
+        assert signer.credential.managed_private_key is not None
+        assert signer.credential.hash_algorithm is None
+
+        private_key = signer.credential.get_private_key()
+        signature = private_key.sign(b'mldsa signer test payload')
+
+        certificate_public_key = signer.credential.get_certificate().public_key()
+        certificate_public_key.verify(signature=signature, data=b'mldsa signer test payload')
 
     def test_create_backend_managed_signer_cleans_up_key_on_persistence_failure(
         self,
