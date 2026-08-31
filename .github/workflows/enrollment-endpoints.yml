@@ -41,7 +41,7 @@ jobs:
       - name: Cache OpenSSL build
         if: steps.openssl.outputs.needs_build == 'true'
         id: openssl-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/openssl-local
           key: openssl-${{ env.OPENSSL_VERSION }}-v2-${{ runner.os }}-${{ runner.arch }}
