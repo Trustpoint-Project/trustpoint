@@ -665,7 +665,9 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get the keyword arguments for instantiating the form."""
         kwargs = super().get_form_kwargs()
-        security_config, _ = SecurityConfig.objects.get_or_create(pk=1)
+        security_config, created = SecurityConfig.objects.get_or_create(pk=1)
+        if created:
+            security_config.apply_security_settings()
         kwargs['instance'] = security_config
         return kwargs
 

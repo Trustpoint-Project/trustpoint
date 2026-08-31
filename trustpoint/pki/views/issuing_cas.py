@@ -84,8 +84,8 @@ if TYPE_CHECKING:
 class CmpContextParams(NamedTuple):
     """Parameters for creating a CMP certificate request context."""
     subject: x509.Name
-    public_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey
-    private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
+    public_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey | Any  # Any for ML-DSA keys
+    private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any  # Any for ML-DSA keys
     recipient_name: str
     extensions: list[x509.Extension[x509.ExtensionType]] | None
     sender_kid: int | None
@@ -1112,7 +1112,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
         cmp_params = CmpContextParams(
             subject=csr_subject,
-            public_key=cast('rsa.RSAPublicKey | ec.EllipticCurvePublicKey', csr_public_key),
+            public_key=cast('rsa.RSAPublicKey | ec.EllipticCurvePublicKey | Any', csr_public_key),
             private_key=private_key,
             recipient_name=recipient_name,
             extensions=csr_extensions,
@@ -1257,14 +1257,14 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         else:
             return recipient_name
 
-    def _load_private_key(self, ca: CaModel) -> rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey:
+    def _load_private_key(self, ca: CaModel) -> rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any:
         """Load the private key from the CA's credential."""
         if not ca.credential or not ca.credential.private_key:
             msg = 'No private key available for CA credential'
             raise ValueError(msg)
 
         return cast(
-            'rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey',
+            'rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any',
             serialization.load_pem_private_key(
                 ca.credential.private_key.encode(),
                 password=None,

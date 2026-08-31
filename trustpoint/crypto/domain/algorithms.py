@@ -9,12 +9,18 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, cast
 
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, mldsa, rsa
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-type SupportedPublicKey = rsa.RSAPublicKey | ec.EllipticCurvePublicKey
+type SupportedPublicKey = (
+    rsa.RSAPublicKey
+    | ec.EllipticCurvePublicKey
+    | mldsa.MLDSA44PublicKey
+    | mldsa.MLDSA65PublicKey
+    | mldsa.MLDSA87PublicKey
+)
 
 
 class KeyAlgorithm(StrEnum):
@@ -22,6 +28,7 @@ class KeyAlgorithm(StrEnum):
 
     RSA = 'rsa'
     EC = 'ec'
+    MLDSA = 'mldsa'
 
 
 class EllipticCurveName(StrEnum):
@@ -62,6 +69,7 @@ class SignatureAlgorithm(StrEnum):
 
     RSA_PKCS1V15 = 'rsa-pkcs1v15'
     ECDSA = 'ecdsa'
+    MLDSA = 'mldsa'
 
 
 _CRYPTOGRAPHY_HASHES: dict[HashAlgorithmName, Callable[[], hashes.HashAlgorithm]] = {

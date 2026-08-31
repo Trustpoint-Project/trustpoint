@@ -314,7 +314,7 @@ class TestDeviceCreateOnboardingView:
             'common_name': 'onboarding-device',
             'serial_number': 'SN77777',
             'domain': domain.pk,
-            'onboarding_protocol': str(OnboardingProtocol.MANUAL.value),
+            'onboarding_protocol': str(OnboardingProtocol.CMP_SHARED_SECRET.value),
             'onboarding_pki_protocols': ['1'],  # CMP
         }
 
@@ -352,7 +352,7 @@ class TestOpcUaGdsCreateOnboardingView:
             'common_name': 'opcua-onboarding-device',
             'serial_number': 'SN66666',
             'domain': domain.pk,
-            'onboarding_protocol': str(OnboardingProtocol.MANUAL.value),
+            'onboarding_protocol': str(OnboardingProtocol.EST_USERNAME_PASSWORD.value),
             'onboarding_pki_protocols': ['2'],  # EST
         }
 

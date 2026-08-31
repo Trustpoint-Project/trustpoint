@@ -12,6 +12,11 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
 from request.operation_processor.csr_build import CsrBuilder, ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstCaCsrSignProcessor, EstDeviceCsrSignProcessor
 from request.operation_processor.revoke_cert import CertificateRevocationProcessor
@@ -290,6 +295,26 @@ class TestEstCaCsrSignProcessor:
 
         proc = EstCaCsrSignProcessor()
         proc.process_operation(ctx)
+        assert isinstance(proc.get_signed_csr(), x509.CertificateSigningRequest)
+
+    @pytest.mark.skipif(mldsa is None, reason='cryptography ML-DSA classes unavailable')
+    def test_valid_signing_allows_none_hash_for_mldsa(self) -> None:
+        """ML-DSA CSR signing must use algorithm=None when signature suite has no hash."""
+        assert mldsa is not None
+        key = mldsa.MLDSA44PrivateKey.generate()
+        cred = Mock()
+        cred.certificate = Mock()
+        cred.get_private_key.return_value = key
+        cred.get_certificate.return_value = Mock()
+
+        ctx = self._make_context()
+        ctx.issuer_credential = cred
+
+        proc = EstCaCsrSignProcessor()
+        with patch('request.operation_processor.csr_sign.SignatureSuite.from_certificate') as suite_mock:
+            suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=None))
+            proc.process_operation(ctx)
+
         assert isinstance(proc.get_signed_csr(), x509.CertificateSigningRequest)
 
     def test_get_signed_csr_before_process_raises_value_error(self) -> None:

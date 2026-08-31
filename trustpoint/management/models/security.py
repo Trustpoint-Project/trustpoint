@@ -24,6 +24,7 @@ class _SecurityModeDefaults(TypedDict):
 
     rsa_minimum_key_size: int | None
     not_permitted_ecc_curve_oids: list[str]
+    not_permitted_mldsa_variant_oids: list[str]
     not_permitted_signature_algorithm_oids: list[str]
     max_cert_validity_days: int | None
     max_crl_validity_days: int | None
@@ -94,6 +95,13 @@ class SecurityConfig(models.Model):
         SHA384 = HashAlgorithm.SHA384.dotted_string, _('SHA-384')
         SHA512 = HashAlgorithm.SHA512.dotted_string, _('SHA-512')
 
+    class MlDsaVariantChoices(models.TextChoices):
+        """Selectable ML-DSA variants from :class:`trustpoint_core.oid.PublicKeyAlgorithmOid`."""
+
+        MLDSA44 = PublicKeyAlgorithmOid.ML_DSA_44.dotted_string, _('ML-DSA-44')
+        MLDSA65 = PublicKeyAlgorithmOid.ML_DSA_65.dotted_string, _('ML-DSA-65')
+        MLDSA87 = PublicKeyAlgorithmOid.ML_DSA_87.dotted_string, _('ML-DSA-87')
+
     # ------------------------------------------------------------------
     # Model fields
     # ------------------------------------------------------------------
@@ -119,7 +127,7 @@ class SecurityConfig(models.Model):
         default=2048,
         help_text=_(
             'Minimum RSA key size in bits that certificates must meet. '
-            'Set to null to disallow RSA entirely.'
+            'Set to null to disallow RSA entirely.',
         ),
     )
 
@@ -128,7 +136,16 @@ class SecurityConfig(models.Model):
         blank=True,
         help_text=_(
             'JSON list of ECC curve OIDs (from trustpoint_core.oid.NamedCurve) '
-            'not permitted at the current security level.'
+            'not permitted at the current security level.',
+        ),
+    )
+
+    not_permitted_mldsa_variant_oids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=_(
+            'JSON list of ML-DSA variant OIDs (from trustpoint_core.oid.PublicKeyAlgorithmOid) '
+            'not permitted at the current security level.',
         ),
     )
 
@@ -137,7 +154,7 @@ class SecurityConfig(models.Model):
         blank=True,
         help_text=_(
             'JSON list of hash algorithm OIDs (from trustpoint_core.oid.HashAlgorithm) '
-            'not permitted at the current security level.'
+            'not permitted at the current security level.',
         ),
     )
 
@@ -149,7 +166,7 @@ class SecurityConfig(models.Model):
         default=None,
         help_text=_(
             'Maximum certificate validity period in days. '
-            'Set to null for no limit.'
+            'Set to null for no limit.',
         ),
     )
 
@@ -159,7 +176,7 @@ class SecurityConfig(models.Model):
         default=None,
         help_text=_(
             'Maximum CRL validity period in days. '
-            'Set to null for no limit.'
+            'Set to null for no limit.',
         ),
     )
 
@@ -184,7 +201,7 @@ class SecurityConfig(models.Model):
         default=False,
         help_text=_(
             'Allow existing private-key credentials to be imported. Imported keys require '
-            'PKCS#11-backed application-secret protection and are stored encrypted in the database.'
+            'PKCS#11-backed application-secret protection and are stored encrypted in the database.',
         ),
     )
 
@@ -195,7 +212,7 @@ class SecurityConfig(models.Model):
         blank=True,
         help_text=_(
             'JSON list of allowed NoOnboardingPkiProtocol integer values '
-            '(bitmask flags: CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32).'
+            '(bitmask flags: CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32).',
         ),
     )
 
@@ -205,7 +222,8 @@ class SecurityConfig(models.Model):
         help_text=_(
             'JSON list of allowed OnboardingProtocol integer values '
             '(MANUAL=0, CMP_IDEVID=1, CMP_SHARED_SECRET=2, EST_IDEVID=3, '
-            'EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7, REST_USERNAME_PASSWORD=8).'
+            'EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7, '
+            'REST_USERNAME_PASSWORD=8, AGENT=9).',
         ),
     )
 
@@ -214,9 +232,9 @@ class SecurityConfig(models.Model):
     # ------------------------------------------------------------------
 
     #: All OnboardingProtocol values
-    _ALL_ONBOARDING_PROTOCOLS: ClassVar[list[int]] = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    _ALL_ONBOARDING_PROTOCOLS: ClassVar[list[int]] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     #: All OnboardingProtocol values except MANUAL (0)
-    _ONBOARDING_PROTOCOLS_NO_MANUAL: ClassVar[list[int]] = [1, 2, 3, 4, 5, 6, 7, 8]
+    _ONBOARDING_PROTOCOLS_NO_MANUAL: ClassVar[list[int]] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     _MODE_DEFAULTS: ClassVar[dict[str, _SecurityModeDefaults]] = {
         # ----------------------------------------------------------------
@@ -225,6 +243,7 @@ class SecurityConfig(models.Model):
         SecurityModeChoices.LAB: {
             'rsa_minimum_key_size': 0,             # any RSA key size allowed
             'not_permitted_ecc_curve_oids': [],
+            'not_permitted_mldsa_variant_oids': [],
             'not_permitted_signature_algorithm_oids': [],
             'max_cert_validity_days': None,        # no limit
             'max_crl_validity_days': None,         # no limit
@@ -241,6 +260,7 @@ class SecurityConfig(models.Model):
         SecurityModeChoices.BROWNFIELD: {
             'rsa_minimum_key_size': 1024,
             'not_permitted_ecc_curve_oids': [],
+            'not_permitted_mldsa_variant_oids': [],
             'not_permitted_signature_algorithm_oids': [],
             'max_cert_validity_days': 1825,        # 5 years
             'max_crl_validity_days': 365,
@@ -260,6 +280,7 @@ class SecurityConfig(models.Model):
                 NamedCurveChoices.SECP192R1,
                 NamedCurveChoices.SECP224R1,
             ],
+            'not_permitted_mldsa_variant_oids': [],
             'not_permitted_signature_algorithm_oids': [
                 HashAlgorithmChoices.MD5,
                 HashAlgorithmChoices.SHA1,
@@ -283,6 +304,7 @@ class SecurityConfig(models.Model):
                 NamedCurveChoices.SECP224R1,
                 NamedCurveChoices.SECP256K1,
             ],
+            'not_permitted_mldsa_variant_oids': [],
             'not_permitted_signature_algorithm_oids': [
                 HashAlgorithmChoices.MD5,
                 HashAlgorithmChoices.SHA1,
@@ -308,6 +330,7 @@ class SecurityConfig(models.Model):
                 NamedCurveChoices.SECP256R1,
                 NamedCurveChoices.BRAINPOOLP256R1,
             ],
+            'not_permitted_mldsa_variant_oids': [],
             'not_permitted_signature_algorithm_oids': [
                 HashAlgorithmChoices.MD5,
                 HashAlgorithmChoices.SHA1,
@@ -340,6 +363,7 @@ class SecurityConfig(models.Model):
 
         self.rsa_minimum_key_size = defaults['rsa_minimum_key_size']
         self.not_permitted_ecc_curve_oids = list(defaults['not_permitted_ecc_curve_oids'])
+        self.not_permitted_mldsa_variant_oids = list(defaults['not_permitted_mldsa_variant_oids'])
         self.not_permitted_signature_algorithm_oids = list(defaults['not_permitted_signature_algorithm_oids'])
         self.max_cert_validity_days = defaults['max_cert_validity_days']
         self.max_crl_validity_days = defaults['max_crl_validity_days']
@@ -351,6 +375,7 @@ class SecurityConfig(models.Model):
         self.save(update_fields=[
             'rsa_minimum_key_size',
             'not_permitted_ecc_curve_oids',
+            'not_permitted_mldsa_variant_oids',
             'not_permitted_signature_algorithm_oids',
             'max_cert_validity_days',
             'max_crl_validity_days',
@@ -366,6 +391,7 @@ class SecurityConfig(models.Model):
         """Return a JSON string of each mode's display-friendly threshold values for the settings JS."""
         ecc_labels = dict(cls.NamedCurveChoices.choices)
         sig_labels = dict(cls.HashAlgorithmChoices.choices)
+        mldsa_labels = dict(cls.MlDsaVariantChoices.choices)
 
         no_onboarding_labels: dict[int, str] = {c.value: str(c.label) for c in NoOnboardingPkiProtocol}
         onboarding_labels: dict[int, str] = {c.value: str(c.label) for c in OnboardingProtocol}
@@ -376,6 +402,9 @@ class SecurityConfig(models.Model):
                 'rsa_minimum_key_size': defaults['rsa_minimum_key_size'],
                 'not_permitted_ecc_curves': [
                     str(ecc_labels.get(oid, oid)) for oid in defaults['not_permitted_ecc_curve_oids']
+                ],
+                'not_permitted_mldsa_variants': [
+                    str(mldsa_labels.get(oid, oid)) for oid in defaults['not_permitted_mldsa_variant_oids']
                 ],
                 'not_permitted_signature_algorithms': [
                     str(sig_labels.get(oid, oid)) for oid in defaults['not_permitted_signature_algorithm_oids']
@@ -415,6 +444,7 @@ class SecurityConfig(models.Model):
         violations.extend(self._check_self_signed_cas(defaults, mode_label, CaModel))
         violations.extend(self._check_rsa_key_size(defaults, mode_label, CaModel))
         violations.extend(self._check_ecc_curves(defaults, mode_label, CaModel))
+        violations.extend(self._check_mldsa_variants(defaults, mode_label, CaModel))
         violations.extend(self._check_signature_algorithms(defaults, mode_label, CaModel))
         violations.extend(self._check_crl_validity(defaults, mode_label, CaModel))
         violations.extend(self._check_no_onboarding_protocols(defaults, mode_label, CaModel, DeviceModel))
@@ -429,7 +459,7 @@ class SecurityConfig(models.Model):
         """Return a violation if auto-generated PKI is enabled but not permitted in the target mode."""
         if not defaults['allow_auto_gen_pki'] and self.auto_gen_pki:
             return [str(_(
-                'Auto-generated PKI is currently enabled but is not permitted in %(mode)s.'
+                'Auto-generated PKI is currently enabled but is not permitted in %(mode)s.',
             ) % {'mode': mode_label})]
         return []
 
@@ -441,11 +471,11 @@ class SecurityConfig(models.Model):
         if defaults['allow_self_signed_ca']:
             return []
         names = ca_model.objects.filter(
-            credential__certificate__is_self_signed=True
+            credential__certificate__is_self_signed=True,
         ).values_list('unique_name', flat=True)
         return [
             str(_(
-                'Issuing CA "%(ca)s" has a self-signed certificate, which is not permitted in %(mode)s.'
+                'Issuing CA "%(ca)s" has a self-signed certificate, which is not permitted in %(mode)s.',
             ) % {'ca': n, 'mode': mode_label})
             for n in names
         ]
@@ -459,11 +489,11 @@ class SecurityConfig(models.Model):
         min_rsa: int | None = defaults['rsa_minimum_key_size']
         if min_rsa is None:
             names = ca_model.objects.filter(
-                credential__certificate__spki_algorithm_oid=rsa_oid
+                credential__certificate__spki_algorithm_oid=rsa_oid,
             ).values_list('unique_name', flat=True)
             return [
                 str(_(
-                    'Issuing CA "%(ca)s" uses an RSA key, which is not permitted in %(mode)s.'
+                    'Issuing CA "%(ca)s" uses an RSA key, which is not permitted in %(mode)s.',
                 ) % {'ca': n, 'mode': mode_label})
                 for n in names
             ]
@@ -477,7 +507,7 @@ class SecurityConfig(models.Model):
         return [
             str(_(
                 'Issuing CA "%(ca)s" has an RSA key of %(size)d bits, below the minimum of %(min)d bits '
-                'required by %(mode)s.'
+                'required by %(mode)s.',
             ) % {'ca': n, 'size': sz, 'min': min_rsa, 'mode': mode_label})
             for n, sz in rows
         ]
@@ -498,8 +528,27 @@ class SecurityConfig(models.Model):
         curve_labels = dict(SecurityConfig.NamedCurveChoices.choices)
         return [
             str(_(
-                'Issuing CA "%(ca)s" uses ECC curve %(curve)s, which is not permitted in %(mode)s.'
+                'Issuing CA "%(ca)s" uses ECC curve %(curve)s, which is not permitted in %(mode)s.',
             ) % {'ca': n, 'curve': curve_labels.get(oid, oid), 'mode': mode_label})
+            for n, oid in rows
+        ]
+
+    @staticmethod
+    def _check_mldsa_variants(
+        defaults: _SecurityModeDefaults, mode_label: str, ca_model: type[CaModel],
+    ) -> list[str]:
+        """Return violations for CA certificates using a blocked ML-DSA variant."""
+        blocked: list[str] = defaults['not_permitted_mldsa_variant_oids']
+        if not blocked:
+            return []
+        rows = ca_model.objects.filter(
+            credential__certificate__spki_algorithm_oid__in=blocked,
+        ).values_list('unique_name', 'credential__certificate__spki_algorithm_oid')
+        mldsa_labels = dict(SecurityConfig.MlDsaVariantChoices.choices)
+        return [
+            str(_(
+                'Issuing CA "%(ca)s" uses ML-DSA variant %(variant)s, which is not permitted in %(mode)s.',
+            ) % {'ca': n, 'variant': mldsa_labels.get(oid, oid), 'mode': mode_label})
             for n, oid in rows
         ]
 
@@ -533,7 +582,7 @@ class SecurityConfig(models.Model):
                 label = sig_oid
             violations.append(str(_(
                 'Issuing CA "%(ca)s" uses signature algorithm with hash %(hash)s, '
-                'which is not permitted in %(mode)s.'
+                'which is not permitted in %(mode)s.',
             ) % {'ca': ca_name, 'hash': label, 'mode': mode_label}))
         return violations
 
@@ -547,12 +596,12 @@ class SecurityConfig(models.Model):
             return []
         max_hours = float(max_days) * 24
         rows = ca_model.objects.filter(
-            crl_validity_hours__gt=max_hours
+            crl_validity_hours__gt=max_hours,
         ).values_list('unique_name', 'crl_validity_hours')
         return [
             str(_(
                 'Issuing CA "%(ca)s" has a CRL validity of %(hours).2f hours (%(days).1f days), '
-                'exceeding the maximum of %(max_days)d days in %(mode)s.'
+                'exceeding the maximum of %(max_days)d days in %(mode)s.',
             ) % {'ca': n, 'hours': h, 'days': h / 24, 'max_days': max_days, 'mode': mode_label})
             for n, h in rows
         ]
@@ -573,20 +622,20 @@ class SecurityConfig(models.Model):
                 continue
             label = proto_labels.get(proto.value, str(proto.value))
             for ca_name, bitmask in ca_model.objects.filter(
-                no_onboarding_config__isnull=False
+                no_onboarding_config__isnull=False,
             ).values_list('unique_name', 'no_onboarding_config__pki_protocols'):
                 if bitmask is not None and (bitmask & proto.value) == proto.value:
                     violations.append(str(_(
                         'Issuing CA "%(ca)s" uses no-onboarding protocol "%(protocol)s", '
-                        'which is not permitted in %(mode)s.'
+                        'which is not permitted in %(mode)s.',
                     ) % {'ca': ca_name, 'protocol': label, 'mode': mode_label}))
             for dev_name, bitmask in device_model.objects.filter(
-                no_onboarding_config__isnull=False
+                no_onboarding_config__isnull=False,
             ).values_list('common_name', 'no_onboarding_config__pki_protocols'):
                 if bitmask is not None and (bitmask & proto.value) == proto.value:
                     violations.append(str(_(
                         'Device "%(device)s" uses no-onboarding protocol "%(protocol)s", '
-                        'which is not permitted in %(mode)s.'
+                        'which is not permitted in %(mode)s.',
                     ) % {'device': dev_name, 'protocol': label, 'mode': mode_label}))
         return violations
 
@@ -598,14 +647,14 @@ class SecurityConfig(models.Model):
         permitted: list[int] = defaults['permitted_onboarding_protocols']
         proto_labels: dict[int, str] = {c.value: str(c.label) for c in OnboardingProtocol}
         rows = device_model.objects.filter(
-            onboarding_config__isnull=False
+            onboarding_config__isnull=False,
         ).exclude(
-            onboarding_config__onboarding_protocol__in=permitted
+            onboarding_config__onboarding_protocol__in=permitted,
         ).values_list('common_name', 'onboarding_config__onboarding_protocol')
         return [
             str(_(
                 'Device "%(device)s" uses onboarding protocol "%(protocol)s", '
-                'which is not permitted in %(mode)s.'
+                'which is not permitted in %(mode)s.',
             ) % {'device': n, 'protocol': proto_labels.get(p, str(p)), 'mode': mode_label})
             for n, p in rows
         ]

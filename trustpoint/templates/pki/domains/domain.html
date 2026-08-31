@@ -49,7 +49,7 @@
                     <a href="{% url 'pki:issuing_cas-detail' domain.issuing_ca.pk %}">{{ domain.issuing_ca.unique_name }}</a>
                 </td>
                 <td>{{ domain.devices.count }}</td>
-                <td>{{ domain.signature_suite }}</td>
+                <td>{{ domain.signature_suite_display }}</td>
                 <td>{{ domain.created_at|local_datetime }}</td>
 
                 <td><a href="config/{{ domain.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a></td>

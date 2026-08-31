@@ -15,8 +15,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_q.models import Schedule  # type: ignore[import-untyped]
-from django_q.tasks import schedule  # type: ignore[import-untyped]
+from django_q.models import Schedule
+from django_q.tasks import schedule
 from trustpoint_core import oid
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
@@ -745,6 +745,26 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is not None and self.credential.certificate is not None:
             return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
         return None
+
+    @property
+    def signature_suite_display(self) -> str:
+        """Get a safe string representation of the signature suite."""
+        try:
+            ss = self.signature_suite
+            if ss is None:
+                return '-'
+            if hasattr(ss, 'signature_algorithm') and ss.signature_algorithm:
+                sig_alg = ss.signature_algorithm
+                if hasattr(sig_alg, 'value'):
+                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_44.dotted_string:
+                        return 'ML-DSA-44'
+                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_65.dotted_string:
+                        return 'ML-DSA-65'
+                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_87.dotted_string:
+                        return 'ML-DSA-87'
+            return str(ss)
+        except ValueError:
+            return '-'
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo | None:
