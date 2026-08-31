@@ -68,9 +68,11 @@ In Nginx Proxy Manager:
 Create a Web UI automation device with:
 
 ```text
-Base URL: http://127.0.0.1:8181
+Base URL: https://webui-test.local:8443
 Authentication: Form-based login
 ```
+
+The fingerprint verification step checks the configured HTTPS base URL itself, so the base URL must point at the live certificate endpoint that is expected to serve the renewed certificate.
 
 Assign a JSON automation profile that:
 
@@ -79,4 +81,4 @@ Assign a JSON automation profile that:
 3. Uploads the PEM certificate and private key.
 4. Saves the certificate.
 5. Assigns it to the proxy host.
-6. Verifies the certificate fingerprint at `https://webui-test.local:8443`.
+6. Verifies the certificate fingerprint on the same HTTPS endpoint (`https://webui-test.local:8443`).

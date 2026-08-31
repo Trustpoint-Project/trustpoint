@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -59,6 +60,13 @@ ALLOWED_SECRET_PLACEHOLDERS = frozenset(
         '{{ private_key_password }}',
     }
 )
+
+_RUNTIME_VARIABLE_PATTERN = re.compile(r'^\{\{\s*[a-zA-Z0-9_]+\s*\}\}$')
+
+
+def _is_runtime_variable(value: str) -> bool:
+    """Return whether a value is a runner-provided template variable reference."""
+    return bool(_RUNTIME_VARIABLE_PATTERN.fullmatch(value))
 
 STEP_SCHEMA: dict[str, Any] = {
     'type': 'object',
@@ -234,6 +242,15 @@ def _validate_operation(operation_name: str, operation: dict[str, Any], paths: d
             if isinstance(value, str) and value not in ALLOWED_SECRET_PLACEHOLDERS:
                 raise ValidationError(
                     {'profile': [_('Sensitive step %(step_id)s must use a secret placeholder.') % {
+                        'step_id': step_id,
+                    }]}
+                )
+
+        if step.get('action') == 'upload':
+            artifact = step.get('artifact')
+            if isinstance(artifact, str) and not _is_runtime_variable(artifact):
+                raise ValidationError(
+                    {'profile': [_('Upload step %(step_id)s must use a runner-provided variable artifact.') % {
                         'step_id': step_id,
                     }]}
                 )

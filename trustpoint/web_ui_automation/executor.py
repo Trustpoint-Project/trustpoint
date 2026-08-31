@@ -455,10 +455,15 @@ def _build_target_url(base_url: str, profile: dict[str, Any], step: dict[str, An
 
 
 def _assert_same_origin(base_url: str, target_url: str) -> None:
-    """Reject redirects to another scheme, host, or port."""
+    """Reject redirects to another scheme, host, or port, normalizing default ports."""
     base = urlsplit(base_url)
     target = urlsplit(target_url)
-    if (base.scheme, base.hostname, base.port) != (target.scheme, target.hostname, target.port):
+
+    def _normalized_origin(parts: Any) -> tuple[str, str | None, int]:
+        default_port = 443 if parts.scheme == 'https' else 80 if parts.scheme == 'http' else -1
+        return (parts.scheme, parts.hostname, parts.port or default_port)
+
+    if _normalized_origin(base) != _normalized_origin(target):
         msg = 'The device redirected the browser outside the configured origin.'
         raise ValueError(msg)
 

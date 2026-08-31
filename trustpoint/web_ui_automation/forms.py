@@ -154,7 +154,7 @@ class WebUiAutomationDeviceCreateForm(
             password=self.cleaned_data['password'],
             private_key_password=self.cleaned_data.get(
                 'private_key_password',
-                '',
+                automation_device.get_private_key_password(),
             ),
         )
 
@@ -378,6 +378,10 @@ class WebUiAutomationDeviceUpdateForm(forms.Form):
         if username or password:
             current_username = username or automation_device.get_username()
             current_password = password or automation_device.get_password()
-            automation_device.set_credentials(current_username, current_password)
+            automation_device.set_credentials(
+                current_username,
+                current_password,
+                private_key_password=automation_device.get_private_key_password(),
+            )
 
         return automation_device

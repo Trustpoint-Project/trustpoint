@@ -7,11 +7,9 @@ from __future__ import annotations
 
 import contextlib
 import json
-import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from django import db
 from django.contrib import messages
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -25,7 +23,6 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_WEB_AUTOMATION_SUBCATEGORY, PageContextMixin
 from web_ui_automation.audit import WebUiAuditOperation, write_audit_entry
-from web_ui_automation.executor import execute_job
 from web_ui_automation.forms import (
     ConfirmExecutionForm,
     EnableAutomaticRenewalForm,
@@ -720,18 +717,7 @@ class ExecuteJobNowView(WebUiPageMixin, LoggerMixin, View):
             messages.error(request, f'Job cannot be executed. Current status: {job.get_status_display()}')
             return HttpResponseRedirect(reverse('web_ui_automation:job-detail', kwargs={'pk': pk}))
 
-        def run_job() -> None:
-            """Run the job in a separate thread with proper database connection."""
-            db.connections.close_all()
-            try:
-                execute_job(job.pk)
-            finally:
-                db.connections.close_all()
-
-        thread = threading.Thread(target=run_job, daemon=True)
-        thread.start()
-
-        messages.success(request, 'Job execution started in background.')
+        messages.error(request, 'Immediate execution is disabled; use the queue or a dedicated worker process.')
         return HttpResponseRedirect(reverse('web_ui_automation:job-detail', kwargs={'pk': pk}))
 
 
@@ -848,15 +834,22 @@ class RenewalConfigView(WebUiPageMixin, LoggerMixin, DetailView[WebUiAutomationA
         """Save renewal configuration."""
         assignment = get_object_or_404(WebUiAutomationAssignedProfile, pk=pk, automation_device_id=device_id)
 
+        try:
+            renewal_days_raw = request.POST.get('renewal_days', assignment.renewal_days)
+            assignment.renewal_days = int(renewal_days_raw)
+        except (TypeError, ValueError):
+            messages.error(request, 'Renewal days must be a positive integer.')
+            return HttpResponseRedirect(
+                reverse('web_ui_automation:renewal-config', kwargs={'device_id': device_id, 'pk': pk})
+            )
+
         assignment.automatic_renewal_enabled = request.POST.get('automatic_renewal_enabled') == 'on'
         assignment.renewal_mode = request.POST.get('renewal_mode', assignment.renewal_mode)
-        assignment.renewal_days = int(request.POST.get('renewal_days', assignment.renewal_days))
 
         next_update = request.POST.get('next_certificate_update_scheduled')
         if next_update:
             naive_dt = parse_datetime(next_update)
             if naive_dt:
-                # Make datetime timezone-aware
                 assignment.next_certificate_update_scheduled = timezone.make_aware(naive_dt)
             else:
                 assignment.next_certificate_update_scheduled = None
@@ -890,9 +883,10 @@ class RevokeCertificateView(WebUiPageMixin, LoggerMixin, View):
                 reverse('web_ui_automation:device-clm', kwargs={'pk': device_id})
             )
 
-        # TODO (FHK): Certificate revocation logic to be implemented  # noqa: FIX002
-
-        messages.success(request, f'Certificate revocation initiated for {assignment.workflow_definition.name}.')
+        messages.error(
+            request,
+            'Certificate revocation is not implemented for Web UI automation yet; no revocation was executed.',
+        )
         return HttpResponseRedirect(
             reverse('web_ui_automation:device-clm', kwargs={'pk': device_id})
         )

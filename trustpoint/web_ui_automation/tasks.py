@@ -17,6 +17,7 @@ def execute_web_ui_automation_job(job_id: int) -> None:
     """Django-Q2 entry point for executing one queued automation job."""
     execute_job(job_id)
 
+
 def enqueue_due_renewals() -> int:
     """Queue all eligible automatic renewals that are currently due."""
     queued = 0

@@ -178,3 +178,25 @@ def test_type_sensitive_literal_is_rejected(valid_profile: dict[str, object]) ->
     )
     with pytest.raises(ValidationError):
         validate_profile_schema(profile)
+
+
+def test_upload_artifact_requires_placeholder(valid_profile: dict[str, object]) -> None:
+    """Reject upload steps that target local filesystem paths instead of runner variables."""
+    profile = copy.deepcopy(valid_profile)
+    profile['operations']['onboard']['steps'].append(
+        {
+            'id': 'upload-cert',
+            'action': 'upload',
+            'selector': 'input[type="file"]',
+            'artifact': '/etc/passwd',
+        }
+    )
+    with pytest.raises(ValidationError):
+        validate_profile_schema(profile)
+
+
+def test_same_origin_treats_default_ports_as_equivalent() -> None:
+    """Treat https://host and https://host:443 as the same origin."""
+    from web_ui_automation.executor import _assert_same_origin
+
+    _assert_same_origin('https://example.com', 'https://example.com:443/path')
