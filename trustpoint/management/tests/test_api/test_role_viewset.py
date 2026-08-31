@@ -12,7 +12,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from users.models import GroupProfile
+from users.models import GroupProfile, Role
 
 User = get_user_model()
 
@@ -92,7 +92,7 @@ class TestRoleViewSetAuthorization:
 class TestRoleViewSetAvailablePermissions:
     """Tests for GET /api/roles/available-permissions/."""
 
-    def test_returns_the_four_app_permissions(self, superuser_client: APIClient) -> None:
+    def test_returns_all_app_permissions(self, superuser_client: APIClient) -> None:
         """Returns exactly the AppPermission-scoped permissions with id and name."""
         response = superuser_client.get(reverse('roles-available-permissions'))
         assert response.status_code == status.HTTP_200_OK, response.data
@@ -145,14 +145,24 @@ class TestRoleViewSetUpdate:
         admin_group.refresh_from_db()
         assert admin_group.name == 'Admin'
 
-    def test_updating_admin_role_permissions_without_renaming_is_allowed(
+    def test_updating_admin_role_permissions_is_blocked(
         self, superuser_client: APIClient, admin_group: Group,
     ) -> None:
-        """Non-rename updates to the Admin role (e.g. permissions) are still allowed."""
+        """The built-in Admin role's permissions cannot be changed."""
         perm_id = Permission.objects.filter(content_type__model='apppermission').first().pk
         url = reverse('roles-detail', args=[admin_group.pk])
         response = superuser_client.patch(url, {'permissions': [perm_id]}, format='json')
-        assert response.status_code == status.HTTP_200_OK, response.data
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_updating_service_account_role_is_blocked(self, superuser_client: APIClient) -> None:
+        """The built-in Service Account role's permissions cannot be changed."""
+        service_group = Role.get_service_group()
+        url = reverse('roles-detail', args=[service_group.pk])
+
+        response = superuser_client.patch(url, {'permissions': []}, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert list(service_group.permissions.values_list('codename', flat=True)) == ['use_rest_api']
 
 
 @pytest.mark.django_db

@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+import base64
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth import authenticate
@@ -152,6 +152,17 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
 
         if grant_type == 'client_credentials':
             if not client_id or not client_secret:
+                auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+                if auth_header.lower().startswith('basic '):
+                    try:
+                        decoded = base64.b64decode(auth_header[6:], validate=True).decode('utf-8')
+                        client_id, client_secret = decoded.split(':', 1)
+                        client_id = client_id.strip()
+                        client_secret = client_secret.strip()
+                    except (ValueError, UnicodeDecodeError):
+                        client_id = ''
+                        client_secret = ''
+            if not client_id or not client_secret:
                 return Response(
                     {
                         'error': 'invalid_request',
@@ -160,6 +171,19 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             return self._handle_service_account(request, client_id, client_secret)
+
+        user = authenticate(
+            request=request,
+            username=data.get('username'),
+            password=data.get('password'),
+        )
+        if user is not None and not user.has_perm('users.use_rest_api'):
+            return Response(
+                {
+                    'detail': 'User is not permitted to use the REST API.',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         return super().post(request, *args, **kwargs)
 
@@ -196,14 +220,22 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        refresh = RefreshToken.for_user(user)
-        access_token = str(refresh.access_token)
+        if not user.has_perm('users.use_rest_api'):
+            return Response(
+                {
+                    'error': 'invalid_client',
+                    'error_description': 'Service account is not permitted to use the REST API',
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
-        expires_in = int(timedelta(hours=1).total_seconds())
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+        expires_in = int(access_token.lifetime.total_seconds())
 
         return Response(
             {
-                'access': access_token,
+                'access': str(access_token),
                 'token_type': 'Bearer',
                 'expires_in': expires_in,
             },

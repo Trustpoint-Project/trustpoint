@@ -68,26 +68,41 @@
                     </div>
 
                     {# --- Permissions dual-listbox (hidden when superuser is checked) --- #}
-                    <div id="permissions-section">
-                        {% include 'management/includes/dual_listbox.html' %}
-                    </div>
+                    {% if is_protected %}
+                        <div class="mb-3">
+                            <label class="form-label">{% trans 'Permissions' %}</label>
+                            <ul class="list-group">
+                                {% for permission in fixed_permissions %}
+                                    <li class="list-group-item">{{ permission.name }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% else %}
+                        <div id="permissions-section">
+                            {% include 'management/includes/dual_listbox.html' %}
+                        </div>
+                    {% endif %}
 
                     <div class="d-flex justify-content-end gap-2 mt-4">
                         <a href="{% url 'management:role_management' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
-                        <button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+                        {% if not is_protected %}
+                            <button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+                        {% endif %}
                     </div>
                 </form>
-                <script>
-                (function () {
-                    const cb = document.getElementById('superuser-check') || document.getElementById('{{ form.grants_superuser.id_for_label }}');
-                    const section = document.getElementById('permissions-section');
-                    if (cb && section) {
-                        function toggle() { section.style.display = cb.checked ? 'none' : ''; }
-                        cb.addEventListener('change', toggle);
-                        toggle();
-                    }
-                })();
-                </script>
+                {% if not is_protected %}
+                    <script>
+                    (function () {
+                        const cb = document.getElementById('superuser-check') || document.getElementById('{{ form.grants_superuser.id_for_label }}');
+                        const section = document.getElementById('permissions-section');
+                        if (cb && section) {
+                            function toggle() { section.style.display = cb.checked ? 'none' : ''; }
+                            cb.addEventListener('change', toggle);
+                            toggle();
+                        }
+                    })();
+                    </script>
+                {% endif %}
             </div>
         </div>
     </div>

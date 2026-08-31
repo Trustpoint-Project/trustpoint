@@ -31,8 +31,8 @@ from trustpoint.views.base import ContextDataMixin, SuperuserRequiredMixin
 from users.form import GroupPermissionForm
 from users.models import Role
 
-# Only Admin is protected — all other roles can be edited/deleted.
-_PROTECTED_GROUP_NAMES: frozenset[str] = frozenset({Role.ADMIN.value})
+# Built-in roles cannot be renamed or deleted.
+_PROTECTED_GROUP_NAMES: frozenset[str] = frozenset({Role.ADMIN.value, Role.SERVICE.value})
 
 
 class RoleContextMixin(ContextDataMixin):
@@ -123,6 +123,12 @@ class RoleEditView(
         """
         context = super().get_context_data(**kwargs)
         context['is_protected'] = self.object.name in _PROTECTED_GROUP_NAMES
+        context['is_service_role'] = self.object.name == Role.SERVICE.value
+        context['fixed_permissions'] = (
+            self.object.permissions.order_by('name')
+            if context['is_service_role']
+            else Permission.objects.filter(content_type__model='apppermission').order_by('name')
+        )
         return context
 
     def form_valid(self, form: BaseModelForm[Group]) -> HttpResponse:
@@ -140,12 +146,11 @@ class RoleEditView(
             role's name was changed.
         """
         original_name = self.get_object().name
-        new_name = form.cleaned_data['name']
 
-        if original_name in _PROTECTED_GROUP_NAMES and new_name != original_name:
+        if original_name in _PROTECTED_GROUP_NAMES:
             messages.error(
                 self.request,
-                _('Cannot rename "%(name)s": this is a built-in role.') % {'name': original_name},
+                _('Cannot modify "%(name)s": its permissions are fixed.') % {'name': original_name},
             )
             return self.render_to_response(self.get_context_data(form=form))
 
@@ -221,8 +226,13 @@ class RoleViewSet(viewsets.ModelViewSet[Group]):
     permission_classes = (IsSuperUser,)
 
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """Update the role, refusing to rename a protected (built-in) role."""
+        """Update the role, refusing changes to fixed built-in roles."""
         instance = self.get_object()
+        if instance.name in _PROTECTED_GROUP_NAMES:
+            return Response(
+                {'detail': 'Cannot modify this role: its permissions are fixed.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         new_name = request.data.get('name') if isinstance(request.data, dict) else None
         if (
             instance.name in _PROTECTED_GROUP_NAMES

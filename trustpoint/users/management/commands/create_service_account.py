@@ -11,7 +11,7 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
 
-from users.models import ServiceAccountCredential, TrustpointUser
+from users.models import Role, ServiceAccountCredential, TrustpointUser
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser
@@ -32,8 +32,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--role',
             type=str,
-            default='Default',
-            help='Role/group name for the service account (default: Default)',
+            default=Role.SERVICE.value,
+            help=f'Role/group name for the service account (default: {Role.SERVICE.value})',
         )
         parser.add_argument(
             '--description',

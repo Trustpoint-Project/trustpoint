@@ -13,6 +13,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.AlterModelOptions(
+            name='apppermission',
+            options={'default_permissions': (), 'permissions': (('manage_workflow', 'Can manage workflow'), ('onboard_device', 'Can onboard device'), ('manage_ca', 'Can manage CA'), ('manage_role', 'Can manage role'), ('use_rest_api', 'Can use REST API'))},
+        ),
         migrations.AddField(
             model_name='trustpointuser',
             name='account_type',

@@ -14,7 +14,7 @@ import secrets
 from typing import TYPE_CHECKING, Any
 
 from django.apps import apps
-from django.contrib.auth.models import AbstractUser, Group, UserManager
+from django.contrib.auth.models import AbstractUser, Group, Permission, UserManager
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -33,6 +33,23 @@ class Role(models.TextChoices):
 
     ADMIN = 'Admin', _('Admin')
     DEFAULT = 'Default', _('Default')
+    SERVICE = 'Service Account', _('Service Account')
+
+    @classmethod
+    def get_service_group(cls) -> Group:
+        """Return the dedicated group used by service accounts."""
+        group, _ = Group.objects.get_or_create(name=cls.SERVICE.value)
+        try:
+            permission = Permission.objects.get(
+                content_type__app_label='users',
+                content_type__model='apppermission',
+                codename='use_rest_api',
+            )
+        except Permission.DoesNotExist:
+            pass
+        else:
+            group.permissions.set([permission])
+        return group
 
 class GroupProfile(models.Model):
     """Extended attributes for a Django ``Group`` used as a role.
@@ -101,7 +118,8 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
             admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN.value)
             extra_fields['role'] = admin_group
-        extra_fields.setdefault('organization', self._get_default_org())
+        if 'organization' not in extra_fields:
+            extra_fields['organization'] = self._get_default_org()
         return super().create_superuser(username, email, password, **extra_fields)
 
     def create_user(
@@ -123,9 +141,13 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
             The newly created TrustpointUser instance.
         """
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
-            default_group, _ = Group.objects.get_or_create(name=Role.DEFAULT.value)
-            extra_fields['role'] = default_group
-        extra_fields.setdefault('organization', self._get_default_org())
+            if extra_fields.get('account_type') == TrustpointUser.AccountType.SERVICE:
+                extra_fields['role'] = Role.get_service_group()
+            else:
+                default_group, _ = Group.objects.get_or_create(name=Role.DEFAULT.value)
+                extra_fields['role'] = default_group
+        if 'organization' not in extra_fields:
+            extra_fields['organization'] = self._get_default_org()
         return super().create_user(username, email, password, **extra_fields)
 
 
@@ -228,7 +250,8 @@ class AppPermission(models.Model):
             ('manage_workflow', 'Can manage workflow'),
             ('onboard_device', 'Can onboard device'),
             ('manage_ca', 'Can manage CA'),
-            ('manage_role', 'Can manage role')
+            ('manage_role', 'Can manage role'),
+            ('use_rest_api', 'Can use REST API'),
         )
 
     def __str__(self) -> str:

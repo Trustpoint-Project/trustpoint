@@ -12,13 +12,12 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.contrib.auth.models import Group
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView
 
-from users.models import ServiceAccountCredential, TrustpointUser
+from users.models import Role, ServiceAccountCredential, TrustpointUser
 
 if TYPE_CHECKING:
     from typing import Any
@@ -83,12 +82,12 @@ class ServiceAccountCreateView(
     model = TrustpointUser
     template_name = 'management/service_accounts/service_account_create.html'
     permission_required = 'users.add_trustpointuser'
-    fields = ['username', 'role', 'organization']  # noqa: RUF012
+    fields = ['username', 'organization']  # noqa: RUF012
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add available roles and page context."""
+        """Add the fixed service role and page context."""
         context = super().get_context_data(**kwargs)
-        context['roles'] = Group.objects.all()
+        context['default_service_role'] = Role.get_service_group()
         context['page_category'] = 'management'
         context['page_name'] = 'service_accounts'
         return context
@@ -99,6 +98,7 @@ class ServiceAccountCreateView(
         # Create the service account
         service_account = form.save(commit=False)
         service_account.account_type = TrustpointUser.AccountType.SERVICE
+        service_account.role = Role.get_service_group()
         service_account.set_unusable_password()
         service_account.save()
 

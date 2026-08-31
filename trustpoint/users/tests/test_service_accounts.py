@@ -5,12 +5,13 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 from django.contrib.auth.hashers import make_password
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework import status
@@ -18,7 +19,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
 from users.authentication import ServiceAccountBackend
-from users.models import ServiceAccountCredential, TrustpointUser
+from users.models import Role, ServiceAccountCredential, TrustpointUser
 
 if TYPE_CHECKING:
     from management.models.organization import OrganizationModel
@@ -34,7 +35,7 @@ def organization(db: object) -> OrganizationModel:
 @pytest.fixture
 def service_role(db: object) -> Group:
     """Create a role for service accounts."""
-    return Group.objects.create(name='ServiceRole')
+    return Role.get_service_group()
 
 
 @pytest.fixture
@@ -84,6 +85,21 @@ class TestTrustpointUser:
         assert not account.is_staff
         assert not account.is_superuser
 
+    def test_service_account_defaults_to_service_role(
+        self,
+        organization: OrganizationModel,
+    ) -> None:
+        """Service accounts should default to the dedicated API-only role."""
+        account = TrustpointUser.objects.create_user(
+            username='service_default_role',
+            account_type=TrustpointUser.AccountType.SERVICE,
+            organization=organization,
+        )
+
+        assert account.role.name == Role.SERVICE.value
+        assert account.role.name == Role.get_service_group().name
+        assert account.has_perm('users.use_rest_api')
+
     def test_service_account_cannot_be_staff(self, service_account: TrustpointUser) -> None:
         """Test that service accounts cannot be staff."""
         service_account.is_staff = True
@@ -114,7 +130,7 @@ class TestTrustpointUser:
             organization=organization,
         )
 
-        assert str(account) == 'Username: human1, Role: ServiceRole'
+        assert str(account) == 'Username: human1, Role: Service Account'
 
     def test_service_account_str_representation(self, service_account: TrustpointUser) -> None:
         """Test string representation of service account."""
@@ -411,18 +427,70 @@ class TestServiceAccountAPI:
         assert response.data['token_type'] == 'Bearer'
         assert response.data['expires_in'] == int(AccessToken(response.data['access']).lifetime.total_seconds())
 
-    def test_service_account_header_authenticates_api_requests(
+    def test_service_account_basic_header_authenticates_api_requests(
         self,
         service_credential: tuple[ServiceAccountCredential, str],
     ) -> None:
-        """A valid ServiceAccount authorization header should authenticate real API calls."""
+        """A valid HTTP Basic auth header should authenticate real API calls for service accounts."""
         credential, secret = service_credential
         client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION=f'ServiceAccount {credential.client_id}:{secret}')
+        basic_value = base64.b64encode(f'{credential.client_id}:{secret}'.encode()).decode()
+        client.credentials(HTTP_AUTHORIZATION=f'Basic {basic_value}')
 
         response = client.get('/api/devices/')
 
         assert response.status_code == status.HTTP_200_OK
+
+    def test_oauth_client_credentials_accept_basic_auth_header(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """The OAuth client credentials grant should accept standard Basic client authentication."""
+        credential, secret = service_credential
+        client = APIClient()
+        basic_value = base64.b64encode(f'{credential.client_id}:{secret}'.encode()).decode()
+
+        response = client.post(
+            '/api/token/',
+            {'grant_type': 'client_credentials'},
+            HTTP_AUTHORIZATION=f'Basic {basic_value}',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert 'access' in response.data
+        assert response.data['token_type'] == 'Bearer'
+
+    def test_oauth_client_credentials_requires_rest_api_permission(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """A service account without REST API access cannot obtain a bearer token."""
+        credential, secret = service_credential
+        credential.service_account.role.permissions.clear()
+
+        response = APIClient().post('/api/token/', {
+            'grant_type': 'client_credentials',
+            'client_id': credential.client_id,
+            'client_secret': secret,
+        })
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data['error'] == 'invalid_client'
+
+    def test_basic_auth_requires_rest_api_permission(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """A service account without REST API access cannot call API resources."""
+        credential, secret = service_credential
+        credential.service_account.role.permissions.clear()
+        basic_value = base64.b64encode(f'{credential.client_id}:{secret}'.encode()).decode()
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Basic {basic_value}')
+
+        response = client.get('/api/devices/')
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_api_authentication_with_invalid_format(self) -> None:
         """Test API authentication with invalid credentials."""
@@ -457,3 +525,49 @@ class TestServiceAccountAPI:
         })
         # Should get bad request error for missing required fields
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+class TestHumanUserAPI:
+    """Tests for human user API authentication."""
+
+    def test_token_requires_rest_api_permission(self) -> None:
+        """A user without REST API access cannot obtain bearer tokens."""
+        role = Group.objects.create(name='No API access')
+        TrustpointUser.objects.create_user(
+            username='no_api_access',
+            password='TestPassword123!',
+            role=role,
+        )
+
+        response = APIClient().post('/api/token/', {
+            'username': 'no_api_access',
+            'password': 'TestPassword123!',
+        })
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.data['detail'] == 'User is not permitted to use the REST API.'
+
+    def test_token_is_issued_with_rest_api_permission(self) -> None:
+        """A user with REST API access can obtain bearer tokens."""
+        role = Group.objects.create(name='API access')
+        permission = Permission.objects.get(
+            content_type__app_label='users',
+            content_type__model='apppermission',
+            codename='use_rest_api',
+        )
+        role.permissions.add(permission)
+        TrustpointUser.objects.create_user(
+            username='api_access',
+            password='TestPassword123!',
+            role=role,
+        )
+
+        response = APIClient().post('/api/token/', {
+            'username': 'api_access',
+            'password': 'TestPassword123!',
+        })
+
+        assert response.status_code == status.HTTP_200_OK
+        assert 'access' in response.data
+        assert 'refresh' in response.data

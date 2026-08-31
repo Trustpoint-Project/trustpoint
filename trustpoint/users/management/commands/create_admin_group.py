@@ -10,9 +10,9 @@ from users.models import GroupProfile, Role
 
 
 class Command(BaseCommand):
-    """Creates the Admin group and its GroupProfile if they do not exist."""
+    """Create built-in role groups and their GroupProfiles if they do not exist."""
 
-    help = 'Creates the default Admin role group and GroupProfile.'
+    help = 'Creates the built-in Admin and Service Account role groups and GroupProfiles.'
 
     def handle(self, *_args: object, **_options: object) -> None:
         """Execute the command."""
@@ -21,7 +21,17 @@ class Command(BaseCommand):
             group=group,
             defaults={'grants_staff': True, 'grants_superuser': True},
         )
+        service_group = Role.get_service_group()
+        service_created = service_group._state.adding
+        GroupProfile.objects.get_or_create(
+            group=service_group,
+            defaults={'grants_staff': False, 'grants_superuser': False},
+        )
         if created:
             self.stdout.write('Admin group created.')
         else:
             self.stdout.write('Admin group already exists.')
+        if service_created:
+            self.stdout.write('Service Account group created.')
+        else:
+            self.stdout.write('Service Account group already exists.')

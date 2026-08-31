@@ -10,7 +10,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from management.models.organization import OrganizationModel
-from users.models import GroupProfile
+from users.models import GroupProfile, Role
 
 User = get_user_model()
 
@@ -66,6 +66,18 @@ class UserTableViewTest(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
 
+    def test_service_accounts_are_not_listed(self) -> None:
+        """The user-management list excludes API-only service accounts."""
+        service_account = User.objects.create_user(
+            username='service-account',
+            role=_create_plain_group('Service Account'),
+            account_type=User.AccountType.SERVICE,
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertNotIn(service_account, response.context['users'])
+
 
 class UserCreateViewTest(TestCase):
     """Tests for the user creation view."""
@@ -80,6 +92,28 @@ class UserCreateViewTest(TestCase):
     def test_get_returns_200(self) -> None:
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
+
+    def test_service_account_role_is_not_available(self) -> None:
+        """The fixed service-account role is absent from the human-user form."""
+        service_group = Role.get_service_group()
+
+        response = self.client.get(self.url)
+
+        self.assertNotIn(service_group, response.context['form'].fields['role'].queryset)
+
+    def test_service_account_role_cannot_be_submitted(self) -> None:
+        """A crafted submission cannot assign the service-account role to a human user."""
+        service_group = Role.get_service_group()
+
+        response = self.client.post(self.url, {
+            'username': 'not-a-service-account',
+            'password1': 'StrongPass123!',
+            'password2': 'StrongPass123!',
+            'role': service_group.pk,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(username='not-a-service-account').exists())
 
     def test_create_user_success(self) -> None:
         """A valid POST creates the user and shows a success message."""
