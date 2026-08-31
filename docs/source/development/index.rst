@@ -179,6 +179,22 @@ Populates the database with an example CA, domain and device instances.
 
 .. code:: bash
 
+   uv run manage.py create_protocol_test_env --output ../var/protocol_test_env.json
+
+Creates an issuing CA, a domain and six devices (one per combination of onboarding mode
+and PKI protocol) used by the CMP/EST/REST enrollment endpoint tests, and writes the
+resulting credentials as JSON. Combined with a running HTTPS server, the endpoints can
+then be exercised with:
+
+.. code:: bash
+
+   tests/scripts/test_protocol_endpoints.sh \
+      --host 127.0.0.1:443 \
+      --env-file var/protocol_test_env.json \
+      --tls-cert tests/data/x509/https_server.crt
+
+.. code:: bash
+
    uv run manage.py makemsg -l de
    uv run manage.py makemsg -l de -d djangojs
 

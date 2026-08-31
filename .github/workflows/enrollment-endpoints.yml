@@ -1,0 +1,78 @@
+name: Tests / Enrollment Endpoints
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  enrollment-endpoints:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    env:
+      # Ports below 1024 require root on the runner, so the development server is
+      # exposed on 8443 instead of the usual 443.
+      TRUSTPOINT_HOST: 127.0.0.1:8443
+      TLS_CERT: tests/data/x509/https_server.crt
+      TLS_KEY: tests/data/x509/https_server.pem
+      ENV_FILE: var/protocol_test_env.json
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+        with:
+          run_migrations: true
+
+      - name: Create CA, domain and test devices
+        run: uv run trustpoint/manage.py create_protocol_test_env --output "${ENV_FILE}"
+
+      - name: Start Trustpoint HTTPS development server
+        run: |
+          mkdir -p reports
+          uv run trustpoint/manage.py runserver_plus "${TRUSTPOINT_HOST}" \
+            --cert-file "${TLS_CERT}" \
+            --key-file "${TLS_KEY}" \
+            --nopin \
+            > reports/server.log 2>&1 &
+          echo $! > server.pid
+
+          for _ in $(seq 1 60); do
+            if curl --silent --output /dev/null --cacert "${TLS_CERT}" "https://${TRUSTPOINT_HOST}/"; then
+              echo "Server is up."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Server did not become ready in time." >&2
+          cat reports/server.log >&2
+          exit 1
+
+      - name: Test CMP, EST and REST enrollment
+        run: |
+          bash tests/scripts/test_protocol_endpoints.sh \
+            --host "${TRUSTPOINT_HOST}" \
+            --env-file "${ENV_FILE}" \
+            --tls-cert "${TLS_CERT}" \
+            --work-dir reports/enrollment
+
+      - name: Stop Trustpoint development server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            pkill -P "$(cat server.pid)" || true
+            kill "$(cat server.pid)" || true
+          fi
+
+      - name: Upload server log and issued certificates
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: enrollment-endpoint-reports
+          path: reports/
