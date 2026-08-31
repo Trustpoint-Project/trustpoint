@@ -9,7 +9,7 @@ from django.contrib.messages import get_messages
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from users.models import GroupProfile
+from users.models import GroupProfile, Role
 
 User = get_user_model()
 
@@ -33,6 +33,15 @@ class RoleTableViewTest(TestCase):
     def test_get_returns_200(self) -> None:
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
+
+    def test_admin_role_shows_permissions(self) -> None:
+        """The Admin role displays all available permissions as a read-only list."""
+        url = reverse('management:edit_role', kwargs={'pk': self.admin_user.role.pk})
+
+        response = self.client.get(url)
+
+        self.assertContains(response, 'Can use REST API')
+        self.assertNotContains(response, 'Assigned Permissions')
 
 
 class RoleCreateViewTest(TestCase):
@@ -93,6 +102,21 @@ class RoleEditViewTest(TestCase):
         self.assertEqual(self.custom_group.name, 'Analyst Updated')
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('Analyst Updated' in str(m) for m in messages))
+
+    def test_service_account_role_permissions_are_fixed(self) -> None:
+        """The built-in service-account role cannot be modified."""
+        service_group = Role.get_service_group()
+        url = reverse('management:edit_role', kwargs={'pk': service_group.pk})
+
+        response = self.client.post(url, {
+            'name': Role.SERVICE.value,
+            'grants_staff': 'on',
+            'grants_superuser': 'on',
+            'permissions': [],
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(service_group.permissions.values_list('codename', flat=True)), ['use_rest_api'])
 
 
 class RoleDeleteViewTest(TestCase):

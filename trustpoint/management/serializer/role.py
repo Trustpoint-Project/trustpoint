@@ -49,8 +49,8 @@ class RoleSerializer(serializers.ModelSerializer[Group]):
         )
 
     def get_is_protected(self, obj: Group) -> bool:
-        """Return whether this role is the built-in, non-deletable Admin role."""
-        return obj.name == Role.ADMIN.value
+        """Return whether this role is a built-in, non-deletable role."""
+        return obj.name in {Role.ADMIN.value, Role.SERVICE.value}
 
     def get_user_count(self, obj: Group) -> int:
         """Return how many users are currently assigned to this role."""

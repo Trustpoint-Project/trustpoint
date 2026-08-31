@@ -1,0 +1,573 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
+"""Tests for service account functionality."""
+
+from __future__ import annotations
+
+import base64
+from datetime import timedelta
+from typing import TYPE_CHECKING
+
+import pytest
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
+
+from users.authentication import ServiceAccountBackend
+from users.models import Role, ServiceAccountCredential, TrustpointUser
+
+if TYPE_CHECKING:
+    from management.models.organization import OrganizationModel
+
+
+@pytest.fixture
+def organization(db: object) -> OrganizationModel:
+    """Create a test organization."""
+    from management.models import OrganizationModel
+    return OrganizationModel.objects.create(name='TestOrg', organization='testorg')
+
+
+@pytest.fixture
+def service_role(db: object) -> Group:
+    """Create a role for service accounts."""
+    return Role.get_service_group()
+
+
+@pytest.fixture
+def service_account(db: object, service_role: Group, organization: OrganizationModel) -> TrustpointUser:
+    """Create a service account."""
+    account = TrustpointUser.objects.create(
+        username='test_service',
+        account_type=TrustpointUser.AccountType.SERVICE,
+        role=service_role,
+        organization=organization,
+    )
+    account.set_unusable_password()
+    account.save()
+    return account
+
+
+@pytest.fixture
+def service_credential(db: object, service_account: TrustpointUser) -> tuple[ServiceAccountCredential, str]:
+    """Create an API key credential for the service account."""
+    client_id = ServiceAccountCredential.generate_client_id()
+    secret = ServiceAccountCredential.generate_secret()
+    hashed_secret = make_password(secret)
+
+    credential = ServiceAccountCredential.objects.create(
+        service_account=service_account,
+        client_id=client_id,
+        hashed_secret=hashed_secret,
+        description='Test credential',
+    )
+    return credential, secret
+
+
+@pytest.mark.django_db
+class TestTrustpointUser:
+    """Tests for TrustpointUser model with service accounts."""
+
+    def test_service_account_creation(self, service_role: Group, organization: OrganizationModel) -> None:
+        """Test creating a service account."""
+        account = TrustpointUser.objects.create(
+            username='service1',
+            account_type=TrustpointUser.AccountType.SERVICE,
+            role=service_role,
+            organization=organization,
+        )
+
+        assert account.account_type == TrustpointUser.AccountType.SERVICE
+        assert not account.is_staff
+        assert not account.is_superuser
+
+    def test_service_account_defaults_to_service_role(
+        self,
+        organization: OrganizationModel,
+    ) -> None:
+        """Service accounts should default to the dedicated API-only role."""
+        account = TrustpointUser.objects.create_user(
+            username='service_default_role',
+            account_type=TrustpointUser.AccountType.SERVICE,
+            organization=organization,
+        )
+
+        assert account.role.name == Role.SERVICE.value
+        assert account.role.name == Role.get_service_group().name
+        assert account.has_perm('users.use_rest_api')
+
+    def test_service_account_cannot_be_staff(self, service_account: TrustpointUser) -> None:
+        """Test that service accounts cannot be staff."""
+        service_account.is_staff = True
+        service_account.is_superuser = True
+
+        with pytest.raises(ValidationError, match='Service accounts cannot be staff or superusers'):
+            service_account.full_clean()
+
+    def test_service_account_flags_forced_to_false_on_save(
+        self,
+        service_account: TrustpointUser
+    ) -> None:
+        """Test that is_staff and is_superuser are forced to False on save."""
+        service_account.is_staff = True
+        service_account.is_superuser = True
+        service_account.save()
+
+        service_account.refresh_from_db()
+        assert not service_account.is_staff
+        assert not service_account.is_superuser
+
+    def test_human_account_str_representation(self, service_role: Group, organization: OrganizationModel) -> None:
+        """Test string representation of human account."""
+        account = TrustpointUser.objects.create(
+            username='human1',
+            account_type=TrustpointUser.AccountType.HUMAN,
+            role=service_role,
+            organization=organization,
+        )
+
+        assert str(account) == 'Username: human1, Role: Service Account'
+
+    def test_service_account_str_representation(self, service_account: TrustpointUser) -> None:
+        """Test string representation of service account."""
+        result = str(service_account)
+        assert 'test_service' in result
+        assert 'Service' in result
+
+
+@pytest.mark.django_db
+class TestServiceAccountCredential:
+    """Tests for ServiceAccountCredential model."""
+
+    def test_credential_creation(self, service_credential: tuple[ServiceAccountCredential, str]) -> None:
+        """Test creating a service account credential."""
+        credential, secret = service_credential
+
+        assert credential.client_id.startswith('sa_')
+        assert credential.is_active
+        assert credential.is_valid()
+
+    def test_client_id_generation(self) -> None:
+        """Test client ID generation."""
+        client_id = ServiceAccountCredential.generate_client_id()
+
+        assert client_id.startswith('sa_')
+        assert len(client_id) > 40  # URL-safe base64 encoded token
+
+    def test_secret_generation(self) -> None:
+        """Test secret generation."""
+        secret = ServiceAccountCredential.generate_secret()
+
+        assert len(secret) > 60  # URL-safe base64 encoded token
+
+    def test_credential_expiration(
+        self,
+        service_account: TrustpointUser
+    ) -> None:
+        """Test credential expiration."""
+        past_time = timezone.now() - timedelta(days=1)
+
+        credential = ServiceAccountCredential.objects.create(
+            service_account=service_account,
+            client_id=ServiceAccountCredential.generate_client_id(),
+            hashed_secret=make_password('test_secret'),
+            expires_at=past_time,
+        )
+
+        assert not credential.is_valid()
+
+    def test_credential_inactive(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str]
+    ) -> None:
+        """Test inactive credential."""
+        credential, _ = service_credential
+        credential.is_active = False
+        credential.save()
+
+        assert not credential.is_valid()
+
+    def test_record_usage(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str]
+    ) -> None:
+        """Test recording credential usage."""
+        credential, _ = service_credential
+        assert credential.last_used is None
+        assert credential.usage_count == 0
+
+        credential.record_usage()
+        credential.refresh_from_db()
+
+        assert credential.last_used is not None
+        assert credential.usage_count == 1
+
+    def test_is_expired_matches_expiration_window(
+        self,
+        service_account: TrustpointUser,
+    ) -> None:
+        """Expired credentials should report an expiration state for templates and UI logic."""
+        active_credential = ServiceAccountCredential.objects.create(
+            service_account=service_account,
+            client_id=ServiceAccountCredential.generate_client_id(),
+            hashed_secret=make_password('test_secret'),
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+        expired_credential = ServiceAccountCredential.objects.create(
+            service_account=service_account,
+            client_id=ServiceAccountCredential.generate_client_id(),
+            hashed_secret=make_password('test_secret'),
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+
+        assert not active_credential.is_expired()
+        assert expired_credential.is_expired()
+
+    def test_credential_requires_service_account(
+        self,
+        service_role: Group,
+        organization: OrganizationModel
+    ) -> None:
+        """Test that credentials can only be associated with service accounts."""
+        human_account = TrustpointUser.objects.create(
+            username='human1',
+            account_type=TrustpointUser.AccountType.HUMAN,
+            role=service_role,
+            organization=organization,
+        )
+
+        credential = ServiceAccountCredential(
+            service_account=human_account,
+            client_id=ServiceAccountCredential.generate_client_id(),
+            hashed_secret=make_password('test'),
+        )
+
+        with pytest.raises(ValidationError, match='Credentials can only be associated with service accounts'):
+            credential.full_clean()
+
+
+@pytest.mark.django_db
+class TestServiceAccountBackend:
+    """Tests for ServiceAccountBackend authentication."""
+
+    def test_successful_authentication(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str]
+    ) -> None:
+        """Test successful service account authentication."""
+        credential, secret = service_credential
+        backend = ServiceAccountBackend()
+
+        user = backend.authenticate(
+            request=None,
+            client_id=credential.client_id,
+            secret=secret,
+        )
+
+        assert user is not None
+        assert user == credential.service_account
+
+    def test_authentication_accepts_django_request_keyword(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """The backend must accept the standard request kwarg used by Django auth."""
+        credential, secret = service_credential
+        backend = ServiceAccountBackend()
+
+        user = backend.authenticate(
+            request=object(),
+            client_id=credential.client_id,
+            secret=secret,
+        )
+
+        assert user == credential.service_account
+
+    def test_authentication_ignores_blank_whitespace_credentials(self) -> None:
+        """Whitespace-only credentials should fail cleanly instead of creating an auth edge case."""
+        backend = ServiceAccountBackend()
+
+        user = backend.authenticate(
+            request=None,
+            client_id='   ',
+            secret=' valid-secret ',
+        )
+
+        assert user is None
+
+    def test_authentication_with_invalid_client_id(self) -> None:
+        """Test authentication with invalid client ID."""
+        backend = ServiceAccountBackend()
+
+        user = backend.authenticate(
+            request=None,
+            client_id='invalid_id',
+            secret='invalid_secret',
+        )
+
+        assert user is None
+
+    def test_authentication_with_invalid_secret(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str]
+    ) -> None:
+        """Test authentication with invalid secret."""
+        credential, _ = service_credential
+        backend = ServiceAccountBackend()
+
+        user = backend.authenticate(
+            request=None,
+            client_id=credential.client_id,
+            secret='wrong_secret',
+        )
+
+        assert user is None
+
+    def test_authentication_with_inactive_credential(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str]
+    ) -> None:
+        """Test authentication with inactive credential."""
+        credential, secret = service_credential
+        credential.is_active = False
+        credential.save()
+
+        backend = ServiceAccountBackend()
+        user = backend.authenticate(
+            request=None,
+            client_id=credential.client_id,
+            secret=secret,
+        )
+
+        assert user is None
+
+    def test_authentication_with_expired_credential(
+        self,
+        service_account: TrustpointUser
+    ) -> None:
+        """Test authentication with expired credential."""
+        client_id = ServiceAccountCredential.generate_client_id()
+        secret = ServiceAccountCredential.generate_secret()
+
+        credential = ServiceAccountCredential.objects.create(
+            service_account=service_account,
+            client_id=client_id,
+            hashed_secret=make_password(secret),
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+
+        backend = ServiceAccountBackend()
+        user = backend.authenticate(
+            request=None,
+            client_id=credential.client_id,
+            secret=secret,
+        )
+
+        assert user is None
+
+    def test_get_user(self, service_account: TrustpointUser) -> None:
+        """Test retrieving a user by ID."""
+        backend = ServiceAccountBackend()
+        user = backend.get_user(service_account.pk)
+
+        assert user == service_account
+
+    def test_get_user_not_found(self) -> None:
+        """Test retrieving a non-existent user."""
+        backend = ServiceAccountBackend()
+        user = backend.get_user(999999)
+
+        assert user is None
+
+
+@pytest.mark.django_db
+class TestServiceAccountConfiguration:
+    """Tests for service account configuration wiring."""
+
+    def test_service_account_middleware_is_enabled(self) -> None:
+        """Service accounts should be blocked from the Web UI when enabled in settings."""
+        from django.conf import settings
+
+        assert 'users.middleware.ServiceAccountMiddleware' in settings.MIDDLEWARE
+
+    def test_drf_uses_service_account_authentication(self) -> None:
+        """The API authentication stack should accept service-account credentials."""
+        from django.conf import settings
+
+        assert 'users.api_auth.ServiceAccountAuthentication' in settings.REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES']
+
+
+@pytest.mark.django_db
+class TestServiceAccountAPI:
+    """Tests for service account API authentication."""
+
+    def test_api_authentication_with_service_account(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str]
+    ) -> None:
+        """Test API authentication using service account credentials via OAuth 2.0."""
+        credential, secret = service_credential
+        client = APIClient()
+
+        # Use OAuth 2.0 client credentials grant
+        response = client.post('/api/token/', {
+            'grant_type': 'client_credentials',
+            'client_id': credential.client_id,
+            'client_secret': secret,
+        })
+
+        # Should get access token
+        assert response.status_code == status.HTTP_200_OK
+        assert 'access' in response.data
+        assert 'token_type' in response.data
+        assert response.data['token_type'] == 'Bearer'
+        assert response.data['expires_in'] == int(AccessToken(response.data['access']).lifetime.total_seconds())
+
+    def test_service_account_basic_header_authenticates_api_requests(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """A valid HTTP Basic auth header should authenticate real API calls for service accounts."""
+        credential, secret = service_credential
+        client = APIClient()
+        basic_value = base64.b64encode(f'{credential.client_id}:{secret}'.encode()).decode()
+        client.credentials(HTTP_AUTHORIZATION=f'Basic {basic_value}')
+
+        response = client.get('/api/devices/')
+
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_oauth_client_credentials_accept_basic_auth_header(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """The OAuth client credentials grant should accept standard Basic client authentication."""
+        credential, secret = service_credential
+        client = APIClient()
+        basic_value = base64.b64encode(f'{credential.client_id}:{secret}'.encode()).decode()
+
+        response = client.post(
+            '/api/token/',
+            {'grant_type': 'client_credentials'},
+            HTTP_AUTHORIZATION=f'Basic {basic_value}',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert 'access' in response.data
+        assert response.data['token_type'] == 'Bearer'
+
+    def test_oauth_client_credentials_requires_rest_api_permission(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """A service account without REST API access cannot obtain a bearer token."""
+        credential, secret = service_credential
+        credential.service_account.role.permissions.clear()
+
+        response = APIClient().post('/api/token/', {
+            'grant_type': 'client_credentials',
+            'client_id': credential.client_id,
+            'client_secret': secret,
+        })
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data['error'] == 'invalid_client'
+
+    def test_basic_auth_requires_rest_api_permission(
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+    ) -> None:
+        """A service account without REST API access cannot call API resources."""
+        credential, secret = service_credential
+        credential.service_account.role.permissions.clear()
+        basic_value = base64.b64encode(f'{credential.client_id}:{secret}'.encode()).decode()
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Basic {basic_value}')
+
+        response = client.get('/api/devices/')
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_api_authentication_with_invalid_format(self) -> None:
+        """Test API authentication with invalid credentials."""
+        client = APIClient()
+
+        response = client.post('/api/token/', {
+            'grant_type': 'client_credentials',
+            'client_id': 'invalid_client',
+            'client_secret': 'invalid_secret',
+        })
+        # Should get authentication error
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_api_authentication_missing_service_credentials_returns_invalid_request(self) -> None:
+        """A client_credentials grant without both fields should return a proper OAuth2 invalid_request response."""
+        client = APIClient()
+
+        response = client.post('/api/token/', {
+            'grant_type': 'client_credentials',
+            'client_id': 'sa_valid_id',
+        })
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error'] == 'invalid_request'
+
+    def test_api_authentication_missing_credentials(self) -> None:
+        """Test API request without credentials."""
+        client = APIClient()
+
+        response = client.post('/api/token/', {
+            'grant_type': 'client_credentials',
+        })
+        # Should get bad request error for missing required fields
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+class TestHumanUserAPI:
+    """Tests for human user API authentication."""
+
+    def test_token_requires_rest_api_permission(self) -> None:
+        """A user without REST API access cannot obtain bearer tokens."""
+        role = Group.objects.create(name='No API access')
+        TrustpointUser.objects.create_user(
+            username='no_api_access',
+            password='TestPassword123!',
+            role=role,
+        )
+
+        response = APIClient().post('/api/token/', {
+            'username': 'no_api_access',
+            'password': 'TestPassword123!',
+        })
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.data['detail'] == 'User is not permitted to use the REST API.'
+
+    def test_token_is_issued_with_rest_api_permission(self) -> None:
+        """A user with REST API access can obtain bearer tokens."""
+        role = Group.objects.create(name='API access')
+        permission = Permission.objects.get(
+            content_type__app_label='users',
+            content_type__model='apppermission',
+            codename='use_rest_api',
+        )
+        role.permissions.add(permission)
+        TrustpointUser.objects.create_user(
+            username='api_access',
+            password='TestPassword123!',
+            role=role,
+        )
+
+        response = APIClient().post('/api/token/', {
+            'username': 'api_access',
+            'password': 'TestPassword123!',
+        })
+
+        assert response.status_code == status.HTTP_200_OK
+        assert 'access' in response.data
+        assert 'refresh' in response.data

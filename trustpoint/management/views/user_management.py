@@ -7,6 +7,7 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.db.models import QuerySet
 from django.forms import BaseModelForm
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse_lazy
@@ -64,6 +65,10 @@ class UserTableView(
     template_name = 'management/user_management.html'
     context_object_name = 'users'
     default_sort_param = 'username'
+
+    def get_queryset(self) -> QuerySet[TrustpointUser]:
+        """Return human users only."""
+        return TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.HUMAN)
 
 
 class UserCreateView(

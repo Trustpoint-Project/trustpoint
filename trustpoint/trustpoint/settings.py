@@ -467,6 +467,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'users.middleware.ServiceAccountMiddleware',
     'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
@@ -533,6 +534,13 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
+]
+
+# Authentication backends
+# https://docs.djangoproject.com/en/5.0/ref/settings/#authentication-backends
+AUTHENTICATION_BACKENDS = [
+    'users.authentication.ServiceAccountBackend',  # Service account authentication
+    'django.contrib.auth.backends.ModelBackend',    # Default Django authentication
 ]
 
 
@@ -653,6 +661,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'users.api_auth.ServiceAccountAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_FILTER_BACKENDS': [

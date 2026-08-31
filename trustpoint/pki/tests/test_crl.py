@@ -12,6 +12,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.test import Client
@@ -38,6 +39,12 @@ def api_client(issuing_ca_instance: dict[str, Any]) -> tuple[APIClient, Any]:
     """Create an authenticated API client with JWT token."""
     client = APIClient()
     user = User.objects.create_user(username='apiuser', password='apipass123')
+    permission = Permission.objects.get(
+        content_type__app_label='users',
+        content_type__model='apppermission',
+        codename='use_rest_api',
+    )
+    user.role.permissions.add(permission)
     
     # Get JWT token
     response = client.post(
