@@ -32,7 +32,7 @@
                             {{ signer.unique_name }}
                         </a>
                     </td>
-                    <td>{{ signer.credential.certificate.signature_suite }}</td>
+                    <td>{{ signer.credential.certificate.signature_suite_display }}</td>
                     <td>{{ signer.created_at|local_datetime }}</td>
                     <td>{{ signer.credential.certificate.not_valid_after|local_datetime }}</td>
                     <td>

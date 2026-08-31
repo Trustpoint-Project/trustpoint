@@ -23,7 +23,15 @@ from crypto.domain.errors import (
 )
 from crypto.domain.policies import KeyPolicy, KeyUsage
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
-from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec, SignRequest, algorithm_for_key_spec
+from crypto.domain.specs import (
+    EcKeySpec,
+    KeySpec,
+    MlDsaKeySpec,
+    MlDsaVariant,
+    RsaKeySpec,
+    SignRequest,
+    algorithm_for_key_spec,
+)
 
 __all__ = [
     'AuthenticationError',
@@ -41,6 +49,8 @@ __all__ = [
     'ManagedKeyVerification',
     'ManagedKeyVerificationStatus',
     'MechanismUnsupportedError',
+    'MlDsaKeySpec',
+    'MlDsaVariant',
     'ProviderConfigurationError',
     'ProviderUnavailableError',
     'RsaKeySpec',

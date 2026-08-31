@@ -26,7 +26,7 @@ from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.errors import CryptoError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
-from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.domain.specs import EcKeySpec, KeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
@@ -594,6 +594,9 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         ('ECC-SECP256R1', 'ECC SECP256R1'),
         ('ECC-SECP384R1', 'ECC SECP384R1'),
         ('ECC-SECP521R1', 'ECC SECP521R1'),
+        ('MLDSA-44', 'ML-DSA-44'),
+        ('MLDSA-65', 'ML-DSA-65'),
+        ('MLDSA-87', 'ML-DSA-87'),
     ]
 
     class Meta:
@@ -629,6 +632,9 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         """Map the form key type to a backend key spec."""
         if key_type.startswith('RSA-'):
             return RsaKeySpec(key_size=int(key_type.split('-')[1]))
+        if key_type.startswith('MLDSA-'):
+            variant_str = 'mldsa' + key_type.split('-')[1]
+            return MlDsaKeySpec(variant=MlDsaVariant(variant_str))
         curve_name = key_type.split('-')[1]
         return EcKeySpec(curve=EllipticCurveName(curve_name.lower()))
 

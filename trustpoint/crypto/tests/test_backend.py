@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
+import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa, utils
 from pkcs11 import Attribute, Mechanism, NoSuchKey, ObjectClass
 from pkcs11.exceptions import GeneralError
@@ -16,8 +17,9 @@ from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
 from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
+from crypto.domain.errors import UnsupportedKeySpecError
 from crypto.domain.policies import KeyPolicy
-from crypto.domain.specs import EcKeySpec, RsaKeySpec, SignRequest
+from crypto.domain.specs import EcKeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec, SignRequest
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -403,6 +405,21 @@ def test_generate_managed_ec_key_uses_domain_parameters() -> None:
 
     assert session.domain_parameter_calls
     assert session.domain_parameters.generate_keypair_calls
+
+
+def test_generate_managed_mldsa_key_is_not_supported() -> None:
+    """PKCS#11 ML-DSA generation must remain explicitly unsupported."""
+    session = FakeSession()
+    backend = _build_backend(session)
+
+    with pytest.raises(UnsupportedKeySpecError):
+        backend.generate_managed_key(
+            alias='ca/mldsa-root',
+            key_spec=MlDsaKeySpec(variant=MlDsaVariant.MLDSA44),
+            policy=KeyPolicy.managed_signing_key(),
+        )
+
+    assert not session.generate_keypair_calls
 
 
 def test_get_public_key_loads_rsa_public_key() -> None:
