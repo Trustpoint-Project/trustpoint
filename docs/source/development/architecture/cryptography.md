@@ -103,6 +103,11 @@ flowchart TB
 - `ECDSA_P384`: NIST P-384 (secp384r1)
 - `ECDSA_P521`: NIST P-521 (secp521r1)
 
+**ML-DSA (post-quantum):**
+- `ML_DSA_44`, `ML_DSA_65`, `ML_DSA_87`
+- Supported for CSR/certificate signature verification (EST and REST enrollment)
+- **Not supported by the PKCS#11 provider yet:** ML-DSA keys are only available via the software provider; HSM-backed ML-DSA key generation and signing are not yet implemented
+
 ## Security Best Practices
 
 1. **Use hardware HSM in production:** SoftHSM is for development only
