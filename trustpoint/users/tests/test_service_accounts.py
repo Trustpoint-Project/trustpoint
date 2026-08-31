@@ -15,6 +15,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 
 from users.authentication import ServiceAccountBackend
 from users.models import ServiceAccountCredential, TrustpointUser
@@ -408,6 +409,7 @@ class TestServiceAccountAPI:
         assert 'access' in response.data
         assert 'token_type' in response.data
         assert response.data['token_type'] == 'Bearer'
+        assert response.data['expires_in'] == int(AccessToken(response.data['access']).lifetime.total_seconds())
 
     def test_service_account_header_authenticates_api_requests(
         self,
