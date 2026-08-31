@@ -179,6 +179,27 @@ Populates the database with an example CA, domain and device instances.
 
 .. code:: bash
 
+   uv run manage.py create_protocol_test_env --output ../var/protocol_test_env.json
+
+Creates one issuing CA, domain and device pair per enrollment protocol and writes the
+resulting credentials as JSON. Because Trustpoint requires the end entity key to match
+the signature suite of the issuing CA, each protocol uses a different algorithm:
+EST uses EC P-256, CMP uses ML-DSA-65 and REST uses RSA-2048. Every domain contains one
+device that requires onboarding and one that does not.
+
+Combined with a running HTTPS server, the endpoints can then be exercised with:
+
+.. code:: bash
+
+   tests/scripts/test_protocol_endpoints.sh \
+      --host 127.0.0.1:443 \
+      --env-file var/protocol_test_env.json \
+      --tls-cert tests/data/x509/https_server.crt
+
+The ML-DSA CMP test requires OpenSSL 3.5 or newer.
+
+.. code:: bash
+
    uv run manage.py makemsg -l de
    uv run manage.py makemsg -l de -d djangojs
 

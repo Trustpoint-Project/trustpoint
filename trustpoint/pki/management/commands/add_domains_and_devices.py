@@ -17,10 +17,11 @@ from django.core.management.base import BaseCommand
 from crypto.application.capabilities import normalize_curve_name
 from crypto.application.private_keys import (
     ManagedECPrivateKey,
+    ManagedMLDSAPrivateKey,
     ManagedRSAPrivateKey,
     generate_managed_signing_private_key,
 )
-from crypto.domain.specs import EcKeySpec, RsaKeySpec
+from crypto.domain.specs import EcKeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from devices.models import DeviceModel
 from management.models.audit_log import AuditLog
@@ -88,7 +89,7 @@ def get_random_onboarding_pki_protocols(
     return random_protocols
 
 
-def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey) -> CryptoManagedKeyModel:
+def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey) -> CryptoManagedKeyModel:
     """Resolve a generated managed key facade to its database model."""
     return CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
 
@@ -96,8 +97,8 @@ def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey) 
 def _generate_managed_signer_key(
     *,
     alias: str,
-    issuing_ca_private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
-) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
+    issuing_ca_private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | ManagedMLDSAPrivateKey,
+) -> ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey:
     """Generate a signer key with the same key family as the issuing CA."""
     if isinstance(issuing_ca_private_key, rsa.RSAPrivateKey):
         signer_key = generate_managed_signing_private_key(
@@ -112,6 +113,13 @@ def _generate_managed_signer_key(
         signer_key = generate_managed_signing_private_key(
             alias=alias,
             key_spec=EcKeySpec(curve=curve_name),
+        )
+    elif isinstance(issuing_ca_private_key, ManagedMLDSAPrivateKey):
+        # For ML-DSA, we'll use ML-DSA-65 as the default variant for signers
+        # In the future, this could be made configurable or match the issuing CA's variant
+        signer_key = generate_managed_signing_private_key(
+            alias=alias,
+            key_spec=MlDsaKeySpec(variant=MlDsaVariant.MLDSA65),
         )
     else:
         msg = 'Unsupported issuing CA private key type.'
@@ -250,6 +258,12 @@ class Command(BaseCommand, LoggerMixin):
                 'Vacuum-Layer-Grippers',
                 'Vacuum-Ejectors',
             ],
+            'campus_schwarzwald': [
+                'Quantum-Safe-Gateway',
+                'PQC-Encryption-Module',
+                'ML-DSA-Signature-Service',
+                'Hybrid-Crypto-Controller',
+            ],
         }
 
         domain_ca_truststore_map = {
@@ -260,6 +274,7 @@ class Command(BaseCommand, LoggerMixin):
             'belden': ('issuing-ca-d', 'idevid-truststore-EC-256'),
             'phoenix_contact': ('issuing-ca-e', 'idevid-truststore-EC-384'),
             'schmalz': ('issuing-ca-f', 'idevid-truststore-EC-521'),
+            'campus_schwarzwald': ('issuing-ca-g', 'idevid-truststore-ML-DSA-65'),
         }
 
         onboarding_protocols = list(OnboardingProtocol)

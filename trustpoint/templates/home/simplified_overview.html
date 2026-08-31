@@ -100,12 +100,10 @@
                                         <strong>{% trans "Valid Until" %}:</strong>
                                         {{ domain.issuing_ca.credential.certificate.not_valid_after|local_datetime }}
                                     </div>
-                                    {% if domain.issuing_ca.signature_suite %}
                                     <div class="mb-2">
                                         <strong>{% trans "Signature Suite" %}:</strong>
-                                        {{ domain.issuing_ca.signature_suite }}
+                                        {{ domain.issuing_ca.signature_suite_display }}
                                     </div>
-                                    {% endif %}
                                     {% endif %}
                                     <h6 class="text-muted mb-2">{% trans "Certificates" %}</h6>
                                     <div class="d-flex flex-column gap-2 mb-3">

@@ -8,6 +8,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from cryptography.hazmat.primitives import hashes
+from trustpoint_core.oid import HashAlgorithm
+
+from pki.models import IssuedCredentialModel
 
 from request.authorization.cmp import (
     CmpAuthorization,
@@ -148,13 +152,55 @@ class TestCmpCertConfAuthorization:
 
         mock_cred = Mock()
         mock_cred.common_name = 'test-device-cert'
-        from pki.models import IssuedCredentialModel
         mock_qs = Mock()
         mock_qs.select_related.return_value.first.return_value = mock_cred
         with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs):
+            with patch('request.authorization.cmp.SignatureSuite.from_certificate') as suite_mock:
+                suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=HashAlgorithm.SHA256))
+                CmpCertConfAuthorization().authorize(ctx)
+
+        assert ctx.credential_to_revoke is mock_cred
+
+    def test_rejection_with_declared_hash_alg_matches_certificate_digest(self) -> None:
+        """Rejection lookup must honor certConf hashAlg when provided."""
+        cert_der = b'certificate-der-bytes'
+        digest = hashes.Hash(hashes.SHA384())
+        digest.update(cert_der)
+        cert_hash = digest.finalize()
+
+        ctx = CmpCertConfRequestContext(
+            operation='certconf',
+            cert_conf_status=2,
+            cert_hash=cert_hash,
+            cert_hash_algorithm_oid=HashAlgorithm.SHA384.dotted_string,
+        )
+
+        mock_cred = Mock()
+        mock_cred.common_name = 'test-device-cert'
+        mock_cred.credential.get_certificate.return_value = Mock(public_bytes=Mock(return_value=cert_der))
+
+        mock_qs = Mock()
+        mock_qs.iterator.return_value = [mock_cred]
+        with patch.object(IssuedCredentialModel.objects, 'select_related', return_value=mock_qs):
             CmpCertConfAuthorization().authorize(ctx)
 
         assert ctx.credential_to_revoke is mock_cred
+
+    def test_rejection_requires_hash_alg_for_no_implicit_hash_signature(self) -> None:
+        """Rejection without hashAlg must be denied for no-implicit-digest signature suites."""
+        cert_hash = bytes.fromhex('aa' * 32)
+        ctx = CmpCertConfRequestContext(operation='certconf', cert_conf_status=2, cert_hash=cert_hash)
+
+        mock_cred = Mock()
+        mock_cred.credential.get_certificate.return_value = Mock()
+
+        mock_qs = Mock()
+        mock_qs.select_related.return_value.first.return_value = mock_cred
+        with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs):
+            with patch('request.authorization.cmp.SignatureSuite.from_certificate') as suite_mock:
+                suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=None))
+                with pytest.raises(ValueError, match='hashAlg is required'):
+                    CmpCertConfAuthorization().authorize(ctx)
 
 
 # ---------------------------------------------------------------------------

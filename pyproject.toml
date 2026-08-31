@@ -34,9 +34,9 @@ dependencies = [
     "pydantic>=2.13.4",
     "pydeps>=3.0.1",
     "python-pkcs11>=0.8.1",
-    "trustpoint-core==0.3.1",
+    "trustpoint-core>=0.4.1",
     "types-paramiko>=3.5.0.20250516",
-    "zeroconf>=0.150,<0.151",
+    "zeroconf>=0.151,<0.152",
     "asyncua~=1.1.8", # 2.0 available, check API changes before upgrading
     "django-q2>=1.9.0",
     "drf-yasg>=1.21.15",
@@ -89,6 +89,9 @@ docker = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.uv]
 required-version = ">=0.8.20"

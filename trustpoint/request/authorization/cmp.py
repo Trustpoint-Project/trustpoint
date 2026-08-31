@@ -4,7 +4,10 @@
 """Provides the 'CmpAuthorization' class using the Composite pattern for modular CMP authorization."""
 from typing import Never
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import Encoding
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
+from trustpoint_core.oid import HashAlgorithm, SignatureSuite
 
 from cmp.models import CmpTransactionModel
 from cmp.util import PKI_STATUS_REJECTION, PKIFailureInfo
@@ -29,6 +32,17 @@ from .base import (
     ProtocolAuthorization,
     SecurityConfigAuthorization,
 )
+
+CERTCONF_ALLOWED_DIGESTS: dict[HashAlgorithm, type[hashes.HashAlgorithm]] = {
+    HashAlgorithm.SHA224: hashes.SHA224,
+    HashAlgorithm.SHA256: hashes.SHA256,
+    HashAlgorithm.SHA384: hashes.SHA384,
+    HashAlgorithm.SHA512: hashes.SHA512,
+    HashAlgorithm.SHA3_224: hashes.SHA3_224,
+    HashAlgorithm.SHA3_256: hashes.SHA3_256,
+    HashAlgorithm.SHA3_384: hashes.SHA3_384,
+    HashAlgorithm.SHA3_512: hashes.SHA3_512,
+}
 
 
 class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
@@ -159,17 +173,9 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
             self.logger.warning('certConf authorization failed: certHash is missing')
             self._raise_authorization_error(error_message, context)
 
-        # The certHash in RFC 4210 §5.3.18 is computed as SHA-256 over the
-        # DER-encoded certificate.
         cert_hash_hex: str = context.cert_hash.hex().upper()
-
-        cert_model = (
-            IssuedCredentialModel.objects.filter(
-                credential__certificate__sha256_fingerprint=cert_hash_hex
-            )
-            .select_related('credential', 'device', 'domain')
-            .first()
-        )
+        hash_algorithm = self._resolve_certconf_hash_algorithm(context)
+        cert_model = self._resolve_issued_credential_by_cert_hash(context=context, hash_algorithm=hash_algorithm)
 
         if cert_model is None:
             error_message = (
@@ -187,6 +193,70 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
             cert_model.common_name,
             cert_hash_hex,
         )
+
+    def _resolve_certconf_hash_algorithm(self, context: CmpCertConfRequestContext) -> hashes.HashAlgorithm:
+        """Resolve the digest declared by certConf hashAlg, defaulting to SHA-256."""
+        if not context.cert_hash_algorithm_oid:
+            return hashes.SHA256()
+
+        try:
+            hash_algorithm = HashAlgorithm.from_dotted_string(context.cert_hash_algorithm_oid)
+        except ValueError as exc:
+            msg = f'certConf hashAlg OID {context.cert_hash_algorithm_oid!r} is unsupported.'
+            self._raise_authorization_error(msg, context)
+            raise ValueError(msg) from exc
+
+        digest_factory = CERTCONF_ALLOWED_DIGESTS.get(hash_algorithm)
+        if digest_factory is None:
+            msg = f'certConf hashAlg OID {context.cert_hash_algorithm_oid!r} is not permitted.'
+            self._raise_authorization_error(msg, context)
+            raise ValueError(msg)
+        return digest_factory()
+
+    def _resolve_issued_credential_by_cert_hash(
+        self,
+        *,
+        context: CmpCertConfRequestContext,
+        hash_algorithm: hashes.HashAlgorithm,
+    ) -> IssuedCredentialModel | None:
+        """Resolve the issued credential by certHash using the declared digest algorithm."""
+        cert_hash = context.cert_hash
+        if cert_hash is None:
+            msg = 'certConf rejection received but certHash is missing. Authorization denied.'
+            self._raise_authorization_error(msg, context)
+
+        cert_hash_hex = cert_hash.hex().upper()
+
+        if isinstance(hash_algorithm, hashes.SHA256):
+            issued_cred = (
+                IssuedCredentialModel.objects.filter(
+                    credential__certificate__sha256_fingerprint=cert_hash_hex
+                )
+                .select_related('credential', 'device', 'domain')
+                .first()
+            )
+            if issued_cred is None:
+                return None
+            if context.cert_hash_algorithm_oid is None:
+                signature_hash = SignatureSuite.from_certificate(
+                    issued_cred.credential.get_certificate()
+                ).algorithm_identifier.hash_algorithm
+                if signature_hash is None:
+                    self._raise_authorization_error(
+                        'certConf hashAlg is required for certificates whose signature algorithm has no implicit hash.',
+                        context,
+                    )
+            return issued_cred
+
+        issued_credentials = IssuedCredentialModel.objects.select_related('credential', 'device', 'domain')
+        for issued_cred in issued_credentials.iterator():
+            certificate = issued_cred.credential.get_certificate()
+            certificate_der = certificate.public_bytes(Encoding.DER)
+            digest_ctx = hashes.Hash(hash_algorithm)
+            digest_ctx.update(certificate_der)
+            if digest_ctx.finalize() == cert_hash:
+                return issued_cred
+        return None
 
     def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> Never:
         """Set a generic error on the context and raise ValueError."""
