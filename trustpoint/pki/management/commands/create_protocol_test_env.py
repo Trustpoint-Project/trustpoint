@@ -3,20 +3,18 @@
 
 """Sets up a Trustpoint test environment for CMP / EST / REST enrollment endpoint testing.
 
-Creates a single issuing CA and domain plus six devices, one for each combination of
-onboarding mode and PKI protocol:
+Trustpoint requires the end entity key to match the signature suite of the issuing CA, so
+each protocol gets its own issuing CA and domain with a different signature algorithm:
 
-============================  ================  ==============================
-Device                        Onboarding        Application certificate via
-============================  ================  ==============================
-``est-onboarding-device``     EST user/pass     EST (domain credential / mTLS)
-``cmp-onboarding-device``     CMP shared sec.   CMP (domain credential / mTLS)
-``rest-onboarding-device``    REST user/pass    REST (domain credential / mTLS)
-``est-no-onboarding-device``  none              EST username & password
-``cmp-no-onboarding-device``  none              CMP shared secret
-``rest-no-onboarding-device`` none              REST username & password
-============================  ================  ==============================
+========  ==========  ==========================  =========================
+Protocol  Algorithm   Issuing CA                  Domain
+========  ==========  ==========================  =========================
+EST       EC P-256    ``protocol-test-ca-ec``     ``protocoltest-est``
+CMP       ML-DSA-65   ``protocol-test-ca-mldsa``  ``protocoltest-cmp``
+REST      RSA-2048    ``protocol-test-ca-rsa``    ``protocoltest-rest``
+========  ==========  ==========================  =========================
 
+Every domain contains two devices, one that requires onboarding and one that does not.
 The credentials are written as JSON to the path given by ``--output`` so that shell based
 integration tests can consume them.
 """
@@ -24,13 +22,20 @@ integration tests can consume them.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from cryptography.hazmat.primitives import hashes
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
+from crypto.application.private_keys import (
+    ManagedECPrivateKey,
+    ManagedMLDSAPrivateKey,
+    ManagedRSAPrivateKey,
+)
+from crypto.domain.algorithms import EllipticCurveName
+from crypto.domain.specs import MlDsaVariant
 from devices.models import DeviceModel
 from onboarding.models import (
     NoOnboardingConfigModel,
@@ -49,29 +54,72 @@ if TYPE_CHECKING:
     from argparse import ArgumentParser
     from typing import Any
 
-CA_UNIQUE_NAME = 'protocol-test-ca'
-DOMAIN_UNIQUE_NAME = 'protocoltest'
+type ManagedCaPrivateKey = ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey
 
 EST_PASSWORD = 'protocoltest-est-secret'  # noqa: S105
 CMP_SHARED_SECRET = 'protocoltest-cmp-secret'  # noqa: S105
 
-ONBOARDING_DEVICES = {
-    'est-onboarding-device': (OnboardingProtocol.EST_USERNAME_PASSWORD, OnboardingPkiProtocol.EST),
-    'cmp-onboarding-device': (OnboardingProtocol.CMP_SHARED_SECRET, OnboardingPkiProtocol.CMP),
-    'rest-onboarding-device': (OnboardingProtocol.REST_USERNAME_PASSWORD, OnboardingPkiProtocol.REST),
-}
+RSA_KEY_SIZE = 2048
+EC_CURVE = EllipticCurveName.SECP256R1
+MLDSA_VARIANT = MlDsaVariant.MLDSA65
 
-NO_ONBOARDING_DEVICES = {
-    'est-no-onboarding-device': NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
-    'cmp-no-onboarding-device': NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
-    'rest-no-onboarding-device': NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD,
-}
+
+@dataclass(frozen=True)
+class ProtocolSetup:
+    """Describes the CA, domain and devices used to test a single enrollment protocol."""
+
+    protocol: str
+    key_algorithm: str
+    ca_unique_name: str
+    domain_unique_name: str
+    onboarding_device: str
+    onboarding_protocol: OnboardingProtocol
+    onboarding_pki_protocol: OnboardingPkiProtocol
+    no_onboarding_device: str
+    no_onboarding_pki_protocol: NoOnboardingPkiProtocol
+
+
+PROTOCOL_SETUPS = (
+    ProtocolSetup(
+        protocol='est',
+        key_algorithm='ec',
+        ca_unique_name='protocol-test-ca-ec',
+        domain_unique_name='protocoltest-est',
+        onboarding_device='est-onboarding-device',
+        onboarding_protocol=OnboardingProtocol.EST_USERNAME_PASSWORD,
+        onboarding_pki_protocol=OnboardingPkiProtocol.EST,
+        no_onboarding_device='est-no-onboarding-device',
+        no_onboarding_pki_protocol=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+    ),
+    ProtocolSetup(
+        protocol='cmp',
+        key_algorithm='mldsa',
+        ca_unique_name='protocol-test-ca-mldsa',
+        domain_unique_name='protocoltest-cmp',
+        onboarding_device='cmp-onboarding-device',
+        onboarding_protocol=OnboardingProtocol.CMP_SHARED_SECRET,
+        onboarding_pki_protocol=OnboardingPkiProtocol.CMP,
+        no_onboarding_device='cmp-no-onboarding-device',
+        no_onboarding_pki_protocol=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
+    ),
+    ProtocolSetup(
+        protocol='rest',
+        key_algorithm='rsa',
+        ca_unique_name='protocol-test-ca-rsa',
+        domain_unique_name='protocoltest-rest',
+        onboarding_device='rest-onboarding-device',
+        onboarding_protocol=OnboardingProtocol.REST_USERNAME_PASSWORD,
+        onboarding_pki_protocol=OnboardingPkiProtocol.REST,
+        no_onboarding_device='rest-no-onboarding-device',
+        no_onboarding_pki_protocol=NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD,
+    ),
+)
 
 
 class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
     """Creates a Trustpoint test environment for CMP / EST / REST endpoint testing."""
 
-    help = 'Creates an issuing CA, a domain and devices for CMP / EST / REST endpoint testing.'
+    help = 'Creates issuing CAs, domains and devices for CMP / EST / REST endpoint testing.'
 
     def add_arguments(self, parser: ArgumentParser) -> None:
         """Adds the command line arguments.
@@ -95,32 +143,34 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         """
         call_command('create_default_cert_profiles')
 
-        issuing_ca = self._get_or_create_issuing_ca()
-        domain = self._get_or_create_domain(issuing_ca)
+        environment: dict[str, Any] = {'protocols': {}}
 
-        environment: dict[str, Any] = {
-            'ca': CA_UNIQUE_NAME,
-            'domain': DOMAIN_UNIQUE_NAME,
-            'domain_credential_profile': domain.get_domain_credential_profile_name(),
-            'devices': {},
-        }
+        for setup in PROTOCOL_SETUPS:
+            issuing_ca = self._get_or_create_issuing_ca(setup)
+            domain = self._get_or_create_domain(setup, issuing_ca)
 
-        for common_name, (onboarding_protocol, pki_protocol) in ONBOARDING_DEVICES.items():
-            device = self._get_or_create_onboarding_device(domain, common_name, onboarding_protocol, pki_protocol)
-            environment['devices'][common_name] = {
-                'pk': device.pk,
-                'onboarding': True,
-                'est_password': EST_PASSWORD,
-                'cmp_shared_secret': CMP_SHARED_SECRET,
-            }
+            onboarding_device = self._get_or_create_onboarding_device(setup, domain)
+            no_onboarding_device = self._get_or_create_no_onboarding_device(setup, domain)
 
-        for common_name, no_onboarding_pki_protocol in NO_ONBOARDING_DEVICES.items():
-            device = self._get_or_create_no_onboarding_device(domain, common_name, no_onboarding_pki_protocol)
-            environment['devices'][common_name] = {
-                'pk': device.pk,
-                'onboarding': False,
-                'est_password': EST_PASSWORD,
-                'cmp_shared_secret': CMP_SHARED_SECRET,
+            environment['protocols'][setup.protocol] = {
+                'ca': setup.ca_unique_name,
+                'domain': setup.domain_unique_name,
+                'domain_credential_profile': domain.get_domain_credential_profile_name(),
+                'key_algorithm': setup.key_algorithm,
+                'devices': {
+                    setup.onboarding_device: {
+                        'pk': onboarding_device.pk,
+                        'onboarding': True,
+                        'est_password': EST_PASSWORD,
+                        'cmp_shared_secret': CMP_SHARED_SECRET,
+                    },
+                    setup.no_onboarding_device: {
+                        'pk': no_onboarding_device.pk,
+                        'onboarding': False,
+                        'est_password': EST_PASSWORD,
+                        'cmp_shared_secret': CMP_SHARED_SECRET,
+                    },
+                },
             }
 
         output: Path | None = options.get('output')
@@ -131,90 +181,100 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
 
         self.stdout.write(json.dumps(environment, indent=2))
 
-    def _get_or_create_issuing_ca(self) -> CaModel:
-        """Returns the existing test CA or creates a fresh RSA-2048 root and issuing CA.
+    def _create_ca_key(self, setup: ProtocolSetup, alias: str) -> ManagedCaPrivateKey:
+        """Generates a CA signing key matching the signature algorithm of the given setup.
+
+        Args:
+            setup: The protocol setup describing the desired algorithm.
+            alias: The backend key alias.
+
+        Returns:
+            The generated managed private key.
+        """
+        if setup.key_algorithm == 'rsa':
+            return self.create_backend_rsa_private_key(alias=alias, key_size=RSA_KEY_SIZE)
+        if setup.key_algorithm == 'ec':
+            return self.create_backend_ec_private_key(alias=alias, curve=EC_CURVE)
+        if setup.key_algorithm == 'mldsa':
+            return self.create_backend_mldsa_private_key(alias=alias, variant=MLDSA_VARIANT)
+        msg = f'Unsupported key algorithm {setup.key_algorithm!r}.'
+        raise ValueError(msg)
+
+    def _get_or_create_issuing_ca(self, setup: ProtocolSetup) -> CaModel:
+        """Returns the existing test CA or creates a root and issuing CA for the given setup.
+
+        Args:
+            setup: The protocol setup describing the CA to create.
 
         Returns:
             The issuing CA model instance.
         """
-        existing = CaModel.objects.filter(unique_name=CA_UNIQUE_NAME).first()
+        existing = CaModel.objects.filter(unique_name=setup.ca_unique_name).first()
         if existing:
-            self.stdout.write(f'Issuing CA "{CA_UNIQUE_NAME}" already exists.')
+            self.stdout.write(f'Issuing CA "{setup.ca_unique_name}" already exists.')
             return existing
 
-        root_key = self.create_backend_rsa_private_key(alias=f'{CA_UNIQUE_NAME}-root', key_size=2048)
-        issuing_key = self.create_backend_rsa_private_key(alias=CA_UNIQUE_NAME, key_size=2048)
+        root_key = self._create_ca_key(setup, f'{setup.ca_unique_name}-root')
+        issuing_key = self._create_ca_key(setup, setup.ca_unique_name)
 
-        root_cert, _ = self.create_root_ca(
-            f'{CA_UNIQUE_NAME}-root',
-            private_key=root_key,
-            hash_algorithm=hashes.SHA256(),
-        )
+        root_cert, _ = self.create_root_ca(f'{setup.ca_unique_name}-root', private_key=root_key)
         issuing_cert, _ = self.create_issuing_ca(
             issuer_private_key=root_key,
             private_key=issuing_key,
-            issuer_cn=f'{CA_UNIQUE_NAME}-root',
-            subject_cn=CA_UNIQUE_NAME,
-            hash_algorithm=hashes.SHA256(),
+            issuer_cn=f'{setup.ca_unique_name}-root',
+            subject_cn=setup.ca_unique_name,
         )
         issuing_ca = CertificateGenerator.save_issuing_ca(
             issuing_ca_cert=issuing_cert,
             chain=[root_cert],
             private_key=issuing_key,
-            unique_name=CA_UNIQUE_NAME,
+            unique_name=setup.ca_unique_name,
         )
-        self.stdout.write(f'Created issuing CA "{CA_UNIQUE_NAME}".')
+        self.stdout.write(f'Created issuing CA "{setup.ca_unique_name}" ({setup.key_algorithm}).')
         return issuing_ca
 
-    def _get_or_create_domain(self, issuing_ca: CaModel) -> DomainModel:
-        """Returns the existing test domain or creates it, linked to the given issuing CA.
+    def _get_or_create_domain(self, setup: ProtocolSetup, issuing_ca: CaModel) -> DomainModel:
+        """Returns the existing domain or creates it, linked to the given issuing CA.
 
         Args:
+            setup: The protocol setup describing the domain to create.
             issuing_ca: The issuing CA to associate with the domain.
 
         Returns:
             The domain model instance.
         """
         domain, created = DomainModel.objects.get_or_create(
-            unique_name=DOMAIN_UNIQUE_NAME,
+            unique_name=setup.domain_unique_name,
             defaults={'issuing_ca': issuing_ca},
         )
         if not created:
             domain.issuing_ca = issuing_ca
             domain.save()
-        self.stdout.write(f'{"Created" if created else "Updated"} domain "{DOMAIN_UNIQUE_NAME}".')
+        self.stdout.write(f'{"Created" if created else "Updated"} domain "{setup.domain_unique_name}".')
         return domain
 
-    def _get_or_create_onboarding_device(
-        self,
-        domain: DomainModel,
-        common_name: str,
-        onboarding_protocol: OnboardingProtocol,
-        pki_protocol: OnboardingPkiProtocol,
-    ) -> DeviceModel:
+    def _get_or_create_onboarding_device(self, setup: ProtocolSetup, domain: DomainModel) -> DeviceModel:
         """Returns the existing device or creates one requiring onboarding.
 
         Args:
+            setup: The protocol setup describing the device to create.
             domain: The domain to place the device in.
-            common_name: The common name of the device.
-            onboarding_protocol: The onboarding protocol the device uses.
-            pki_protocol: The PKI protocol allowed for application certificates.
 
         Returns:
             The device model instance.
         """
-        existing = DeviceModel.objects.filter(common_name=common_name).first()
+        existing = DeviceModel.objects.filter(common_name=setup.onboarding_device).first()
         if existing:
-            self.stdout.write(f'Device "{common_name}" already exists.')
+            self.stdout.write(f'Device "{setup.onboarding_device}" already exists.')
             return existing
 
         onboarding_config = OnboardingConfigModel(
             onboarding_status=OnboardingStatus.PENDING,
-            onboarding_protocol=onboarding_protocol,
+            onboarding_protocol=setup.onboarding_protocol,
         )
-        onboarding_config.set_pki_protocols([pki_protocol])
+        onboarding_config.set_pki_protocols([setup.onboarding_pki_protocol])
 
-        if onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
+        if setup.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
             onboarding_config.cmp_shared_secret = CMP_SHARED_SECRET
         else:
             onboarding_config.est_password = EST_PASSWORD
@@ -222,38 +282,35 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         onboarding_config.save()
 
         device = DeviceModel(
-            common_name=common_name,
-            serial_number=common_name.upper(),
+            common_name=setup.onboarding_device,
+            serial_number=setup.onboarding_device.upper(),
             domain=domain,
             device_type=DeviceModel.DeviceType.GENERIC_DEVICE,
             onboarding_config=onboarding_config,
         )
         device.save()
-        self.stdout.write(f'Created device "{common_name}" (onboarding).')
+        self.stdout.write(f'Created device "{setup.onboarding_device}" (onboarding).')
         return device
 
-    def _get_or_create_no_onboarding_device(
-        self, domain: DomainModel, common_name: str, pki_protocol: NoOnboardingPkiProtocol
-    ) -> DeviceModel:
+    def _get_or_create_no_onboarding_device(self, setup: ProtocolSetup, domain: DomainModel) -> DeviceModel:
         """Returns the existing device or creates one that does not require onboarding.
 
         Args:
+            setup: The protocol setup describing the device to create.
             domain: The domain to place the device in.
-            common_name: The common name of the device.
-            pki_protocol: The PKI protocol allowed for application certificates.
 
         Returns:
             The device model instance.
         """
-        existing = DeviceModel.objects.filter(common_name=common_name).first()
+        existing = DeviceModel.objects.filter(common_name=setup.no_onboarding_device).first()
         if existing:
-            self.stdout.write(f'Device "{common_name}" already exists.')
+            self.stdout.write(f'Device "{setup.no_onboarding_device}" already exists.')
             return existing
 
         no_onboarding_config = NoOnboardingConfigModel()
-        no_onboarding_config.set_pki_protocols([pki_protocol])
+        no_onboarding_config.set_pki_protocols([setup.no_onboarding_pki_protocol])
 
-        if pki_protocol == NoOnboardingPkiProtocol.CMP_SHARED_SECRET:
+        if setup.no_onboarding_pki_protocol == NoOnboardingPkiProtocol.CMP_SHARED_SECRET:
             no_onboarding_config.cmp_shared_secret = CMP_SHARED_SECRET
         else:
             no_onboarding_config.est_password = EST_PASSWORD
@@ -261,12 +318,12 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         no_onboarding_config.save()
 
         device = DeviceModel(
-            common_name=common_name,
-            serial_number=common_name.upper(),
+            common_name=setup.no_onboarding_device,
+            serial_number=setup.no_onboarding_device.upper(),
             domain=domain,
             device_type=DeviceModel.DeviceType.GENERIC_DEVICE,
             no_onboarding_config=no_onboarding_config,
         )
         device.save()
-        self.stdout.write(f'Created device "{common_name}" (no onboarding).')
+        self.stdout.write(f'Created device "{setup.no_onboarding_device}" (no onboarding).')
         return device

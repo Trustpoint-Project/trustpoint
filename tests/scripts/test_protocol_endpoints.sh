@@ -7,6 +7,13 @@
 # Expects a running Trustpoint HTTPS server and a test environment created with
 #   uv run trustpoint/manage.py create_protocol_test_env --output <env-file>
 #
+# Each protocol uses its own issuing CA, domain and signature algorithm, because Trustpoint
+# requires the end entity key to match the signature suite of the issuing CA:
+#
+#   EST  -> EC P-256
+#   CMP  -> ML-DSA-65   (requires OpenSSL >= 3.5)
+#   REST -> RSA-2048
+#
 # For every protocol two devices are exercised:
 #   * a device without onboarding, authenticating directly with its shared secret
 #   * a device with onboarding, which first obtains a domain credential and then
@@ -52,6 +59,11 @@ for tool in openssl curl jq python3; do
     command -v "${tool}" >/dev/null || { echo "Required tool not found: ${tool}" >&2; exit 2; }
 done
 
+if ! openssl genpkey -algorithm ML-DSA-65 -out /dev/null 2>/dev/null; then
+    echo "ML-DSA is not supported by $(openssl version). OpenSSL >= 3.5 is required." >&2
+    exit 2
+fi
+
 TLS_CERT="$(cd "$(dirname "${TLS_CERT}")" && pwd)/$(basename "${TLS_CERT}")"
 ENV_FILE="$(cd "$(dirname "${ENV_FILE}")" && pwd)/$(basename "${ENV_FILE}")"
 
@@ -62,9 +74,6 @@ mkdir -p "${WORK_DIR}"
 cd "${WORK_DIR}"
 
 BASE_URL="https://${HOST}"
-CA_NAME="$(jq -r .ca "${ENV_FILE}")"
-DOMAIN="$(jq -r .domain "${ENV_FILE}")"
-DC_PROFILE="$(jq -r .domain_credential_profile "${ENV_FILE}")"
 APP_PROFILE="tls_server"
 
 APP_SUBJECT="/CN=tls_server.local"
@@ -74,13 +83,53 @@ DC_SUBJECT="/CN=Trustpoint-Domain-Credential"
 
 FAILURES=0
 
+proto_field() {
+    jq -r ".protocols[\"$1\"].$2" "${ENV_FILE}"
+}
+
 device_field() {
-    jq -r ".devices[\"$1\"].$2" "${ENV_FILE}"
+    jq -r ".protocols[\"$1\"].devices[\"$2\"].$3" "${ENV_FILE}"
 }
 
 log() {
     echo
     echo "=== $* ==="
+}
+
+fail() {
+    echo "FAIL: $*" >&2
+    FAILURES=$((FAILURES + 1))
+    return 1
+}
+
+gen_key() {
+    local out="$1" algorithm="$2"
+    case "${algorithm}" in
+        rsa) openssl genrsa -out "${out}" 2048 2>/dev/null ;;
+        ec) openssl ecparam -name prime256v1 -genkey -noout -out "${out}" ;;
+        mldsa) openssl genpkey -algorithm ML-DSA-65 -out "${out}" 2>/dev/null ;;
+        *) fail "Unsupported key algorithm: ${algorithm}" ;;
+    esac
+}
+
+# Maps the environment key algorithm to the name OpenSSL prints for the public key.
+expected_public_key_algorithm() {
+    case "$1" in
+        rsa) echo 'rsaEncryption' ;;
+        ec) echo 'id-ecPublicKey' ;;
+        mldsa) echo 'ML-DSA-65' ;;
+        *) echo 'unknown' ;;
+    esac
+}
+
+gen_app_csr_der() {
+    openssl req -new -key "$1" -outform DER -out "$2" \
+        -addext "subjectAltName = ${APP_SAN_REQ}" -subj "${APP_SUBJECT}"
+}
+
+gen_app_csr_pem() {
+    openssl req -new -key "$1" -out "$2" \
+        -addext "subjectAltName = ${APP_SAN_REQ}" -subj "${APP_SUBJECT}"
 }
 
 # Extracts the certificate with the given subject common name from a PEM bundle.
@@ -99,12 +148,6 @@ extract_cert_by_cn() {
     done
     rm -rf "${dir}"
     echo "No certificate with CN='${cn}' found in ${bundle}" >&2
-    return 1
-}
-
-fail() {
-    echo "FAIL: $*" >&2
-    FAILURES=$((FAILURES + 1))
     return 1
 }
 
@@ -135,7 +178,7 @@ extract_rest_certificate() {
 }
 
 assert_tls_server_cert() {
-    local cert="$1" label="$2" subject issuer
+    local cert="$1" label="$2" ca_name="$3" algorithm="$4" subject issuer expected_algorithm
 
     if [[ ! -s "${cert}" ]]; then
         fail "${label}: no certificate was written"
@@ -152,13 +195,20 @@ assert_tls_server_cert() {
 
     subject="$(openssl x509 -in "${cert}" -noout -subject)"
     issuer="$(openssl x509 -in "${cert}" -noout -issuer)"
+    expected_algorithm="$(expected_public_key_algorithm "${algorithm}")"
 
     if [[ "${subject}" != *'tls_server.local'* ]]; then
         fail "${label}: unexpected subject: ${subject}"
         return 1
     fi
-    if [[ "${issuer}" != *"${CA_NAME}"* ]]; then
+    if [[ "${issuer}" != *"${ca_name}"* ]]; then
         fail "${label}: unexpected issuer: ${issuer}"
+        return 1
+    fi
+    if ! openssl x509 -in "${cert}" -noout -text | grep -q "Public Key Algorithm: ${expected_algorithm}"; then
+        fail "${label}: expected a ${expected_algorithm} key, got: $(
+            openssl x509 -in "${cert}" -noout -text | grep -m1 'Public Key Algorithm:'
+        )"
         return 1
     fi
     if ! openssl x509 -in "${cert}" -noout -ext extendedKeyUsage 2>/dev/null | grep -q 'TLS Web Server Authentication'; then
@@ -170,7 +220,7 @@ assert_tls_server_cert() {
         return 1
     fi
 
-    echo "PASS: ${label}: ${subject}"
+    echo "PASS: ${label}: ${subject} [${expected_algorithm}]"
     return 0
 }
 
@@ -203,70 +253,66 @@ curl_rest() {
         "${url}"
 }
 
-gen_key() {
-    openssl genrsa -out "$1" 2048 2>/dev/null
-}
-
-gen_app_csr_der() {
-    openssl req -new -key "$1" -outform DER -out "$2" \
-        -addext "subjectAltName = ${APP_SAN_REQ}" -subj "${APP_SUBJECT}"
-}
-
-gen_app_csr_pem() {
-    openssl req -new -key "$1" -out "$2" \
-        -addext "subjectAltName = ${APP_SAN_REQ}" -subj "${APP_SUBJECT}"
-}
-
 # --------------------------------------------------------------------------------------
 # EST
 # --------------------------------------------------------------------------------------
 
 test_est_no_onboarding() {
     local device='est-no-onboarding-device' p='est-no'
-    log "EST without onboarding (${device})"
+    local domain ca algorithm
+    domain="$(proto_field est domain)"
+    ca="$(proto_field est ca)"
+    algorithm="$(proto_field est key_algorithm)"
 
-    gen_key "${p}-key.pem"
+    log "EST without onboarding (${device}, ${algorithm})"
+
+    gen_key "${p}-key.pem" "${algorithm}"
     gen_app_csr_der "${p}-key.pem" "${p}-csr.der"
 
-    curl_est "${p}.p7c" "${BASE_URL}/.well-known/est/${DOMAIN}/${APP_PROFILE}/simpleenroll" \
-        --user "${device}:$(device_field "${device}" est_password)" \
+    curl_est "${p}.p7c" "${BASE_URL}/.well-known/est/${domain}/${APP_PROFILE}/simpleenroll" \
+        --user "${device}:$(device_field est "${device}" est_password)" \
         --data-binary "@${p}-csr.der" || { fail "EST enrollment for ${device}: $(head -c 200 "${p}.p7c")"; return 1; }
 
     decode_pkcs7_response "${p}.p7c" "${p}-bundle.pem" 'EST / no onboarding' || return 1
     extract_cert_by_cn "${p}-bundle.pem" 'tls_server.local' "${p}-cert.pem" || { fail "${device}"; return 1; }
-    assert_tls_server_cert "${p}-cert.pem" "EST / no onboarding"
+    assert_tls_server_cert "${p}-cert.pem" 'EST / no onboarding' "${ca}" "${algorithm}"
 }
 
 test_est_onboarding() {
     local device='est-onboarding-device' p='est-ob'
-    log "EST with onboarding (${device})"
+    local domain ca algorithm dc_profile password
+    domain="$(proto_field est domain)"
+    ca="$(proto_field est ca)"
+    algorithm="$(proto_field est key_algorithm)"
+    dc_profile="$(proto_field est domain_credential_profile)"
+    password="$(device_field est "${device}" est_password)"
 
-    local password
-    password="$(device_field "${device}" est_password)"
+    log "EST with onboarding (${device}, ${algorithm})"
 
-    gen_key "${p}-dc-key.pem"
+    gen_key "${p}-dc-key.pem" "${algorithm}"
     openssl req -new -key "${p}-dc-key.pem" -outform DER -out "${p}-dc-csr.der" -subj "${DC_SUBJECT}"
 
-    curl_est "${p}-dc.p7c" "${BASE_URL}/.well-known/est/${DOMAIN}/${DC_PROFILE}/simpleenroll" \
+    curl_est "${p}-dc.p7c" "${BASE_URL}/.well-known/est/${domain}/${dc_profile}/simpleenroll" \
         --user "${device}:${password}" \
-        --data-binary "@${p}-dc-csr.der" || { fail "EST onboarding for ${device}: $(head -c 200 "${p}-dc.p7c")"; return 1; }
+        --data-binary "@${p}-dc-csr.der" \
+        || { fail "EST onboarding for ${device}: $(head -c 200 "${p}-dc.p7c")"; return 1; }
 
     decode_pkcs7_response "${p}-dc.p7c" "${p}-dc-bundle.pem" 'EST / onboarding' || return 1
     extract_cert_by_cn "${p}-dc-bundle.pem" 'Trustpoint-Domain-Credential' "${p}-dc-cert.pem" \
         || { fail "domain credential for ${device}"; return 1; }
     echo "Onboarded ${device}: $(openssl x509 -in "${p}-dc-cert.pem" -noout -subject)"
 
-    gen_key "${p}-key.pem"
+    gen_key "${p}-key.pem" "${algorithm}"
     gen_app_csr_der "${p}-key.pem" "${p}-csr.der"
 
-    curl_est "${p}.p7c" "${BASE_URL}/.well-known/est/${DOMAIN}/${APP_PROFILE}/simpleenroll" \
+    curl_est "${p}.p7c" "${BASE_URL}/.well-known/est/${domain}/${APP_PROFILE}/simpleenroll" \
         --cert "${p}-dc-cert.pem" --key "${p}-dc-key.pem" \
         --header "SSL-CLIENT-CERT: $(client_cert_header "${p}-dc-cert.pem")" \
         --data-binary "@${p}-csr.der" || { fail "EST enrollment for ${device}: $(head -c 200 "${p}.p7c")"; return 1; }
 
     decode_pkcs7_response "${p}.p7c" "${p}-bundle.pem" 'EST / onboarded' || return 1
     extract_cert_by_cn "${p}-bundle.pem" 'tls_server.local' "${p}-cert.pem" || { fail "${device}"; return 1; }
-    assert_tls_server_cert "${p}-cert.pem" 'EST / onboarded'
+    assert_tls_server_cert "${p}-cert.pem" 'EST / onboarded' "${ca}" "${algorithm}"
 }
 
 # --------------------------------------------------------------------------------------
@@ -275,37 +321,46 @@ test_est_onboarding() {
 
 test_cmp_no_onboarding() {
     local device='cmp-no-onboarding-device' p='cmp-no'
-    log "CMP without onboarding (${device})"
+    local domain ca algorithm
+    domain="$(proto_field cmp domain)"
+    ca="$(proto_field cmp ca)"
+    algorithm="$(proto_field cmp key_algorithm)"
 
-    gen_key "${p}-key.pem"
+    log "CMP without onboarding (${device}, ${algorithm})"
+
+    gen_key "${p}-key.pem" "${algorithm}"
 
     if ! openssl cmp -cmd cr \
         -tls_used -tls_trusted "${TLS_CERT}" \
-        -server "${BASE_URL}/.well-known/cmp/p/${DOMAIN}/${APP_PROFILE}/certification" \
-        -ref "$(device_field "${device}" pk)" \
-        -secret "pass:$(device_field "${device}" cmp_shared_secret)" \
+        -server "${BASE_URL}/.well-known/cmp/p/${domain}/${APP_PROFILE}/certification" \
+        -ref "$(device_field cmp "${device}" pk)" \
+        -secret "pass:$(device_field cmp "${device}" cmp_shared_secret)" \
         -subject "${APP_SUBJECT}" -days 10 -sans "${APP_SAN_CMP}" \
         -newkey "${p}-key.pem" \
         -certout "${p}-cert.pem" -chainout "${p}-chain.pem" -extracertsout "${p}-full-chain.pem"; then
         fail "CMP enrollment for ${device}"
         return 1
     fi
-    assert_tls_server_cert "${p}-cert.pem" 'CMP / no onboarding'
+    assert_tls_server_cert "${p}-cert.pem" 'CMP / no onboarding' "${ca}" "${algorithm}"
 }
 
 test_cmp_onboarding() {
     local device='cmp-onboarding-device' p='cmp-ob'
-    log "CMP with onboarding (${device})"
+    local domain ca algorithm dc_profile pk secret
+    domain="$(proto_field cmp domain)"
+    ca="$(proto_field cmp ca)"
+    algorithm="$(proto_field cmp key_algorithm)"
+    dc_profile="$(proto_field cmp domain_credential_profile)"
+    pk="$(device_field cmp "${device}" pk)"
+    secret="$(device_field cmp "${device}" cmp_shared_secret)"
 
-    local pk secret
-    pk="$(device_field "${device}" pk)"
-    secret="$(device_field "${device}" cmp_shared_secret)"
+    log "CMP with onboarding (${device}, ${algorithm})"
 
-    gen_key "${p}-dc-key.pem"
+    gen_key "${p}-dc-key.pem" "${algorithm}"
 
     if ! openssl cmp -cmd ir \
         -tls_used -tls_trusted "${TLS_CERT}" \
-        -server "${BASE_URL}/.well-known/cmp/p/${DOMAIN}/${DC_PROFILE}/initialization" \
+        -server "${BASE_URL}/.well-known/cmp/p/${domain}/${dc_profile}/initialization" \
         -ref "${pk}" -secret "pass:${secret}" \
         -subject "${DC_SUBJECT}" \
         -newkey "${p}-dc-key.pem" \
@@ -315,12 +370,12 @@ test_cmp_onboarding() {
     fi
     echo "Onboarded ${device}: $(openssl x509 -in "${p}-dc-cert.pem" -noout -subject)"
 
-    gen_key "${p}-key.pem"
+    gen_key "${p}-key.pem" "${algorithm}"
 
     if ! openssl cmp -cmd cr \
         -tls_used -tls_trusted "${TLS_CERT}" \
         -trusted "${p}-dc-full-chain.pem" \
-        -server "${BASE_URL}/.well-known/cmp/p/${DOMAIN}/${APP_PROFILE}/certification" \
+        -server "${BASE_URL}/.well-known/cmp/p/${domain}/${APP_PROFILE}/certification" \
         -cert "${p}-dc-cert.pem" -key "${p}-dc-key.pem" \
         -subject "${APP_SUBJECT}" -days 10 -sans "${APP_SAN_CMP}" \
         -newkey "${p}-key.pem" \
@@ -328,7 +383,7 @@ test_cmp_onboarding() {
         fail "CMP enrollment for ${device}"
         return 1
     fi
-    assert_tls_server_cert "${p}-cert.pem" 'CMP / onboarded'
+    assert_tls_server_cert "${p}-cert.pem" 'CMP / onboarded' "${ca}" "${algorithm}"
 }
 
 # --------------------------------------------------------------------------------------
@@ -337,49 +392,59 @@ test_cmp_onboarding() {
 
 test_rest_no_onboarding() {
     local device='rest-no-onboarding-device' p='rest-no'
-    log "REST without onboarding (${device})"
+    local domain ca algorithm
+    domain="$(proto_field rest domain)"
+    ca="$(proto_field rest ca)"
+    algorithm="$(proto_field rest key_algorithm)"
 
-    gen_key "${p}-key.pem"
+    log "REST without onboarding (${device}, ${algorithm})"
+
+    gen_key "${p}-key.pem" "${algorithm}"
     gen_app_csr_pem "${p}-key.pem" "${p}-csr.pem"
 
-    curl_rest "${p}.json" "${p}-csr.pem" "${BASE_URL}/rest/${DOMAIN}/${APP_PROFILE}/enroll/" \
-        --user "${device}:$(device_field "${device}" est_password)" \
+    curl_rest "${p}.json" "${p}-csr.pem" "${BASE_URL}/rest/${domain}/${APP_PROFILE}/enroll/" \
+        --user "${device}:$(device_field rest "${device}" est_password)" \
         || { fail "REST enrollment for ${device}: $(head -c 200 "${p}.json")"; return 1; }
 
     extract_rest_certificate "${p}.json" "${p}-cert.pem" 'REST / no onboarding' || return 1
-    assert_tls_server_cert "${p}-cert.pem" 'REST / no onboarding'
+    assert_tls_server_cert "${p}-cert.pem" 'REST / no onboarding' "${ca}" "${algorithm}"
 }
 
 test_rest_onboarding() {
     local device='rest-onboarding-device' p='rest-ob'
-    log "REST with onboarding (${device})"
+    local domain ca algorithm dc_profile password
+    domain="$(proto_field rest domain)"
+    ca="$(proto_field rest ca)"
+    algorithm="$(proto_field rest key_algorithm)"
+    dc_profile="$(proto_field rest domain_credential_profile)"
+    password="$(device_field rest "${device}" est_password)"
 
-    local password
-    password="$(device_field "${device}" est_password)"
+    log "REST with onboarding (${device}, ${algorithm})"
 
-    gen_key "${p}-dc-key.pem"
+    gen_key "${p}-dc-key.pem" "${algorithm}"
     openssl req -new -key "${p}-dc-key.pem" -out "${p}-dc-csr.pem" -subj "${DC_SUBJECT}"
 
-    curl_rest "${p}-dc.json" "${p}-dc-csr.pem" "${BASE_URL}/rest/${DOMAIN}/${DC_PROFILE}/enroll/" \
+    curl_rest "${p}-dc.json" "${p}-dc-csr.pem" "${BASE_URL}/rest/${domain}/${dc_profile}/enroll/" \
         --user "${device}:${password}" \
         || { fail "REST onboarding for ${device}: $(head -c 200 "${p}-dc.json")"; return 1; }
 
     extract_rest_certificate "${p}-dc.json" "${p}-dc-cert.pem" 'REST / onboarding' || return 1
     echo "Onboarded ${device}: $(openssl x509 -in "${p}-dc-cert.pem" -noout -subject)"
 
-    gen_key "${p}-key.pem"
+    gen_key "${p}-key.pem" "${algorithm}"
     gen_app_csr_pem "${p}-key.pem" "${p}-csr.pem"
 
-    curl_rest "${p}.json" "${p}-csr.pem" "${BASE_URL}/rest/${DOMAIN}/${APP_PROFILE}/enroll/" \
+    curl_rest "${p}.json" "${p}-csr.pem" "${BASE_URL}/rest/${domain}/${APP_PROFILE}/enroll/" \
         --cert "${p}-dc-cert.pem" --key "${p}-dc-key.pem" \
         --header "SSL-CLIENT-CERT: $(client_cert_header "${p}-dc-cert.pem")" \
         || { fail "REST enrollment for ${device}: $(head -c 200 "${p}.json")"; return 1; }
 
     extract_rest_certificate "${p}.json" "${p}-cert.pem" 'REST / onboarded' || return 1
-    assert_tls_server_cert "${p}-cert.pem" 'REST / onboarded'
+    assert_tls_server_cert "${p}-cert.pem" 'REST / onboarded' "${ca}" "${algorithm}"
 }
 
-echo "Testing Trustpoint enrollment endpoints at ${BASE_URL} (domain: ${DOMAIN})"
+echo "Testing Trustpoint enrollment endpoints at ${BASE_URL}"
+echo "Using $(openssl version)"
 echo "Working directory: ${WORK_DIR}"
 
 # Every test is allowed to fail so that all protocols are exercised in a single run.
