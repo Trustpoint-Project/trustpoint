@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 import django.core.validators
 import django.db.models.deletion
 from django.conf import settings
@@ -10,7 +13,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('devices', '0003_tp_v0_6_0'),
-        ('pki', '0002_initial'),
+        ('pki', '0003_tp_v1_0_dev0'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

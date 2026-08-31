@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django_q.tasks import async_task  # type: ignore[import-untyped]
+from django_q.tasks import async_task
 
 from web_ui_automation.issuance import get_issuance_adapter
 from web_ui_automation.models import AutomationOperation, WebUiAutomationAssignedProfile, WebUiAutomationJob
