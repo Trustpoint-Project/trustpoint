@@ -44,7 +44,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/openssl-local
-          key: openssl-${{ env.OPENSSL_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+          key: openssl-${{ env.OPENSSL_VERSION }}-v2-${{ runner.os }}-${{ runner.arch }}
 
       - name: Build OpenSSL
         if: steps.openssl.outputs.needs_build == 'true' && steps.openssl-cache.outputs.cache-hit != 'true'
@@ -54,13 +54,21 @@ jobs:
           cd "openssl-${OPENSSL_VERSION}"
           ./Configure --prefix="$HOME/openssl-local" --openssldir="$HOME/openssl-local/ssl" shared
           make -j"$(nproc)"
-          make install_sw
+          # install_ssldirs provides openssl.cnf, without which "openssl req" cannot run.
+          make install_sw install_ssldirs
 
       - name: Use the locally built OpenSSL
         if: steps.openssl.outputs.needs_build == 'true'
         run: |
           echo "$HOME/openssl-local/bin" >> "$GITHUB_PATH"
           echo "LD_LIBRARY_PATH=$HOME/openssl-local/lib64:$HOME/openssl-local/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+
+      - name: Verify the OpenSSL toolchain
+        run: |
+          openssl version
+          openssl genpkey -algorithm ML-DSA-65 -out /tmp/verify-mldsa.pem
+          openssl ecparam -name prime256v1 -genkey -noout -out /tmp/verify-ec.pem
+          openssl req -new -key /tmp/verify-ec.pem -subj '/CN=verify' -out /dev/null
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action

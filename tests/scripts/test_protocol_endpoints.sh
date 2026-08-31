@@ -108,8 +108,8 @@ gen_key() {
         rsa) openssl genrsa -out "${out}" 2048 2>/dev/null ;;
         ec) openssl ecparam -name prime256v1 -genkey -noout -out "${out}" ;;
         mldsa) openssl genpkey -algorithm ML-DSA-65 -out "${out}" 2>/dev/null ;;
-        *) fail "Unsupported key algorithm: ${algorithm}" ;;
-    esac
+        *) fail "Unsupported key algorithm: ${algorithm}"; return 1 ;;
+    esac || { fail "Could not generate ${algorithm} key ${out}"; return 1; }
 }
 
 # Maps the environment key algorithm to the name OpenSSL prints for the public key.
@@ -124,12 +124,21 @@ expected_public_key_algorithm() {
 
 gen_app_csr_der() {
     openssl req -new -key "$1" -outform DER -out "$2" \
-        -addext "subjectAltName = ${APP_SAN_REQ}" -subj "${APP_SUBJECT}"
+        -addext "subjectAltName = ${APP_SAN_REQ}" -subj "${APP_SUBJECT}" \
+        || { fail "Could not create CSR $2"; return 1; }
 }
 
 gen_app_csr_pem() {
     openssl req -new -key "$1" -out "$2" \
-        -addext "subjectAltName = ${APP_SAN_REQ}" -subj "${APP_SUBJECT}"
+        -addext "subjectAltName = ${APP_SAN_REQ}" -subj "${APP_SUBJECT}" \
+        || { fail "Could not create CSR $2"; return 1; }
+}
+
+gen_dc_csr() {
+    local key="$1" out="$2"
+    shift 2
+    openssl req -new -key "${key}" -out "${out}" -subj "${DC_SUBJECT}" "$@" \
+        || { fail "Could not create domain credential CSR ${out}"; return 1; }
 }
 
 # Extracts the certificate with the given subject common name from a PEM bundle.
@@ -266,8 +275,8 @@ test_est_no_onboarding() {
 
     log "EST without onboarding (${device}, ${algorithm})"
 
-    gen_key "${p}-key.pem" "${algorithm}"
-    gen_app_csr_der "${p}-key.pem" "${p}-csr.der"
+    gen_key "${p}-key.pem" "${algorithm}" || return 1
+    gen_app_csr_der "${p}-key.pem" "${p}-csr.der" || return 1
 
     curl_est "${p}.p7c" "${BASE_URL}/.well-known/est/${domain}/${APP_PROFILE}/simpleenroll" \
         --user "${device}:$(device_field est "${device}" est_password)" \
@@ -289,8 +298,8 @@ test_est_onboarding() {
 
     log "EST with onboarding (${device}, ${algorithm})"
 
-    gen_key "${p}-dc-key.pem" "${algorithm}"
-    openssl req -new -key "${p}-dc-key.pem" -outform DER -out "${p}-dc-csr.der" -subj "${DC_SUBJECT}"
+    gen_key "${p}-dc-key.pem" "${algorithm}" || return 1
+    gen_dc_csr "${p}-dc-key.pem" "${p}-dc-csr.der" -outform DER || return 1
 
     curl_est "${p}-dc.p7c" "${BASE_URL}/.well-known/est/${domain}/${dc_profile}/simpleenroll" \
         --user "${device}:${password}" \
@@ -302,8 +311,8 @@ test_est_onboarding() {
         || { fail "domain credential for ${device}"; return 1; }
     echo "Onboarded ${device}: $(openssl x509 -in "${p}-dc-cert.pem" -noout -subject)"
 
-    gen_key "${p}-key.pem" "${algorithm}"
-    gen_app_csr_der "${p}-key.pem" "${p}-csr.der"
+    gen_key "${p}-key.pem" "${algorithm}" || return 1
+    gen_app_csr_der "${p}-key.pem" "${p}-csr.der" || return 1
 
     curl_est "${p}.p7c" "${BASE_URL}/.well-known/est/${domain}/${APP_PROFILE}/simpleenroll" \
         --cert "${p}-dc-cert.pem" --key "${p}-dc-key.pem" \
@@ -328,7 +337,7 @@ test_cmp_no_onboarding() {
 
     log "CMP without onboarding (${device}, ${algorithm})"
 
-    gen_key "${p}-key.pem" "${algorithm}"
+    gen_key "${p}-key.pem" "${algorithm}" || return 1
 
     if ! openssl cmp -cmd cr \
         -tls_used -tls_trusted "${TLS_CERT}" \
@@ -356,7 +365,7 @@ test_cmp_onboarding() {
 
     log "CMP with onboarding (${device}, ${algorithm})"
 
-    gen_key "${p}-dc-key.pem" "${algorithm}"
+    gen_key "${p}-dc-key.pem" "${algorithm}" || return 1
 
     if ! openssl cmp -cmd ir \
         -tls_used -tls_trusted "${TLS_CERT}" \
@@ -370,7 +379,7 @@ test_cmp_onboarding() {
     fi
     echo "Onboarded ${device}: $(openssl x509 -in "${p}-dc-cert.pem" -noout -subject)"
 
-    gen_key "${p}-key.pem" "${algorithm}"
+    gen_key "${p}-key.pem" "${algorithm}" || return 1
 
     if ! openssl cmp -cmd cr \
         -tls_used -tls_trusted "${TLS_CERT}" \
@@ -399,8 +408,8 @@ test_rest_no_onboarding() {
 
     log "REST without onboarding (${device}, ${algorithm})"
 
-    gen_key "${p}-key.pem" "${algorithm}"
-    gen_app_csr_pem "${p}-key.pem" "${p}-csr.pem"
+    gen_key "${p}-key.pem" "${algorithm}" || return 1
+    gen_app_csr_pem "${p}-key.pem" "${p}-csr.pem" || return 1
 
     curl_rest "${p}.json" "${p}-csr.pem" "${BASE_URL}/rest/${domain}/${APP_PROFILE}/enroll/" \
         --user "${device}:$(device_field rest "${device}" est_password)" \
@@ -421,8 +430,8 @@ test_rest_onboarding() {
 
     log "REST with onboarding (${device}, ${algorithm})"
 
-    gen_key "${p}-dc-key.pem" "${algorithm}"
-    openssl req -new -key "${p}-dc-key.pem" -out "${p}-dc-csr.pem" -subj "${DC_SUBJECT}"
+    gen_key "${p}-dc-key.pem" "${algorithm}" || return 1
+    gen_dc_csr "${p}-dc-key.pem" "${p}-dc-csr.pem" || return 1
 
     curl_rest "${p}-dc.json" "${p}-dc-csr.pem" "${BASE_URL}/rest/${domain}/${dc_profile}/enroll/" \
         --user "${device}:${password}" \
@@ -431,8 +440,8 @@ test_rest_onboarding() {
     extract_rest_certificate "${p}-dc.json" "${p}-dc-cert.pem" 'REST / onboarding' || return 1
     echo "Onboarded ${device}: $(openssl x509 -in "${p}-dc-cert.pem" -noout -subject)"
 
-    gen_key "${p}-key.pem" "${algorithm}"
-    gen_app_csr_pem "${p}-key.pem" "${p}-csr.pem"
+    gen_key "${p}-key.pem" "${algorithm}" || return 1
+    gen_app_csr_pem "${p}-key.pem" "${p}-csr.pem" || return 1
 
     curl_rest "${p}.json" "${p}-csr.pem" "${BASE_URL}/rest/${domain}/${APP_PROFILE}/enroll/" \
         --cert "${p}-dc-cert.pem" --key "${p}-dc-key.pem" \
