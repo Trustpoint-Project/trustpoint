@@ -58,3 +58,4 @@ class NoOnboardingPkiProtocol(models.IntegerChoices):
     # 8 reserved for EST Client Certificate
     MANUAL = 16, _('Manual')
     REST_USERNAME_PASSWORD = 32, _('REST - Username & Password')
+    WEB_UI = 64, _('Web UI')

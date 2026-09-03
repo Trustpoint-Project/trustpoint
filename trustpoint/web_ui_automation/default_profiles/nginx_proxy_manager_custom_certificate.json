@@ -1,0 +1,203 @@
+{
+  "schema": "trustpoint.web-automation.v1",
+  "name": "Nginx Proxy Manager Custom Certificate Upload",
+  "version": "1.0.0",
+  "metadata": {
+    "vendor": "Nginx Proxy Manager",
+    "device_family": "Nginx Proxy Manager",
+    "firmware_hint": "2.15.1",
+    "description": "Uploads a Trustpoint-issued PEM certificate and private key as a custom certificate in Nginx Proxy Manager."
+  },
+  "certificate_profile": "tls_server",
+  "key_generation": "trustpoint",
+  "encoding": "PEM",
+  "paths": {
+    "certificates": "/certificates"
+  },
+  "inputs": {
+    "device_username": {
+      "type": "secret",
+      "source": "device_credentials",
+      "required": true
+    },
+    "device_password": {
+      "type": "secret",
+      "source": "device_credentials",
+      "required": true
+    }
+  },
+  "operations": {
+    "onboard": {
+      "steps": [
+        {
+          "id": "open-certificates-page",
+          "action": "goto",
+          "path_ref": "certificates",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "enter-email",
+          "action": "fill",
+          "selector": "input[name='email']",
+          "value": "{{ device_username }}",
+          "sensitive": true
+        },
+        {
+          "id": "enter-password",
+          "action": "fill",
+          "selector": "input[name='password']",
+          "value": "{{ device_password }}",
+          "sensitive": true
+        },
+        {
+          "id": "submit-login",
+          "action": "press",
+          "selector": "input[name='password']",
+          "key": "Enter"
+        },
+        {
+          "id": "wait-for-certificate-page",
+          "action": "wait_for",
+          "selector": "button.dropdown-toggle.btn-pink",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "open-add-certificate-menu",
+          "action": "click",
+          "selector": "button.dropdown-toggle.btn-pink"
+        },
+        {
+          "id": "select-custom-certificate",
+          "action": "click",
+          "target": {
+            "role": "link",
+            "names": [
+              "Custom Certificate"
+            ]
+          }
+        },
+        {
+          "id": "enter-certificate-name",
+          "action": "fill",
+          "selector": "#niceName",
+          "value": "Trustpoint webui-test.local"
+        },
+        {
+          "id": "upload-private-key",
+          "action": "upload",
+          "selector": "#certificateKey",
+          "artifact": "{{ private_key_pem }}",
+          "sensitive": true
+        },
+        {
+          "id": "upload-certificate",
+          "action": "upload",
+          "selector": "#certificate",
+          "artifact": "{{ certificate_pem }}"
+        },
+        {
+          "id": "save-custom-certificate",
+          "action": "click",
+          "target": {
+            "role": "button",
+            "names": [
+              "Save"
+            ]
+          },
+          "timeout_ms": 30000
+        },
+        {
+          "id": "confirm-certificate-listed",
+          "action": "wait_for",
+          "selector": "text=Trustpoint webui-test.local",
+          "state": "visible",
+          "timeout_ms": 30000
+        }
+      ]
+    },
+    "renew": {
+    "steps": [
+      {
+        "id": "open-certificates-page",
+        "action": "goto",
+        "path_ref": "certificates",
+        "timeout_ms": 30000
+      },
+      {
+        "id": "enter-email",
+        "action": "fill",
+        "selector": "input[name='email']",
+        "value": "{{ device_username }}",
+        "sensitive": true
+      },
+      {
+        "id": "enter-password",
+        "action": "fill",
+        "selector": "input[name='password']",
+        "value": "{{ device_password }}",
+        "sensitive": true
+      },
+      {
+        "id": "submit-login",
+        "action": "press",
+        "selector": "input[name='password']",
+        "key": "Enter"
+      },
+      {
+        "id": "wait-for-managed-certificate",
+        "action": "wait_for",
+        "selector": "tr:has-text('Trustpoint webui-test.local')",
+        "state": "visible",
+        "timeout_ms": 30000
+      },
+      {
+        "id": "open-certificate-actions",
+        "action": "click",
+        "selector": "tr:has-text('Trustpoint webui-test.local') button"
+      },
+      {
+        "id": "select-renew",
+        "action": "click",
+        "target": {
+          "role": "button",
+          "names": [
+            "Renew"
+          ]
+        }
+      },
+      {
+        "id": "upload-renewed-private-key",
+        "action": "upload",
+        "selector": "#certificateKey",
+        "artifact": "{{ private_key_pem }}",
+        "sensitive": true
+      },
+      {
+        "id": "upload-renewed-certificate",
+        "action": "upload",
+        "selector": "#certificate",
+        "artifact": "{{ certificate_pem }}"
+      },
+      {
+        "id": "save-renewed-certificate",
+        "action": "click",
+        "target": {
+          "role": "button",
+          "names": [
+            "Save"
+          ]
+        },
+        "timeout_ms": 30000
+      },
+      {
+        "id": "confirm-certificate-still-in-use",
+        "action": "wait_for",
+        "selector": "tr:has-text('Trustpoint webui-test.local'):has-text('In Use')",
+        "state": "visible",
+        "timeout_ms": 30000
+      }
+    ]
+    }
+  }
+}

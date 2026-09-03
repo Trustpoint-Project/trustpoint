@@ -197,3 +197,5 @@ node_modules/
 workflow2Folder/
 
 .env
+
+/trustpoint/web_ui_automation/tests/testenv/data

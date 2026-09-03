@@ -46,11 +46,6 @@ WORKFLOW_STEP_SCHEMA = {
 class TrustpointAgent(models.Model):
     """A registered automation agent deployed inside a production cell."""
 
-    class Capability(models.TextChoices):
-        """Known job types an agent may support. An agent may declare multiple."""
-
-        WBM_CERT_PUSH = 'wbm_cert_push', _('WBM Certificate Push')
-
     name = models.CharField(
         verbose_name=_('Name'),
         max_length=120,
@@ -80,15 +75,6 @@ class TrustpointAgent(models.Model):
         ),
     )
 
-    capabilities = models.JSONField(
-        verbose_name=_('Capabilities'),
-        default=list,
-        blank=True,
-        help_text=_(
-            'List of job types this agent supports, e.g. ["wbm_cert_push"]. '
-            'Used for display and validation; does not restrict API access at runtime.'
-        ),
-    )
     cell_location = models.CharField(
         verbose_name=_('Cell Location'),
         max_length=200,
@@ -138,12 +124,7 @@ class TrustpointAgent(models.Model):
         return f'TrustpointAgent({self.name} / {self.agent_id})'
 
     def clean(self) -> None:
-        """Validate that all declared capabilities are known values and enforce device-type constraints."""
-        valid = {c.value for c in TrustpointAgent.Capability}
-        unknown = [c for c in self.capabilities if c not in valid]
-        if unknown:
-            raise ValidationError({'capabilities': f'Unknown capabilities: {unknown}'})
-
+        """Enforce device-type constraints."""
         self._validate_device_association()
 
     def _validate_device_association(self) -> None:

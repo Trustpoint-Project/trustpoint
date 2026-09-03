@@ -1,0 +1,233 @@
+{
+  "schema": "trustpoint.web-automation.v1",
+  "name": "Nginx Proxy Manager Custom Certificate Lifecycle",
+  "version": "1.2.0",
+  "metadata": {
+    "vendor": "Nginx Proxy Manager",
+    "device_family": "Nginx Proxy Manager",
+    "firmware_hint": "2.15.1",
+    "description": "Uploads a custom PEM certificate during onboarding. During renewal, deletes the previous custom certificate and uploads the renewed certificate using the same Trustpoint-managed private key. The new certificate must subsequently be assigned to the Proxy Host."
+  },
+  "certificate_profile": "tls_server",
+  "key_generation": "trustpoint",
+  "encoding": "PEM",
+  "paths": {
+    "certificates": "/certificates"
+  },
+  "inputs": {
+    "device_username": {
+      "type": "secret",
+      "source": "device_credentials",
+      "required": true
+    },
+    "device_password": {
+      "type": "secret",
+      "source": "device_credentials",
+      "required": true
+    }
+  },
+  "operations": {
+    "onboard": {
+      "steps": [
+        {
+          "id": "open-certificates-page",
+          "action": "goto",
+          "path_ref": "certificates",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "enter-email",
+          "action": "fill",
+          "selector": "input[name='email']",
+          "value": "{{ device_username }}",
+          "sensitive": true
+        },
+        {
+          "id": "enter-password",
+          "action": "fill",
+          "selector": "input[name='password']",
+          "value": "{{ device_password }}",
+          "sensitive": true
+        },
+        {
+          "id": "submit-login",
+          "action": "press",
+          "selector": "input[name='password']",
+          "key": "Enter"
+        },
+        {
+          "id": "wait-for-certificates-page",
+          "action": "wait_for",
+          "selector": "button.dropdown-toggle.btn-pink",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "open-add-certificate-menu",
+          "action": "click",
+          "selector": "button.dropdown-toggle.btn-pink"
+        },
+        {
+          "id": "select-custom-certificate",
+          "action": "click",
+          "selector": ".dropdown-menu.show a.dropdown-item:has(span[data-translation-id='certificates.custom'])"
+        },
+        {
+          "id": "enter-certificate-name",
+          "action": "fill",
+          "selector": "#niceName",
+          "value": "Trustpoint webui-test.local"
+        },
+        {
+          "id": "upload-private-key",
+          "action": "upload",
+          "selector": "#certificateKey",
+          "artifact": "{{ private_key_pem }}",
+          "sensitive": true
+        },
+        {
+          "id": "upload-certificate",
+          "action": "upload",
+          "selector": "#certificate",
+          "artifact": "{{ certificate_pem }}"
+        },
+        {
+          "id": "save-custom-certificate",
+          "action": "click",
+          "selector": ".modal.show button[type='submit']",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "confirm-certificate-listed",
+          "action": "wait_for",
+          "selector": "tr:has-text('Trustpoint webui-test.local')",
+          "state": "visible",
+          "timeout_ms": 30000
+        }
+      ]
+    },
+    "renew": {
+      "steps": [
+        {
+          "id": "open-certificates-page",
+          "action": "goto",
+          "path_ref": "certificates",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "enter-email",
+          "action": "fill",
+          "selector": "input[name='email']",
+          "value": "{{ device_username }}",
+          "sensitive": true
+        },
+        {
+          "id": "enter-password",
+          "action": "fill",
+          "selector": "input[name='password']",
+          "value": "{{ device_password }}",
+          "sensitive": true
+        },
+        {
+          "id": "submit-login",
+          "action": "press",
+          "selector": "input[name='password']",
+          "key": "Enter"
+        },
+        {
+          "id": "wait-for-certificates-page",
+          "action": "wait_for",
+          "selector": "button.dropdown-toggle.btn-pink",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-existing-certificate",
+          "action": "wait_for",
+          "selector": "tr:has-text('Trustpoint webui-test.local')",
+          "state": "visible",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "open-existing-certificate-actions",
+          "action": "click",
+          "selector": "tr:has-text('Trustpoint webui-test.local') button.dropdown-toggle.btn-action"
+        },
+        {
+          "id": "wait-for-existing-certificate-actions",
+          "action": "wait_for",
+          "selector": ".dropdown-menu.show",
+          "state": "visible",
+          "timeout_ms": 10000
+        },
+        {
+          "id": "select-delete",
+          "action": "click",
+          "selector": ".dropdown-menu.show a.dropdown-item:has(span[data-translation-id='action.delete'])"
+        },
+        {
+          "id": "wait-for-delete-confirmation",
+          "action": "wait_for",
+          "selector": ".modal.show span[data-translation-id='object.delete']",
+          "state": "visible",
+          "timeout_ms": 10000
+        },
+        {
+          "id": "confirm-delete",
+          "action": "click",
+          "selector": ".modal.show button[type='submit']:has(span[data-translation-id='action.delete'])",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "wait-for-old-certificate-removal",
+          "action": "wait_for",
+          "selector": "tr:has-text('Trustpoint webui-test.local')",
+          "state": "hidden",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "open-add-certificate-menu",
+          "action": "click",
+          "selector": "button.dropdown-toggle.btn-pink"
+        },
+        {
+          "id": "select-custom-certificate",
+          "action": "click",
+          "selector": ".dropdown-menu.show a.dropdown-item:has(span[data-translation-id='certificates.custom'])"
+        },
+        {
+          "id": "enter-certificate-name",
+          "action": "fill",
+          "selector": "#niceName",
+          "value": "Trustpoint webui-test.local"
+        },
+        {
+          "id": "upload-private-key",
+          "action": "upload",
+          "selector": "#certificateKey",
+          "artifact": "{{ private_key_pem }}",
+          "sensitive": true
+        },
+        {
+          "id": "upload-certificate",
+          "action": "upload",
+          "selector": "#certificate",
+          "artifact": "{{ certificate_pem }}"
+        },
+        {
+          "id": "save-custom-certificate",
+          "action": "click",
+          "selector": ".modal.show button[type='submit']",
+          "timeout_ms": 30000
+        },
+        {
+          "id": "confirm-certificate-listed",
+          "action": "wait_for",
+          "selector": "tr:has-text('Trustpoint webui-test.local')",
+          "state": "visible",
+          "timeout_ms": 30000
+        }
+      ]
+    }
+  }
+}
