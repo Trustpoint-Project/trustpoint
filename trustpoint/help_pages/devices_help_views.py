@@ -87,8 +87,8 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
         if not domain:
             raise Http404(_('No domain is configured for this device.'))
 
-        https_port = settings.TP_HTTPS_PORT or '443'
-        host_base = f'https://{host_ip}:{https_port}' if https_port != '443' else f'https://{host_ip}'
+        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))
+        host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
         cred_count = IssuedCredentialModel.objects.filter(device=device).count()
 
         public_key_info = domain.public_key_info
@@ -180,6 +180,10 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         no_onboarding_config = getattr(device, 'no_onboarding_config', None)
         if not no_onboarding_config:
             raise Http404(_('Onboarding is configured for this device.'))
@@ -198,7 +202,7 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
                 HelpRow(_non_lazy('Key Identifier (KID)'), str(device.pk), ValueRenderType.CODE),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(_non_lazy('Shared-Secret'), cmp_shared_secret, ValueRenderType.CODE),
@@ -446,6 +450,10 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         no_onboarding_config = getattr(device, 'no_onboarding_config', None)
         if not no_onboarding_config:
             raise Http404(_('Onboarding is configured for this device.'))
@@ -466,7 +474,7 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -485,20 +493,71 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
         cred = help_context.cred_count
 
         def _build_section(title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
+            """Build per-profile help section with Linux *and* Windows commands.
+
+            The order is:
+            - CSR generation with OpenSSL (common Linux/Windows)
+            - EST enrollment with curl (common Linux/Windows)
+            - Linux: convert base64 PKCS#7 to PEM with OpenSSL
+            - Windows: decode base64 PKCS#7 with certutil
+            - Windows: install certificate with certreq
+            """
+            # Cross-platform single-line curl command suitable for both
+            # Linux shells and Windows cmd.exe.
+            curl_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_command(
+                est_username=device.common_name,
+                est_password=est_password,
+                host=_get_enroll_path(cert_profile_name=cert_profile_name),
+                cred_number=cred,
+            )
+
+            # Linux/OpenSSL conversion: base64 text -> DER PKCS#7 -> PEM
+            linux_convert_cmd = EstUsernamePasswordCommandBuilder.get_conversion_p7_pem_command(cred_number=cred)
+
+            # Windows: decode base64 PKCS#7 and convert to PEM using certutil + openssl.
+            windows_convert_cmd = EstUsernamePasswordCommandBuilder.get_conversion_p7_pem_windows_command(
+                cred_number=cred,
+            )
+
+            windows_install_cmd = (
+                f'certutil -addstore -f "MY" certificate-{cred}.pem'
+            )
+
             return HelpSection(
                 title,
                 [
-                    HelpRow(_non_lazy('OpenSSL Command'), cmd, ValueRenderType.CODE),
+                    HelpRow(
+                        _non_lazy('Generate CSR with OpenSSL'),
+                        cmd,
+                        ValueRenderType.CODE,
+                    ),
                     HelpRow(
                         _non_lazy('Enroll certificate with curl'),
-                        value=EstUsernamePasswordCommandBuilder.get_curl_enroll_command(
-                            est_username=device.common_name,
-                            est_password=est_password,
-                            host=_get_enroll_path(cert_profile_name=cert_profile_name),
-                            cred_number=cred,
-                        ),
+                        value=curl_cmd,
                         value_render_type=ValueRenderType.CODE,
                     ),
+
+                    # Linux-specific post-processing
+                    HelpRow(
+                        _non_lazy('Convert certificate to PEM (Linux/OpenSSL)'),
+                        value=linux_convert_cmd,
+                        value_render_type=ValueRenderType.CODE,
+                        css_class='platform-linux',
+                    ),
+
+                    # Windows-specific post-processing
+                    HelpRow(
+                        _non_lazy('Convert certificate to PEM (Windows, certutil & OpenSSL)'),
+                        value=windows_convert_cmd,
+                        value_render_type=ValueRenderType.CODE,
+                        css_class='platform-windows',
+                    ),
+        HelpRow(
+            _non_lazy('Install certificate into Windows store (certutil)'),
+            value=windows_install_cmd,
+            value_render_type=ValueRenderType.CODE,
+            css_class='platform-windows',
+        ),
                 ],
                 css_id=cert_profile_name,
                 hidden=hidden,
@@ -544,14 +603,16 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
             sections.append(sect)
         sections.append(
             HelpSection(
-                heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional)'),
+                heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional, Linux/OpenSSL)'),
                 rows=[
                     HelpRow(
                         key=_non_lazy('OpenSSL Command'),
                         value=EstUsernamePasswordCommandBuilder.get_conversion_p7_pem_command(cred_number=cred),
                         value_render_type=ValueRenderType.CODE,
+                        css_class='platform-linux',
                     )
                 ],
+                css_class='platform-linux',
             )
         )
         return sections, _non_lazy('Help - Issue Application Certificates using EST with username and password')
@@ -580,6 +641,10 @@ class OnboardingDomainCredentialCmpSharedSecretStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -598,7 +663,7 @@ class OnboardingDomainCredentialCmpSharedSecretStrategy(HelpPageStrategy):
                 HelpRow(_non_lazy('Key Identifier (KID)'), str(device.pk), ValueRenderType.CODE),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(_non_lazy('Shared-Secret'), cmp_shared_secret, ValueRenderType.CODE),
@@ -648,6 +713,10 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -665,7 +734,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -692,7 +761,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         enroll_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_domain_credential_command(
             est_username=device.common_name,
             est_password=est_password,
-            host=f'{base}/{help_context.domain.get_domain_credential_profile_name()}/simpleenroll/',
+            host=f'{base}/{domain.get_domain_credential_profile_name()}/simpleenroll/',
         )
 
         enroll_cmd_row = HelpRow(
@@ -752,6 +821,10 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -768,7 +841,7 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
             ],
@@ -788,7 +861,7 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
 
         sections = [
             summary,
-            build_cmp_signer_trust_store_section(domain=help_context.domain),
+            build_cmp_signer_trust_store_section(domain=domain),
             build_keygen_section(help_context, file_name=''),
             build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
         ]
@@ -848,6 +921,10 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -867,7 +944,7 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
             ],
@@ -969,6 +1046,10 @@ class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         no_onboarding_config = getattr(device, 'no_onboarding_config', None)
         if not no_onboarding_config:
             raise Http404(_('Onboarding is configured for this device.'))
@@ -989,7 +1070,7 @@ class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -1097,13 +1178,17 @@ class OnboardingDomainCredentialRestUsernamePasswordStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
         est_password = onboarding_config.est_password
         host_base = help_context.host_base
         domain_name = help_context.domain_unique_name
-        domain_cred_profile = help_context.domain.get_domain_credential_profile_name()
+        domain_cred_profile = domain.get_domain_credential_profile_name()
         enroll_url = f'{host_base}/rest/{domain_name}/{domain_cred_profile}/enroll/'
 
         summary = HelpSection(
@@ -1116,7 +1201,7 @@ class OnboardingDomainCredentialRestUsernamePasswordStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -1180,6 +1265,10 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         onboarding_config = getattr(device, 'onboarding_config', None)
         if not onboarding_config:
             raise Http404(_('Onboarding is not configured for this device.'))
@@ -1207,7 +1296,7 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -1346,6 +1435,10 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
 
     def _build_summary_section(self, help_context: HelpContext) -> HelpSection:
         """Build the summary section with basic device information."""
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
         return HelpSection(
             _non_lazy('Summary'),
             [
@@ -1366,7 +1459,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Required Public Key Type'),
-                    str(help_context.domain.public_key_info),
+                    str(domain.public_key_info),
                     ValueRenderType.CODE,
                 ),
             ],
@@ -1947,7 +2040,11 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
         )
 
         aoki_init_cmd = AokiEstIDevIDCommandBuilder.get_aoki_init_command(help_context.host_base)
-        domain_cred_profile_name = help_context.domain.get_domain_credential_profile_name()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
+        domain_cred_profile_name = domain.get_domain_credential_profile_name()
         aoki_response = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(domain_cred_profile_name)
         keygen_cmd = AokiEstIDevIDCommandBuilder.get_keygen_command()
         csr_cmd = AokiEstIDevIDCommandBuilder.get_csr_command()
@@ -2018,8 +2115,8 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
         except DomainModel.DoesNotExist as exc:
             raise Http404(_('No domains configured in the system.')) from exc
 
-        https_port = settings.TP_HTTPS_PORT or '443'
-        host_base = f'https://{host_ip}:{https_port}' if https_port != '443' else f'https://{host_ip}'
+        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))
+        host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
 
         public_key_info = domain.public_key_info
         if not public_key_info:
@@ -2106,8 +2203,8 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
         except DomainModel.DoesNotExist as exc:
             raise Http404(_('No domains configured in the system.')) from exc
 
-        https_port = settings.TP_HTTPS_PORT or '443'
-        host_base = f'https://{host_ip}:{https_port}' if https_port != '443' else f'https://{host_ip}'
+        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))
+        host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
 
         public_key_info = domain.public_key_info
         if not public_key_info:
@@ -2126,8 +2223,8 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
             allowed_app_profiles=allowed_app_profiles,
             public_key_info=public_key_info,
             host_base=host_base,
-            host_cmp_path=f'{host_base}/.aoki/initialization',
-            host_est_path=f'{host_base}',
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/.aoki/initialization',
+            host_est_path=f'{host_base}/.aoki/init',
             cred_count=0,
         )
 
