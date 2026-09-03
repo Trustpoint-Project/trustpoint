@@ -24,15 +24,24 @@ jobs:
         run: uv run pytest --cov=trustpoint --cov-report=xml --junitxml=junit.xml -o junit_family=legacy trustpoint/
 
       - name: Upload coverage to Codecov
+        if: >
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
 
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
+        if: >
+          !cancelled() &&
+          (
+            github.event_name != 'pull_request' ||
+            github.event.pull_request.head.repo.full_name == github.repository
+          )
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./junit.xml
+          report_type: test_results
 
