@@ -2,10 +2,15 @@
 # SPDX-License-Identifier: MIT
 
 """Tests for authorization components."""
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.x509.oid import NameOID
 from devices.models import DeviceModel
+from management.models.security import SecurityConfig
 from pki.models.domain import DomainModel
 
 from request.authorization.base import (
@@ -13,10 +18,31 @@ from request.authorization.base import (
     CertificateProfileAuthorization,
     CompositeAuthorization,
     DomainScopeValidation,
+    DevOwnerIDAuthorization,
+    OnboardingDomainCredentialAuthorization,
     ProtocolAuthorization,
+    SecurityConfigAuthorization,
 )
 from request.authorization.est import EstAuthorization, EstOperationAuthorization
-from request.request_context import BaseRequestContext, BaseCertificateRequestContext, EstBaseRequestContext, EstCertificateRequestContext
+from request.authorization.manual import ManualAuthorization
+from request.authorization.rest import RestAuthorization, RestOperationAuthorization
+from request.request_context import (
+    BaseRequestContext,
+    BaseCertificateRequestContext,
+    CmpBaseRequestContext,
+    EstBaseRequestContext,
+    EstCertificateRequestContext,
+    HttpBaseRequestContext,
+    RestBaseRequestContext,
+)
+
+
+def _csr(private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey, *, ca: bool = False) -> x509.CertificateSigningRequest:
+    builder = x509.CertificateSigningRequestBuilder().subject_name(
+        x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'authorization-test')])
+    )
+    builder = builder.add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
+    return builder.sign(private_key, hashes.SHA256())
 
 
 class TestProtocolAuthorization:
@@ -225,6 +251,33 @@ class TestCertificateProfileAuthorization:
         # Should not raise an exception
         auth.authorize(context)
 
+    def test_cert_profile_requires_domain_and_device(self) -> None:
+        auth = CertificateProfileAuthorization()
+        context = MagicMock(spec=BaseCertificateRequestContext)
+        context.domain = None
+        with pytest.raises(ValueError, match='Domain information is missing'):
+            auth.authorize(context)
+
+        context.domain = Mock()
+        context.device = None
+        with pytest.raises(ValueError, match='Device information is missing'):
+            auth.authorize(context)
+
+    def test_aoki_profile_defaults_to_domain_credential(self) -> None:
+        auth = CertificateProfileAuthorization()
+        context = MagicMock(spec=BaseCertificateRequestContext)
+        context.domain_str = '.aoki'
+        context.cert_profile_str = None
+        context.domain = Mock()
+        context.domain.get_domain_credential_profile_name.return_value = 'domain_credential'
+        context.device = Mock(onboarding_config=Mock())
+        context.domain.get_allowed_cert_profile.return_value = Mock(
+            credential_type='certificate'
+        )
+        with patch('request.authorization.base.ProfileValidator.validate'):
+            auth.authorize(context)
+        assert context.cert_profile_str == 'domain_credential'
+
 
 class TestDomainScopeValidation:
     """Test cases for DomainScopeValidation."""
@@ -309,6 +362,114 @@ class TestDomainScopeValidation:
 
         assert f"Unauthorized requested domain: '{domain}'" in str(exc_info.value)
         assert "Device domain: 'None'" in str(exc_info.value)
+
+
+class TestOnboardingAndOwnerAuthorization:
+    def test_onboarding_domain_profile_is_allowed_without_existing_credential(self) -> None:
+        context = MagicMock(spec=BaseCertificateRequestContext)
+        context.device = Mock(onboarding_config=Mock(), common_name='device')
+        context.certificate_profile_model = Mock(unique_name='domain_credential')
+        OnboardingDomainCredentialAuthorization().authorize(context)
+
+    def test_onboarding_requires_a_valid_domain_credential(self) -> None:
+        context = MagicMock(spec=BaseCertificateRequestContext)
+        context.device = Mock(onboarding_config=Mock(), common_name='device')
+        context.certificate_profile_model = Mock(unique_name='tls_server')
+        context.domain = None
+        with patch('request.authorization.base.IssuedCredentialModel.objects.filter') as filter_mock:
+            filter_mock.return_value.select_related.return_value = [
+                Mock(is_valid_domain_credential=Mock(return_value=(False, 'expired')))
+            ]
+            with pytest.raises(ValueError, match='no valid domain credential'):
+                OnboardingDomainCredentialAuthorization().authorize(context)
+        assert context.http_response_status == 403
+
+    def test_dev_owner_id_skips_non_aoki_and_sets_owner_credential(self) -> None:
+        component = DevOwnerIDAuthorization()
+        component.authorize(BaseRequestContext(protocol='rest', domain_str='.aoki'))
+        context = CmpBaseRequestContext(protocol='cmp', domain_str='.aoki', client_certificate=Mock())
+        owner = Mock()
+        with patch('request.authorization.base.AokiServiceMixin.get_owner_credential', return_value=owner):
+            component.authorize(context)
+        assert context.owner_credential is owner
+
+    def test_dev_owner_id_rejects_missing_certificate_and_missing_owner(self) -> None:
+        context = CmpBaseRequestContext(protocol='cmp', domain_str='.aoki')
+        with pytest.raises(ValueError, match='Client certificate is missing'):
+            DevOwnerIDAuthorization().authorize(context)
+        context.client_certificate = Mock()
+        with patch('request.authorization.base.AokiServiceMixin.get_owner_credential', return_value=None), \
+             patch('request.authorization.base.AokiServiceMixin.get_domain_based_owner_credential', return_value=None):
+            with pytest.raises(ValueError, match='No DevOwnerID credential'):
+                DevOwnerIDAuthorization().authorize(context)
+        assert context.http_response_status == 403
+
+
+class TestSecurityConfigAuthorization:
+    def test_rsa_key_size_is_allowed_and_rejected(self) -> None:
+        csr = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048))
+        component = SecurityConfigAuthorization()
+        component._check_key_constraints(csr, Mock(rsa_minimum_key_size=2048))
+        with pytest.raises(ValueError, match='below the minimum'):
+            component._check_key_constraints(csr, Mock(rsa_minimum_key_size=4096))
+        with pytest.raises(ValueError, match='not permitted'):
+            component._check_key_constraints(csr, Mock(rsa_minimum_key_size=None))
+
+    def test_curve_and_signature_restrictions_are_enforced(self) -> None:
+        csr = _csr(ec.generate_private_key(ec.SECP256R1()))
+        component = SecurityConfigAuthorization()
+        curve_oid = component._ec_curve_oid(csr.public_key())
+        assert curve_oid is not None
+        with pytest.raises(ValueError, match='ECC curve'):
+            component._check_key_constraints(csr, Mock(not_permitted_ecc_curve_oids=[curve_oid]))
+        hash_oid = component._hash_oid('sha256')
+        assert hash_oid is not None
+        with pytest.raises(ValueError, match='Signature hash algorithm'):
+            component._check_signature_algorithm(csr, Mock(not_permitted_signature_algorithm_oids=[hash_oid]))
+
+    def test_ca_policy_and_missing_security_config_paths(self) -> None:
+        csr = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048), ca=True)
+        with pytest.raises(ValueError, match='CA certificate issuance'):
+            SecurityConfigAuthorization()._check_ca_issuance(csr, Mock(allow_ca_issuance=False))
+        context = MagicMock(spec=BaseCertificateRequestContext)
+        context.cert_requested = csr
+        context.cert_requested_profile_validated = None
+        with patch.object(SecurityConfig.objects, 'get', side_effect=SecurityConfig.DoesNotExist):
+            SecurityConfigAuthorization().authorize(context)
+
+
+class TestManualAndRestAuthorization:
+    def test_manual_authorization_contains_manual_protocol(self) -> None:
+        protocols = next(component for component in ManualAuthorization().components if isinstance(component, ProtocolAuthorization))
+        assert protocols.allowed_protocols == ['manual']
+
+    def test_rest_operation_authorization_success_and_failures(self) -> None:
+        component = RestOperationAuthorization(['enroll'])
+        component.authorize(RestBaseRequestContext(operation='enroll'))
+        with pytest.raises(TypeError, match='RestBaseRequestContext'):
+            component.authorize(HttpBaseRequestContext())
+        with pytest.raises(ValueError, match='Operation information is missing'):
+            component.authorize(RestBaseRequestContext())
+        with pytest.raises(ValueError, match="Unauthorized operation: 'reenroll'"):
+            component.authorize(RestBaseRequestContext(operation='reenroll'))
+
+    def test_rest_authorization_forwards_custom_operations(self) -> None:
+        auth = RestAuthorization(['issue'])
+        operation = next(component for component in auth.components if isinstance(component, RestOperationAuthorization))
+        assert operation.allowed_operations == ['issue']
+
+    def test_rest_authorization_default_components_and_operations(self) -> None:
+        auth = RestAuthorization()
+        assert [type(component).__name__ for component in auth.components] == [
+            'DomainScopeValidation',
+            'CertificateProfileAuthorization',
+            'OnboardingDomainCredentialAuthorization',
+            'ProtocolAuthorization',
+            'RestOperationAuthorization',
+            'SecurityConfigAuthorization',
+        ]
+        operation = next(component for component in auth.components if isinstance(component, RestOperationAuthorization))
+        assert operation.allowed_operations == ['enroll', 'reenroll']
 
 
 class TestCompositeAuthorization:
