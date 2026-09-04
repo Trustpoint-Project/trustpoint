@@ -1498,7 +1498,10 @@ class TestGdsPushServiceAdditionalCoverage:
         """Reject a trustlist when a CA has no configured CRL."""
         service = GdsPushService(mock_opc_device, insecure=True)
 
-        with patch.object(service, '_build_ca_chain', new_callable=AsyncMock, return_value=[mock_ca_with_crl]):
+        with (
+            patch.object(service, '_build_ca_chain', new_callable=AsyncMock, return_value=[mock_ca_with_crl]),
+            patch.object(CaModel, 'crl_pem', new_callable=PropertyMock, return_value=''),
+        ):
             with pytest.raises(GdsPushError, match='has no CRL configured'):
                 await service._build_trustlist_for_server()
 
