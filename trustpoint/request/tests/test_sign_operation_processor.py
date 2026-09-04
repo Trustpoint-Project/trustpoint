@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Focused tests for CMP signing operation processing."""
 
 from unittest.mock import Mock, patch

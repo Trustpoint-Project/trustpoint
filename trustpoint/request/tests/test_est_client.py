@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Behavioral tests for the EST client at its HTTP boundary."""
 
 import base64

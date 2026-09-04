@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Additional security and error-path tests for request components."""
 
 from unittest.mock import MagicMock, Mock, patch
