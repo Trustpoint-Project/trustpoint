@@ -13,9 +13,17 @@ from pki.models import DomainModel
 
 from request.message_parser import CmpMessageParser, EstMessageParser
 from request.message_parser.base import CertProfileParsing, CompositeParsing, DomainParsing
-from request.message_parser.cmp import CmpPkiMessageParsing
+from request.message_parser.cmp import CmpCertConfBodyValidation, CmpPkiMessageParsing
 from request.message_parser.est import EstAuthorizationHeaderParsing, EstCsrSignatureVerification, EstPkiMessageParsing
-from request.request_context import BaseCertificateRequestContext, BaseRequestContext, BaseRevocationRequestContext, CmpBaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
+from request.request_context import (
+    BaseCertificateRequestContext,
+    BaseRequestContext,
+    BaseRevocationRequestContext,
+    CmpBaseRequestContext,
+    CmpCertConfRequestContext,
+    EstBaseRequestContext,
+    EstCertificateRequestContext,
+)
 
 
 class TestEstPkiMessageParsing:
@@ -592,6 +600,58 @@ class TestCompositeParsing:
 
         # Should not raise any exception
         composite.parse(mock_context)
+
+
+class TestCmpCertConfBodyValidation:
+    """Regression tests for RFC 9480 certConf parsing."""
+
+    def test_parse_certconf_body_requires_cert_hash_for_cmp2000(self):
+        """CMP 2000 still requires CertStatus.certHash."""
+        parser = CmpCertConfBodyValidation()
+        context = CmpCertConfRequestContext(operation='certconf', parsed_message={'header': {'pvno': 2}})
+        pki_body = object()
+
+        class CertStatusStub(dict):
+            def __getitem__(self, key):
+                values = {
+                    'certHash': Mock(hasValue=Mock(return_value=False)),
+                    'certReqId': Mock(hasValue=Mock(return_value=True)),
+                    'statusInfo': Mock(hasValue=Mock(return_value=False)),
+                    'hashAlg': Mock(hasValue=Mock(return_value=False)),
+                }
+                return values[key]
+
+        cert_status = CertStatusStub()
+
+        with patch.object(parser, '_extract_single_cert_status', return_value=cert_status), \
+             pytest.raises(ValueError, match='certHash is REQUIRED in CertStatus for CMP 2000'):
+            parser.parse_certconf_body(context, pki_body)
+
+    def test_parse_certconf_body_allows_missing_cert_hash_for_cmp2021(self):
+        """CMP 2021 allows CertStatus.certHash to be absent when not required by the profile."""
+        parser = CmpCertConfBodyValidation()
+        context = CmpCertConfRequestContext(operation='certconf', parsed_message={'header': {'pvno': 3}})
+        pki_body = object()
+
+        class CertStatusStub(dict):
+            def __getitem__(self, key):
+                values = {
+                    'certHash': Mock(hasValue=Mock(return_value=False)),
+                    'certReqId': Mock(hasValue=Mock(return_value=True)),
+                    'statusInfo': Mock(hasValue=Mock(return_value=False)),
+                    'hashAlg': Mock(hasValue=Mock(return_value=False)),
+                }
+                return values[key]
+
+        cert_status = CertStatusStub()
+
+        with patch.object(parser, '_extract_single_cert_status', return_value=cert_status), \
+             patch.object(parser, '_parse_cert_req_id', return_value=0), \
+             patch.object(parser, '_parse_cert_conf_status'), \
+             patch.object(parser, '_parse_cert_hash_algorithm_oid', return_value=None):
+            parser.parse_certconf_body(context, pki_body)
+
+        assert context.cert_hash is None
 
 
 class TestCmpMessageParser:

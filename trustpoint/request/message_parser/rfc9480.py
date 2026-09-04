@@ -15,7 +15,7 @@ from pyasn1_modules import rfc4210, rfc5280  # type: ignore[import-untyped]
 def _build_cert_status_component_type() -> namedtype.NamedTypes:
     """Build the CertStatus component types including the hashAlg field (RFC 9480)."""
     return namedtype.NamedTypes(
-        namedtype.NamedType('certHash', univ.OctetString()),
+        namedtype.OptionalNamedType('certHash', univ.OctetString()),
         namedtype.NamedType('certReqId', univ.Integer()),
         namedtype.OptionalNamedType('statusInfo', rfc4210.PKIStatusInfo()),
         namedtype.OptionalNamedType(
