@@ -9,10 +9,19 @@ from unittest.mock import Mock, patch
 
 from django.http import Http404
 from django.test import RequestFactory, TestCase
+from trustpoint_core import oid
 
 from devices.models import DeviceModel
+from ..base import HelpContext
 from ..devices_help_views import (
+    AgentSetupProfileStrategy,
+    ApplicationCertificateWithCmpDomainCredentialStrategy,
+    ApplicationCertificateWithEstDomainCredentialStrategy,
+    ApplicationCertificateWithRestDomainCredentialStrategy,
+    AokiCmpIDevIDStrategy,
+    AokiEstIDevIDStrategy,
     BaseHelpView,
+    CmpRevocationStrategy,
     DeviceApplicationCertificateWithCmpDomainCredentialHelpView,
     DeviceApplicationCertificateWithEstDomainCredentialHelpView,
     DeviceNoOnboardingCmpSharedSecretHelpView,
@@ -21,13 +30,98 @@ from ..devices_help_views import (
     DeviceOnboardingDomainCredentialEstUsernamePasswordHelpView,
     NoOnboardingCmpSharedSecretStrategy,
     NoOnboardingEstUsernamePasswordStrategy,
+    NoOnboardingRestUsernamePasswordStrategy,
     OnboardingDomainCredentialCmpSharedSecretStrategy,
     OnboardingDomainCredentialEstUsernamePasswordStrategy,
+    OnboardingDomainCredentialRestUsernamePasswordStrategy,
+    OpcUaGdsPushApplicationCertificateStrategy,
     OpcUaGdsPushApplicationCertificateHelpView,
     OpcUaGdsPushOnboardingHelpView,
     OpcUaGdsPushOnboardingStrategy,
+    _agent_get_est_password,
 )
-from ..help_section import ValueRenderType
+from ..help_section import HelpSection, ValueRenderType
+
+
+def _public_key_info() -> oid.PublicKeyInfo:
+    """Return a reusable RSA public-key descriptor for help contexts."""
+    return oid.PublicKeyInfo(
+        public_key_algorithm_oid=oid.PublicKeyAlgorithmOid.RSA,
+        key_size=2048,
+    )
+
+
+def _sample_request() -> dict[str, object]:
+    """Return a representative certificate profile sample request."""
+    return {
+        'subject': {'CN': 'Device 1'},
+        'validity': {'days': 30},
+        'extensions': {
+            'subject_alternative_name': {
+                'dns_names': ['device.example.test'],
+            },
+        },
+    }
+
+
+def _profile(unique_name: str = 'tls_server', display_name: str = 'TLS Server', alias: str | None = None) -> Mock:
+    """Return a lightweight allowed certificate profile mock."""
+    profile = Mock()
+    profile.alias = alias
+    profile.certificate_profile.unique_name = unique_name
+    profile.certificate_profile.display_name = display_name
+    profile.certificate_profile.profile = {'profile': unique_name}
+    return profile
+
+
+def _domain() -> Mock:
+    """Return a lightweight domain mock."""
+    domain = Mock()
+    domain.unique_name = 'test-domain'
+    domain.public_key_info = _public_key_info()
+    domain.get_domain_credential_profile_name.return_value = 'domain_credential'
+    return domain
+
+
+def _device(domain: Mock, *, no_onboarding: bool = False, onboarding: bool = False) -> Mock:
+    """Return a lightweight device mock with optional onboarding configs."""
+    device = Mock()
+    device.pk = 123
+    device.common_name = 'device-1'
+    device.domain = domain
+    device.no_onboarding_config = None
+    device.onboarding_config = None
+    if no_onboarding:
+        device.no_onboarding_config = Mock(cmp_shared_secret='cmp-secret', est_password='rest-secret')
+    if onboarding:
+        device.onboarding_config = Mock(cmp_shared_secret='cmp-secret', est_password='rest-secret')
+    return device
+
+
+def _help_context(
+    device: Mock,
+    domain: Mock | None,
+    profiles: list[Mock] | None = None,
+    *,
+    cred_count: int = 2,
+) -> HelpContext:
+    """Return a realistic help context for strategy tests."""
+    return HelpContext(
+        device=device,
+        domain=domain,
+        domain_unique_name='test-domain',
+        allowed_app_profiles=profiles or [],
+        public_key_info=_public_key_info(),
+        host_base='https://trustpoint.test:8443',
+        host_cmp_path='https://trustpoint.test:8443/.well-known/cmp/p/test-domain',
+        host_est_path='https://trustpoint.test:8443/.well-known/est/test-domain',
+        cred_count=cred_count,
+    )
+
+
+def _section(heading: str = 'Patched Section') -> HelpSection:
+    """Return a simple replacement for helper sections that hit unrelated database state."""
+    return HelpSection(heading, [])
 
 
 class BaseHelpViewTests(TestCase):
@@ -646,3 +740,345 @@ class OpcUaGdsPushOnboardingHelpViewTests(TestCase):
         view = OpcUaGdsPushOnboardingHelpView()
         assert isinstance(view.strategy, OpcUaGdsPushOnboardingStrategy)
         assert view.page_name == 'devices'
+
+
+class DeviceStrategyGeneratedContentTests(TestCase):
+    """Test generated help content for device strategies without masking the strategy code."""
+
+    @patch('help_pages.devices_help_views.JSONProfileVerifier')
+    def test_no_onboarding_cmp_shared_secret_builds_profile_commands(self, mock_verifier: Mock) -> None:
+        """Test CMP shared-secret sections include profile-specific commands and hidden state."""
+        mock_verifier.return_value.get_sample_request.return_value = _sample_request()
+        domain = _domain()
+        device = _device(domain, no_onboarding=True)
+        profiles = [_profile(alias='server_alias'), _profile('client_auth', 'Client Auth')]
+
+        sections, heading = NoOnboardingCmpSharedSecretStrategy().build_sections(_help_context(device, domain, profiles))
+
+        assert 'CMP with a shared-secret' in heading
+        assert sections[0].rows[3].value == 'cmp-secret'
+        assert sections[3].css_id == 'server_alias'
+        assert sections[3].hidden is False
+        assert sections[4].css_id == 'client_auth'
+        assert sections[4].hidden is True
+        assert 'server_alias/certification' in sections[3].rows[0].value
+        assert '-secret pass:cmp-secret' in sections[3].rows[0].value
+
+    @patch('help_pages.devices_help_views.JSONProfileVerifier', side_effect=ValueError('invalid profile'))
+    def test_no_onboarding_cmp_shared_secret_reports_malformed_profile(self, mock_verifier: Mock) -> None:
+        """Test malformed CMP profiles produce a visible error row instead of a command."""
+        domain = _domain()
+        device = _device(domain, no_onboarding=True)
+
+        sections, _heading = NoOnboardingCmpSharedSecretStrategy().build_sections(
+            _help_context(device, domain, [_profile()])
+        )
+
+        assert sections[3].rows[0].value_render_type == ValueRenderType.PLAIN
+        assert 'Certificate Profile is malformed' in sections[3].rows[0].value
+        mock_verifier.assert_called_once()
+
+    @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    @patch('help_pages.devices_help_views.JSONProfileVerifier')
+    def test_no_onboarding_est_username_password_builds_linux_and_windows_steps(
+        self, mock_verifier: Mock, mock_tls: Mock
+    ) -> None:
+        """Test EST username/password help includes enrollment and platform conversion commands."""
+        mock_verifier.return_value.get_sample_request.return_value = _sample_request()
+        domain = _domain()
+        device = _device(domain, no_onboarding=True)
+
+        sections, heading = NoOnboardingEstUsernamePasswordStrategy().build_sections(
+            _help_context(device, domain, [_profile(alias='server_alias')], cred_count=4)
+        )
+
+        assert 'EST with username and password' in heading
+        assert mock_tls.called
+        profile_section = sections[4]
+        assert profile_section.css_id == 'server_alias'
+        assert [row.key for row in profile_section.rows] == [
+            'Generate CSR with OpenSSL',
+            'Enroll certificate with curl',
+            'Convert certificate to PEM (Linux/OpenSSL)',
+            'Convert certificate to PEM (Windows, certutil & OpenSSL)',
+            'Install certificate into Windows store (certutil)',
+        ]
+        assert '--user "device-1:rest-secret"' in profile_section.rows[1].value
+        assert 'certificate-4.p7c' in profile_section.rows[1].value
+        assert sections[-1].css_class == 'platform-linux'
+
+    @patch('help_pages.devices_help_views.build_cmp_signer_trust_store_section', return_value=_section('CMP Signer'))
+    @patch('help_pages.devices_help_views.JSONProfileVerifier')
+    def test_application_cmp_domain_credential_builds_commands(self, mock_verifier: Mock, mock_cmp: Mock) -> None:
+        """Test application CMP help builds mTLS profile commands."""
+        mock_verifier.return_value.get_sample_request.return_value = _sample_request()
+        domain = _domain()
+        device = _device(domain, onboarding=True)
+
+        sections, heading = ApplicationCertificateWithCmpDomainCredentialStrategy().build_sections(
+            _help_context(device, domain, [_profile()], cred_count=5)
+        )
+
+        assert 'CMP with a Domain Credential' in heading
+        assert mock_cmp.called
+        assert sections[4].heading == 'Certificate Request for a TLS Server Certificate'
+        assert '-cert domain-credential-certificate.pem' in sections[4].rows[0].value
+        assert '-newkey key-5.pem' in sections[4].rows[0].value
+
+    @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    @patch('help_pages.devices_help_views.JSONProfileVerifier')
+    def test_application_est_domain_credential_builds_enroll_and_convert_steps(
+        self, mock_verifier: Mock, mock_tls: Mock
+    ) -> None:
+        """Test application EST help builds CSR, mTLS curl, and conversion steps."""
+        mock_verifier.return_value.get_sample_request.return_value = _sample_request()
+        domain = _domain()
+        device = _device(domain, onboarding=True)
+
+        sections, heading = ApplicationCertificateWithEstDomainCredentialStrategy().build_sections(
+            _help_context(device, domain, [_profile(alias='server_alias')], cred_count=6)
+        )
+
+        assert 'EST with a Domain Credential' in heading
+        assert mock_tls.called
+        assert sections[4].css_id == 'server_alias'
+        assert 'csr-6.der' in sections[4].rows[0].value
+        assert '--cert domain-credential-certificate.pem' in sections[4].rows[1].value
+        assert 'server_alias/simpleenroll' in sections[4].rows[1].value
+        assert 'certificate-6.pem' in sections[-1].rows[0].value
+
+    @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    @patch('help_pages.devices_help_views.JSONProfileVerifier')
+    def test_no_onboarding_rest_username_password_builds_json_enrollment(
+        self, mock_verifier: Mock, mock_tls: Mock
+    ) -> None:
+        """Test REST username/password app-certificate help commands."""
+        mock_verifier.return_value.get_sample_request.return_value = _sample_request()
+        domain = _domain()
+        device = _device(domain, no_onboarding=True)
+
+        sections, heading = NoOnboardingRestUsernamePasswordStrategy().build_sections(
+            _help_context(device, domain, [_profile()], cred_count=7)
+        )
+
+        assert 'REST with username and password' in heading
+        assert mock_tls.called
+        assert '/rest/test-domain/<certificate_profile>/enroll/' in sections[0].rows[0].value
+        assert '--user "device-1:rest-secret"' in sections[4].rows[1].value
+        assert 'certificate-7.json' in sections[4].rows[1].value
+        assert 'certificate-7.pem' in sections[4].rows[2].value
+
+    @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    def test_onboarding_rest_username_password_builds_domain_credential_steps(self, mock_tls: Mock) -> None:
+        """Test REST username/password domain credential help commands."""
+        domain = _domain()
+        device = _device(domain, onboarding=True)
+
+        sections, heading = OnboardingDomainCredentialRestUsernamePasswordStrategy().build_sections(
+            _help_context(device, domain)
+        )
+
+        assert 'Domain Credential using REST' in heading
+        assert mock_tls.called
+        assert '/rest/test-domain/domain_credential/enroll/' in sections[0].rows[0].value
+        assert 'csr-domain-credential.pem' in sections[3].rows[0].value
+        assert '--user "device-1:rest-secret"' in sections[3].rows[1].value
+        assert 'domain-credential-certificate.pem' in sections[3].rows[2].value
+
+    @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    @patch('help_pages.devices_help_views.JSONProfileVerifier')
+    def test_application_rest_domain_credential_builds_enroll_reenroll_and_extract_steps(
+        self, mock_verifier: Mock, mock_tls: Mock
+    ) -> None:
+        """Test REST mTLS app-certificate help commands."""
+        mock_verifier.return_value.get_sample_request.return_value = _sample_request()
+        domain = _domain()
+        device = _device(domain, onboarding=True)
+
+        sections, heading = ApplicationCertificateWithRestDomainCredentialStrategy().build_sections(
+            _help_context(device, domain, [_profile(alias='server_alias')], cred_count=8)
+        )
+
+        assert 'REST with a Domain Credential' in heading
+        assert mock_tls.called
+        profile_section = sections[4]
+        assert 'server_alias/enroll/' in profile_section.rows[1].value
+        assert 'server_alias/reenroll/' in profile_section.rows[2].value
+        assert 'previously issued certificate' in profile_section.rows[3].value
+        assert 'certificate-8.pem' in profile_section.rows[4].value
+        assert 'certificate-chain-8.pem' in profile_section.rows[5].value
+
+    @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    @patch('help_pages.devices_help_views.JSONProfileVerifier', side_effect=ValueError('invalid profile'))
+    def test_rest_malformed_profile_paths_report_plain_errors(self, mock_verifier: Mock, mock_tls: Mock) -> None:
+        """Test REST strategies report malformed certificate profiles."""
+        domain = _domain()
+        no_onboarding_device = _device(domain, no_onboarding=True)
+        onboarding_device = _device(domain, onboarding=True)
+
+        no_onboarding_sections, _heading = NoOnboardingRestUsernamePasswordStrategy().build_sections(
+            _help_context(no_onboarding_device, domain, [_profile()])
+        )
+        app_sections, _heading = ApplicationCertificateWithRestDomainCredentialStrategy().build_sections(
+            _help_context(onboarding_device, domain, [_profile()])
+        )
+
+        assert no_onboarding_sections[4].rows[0].value_render_type == ValueRenderType.PLAIN
+        assert 'Certificate Profile is malformed' in no_onboarding_sections[4].rows[0].value
+        assert app_sections[4].rows[0].value_render_type == ValueRenderType.PLAIN
+        assert 'Certificate Profile is malformed' in app_sections[4].rows[0].value
+        assert mock_verifier.call_count == 2
+        assert mock_tls.call_count == 2
+
+    def test_strategies_raise_when_required_domain_or_config_is_missing(self) -> None:
+        """Test important Http404 branches for missing domain and onboarding state."""
+        domain = _domain()
+        missing_domain_device = _device(domain, no_onboarding=True)
+        missing_config_device = _device(domain)
+
+        with self.assertRaises(Http404):
+            NoOnboardingCmpSharedSecretStrategy().build_sections(_help_context(missing_domain_device, None))
+        with self.assertRaises(Http404):
+            NoOnboardingEstUsernamePasswordStrategy().build_sections(_help_context(missing_domain_device, None))
+        with self.assertRaises(Http404):
+            ApplicationCertificateWithCmpDomainCredentialStrategy().build_sections(
+                _help_context(missing_config_device, domain)
+            )
+        with self.assertRaises(Http404):
+            ApplicationCertificateWithEstDomainCredentialStrategy().build_sections(
+                _help_context(missing_config_device, domain)
+            )
+        with self.assertRaises(Http404):
+            NoOnboardingRestUsernamePasswordStrategy().build_sections(_help_context(missing_config_device, domain))
+        with self.assertRaises(Http404):
+            OnboardingDomainCredentialRestUsernamePasswordStrategy().build_sections(
+                _help_context(missing_config_device, domain)
+            )
+        with self.assertRaises(Http404):
+            ApplicationCertificateWithRestDomainCredentialStrategy().build_sections(
+                _help_context(missing_config_device, domain)
+            )
+
+    @patch('help_pages.devices_help_views.CmpSharedSecretCommandBuilder.get_app_cert_self_revoke_command')
+    @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
+    @patch('help_pages.devices_help_views.reverse')
+    def test_cmp_revocation_lists_credentials_and_reason_commands(
+        self, mock_reverse: Mock, mock_filter: Mock, mock_revoke_command: Mock
+    ) -> None:
+        """Test CMP revocation help includes credentials and reason-specific commands."""
+        mock_reverse.side_effect = lambda name, kwargs: f'/{name}/{kwargs["pk"]}/'
+        mock_revoke_command.return_value = 'openssl cmp -cmd rr -revreason 0 -trusted full-chain-3.pem'
+        app_credential = Mock()
+        app_credential.id = 17
+        app_credential.common_name = 'app-cert-1'
+        app_credential.credential.certificate_or_error.pk = 55
+        mock_filter.return_value.select_related.return_value = [app_credential]
+        domain = _domain()
+        device = _device(domain, no_onboarding=True)
+
+        sections, heading = CmpRevocationStrategy().build_sections(_help_context(device, domain, cred_count=3))
+
+        assert 'Revoke CMP Application Credential' in heading
+        assert 'app-cert-1' in sections[0].rows[1].value
+        assert sections[1].heading == 'Credential Files'
+        assert sections[2].heading == 'Revocation Reason'
+        assert any('-revreason 1' in section.rows[0].value for section in sections[3:])
+        mock_revoke_command.assert_called_once_with(
+            host='https://trustpoint.test:8443/.well-known/cmp/p/test-domain/revocation',
+            cred_number=3,
+        )
+
+    @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
+    @patch('help_pages.devices_help_views.reverse')
+    def test_cmp_revocation_without_credentials_shows_empty_state(self, mock_reverse: Mock, mock_filter: Mock) -> None:
+        """Test CMP revocation help shows an empty state when no app credentials exist."""
+        mock_reverse.return_value = '/certificate/55/'
+        mock_filter.return_value.select_related.return_value = []
+        domain = _domain()
+        device = _device(domain, no_onboarding=True)
+
+        sections, _heading = CmpRevocationStrategy().build_sections(_help_context(device, domain, cred_count=1))
+
+        assert sections[0].rows[1].key == 'No Credentials'
+        assert 'No application credentials found' in sections[0].rows[1].value
+
+    def test_aoki_cmp_and_est_strategies_build_instruction_sections(self) -> None:
+        """Test AOKI strategies generate requirement, workflow, and command sections."""
+        domain = _domain()
+        context = _help_context(_device(domain), domain)
+
+        cmp_sections, cmp_heading = AokiCmpIDevIDStrategy().build_sections(context)
+        est_sections, est_heading = AokiEstIDevIDStrategy().build_sections(context)
+
+        assert cmp_heading == 'AOKI with CMP - IDevID Authentication'
+        assert [section.heading for section in cmp_sections] == [
+            'Device Requirements',
+            'Trustpoint Requirements',
+            'How AOKI with CMP Works',
+            'Example Commands',
+        ]
+        assert '-server https://trustpoint.test:8443/.well-known/cmp/p/test-domain' in cmp_sections[3].rows[1].value
+        assert est_heading == 'AOKI with EST - IDevID Authentication (mTLS)'
+        assert '"protocol": "EST"' in est_sections[3].rows[1].value
+        assert 'domain_credential/simpleenroll' in est_sections[3].rows[1].value
+
+    def test_aoki_est_strategy_requires_domain_for_response_profile(self) -> None:
+        """Test AOKI EST fails when no domain is available for the domain credential profile."""
+        domain = _domain()
+
+        with self.assertRaises(Http404):
+            AokiEstIDevIDStrategy().build_sections(_help_context(_device(domain), None))
+
+    @patch('help_pages.devices_help_views.reverse')
+    def test_agent_setup_profile_uses_onboarding_or_no_onboarding_password(self, mock_reverse: Mock) -> None:
+        """Test agent setup profile content and password-source fallback behavior."""
+        mock_reverse.side_effect = lambda name, kwargs: f'/{name}/{kwargs["pk"]}/'
+        domain = _domain()
+        onboarding_device = _device(domain, onboarding=True)
+        no_onboarding_device = _device(domain, no_onboarding=True)
+
+        assert _agent_get_est_password(onboarding_device) == 'rest-secret'
+        assert _agent_get_est_password(no_onboarding_device) == 'rest-secret'
+
+        sections, heading = AgentSetupProfileStrategy().build_sections(_help_context(onboarding_device, domain))
+
+        assert heading == 'Help - Issue a Domain Credential for Agent'
+        assert sections[0].rows[0].value == 'https://trustpoint.test:8443/rest/test-domain/domain_credential/enroll/'
+        assert 'host_ip=trustpoint.test' in sections[0].rows[3].value
+        assert 'python agent.py --profile agent_setup.json' in sections[0].rows[5].value
+
+        with self.assertRaises(Http404):
+            _agent_get_est_password(_device(domain))
+
+    @patch('help_pages.devices_help_views.reverse', return_value='/renewal/123/')
+    @patch('help_pages.devices_help_views.timezone')
+    def test_opc_ua_gds_renewal_settings_render_enabled_pending_and_disabled(
+        self, mock_timezone: Mock, mock_reverse: Mock
+    ) -> None:
+        """Test OPC UA renewal settings render the important scheduling states."""
+        strategy = OpcUaGdsPushApplicationCertificateStrategy()
+        device = Mock(pk=123, opc_gds_push_renewal_interval=12)
+        now = Mock()
+        future = Mock()
+        future.__gt__ = Mock(return_value=True)
+        future.strftime.return_value = '2026-09-04 12:00 UTC'
+        mock_timezone.now.return_value = now
+
+        device.opc_gds_push_enable_periodic_update = True
+        device.opc_gds_push_last_update_scheduled_at = future
+        enabled_section = strategy._build_renewal_settings_section(device)
+
+        future.__gt__.return_value = False
+        pending_section = strategy._build_renewal_settings_section(device)
+
+        device.opc_gds_push_enable_periodic_update = False
+        device.opc_gds_push_last_update_scheduled_at = None
+        disabled_section = strategy._build_renewal_settings_section(device)
+
+        assert 'Enabled' in enabled_section.rows[0].value
+        assert '2026-09-04 12:00 UTC' in enabled_section.rows[0].value
+        assert 'checked' in enabled_section.rows[1].value
+        assert 'Pending' in pending_section.rows[0].value
+        assert 'Disabled' in disabled_section.rows[0].value
+        assert 'name="opc_gds_push_renewal_interval"' in disabled_section.rows[1].value
+        assert mock_reverse.called
