@@ -93,6 +93,7 @@ class DeviceModel(CustomDeleteActionModel):
         OPC_UA_GDS = 1, _('OPC UA GDS')
         OPC_UA_GDS_PUSH = 2, _('OPC UA GDS Push')
         AGENT_ONE_TO_ONE = 3, _('Agent (1-to-1)')
+        WEB_UI_AUTOMATION = 4, _('Web UI Automation')
 
     device_type = models.IntegerField(
         choices=DeviceType,

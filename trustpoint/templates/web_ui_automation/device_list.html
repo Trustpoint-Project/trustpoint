@@ -1,0 +1,63 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header"><h1>{% trans "Web UI Automation Devices" %}</h1></div>
+    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
+        <table class="table">
+            <thead><tr>
+                <th id="checkbox-column"><input type="checkbox"/></th>
+                <th>{% trans "Device" %}</th>
+                <th>{% trans "Domain" %}</th>
+                <th>{% trans "Base URL" %}</th>
+                <th>{% trans "Authentication" %}</th>
+                <th>{% trans "Certificate Management" %}</th>
+            </tr></thead>
+            <tbody>
+            {% for automation_device in page_obj %}
+                <tr>
+                    <td class="row_checkbox">
+                        <input type="checkbox" name="row_checkbox" value="{{ automation_device.id }}"/>
+                    </td>
+                    <td>{{ automation_device.device.common_name }}</td>
+                    <td data-col="domain">
+                        {% if automation_device.device.domain %}
+                        <a href="{% url 'pki:domains-detail' automation_device.device.domain.pk %}">{{ automation_device.device.domain }}</a>
+                        {% else %}
+                        No domain
+                        {% endif %}
+                    </td>
+                    <td>{{ automation_device.base_url }}</td>
+                    <td>{{ automation_device.get_authentication_type_display }}</td>
+                    <td>
+                        <a class="btn btn-sm btn-primary" href="{% url 'web_ui_automation:device-clm' pk=automation_device.pk %}">{% trans "Manage" %}</a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="6" class="middle">{% trans "No Web UI automation devices configured." %}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% include "trustpoint/pagination.html" %}
+    </div>
+    <div class="card-footer d-flex flex-column flex-md-row justify-content-between tp-sticky-footer">
+        <div class="m-1 d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+                    data-tp-url="{{ device_revoke_url }}">
+                {% trans 'Revoke selected' %}
+            </button>
+
+            <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+                    data-tp-url="{{ device_delete_url }}">
+                {% trans 'Delete selected' %}
+            </button>
+        </div>
+
+        <div class="m-1 d-flex flex-wrap justify-content-md-end gap-2">
+            <a class="btn btn-secondary" href="{% url 'web_ui_automation:profiles' %}">{% trans "Profiles" %}</a>
+            <a class="btn btn-primary" href="{% url 'web_ui_automation:device-create' %}">{% trans "Create Device" %}</a>
+        </div>
+    </div>
+</div>
+{% endblock content %}

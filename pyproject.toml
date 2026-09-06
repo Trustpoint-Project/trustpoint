@@ -41,6 +41,7 @@ dependencies = [
     "django-q2>=1.9.0",
     "drf-yasg>=1.21.15",
     "types-requests>=2.32.4.20260324",
+    "playwright>=1.61.0"
 ]
 
 [dependency-groups]

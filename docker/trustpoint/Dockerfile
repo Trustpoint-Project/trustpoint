@@ -84,6 +84,37 @@ RUN uv sync --no-install-project --no-dev --group docs --group docker --python-p
 
 COPY --chown=www-data:www-data ./ ./
 RUN uv sync --no-dev --group docs --group docker --python-preference only-system
+
+# Install Playwright browsers for web UI automation
+USER root
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libnss3 \
+        libnspr4 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdrm2 \
+        libdbus-1-3 \
+        libxkbcommon0 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxrandr2 \
+        libgbm1 \
+        libasound2 \
+        libpango-1.0-0 \
+        libcairo2 \
+        libatspi2.0-0 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create cache directory for Playwright with proper permissions
+RUN mkdir -p /var/www/.cache && \
+    chown -R www-data:www-data /var/www/.cache
+
+USER www-data
+RUN uv run playwright install chromium
+
 USER root
 
 # Prepare Trustpoint runtime directories.

@@ -1,0 +1,13 @@
+services:
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:2.15.1
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+      - "8181:81"
+      - "8443:443"
+    environment:
+      TZ: "Europe/Berlin"
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt

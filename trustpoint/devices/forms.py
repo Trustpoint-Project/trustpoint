@@ -1319,8 +1319,5 @@ class ClmAgentDeviceForm(forms.Form):
             if agent:
                 agent.poll_interval_seconds = self.cleaned_data['poll_interval_seconds']
                 agent.os_path = self.cleaned_data['os_path']
-                # Ensure capabilities is set to avoid validation error
-                if agent.capabilities is None:
-                    agent.capabilities = []
                 agent.full_clean()
                 agent.save()

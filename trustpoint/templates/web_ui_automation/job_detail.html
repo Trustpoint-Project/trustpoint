@@ -1,0 +1,44 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header"><h1>{% blocktrans with id=job.pk %}Automation Job {{ id }}{% endblocktrans %}</h1></div>
+    <div class="card-body">
+        <dl class="row">
+            <dt class="col-sm-3">{% trans "Device" %}</dt><dd class="col-sm-9">{{ job.assignment.automation_device }}</dd>
+            <dt class="col-sm-3">{% trans "Profile" %}</dt><dd class="col-sm-9">{{ job.assignment.workflow_definition }}</dd>
+            <dt class="col-sm-3">{% trans "Operation" %}</dt><dd class="col-sm-9">{{ job.get_operation_display }}</dd>
+            <dt class="col-sm-3">{% trans "Status" %}</dt><dd class="col-sm-9">{{ job.get_status_display }}</dd>
+            <dt class="col-sm-3">{% trans "Result" %}</dt><dd class="col-sm-9">{{ job.get_result_display }}</dd>
+            <dt class="col-sm-3">{% trans "Verification" %}</dt><dd class="col-sm-9">{{ job.get_verification_status_display }}</dd>
+        </dl>
+        {% if job.error_message %}<div class="alert alert-danger">{{ job.error_message }}</div>{% endif %}
+        <h2>{% trans "Step Logs" %}</h2>
+        <table class="table"><thead><tr><th>#</th><th>{% trans "Step" %}</th><th>{% trans "Action" %}</th><th>{% trans "Status" %}</th><th>{% trans "Message" %}</th></tr></thead>
+        <tbody>{% for log in job.step_logs.all %}<tr><td>{{ log.sequence }}</td><td>{{ log.step_id }}</td><td>{{ log.action }}</td><td>{{ log.get_status_display }}</td><td>{{ log.message }}</td></tr>{% empty %}<tr><td colspan="5">{% trans "No logs yet." %}</td></tr>{% endfor %}</tbody></table>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <a class="btn btn-secondary" href="{% url 'web_ui_automation:device-clm' pk=job.assignment.automation_device_id %}">{% trans "Back" %}</a>
+        {% if job.status == 'QUEUED' %}
+        <form method="post" action="{% url 'web_ui_automation:job-execute' pk=job.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-primary" type="submit">
+                <i class="bi bi-play-fill"></i> {% trans "Execute Now" %}
+            </button>
+        </form>
+        {% endif %}
+        {% if job.status == 'AWAITING_CONFIRMATION' %}
+        <form method="post" action="{% url 'web_ui_automation:job-confirm' pk=job.pk %}">{% csrf_token %}<input type="hidden" name="confirm" value="on"><button class="btn btn-success" type="submit">{% trans "Confirm" %}</button></form>
+        {% endif %}
+        {% if job.status == 'FAILED' %}
+        <form method="post" action="{% url 'web_ui_automation:operation-run' pk=job.assignment.pk operation=job.operation %}">
+            {% csrf_token %}
+            <button class="btn btn-warning" type="submit">
+                <i class="bi bi-arrow-clockwise"></i> {% trans "Retry" %}
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock content %}

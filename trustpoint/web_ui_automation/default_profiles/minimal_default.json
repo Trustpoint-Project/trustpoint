@@ -1,0 +1,47 @@
+{
+  "schema": "trustpoint.web-automation.v1",
+  "name": "Minimal Profile Template",
+  "version": "1.0.0",
+  "metadata": {
+    "vendor": "Generic",
+    "device_family": "Device",
+    "firmware_hint": "Adapt to your device",
+    "description": "Minimal profile template for Web UI automation"
+  },
+  "certificate_profile": "tls_server",
+  "key_generation": "trustpoint",
+  "encoding": "PEM",
+  "paths": {
+    "login": "/login"
+  },
+  "operations": {
+    "onboard": {
+      "steps": [
+        {
+          "id": "open-login",
+          "action": "goto",
+          "path_ref": "login"
+        },
+        {
+          "id": "enter-username",
+          "action": "fill",
+          "selector": "input[name='username']",
+          "value": "{{ device_username }}",
+          "sensitive": true
+        },
+        {
+          "id": "enter-password",
+          "action": "fill",
+          "selector": "input[name='password']",
+          "value": "{{ device_password }}",
+          "sensitive": true
+        },
+        {
+          "id": "submit-login",
+          "action": "click",
+          "selector": "button[type='submit']"
+        }
+      ]
+    }
+  }
+}

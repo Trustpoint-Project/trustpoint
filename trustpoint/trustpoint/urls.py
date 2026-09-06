@@ -77,6 +77,7 @@ urlpatterns += [
     path('home/', include('home.urls')),
     path('devices/', include('devices.urls')),
     path('management/', include('management.urls')),
+    path('web_ui_automation/', include('web_ui_automation.urls')),
     path('prometheus/metrics', prometheus_metrics_view, name='prometheus-metrics'),
     path('i18n/', include('django.conf.urls.i18n')),
     path(
