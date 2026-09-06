@@ -15,8 +15,13 @@ Prerequisites
 Getting started with the Trustpoint Wizard script
 --------------------------------------------------
 
-The ``tp_wizard.sh`` script provides a guided CLI for setting up a Docker environment.
-This requires a Linux host.
+The ``tp_wizard.sh`` script provides a guided CLI for setting up and managing a
+Docker environment. This requires a Linux host. The repository ``.env`` is
+read as input; wizard-generated values are written to ``.env.tp_wizard``.
+The interactive command prompts for the selected services' ports and
+credentials. Trustpoint's in-app setup wizard remains enabled by default;
+automatic setup is opt-in with ``--skip-wizard``. The older ``--skip-setup``
+spelling remains an alias.
 
 .. code-block:: bash
 
@@ -24,12 +29,33 @@ This requires a Linux host.
     cd trustpoint
     ./tp_wizard.sh
 
-Convenience commands:
+Demo presets:
 
-- ``./tp_wizard.sh up`` — start Trustpoint and Postgres with default testing credentials (testing only).
-- ``./tp_wizard.sh up demo`` — additionally start SFTP and mailpit demo servers (testing only).
-- ``./tp_wizard.sh down`` — stop and remove all containers.
-- ``./tp_wizard.sh nuke`` — remove all containers and delete all stored data.
+- ``./tp_wizard.sh demo light`` — start Trustpoint and PostgreSQL.
+- ``./tp_wizard.sh demo`` — add Mailpit and SFTPGo.
+- ``./tp_wizard.sh demo full`` — add provisioned Prometheus and Grafana. Add ``--skip-wizard`` to enable Trustpoint metrics automatically.
+
+The same option works for explicit service startup, for example
+``./tp_wizard.sh up trustpoint db --skip-wizard``.
+
+Workflows2 is not started by any demo preset. Start it explicitly when needed:
+
+.. code-block:: bash
+
+    ./tp_wizard.sh up worker
+
+Other lifecycle commands:
+
+- ``./tp_wizard.sh status`` — show a compact service status summary.
+- ``./tp_wizard.sh logs trustpoint`` — follow service logs.
+- ``./tp_wizard.sh down`` — remove wizard-managed services and matching Compose services.
+- ``./tp_wizard.sh nuke`` — remove the Compose project, wizard containers, volumes, and local generated data after confirmation. It separately asks whether to delete ``.env.tp_wizard``.
+- ``./tp_wizard.sh demo help`` — explain the demo preset differences.
+
+The wizard also recognizes services started with this repository's
+``docker-compose.yml``. This means ``down`` and ``nuke`` can remove a
+Compose-created ``trustpoint-worker`` as well as containers started directly
+by the wizard.
 
 Getting started with Docker Compose
 ------------------------------------

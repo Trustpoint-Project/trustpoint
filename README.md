@@ -92,7 +92,39 @@ cd trustpoint
 ./tp_wizard.sh
 ```
 
-The wizard guides you through the Docker-based setup.
+The wizard guides you through the Docker-based setup. It keeps repository
+`.env` unchanged and writes generated runtime values to `.env.tp_wizard`.
+Running `./tp_wizard.sh` lets you select and configure each service. Trustpoint's
+in-app setup wizard remains enabled unless you explicitly choose automatic
+setup or pass `--skip-wizard` (`--skip-setup` is retained as an alias).
+
+For repeatable demo environments:
+
+```bash
+./tp_wizard.sh demo light
+./tp_wizard.sh demo
+./tp_wizard.sh demo full --skip-wizard
+```
+
+`demo light` starts Trustpoint and PostgreSQL. `demo` adds Mailpit and SFTPGo.
+`demo full` also starts and provisions Prometheus and Grafana. With
+`--skip-wizard`, the Trustpoint metrics endpoint is enabled automatically;
+otherwise enable it after completing the in-app setup wizard. Workflows2 is
+never started by default; add it explicitly with `./tp_wizard.sh up worker`.
+
+Useful lifecycle commands:
+
+```bash
+./tp_wizard.sh status
+./tp_wizard.sh logs trustpoint
+./tp_wizard.sh down
+./tp_wizard.sh nuke
+```
+
+The wizard also recognizes the services from this repository's
+`docker-compose.yml`, so `down` and `nuke` remove Compose-created containers
+and workers as well as wizard-created containers. Run `./tp_wizard.sh demo help`
+for the preset details.
 
 
 
