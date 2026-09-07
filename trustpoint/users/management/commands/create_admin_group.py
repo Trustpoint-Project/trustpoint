@@ -6,7 +6,7 @@
 from django.contrib.auth.models import Group
 from django.core.management import BaseCommand
 
-from users.models import GroupProfile, Role
+from users.models import BuiltinRole, GroupProfile
 
 
 class Command(BaseCommand):
@@ -16,12 +16,12 @@ class Command(BaseCommand):
 
     def handle(self, *_args: object, **_options: object) -> None:
         """Execute the command."""
-        group, created = Group.objects.get_or_create(name=Role.ADMIN.value)
+        group, created = Group.objects.get_or_create(name=BuiltinRole.ADMIN.value)
         GroupProfile.objects.get_or_create(
             group=group,
             defaults={'grants_staff': True, 'grants_superuser': True},
         )
-        service_group = Role.get_service_group()
+        service_group = BuiltinRole.get_service_group()
         service_created = service_group._state.adding
         GroupProfile.objects.get_or_create(
             group=service_group,

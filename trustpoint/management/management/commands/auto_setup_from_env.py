@@ -66,7 +66,7 @@ class Command(BaseCommand):
         """Ensure the Admin role (Group) exists with proper superuser permissions."""
         self.stdout.write('Ensuring Admin role exists...')
         try:
-            call_command('create_admin_group')
+            call_command('create_builtin_groups')
             self.stdout.write(self.style.SUCCESS('Admin role configured'))
         except Exception as e:
             err_msg = f'Failed to create Admin role: {e}'

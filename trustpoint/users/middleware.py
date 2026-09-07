@@ -65,10 +65,4 @@ class ServiceAccountMiddleware:
         Returns:
             True if it's an API path.
         """
-        api_prefixes = [
-            '/api/',
-            '/rest/',
-            '/.well-known/',
-            '/aoki/',
-        ]
-        return any(path.startswith(prefix) for prefix in api_prefixes)
+        return path.startswith('/api/')

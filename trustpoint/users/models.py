@@ -3,7 +3,7 @@
 
 """Custom user model with role-based access control.
 
-Defines a ``Role`` enum whose values are human-readable group names
+Defines a ``BuiltinRole`` enum whose values are human-readable group names
 (e.g. ``'Admin'``) and a ``TrustpointUser`` model whose ``role`` field
 is a foreign key to ``django.contrib.auth.models.Group``.
 """
@@ -24,16 +24,18 @@ if TYPE_CHECKING:
     from management.models.organization import OrganizationModel
 
 
-class Role(models.TextChoices):
-    """Predefined roles that map to Django groups.
-
-    The *value* is the canonical Group name stored in the database.
-    Admin is the only protected group and cannot be deleted via the UI.
-    """
+class BuiltinRole(models.TextChoices):
+    """Canonical names of built-in Trustpoint roles."""
 
     ADMIN = 'Admin', _('Admin')
-    DEFAULT = 'Default', _('Default')
     SERVICE = 'Service Account', _('Service Account')
+
+    PKI_ADMIN = 'PKI Administrator', _('PKI Administrator')
+    DEVICE_OPERATOR = 'Device Operator', _('Device Operator')
+    SYSTEM_ADMIN = 'System Administrator', _('System Administrator')
+    WORKFLOW_ADMIN = 'Workflow Administrator', _('Workflow Administrator')
+    WORKFLOW_APPROVER = 'Workflow Approver', _('Workflow Approver')
+    SECURITY_AUDITOR = 'Security Auditor', _('Security Auditor')
 
     @classmethod
     def get_service_group(cls) -> Group:
@@ -76,6 +78,16 @@ class GroupProfile(models.Model):
         verbose_name=_('superuser status'),
         help_text=_('Users with this role have all permissions without explicitly assigning them.'),
     )
+    is_builtin = models.BooleanField(
+        default=False,
+        verbose_name=_('built-in role'),
+        help_text=_('Identifies a role provided by Trustpoint.'),
+    )
+    is_protected = models.BooleanField(
+        default=False,
+        verbose_name=_('protected role'),
+        help_text=_('Prevents the role from being modified or deleted.'),
+    )
 
     class Meta:
         """Metaclass for GroupProfile."""
@@ -116,7 +128,7 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
             The newly created superuser instance.
         """
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
-            admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN.value)
+            admin_group, _ = Group.objects.get_or_create(name=BuiltinRole.ADMIN.value)
             extra_fields['role'] = admin_group
         if 'organization' not in extra_fields:
             extra_fields['organization'] = self._get_default_org()
@@ -142,9 +154,9 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
         """
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
             if extra_fields.get('account_type') == TrustpointUser.AccountType.SERVICE:
-                extra_fields['role'] = Role.get_service_group()
+                extra_fields['role'] = BuiltinRole.get_service_group()
             else:
-                default_group, _ = Group.objects.get_or_create(name=Role.DEFAULT.value)
+                default_group, _ = Group.objects.get_or_create(name=BuiltinRole.DEVICE_OPERATOR.value)
                 extra_fields['role'] = default_group
         if 'organization' not in extra_fields:
             extra_fields['organization'] = self._get_default_org()
@@ -261,6 +273,7 @@ class AppPermission(models.Model):
                 'manage_service_accounts',
                 _('Can manage service accounts'),
             ),
+                ('use_rest_api', _('Can use the REST API')),
 
             # -----------------------------------------------------------------
             # PKI configuration

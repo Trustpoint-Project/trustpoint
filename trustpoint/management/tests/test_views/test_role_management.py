@@ -9,7 +9,7 @@ from django.contrib.messages import get_messages
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from users.models import GroupProfile, Role
+from users.models import BuiltinRole, GroupProfile
 
 User = get_user_model()
 
@@ -105,11 +105,11 @@ class RoleEditViewTest(TestCase):
 
     def test_service_account_role_permissions_are_fixed(self) -> None:
         """The built-in service-account role cannot be modified."""
-        service_group = Role.get_service_group()
+        service_group = BuiltinRole.get_service_group()
         url = reverse('management:edit_role', kwargs={'pk': service_group.pk})
 
         response = self.client.post(url, {
-            'name': Role.SERVICE.value,
+            'name': BuiltinRole.SERVICE.value,
             'grants_staff': 'on',
             'grants_superuser': 'on',
             'permissions': [],

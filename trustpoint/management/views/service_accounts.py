@@ -18,7 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView
 
-from users.models import Role, ServiceAccountCredential, TrustpointUser
+from users.models import BuiltinRole, ServiceAccountCredential, TrustpointUser
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
@@ -84,7 +84,7 @@ class ServiceAccountCreateView(
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the fixed service role and page context."""
         context = super().get_context_data(**kwargs)
-        context['default_service_role'] = Role.get_service_group()
+        context['default_service_role'] = BuiltinRole.get_service_group()
         context['page_category'] = 'management'
         context['page_name'] = 'service_accounts'
         return context
@@ -97,7 +97,7 @@ class ServiceAccountCreateView(
         # Create the service account
         service_account = form.save(commit=False)
         service_account.account_type = TrustpointUser.AccountType.SERVICE
-        service_account.role = Role.get_service_group()
+        service_account.role = BuiltinRole.get_service_group()
         service_account.set_unusable_password()
         service_account.save()
 

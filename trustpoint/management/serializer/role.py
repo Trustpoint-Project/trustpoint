@@ -8,7 +8,7 @@ from typing import Any
 from django.contrib.auth.models import Group, Permission
 from rest_framework import serializers
 
-from users.models import GroupProfile, Role
+from users.models import GroupProfile
 
 
 class PermissionSerializer(serializers.ModelSerializer[Permission]):
@@ -49,8 +49,9 @@ class RoleSerializer(serializers.ModelSerializer[Group]):
         )
 
     def get_is_protected(self, obj: Group) -> bool:
-        """Return whether this role is a built-in, non-deletable role."""
-        return obj.name in {Role.ADMIN.value, Role.SERVICE.value}
+        """Return whether this role is protected from modification and deletion."""
+        profile = getattr(obj, 'profile', None)
+        return bool(profile and profile.is_protected)
 
     def get_user_count(self, obj: Group) -> int:
         """Return how many users are currently assigned to this role."""

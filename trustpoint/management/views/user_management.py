@@ -25,7 +25,7 @@ from management.serializer.user import UserSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin, SortableTableMixin, SuperuserRequiredMixin
 from users.form import TrustpointUserCreationForm, TrustpointUserRoleForm
-from users.models import Role, TrustpointUser
+from users.models import BuiltinRole, TrustpointUser
 from users.permissions import AppPermissions
 
 
@@ -42,8 +42,8 @@ def _is_last_admin(user: TrustpointUser) -> bool:
         True when the user has the ADMIN role and no other admin exists.
     """
     return (
-        user.role.name == Role.ADMIN
-        and get_user_model().objects.filter(role__name=Role.ADMIN).count() == 1
+        user.role.name == BuiltinRole.ADMIN
+        and get_user_model().objects.filter(role__name=BuiltinRole.ADMIN).count() == 1
     )
 
 
@@ -187,7 +187,7 @@ class UserChangeRoleView(
         user: TrustpointUser = self.get_object()
         new_role = form.cleaned_data['role']
 
-        if _is_last_admin(user) and new_role.name != Role.ADMIN:
+        if _is_last_admin(user) and new_role.name != BuiltinRole.ADMIN:
             messages.error(
                 self.request,
                 _('Cannot change role of "%(username)s": at least one admin must remain.')

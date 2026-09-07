@@ -12,7 +12,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from users.models import GroupProfile, Role
+from users.models import BuiltinRole, GroupProfile
 
 User = get_user_model()
 
@@ -156,7 +156,7 @@ class TestRoleViewSetUpdate:
 
     def test_updating_service_account_role_is_blocked(self, superuser_client: APIClient) -> None:
         """The built-in Service Account role's permissions cannot be changed."""
-        service_group = Role.get_service_group()
+        service_group = BuiltinRole.get_service_group()
         url = reverse('roles-detail', args=[service_group.pk])
 
         response = superuser_client.patch(url, {'permissions': []}, format='json')
