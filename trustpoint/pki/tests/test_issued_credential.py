@@ -129,3 +129,132 @@ def test_pre_delete_issued_credential(credential_instance: dict[str, Any], devic
     assert not CredentialModel.objects.filter(pk=credential.pk).exists(), (
         'The credential instance should be deleted after `pre_delete` is called.'
     )
+
+
+@pytest.mark.django_db
+def test_str_and_clean_require_a_device(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+) -> None:
+    """The string form names the credential and a device is mandatory."""
+    from django.core.exceptions import ValidationError
+
+    issued_credential = IssuedCredentialModel(
+        common_name='Named Credential',
+        issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+        issued_using_cert_profile='TLS Client',
+        credential=credential_instance['credential'],
+        domain=device_instance['device'].domain,
+    )
+
+    assert str(issued_credential) == 'IssuedCredentialModel(common_name=Named Credential)'
+    with pytest.raises(ValidationError, match='device'):
+        issued_credential.clean()
+
+
+@pytest.mark.django_db
+def test_application_credential_is_not_a_domain_credential(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+) -> None:
+    """Application credentials cannot be used to enrol further credentials."""
+    device = device_instance['device']
+    issued_credential = IssuedCredentialModel.objects.create(
+        common_name='Application Credential',
+        issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+        issued_using_cert_profile='TLS Client',
+        credential=credential_instance['credential'],
+        device=device,
+        domain=device.domain,
+    )
+
+    is_valid, reason = issued_credential.is_valid_domain_credential()
+
+    assert is_valid is False
+    assert 'DOMAIN_CREDENTIAL' in reason
+
+
+@pytest.mark.django_db
+def test_revocation_is_skipped_without_a_domain(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+) -> None:
+    """A credential without a domain has no issuing CA and is not revoked."""
+    device = device_instance['device']
+    issued_credential = IssuedCredentialModel.objects.create(
+        common_name='Domainless Credential',
+        issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+        issued_using_cert_profile='TLS Client',
+        credential=credential_instance['credential'],
+        device=device,
+        domain=device.domain,
+    )
+    issued_credential.domain = None
+
+    issued_credential.revoke()
+
+    assert not RevokedCertificateModel.objects.filter(
+        certificate=issued_credential.credential.certificate
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_already_revoked_certificates_are_not_revoked_again(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+) -> None:
+    """Revoking twice does not create duplicate revocation entries."""
+    device = device_instance['device']
+    issued_credential = IssuedCredentialModel.objects.create(
+        common_name='Twice Revoked Credential',
+        issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+        issued_using_cert_profile='TLS Client',
+        credential=credential_instance['credential'],
+        device=device,
+        domain=device.domain,
+    )
+    issued_credential.revoke()
+
+    issued_credential.revoke()
+
+    assert RevokedCertificateModel.objects.filter(
+        certificate=issued_credential.credential.certificate
+    ).count() == 1
+
+
+@pytest.mark.django_db
+def test_unknown_certificate_lookup_raises(device_instance: dict[str, Any]) -> None:
+    """Looking up an unknown certificate reports it as missing."""
+    from pki.util.x509 import CertificateGenerator
+
+    root, root_key = CertificateGenerator.create_root_ca('Lookup Root')
+    unknown, _ = CertificateGenerator.create_ee(root_key, root.subject, 'unknown-cert')
+
+    with pytest.raises(IssuedCredentialModel.DoesNotExist):
+        IssuedCredentialModel.get_credential_for_certificate(unknown)
+
+
+@pytest.mark.django_db
+def test_unknown_serial_number_lookup_raises(device_instance: dict[str, Any]) -> None:
+    """Looking up an unknown serial number reports it as missing."""
+    device = device_instance['device']
+
+    with pytest.raises(IssuedCredentialModel.DoesNotExist):
+        IssuedCredentialModel.get_credential_for_serial_number(device.domain, device, 'DEADBEEF')
+
+
+@pytest.mark.django_db
+def test_serial_number_lookup_returns_matching_credential(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+) -> None:
+    """A known serial number resolves to its issued credential."""
+    device = device_instance['device']
+    issued_credential = IssuedCredentialModel.objects.create(
+        common_name='Serial Lookup Credential',
+        issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+        issued_using_cert_profile='TLS Client',
+        credential=credential_instance['credential'],
+        device=device,
+        domain=device.domain,
+    )
+    serial = issued_credential.credential.certificate.serial_number
+
+    found = IssuedCredentialModel.get_credential_for_serial_number(device.domain, device, serial)
+
+    assert found == issued_credential

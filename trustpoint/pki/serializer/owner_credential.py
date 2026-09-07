@@ -115,6 +115,8 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
         if pk_file is None:
             raise serializers.ValidationError({'private_key_file': 'No private key file provided.'})
         pw = attrs.get('private_key_file_password') or None
+        if isinstance(pw, str):
+            pw = pw.encode('utf-8')
         try:
             return PrivateKeySerializer.from_bytes(pk_file.read(), pw)
         except Exception as exc:

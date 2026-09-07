@@ -3,6 +3,7 @@
 
 """Tests for the auto-generated PKI."""
 
+from typing import cast
 from unittest import mock
 
 import pytest
@@ -89,3 +90,26 @@ def test_auto_gen_pki(key_alg: AutoGenPkiKeyAlgorithm) -> None:
         # Check that the domain has been set as inactive
         domain = DomainModel.objects.get(unique_name='AutoGenPKI')
         assert not domain.is_active
+
+
+@pytest.mark.parametrize(
+    ('key_alg', 'expected_type'),
+    [
+        (AutoGenPkiKeyAlgorithm.RSA2048, 'RsaKeySpec'),
+        (AutoGenPkiKeyAlgorithm.RSA4096, 'RsaKeySpec'),
+        (AutoGenPkiKeyAlgorithm.SECP256R1, 'EcKeySpec'),
+        (AutoGenPkiKeyAlgorithm.MLDSA44, 'MlDsaKeySpec'),
+        (AutoGenPkiKeyAlgorithm.MLDSA65, 'MlDsaKeySpec'),
+        (AutoGenPkiKeyAlgorithm.MLDSA87, 'MlDsaKeySpec'),
+    ],
+)
+def test_key_spec_for_supported_algorithms(key_alg: AutoGenPkiKeyAlgorithm, expected_type: str) -> None:
+    """Each public AutoGenPKI algorithm maps to its backend key specification."""
+    key_spec_for_algorithm = getattr(AutoGenPki, '_key_spec_for_algorithm')
+    assert type(key_spec_for_algorithm(key_alg)).__name__ == expected_type
+
+
+def test_key_spec_for_unknown_algorithm_rejects_invalid_value() -> None:
+    """Unknown AutoGenPKI choices fail before backend interaction."""
+    with pytest.raises(ValueError, match='Unsupported'):
+        getattr(AutoGenPki, '_key_spec_for_algorithm')(cast(AutoGenPkiKeyAlgorithm, 'invalid'))
