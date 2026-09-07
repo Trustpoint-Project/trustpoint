@@ -969,7 +969,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         try:
             ca_cert.verify_directly_issued_by(ca_cert)
-        except InvalidSignature:
+        except (InvalidSignature, ValueError):
+            # ValueError is raised when the issuer name does not match the subject name.
             return False
         else:
             return True

@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
 """Tests for PKI security-policy strategies."""
 
 from __future__ import annotations

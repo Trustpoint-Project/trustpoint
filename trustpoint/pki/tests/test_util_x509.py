@@ -1,3 +1,5 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
 """Tests for X.509 generation, extraction, and verification helpers."""
 
 from __future__ import annotations
