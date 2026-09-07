@@ -11,13 +11,15 @@ from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.hashers import make_password
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView
 
 from users.models import Role, ServiceAccountCredential, TrustpointUser
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from typing import Any
@@ -26,13 +28,12 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class ServiceAccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListView[TrustpointUser]):
+class ServiceAccountListView(LoginRequiredMixin, ListView[TrustpointUser]):
     """List all service accounts."""
 
     model = TrustpointUser
     template_name = 'management/service_accounts/service_account_list.html'
     context_object_name = 'service_accounts'
-    permission_required = 'users.view_trustpointuser'
     paginate_by = 50
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
@@ -49,13 +50,12 @@ class ServiceAccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListVi
         return context
 
 
-class ServiceAccountDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView[TrustpointUser]):
+class ServiceAccountDetailView(LoginRequiredMixin, DetailView[TrustpointUser]):
     """View service account details and credentials."""
 
     model = TrustpointUser
     template_name = 'management/service_accounts/service_account_detail.html'
     context_object_name = 'service_account'
-    permission_required = 'users.view_trustpointuser'
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
         """Return only service accounts."""
@@ -73,15 +73,12 @@ class ServiceAccountDetailView(LoginRequiredMixin, PermissionRequiredMixin, Deta
 
 
 class ServiceAccountCreateView(
-    LoginRequiredMixin,
-    PermissionRequiredMixin,
     CreateView[TrustpointUser, forms.ModelForm[TrustpointUser]]
 ):
     """Create a new service account with API credentials."""
 
     model = TrustpointUser
     template_name = 'management/service_accounts/service_account_create.html'
-    permission_required = 'users.add_trustpointuser'
     fields = ['username', 'organization']  # noqa: RUF012
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -95,6 +92,8 @@ class ServiceAccountCreateView(
     @transaction.atomic
     def form_valid(self, form: Any) -> HttpResponse:
         """Create service account and generate API credentials."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SERVICE_ACCOUNTS):
+            raise PermissionDenied
         # Create the service account
         service_account = form.save(commit=False)
         service_account.account_type = TrustpointUser.AccountType.SERVICE
@@ -217,13 +216,12 @@ def generate_credential_view(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect(reverse('management:service_account_created'))
 
 
-class ServiceAccountDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView[TrustpointUser, forms.Form]):
+class ServiceAccountDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, forms.Form]):
     """Delete a service account."""
 
     model = TrustpointUser
     template_name = 'management/service_accounts/delete_service_account_confirm.html'
     success_url = reverse_lazy('management:service_account_list')
-    permission_required = 'users.delete_trustpointuser'
     context_object_name = 'service_account'
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
@@ -241,6 +239,8 @@ class ServiceAccountDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Dele
 
     def form_valid(self, form: Any) -> HttpResponse:
         """Delete the service account and show success message."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SERVICE_ACCOUNTS):
+            raise PermissionDenied
         self.object = self.get_object()
         username = self.object.username
 

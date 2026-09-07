@@ -7,7 +7,7 @@ import logging
 from typing import Any, cast
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import ProtectedError, QuerySet
 from django.forms import Form
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -21,6 +21,7 @@ from pki.filters import CaFilter
 from pki.models import CaModel
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin
+from users.permissions import AppPermissions
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,8 @@ class CaBulkDeleteConfirmView(BulkDeleteView):
 
     def form_valid(self, form: Form) -> HttpResponse:  # noqa: ARG002
         """Delete the selected CAs on valid form, handling hierarchical dependencies."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         queryset = self.get_queryset()
         deleted_count = queryset.count() if queryset else 0
 

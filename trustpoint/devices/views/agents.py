@@ -7,6 +7,7 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
+from django.core.exceptions import PermissionDenied
 from django.db.models import QuerySet
 from django.http import HttpResponse
 from django.urls import reverse_lazy
@@ -30,6 +31,7 @@ from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     PageContextMixin,
 )
+from users.permissions import AppPermissions
 
 
 class AgentTableView(AbstractDeviceTableView):
@@ -100,6 +102,8 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
 
     def form_valid(self, form: AgentOnboardingCreateForm) -> HttpResponse:
         """Save the form as an AGENT_ONE_TO_ONE device."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         self.object = form.save(device_type=DeviceModel.DeviceType.AGENT_ONE_TO_ONE)
         agent_uuid = uuid.uuid4().hex.upper()
         agent_os_path = form.cleaned_data.get('agent_os_path', '/etc/trustpoint')

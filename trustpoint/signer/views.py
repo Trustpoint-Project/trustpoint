@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import ProtectedError, QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
@@ -32,6 +32,7 @@ from signer.models import SignedMessageModel, SignerModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTableMixin
+from users.permissions import AppPermissions
 
 
 class SignerContextMixin(ContextDataMixin):
@@ -57,6 +58,8 @@ class SignerAddMethodSelectView(SignerContextMixin, FormView[SignerAddMethodSele
 
     def form_valid(self, form: SignerAddMethodSelectForm) -> HttpResponseRedirect:
         """Redirect to the next step based on the selected method."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
+            raise PermissionDenied
         method_select = form.cleaned_data.get('method_select')
         if not method_select:
             return HttpResponseRedirect(reverse_lazy('signer:signer-add-method_select'))
@@ -78,6 +81,8 @@ class SignerGenerateView(SignerContextMixin, FormView[SignerGenerateForm]):
 
     def form_valid(self, form: SignerGenerateForm) -> HttpResponse:
         """Generate the signer and create an audit-log entry."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
+            raise PermissionDenied
         signer = form.save()
         user = getattr(self.request, 'user', None)
         actor = user if user is not None and user.is_authenticated else None
@@ -103,6 +108,8 @@ class SignerAddFileImportFileTypeSelectView(SignerContextMixin, FormView[SignerA
 
     def form_valid(self, form: SignerAddFileTypeSelectForm) -> HttpResponseRedirect:
         """Redirect to the next step based on the selected file type."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
+            raise PermissionDenied
         method_select = form.cleaned_data.get('method_select')
         if not method_select:
             return HttpResponseRedirect(reverse_lazy('signer:signer-add-file_import-file_type_select'))
@@ -124,6 +131,8 @@ class SignerAddFileImportPkcs12View(SignerContextMixin, FormView[SignerAddFileIm
 
     def form_valid(self, form: SignerAddFileImportPkcs12Form) -> HttpResponse:
         """Handle the case where the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
+            raise PermissionDenied
         signer = form.created_signer
         user = getattr(self.request, 'user', None)
         actor = user if user is not None and user.is_authenticated else None
@@ -150,6 +159,8 @@ class SignerAddFileImportSeparateFilesView(SignerContextMixin, FormView[SignerAd
 
     def form_valid(self, form: SignerAddFileImportSeparateFilesForm) -> HttpResponse:
         """Handle the case where the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
+            raise PermissionDenied
         signer = form.created_signer
         user = getattr(self.request, 'user', None)
         actor = user if user is not None and user.is_authenticated else None
@@ -239,6 +250,8 @@ class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):
 
     def form_valid(self, form: Any) -> HttpResponse:
         """Delete the selected Signers on valid form."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
+            raise PermissionDenied
         queryset = self.get_queryset()
         signers_to_delete = list(queryset)
         deleted_count = len(signers_to_delete)

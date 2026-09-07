@@ -11,23 +11,26 @@ from typing import Any, ClassVar
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission
+from rest_framework.views import APIView
 
 from management.backup_artifacts import backup_manifest_path
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
 from management.serializer.backup import BackupSerializer
 from trustpoint.logger import LoggerMixin
-from trustpoint.views.base import SortableTableFromListMixin
+from trustpoint.views.base import SortableTableFromListMixin, UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 from util.sftp import SftpClient, SftpError
 
 
@@ -145,6 +148,9 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
 
     def post(self, request: Any, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle form submissions for backup or SFTP settings."""
+        if not request.user.has_perm(AppPermissions.MANAGE_BACKUPS):
+            raise PermissionDenied
+
         if 'create_local_backup' in request.POST:
             return self._handle_create_local_backup(request)
 
@@ -317,8 +323,10 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
         return redirect(self.success_url)
 
 
-class BackupFileDownloadView(View):
+class BackupFileDownloadView(UserPermissionRequiredMixin, View):
     """Serve a backup file, bundled with its manifest when available."""
+
+    permission_required = AppPermissions.MANAGE_BACKUPS
 
     @staticmethod
     def _bundle_filename(filename: str) -> str:
@@ -409,8 +417,10 @@ def _build_tar_gz_backup_artifact(filename: str, path: Path, manifest_path: Path
     return _backup_artifact_filename(filename, 'tar.gz'), buffer.getvalue()
 
 
-class BackupFilesDownloadMultipleView(View):
+class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
     """Download multiple selected backup files as a ZIP or tar.gz archive."""
+
+    permission_required = AppPermissions.MANAGE_BACKUPS
 
     def post(self, request: Any, archive_format: str) -> HttpResponse:
         """Bundle selected backups into an archive.
@@ -467,8 +477,9 @@ class BackupFilesDownloadMultipleView(View):
         return response
 
 
-class BackupFilesDeleteMultipleView(View, LoggerMixin):
+class BackupFilesDeleteMultipleView(UserPermissionRequiredMixin, View, LoggerMixin):
     """Delete multiple selected backup files and notify the user."""
+    permission_required = AppPermissions.MANAGE_BACKUPS
 
     def post(self, request: Any) -> HttpResponse:
         """Delete the selected backup files.
@@ -517,6 +528,17 @@ class BackupFilesDeleteMultipleView(View, LoggerMixin):
 
         return redirect('management:backups')
 
+class CanManageBackup(BasePermission):
+    """Allow only users permitted to manage backup settings."""
+
+    def has_permission(self, request: HttpRequest, view: APIView) -> bool:
+        """Check if the user has permission to manage backup settings."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(AppPermissions.MANAGE_BACKUPS)
+        )
+
 @extend_schema(tags=['Backup'])
 @extend_schema_view(
     list=extend_schema(description='Retrieve a list of all backups.'),
@@ -534,7 +556,7 @@ class BackupViewSet(viewsets.ModelViewSet[Any]):
     """
     queryset = BackupOptions.objects.all().order_by('-user')
     serializer_class = BackupSerializer
-    permission_classes: ClassVar = [IsAuthenticated] # type: ignore[misc]
+    permission_classes: ClassVar = [CanManageBackup] # type: ignore[misc]
     filter_backends: ClassVar = [ # type: ignore[misc]
         DjangoFilterBackend,
         filters.SearchFilter,

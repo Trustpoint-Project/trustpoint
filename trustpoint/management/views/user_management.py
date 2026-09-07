@@ -7,6 +7,7 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied
 from django.db.models import QuerySet
 from django.forms import BaseModelForm
 from django.http import HttpResponse, HttpResponseRedirect
@@ -25,6 +26,7 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin, SortableTableMixin, SuperuserRequiredMixin
 from users.form import TrustpointUserCreationForm, TrustpointUserRoleForm
 from users.models import Role, TrustpointUser
+from users.permissions import AppPermissions
 
 
 def _is_last_admin(user: TrustpointUser) -> bool:
@@ -93,6 +95,8 @@ class UserCreateView(
         Returns:
             Redirect to the user management list.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_USERS):
+            raise PermissionDenied
         response = super().form_valid(form)
         username = self.object.username if self.object else ''
         messages.success(
@@ -130,6 +134,9 @@ class UserDeleteView(
             Redirect to the user management list on success, or back to the
             list with an error message if the last admin would be removed.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_USERS):
+            raise PermissionDenied
+
         self.object = self.get_object()
 
         if _is_last_admin(self.object):
@@ -165,6 +172,9 @@ class UserChangeRoleView(
     def form_valid(self, form: BaseModelForm[TrustpointUser]) -> HttpResponse:
         """Save the role change unless it would remove the last admin.
 
+        Raises:
+            PermissionDenied: If the current user does not have permission to manage users.
+
         Args:
             form: The validated role form.
 
@@ -172,6 +182,8 @@ class UserChangeRoleView(
             Redirect to the user management list on success, or re-render the
             form with an error message if the last admin would be downgraded.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         user: TrustpointUser = self.get_object()
         new_role = form.cleaned_data['role']
 
@@ -198,7 +210,13 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
     permission_classes = (IsSuperUser,)
 
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """Delete the user unless they are the last remaining admin."""
+        """Delete the user unless they are the last remaining admin.
+
+        Raises:
+            PermissionDenied: If the current user does not have permission to manage users.
+        """
+        if not request.user.has_perm(AppPermissions.MANAGE_USERS):
+            raise PermissionDenied
         instance = self.get_object()
         if _is_last_admin(instance):
             return Response(
@@ -208,7 +226,13 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
         return super().destroy(request, *args, **kwargs)
 
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """Update the user, refusing to change the role of the last remaining admin."""
+        """Update the user, refusing to change the role of the last remaining admin.
+
+        Raises:
+            PermissionDenied: If the current user does not have permission to manage users.
+        """
+        if not request.user.has_perm(AppPermissions.MANAGE_USERS):
+            raise PermissionDenied
         instance = self.get_object()
         new_role = request.data.get('role') if isinstance(request.data, dict) else None
         if _is_last_admin(instance) and new_role is not None and str(new_role) != str(instance.role_id):

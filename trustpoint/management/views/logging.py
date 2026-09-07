@@ -22,13 +22,15 @@ from django.views.generic.list import ListView
 from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
 from management.serializer.logging import LoggingSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
-from trustpoint.views.base import SortableTableFromListMixin
+from trustpoint.views.base import SortableTableFromListMixin, UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
 
@@ -186,13 +188,20 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
         return queryset
 
 
-class LoggingFilesDetailsView(PageContextMixin, LoggerMixin, TemplateView):
+class LoggingFilesDetailsView(
+    UserPermissionRequiredMixin,
+    PageContextMixin,
+    LoggerMixin,
+    TemplateView
+):
     """Log file detail view, allows to view the content of a single log file without download."""
 
     http_method_names = ('get',)
 
     template_name = 'management/logging/logging_files_details.html'
     log_directory = LOG_DIR_PATH
+
+    permission_required = AppPermissions.VIEW_SYSTEM_LOGS
 
     page_category = 'settings'
     page_name = 'logging'
@@ -211,10 +220,17 @@ class LoggingFilesDetailsView(PageContextMixin, LoggerMixin, TemplateView):
         return context
 
 
-class LoggingFilesDownloadView(PageContextMixin, LoggerMixin, TemplateView):
+class LoggingFilesDownloadView(
+    UserPermissionRequiredMixin,
+    PageContextMixin,
+    LoggerMixin,
+    TemplateView
+):
     """View to download a single log file."""
 
     http_method_names = ('get',)
+
+    permission_required = AppPermissions.VIEW_SYSTEM_LOGS
 
     page_category = 'settings'
     page_name = 'logging'
@@ -236,11 +252,16 @@ class LoggingFilesDownloadView(PageContextMixin, LoggerMixin, TemplateView):
         return response
 
 
-class LoggingFilesDownloadMultipleView(PageContextMixin, LoggerMixin, View):
+class LoggingFilesDownloadMultipleView(
+    UserPermissionRequiredMixin,
+    PageContextMixin,
+    LoggerMixin,
+    View
+):
     """View to download multiple log files as a single archive."""
 
     http_method_names = ('get',)
-
+    permission_required = AppPermissions.VIEW_SYSTEM_LOGS
     page_category = 'settings'
     page_name = 'logging'
 
@@ -295,6 +316,17 @@ class LoggingFilesDownloadMultipleView(PageContextMixin, LoggerMixin, View):
         response['Content-Disposition'] = 'attachment; filename=trustpoint-logs.tar.gz'
         return response
 
+class CanManageLogging(BasePermission):
+    """Allow only users permitted to manage logging settings."""
+
+    def has_permission(self, request: Request, view: Any) -> bool:
+        """Check if the user has permission to manage logging settings."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION)
+        )
+
 @extend_schema(tags=['Logging'])
 class LoggingViewSet(viewsets.GenericViewSet[Any]):
     """ViewSet for managing Backup instances.
@@ -303,6 +335,7 @@ class LoggingViewSet(viewsets.GenericViewSet[Any]):
     create, update, and delete.
     """
     serializer_class = LoggingSerializer
+    permission_classes = (CanManageLogging,)
     filter_backends = ()
 
     @action(detail=False, methods=['get'])

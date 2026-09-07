@@ -28,16 +28,18 @@ from help_pages.commands import CmpClientCertificateCommandBuilder, EstClientCer
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import TlsSettings
 from pki.models import CaModel, DevIdRegistration, DomainModel, IssuedCredentialModel, OwnerCredentialModel
+from trustpoint.views.base import UserPermissionRequiredMixin
 
 PKI_PAGE_DOMAIN_SUBCATEGORY = 'pki:domain'
 PKI_PAGE_TRUSTSTORES_SUBCATEGORY = 'pki:truststores'
 
 
-class BaseHelpView(DetailView[DevIdRegistration]):
+class BaseHelpView(UserPermissionRequiredMixin, DetailView[DevIdRegistration]):
     """Base help view for PKI help pages."""
 
     template_name = 'help/help_page.html'
     model = DevIdRegistration
+    permission_required = 'users.view_help_pages'
     context_object_name = 'devid_registration'
 
     page_category = 'pki'
@@ -229,12 +231,13 @@ class OnboardingEstIdevidRegistrationHelpView(BaseHelpView):
     strategy = OnboardingEstIdevIdDomainCredentialStrategy()
 
 
-class DevIdRegistrationDetailView(DetailView[DevIdRegistration]):
+class DevIdRegistrationDetailView(UserPermissionRequiredMixin, DetailView[DevIdRegistration]):
     """View to display details of a DevIdRegistration."""
 
     model = DevIdRegistration
     template_name = 'help/devid_registration_detail.html'
     context_object_name = 'devid_registration'
+    permission_required = 'users.view_help_pages'
 
     page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
     strategy: HelpPageStrategy

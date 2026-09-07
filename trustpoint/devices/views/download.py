@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
+from django.core.exceptions import PermissionDenied
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
 from django.http.request import HttpRequest
 from django.shortcuts import redirect
@@ -33,6 +34,7 @@ from trustpoint.page_context import (
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
+from users.permissions import AppPermissions
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -227,6 +229,13 @@ class DeviceManualCredentialDownloadView(AbstractDeviceBaseCredentialDownloadVie
     """View to download a password protected domain or application credential in the desired format."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def post(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle POST requests for manual credential download."""
+        if not _request.user.has_perm(AppPermissions.DOWNLOAD_CREDENTIALS):
+            raise PermissionDenied
+
+        return super().post(_request, *_args, **_kwargs)
 
 
 @method_decorator(login_not_required, name='dispatch')

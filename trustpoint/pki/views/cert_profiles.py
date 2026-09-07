@@ -10,6 +10,7 @@ import json
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db.models import ProtectedError, QuerySet
 from django.forms import ValidationError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -21,7 +22,8 @@ from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission
+from rest_framework.request import Request
 
 from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
@@ -33,6 +35,7 @@ from trustpoint.views.base import (
     ContextDataMixin,
     SortableTableMixin,
 )
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.forms import Form
@@ -125,6 +128,8 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
 
     def form_valid(self, form: CertProfileConfigForm) -> HttpResponse:
         """Handle the case where the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_PROFILES):
+            raise PermissionDenied
         cert_profile = form.save()
         messages.success(
             self.request,
@@ -202,6 +207,8 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
 
     def form_valid(self, form: Form) -> HttpResponse:
         """Delete the selected credentials on valid form."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_PROFILES):
+            raise PermissionDenied
         queryset = self.get_queryset()
         deleted_count = queryset.count() if queryset else 0
 
@@ -221,6 +228,17 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
                 .format(count=deleted_count))
 
         return response
+
+class CanManageCertificateProfiles(BasePermission):
+    """Allow only users permitted to manage certificate profiles."""
+
+    def has_permission(self, request: Request, view: Any) -> bool:
+        """Check if the user has permission to manage certificate profiles."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_PROFILES)
+        )
 
 @extend_schema(tags=['Certificate Profile'])
 @extend_schema_view(
@@ -283,7 +301,7 @@ class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
     """
     queryset = CertificateProfileModel.objects.all().order_by('-created_at')
     serializer_class = CertProfileSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanManageCertificateProfiles,)
     filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -298,5 +316,3 @@ class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
         if self.action == 'retrieve':
             return CertProfileDetailSerializer
         return CertProfileSerializer
-
-

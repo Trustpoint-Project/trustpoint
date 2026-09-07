@@ -12,6 +12,7 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import PermissionDenied
 from django.forms import BaseModelForm
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse_lazy
@@ -30,6 +31,7 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin, SuperuserRequiredMixin
 from users.form import GroupPermissionForm
 from users.models import Role
+from users.permissions import AppPermissions
 
 # Built-in roles cannot be renamed or deleted.
 _PROTECTED_GROUP_NAMES: frozenset[str] = frozenset({Role.ADMIN.value, Role.SERVICE.value})
@@ -88,6 +90,8 @@ class RoleCreateView(
         Returns:
             Redirect to the role management list.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         response = super().form_valid(form)
         name = self.object.name if self.object else ''
         messages.success(
@@ -145,6 +149,8 @@ class RoleEditView(
             back to the form with an error message if a protected
             role's name was changed.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         original_name = self.get_object().name
 
         if original_name in _PROTECTED_GROUP_NAMES:
@@ -192,6 +198,8 @@ class RoleDeleteView(
             the list with an error message if the group is protected or
             still has assigned users.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         self.object = self.get_object()
 
         if self.object.name in _PROTECTED_GROUP_NAMES:
@@ -227,6 +235,8 @@ class RoleViewSet(viewsets.ModelViewSet[Group]):
 
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Update the role, refusing changes to fixed built-in roles."""
+        if not request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         instance = self.get_object()
         if instance.name in _PROTECTED_GROUP_NAMES:
             return Response(
@@ -247,6 +257,8 @@ class RoleViewSet(viewsets.ModelViewSet[Group]):
 
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Delete the role, refusing protected roles or roles still assigned to users."""
+        if not request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         instance = self.get_object()
         if instance.name in _PROTECTED_GROUP_NAMES:
             return Response(
