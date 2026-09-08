@@ -11,6 +11,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import Client
 from django.urls import reverse
 
@@ -27,7 +28,10 @@ User = get_user_model()
 def authenticated_client() -> Client:
     """Return a logged-in client."""
     client = Client()
-    client.force_login(User.objects.create_user(username='ts-user', password='ts-pass-123'))  # noqa: S106
+    user = User.objects.create_user(username='ts-user', password='ts-pass-123')  # noqa: S106
+    permission = Permission.objects.get(codename='manage_truststores')
+    user.role.permissions.add(permission)
+    client.force_login(user)
     return client
 
 

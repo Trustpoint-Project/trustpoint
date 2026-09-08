@@ -19,7 +19,15 @@ User = get_user_model()
 
 def _create_admin_group() -> Group:
     group, _ = Group.objects.get_or_create(name='Admin')
-    GroupProfile.objects.get_or_create(group=group, defaults={'grants_staff': True, 'grants_superuser': True})
+    GroupProfile.objects.update_or_create(
+        group=group,
+        defaults={
+            'grants_staff': True,
+            'grants_superuser': True,
+            'is_builtin': True,
+            'is_protected': True,
+        },
+    )
     return group
 
 
@@ -154,15 +162,14 @@ class TestRoleViewSetUpdate:
         response = superuser_client.patch(url, {'permissions': [perm_id]}, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_updating_service_account_role_is_blocked(self, superuser_client: APIClient) -> None:
-        """The built-in Service Account role's permissions cannot be changed."""
+    def test_updating_service_account_role_is_allowed(self, superuser_client: APIClient) -> None:
+        """The Service Account role is editable because only Admin is protected."""
         service_group = BuiltinRole.get_service_group()
         url = reverse('roles-detail', args=[service_group.pk])
 
         response = superuser_client.patch(url, {'permissions': []}, format='json')
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert list(service_group.permissions.values_list('codename', flat=True)) == ['use_rest_api']
+        assert response.status_code == status.HTTP_200_OK
 
 
 @pytest.mark.django_db

@@ -5,6 +5,7 @@
 
 
 import pytest
+from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
 from django.urls import reverse
 from django.test import RequestFactory
@@ -26,6 +27,13 @@ from pki.views.domains import (
     IssuedCertificatesView,
     OnboardingMethodSelectIdevidHelpView,
 )
+
+
+@pytest.fixture(autouse=True)
+def grant_domain_management_permission(admin_user) -> None:
+    """Grant the shared domain-test user access to protected domain operations."""
+    permission = Permission.objects.get(codename='manage_domains')
+    admin_user.role.permissions.add(permission)
 
 
 @pytest.mark.django_db
