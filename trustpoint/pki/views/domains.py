@@ -552,7 +552,7 @@ class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdR
 class CanManageDomains(BasePermission):
     """Allow only users permitted to manage domains."""
 
-    def has_permission(self, request: Request, view: Any) -> bool:
+    def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage domains."""
         return bool(
             request.user

@@ -319,7 +319,7 @@ class LoggingFilesDownloadMultipleView(
 class CanManageLogging(BasePermission):
     """Allow only users permitted to manage logging settings."""
 
-    def has_permission(self, request: Request, view: Any) -> bool:
+    def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage logging settings."""
         return bool(
             request.user

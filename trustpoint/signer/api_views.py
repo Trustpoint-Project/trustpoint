@@ -11,7 +11,6 @@ from typing import Any, ClassVar
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from django.http import HttpRequest
 from drf_spectacular.utils import (
     OpenApiResponse,
     extend_schema,
@@ -36,7 +35,7 @@ from users.permissions import AppPermissions
 class CanManageTruststores(BasePermission):
     """Allow only users permitted to manage signer settings."""
 
-    def has_permission(self, request: Request, view: Any) -> bool:
+    def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage signer settings."""
         return bool(
             request.user

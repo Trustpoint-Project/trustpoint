@@ -388,7 +388,7 @@ class ActivateTlsServerView(View, LoggerMixin):
     def post(self, request: HttpRequest, *args: Any, **kwargs: dict[str, Any]) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential activation."""
         del args
-        if not self.request.user.has_perm(AppPermissions.MANAGE_TLS_WEBSERVER_CONFIGURATION):
+        if not request.user.has_perm(AppPermissions.MANAGE_TLS_WEBSERVER_CONFIGURATION):
             raise PermissionDenied
         cert_id: int = kwargs['pk']  # type: ignore[assignment]
         self.logger.info('Activating TLS certificate with ID: %s', cert_id)
@@ -421,7 +421,7 @@ class ActivateTlsServerView(View, LoggerMixin):
 class CanManageTls(BasePermission):
     """Allow only users permitted to manage TLS certificates."""
 
-    def has_permission(self, request: Request, view: Any) -> bool:
+    def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage TLS certificates."""
         return bool(
             request.user

@@ -7,7 +7,9 @@ import smtplib
 from unittest.mock import Mock, patch
 
 from django.conf import settings as django_settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
@@ -19,15 +21,35 @@ from pki.util.keys import AutoGenPkiKeyAlgorithm
 LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 
 
+class AuthorizedRequestFactory(RequestFactory):
+    """Create requests authorized for settings mutation tests."""
+
+    def __init__(self, user):
+        super().__init__()
+        self.user = user
+
+    def request(self, **request):
+        http_request = super().request(**request)
+        http_request.user = self.user
+        return http_request
+
+
+def authorized_request_factory(*permission_codenames: str) -> AuthorizedRequestFactory:
+    """Create requests for a user with the specified application permissions."""
+    user = get_user_model().objects.create_user(username='settings-tester', password='testpass123')
+    permissions = Permission.objects.filter(codename__in=permission_codenames)
+    user.role.permissions.add(*permissions)
+    return AuthorizedRequestFactory(user)
+
+
 class SecuritySettingsViewTest(TestCase):
     """Test suite for SecuritySettingsView."""
 
     def setUp(self):
         """Set up test fixtures."""
-        self.factory = RequestFactory()
+        self.factory = authorized_request_factory('manage_security_configuration')
         self.view = SecuritySettingsView()
         self.view.request = self.factory.get('/settings/security/')
-        self.view.request.user = AnonymousUser()
 
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
@@ -271,7 +293,7 @@ class SettingsTabViewTest(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.factory = RequestFactory()
+        self.factory = authorized_request_factory('manage_system_configuration')
         self.view = SettingsTabView()
         self.view.request = self.factory.get('/settings/')
 
@@ -552,7 +574,7 @@ class ChangeLogLevelViewTest(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.factory = RequestFactory()
+        self.factory = authorized_request_factory('manage_system_configuration')
         self.view = ChangeLogLevelView()
         
         # Save original log level

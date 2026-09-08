@@ -23,7 +23,6 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import BasePermission
-from rest_framework.request import Request
 
 from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
@@ -39,6 +38,7 @@ from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.forms import Form
+    from rest_framework.request import Request
 
 
 class CertProfileContextMixin(ContextDataMixin):
@@ -232,7 +232,7 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
 class CanManageCertificateProfiles(BasePermission):
     """Allow only users permitted to manage certificate profiles."""
 
-    def has_permission(self, request: Request, view: Any) -> bool:
+    def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage certificate profiles."""
         return bool(
             request.user

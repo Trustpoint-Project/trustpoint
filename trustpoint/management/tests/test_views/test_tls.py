@@ -4,7 +4,8 @@
 """Test suite for TLS views."""
 from unittest.mock import Mock, patch
 
-from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase
@@ -23,6 +24,21 @@ from management.views.tls import (
 from pki.models import CertificateModel, CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
+
+
+class AuthorizedRequestFactory(RequestFactory):
+    """Create requests authorized for protected TLS view tests."""
+
+    def __init__(self):
+        super().__init__()
+        self.user = get_user_model().objects.create_user(username='tls-tester', password='testpass123')
+        permission = Permission.objects.get(codename='manage_tls_webserver_configuration')
+        self.user.role.permissions.add(permission)
+
+    def request(self, **request):
+        http_request = super().request(**request)
+        http_request.user = self.user
+        return http_request
 
 
 class TlsSettingsContextMixinTest(TestCase):
@@ -55,7 +71,7 @@ class TlsViewTest(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.factory = RequestFactory()
+        self.factory = AuthorizedRequestFactory()
         self.view = TlsView()
         self.view.request = self.factory.get('/tls/')
         
@@ -320,7 +336,7 @@ class GenerateTlsCertificateViewTest(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.factory = RequestFactory()
+        self.factory = AuthorizedRequestFactory()
         self.view = GenerateTlsCertificateView()
         self.view.request = self.factory.get('/tls/generate/')
         
@@ -418,10 +434,9 @@ class TlsAddFileImportPkcs12ViewTest(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.factory = RequestFactory()
+        self.factory = AuthorizedRequestFactory()
         self.view = TlsAddFileImportPkcs12View()
         self.view.request = self.factory.get('/tls/import/pkcs12/')
-        self.view.request.user = AnonymousUser()
 
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
@@ -458,10 +473,9 @@ class TlsAddFileImportSeparateFilesViewTest(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.factory = RequestFactory()
+        self.factory = AuthorizedRequestFactory()
         self.view = TlsAddFileImportSeparateFilesView()
         self.view.request = self.factory.get('/tls/import/separate/')
-        self.view.request.user = AnonymousUser()
 
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
@@ -498,7 +512,7 @@ class ActivateTlsServerViewTest(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.factory = RequestFactory()
+        self.factory = AuthorizedRequestFactory()
         self.view = ActivateTlsServerView()
         
         # Create a certificate and credential using mocks

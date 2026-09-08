@@ -448,7 +448,7 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
 class CanManageTruststores(BasePermission):
     """Allow only users permitted to manage truststores."""
 
-    def has_permission(self, request: Request, view: Any) -> bool:
+    def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage truststores."""
         return bool(
             request.user

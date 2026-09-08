@@ -22,7 +22,6 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import BasePermission
-from rest_framework.views import APIView
 
 from management.backup_artifacts import backup_manifest_path
 from management.forms import BackupOptionsForm
@@ -531,7 +530,7 @@ class BackupFilesDeleteMultipleView(UserPermissionRequiredMixin, View, LoggerMix
 class CanManageBackup(BasePermission):
     """Allow only users permitted to manage backup settings."""
 
-    def has_permission(self, request: HttpRequest, view: APIView) -> bool:
+    def has_permission(self, request: HttpRequest, _view: Any) -> bool:
         """Check if the user has permission to manage backup settings."""
         return bool(
             request.user

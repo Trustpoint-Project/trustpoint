@@ -26,7 +26,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
@@ -69,6 +69,8 @@ def admin_user(db: Any) -> AbstractBaseUser:
     )
     admin_group, _ = Group.objects.get_or_create(name='Admin')
     user.groups.add(admin_group)
+    manage_devices_perm = Permission.objects.get(codename='manage_devices')
+    user.role.permissions.add(manage_devices_perm)
     return user
 
 

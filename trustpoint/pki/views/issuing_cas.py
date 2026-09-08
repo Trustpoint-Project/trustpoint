@@ -1707,7 +1707,7 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
 class CanManageIssuingCas(BasePermission):
     """Allow only users permitted to manage issuing CAs."""
 
-    def has_permission(self, request: Request, view: Any) -> bool:
+    def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage issuing CAs."""
         return bool(
             request.user

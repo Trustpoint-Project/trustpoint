@@ -19,7 +19,6 @@ from workflows2.serializers import Workflow2DefinitionSerializer
 from workflows2.services.definitions import WorkflowDefinitionService
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest
     from rest_framework.request import Request
 
 
@@ -54,7 +53,7 @@ YAML_REQUEST_EXAMPLE = OpenApiExample(
 class CanManageWorkflows(BasePermission):
     """Allow only users permitted to manage workflows."""
 
-    def has_permission(self, request: Request, view: Any) -> bool:
+    def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage workflows."""
         return bool(
             request.user
