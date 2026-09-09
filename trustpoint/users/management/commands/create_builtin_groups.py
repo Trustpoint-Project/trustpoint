@@ -76,7 +76,8 @@ class Command(BaseCommand):
                     'grants_staff': role is BuiltinRole.ADMIN,
                     'grants_superuser': role is BuiltinRole.ADMIN,
                     'is_builtin': True,
-                    'is_protected': role is BuiltinRole.ADMIN,
+                    'is_modification_protected': role is BuiltinRole.ADMIN,
+                    'is_deletion_protected': role in (BuiltinRole.ADMIN, BuiltinRole.SERVICE),
                 },
             )
             group.permissions.set(self._get_permissions(available_permissions, codenames))

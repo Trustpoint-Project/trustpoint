@@ -25,7 +25,8 @@ def _create_admin_group() -> Group:
             'grants_staff': True,
             'grants_superuser': True,
             'is_builtin': True,
-            'is_protected': True,
+            'is_modification_protected': True,
+            'is_deletion_protected': True,
         },
     )
     return group
@@ -125,10 +126,11 @@ class TestRoleViewSetCreate:
         assert GroupProfile.objects.get(group=group).grants_staff is True
 
     def test_create_response_includes_computed_fields(self, superuser_client: APIClient) -> None:
-        """The response includes is_protected and user_count for a freshly created role."""
+        """The response includes protection flags and user_count for a freshly created role."""
         response = superuser_client.post(reverse('roles-list'), {'name': 'Auditor'}, format='json')
         assert response.status_code == status.HTTP_201_CREATED, response.data
-        assert response.data['is_protected'] is False
+        assert response.data['is_modification_protected'] is False
+        assert response.data['is_deletion_protected'] is False
         assert response.data['user_count'] == 0
 
 
@@ -163,13 +165,20 @@ class TestRoleViewSetUpdate:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_updating_service_account_role_is_allowed(self, superuser_client: APIClient) -> None:
-        """The Service Account role is editable because only Admin is protected."""
+        """The Service Account role is editable but cannot be deleted."""
         service_group = BuiltinRole.get_service_group()
+        GroupProfile.objects.update_or_create(
+            group=service_group,
+            defaults={'is_deletion_protected': True, 'is_modification_protected': False},
+        )
         url = reverse('roles-detail', args=[service_group.pk])
 
         response = superuser_client.patch(url, {'permissions': []}, format='json')
 
         assert response.status_code == status.HTTP_200_OK
+
+        response = superuser_client.delete(url)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db

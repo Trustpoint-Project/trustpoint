@@ -83,10 +83,15 @@ class GroupProfile(models.Model):
         verbose_name=_('built-in role'),
         help_text=_('Identifies a role provided by Trustpoint.'),
     )
-    is_protected = models.BooleanField(
+    is_modification_protected = models.BooleanField(
         default=False,
-        verbose_name=_('protected role'),
-        help_text=_('Prevents the role from being modified or deleted.'),
+        verbose_name=_('modification-protected role'),
+        help_text=_('Prevents the role from being modified.'),
+    )
+    is_deletion_protected = models.BooleanField(
+        default=False,
+        verbose_name=_('deletion-protected role'),
+        help_text=_('Prevents the role from being deleted.'),
     )
 
     class Meta:

@@ -37,7 +37,8 @@ class TestCreateBuiltinGroupsCommand:
             profile = GroupProfile.objects.get(group=group)
 
             assert profile.is_builtin
-            assert profile.is_protected is (role is BuiltinRole.ADMIN)
+            assert profile.is_modification_protected is (role is BuiltinRole.ADMIN)
+            assert profile.is_deletion_protected is (role in (BuiltinRole.ADMIN, BuiltinRole.SERVICE))
             assert profile.grants_staff is (role is BuiltinRole.ADMIN)
             assert profile.grants_superuser is (role is BuiltinRole.ADMIN)
             if codenames is not None:

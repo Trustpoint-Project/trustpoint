@@ -22,7 +22,8 @@ def _create_admin_group() -> Group:
             'grants_staff': True,
             'grants_superuser': True,
             'is_builtin': True,
-            'is_protected': True,
+            'is_modification_protected': True,
+            'is_deletion_protected': True,
         },
     )
     manage_roles_perm = Permission.objects.get(codename='manage_roles')
@@ -114,8 +115,12 @@ class RoleEditViewTest(TestCase):
         self.assertTrue(any('Analyst Updated' in str(m) for m in messages))
 
     def test_service_account_role_can_be_modified(self) -> None:
-        """Only the Admin role is protected from modification."""
+        """The Service Account role can be modified but cannot be deleted."""
         service_group = BuiltinRole.get_service_group()
+        GroupProfile.objects.update_or_create(
+            group=service_group,
+            defaults={'is_deletion_protected': True, 'is_modification_protected': False},
+        )
         url = reverse('management:edit_role', kwargs={'pk': service_group.pk})
 
         response = self.client.post(url, {
@@ -126,6 +131,10 @@ class RoleEditViewTest(TestCase):
         })
 
         self.assertEqual(response.status_code, 302)
+
+        delete_response = self.client.post(reverse('management:delete_role', kwargs={'pk': service_group.pk}))
+        self.assertEqual(delete_response.status_code, 302)
+        self.assertTrue(Group.objects.filter(pk=service_group.pk).exists())
 
 
 class RoleDeleteViewTest(TestCase):
