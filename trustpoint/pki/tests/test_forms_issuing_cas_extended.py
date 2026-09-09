@@ -416,6 +416,38 @@ class TestIssuingCaSeparateFilesImport:
         ca = CaModel.objects.get(unique_name='chain-ca')
         assert ca.chain_truststore is not None
 
+    def test_chain_creates_ca_hierarchy_for_imported_issuing_ca(self) -> None:
+        """A supplied chain creates parent CA rows and links the imported CA below them."""
+        root, root_key = CertificateGenerator.create_root_ca('Import Tree Root', path_length=2)
+        intermediate, intermediate_key = CertificateGenerator.create_issuing_ca(
+            root_key, 'Import Tree Root', 'Import Tree Intermediate', path_length=1
+        )
+        issuing, issuing_key = CertificateGenerator.create_issuing_ca(
+            intermediate_key, 'Import Tree Intermediate', 'Import Tree Issuing'
+        )
+        form = IssuingCaAddFileImportSeparateFilesForm(
+            data={'unique_name': 'import-tree-ca'},
+            files={
+                'ca_certificate': SimpleUploadedFile(
+                    'ca.pem', issuing.public_bytes(serialization.Encoding.PEM)
+                ),
+                'ca_certificate_chain': SimpleUploadedFile(
+                    'chain.pem',
+                    intermediate.public_bytes(serialization.Encoding.PEM)
+                    + root.public_bytes(serialization.Encoding.PEM),
+                ),
+                'private_key_file': SimpleUploadedFile('key.pem', _key_pem(issuing_key)),
+            },
+        )
+
+        assert form.is_valid(), form.errors
+        imported_ca = CaModel.objects.get(unique_name='import-tree-ca')
+        root_ca = CaModel.objects.get(certificate__common_name='Import Tree Root')
+        intermediate_ca = CaModel.objects.get(certificate__common_name='Import Tree Intermediate')
+        assert root_ca.parent_ca is None
+        assert intermediate_ca.parent_ca == root_ca
+        assert imported_ca.parent_ca == intermediate_ca
+
     def test_untrusted_chain_is_rejected(self) -> None:
         """A chain that does not sign the CA certificate is rejected."""
         _root, root_key = CertificateGenerator.create_root_ca('Real Root', path_length=2)
