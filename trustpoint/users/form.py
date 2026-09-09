@@ -12,7 +12,7 @@ from django.utils.translation import gettext_lazy as _
 
 from management.models.organization import OrganizationModel
 
-from .models import GroupProfile, Role, TrustpointUser
+from .models import BuiltinRole, GroupProfile, TrustpointUser
 
 
 class TrustpointSuperUserCreationForm(UserCreationForm[TrustpointUser]):
@@ -57,7 +57,7 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
         self.fields['email'].required = False
         self.fields['email'].label = _('Email (optional)')
         role_field = cast('forms.ModelChoiceField[Group]', self.fields['role'])
-        role_field.queryset = Group.objects.exclude(name=Role.SERVICE.value)
+        role_field.queryset = Group.objects.exclude(name=BuiltinRole.SERVICE.value)
         organization_field = cast('forms.ModelChoiceField[OrganizationModel]', self.fields['organization'])
         organization_field.required = False
         organization_field.queryset = OrganizationModel.objects.all()

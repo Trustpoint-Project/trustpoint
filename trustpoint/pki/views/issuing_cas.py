@@ -14,7 +14,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
@@ -34,7 +34,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from management.models.audit_log import AuditLog
@@ -73,6 +73,7 @@ from trustpoint.views.base import (
     ContextDataMixin,
     SortableTableMixin,
 )
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -167,6 +168,8 @@ class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView[IssuingCa
 
     def form_valid(self, form: IssuingCaAddFileImportPkcs12Form) -> HttpResponse:
         """Handle the case where the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         messages.success(
             self.request,
             _('Successfully added Issuing CA {name}.').format(name=form.cleaned_data['unique_name']),
@@ -192,6 +195,8 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[Is
 
     def form_valid(self, form: IssuingCaAddFileImportSeparateFilesForm) -> HttpResponse:
         """Handle the case where the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         messages.success(
             self.request,
             _('Successfully added Issuing CA {name}.').format(name=form.cleaned_data['unique_name']),
@@ -216,6 +221,8 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
 
     def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
         """Handle successful form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         ca = form.save()
         messages.success(
             self.request,
@@ -267,6 +274,8 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle both association and import form submissions."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         if 'trust_store_file' in request.FILES:
             return self._handle_import(request)
         return super().post(request, *args, **kwargs)
@@ -405,6 +414,8 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
 
     def form_valid(self, form: IssuingCaTruststoreAssociationForm) -> HttpResponse:
         """Handle successful form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         form.save()
         ca = self.get_ca()
 
@@ -434,6 +445,7 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
 class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
     """Mixin for defining certificate content using a certificate profile."""
 
+    request: HttpRequest
     ca_type_filter: CaModel.CaTypeChoice
     redirect_url_name: str
     available_profiles: list[CertificateProfileModel]
@@ -466,6 +478,8 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Dispatch the request, ensuring the CA and profile exist."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         self.ca = get_object_or_404(
             CaModel.objects.filter(ca_type=self.ca_type_filter),
             pk=kwargs['pk']
@@ -500,16 +514,18 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
         """Handle the case where the form is invalid."""
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f'{field}: {error}')  # type: ignore[attr-defined]
+                messages.error(self.request, f'{field}: {error}')
         return super().form_invalid(form)  # type: ignore[misc,no-any-return]
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Handle the case where the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         self.logger.info('Form cleaned_data: %s', form.cleaned_data)
-        self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data # type: ignore[attr-defined]
-        self.request.session[f'cert_profile_pk_{self.ca.pk}'] = self.cert_profile.pk  # type: ignore[attr-defined]
+        self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data
+        self.request.session[f'cert_profile_pk_{self.ca.pk}'] = self.cert_profile.pk
         messages.success(
-            self.request, # type: ignore[attr-defined]
+            self.request,
             self.get_success_message()
         )
         return redirect(self.redirect_url_name, pk=self.ca.pk)
@@ -536,14 +552,18 @@ class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormVie
 class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
     """Mixin for CMP RA configuration views."""
 
+    request: HttpRequest
+
     def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
         """Handle successful CMP RA configuration submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_RAS):
+            raise PermissionDenied
         ca = form.save(is_ra_mode=True)
         messages.success(
-            self.request,  # type: ignore[attr-defined]
+            self.request,
             _('Successfully configured CMP RA {name}. Please associate a trust store.').format(name=ca.unique_name)
         )
-        actor = self.request.user if self.request.user.is_authenticated else None  # type: ignore[attr-defined]
+        actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.CA_CREATED,
             target=ca,
@@ -561,6 +581,8 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
 
     def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
         """Handle successful form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         ca = form.save()
         messages.success(
             self.request,
@@ -588,16 +610,20 @@ class RemoteRaAddRequestCmpView(RemoteRaAddRequestCmpMixin, FormView[IssuingCaAd
 class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
     """Mixin for EST RA configuration views."""
 
+    request: HttpRequest
+
     def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
         """Handle successful EST RA configuration submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_RAS):
+            raise PermissionDenied
         ca = form.save(is_ra_mode=True)
         messages.success(
-            self.request,  # type: ignore[attr-defined]
+            self.request,
             _('Successfully configured EST RA {name}. Please associate the CA chain trust store.').format(
                 name=ca.unique_name
             )
         )
-        actor = self.request.user if self.request.user.is_authenticated else None  # type: ignore[attr-defined]
+        actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.CA_CREATED,
             target=ca,
@@ -706,6 +732,8 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle POST request to update CRL cycle settings."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         issuing_ca = self.get_object()
         self.object = issuing_ca
 
@@ -992,6 +1020,8 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle POST request to request certificate via EST."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         ca = self.get_object()
 
         cert_content_key = f'cert_content_data_{ca.pk}'
@@ -1186,6 +1216,8 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle POST request to request certificate via CMP."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         ca = self.get_object()
 
         cert_content_key = f'cert_content_data_{ca.pk}'
@@ -1561,6 +1593,8 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
 
     def form_valid(self, form: Form) -> HttpResponse:
         """Delete the selected Issuing CAs on valid form."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         queryset = self.get_queryset()
         deleted_count = queryset.count() if queryset else 0
 
@@ -1670,6 +1704,17 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
             response['Content-Disposition'] = f'attachment; filename="{ca.unique_name}.crl"'
         return response
 
+class CanManageIssuingCas(BasePermission):
+    """Allow only users permitted to manage issuing CAs."""
+
+    def has_permission(self, request: Request, _view: Any) -> bool:
+        """Check if the user has permission to manage issuing CAs."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(AppPermissions.MANAGE_CAS)
+        )
+
 @extend_schema(tags=['Issuing-CA'])
 class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
     """ViewSet for managing Issuing CA instances via REST API."""
@@ -1678,7 +1723,7 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
         ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
     ).order_by('-created_at')
     serializer_class = IssuingCaSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanManageIssuingCas,)
     filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -1884,6 +1929,8 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
     )
     def generate_crl(self, _request: Request, pk: int | None = None, **_kwargs: Any) -> Response:
         """Generate a new CRL for this Issuing CA."""
+        if not _request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         del pk # not needed, but passed by DRF
         ca = self.get_object()
 

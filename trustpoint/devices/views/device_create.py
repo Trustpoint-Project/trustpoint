@@ -6,6 +6,7 @@
 from typing import Any
 
 from django import forms
+from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
@@ -29,6 +30,7 @@ from trustpoint.page_context import (
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
+from users.permissions import AppPermissions
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -179,6 +181,8 @@ class AbstractCreateNoOnboardingView(PageContextMixin, FormView[NoOnboardingCrea
         Returns:
             The HTTP Response to be returned.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         if self.page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY:
             self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
         else:
@@ -252,6 +256,8 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
         Returns:
             The HTTP Response to be returned.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         if self.page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY:
             self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)  # type: ignore[attr-defined]
         elif self.page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY:

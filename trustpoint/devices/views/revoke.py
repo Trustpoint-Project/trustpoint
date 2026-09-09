@@ -7,6 +7,7 @@ import datetime
 from typing import Any
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db.models import QuerySet
 from django.http import Http404, HttpResponse
 from django.http.request import HttpRequest
@@ -37,6 +38,7 @@ from trustpoint.page_context import (
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
+from users.permissions import AppPermissions
 from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
@@ -99,6 +101,8 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
         Returns:
             Redirect to the devices summary.
         """
+        if not self.request.user.has_perm(AppPermissions.REVOKE_CERTIFICATES):
+            raise PermissionDenied
         self.object = self.get_object()
 
         device = self.object.device
@@ -267,6 +271,8 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
         Returns:
             Redirect to the devices summary.
         """
+        if not self.request.user.has_perm(AppPermissions.REVOKE_CERTIFICATES):
+            raise PermissionDenied
         revoke_form = self.form_class(self.request.POST)
         if revoke_form.is_valid():
             self.pks = revoke_form.cleaned_data['pks']

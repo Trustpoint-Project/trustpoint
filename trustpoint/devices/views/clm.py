@@ -8,6 +8,7 @@ import datetime
 from typing import Any, cast
 
 from django import forms
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Q, QuerySet
 from django.http import HttpResponse, HttpResponseBase
@@ -47,6 +48,7 @@ from trustpoint.page_context import (
     PageContextMixin,
 )
 from trustpoint.settings import UIConfig
+from users.permissions import AppPermissions
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -498,6 +500,8 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         Returns:
             The HttpResponse.
         """
+        if not request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         self.object = self.get_object()
 
         _agent_device_types = (

@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission
 from django.test import Client
 from django.urls import reverse
 
@@ -24,6 +25,8 @@ def admin_user() -> User:
         email='admin@test.com',
         password='testpass123'
     )
+    permission = Permission.objects.get(codename='manage_cas')
+    user.role.permissions.add(permission)
     return user
 
 

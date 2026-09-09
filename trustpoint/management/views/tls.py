@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import ProtectedError
 from django.http import HttpResponseRedirect
@@ -19,7 +19,7 @@ from django.views.generic import FormView, TemplateView, View
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission
 
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.management.commands.update_tls import Command as UpdateTlsCommand
@@ -32,10 +32,12 @@ from setup_wizard.forms import StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import BulkDeleteView
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.forms import Form
     from django.http import HttpRequest, HttpResponse
+    from rest_framework.request import Request
 
 
 class TlsSettingsContextMixin:
@@ -135,6 +137,8 @@ class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
 
     def form_valid(self, form: IPv4AddressForm) -> HttpResponse:
         """Handle valid form submissions."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_TLS_WEBSERVER_CONFIGURATION):
+            raise PermissionDenied
         ipv4_address = form.cleaned_data.get('ipv4_address')
         TlsSettings.objects.update_or_create(
             id=1,
@@ -328,6 +332,8 @@ class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
 
     def form_valid(self, _form: Form) -> HttpResponse:
         """Attempt to delete tls certificates if the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_TLS_WEBSERVER_CONFIGURATION):
+            raise PermissionDenied
         queryset = self.get_queryset()
         try:
             active_credential = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
@@ -382,6 +388,8 @@ class ActivateTlsServerView(View, LoggerMixin):
     def post(self, request: HttpRequest, *args: Any, **kwargs: dict[str, Any]) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential activation."""
         del args
+        if not request.user.has_perm(AppPermissions.MANAGE_TLS_WEBSERVER_CONFIGURATION):
+            raise PermissionDenied
         cert_id: int = kwargs['pk']  # type: ignore[assignment]
         self.logger.info('Activating TLS certificate with ID: %s', cert_id)
         try:
@@ -410,6 +418,18 @@ class ActivateTlsServerView(View, LoggerMixin):
             messages.error(request, 'An unexpected error occurred while activating TLS certificate')
         return redirect(reverse('management:tls'))
 
+class CanManageTls(BasePermission):
+    """Allow only users permitted to manage TLS certificates."""
+
+    def has_permission(self, request: Request, _view: Any) -> bool:
+        """Check if the user has permission to manage TLS certificates."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(AppPermissions.MANAGE_TLS_WEBSERVER_CONFIGURATION)
+        )
+
+
 @extend_schema(tags=['Tls'])
 @extend_schema_view(
     list=extend_schema(description='Retrieve a list of all TLS Certificates.'),
@@ -427,7 +447,7 @@ class TlsViewSet(viewsets.ModelViewSet[Any]):
     """
     queryset = CredentialModel.objects.all().order_by('-created_at')
     serializer_class = CredentialSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanManageTls,)
     filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,

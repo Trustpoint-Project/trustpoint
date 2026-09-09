@@ -17,7 +17,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -29,7 +29,19 @@ from signer.serializers import (
     SignHashRequestSerializer,
 )
 from trustpoint.logger import LoggerMixin
+from users.permissions import AppPermissions
 
+
+class CanManageTruststores(BasePermission):
+    """Allow only users permitted to manage signer settings."""
+
+    def has_permission(self, request: Request, _view: Any) -> bool:
+        """Check if the user has permission to manage signer settings."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(AppPermissions.MANAGE_SIGNER)
+        )
 
 @extend_schema(tags=['Signer'])
 class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
@@ -37,7 +49,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
 
     queryset = SignerModel.objects.all()
     serializer_class = SignerSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanManageTruststores,)
 
     @extend_schema(
         methods=['post'],

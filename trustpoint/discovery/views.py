@@ -8,6 +8,7 @@ import threading
 from typing import Any
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -15,6 +16,7 @@ from django.views import View
 
 from pki.models.certificate import CertificateModel
 from trustpoint.views.base import ContextDataMixin
+from users.permissions import AppPermissions
 
 from .models import DiscoveredDevice, DiscoveryPort
 from .scanner import OTScanner
@@ -207,6 +209,8 @@ class StartScanView(View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Start scanning in a background thread when no scan is running."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_DISCOVERY):
+            raise PermissionDenied
         start_ip = request.POST.get('start_ip', '10.100.13.1')
         end_ip = request.POST.get('end_ip', '10.100.13.254')
 
@@ -228,6 +232,8 @@ class StopScanView(View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Signal the active scanner to stop."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_DISCOVERY):
+            raise PermissionDenied
         ScanManager.request_stop()
         messages.info(request, 'Stopping the scan...')
         return redirect('discovery:device_list')
@@ -240,6 +246,8 @@ class AddPortView(View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Validate and persist an additional scan port."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_DISCOVERY):
+            raise PermissionDenied
         port_str = request.POST.get('port_number')
         desc = request.POST.get('description')
 
@@ -294,6 +302,8 @@ class ClearDevicesView(View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Delete all discovered devices from inventory."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_DISCOVERY):
+            raise PermissionDenied
         DiscoveredDevice.objects.all().delete()
         messages.success(request, 'Discovery inventory cleared.')
         return redirect('discovery:device_list')

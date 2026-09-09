@@ -6,7 +6,7 @@
 import logging
 
 from behave import given, runner, step, then, when
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 from django.test import Client
 from management.models.security import SecurityConfig
 from pki.models.domain import DomainModel
@@ -68,7 +68,12 @@ def step_admin_logged_in(context: runner.Context) -> None:
         context: the behave context
     """
     try:
-        TrustpointUser.objects.create_superuser(username='admin', password='testing321')  # noqa: S106
+        admin_user = TrustpointUser.objects.create_superuser(username='admin', password='testing321')  # noqa: S106
+        admin_permissions = Permission.objects.filter(
+            content_type__app_label='users',
+            content_type__model='apppermission',
+        )
+        admin_user.role.permissions.set(admin_permissions)
         client = Client()
         login_success = client.login(username='admin', password='testing321')  # noqa: S106
         if not login_success:

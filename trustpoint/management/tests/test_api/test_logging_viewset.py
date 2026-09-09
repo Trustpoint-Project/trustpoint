@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -45,7 +46,10 @@ def api_client() -> APIClient:
 def user():
     """Create a test user."""
     User = get_user_model()
-    return User.objects.create_user(username='log_testuser', password='testpass123')
+    test_user = User.objects.create_user(username='log_testuser', password='testpass123')
+    manage_system_configuration_perm = Permission.objects.get(codename='manage_system_configuration')
+    test_user.role.permissions.add(manage_system_configuration_perm)
+    return test_user
 
 
 @pytest.fixture

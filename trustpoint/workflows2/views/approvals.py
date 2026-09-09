@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,6 +18,7 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from trustpoint.page_context import PageContextMixin
+from users.permissions import AppPermissions
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance
 from workflows2.services.dispatch import WorkflowDispatchService
@@ -316,8 +318,10 @@ class Workflow2ApprovalDetailView(PageContextMixin, LoginRequiredMixin, View):
 class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
     """Approve/Reject and continue with the normal dispatch execution policy."""
 
-    def post(self, request: HttpRequest, approval_id: UUID) -> HttpResponse:
+    def post(self, request: HttpRequest, approval_id: UUID) -> HttpResponse: #noqa: C901
         """Resolve an approval and continue execution if the workflow can proceed."""
+        if not request.user.has_perm(AppPermissions.APPROVE_WORKFLOWS):
+            raise PermissionDenied
         decision = (request.POST.get('decision') or '').strip().lower()
         comment = (request.POST.get('comment') or '').strip()
         if decision not in {'approved', 'rejected'}:

@@ -26,7 +26,7 @@
                     {# --- Name field (read-only for protected roles) --- #}
                     <div class="mb-3">
                         <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
-                        {% if is_protected %}
+                            {% if is_modification_protected %}
                             <input type="text" class="form-control" value="{{ object.name }}" readonly>
                             <input type="hidden" name="name" value="{{ object.name }}">
                         {% else %}
@@ -43,7 +43,7 @@
 
                     {# --- Staff / Superuser checkboxes --- #}
                     <div class="mb-3 form-check">
-                        {% if is_protected %}
+                            {% if is_modification_protected %}
                             <input type="checkbox" class="form-check-input" {% if form.grants_staff.value %}checked{% endif %} disabled>
                             <input type="hidden" name="grants_staff" value="{{ form.grants_staff.value|yesno:'on,' }}">
                         {% else %}
@@ -55,7 +55,7 @@
                         {% endif %}
                     </div>
                     <div class="mb-3 form-check">
-                        {% if is_protected %}
+                            {% if is_modification_protected %}
                             <input type="checkbox" class="form-check-input" id="superuser-check" {% if form.grants_superuser.value %}checked{% endif %} disabled>
                             <input type="hidden" name="grants_superuser" value="{{ form.grants_superuser.value|yesno:'on,' }}">
                         {% else %}
@@ -68,9 +68,9 @@
                     </div>
 
                     {# --- Permissions dual-listbox (hidden when superuser is checked) --- #}
-                    {% if is_protected %}
-                        <div class="mb-3">
-                            <label class="form-label">{% trans 'Permissions' %}</label>
+                    {% if is_modification_protected %}
+                            <div class="mb-3">
+                                <label class="form-label">{% trans 'Permissions' %}</label>
                             <ul class="list-group">
                                 {% for permission in fixed_permissions %}
                                     <li class="list-group-item">{{ permission.name }}</li>
@@ -85,12 +85,12 @@
 
                     <div class="d-flex justify-content-end gap-2 mt-4">
                         <a href="{% url 'management:role_management' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
-                        {% if not is_protected %}
+                            {% if not is_modification_protected %}
                             <button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
                         {% endif %}
                     </div>
                 </form>
-                {% if not is_protected %}
+                {% if not is_modification_protected %}
                     <script>
                     (function () {
                         const cb = document.getElementById('superuser-check') || document.getElementById('{{ form.grants_superuser.id_for_label }}');

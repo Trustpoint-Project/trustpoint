@@ -6,6 +6,7 @@
 from typing import Any
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.forms import BaseModelForm
 from django.http import HttpResponse
 from django.urls import reverse_lazy
@@ -18,6 +19,7 @@ from management.models.audit_log import AuditLog
 from management.models.organization import OrganizationModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin, SuperuserRequiredMixin
+from users.permissions import AppPermissions
 
 
 class OrganizationContextMixin(ContextDataMixin):
@@ -55,6 +57,8 @@ class OrganizationCreateView(
 
     def form_valid(self, form: BaseModelForm[OrganizationModel]) -> HttpResponse:
         """Save the new organization, write audit log, and show a success message."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ORGANIZATIONS):
+            raise PermissionDenied
         response = super().form_valid(form)
         if not self.object:
             return response
@@ -90,6 +94,8 @@ class OrganizationEditView(
 
     def form_valid(self, form: BaseModelForm[OrganizationModel]) -> HttpResponse:
         """Save organization changes, write audit log, and show a success message."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ORGANIZATIONS):
+            raise PermissionDenied
         response = super().form_valid(form)
 
         actor = self.request.user if self.request.user.is_authenticated else None
@@ -121,7 +127,13 @@ class OrganizationDeleteView(
     success_url = reverse_lazy('management:organization')
 
     def form_valid(self, form: Any) -> HttpResponse:
-        """Delete the organization, write audit log, and show a success message."""
+        """Delete the organization, write audit log, and show a success message.
+
+        Raises:
+            PermissionDenied: If the current user does not have permission to manage organizations.
+        """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ORGANIZATIONS):
+            raise PermissionDenied
         self.object = self.get_object()
 
         actor = self.request.user if self.request.user.is_authenticated else None

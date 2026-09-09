@@ -90,6 +90,7 @@ def test_request_cert_views_redirect_when_content_is_missing() -> None:
         (IssuingCaRequestCertCmpView, 'pki:issuing_cas-define-cert-content-cmp'),
     ]:
         request = RequestFactory().post('/')
+        request.user = Mock(has_perm=Mock(return_value=True))
         request.session = {}
         view = view_class()
         view.get_object = Mock(return_value=ca)

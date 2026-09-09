@@ -19,7 +19,8 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
 from users.authentication import ServiceAccountBackend
-from users.models import Role, ServiceAccountCredential, TrustpointUser
+from users.middleware import ServiceAccountMiddleware
+from users.models import BuiltinRole, ServiceAccountCredential, TrustpointUser
 
 if TYPE_CHECKING:
     from management.models.organization import OrganizationModel
@@ -35,7 +36,7 @@ def organization(db: object) -> OrganizationModel:
 @pytest.fixture
 def service_role(db: object) -> Group:
     """Create a role for service accounts."""
-    return Role.get_service_group()
+    return BuiltinRole.get_service_group()
 
 
 @pytest.fixture
@@ -96,8 +97,8 @@ class TestTrustpointUser:
             organization=organization,
         )
 
-        assert account.role.name == Role.SERVICE.value
-        assert account.role.name == Role.get_service_group().name
+        assert account.role.name == BuiltinRole.SERVICE.value
+        assert account.role.name == BuiltinRole.get_service_group().name
         assert account.has_perm('users.use_rest_api')
 
     def test_service_account_cannot_be_staff(self, service_account: TrustpointUser) -> None:
@@ -387,6 +388,20 @@ class TestServiceAccountBackend:
 @pytest.mark.django_db
 class TestServiceAccountConfiguration:
     """Tests for service account configuration wiring."""
+
+    @pytest.mark.parametrize(
+        ('path', 'is_api_path'),
+        [
+            ('/api/pki/cert-profiles/', True),
+            ('/rest/', False),
+            ('/.well-known/cmp/', False),
+            ('/aoki/', False),
+            ('/management/', False),
+        ],
+    )
+    def test_service_account_api_path_is_limited_to_viewset_api(self, path: str, *, is_api_path: bool) -> None:
+        """Only the REST ViewSet namespace may be used by service-account sessions."""
+        assert ServiceAccountMiddleware._is_api_path(path) is is_api_path
 
     def test_service_account_middleware_is_enabled(self) -> None:
         """Service accounts should be blocked from the Web UI when enabled in settings."""

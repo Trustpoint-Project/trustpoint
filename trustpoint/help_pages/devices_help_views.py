@@ -59,6 +59,8 @@ from trustpoint.page_context import (
     DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY,
     PageContextMixin,
 )
+from trustpoint.views.base import UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from typing import Any
@@ -69,13 +71,14 @@ if TYPE_CHECKING:
 # --------------------------------------------------- Base Classes ----------------------------------------------------
 
 
-class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
+class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
     """Base help view that constructs the context."""
 
     template_name = 'help/help_page.html'
     http_method_names = ('get',)
     model = DeviceModel
     context_object_name = 'device'
+    permission_required = AppPermissions.VIEW_HELP_PAGES
 
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str

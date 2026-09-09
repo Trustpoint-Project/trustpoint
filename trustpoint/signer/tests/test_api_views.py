@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.x509.oid import NameOID
+from django.contrib.auth.models import Permission
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -30,6 +31,8 @@ def authenticated_client(api_client):
     from django.contrib.auth import get_user_model
     User = get_user_model()
     user = User.objects.create_user(username='testuser', password='testpass123')
+    manage_signer_perm = Permission.objects.get(codename='manage_signer')
+    user.role.permissions.add(manage_signer_perm)
     api_client.force_authenticate(user=user)
     return api_client
 

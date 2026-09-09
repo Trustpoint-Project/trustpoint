@@ -12,6 +12,7 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import PermissionDenied
 from django.forms import BaseModelForm
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse_lazy
@@ -29,10 +30,19 @@ from management.serializer.role import PermissionSerializer, RoleSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin, SuperuserRequiredMixin
 from users.form import GroupPermissionForm
-from users.models import Role
+from users.permissions import AppPermissions
 
-# Built-in roles cannot be renamed or deleted.
-_PROTECTED_GROUP_NAMES: frozenset[str] = frozenset({Role.ADMIN.value, Role.SERVICE.value})
+
+def _is_modification_protected(group: Group) -> bool:
+    """Return whether the group profile prevents role modification."""
+    profile = getattr(group, 'profile', None)
+    return bool(profile and profile.is_modification_protected)
+
+
+def _is_deletion_protected(group: Group) -> bool:
+    """Return whether the group profile prevents role deletion."""
+    profile = getattr(group, 'profile', None)
+    return bool(profile and profile.is_deletion_protected)
 
 
 class RoleContextMixin(ContextDataMixin):
@@ -62,7 +72,9 @@ class RoleTableView(
             ``protected_group_names``.
         """
         context = super().get_context_data(**kwargs)
-        context['protected_group_names'] = _PROTECTED_GROUP_NAMES
+        context['protected_group_names'] = set(
+            Group.objects.filter(profile__is_deletion_protected=True).values_list('name', flat=True)
+        )
         return context
 
 
@@ -88,6 +100,8 @@ class RoleCreateView(
         Returns:
             Redirect to the role management list.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         response = super().form_valid(form)
         name = self.object.name if self.object else ''
         messages.success(
@@ -105,8 +119,8 @@ class RoleEditView(
 ):
     """View for editing an existing group's name and permissions.
 
-    For protected groups the name field is rendered read-only by the
-    template (the ``is_protected`` context flag).
+    For modification-protected groups the name field is rendered read-only by the
+    template (the ``is_modification_protected`` context flag).
     """
 
     model = Group
@@ -115,18 +129,17 @@ class RoleEditView(
     success_url = reverse_lazy('management:role_management')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the ``is_protected`` flag to the template context.
+        """Add the modification-protection flag to the template context.
 
         Returns:
-            The template context dictionary with ``is_protected`` set to
-            ``True`` when the group is one of the built-in roles.
+            The template context dictionary with ``is_modification_protected``
+            set to ``True`` when the group cannot be modified.
         """
         context = super().get_context_data(**kwargs)
-        context['is_protected'] = self.object.name in _PROTECTED_GROUP_NAMES
-        context['is_service_role'] = self.object.name == Role.SERVICE.value
+        context['is_modification_protected'] = _is_modification_protected(self.object)
         context['fixed_permissions'] = (
             self.object.permissions.order_by('name')
-            if context['is_service_role']
+            if context['is_modification_protected']
             else Permission.objects.filter(content_type__model='apppermission').order_by('name')
         )
         return context
@@ -145,9 +158,11 @@ class RoleEditView(
             back to the form with an error message if a protected
             role's name was changed.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         original_name = self.get_object().name
 
-        if original_name in _PROTECTED_GROUP_NAMES:
+        if _is_modification_protected(self.get_object()):
             messages.error(
                 self.request,
                 _('Cannot modify "%(name)s": its permissions are fixed.') % {'name': original_name},
@@ -192,9 +207,11 @@ class RoleDeleteView(
             the list with an error message if the group is protected or
             still has assigned users.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         self.object = self.get_object()
 
-        if self.object.name in _PROTECTED_GROUP_NAMES:
+        if _is_deletion_protected(self.object):
             messages.error(
                 self.request,
                 _('Cannot delete "%(name)s": this is a built-in role.') % {'name': self.object.name},
@@ -227,28 +244,22 @@ class RoleViewSet(viewsets.ModelViewSet[Group]):
 
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Update the role, refusing changes to fixed built-in roles."""
+        if not request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         instance = self.get_object()
-        if instance.name in _PROTECTED_GROUP_NAMES:
+        if _is_modification_protected(instance):
             return Response(
                 {'detail': 'Cannot modify this role: its permissions are fixed.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        new_name = request.data.get('name') if isinstance(request.data, dict) else None
-        if (
-            instance.name in _PROTECTED_GROUP_NAMES
-            and new_name is not None
-            and str(new_name) != instance.name
-        ):
-            return Response(
-                {'detail': 'Cannot rename this role: it is a built-in role.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Delete the role, refusing protected roles or roles still assigned to users."""
+        if not request.user.has_perm(AppPermissions.MANAGE_ROLES):
+            raise PermissionDenied
         instance = self.get_object()
-        if instance.name in _PROTECTED_GROUP_NAMES:
+        if _is_deletion_protected(instance):
             return Response(
                 {'detail': 'Cannot delete this role: it is a built-in role.'},
                 status=status.HTTP_400_BAD_REQUEST,

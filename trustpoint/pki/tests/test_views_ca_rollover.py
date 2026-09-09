@@ -28,7 +28,7 @@ def request(method: str = 'post', **data: str) -> object:
     """Build a request with an authenticated operator."""
     factory = RequestFactory()
     test_request = getattr(factory, method)('/ca/rollover/', data=data)
-    test_request.user = SimpleNamespace(is_authenticated=True)
+    test_request.user = SimpleNamespace(is_authenticated=True, has_perm=lambda _permission: True)
     return test_request
 
 
