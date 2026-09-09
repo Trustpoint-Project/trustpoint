@@ -145,7 +145,7 @@ def step_then_new_ca_available(context: runner.Context, name: str) -> None:  # n
     # Get their text content (unescaped and stripped)
     values = [td.get_text(strip=True) for td in tds]
 
-    assert name in values, f"Issuing CA with name {name} doesn't exist"
+    assert any(name in value for value in values), f"Issuing CA with name {name} doesn't exist"
 
 @given('the issuing ca with unique name "{name}" with pkcs12 file exist')
 def step_when_pkcs12_file_import(context: runner.Context, name: str) -> None:  # noqa: ARG001
@@ -178,7 +178,7 @@ def step_when_pkcs12_file_import(context: runner.Context, name: str) -> None:  #
         # Get their text content (unescaped and stripped)
         values = [td.get_text(strip=True) for td in tds]
 
-        assert "test_CA" in values, f"Issuing CA test doesn't exist"
+        assert any(name in value for value in values), f"Issuing CA {name} doesn't exist"
         context.issuing_ca = CaModel.objects.get(unique_name=name)
 
 @when('the admin uploads a broken PKCS12 issuing CA file')
@@ -209,7 +209,7 @@ def step_then_new_ca_not_available(context: runner.Context, name: str) -> None: 
     # Get their text content (unescaped and stripped)
     values = [td.get_text(strip=True) for td in tds]
 
-    assert name not in values, f"Issuing CA test doesn't exist"
+    assert not any(name in value for value in values), f"Issuing CA {name} exists"
 
 @when('the key file of type {key_type} is "{status}"')
 @when('the key file of type "{key_type}" is "{status}"')
