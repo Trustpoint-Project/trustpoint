@@ -10,28 +10,108 @@ import itertools
 import logging
 import urllib.parse
 from datetime import UTC
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, TypeGuard, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509 import load_pem_x509_certificate
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
-from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
+from trustpoint_core.crypto_types import AllowedCertSignHashAlgos, PrivateKey
 from trustpoint_core.oid import NamedCurve
 
-from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
-from crypto.models import CryptoManagedKeyModel
+from crypto.application.private_keys import ManagedECPrivateKey, ManagedMLDSAPrivateKey, ManagedRSAPrivateKey
+from crypto.models import CryptoManagedKeyModel, CryptoProviderSoftwareConfigModel
 from management.models import SecurityConfig
 from pki.models import CaModel, CredentialModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
-    from trustpoint_core.crypto_types import PrivateKey
 
 logger = logging.getLogger(__name__)
+
+CertificateSigningPrivateKey = PrivateKey
+
+
+def is_certificate_signing_private_key(key: object) -> TypeGuard[CertificateSigningPrivateKey]:
+    """Return whether a key is supported for certificate signing."""
+    return isinstance(key, get_args(CertificateSigningPrivateKey))
+
+
+def validate_certificate_signing_private_key(key: object) -> CertificateSigningPrivateKey:
+    """Return a certificate-signing private key or raise TypeError for unsupported types."""
+    if is_certificate_signing_private_key(key):
+        return key
+
+    err_msg = f'Unsupported private key type for certificate signing: {type(key)}.'
+    raise TypeError(err_msg)
+
+
+def _unwrap_mldsa_managed_key(private_key: object) -> object:
+    """Unwrap a managed key to get the actual cryptography private key.
+
+    For software-backed managed keys, we need to retrieve the actual private key
+    because builder.sign() may not accept our managed wrapper in all cases.
+
+    Args:
+        private_key: The private key, possibly a Managed key wrapper (RSA, EC, or ML-DSA).
+
+    Returns:
+        The actual cryptography private key if it's a managed key, otherwise the input unchanged.
+    """
+    logger = logging.getLogger(__name__)
+
+    logger.debug('_unwrap_mldsa_managed_key: input type = %s', type(private_key).__name__)
+    if not isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey, ManagedMLDSAPrivateKey)):
+        logger.debug('_unwrap_mldsa_managed_key: not a managed key, returning unchanged')
+        return private_key
+
+    # RSA/EC managed facades are already cryptography-compatible and must keep using
+    # backend-managed sign operations (including PKCS#11-backed keys).
+    if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey)):
+        logger.debug('_unwrap_mldsa_managed_key: managed RSA/EC key, returning facade unchanged')
+        return private_key
+
+    logger.debug('_unwrap_mldsa_managed_key: managed ML-DSA key, evaluating unwrap path...')
+
+    try:
+        managed_key_model = CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
+        backend_kind = managed_key_model.provider_profile.backend_kind
+        logger.debug('_unwrap_mldsa_managed_key: backend_kind = %s', backend_kind)
+    except CryptoManagedKeyModel.DoesNotExist as exc:
+        msg = f'Managed key {private_key.managed_key_ref.alias!r} not found in database.'
+        raise ValueError(msg) from exc
+
+    if backend_kind != 'software':
+        msg = f'Only software-backed managed ML-DSA keys can be unwrapped, got {backend_kind!r}.'
+        raise NotImplementedError(msg)
+
+    software_config = CryptoProviderSoftwareConfigModel.objects.get(
+        profile=managed_key_model.provider_profile
+    )
+    profile = software_config.build_provider_profile()
+
+    binding = managed_key_model.software_binding
+    if not binding:
+        msg = f'No software binding found for managed key {private_key.managed_key_ref.alias!r}.'
+        raise ValueError(msg)
+
+    actual_key = serialization.load_der_private_key(
+        binding.encrypted_private_key_pkcs8_der,
+        password=profile.require_encryption_material(),
+    )
+
+    logger.debug('_unwrap_mldsa_managed_key: unwrapped to type = %s', type(actual_key).__name__)
+    return actual_key
 
 
 class CertificateGenerator:
@@ -156,10 +236,19 @@ class CertificateGenerator:
             x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_private_key.public_key()), critical=False
         )
 
-        certificate = builder.sign(
-            private_key=issuer_private_key,
-            algorithm=hash_algorithm,
-        )
+        actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
+        actual_issuer_key = validate_certificate_signing_private_key(actual_issuer_key)
+
+        if isinstance(issuer_private_key, ManagedMLDSAPrivateKey):
+            certificate = builder.sign(
+                private_key=actual_issuer_key,
+                algorithm=None,
+            )
+        else:
+            certificate = builder.sign(
+                private_key=actual_issuer_key,
+                algorithm=hash_algorithm,
+            )
         return certificate, private_key
 
     @staticmethod
@@ -224,13 +313,16 @@ class CertificateGenerator:
         for ext, critical in extensions or []:
             builder = builder.add_extension(ext, critical=critical)
 
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(issuer_private_key)
-        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+        actual_issuer_key = _unwrap_mldsa_managed_key(issuer_private_key)
+        actual_issuer_key = validate_certificate_signing_private_key(actual_issuer_key)
+        hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(actual_issuer_key)
+        # For ML-DSA keys, hash_algorithm will be None, which is correct
+        if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
             err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
             raise TypeError(err_msg)
 
         certificate = builder.sign(
-            private_key=issuer_private_key,
+            private_key=actual_issuer_key,
             algorithm=hash_algorithm,
         )
         return certificate, private_key
@@ -307,7 +399,7 @@ class CertificateGenerator:
         Returns:
             CaModel: The created CA model.
         """
-        if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey)):
+        if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey, ManagedMLDSAPrivateKey)):
             CaModel._validate_ca_certificate(issuing_ca_cert)  # noqa: SLF001
             CaModel._validate_ca_type(ca_type)  # noqa: SLF001
             credential = CredentialModel.save_managed_key_credential(
@@ -642,19 +734,26 @@ class CertificateVerifier:
             ValueError: If the signature verification fails or the hash algorithm is missing.
             TypeError: If the issuer public key type is unsupported.
         """
+        issuer_public_key = issuer_cert.public_key()
+
+        is_mldsa = mldsa and isinstance(issuer_public_key, (
+            mldsa.MLDSA44PublicKey,
+            mldsa.MLDSA65PublicKey,
+            mldsa.MLDSA87PublicKey,
+        ))
+
         hash_algorithm = cert.signature_hash_algorithm
-        if hash_algorithm is None:
+        if hash_algorithm is None and not is_mldsa:
             err_msg = 'Certificate signature algorithm is not supported or is missing'
             raise ValueError(err_msg)
 
-        issuer_public_key = issuer_cert.public_key()
         if isinstance(issuer_public_key, rsa.RSAPublicKey):
             try:
                 issuer_public_key.verify(
                     cert.signature,
                     cert.tbs_certificate_bytes,
                     padding.PKCS1v15(),
-                    hash_algorithm,
+                    hash_algorithm,  # type: ignore[arg-type]
                 )
             except Exception as e:
                 err_msg = f'Certificate signature verification failed: {e}'
@@ -664,7 +763,16 @@ class CertificateVerifier:
                 issuer_public_key.verify(
                     cert.signature,
                     cert.tbs_certificate_bytes,
-                    ec.ECDSA(hash_algorithm),
+                    ec.ECDSA(hash_algorithm),  # type: ignore[arg-type]
+                )
+            except Exception as e:
+                err_msg = f'Certificate signature verification failed: {e}'
+                raise ValueError(err_msg) from e
+        elif is_mldsa:
+            try:
+                issuer_public_key.verify(  # type: ignore[union-attr,call-arg]
+                    signature=cert.signature,
+                    data=cert.tbs_certificate_bytes,
                 )
             except Exception as e:
                 err_msg = f'Certificate signature verification failed: {e}'

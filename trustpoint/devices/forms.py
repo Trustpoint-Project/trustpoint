@@ -63,8 +63,16 @@ ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS = [
     (OnboardingProtocol.AGENT.value, OnboardingProtocol.AGENT.label),
 ]
 
+ONBOARDING_CREATE_PROTOCOLS_ALLOWED_FOR_FORMS = [
+    (OnboardingProtocol.CMP_SHARED_SECRET.value, OnboardingProtocol.CMP_SHARED_SECRET.label),
+    (OnboardingProtocol.EST_USERNAME_PASSWORD.value, OnboardingProtocol.EST_USERNAME_PASSWORD.label),
+    (OnboardingProtocol.REST_USERNAME_PASSWORD.value, OnboardingProtocol.REST_USERNAME_PASSWORD.label),
+]
 
-def _get_permitted_onboarding_protocols() -> list[tuple[int, Any]]:
+
+def _get_permitted_onboarding_protocols(
+    protocol_choices: list[tuple[int, Any]] | None = None,
+) -> list[tuple[int, Any]]:
     """Return the list of onboarding protocols permitted by the current security configuration.
 
     Returns:
@@ -72,11 +80,13 @@ def _get_permitted_onboarding_protocols() -> list[tuple[int, Any]]:
     """
     from management.models import SecurityConfig  # noqa: PLC0415
 
+    protocol_choices = protocol_choices or ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS
+
     try:
         cfg: SecurityConfig = SecurityConfig.objects.get()
         permitted: list[int] = cfg.permitted_onboarding_protocols or []
     except SecurityConfig.DoesNotExist:
-        return ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS
+        return protocol_choices
     except SecurityConfig.MultipleObjectsReturned:
         cfg = SecurityConfig.objects.first()  # type: ignore[assignment]
         permitted = cfg.permitted_onboarding_protocols or [] if cfg else []
@@ -86,7 +96,7 @@ def _get_permitted_onboarding_protocols() -> list[tuple[int, Any]]:
 
     return [
         (proto_value, proto_label)
-        for proto_value, proto_label in ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS
+        for proto_value, proto_label in protocol_choices
         if proto_value in permitted
     ]
 
@@ -492,7 +502,7 @@ class OnboardingCreateForm(forms.Form):
     domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
 
     onboarding_protocol = forms.ChoiceField(
-        choices=ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS,
+        choices=ONBOARDING_CREATE_PROTOCOLS_ALLOWED_FOR_FORMS,
         initial=OnboardingProtocol.CMP_SHARED_SECRET,
         label=_('Onboarding Protocol'),
         widget=DisableOptionsSelect(
@@ -519,7 +529,7 @@ class OnboardingCreateForm(forms.Form):
         """Initializes the CreateDeviceForm."""
         super().__init__(*args, **kwargs)
 
-        permitted_protocols = _get_permitted_onboarding_protocols()
+        permitted_protocols = _get_permitted_onboarding_protocols(ONBOARDING_CREATE_PROTOCOLS_ALLOWED_FOR_FORMS)
         onboarding_protocol_field = self.fields['onboarding_protocol']
         if isinstance(onboarding_protocol_field, forms.ChoiceField):
             onboarding_protocol_field.choices = permitted_protocols
@@ -536,6 +546,7 @@ class OnboardingCreateForm(forms.Form):
         ]
         if isinstance(onboarding_protocol_field, forms.ChoiceField):
             onboarding_protocol_field.widget = DisableOptionsSelect(disabled_options=disabled_options)
+            onboarding_protocol_field.widget.choices = onboarding_protocol_field.choices
 
         self.helper = FormHelper()
         self.helper.form_tag = False

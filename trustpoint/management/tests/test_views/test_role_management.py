@@ -4,19 +4,30 @@
 """Tests for the Role Management views."""
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.contrib.messages import get_messages
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from users.models import GroupProfile
+from users.models import BuiltinRole, GroupProfile
 
 User = get_user_model()
 
 
 def _create_admin_group() -> Group:
     group, _ = Group.objects.get_or_create(name='Admin')
-    GroupProfile.objects.get_or_create(group=group, defaults={'grants_staff': True, 'grants_superuser': True})
+    GroupProfile.objects.update_or_create(
+        group=group,
+        defaults={
+            'grants_staff': True,
+            'grants_superuser': True,
+            'is_builtin': True,
+            'is_modification_protected': True,
+            'is_deletion_protected': True,
+        },
+    )
+    manage_roles_perm = Permission.objects.get(codename='manage_roles')
+    group.permissions.add(manage_roles_perm)
     return group
 
 
@@ -33,6 +44,15 @@ class RoleTableViewTest(TestCase):
     def test_get_returns_200(self) -> None:
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
+
+    def test_admin_role_shows_permissions(self) -> None:
+        """The Admin role displays all available permissions as a read-only list."""
+        url = reverse('management:edit_role', kwargs={'pk': self.admin_user.role.pk})
+
+        response = self.client.get(url)
+
+        self.assertContains(response, 'Can manage roles')
+        self.assertNotContains(response, 'Assigned Permissions')
 
 
 class RoleCreateViewTest(TestCase):
@@ -93,6 +113,28 @@ class RoleEditViewTest(TestCase):
         self.assertEqual(self.custom_group.name, 'Analyst Updated')
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('Analyst Updated' in str(m) for m in messages))
+
+    def test_service_account_role_can_be_modified(self) -> None:
+        """The Service Account role can be modified but cannot be deleted."""
+        service_group = BuiltinRole.get_service_group()
+        GroupProfile.objects.update_or_create(
+            group=service_group,
+            defaults={'is_deletion_protected': True, 'is_modification_protected': False},
+        )
+        url = reverse('management:edit_role', kwargs={'pk': service_group.pk})
+
+        response = self.client.post(url, {
+            'name': BuiltinRole.SERVICE.value,
+            'grants_staff': 'on',
+            'grants_superuser': 'on',
+            'permissions': [],
+        })
+
+        self.assertEqual(response.status_code, 302)
+
+        delete_response = self.client.post(reverse('management:delete_role', kwargs={'pk': service_group.pk}))
+        self.assertEqual(delete_response.status_code, 302)
+        self.assertTrue(Group.objects.filter(pk=service_group.pk).exists())
 
 
 class RoleDeleteViewTest(TestCase):

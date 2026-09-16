@@ -55,7 +55,7 @@
                             {% else %}
                                 {{ ca.certificate.not_valid_after|local_datetime }}
                             {% endif %}
-                        </td>                        <td>{{ ca.signature_suite }}</td>
+                        </td>                        <td>{{ ca.signature_suite_display }}</td>
                         <td>{{ ca.created_at|local_datetime }}</td>
                         <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a></td>
                     </tr>

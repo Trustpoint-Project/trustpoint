@@ -25,7 +25,8 @@ from pki.models import IssuedCredentialModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import SortableTableMixin
+from trustpoint.views.base import SortableTableMixin, UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -166,12 +167,18 @@ class NotificationDetailsView(PageContextMixin, LoggerMixin, DetailView[Notifica
         return context
 
 
-class NotificationMarkSolvedView(PageContextMixin, LoggerMixin, DetailView[NotificationModel]):
+class NotificationMarkSolvedView(
+    UserPermissionRequiredMixin,
+    PageContextMixin,
+    LoggerMixin,
+    DetailView[NotificationModel]
+):
     """Mark notification as solved when viewed in the notification details page."""
 
     template_name = 'management/notifications/details.html'
     model = NotificationModel
     context_object_name = 'notification'
+    permission_required = AppPermissions.MANAGE_NOTIFICATIONS
 
     page_category = 'management'
     page_name = 'notifications'
@@ -190,8 +197,10 @@ class NotificationMarkSolvedView(PageContextMixin, LoggerMixin, DetailView[Notif
         return context
 
 
-class NotificationToggleReadView(LoggerMixin, TemplateView):
+class NotificationToggleReadView(UserPermissionRequiredMixin, LoggerMixin, TemplateView):
     """Toggle the read/unread state of a notification and redirect back to its details."""
+
+    permission_required = AppPermissions.MANAGE_NOTIFICATIONS
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
         """Toggle the NEW status on the notification and redirect to details."""
@@ -211,8 +220,10 @@ class NotificationToggleReadView(LoggerMixin, TemplateView):
         return redirect('management:notification_details', pk=pk)
 
 
-class RefreshNotificationsView(LoggerMixin, TemplateView):
+class RefreshNotificationsView(UserPermissionRequiredMixin, LoggerMixin, TemplateView):
     """View to execute all notifications and redirect back to notifications list."""
+
+    permission_required = AppPermissions.MANAGE_NOTIFICATIONS
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
         """Handles GET requests and redirects to the notifications list."""
@@ -228,8 +239,10 @@ class RefreshNotificationsView(LoggerMixin, TemplateView):
         return redirect('management:notifications')
 
 
-class NotificationDeleteView(LoggerMixin, DeleteView[NotificationModel, Any]):
+class NotificationDeleteView(UserPermissionRequiredMixin, LoggerMixin, DeleteView[NotificationModel, Any]):
     """View to delete a notification."""
+
+    permission_required = AppPermissions.MANAGE_NOTIFICATIONS
 
     model: type[NotificationModel] = NotificationModel  # Explicitly set the model type
     template_name = 'management/notifications/confirm_delete.html'

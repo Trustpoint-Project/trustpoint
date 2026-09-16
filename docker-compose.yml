@@ -20,6 +20,8 @@ services:
       DATABASE_PASSWORD: "${DATABASE_PASSWORD:-testing321}"
       DATABASE_HOST: "${DATABASE_HOST:-postgres}"
       DATABASE_PORT: "${DATABASE_PORT:-5432}"
+    volumes:
+      - trustpoint_bootstrap:/var/lib/trustpoint/bootstrap
     healthcheck:
       test: ["CMD-SHELL", "curl -fsk --max-time 5 https://localhost/ > /dev/null"]
       interval: 30s
@@ -72,6 +74,7 @@ services:
 
 volumes:
   postgres_data:
+  trustpoint_bootstrap:
 
 networks:
   default:

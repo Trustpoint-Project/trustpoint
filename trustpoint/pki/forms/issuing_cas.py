@@ -26,7 +26,7 @@ from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.errors import CryptoError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
-from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.domain.specs import EcKeySpec, KeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
@@ -129,6 +129,30 @@ class IssuingCaImportMixin:
                 f'CA certificate verification failed: {e}'
             )
 
+    def _create_keyless_parent_hierarchy(
+        self,
+        cert: x509.Certificate,
+        chain: list[x509.Certificate],
+    ) -> CaModel | None:
+        """Create keyless CA models for the imported certificate's issuer chain."""
+        if not chain:
+            return None
+
+        from pki.forms.truststores import _create_or_get_keyless_ca, _sort_certificate_chain  # noqa: PLC0415
+
+        sorted_certs = _sort_certificate_chain([cert, *chain])
+        if not sorted_certs or sorted_certs[0] != cert:
+            return None
+
+        ca_by_subject: dict[bytes, CaModel] = {}
+        parent_ca = None
+        for chain_cert in reversed(sorted_certs[1:]):
+            ca = _create_or_get_keyless_ca(chain_cert, parent_ca)
+            ca_by_subject[chain_cert.subject.public_bytes()] = ca
+            parent_ca = ca
+
+        return ca_by_subject.get(cert.issuer.public_bytes())
+
     def _finalize_issuing_ca_creation(
         self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer,
         chain: list[x509.Certificate] | None = None,
@@ -206,11 +230,13 @@ class IssuingCaImportMixin:
             credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
             managed_key=managed_key,
         )
+        parent_ca = self._create_keyless_parent_hierarchy(cert, chain)
 
         issuing_ca = CaModel(
             unique_name=unique_name,
             credential=credential_model,
             ca_type=ca_type,
+            parent_ca=parent_ca,
         )
         issuing_ca.save()
 
@@ -593,6 +619,9 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         ('ECC-SECP256R1', 'ECC SECP256R1'),
         ('ECC-SECP384R1', 'ECC SECP384R1'),
         ('ECC-SECP521R1', 'ECC SECP521R1'),
+        ('MLDSA-44', 'ML-DSA-44'),
+        ('MLDSA-65', 'ML-DSA-65'),
+        ('MLDSA-87', 'ML-DSA-87'),
     ]
 
     class Meta:
@@ -628,6 +657,9 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         """Map the form key type to a backend key spec."""
         if key_type.startswith('RSA-'):
             return RsaKeySpec(key_size=int(key_type.split('-')[1]))
+        if key_type.startswith('MLDSA-'):
+            variant_str = 'mldsa' + key_type.split('-')[1]
+            return MlDsaKeySpec(variant=MlDsaVariant(variant_str))
         curve_name = key_type.split('-')[1]
         return EcKeySpec(curve=EllipticCurveName(curve_name.lower()))
 

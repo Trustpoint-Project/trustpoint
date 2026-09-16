@@ -8,6 +8,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from cryptography.hazmat.primitives import hashes
+from trustpoint_core.oid import HashAlgorithm
+
+from pki.models import IssuedCredentialModel
 
 from request.authorization.cmp import (
     CmpAuthorization,
@@ -90,6 +94,56 @@ class TestCmpRevocationAuthorization:
             with pytest.raises(ValueError, match='Signer certificate is not associated'):
                 CmpRevocationAuthorization().authorize(ctx)
 
+    def test_self_revocation_authorizes_matching_signer_certificate(self) -> None:
+        ctx = CmpRevocationRequestContext(
+            operation='revocation', cert_serial_number='1234',
+            client_certificate=Mock(), domain=Mock()
+        )
+        issued = Mock(credential=Mock(certificate_or_error=Mock(serial_number='1234')))
+        with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
+            CmpRevocationAuthorization().authorize(ctx)
+        assert ctx.credential_to_revoke is issued
+
+    def test_domain_credential_revocation_rejects_other_device(self) -> None:
+        target_device = Mock()
+        ctx = CmpRevocationRequestContext(
+            operation='revocation', cert_serial_number='1234',
+            client_certificate=Mock(), domain=Mock(), device=target_device
+        )
+        issued = Mock(
+            credential=Mock(certificate_or_error=Mock(serial_number='5678')),
+            device=Mock(), is_valid_domain_credential=Mock(return_value=(True, None)),
+        )
+        with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
+            with pytest.raises(ValueError, match='Signer device does not match'):
+                CmpRevocationAuthorization().authorize(ctx)
+        assert ctx.http_response_status == 403
+
+        def test_self_revocation_authorizes_matching_signer_certificate(self) -> None:
+            ctx = CmpRevocationRequestContext(
+                operation='revocation', cert_serial_number='1234', client_certificate=Mock(), domain=Mock()
+            )
+            issued = Mock(credential=Mock(certificate_or_error=Mock(serial_number='1234')), common_name='device-cert')
+            with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
+                CmpRevocationAuthorization().authorize(ctx)
+            assert ctx.credential_to_revoke is issued
+
+        def test_domain_credential_revocation_rejects_other_device(self) -> None:
+            target_device = Mock()
+            ctx = CmpRevocationRequestContext(
+                operation='revocation', cert_serial_number='1234', client_certificate=Mock(),
+                domain=Mock(), device=target_device,
+            )
+            issued = Mock(
+                credential=Mock(certificate_or_error=Mock(serial_number='5678')),
+                device=Mock(),
+                is_valid_domain_credential=Mock(return_value=(True, None)),
+            )
+            with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
+                with pytest.raises(ValueError, match='Signer device does not match'):
+                    CmpRevocationAuthorization().authorize(ctx)
+            assert ctx.http_response_status == 403
+
 
 # ---------------------------------------------------------------------------
 # CmpCertConfAuthorization
@@ -148,13 +202,55 @@ class TestCmpCertConfAuthorization:
 
         mock_cred = Mock()
         mock_cred.common_name = 'test-device-cert'
-        from pki.models import IssuedCredentialModel
         mock_qs = Mock()
         mock_qs.select_related.return_value.first.return_value = mock_cred
         with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs):
+            with patch('request.authorization.cmp.SignatureSuite.from_certificate') as suite_mock:
+                suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=HashAlgorithm.SHA256))
+                CmpCertConfAuthorization().authorize(ctx)
+
+        assert ctx.credential_to_revoke is mock_cred
+
+    def test_rejection_with_declared_hash_alg_matches_certificate_digest(self) -> None:
+        """Rejection lookup must honor certConf hashAlg when provided."""
+        cert_der = b'certificate-der-bytes'
+        digest = hashes.Hash(hashes.SHA384())
+        digest.update(cert_der)
+        cert_hash = digest.finalize()
+
+        ctx = CmpCertConfRequestContext(
+            operation='certconf',
+            cert_conf_status=2,
+            cert_hash=cert_hash,
+            cert_hash_algorithm_oid=HashAlgorithm.SHA384.dotted_string,
+        )
+
+        mock_cred = Mock()
+        mock_cred.common_name = 'test-device-cert'
+        mock_cred.credential.get_certificate.return_value = Mock(public_bytes=Mock(return_value=cert_der))
+
+        mock_qs = Mock()
+        mock_qs.iterator.return_value = [mock_cred]
+        with patch.object(IssuedCredentialModel.objects, 'select_related', return_value=mock_qs):
             CmpCertConfAuthorization().authorize(ctx)
 
         assert ctx.credential_to_revoke is mock_cred
+
+    def test_rejection_requires_hash_alg_for_no_implicit_hash_signature(self) -> None:
+        """Rejection without hashAlg must be denied for no-implicit-digest signature suites."""
+        cert_hash = bytes.fromhex('aa' * 32)
+        ctx = CmpCertConfRequestContext(operation='certconf', cert_conf_status=2, cert_hash=cert_hash)
+
+        mock_cred = Mock()
+        mock_cred.credential.get_certificate.return_value = Mock()
+
+        mock_qs = Mock()
+        mock_qs.select_related.return_value.first.return_value = mock_cred
+        with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs):
+            with patch('request.authorization.cmp.SignatureSuite.from_certificate') as suite_mock:
+                suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=None))
+                with pytest.raises(ValueError, match='hashAlg is required'):
+                    CmpCertConfAuthorization().authorize(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +284,51 @@ class TestCmpPollAuthorization:
         with patch.object(CmpTransactionState, 'get_by_transaction_id', return_value=None):
             with pytest.raises(ValueError, match='No CMP transaction found'):
                 CmpPollAuthorization().authorize(ctx)
+
+    def test_poll_request_operation_mismatch_is_rejected(self) -> None:
+        from request.cmp_transaction_state import CmpTransactionState
+
+        ctx = CmpPollRequestContext(
+            cmp_body_type='pollReq', cmp_transaction_id='tx',
+            poll_cert_req_id=0, operation='certification'
+        )
+        transaction = Mock(operation='initialization', cert_req_id=0, device_id=None, domain_id=None)
+        with patch.object(CmpTransactionState, 'get_by_transaction_id', return_value=transaction):
+            with pytest.raises(ValueError, match='operation mismatch'):
+                CmpPollAuthorization().authorize(ctx)
+        assert ctx.http_response_status == 403
+
+        @pytest.mark.parametrize(
+            ('field', 'value', 'message'),
+            [
+                ('operation', 'certification', 'operation mismatch'),
+                ('poll_cert_req_id', 9, 'certReqId mismatch'),
+            ],
+        )
+        def test_poll_request_mismatches_transaction_are_rejected(
+            self, field: str, value: object, message: str
+        ) -> None:
+            ctx = CmpPollRequestContext(
+                cmp_body_type='pollReq', cmp_transaction_id='tx', poll_cert_req_id=0,
+                operation='initialization',
+            )
+            setattr(ctx, field, value)
+            transaction = Mock(operation='initialization', cert_req_id=0, device_id=None, domain_id=None)
+            with patch('request.authorization.cmp.CmpTransactionState.get_by_transaction_id', return_value=transaction):
+                with pytest.raises(ValueError, match=message):
+                    CmpPollAuthorization().authorize(ctx)
+            assert ctx.http_response_status == 403
+
+        def test_poll_request_device_and_domain_mismatches_are_rejected(self) -> None:
+            ctx = CmpPollRequestContext(
+                cmp_body_type='pollReq', cmp_transaction_id='tx', poll_cert_req_id=0,
+                device=Mock(id=1), domain=Mock(id=2),
+            )
+            transaction = Mock(operation='initialization', cert_req_id=0, device_id=3, domain_id=4)
+            with patch('request.authorization.cmp.CmpTransactionState.get_by_transaction_id', return_value=transaction):
+                with pytest.raises(ValueError, match='device does not match'):
+                    CmpPollAuthorization().authorize(ctx)
+            assert ctx.http_response_status == 403
 
     @pytest.mark.django_db
     def test_valid_poll_request_hydrates_context(self) -> None:
@@ -292,6 +433,16 @@ class TestCmpOperationAuthorization:
         ctx = CmpBaseRequestContext(operation='certification')
         ctx.parsed_message = msg
         CmpOperationAuthorization(['certification']).authorize(ctx)  # must not raise
+
+        def test_certconf_and_pollreq_bodies_are_allowed_for_enrollment_operations(self) -> None:
+            from pyasn1_modules.rfc4210 import PKIMessage
+
+            for operation, body_type in (('certification', 'certConf'), ('initialization', 'pollReq')):
+                msg = MagicMock()
+                msg.__class__ = PKIMessage
+                msg['body'].getName.return_value = body_type
+                ctx = CmpBaseRequestContext(operation=operation, parsed_message=msg)
+                CmpOperationAuthorization([operation]).authorize(ctx)
 
 
 # ---------------------------------------------------------------------------

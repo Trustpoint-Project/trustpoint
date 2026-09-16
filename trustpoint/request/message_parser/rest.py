@@ -15,6 +15,11 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.ec import ECDSA
 from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
 
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
 from request.request_context import BaseRequestContext, RestBaseRequestContext, RestCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -140,7 +145,7 @@ class RestCsrSignatureVerification(ParsingComponent, LoggerMixin):
         """Raise a ValueError with the given message."""
         raise ValueError(message)
 
-    def parse(self, context: BaseRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0912
         """Validate the signature of the CSR stored in the context."""
         if not isinstance(context, RestCertificateRequestContext):
             exc_msg = 'RestCsrSignatureVerification requires a RestCertificateRequestContext.'
@@ -160,36 +165,58 @@ class RestCsrSignatureVerification(ParsingComponent, LoggerMixin):
         public_key = csr.public_key()
         signature_hash_algorithm = csr.signature_hash_algorithm
 
-        if signature_hash_algorithm is None:
+        is_mldsa = mldsa and isinstance(public_key, (
+            mldsa.MLDSA44PublicKey,
+            mldsa.MLDSA65PublicKey,
+            mldsa.MLDSA87PublicKey,
+        ))
+
+        if signature_hash_algorithm is None and not is_mldsa:
             error_message = 'CSR does not contain a signature hash algorithm.'
             self.logger.warning('REST CSR signature verification failed: No signature hash algorithm')
             self._raise_validation_error(error_message)
 
-        if not isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
+        if not isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)) and not is_mldsa:
             error_message = 'Unsupported public key type for CSR signature verification.'
             self.logger.warning('REST CSR signature verification failed: Unsupported public key type %s',
                                 type(public_key).__name__)
             raise TypeError(error_message)
 
         try:
-            key_type = 'RSA' if isinstance(public_key, rsa.RSAPublicKey) else 'EC'
-
             if isinstance(public_key, rsa.RSAPublicKey):
+                key_type = 'RSA'
                 public_key.verify(
                     csr.signature,
                     csr.tbs_certrequest_bytes,
                     PKCS1v15(),
-                    signature_hash_algorithm,
+                    signature_hash_algorithm,  # type: ignore[arg-type]
                 )
+                hash_info = f' with {signature_hash_algorithm.name}' if signature_hash_algorithm else ''
             elif isinstance(public_key, ec.EllipticCurvePublicKey):
+                key_type = 'EC'
                 public_key.verify(
                     csr.signature,
                     csr.tbs_certrequest_bytes,
-                    ECDSA(signature_hash_algorithm),
+                    ECDSA(signature_hash_algorithm),  # type: ignore[arg-type]
                 )
+                hash_info = f' with {signature_hash_algorithm.name}' if signature_hash_algorithm else ''
+            elif is_mldsa:
+                if isinstance(public_key, mldsa.MLDSA44PublicKey):
+                    key_type = 'ML-DSA-44'
+                elif isinstance(public_key, mldsa.MLDSA65PublicKey):
+                    key_type = 'ML-DSA-65'
+                else:  # MLDSA87PublicKey
+                    key_type = 'ML-DSA-87'
+                public_key.verify(  # type: ignore[union-attr,call-arg]
+                    signature=csr.signature,
+                    data=csr.tbs_certrequest_bytes,
+                )
+                hash_info = ''  # ML-DSA is a pure signature scheme
+            else:
+                error_message = 'Unsupported key type for signature verification.'
+                raise TypeError(error_message)  # noqa: TRY301
 
-            self.logger.info('REST CSR signature verification successful: %s key with %s hash',
-                             key_type, signature_hash_algorithm.name)
+            self.logger.info('REST CSR signature verification successful: %s key%s', key_type, hash_info)
         except Exception as e:
             error_message = 'Failed to verify the CSR signature.'
             self.logger.exception('REST CSR signature verification failed')

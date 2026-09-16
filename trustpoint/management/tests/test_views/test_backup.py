@@ -22,6 +22,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
 from django.core.management.base import CommandError
 from django.http import Http404
@@ -33,6 +34,14 @@ from management.views.backup import BackupFileDownloadView, create_db_backup, ge
 from util.sftp import SftpError
 
 User = get_user_model()
+
+
+def create_backup_test_user():
+    """Create a user authorized to exercise backup management views."""
+    user = User.objects.create_user(username='testuser', password='testpassword')
+    permission = Permission.objects.get(codename='manage_backups')
+    user.role.permissions.add(permission)
+    return user
 
 
 class GetBackupFileDataTest(TestCase):
@@ -133,7 +142,7 @@ class BackupManageViewTest(TestCase):
         self.backup_dir = Path(self.temp_dir.name)
 
         # Create and log in a test user
-        self.user = User.objects.create_user(username='testuser', password='testpassword')
+        self.user = create_backup_test_user()
         self.client.login(username='testuser', password='testpassword')
 
     @patch('management.views.backup.settings')
@@ -521,7 +530,7 @@ class BackupFileDownloadViewTest(TestCase):
         self.backup_dir = Path(self.temp_dir.name)
         
         # Create and log in a test user
-        self.user = User.objects.create_user(username='testuser', password='testpassword')
+        self.user = create_backup_test_user()
         self.client.login(username='testuser', password='testpassword')
 
     @patch('management.views.backup.settings')
@@ -603,7 +612,7 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
         self.backup_dir = Path(self.temp_dir.name)
         
         # Create and log in a test user
-        self.user = User.objects.create_user(username='testuser', password='testpassword')
+        self.user = create_backup_test_user()
         self.client.login(username='testuser', password='testpassword')
 
     @patch('management.views.backup.settings')
@@ -699,7 +708,7 @@ class BackupFilesDeleteMultipleViewTest(TestCase):
         self.backup_dir = Path(self.temp_dir.name)
         
         # Create and log in a test user
-        self.user = User.objects.create_user(username='testuser', password='testpassword')
+        self.user = create_backup_test_user()
         self.client.login(username='testuser', password='testpassword')
 
     @patch('management.views.backup.settings')

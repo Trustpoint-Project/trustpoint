@@ -35,11 +35,11 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
 
 from pki.views.issuing_cas import CrlDownloadView
+from users.oauth2_views import ServiceAccountTokenObtainPairView
 
 from .views import base
 from .views.prometheus import prometheus_metrics_view
@@ -47,16 +47,14 @@ from .views.prometheus import prometheus_metrics_view
 last_modified_date = timezone.now()
 
 @extend_schema_view(
-    post=extend_schema(tags=['Auth'])
-)
-class CustomTokenObtainPairView(TokenObtainPairView):
-    """For Access Token."""
-
-@extend_schema_view(
-    post=extend_schema(tags=['Auth'])
+    post=extend_schema(
+        tags=['auth'],
+        summary='Refresh JWT access token',
+        description='Obtain a new access token using a valid refresh token.',
+    )
 )
 class CustomTokenRefreshView(TokenRefreshView):
-    """For Refresh Token."""
+    """Refresh JWT token endpoint."""
 
 
 if settings.DEBUG:
@@ -102,8 +100,7 @@ urlpatterns += [
     path('api/', include('agents.api_urls')),
     path('api/', include('workflows2.api_urls')),
 
-    # JWT endpoints
-    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/', ServiceAccountTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
 
     # Swagger & Redoc

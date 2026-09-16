@@ -12,7 +12,7 @@ from request.request_context import (
     EstCertificateRequestContext,
     RestCertificateRequestContext,
 )
-from request.workflows2_handler import Workflow2HandleResult, Workflow2Handler
+from request.workflows2_handler import Workflow2CertificateRequestHandler, Workflow2HandleResult, Workflow2Handler
 from workflows2.events.request_events import Events
 from workflows2.events.triggers import Triggers
 from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Run
@@ -57,6 +57,26 @@ def test_workflows2_handler_continues_without_event() -> None:
     result = Workflow2Handler().handle(context)
 
     assert result == Workflow2HandleResult.continue_processing()
+
+
+def test_workflows2_certificate_handler_rejects_non_certificate_context() -> None:
+    """Certificate dispatch must reject contexts without certificate semantics."""
+    with pytest.raises(TypeError, match='BaseCertificateRequestContext'):
+        Workflow2CertificateRequestHandler().handle(BaseRequestContext(event=Events.est_simpleenroll))
+
+
+def test_workflows2_device_updated_skips_context_without_event_payload() -> None:
+    """Device updates require the structured before/after payload."""
+    device = Mock(id='device-1')
+    context = BaseRequestContext(
+        event=Events.device_updated, device=device, protocol='device', operation='updated',
+    )
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        result = Workflow2Handler().handle(context)
+
+    assert result == Workflow2HandleResult.continue_processing()
+    mock_service.return_value.emit_event_outcome.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -548,3 +568,24 @@ def test_workflows2_handler_emits_device_deleted_from_request_context() -> None:
     assert call['on'] == Triggers.DEVICE_DELETED
     assert call['event']['device']['domain_id'] == 9
     assert call['source'].ca_id == 11
+
+
+def test_workflows2_certificate_handler_continues_when_dispatch_has_no_outcome(test_csr_fixture) -> None:
+    context = EstCertificateRequestContext(
+        protocol='est', operation='simpleenroll', event=Events.est_simpleenroll,
+        device=Mock(id='device-1'), domain=Mock(id=1), cert_requested=test_csr_fixture.get_cryptography_object()
+    )
+    with patch('request.workflows2_handler.WorkflowDispatchService') as service:
+        service.return_value.emit_event_outcome.return_value = None
+        result = Workflow2CertificateRequestHandler().handle(context)
+
+    assert result == Workflow2HandleResult.continue_processing()
+    assert context.workflow2_outcome is None
+
+
+def test_workflows2_device_handler_continues_for_unknown_event() -> None:
+    context = BaseRequestContext(
+        event=Mock(handler='unknown'), protocol='device', operation='unknown', device=Mock(id='device-1')
+    )
+    result = Workflow2Handler().handle(context)
+    assert result == Workflow2HandleResult.continue_processing()

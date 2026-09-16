@@ -18,6 +18,7 @@ from trustpoint_core import oid
 
 from crypto.application.private_keys import (
     ManagedECPrivateKey,
+    ManagedMLDSAPrivateKey,
     ManagedRSAPrivateKey,
     generate_managed_signing_private_key,
 )
@@ -137,7 +138,7 @@ class SignerModel(CustomDeleteActionModel):
     def _cleanup_generated_managed_key(
         *,
         unique_name: str,
-        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey,
+        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey,
     ) -> None:
         """Best-effort cleanup for a generated backend key when signer persistence fails."""
         try:
@@ -153,7 +154,7 @@ class SignerModel(CustomDeleteActionModel):
     def _create_self_signed_signer_certificate(
         *,
         unique_name: str,
-        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey,
+        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey,
         validity_days: int,
     ) -> x509.Certificate:
         """Create a self-signed certificate suitable for hash signing."""
@@ -172,7 +173,7 @@ class SignerModel(CustomDeleteActionModel):
             .not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
             .not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * validity_days))
             .serial_number(x509.random_serial_number())
-            .public_key(public_key)
+            .public_key(public_key)  # type: ignore[arg-type]
             .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
             .add_extension(
                 x509.KeyUsage(
@@ -188,10 +189,11 @@ class SignerModel(CustomDeleteActionModel):
                 ),
                 critical=True,
             )
-            .add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
-            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key), critical=False)
+            .add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)  # type: ignore[arg-type]
+            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key), critical=False)  # type: ignore[arg-type]
         )
-        return builder.sign(private_key=private_key, algorithm=hashes.SHA256())
+        signing_algorithm = None if isinstance(private_key, ManagedMLDSAPrivateKey) else hashes.SHA256()
+        return builder.sign(private_key=private_key, algorithm=signing_algorithm)  # type: ignore[arg-type]
 
 
 class SignedMessageModel(models.Model):

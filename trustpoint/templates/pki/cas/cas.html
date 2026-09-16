@@ -68,13 +68,7 @@
                                 -
                             {% endif %}
                         </td>
-                        <td>
-                            {% if ca.signature_suite %}
-                                {{ ca.signature_suite }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
+                        <td>{{ ca.signature_suite_display }}</td>
                         <td>
                             {% if ca.ca_type == -1 %}
                                 {# Pure keyless CA (KEYLESS type, no credential, certificate only) #}

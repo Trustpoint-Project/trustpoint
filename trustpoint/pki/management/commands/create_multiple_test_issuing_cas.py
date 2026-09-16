@@ -19,10 +19,11 @@ from crypto.application.capabilities import (
 )
 from crypto.application.private_keys import (
     ManagedECPrivateKey,
+    ManagedMLDSAPrivateKey,
     ManagedRSAPrivateKey,
     generate_managed_signing_private_key,
 )
-from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.domain.specs import EcKeySpec, KeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from management.models import SecurityConfig
 from management.models.audit_log import AuditLog
@@ -95,7 +96,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         raise CommandError(msg)
 
     @staticmethod
-    def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey) -> CryptoManagedKeyModel:
+    def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey) -> CryptoManagedKeyModel:
         """Resolve a generated managed key facade to its database model."""
         return CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
 
@@ -104,7 +105,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         *,
         alias: str,
         key_spec: KeySpec,
-    ) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
+    ) -> ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey:
         """Generate a demo private key through the configured crypto backend."""
         return generate_managed_signing_private_key(
             alias=alias,
@@ -141,12 +142,41 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             raise CommandError(msg) from exc
         return key
 
+    def _require_mldsa_demo_support(self, variant: MlDsaVariant) -> None:
+        """Fail clearly before trying to create unsupported backend-backed ML-DSA demo keys."""
+        report = self._active_capability_report()
+        if report.supports_key_spec(MlDsaKeySpec(variant=variant)):
+            return
+        diagnostics = '; '.join(report.diagnostics) or f'{variant.value} key generation/signing was not reported'
+        msg = f'The active crypto backend does not support {variant.value} issuing-CA demo keys: {diagnostics}'
+        raise CommandError(msg)
+
+    def _generate_demo_mldsa_issuing_key(
+        self, *, unique_name: str, variant: MlDsaVariant
+    ) -> ManagedMLDSAPrivateKey:
+        """Generate a demo issuing-CA ML-DSA key in the configured backend."""
+        self._require_mldsa_demo_support(variant)
+        key_label = f'{unique_name}-{uuid.uuid4().hex[:12]}'
+        key = self._generate_managed_private_key(
+            alias=key_label,
+            key_spec=MlDsaKeySpec(variant=variant),
+        )
+        try:
+            key.public_key()
+        except ValueError as exc:
+            msg = (
+                f'The active crypto backend generated a {variant.value} key, but Trustpoint could not read the '
+                f'public key back from the provider: {exc}'
+            )
+            raise CommandError(msg) from exc
+        return key
+
     def _save_managed_generated_issuing_ca(
         self,
         *,
         issuing_ca_cert: x509.Certificate,
         chain: list[x509.Certificate],
-        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey,
+        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey,
         unique_name: str,
         ca_type: CaModel.CaTypeChoice,
         parent_ca: CaModel | None,
@@ -177,14 +207,14 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         self,
         *,
         issuing_ca_cert: x509.Certificate,
-        private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
+        private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | ManagedMLDSAPrivateKey,
         chain: list[x509.Certificate],
         unique_name: str,
         ca_type: CaModel.CaTypeChoice,
         parent_ca: CaModel | None,
     ) -> CaModel:
         """Save a demo issuing CA without importing backend-generated keys back into software storage."""
-        if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey)):
+        if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey, ManagedMLDSAPrivateKey)):
             return self._save_managed_generated_issuing_ca(
                 issuing_ca_cert=issuing_ca_cert,
                 chain=chain,
@@ -590,5 +620,45 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         )
         self._audit_ca_created(ecc3_issuing_ca_model, 'Issuing CA F')
         self.verify_ca_certificate(ecc3_issuing_ca, issuer_cert=ecc3_root, ca_name='Issuing CA F')
+
+        self.log_and_stdout('Creating ML-DSA-65 Root CA and Issuing CA G...')
+        mldsa_root_ca_key = self._generate_demo_mldsa_issuing_key(
+            unique_name='root-ca-mldsa65',
+            variant=MlDsaVariant.MLDSA65,
+        )
+        mldsa_issuing_ca_key = self._generate_demo_mldsa_issuing_key(
+            unique_name='issuing-ca-g',
+            variant=MlDsaVariant.MLDSA65,
+        )
+        mldsa_root, _ = self.create_root_ca(
+            'Root-CA ML-DSA-65', private_key=mldsa_root_ca_key, hash_algorithm=None, validity_days=root_validity_days
+        )
+        mldsa_root_crl = self.generate_empty_crl(mldsa_root, mldsa_root_ca_key, None, crl_validity_hours=root_validity_days * 24)
+        mldsa_root_ca = self.save_keyless_ca(
+            root_ca_cert=mldsa_root,
+            unique_name='root-ca-mldsa65',
+            crl_pem=mldsa_root_crl,
+        )
+        self._audit_ca_created(mldsa_root_ca, 'Root-CA ML-DSA-65')
+        self.verify_ca_certificate(mldsa_root, ca_name='Root-CA ML-DSA-65')
+
+        mldsa_issuing_ca, _key = self.create_issuing_ca(
+            issuer_private_key=mldsa_root_ca_key,
+            private_key=mldsa_issuing_ca_key,
+            issuer_cn='Root-CA ML-DSA-65',
+            subject_cn='Issuing CA G',
+            hash_algorithm=None,
+            validity_days=issuing_validity_days,
+        )
+        mldsa_issuing_ca_model = self._save_demo_issuing_ca(
+            issuing_ca_cert=mldsa_issuing_ca,
+            private_key=mldsa_issuing_ca_key,
+            chain=[mldsa_root],
+            unique_name='issuing-ca-g',
+            ca_type=ca_type,
+            parent_ca=mldsa_root_ca,
+        )
+        self._audit_ca_created(mldsa_issuing_ca_model, 'Issuing CA G')
+        self.verify_ca_certificate(mldsa_issuing_ca, issuer_cert=mldsa_root, ca_name='Issuing CA G')
 
         self.log_and_stdout('All issuing CAs have been created successfully!')

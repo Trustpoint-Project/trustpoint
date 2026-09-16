@@ -116,6 +116,7 @@
                     <a href="{% url 'management:notifications' %}" class="tp-menu-item {% if page_name == 'notifications' %}tp-menu-active{% endif %}">{% trans "Notifications" %}</a>
                     <a href="{% url 'management:organization' %}" class="tp-menu-item {% if page_name == 'organization' %}tp-menu-active{% endif %}">{% trans "Organizations" %}</a>
                     {% if perms.users.manage_role %}
+                    <a href="{% url 'management:service_account_list' %}" class="tp-menu-item {% if page_name == 'service_accounts' %}tp-menu-active{% endif %}">{% trans "Service Accounts" %}</a>
                     <a href="{% url 'management:user_management' %}" class="tp-menu-item {% if page_name == 'user_management' %}tp-menu-active{% endif %}">{% trans "Users" %}</a>
                     <a href="{% url 'management:role_management' %}" class="tp-menu-item {% if page_name == 'role_management' %}tp-menu-active{% endif %}">{% trans "Roles" %}</a>
                     {% endif %}

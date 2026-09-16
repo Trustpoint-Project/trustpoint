@@ -13,6 +13,18 @@ from cryptography.hazmat.primitives import hashes, serialization
 from django.utils import timezone
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 
+from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
+try:
+    from crypto.application.private_keys import ManagedMLDSAPrivateKey
+except ImportError:
+    ManagedMLDSAPrivateKey = None  # type: ignore[assignment, misc]
+
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric import ec, rsa
     from cryptography.x509 import CertificateRevocationList
@@ -39,8 +51,27 @@ def generate_empty_crl(
     Returns:
         str: The CRL in PEM format.
     """
-    if hash_algorithm is None:
+    actual_private_key = _unwrap_mldsa_managed_key(private_key)
+    actual_private_key = validate_certificate_signing_private_key(actual_private_key)
+
+    # For ML-DSA keys, hash_algorithm must be None
+    is_mldsa = (
+        ManagedMLDSAPrivateKey is not None and isinstance(private_key, ManagedMLDSAPrivateKey)
+    ) or (
+        mldsa is not None and isinstance(actual_private_key, (
+            mldsa.MLDSA44PrivateKey,
+            mldsa.MLDSA65PrivateKey,
+            mldsa.MLDSA87PrivateKey,
+        ))
+    )
+
+    # Set default hash algorithm only for non-ML-DSA keys
+    if hash_algorithm is None and not is_mldsa:
         hash_algorithm = hashes.SHA256()
+
+    if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+        err_msg = f'CRL: Hash algo must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
+        raise TypeError(err_msg)
 
     crl_issued_at = datetime.datetime.now(datetime.UTC)
     ca_subject = ca_cert.subject
@@ -52,7 +83,7 @@ def generate_empty_crl(
     )
     crl_builder = crl_builder.add_extension(x509.CRLNumber(crl_number), critical=False)
 
-    crl = crl_builder.sign(private_key=private_key, algorithm=hash_algorithm)  # type: ignore[arg-type]
+    crl = crl_builder.sign(private_key=actual_private_key, algorithm=hash_algorithm)
     return crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
 
 
@@ -113,5 +144,7 @@ def generate_crl_with_revoked_certs(
         raise TypeError(err_msg)
 
     priv_k = issuing_ca.credential.get_private_key()
+    actual_priv_k = _unwrap_mldsa_managed_key(priv_k)
+    actual_priv_k = validate_certificate_signing_private_key(actual_priv_k)
 
-    return crl_builder.sign(private_key=priv_k, algorithm=hash_algorithm)
+    return crl_builder.sign(private_key=actual_priv_k, algorithm=hash_algorithm)

@@ -11,6 +11,12 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from pki.models import CertificateModel
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
 
 from request.operation_processor.csr_build import CsrBuilder, ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstCaCsrSignProcessor, EstDeviceCsrSignProcessor
@@ -292,6 +298,26 @@ class TestEstCaCsrSignProcessor:
         proc.process_operation(ctx)
         assert isinstance(proc.get_signed_csr(), x509.CertificateSigningRequest)
 
+    @pytest.mark.skipif(mldsa is None, reason='cryptography ML-DSA classes unavailable')
+    def test_valid_signing_allows_none_hash_for_mldsa(self) -> None:
+        """ML-DSA CSR signing must use algorithm=None when signature suite has no hash."""
+        assert mldsa is not None
+        key = mldsa.MLDSA44PrivateKey.generate()
+        cred = Mock()
+        cred.certificate = Mock()
+        cred.get_private_key.return_value = key
+        cred.get_certificate.return_value = Mock()
+
+        ctx = self._make_context()
+        ctx.issuer_credential = cred
+
+        proc = EstCaCsrSignProcessor()
+        with patch('request.operation_processor.csr_sign.SignatureSuite.from_certificate') as suite_mock:
+            suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=None))
+            proc.process_operation(ctx)
+
+        assert isinstance(proc.get_signed_csr(), x509.CertificateSigningRequest)
+
     def test_get_signed_csr_before_process_raises_value_error(self) -> None:
         """get_signed_csr() before process_operation() raises ValueError."""
         with pytest.raises(ValueError, match='CSR not signed'):
@@ -375,3 +401,42 @@ class TestCertificateRevocationProcessor:
         ctx.domain.get_issuing_ca_or_value_error.return_value.get_credential.return_value = Mock()
         with pytest.raises(ValueError, match='Credential to revoke must be set'):
             CertificateRevocationProcessor().process_operation(ctx)
+
+    def test_local_ca_revocation_sets_issuer_and_revokes_credential(self) -> None:
+        ctx = CmpRevocationRequestContext()
+        ctx.domain = Mock(unique_name='example')
+        ctx.domain.issuing_ca = Mock()
+        ctx.device = Mock(common_name='device')
+        ctx.protocol = 'cmp'
+        credential = Mock()
+        credential.credential.certificate_or_error = Mock(
+            certificate_status=CertificateModel.CertificateStatus.OK,
+        )
+        ctx.credential_to_revoke = credential
+        ca = ctx.domain.get_issuing_ca_or_value_error.return_value
+        ca.get_credential.return_value = Mock()
+
+        with patch('request.operation_processor.revoke_cert.CaRolloverService.get_active_rollover', return_value=None), \
+            patch('request.operation_processor.revoke_cert.AuditLog.create_entry') as audit:
+            CertificateRevocationProcessor().process_operation(ctx)
+
+        assert ctx.issuer_credential is ca.get_credential.return_value
+        credential.revoke.assert_called_once_with()
+        audit.assert_called_once()
+
+    def test_local_ca_revocation_rejects_already_revoked_certificate(self) -> None:
+        ctx = CmpRevocationRequestContext(
+            domain=Mock(issuing_ca=Mock()), device=Mock(common_name='device'),
+            credential_to_revoke=Mock(),
+        )
+        ctx.domain.get_issuing_ca_or_value_error.return_value.get_credential.return_value = Mock()
+        ctx.credential_to_revoke.credential.certificate_or_error = Mock(
+            certificate_status=CertificateModel.CertificateStatus.REVOKED,
+        )
+
+        with patch('request.operation_processor.revoke_cert.CaRolloverService.get_active_rollover', return_value=None):
+            with pytest.raises(ValueError, match='already revoked'):
+                CertificateRevocationProcessor().process_operation(ctx)
+
+        assert ctx.http_response_status == 422
+        ctx.credential_to_revoke.revoke.assert_not_called()

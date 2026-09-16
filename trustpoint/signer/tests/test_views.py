@@ -143,6 +143,7 @@ class TestSignerAddMethodSelectView:
         from signer.forms import SignerAddMethodSelectForm
 
         request = request_factory.post(reverse('signer:signer-add-method_select'))
+        request.user = Mock(has_perm=Mock(return_value=True))
         view = SignerAddMethodSelectView()
         view.request = request
 
@@ -166,6 +167,7 @@ class TestSignerAddFileImportFileTypeSelectView:
         from signer.forms import SignerAddFileTypeSelectForm
         
         request = request_factory.post(reverse('signer:signer-add-file_import-file_type_select'))
+        request.user = Mock(has_perm=Mock(return_value=True))
         view = SignerAddFileImportFileTypeSelectView()
         view.request = request
         
@@ -181,6 +183,7 @@ class TestSignerAddFileImportFileTypeSelectView:
         from signer.forms import SignerAddFileTypeSelectForm
 
         request = request_factory.post(reverse('signer:signer-add-file_import-file_type_select'))
+        request.user = Mock(has_perm=Mock(return_value=True))
         view = SignerAddFileImportFileTypeSelectView()
         view.request = request
 

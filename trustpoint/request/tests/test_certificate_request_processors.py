@@ -7,12 +7,13 @@ from __future__ import annotations
 
 from unittest.mock import Mock, patch
 
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from request.operation_processor.issue_cert import LocalCaCertificateIssueProcessor
 from request.operation_processor.issue_cred import CredentialIssueProcessor
-from request.request_context import CmpCertificateRequestContext, ManualCredentialRequestContext
+from request.request_context import BaseRequestContext, CmpCertificateRequestContext, ManualCredentialRequestContext
 from workflows2.models import Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome
 
@@ -61,3 +62,28 @@ def test_local_ca_certificate_issue_processor_tolerates_request_without_meta() -
         url = LocalCaCertificateIssueProcessor()._get_crl_distribution_point_url(context, ca_id=7)  # noqa: SLF001
 
     assert url.endswith('/crl/7')
+
+
+def test_credential_issue_processor_validates_context_and_request() -> None:
+    """Reject contexts without the required credential issuance inputs."""
+    processor = CredentialIssueProcessor()
+    with pytest.raises(TypeError, match='subclass of BaseCredentialRequestContext'):
+        processor.process_operation(BaseRequestContext())
+    with pytest.raises(ValueError, match='certificate request'):
+        processor.process_operation(ManualCredentialRequestContext(domain=Mock()))
+    with pytest.raises(ValueError, match='domain'):
+        processor.process_operation(ManualCredentialRequestContext(cert_requested=x509.CertificateBuilder()))
+
+
+def test_credential_issue_processor_preserves_existing_key_and_propagates_issue_errors() -> None:
+    """Reuse an existing key and expose errors from certificate issuance."""
+    context = ManualCredentialRequestContext(
+        cert_requested=x509.CertificateBuilder(), domain=Mock(), private_key=Mock(),
+    )
+    with patch(
+        'request.operation_processor.issue_cred.CertificateIssueProcessor.process_operation',
+        side_effect=RuntimeError('issue failed'),
+    ) as issue:
+        with pytest.raises(RuntimeError, match='issue failed'):
+            CredentialIssueProcessor().process_operation(context)
+    issue.assert_called_once_with(context)

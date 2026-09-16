@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import ProtectedError
 from django.forms import BaseModelForm
 from django.http import Http404, HttpResponse, HttpResponseRedirect
@@ -22,8 +22,9 @@ from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
+from trustpoint_core.oid import AlgorithmIdentifier
 
 from management.models.audit_log import AuditLog
 from pki.filters import DomainFilter
@@ -46,6 +47,7 @@ from trustpoint.views.base import (
     ListInDetailView,
     SortableTableMixin,
 )
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -98,7 +100,20 @@ class DomainTableView(ExportMixin, DomainContextMixin, SortableTableMixin[Domain
         """Safely return the signature suite label for a domain."""
         try:
             ss = domain.signature_suite
-            return str(ss) if ss is not None else '-'
+            if ss is None:
+                return '-'
+            # For ML-DSA (pure signature scheme), format without hash algorithm
+            if hasattr(ss, 'signature_algorithm') and ss.signature_algorithm:
+                sig_alg = ss.signature_algorithm
+                # Check if it's ML-DSA by comparing with AlgorithmIdentifier constants
+                if hasattr(sig_alg, 'value'):
+                    if sig_alg.value == AlgorithmIdentifier.ML_DSA_44.dotted_string:
+                        return 'ML-DSA-44'
+                    if sig_alg.value == AlgorithmIdentifier.ML_DSA_65.dotted_string:
+                        return 'ML-DSA-65'
+                    if sig_alg.value == AlgorithmIdentifier.ML_DSA_87.dotted_string:
+                        return 'ML-DSA-87'
+            return str(ss)
         except ValueError:
             return '-'
 
@@ -158,6 +173,8 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
 
     def form_valid(self, form: BaseModelForm[DomainModel]) -> HttpResponse:
         """Handle the case where the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
+            raise PermissionDenied
         domain = form.save()
         messages.success(
             self.request,
@@ -237,6 +254,8 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle config form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
+            raise PermissionDenied
         del args
         del kwargs
 
@@ -306,6 +325,8 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
 
     def form_valid(self, form: Form) -> HttpResponse:
         """Attempt to delete domains if the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
+            raise PermissionDenied
         queryset = self.get_queryset()
         deleted_count = queryset.count()
         domains_to_delete = list(queryset)
@@ -411,6 +432,8 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
 
     def form_valid(self, form: DevIdRegistrationForm) -> HttpResponse:
         """Handle the case where the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
+            raise PermissionDenied
         dev_id_registration = form.save()
         self.object = dev_id_registration
         messages.success(
@@ -436,6 +459,8 @@ class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView[DevIdRegistrati
 
     def delete(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Override delete method to add a success message."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
+            raise PermissionDenied
         response = super().delete(request, *args, **kwargs)
         messages.success(request, _('DevID Registration Pattern deleted successfully.'))
         return response
@@ -460,6 +485,8 @@ class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectFor
 
     def form_valid(self, form: DevIdAddMethodSelectForm) -> HttpResponseRedirect:
         """Redirect to the view for the selected method."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
+            raise PermissionDenied
         method_select = form.cleaned_data.get('method_select')
         domain_pk = self.kwargs.get('pk')  # Get domain ID
 
@@ -522,6 +549,17 @@ class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdR
 
         return context
 
+class CanManageDomains(BasePermission):
+    """Allow only users permitted to manage domains."""
+
+    def has_permission(self, request: Request, _view: Any) -> bool:
+        """Check if the user has permission to manage domains."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(AppPermissions.MANAGE_DOMAINS)
+        )
+
 @extend_schema(tags=['Domain'])
 @extend_schema_view(
     list=extend_schema(description='Retrieve a list of all domains.'),
@@ -540,13 +578,13 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
 
     queryset = DomainModel.objects.all()
     serializer_class = DomainSerializer
+    permission_classes = (CanManageDomains,)
 
     def get_serializer_class(self) -> type[DomainDetailSerializer | DomainSerializer]:
         """Return the detail serializer for retrieve, and the list serializer for all other actions."""
         if self.action == 'retrieve':
             return DomainDetailSerializer
         return DomainSerializer
-
 
 @extend_schema(tags=['DevID Registration'])
 @extend_schema_view(
@@ -566,7 +604,7 @@ class DevIdRegistrationViewSet(viewsets.ModelViewSet[DevIdRegistration]):
 
     queryset = DevIdRegistration.objects.all()
     serializer_class = DevIdRegistrationSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanManageDomains,)
     filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['domain', 'truststore']
     search_fields: ClassVar = ['unique_name', 'serial_number_pattern']

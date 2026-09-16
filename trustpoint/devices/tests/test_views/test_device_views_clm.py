@@ -6,11 +6,22 @@
 from typing import Any
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import Client
 from django.urls import reverse
 
 from devices.models import DeviceModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
+
+
+@pytest.fixture(autouse=True)
+def grant_manage_devices_to_admin_client(admin_client: Client) -> None:
+    """Grant the shared web-test user access to protected device operations."""
+    user_id = admin_client.session['_auth_user_id']
+    user = get_user_model().objects.get(pk=user_id)
+    manage_devices_perm = Permission.objects.get(codename='manage_devices')
+    user.role.permissions.add(manage_devices_perm)
 
 
 @pytest.mark.django_db
@@ -274,12 +285,12 @@ class TestNoOnboardingCredentialSections:
 class TestDeviceCreateOnboardingProtocols:
     """Test device creation with different onboarding protocols."""
     
-    def test_create_device_with_manual_onboarding(
+    def test_create_device_with_manual_onboarding_is_rejected(
         self,
         admin_client: Client,
         domain_instance: dict[str, Any]
     ) -> None:
-        """Test creating device with MANUAL onboarding protocol."""
+        """Test MANUAL onboarding cannot be created from the onboarding create view."""
         domain = domain_instance['domain']
         
         from onboarding.models import OnboardingProtocol
@@ -295,11 +306,8 @@ class TestDeviceCreateOnboardingProtocols:
         url = reverse('devices:devices_create_onboarding')
         response = admin_client.post(url, data=post_data)
         
-        assert response.status_code == 302
-        
-        device = DeviceModel.objects.get(common_name='manual-onboarding-device')
-        assert device.onboarding_config is not None
-        assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.MANUAL
+        assert response.status_code == 200
+        assert not DeviceModel.objects.filter(common_name='manual-onboarding-device').exists()
 
 
 @pytest.mark.django_db

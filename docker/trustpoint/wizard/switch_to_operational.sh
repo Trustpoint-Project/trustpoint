@@ -152,6 +152,8 @@ start_operational_gunicorn() {
         --bind 0.0.0.0:'$OPERATIONAL_PORT' \
         --workers 4 \
         --timeout 300 \
+        --limit-request-line 8190 \
+        --limit-request-field_size 65536 \
         --user www-data \
         --group www-data \
         trustpoint.wsgi:application" > "$LOG_DIR/gunicorn-operational.log" 2>&1 &

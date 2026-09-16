@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from django.views.generic.base import RedirectView
 
-from management.views import audit_log
+from management.views import audit_log, service_accounts
 
-__all__ = ['audit_log']
+__all__ = ['audit_log', 'service_accounts']
 
 
 class IndexView(RedirectView):

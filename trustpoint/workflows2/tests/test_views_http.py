@@ -102,8 +102,9 @@ workflow:
 class Workflow2HttpViewTests(TestCase):
     def setUp(self) -> None:
         wf2_test_role, _created = Group.objects.get_or_create(name='wf2_test_role')
-        manage_workflow_perm = Permission.objects.get(codename='manage_workflow')
-        wf2_test_role.permissions.add(manage_workflow_perm)
+        manage_workflows_perm = Permission.objects.get(codename='manage_workflows')
+        approve_workflows_perm = Permission.objects.get(codename='approve_workflows')
+        wf2_test_role.permissions.add(manage_workflows_perm, approve_workflows_perm)
         self.user = get_user_model().objects.create_user(
             username="workflow2-tester",
             password="testpass123",

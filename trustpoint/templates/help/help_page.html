@@ -70,6 +70,14 @@
                 {{ form.host_ip }}
               </div>
             </form>
+
+            <div class="form-check mb-2 ms-1">
+              <input class="form-check-input" type="checkbox" id="showWindowsCommands">
+              <label class="form-check-label" for="showWindowsCommands">
+                {% trans 'Show Windows-specific commands' %}
+              </label>
+            </div>
+
             <hr>
             {% for section in help_page.sections %}
                 <div{% if section.css_id %} id="{{ section.css_id }}"{% endif %}{% if section.css_class %} class="{{ section.css_class }}"{% endif %}{% if section.hidden %} hidden{% endif %}>
@@ -128,6 +136,23 @@
             </div>
         </div>
     </div>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        var windowsCheckbox = document.getElementById('showWindowsCommands');
+        if (!windowsCheckbox) {
+          return;
+        }
 
+        function updateVisibility() {
+          var windowsElems = document.querySelectorAll('.platform-windows');
+          windowsElems.forEach(function (el) {
+            el.style.display = windowsCheckbox.checked ? '' : 'none';
+          });
+        }
+
+        windowsCheckbox.addEventListener('change', updateVisibility);
+        updateVisibility();
+      });
+    </script>
 
 {% endblock content %}

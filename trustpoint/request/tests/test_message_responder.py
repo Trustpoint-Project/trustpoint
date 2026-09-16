@@ -3,15 +3,24 @@
 
 """Tests for request/message_responder.py."""
 
+import base64
 import json
 from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
+from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 
 from cmp.models import CmpTransactionModel
 from onboarding.models import OnboardingStatus
-from request.message_responder.cmp import CmpInitializationResponder, CmpTransactionResponder
+from request.message_responder.cmp import (
+    CmpErrorMessageResponder,
+    CmpInitializationResponder,
+    CmpMessageResponder,
+    CmpPkiConfResponder,
+    CmpTransactionResponder,
+    _der_tlv,
+)
 from request.message_responder.est import (
     EstCertificateMessageResponder,
     EstErrorMessageResponder,
@@ -24,6 +33,8 @@ from request.message_responder.rest import (
 )
 from request.request_context import (
     BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertConfRequestContext,
     CmpCertificateRequestContext,
     CmpPollRequestContext,
     EstBaseRequestContext,
@@ -31,6 +42,7 @@ from request.request_context import (
     RestBaseRequestContext,
     RestCertificateRequestContext,
 )
+from request.workflow2_issuance import Workflow2IssuanceDecision
 from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome
 
@@ -184,6 +196,10 @@ class TestEstMessageResponder:
         assert context.http_response_content == 'No suitable responder found for this EST message.'
         assert context.http_response_content_type == 'text/plain'
 
+    def test_build_response_requires_est_context(self) -> None:
+        with pytest.raises(TypeError, match='EstErrorMessageResponder requires an EstBaseRequestContext'):
+            EstErrorMessageResponder.build_response(Mock(spec=BaseRequestContext))
+
 
 @pytest.mark.django_db
 class TestEstCertificateMessageResponder:
@@ -283,6 +299,38 @@ class TestEstCertificateMessageResponder:
         assert context.http_response_content_type == 'application/pkcs7-mime; smime-type=certs-only'
         assert isinstance(context.http_response_content, str)
         assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
+
+    def test_build_response_pkcs7_includes_issued_certificate_chain(
+        self,
+        device_instance_onboarding: dict[str, Any],
+    ) -> None:
+        cert = device_instance_onboarding['cert']
+        context = Mock(spec=EstCertificateRequestContext)
+        context.workflow2_outcome = None
+        context.issued_certificate = cert
+        context.issued_certificate_chain = [cert]
+        context.est_encoding = 'pkcs7'
+        context.device = None
+
+        EstCertificateMessageResponder.build_response(context)
+
+        encoded = base64.b64decode(context.http_response_content)
+        assert len(pkcs7.load_der_pkcs7_certificates(encoded)) == 2
+        assert context.http_response_headers == {'Content-Transfer-Encoding': 'base64'}
+
+    def test_prepare_certificate_data_wraps_base64_der(self, device_instance: dict[str, Any]) -> None:
+        context = EstCertificateRequestContext(
+            issued_certificate=device_instance['cert'],
+            est_encoding='base64_der',
+        )
+
+        data, content_type = EstCertificateMessageResponder._prepare_certificate_data(context)
+
+        assert content_type == 'application/pkix-cert'
+        assert isinstance(data, str)
+        assert data.endswith('\n')
+        assert all(len(line) <= 64 for line in data.splitlines())
+        assert base64.b64decode(data) == device_instance['cert'].public_bytes(Encoding.DER)
 
     def test_build_response_without_onboarding_config(
         self,
@@ -398,6 +446,66 @@ class TestRestMessageResponder:
         assert 'certificate' in payload
         assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
 
+    def test_build_response_rejects_unsupported_operation(self) -> None:
+        context = RestBaseRequestContext(operation='unsupported')
+
+        RestMessageResponder.build_response(context)
+
+        assert context.http_response_status == 500
+        assert json.loads(context.http_response_content) == {
+            'status': 'error',
+            'detail': 'No suitable responder found for this REST message.',
+        }
+
+    def test_build_response_returns_certificate_chain(self, device_instance: dict[str, Any]) -> None:
+        cert = device_instance['cert']
+        context = RestCertificateRequestContext(
+            operation='enroll',
+            issued_certificate=cert,
+            issued_certificate_chain=[cert],
+        )
+
+        RestCertificateMessageResponder.build_response(context)
+
+        payload = json.loads(context.http_response_content)
+        assert payload['certificate'].startswith('-----BEGIN CERTIFICATE-----')
+        assert payload['certificate_chain'] == [payload['certificate']]
+
+    @pytest.mark.parametrize(
+        ('decision', 'status', 'response_status'),
+        [
+            ('reject', 'rejected', 403),
+            ('fail', 'failed', 500),
+            ('unknown', 'error', 500),
+        ],
+    )
+    def test_workflow_terminal_outcomes_are_json_errors(
+        self, decision: str, status: str, response_status: int
+    ) -> None:
+        context = Mock(spec=RestCertificateRequestContext)
+        context.workflow2_outcome = Mock(run=Mock(status='finished'))
+
+        with (
+            patch(
+                'request.message_responder.rest.get_workflow2_issuance_decision',
+                return_value=(
+                    decision
+                    if decision == 'unknown'
+                    else Workflow2IssuanceDecision(decision)
+                ),
+            ),
+            patch('request.message_responder.rest.get_workflow2_run_detail_path', return_value='/runs/1'),
+        ):
+            RestCertificateMessageResponder.build_response(context)
+
+        payload = json.loads(context.http_response_content)
+        assert context.http_response_status == response_status
+        assert payload['status'] == status
+
+    def test_build_response_requires_rest_context(self) -> None:
+        with pytest.raises(TypeError, match='RestMessageResponder requires a RestBaseRequestContext'):
+            RestMessageResponder.build_response(Mock(spec=BaseRequestContext))
+
 
 @pytest.mark.django_db
 class TestEstErrorMessageResponder:
@@ -442,6 +550,10 @@ class TestEstErrorMessageResponder:
         assert context.http_response_content_type == 'text/plain'
         assert context.http_response_content == 'An error occurred processing the EST request.'
 
+    def test_build_response_requires_est_context(self) -> None:
+        with pytest.raises(TypeError, match='EstErrorMessageResponder requires an EstBaseRequestContext'):
+            EstErrorMessageResponder.build_response(Mock(spec=BaseRequestContext))
+
 
 @pytest.mark.django_db
 class TestRestErrorMessageResponder:
@@ -462,6 +574,20 @@ class TestRestErrorMessageResponder:
             'status': 'error',
             'detail': 'An error occurred processing the REST request.',
         }
+
+    def test_build_response_decodes_byte_detail(self) -> None:
+        context = RestBaseRequestContext(http_response_status=400, http_response_content=b'bad request')
+
+        RestErrorMessageResponder.build_response(context)
+
+        assert json.loads(context.http_response_content) == {
+            'status': 'error',
+            'detail': 'bad request',
+        }
+
+    def test_build_response_requires_rest_context(self) -> None:
+        with pytest.raises(TypeError, match='RestErrorMessageResponder requires a RestBaseRequestContext'):
+            RestErrorMessageResponder.build_response(Mock(spec=BaseRequestContext))
 
 
 class TestCmpTransactionResponder:
@@ -537,3 +663,133 @@ class TestCmpTransactionResponder:
         assert build_pollrep.call_args.kwargs['check_after_seconds'] == 5
         assert context.http_response_status == 200
         assert context.http_response_content == b'cmp-pollrep'
+
+    def test_terminal_poll_states_build_transaction_result(self) -> None:
+        for transaction_status in (
+            CmpTransactionModel.Status.CANCELLED,
+            CmpTransactionModel.Status.FAILED,
+        ):
+            context = Mock(spec=CmpPollRequestContext)
+            context.issued_certificate = None
+            context.cmp_transaction = Mock(status=transaction_status, detail=None)
+            with (
+                patch.object(CmpTransactionResponder, '_build_transaction_result_message', return_value=Mock()) as build,
+                patch.object(CmpTransactionResponder, '_protect_pki_message', side_effect=lambda message, **_: message),
+                patch('request.message_responder.cmp.encoder.encode', return_value=b'terminal'),
+            ):
+                assert CmpTransactionResponder.respond_if_needed(context) is True
+            assert build.call_args.kwargs['status'] == 2
+            assert context.http_response_content == b'terminal'
+
+    def test_poll_with_issued_certificate_returns_result(self) -> None:
+        context = Mock(spec=CmpPollRequestContext)
+        context.issued_certificate = Mock()
+        context.cmp_transaction = Mock(status=CmpTransactionModel.Status.WAITING)
+        with (
+            patch.object(CmpTransactionResponder, '_build_transaction_result_message', return_value=Mock()) as build,
+            patch.object(CmpTransactionResponder, '_protect_pki_message', side_effect=lambda message, **_: message),
+            patch('request.message_responder.cmp.encoder.encode', return_value=b'issued'),
+        ):
+            assert CmpTransactionResponder.respond_if_needed(context) is True
+        assert build.call_args.kwargs['status'] == 0
+        assert build.call_args.kwargs['issued_cert'] is context.issued_certificate
+
+    def test_unknown_operation_does_not_handle_transaction(self) -> None:
+        context = Mock(spec=CmpCertificateRequestContext)
+        context.issued_certificate = None
+        context.operation = 'unknown'
+        context.cmp_transaction = Mock(status=CmpTransactionModel.Status.FAILED, detail='failed')
+        with patch.object(CmpTransactionResponder, '_build_transaction_result_message', return_value=None):
+            assert CmpTransactionResponder.respond_if_needed(context) is False
+
+
+class TestCmpResponderValidation:
+    """Test CMP responder routing and protection preconditions."""
+
+    def test_der_tlv_uses_long_form_for_large_values(self) -> None:
+        encoded = _der_tlv(0x04, b'x' * 128)
+        assert encoded[:3] == b'\x04\x81\x80'
+        assert encoded[3:] == b'x' * 128
+
+    def test_build_response_returns_cmp_error_for_authorization_failure(self) -> None:
+        context = Mock(spec=BaseRequestContext)
+        context.error_details = 'unauthorized'
+        context.http_response_status = 403
+        context.http_response_content = None
+        context.http_response_content_type = None
+
+        with patch.object(CmpErrorMessageResponder, 'build_response') as build_error:
+            CmpMessageResponder.build_response(context)
+
+        build_error.assert_called_once_with(context)
+
+    def test_build_response_sets_error_when_no_responder_matches(self) -> None:
+        context = Mock(spec=BaseRequestContext)
+        context.error_details = None
+        context.http_response_status = None
+        context.issued_certificate = None
+        context.workflow2_outcome = None
+
+        with patch.object(CmpErrorMessageResponder, 'build_response') as build_error:
+            CmpMessageResponder.build_response(context)
+
+        assert context.http_response_status == 500
+        assert context.http_response_content == 'No suitable responder found for this CMP message.'
+        build_error.assert_called_once_with(context)
+
+    def test_shared_secret_protection_requires_secret(self) -> None:
+        context = Mock(spec=CmpBaseRequestContext)
+        context.cmp_shared_secret = None
+        with pytest.raises(ValueError, match='CMP shared secret is not set'):
+            CmpMessageResponder._add_protection_shared_secret(Mock(), context)
+
+    def test_initialization_responder_requires_issuer_credential(self) -> None:
+        context = Mock(spec=CmpCertificateRequestContext)
+        context.issued_certificate = Mock()
+        context.issuer_credential = None
+        with pytest.raises(ValueError, match='Issuer credential is not set'):
+            CmpInitializationResponder.build_response(context)
+
+    def test_protection_helpers_choose_shared_secret_or_signature(self) -> None:
+        context = Mock(spec=CmpCertificateRequestContext)
+        message = Mock()
+        context.cmp_shared_secret = 'shared-secret'
+        with patch.object(CmpMessageResponder, '_add_protection_shared_secret', return_value=message) as shared:
+            assert CmpTransactionResponder._protect_pki_message(message, context=context) is message
+        shared.assert_called_once()
+
+        context.cmp_shared_secret = None
+        with patch.object(CmpMessageResponder, '_sign_pki_message', return_value=message) as signed:
+            assert CmpTransactionResponder._protect_pki_message(message, context=context) is message
+        signed.assert_called_once()
+
+    def test_error_response_type_for_operations(self) -> None:
+        assert CmpErrorMessageResponder._get_response_type_for_operation('initialization') == ('ip', 1)
+        assert CmpErrorMessageResponder._get_response_type_for_operation('certification') == ('cp', 3)
+        assert CmpErrorMessageResponder._get_response_type_for_operation('revocation') == ('rp', 12)
+        assert CmpErrorMessageResponder._get_response_type_for_operation(None) == ('error', 23)
+
+    def test_pki_conf_rejects_missing_issuer_credential(self) -> None:
+        context = Mock(spec=CmpCertConfRequestContext)
+        context.issuer_credential = None
+        context.domain = None
+        with pytest.raises(ValueError, match='Cannot determine issuing CA credential'):
+            CmpPkiConfResponder.build_response(context)
+
+    def test_pki_conf_builds_signed_response(self) -> None:
+        context = Mock(spec=CmpCertConfRequestContext)
+        context.issuer_credential = Mock()
+        context.owner_credential = None
+        context.cmp_shared_secret = None
+        context.cert_conf_status = 0
+        context.device = None
+        context.parsed_message = Mock()
+        with (
+            patch.object(CmpPkiConfResponder, '_build_base_pkiconf_message', return_value=Mock()),
+            patch.object(CmpPkiConfResponder, '_sign_pki_message', side_effect=lambda pki_message, **_: pki_message) as sign,
+            patch('request.message_responder.cmp.x509.SubjectKeyIdentifier.from_public_key', return_value=Mock(digest=b'ski')),
+            patch('request.message_responder.cmp.encoder.encode', return_value=b'pkiconf'),
+        ):
+            CmpPkiConfResponder.build_response(context)
+        sign.assert_called_once()
+        assert context.http_response_content == b'pkiconf'

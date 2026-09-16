@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views import View
@@ -19,6 +20,7 @@ from pki.models import CaModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverStrategyType
 from pki.rollover.registry import rollover_registry
 from pki.services.ca_rollover import CaRolloverError, CaRolloverService
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -36,6 +38,8 @@ class PlanRolloverView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         """Plan a new rollover for the given Issuing CA."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         _ensure_strategies_loaded()
         issuing_ca = get_object_or_404(CaModel, pk=pk)
 
@@ -100,6 +104,8 @@ class StartRolloverView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
         """Start the specified rollover."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         _ensure_strategies_loaded()
         rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
 
@@ -137,6 +143,8 @@ class TransitionRolloverView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
         """Transition the specified rollover from PREPARATION to TRANSITION."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         _ensure_strategies_loaded()
         rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
 
@@ -174,6 +182,8 @@ class CompleteRolloverView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
         """Complete the specified rollover."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         _ensure_strategies_loaded()
         rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
 
@@ -208,6 +218,8 @@ class CancelRolloverView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
         """Cancel the specified rollover."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
         _ensure_strategies_loaded()
         rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
 

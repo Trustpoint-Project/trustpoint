@@ -11,6 +11,7 @@ This document describes extension points, planned features, known limitations, a
 | Cloud KMS Integration (AWS, Azure, GCP, Vault) | Planned |
 | Multi-Tenancy | Planned |
 | Post-Quantum Cryptography (PQC) | Planned |
+| PKCS#11 Support for ML-DSA | Planned |
 | Hybrid Certificates (Classical + PQC) | Planned |
 | Certificate Transparency Logs | Planned |
 | External CA Integration (ADCS) | Planned |

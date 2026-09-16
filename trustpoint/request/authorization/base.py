@@ -9,8 +9,14 @@ from typing import ClassVar
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
 from cryptography.x509.base import CertificateBuilder
-from trustpoint_core.oid import HashAlgorithm, NamedCurve
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, NamedCurve
 
 from aoki.views import AokiServiceMixin
 from management.models import SecurityConfig
@@ -307,15 +313,22 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
     @staticmethod
     def _get_public_key(
         req: _CertRequest,
-    ) -> rsa.RSAPublicKey | ec.EllipticCurvePublicKey | None:
+    ) -> rsa.RSAPublicKey | ec.EllipticCurvePublicKey | object | None:
         """Return the public key from either a CSR or a :class:`CertificateBuilder`."""
         if isinstance(req, x509.CertificateSigningRequest):
             pk = req.public_key()
             if isinstance(pk, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
                 return pk
+            # Check for ML-DSA keys
+            if mldsa and isinstance(pk, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)):
+                return pk
             return None
         raw_pk = req._public_key  # noqa: SLF001
         if isinstance(raw_pk, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
+            return raw_pk
+        if mldsa and isinstance(
+            raw_pk, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)
+        ):
             return raw_pk
         return None
 
@@ -338,7 +351,7 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
         """Return the dotted-string OID for a hash algorithm name (e.g. ``'sha256'``), or ``None``."""
         return cls._HASH_OID_MAP.get(hash_name.lower().replace('-', ''))
 
-    def _check_key_constraints(
+    def _check_key_constraints(  # noqa: C901, PLR0912
         self,
         csr: _CertRequest | None,
         cfg: SecurityConfig,
@@ -374,6 +387,29 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
                     curve_name = type(public_key.curve).__name__
                     msg = (
                         f"ECC curve '{curve_name}' is not permitted by the active security policy."
+                    )
+                    self.logger.warning('SecurityConfigAuthorization: %s', msg)
+                    raise ValueError(msg)
+
+        # Check ML-DSA variant restrictions
+        elif mldsa and isinstance(
+            public_key, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)
+        ):
+            not_permitted_mldsa: list[str] = cfg.not_permitted_mldsa_variant_oids or []
+            if not_permitted_mldsa:
+                if isinstance(public_key, mldsa.MLDSA44PublicKey):
+                    variant_oid = AlgorithmIdentifier.ML_DSA_44.dotted_string
+                    variant_name = 'ML-DSA-44'
+                elif isinstance(public_key, mldsa.MLDSA65PublicKey):
+                    variant_oid = AlgorithmIdentifier.ML_DSA_65.dotted_string
+                    variant_name = 'ML-DSA-65'
+                else:  # MLDSA87PublicKey
+                    variant_oid = AlgorithmIdentifier.ML_DSA_87.dotted_string
+                    variant_name = 'ML-DSA-87'
+
+                if variant_oid in not_permitted_mldsa:
+                    msg = (
+                        f"ML-DSA variant '{variant_name}' is not permitted by the active security policy."
                     )
                     self.logger.warning('SecurityConfigAuthorization: %s', msg)
                     raise ValueError(msg)

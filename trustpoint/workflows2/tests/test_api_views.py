@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -66,6 +67,8 @@ class Workflow2DefinitionApiViewSetTests(TestCase):
             username='workflow2-api-tester',
             password='testpass123',
         )
+        manage_workflows_perm = Permission.objects.get(codename='manage_workflows')
+        self.user.role.permissions.add(manage_workflows_perm)
         self.authenticated_client = APIClient()
         self.authenticated_client.force_authenticate(user=self.user)
 

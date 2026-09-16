@@ -6,9 +6,15 @@ from typing import get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
+from crypto.application.private_keys import ManagedMLDSAPrivateKey
 from pki.models import CredentialModel
 from request.request_context import BaseRequestContext
 from trustpoint.logger import LoggerMixin
@@ -26,29 +32,42 @@ class GenericSigner(LoggerMixin):
         private_key = signer_credential.get_private_key()
 
         hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
+
         if hash_algorithm_enum is None:
-            err_msg = 'Failed to get hash algorithm.'
-            raise ValueError(err_msg)
-        hash_algorithm = hash_algorithm_enum.hash_algorithm()
-
-        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
-            err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
-            raise TypeError(err_msg)
-
-        if isinstance(private_key, rsa.RSAPrivateKey):
-            signature = private_key.sign(
-                data,
-                padding.PKCS1v15(),
-                hash_algorithm,
-            )
-        elif isinstance(private_key, ec.EllipticCurvePrivateKey):
-            signature = private_key.sign(
-                data,
-                ec.ECDSA(hash_algorithm),
-            )
+            if isinstance(private_key, ManagedMLDSAPrivateKey) or (mldsa and isinstance(private_key, (
+                mldsa.MLDSA44PrivateKey,
+                mldsa.MLDSA65PrivateKey,
+                mldsa.MLDSA87PrivateKey,
+            ))):
+                signature = private_key.sign(data)
+            else:
+                exc_msg = 'Cannot sign: hash algorithm is None but key is not ML-DSA.'
+                raise TypeError(exc_msg)
         else:
-            exc_msg = 'Cannot sign due to unsupported private key type.'
-            raise TypeError(exc_msg)
+            hash_algorithm = hash_algorithm_enum.hash_algorithm()
+
+            if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+                err_msg = (
+                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
+                    f'but found {type(hash_algorithm)}'
+                )
+                raise TypeError(err_msg)
+
+            if isinstance(private_key, rsa.RSAPrivateKey):
+                signature = private_key.sign(
+                    data,
+                    padding.PKCS1v15(),
+                    hash_algorithm,
+                )
+            elif isinstance(private_key, ec.EllipticCurvePrivateKey):
+                signature = private_key.sign(
+                    data,
+                    ec.ECDSA(hash_algorithm),
+                )
+            else:
+                exc_msg = 'Cannot sign due to unsupported private key type.'
+                raise TypeError(exc_msg)
+
         GenericSigner.logger.debug('Signed %d bytes of data using %s', len(data), signer_credential)
 
         return signature
@@ -64,31 +83,43 @@ class GenericSignatureVerifier:
         public_key = signer_certificate.public_key()
 
         hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
+
         if hash_algorithm_enum is None:
-            err_msg = 'Failed to get hash algorithm.'
-            raise ValueError(err_msg)
-        hash_algorithm = hash_algorithm_enum.hash_algorithm()
-
-        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
-            err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
-            raise TypeError(err_msg)
-
-        if isinstance(public_key, rsa.RSAPublicKey):
-            public_key.verify(
-                signature=signature,
-                data=data,
-                padding=padding.PKCS1v15(),
-                algorithm=hash_algorithm,
-            )
-        elif isinstance(public_key, ec.EllipticCurvePublicKey):
-            public_key.verify(
-                signature=signature,
-                data=data,
-                signature_algorithm=ec.ECDSA(hash_algorithm),
-            )
+            if mldsa and isinstance(public_key, (
+                mldsa.MLDSA44PublicKey,
+                mldsa.MLDSA65PublicKey,
+                mldsa.MLDSA87PublicKey,
+            )):
+                public_key.verify(signature=signature, data=data)
+            else:
+                exc_msg = 'Cannot verify signature: hash algorithm is None but key is not ML-DSA.'
+                raise TypeError(exc_msg)
         else:
-            exc_msg = 'Cannot verify signature due to unsupported public key type.'
-            raise TypeError(exc_msg)
+            hash_algorithm = hash_algorithm_enum.hash_algorithm()
+
+            if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+                err_msg = (
+                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
+                    f'but found {type(hash_algorithm)}'
+                )
+                raise TypeError(err_msg)
+
+            if isinstance(public_key, rsa.RSAPublicKey):
+                public_key.verify(
+                    signature=signature,
+                    data=data,
+                    padding=padding.PKCS1v15(),
+                    algorithm=hash_algorithm,
+                )
+            elif isinstance(public_key, ec.EllipticCurvePublicKey):
+                public_key.verify(
+                    signature=signature,
+                    data=data,
+                    signature_algorithm=ec.ECDSA(hash_algorithm),
+                )
+            else:
+                exc_msg = 'Cannot verify signature due to unsupported public key type.'
+                raise TypeError(exc_msg)
 
 
 class LocalCaCmpSignatureProcessor(LoggerMixin, AbstractOperationProcessor):

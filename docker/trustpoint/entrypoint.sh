@@ -154,6 +154,8 @@ start_gunicorn() {
       --bind 0.0.0.0:8000 \
       --workers 4 \
       --timeout 300 \
+      --limit-request-line 8190 \
+      --limit-request-field_size 65536 \
       --user www-data \
       --group www-data \
       trustpoint.wsgi:application" > /var/log/trustpoint/gunicorn.log 2>&1 &

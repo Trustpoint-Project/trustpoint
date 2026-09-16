@@ -16,6 +16,7 @@ from django.views.generic import ListView
 
 from trustpoint.page_context import PageContextMixin
 from trustpoint.views.base import UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 from workflows2.forms import Workflow2DefinitionForm
 from workflows2.models import Workflow2Definition
 from workflows2.services.definitions import WorkflowDefinitionService
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 class WF2DefPermReqMixin(UserPermissionRequiredMixin):
     """Mixin requiring the user to have the 'users.manage_workflow' permission."""
 
-    permission_required = 'users.manage_workflow'
+    permission_required = AppPermissions.MANAGE_WORKFLOWS
     raise_exception = True
 
 

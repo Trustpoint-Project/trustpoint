@@ -229,6 +229,7 @@ class TestTruststoreCreateViewFormValid:
     def view(self):
         view = TruststoreCreateView()
         view.request = RequestFactory().get('/')
+        view.request.user = Mock(has_perm=Mock(return_value=True))
         return view
 
     @pytest.fixture

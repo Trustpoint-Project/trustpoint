@@ -4,12 +4,15 @@
 """Tests for the CaModel class."""
 
 import datetime
+import uuid
 from typing import Any
 
 import pytest
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from crypto.application.private_keys import ManagedMLDSAPrivateKey, generate_managed_signing_private_key
+from crypto.domain.specs import MlDsaKeySpec, MlDsaVariant
 from django.db.models import ProtectedError
 from django.utils import timezone
 from trustpoint_core import oid
@@ -295,3 +298,30 @@ def test_chain_truststore_ordering() -> None:
     # Verify root comes before intermediate
     assert certificates[0].certificate.common_name == 'Root CA'
     assert certificates[1].certificate.common_name == 'Intermediate CA'
+
+
+@pytest.mark.django_db
+def test_save_issuing_ca_with_managed_mldsa_key() -> None:
+    """Managed ML-DSA keys can be persisted as issuing-CA credentials."""
+    managed_private_key = generate_managed_signing_private_key(
+        alias=f'mldsa-issuing-ca-{uuid.uuid4().hex}',
+        key_spec=MlDsaKeySpec(variant=MlDsaVariant.MLDSA44),
+    )
+    if not isinstance(managed_private_key, ManagedMLDSAPrivateKey):
+        msg = 'Expected a managed ML-DSA private key.'
+        raise TypeError(msg)
+
+    certificate, generated_key = CertificateGenerator.create_root_ca(
+        cn='Managed ML-DSA Root CA',
+        private_key=managed_private_key,
+    )
+
+    issuing_ca = CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=certificate,
+        private_key=generated_key,
+        chain=[],
+        unique_name=f'mldsa_root_ca_{uuid.uuid4().hex}',
+        ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
+    )
+
+    assert issuing_ca.credential.managed_private_key_id == managed_private_key.managed_key_ref.id

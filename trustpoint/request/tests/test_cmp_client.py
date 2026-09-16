@@ -12,6 +12,33 @@ from request.clients.cmp_client import CmpClient, CmpClientError
 from request.request_context import CmpBaseRequestContext
 
 
+def _der(tag: int, value: bytes) -> bytes:
+    """Build a DER TLV for the raw extraction tests."""
+    length = len(value)
+    if length < 128:
+        encoded_length = bytes([length])
+    else:
+        length_bytes = length.to_bytes((length.bit_length() + 7) // 8, 'big')
+        encoded_length = bytes([0x80 | len(length_bytes)]) + length_bytes
+    return bytes([tag]) + encoded_length + value
+
+
+def _raw_cmp_response(*, ca_pubs: bytes = b'', extra_certs: bytes = b'') -> bytes:
+    """Build the CertRepMessage shape traversed by CmpClient."""
+    issued_cert = _der(0x30, b'issued')
+    certified_key_pair = _der(0x30, _der(0xA0, issued_cert))
+    cert_response = _der(
+        0x30,
+        _der(0x02, b'\x00') + _der(0x30, _der(0x02, b'\x00')) + certified_key_pair,
+    )
+    responses = _der(0x30, cert_response)
+    cert_rep_message = _der(0x30, ca_pubs + responses)
+    body = _der(0x30, cert_rep_message)
+    header = _der(0x30, b'')
+    body_and_extra = header + body + extra_certs
+    return _der(0x30, body_and_extra)
+
+
 class TestCmpClient:
     """Test cases for the CmpClient class."""
 
@@ -221,6 +248,122 @@ class TestCmpClient:
         with pytest.raises(ValueError, match='DER parse error: offset 5 beyond data length 4'):
             client._parse_der_tlv(data, 5)
 
+    @pytest.mark.parametrize(
+        ('data', 'offset', 'message'),
+        [
+            (b'', 0, 'DER parse error: offset 0 beyond data length 0'),
+            (b'\x30', 0, 'index out of range'),
+        ],
+    )
+    def test_parse_der_tlv_malformed_or_truncated(
+        self,
+        valid_context: CmpBaseRequestContext,
+        data: bytes,
+        offset: int,
+        message: str,
+    ) -> None:
+        """Test malformed and truncated DER length fields."""
+        client = CmpClient(valid_context)
+
+        with pytest.raises((ValueError, IndexError), match=message):
+            client._parse_der_tlv(data, offset)
+
+    def test_parse_der_tlv_preserves_declared_length_for_truncated_value(
+        self, valid_context: CmpBaseRequestContext
+    ) -> None:
+        """Test the parser's declared-length result for an incomplete value."""
+        client = CmpClient(valid_context)
+
+        _, header_length, value_length, total_length = client._parse_der_tlv(b'\x30\x02\x00', 0)
+
+        assert (header_length, value_length, total_length) == (2, 2, 4)
+
+    def test_extract_certs_from_raw_response_navigates_real_der(self, valid_context: CmpBaseRequestContext) -> None:
+        """Test extraction through the complete raw CertRepMessage structure."""
+        client = CmpClient(valid_context)
+        extra_one = _der(0x30, b'chain-one')
+        extra_two = _der(0x30, b'chain-two')
+        raw_response = _raw_cmp_response(
+            ca_pubs=_der(0xA1, _der(0x30, b'ca-pub')),
+            extra_certs=_der(0xA1, _der(0x30, extra_one + extra_two)),
+        )
+
+        issued_cert, extra_certs = client._extract_certs_from_raw_response(raw_response)
+
+        assert issued_cert == _der(0x30, b'issued')
+        assert extra_certs == [extra_one, extra_two]
+
+    def test_extract_certs_from_raw_response_without_optional_fields(
+        self, valid_context: CmpBaseRequestContext
+    ) -> None:
+        """Test extraction when caPubs and extraCerts are absent."""
+        client = CmpClient(valid_context)
+
+        issued_cert, extra_certs = client._extract_certs_from_raw_response(_raw_cmp_response())
+
+        assert issued_cert == _der(0x30, b'issued')
+        assert extra_certs == []
+
+    def test_extract_certs_from_raw_response_raw_certificate_choice(
+        self, valid_context: CmpBaseRequestContext
+    ) -> None:
+        """Test the fallback for an unexpected CertOrEncCert tag."""
+        client = CmpClient(valid_context)
+        raw_response = _raw_cmp_response()
+        issued_cert = _der(0x30, b'issued')
+        raw_response = raw_response.replace(_der(0xA0, issued_cert), issued_cert, 1)
+
+        extracted_cert, extra_certs = client._extract_certs_from_raw_response(raw_response)
+
+        assert extracted_cert == issued_cert
+        assert extra_certs == []
+
+    def test_extract_extra_certs_handles_non_sequence_wrapper(
+        self, valid_context: CmpBaseRequestContext
+    ) -> None:
+        """Test extraction of an extra certificate from a non-SEQUENCE wrapper."""
+        client = CmpClient(valid_context)
+        extra_cert = _der(0xA0, b'extra')
+        wrapped_extra_cert = _der(0xA1, extra_cert)
+
+        extracted = client._extract_extra_certs(wrapped_extra_cert, 0, len(wrapped_extra_cert))
+
+        assert extracted == [extra_cert]
+
+    def test_extract_extra_certs_ignores_other_trailing_tlv(
+        self, valid_context: CmpBaseRequestContext
+    ) -> None:
+        """Test that unrelated fields after the body are ignored."""
+        client = CmpClient(valid_context)
+        ignored_tlv = _der(0x30, b'ignored')
+
+        extracted = client._extract_extra_certs(ignored_tlv, 0, len(ignored_tlv))
+
+        assert extracted == []
+
+    def test_skip_cert_req_id_and_status_requires_certified_key_pair(
+        self, valid_context: CmpBaseRequestContext
+    ) -> None:
+        """Test the exact error for a CertResponse without a key pair."""
+        client = CmpClient(valid_context)
+        raw_cert_response = _der(0x02, b'\x00') + _der(0x30, b'')
+
+        with pytest.raises(CmpClientError, match=r'^No certifiedKeyPair found in CertResponse$'):
+            client._skip_cert_req_id_and_status(raw_cert_response, 0, len(raw_cert_response))
+
+    @pytest.mark.parametrize(
+        'raw_data',
+        [b'', b'\x30', b'\x30\x02\x30'],
+    )
+    def test_extract_certs_from_raw_response_rejects_malformed_der(
+        self, valid_context: CmpBaseRequestContext, raw_data: bytes
+    ) -> None:
+        """Test exact client errors for malformed raw CMP responses."""
+        client = CmpClient(valid_context)
+
+        with pytest.raises(CmpClientError, match=r'^Failed to extract certificates from raw CMP response DER:'):
+            client._extract_certs_from_raw_response(raw_data)
+
     @patch('request.clients.cmp_client.requests.post')
     @patch('request.clients.cmp_client.encoder.encode')
     def test_send_pki_message_success(self, mock_encode, mock_post, valid_context: CmpBaseRequestContext) -> None:
@@ -248,6 +391,42 @@ class TestCmpClient:
 
     @patch('request.clients.cmp_client.requests.post')
     @patch('request.clients.cmp_client.encoder.encode')
+    def test_send_pki_message_adds_shared_secret_protection(
+        self, mock_encode, mock_post, valid_context: CmpBaseRequestContext
+    ) -> None:
+        """Test protected requests use the protected message for encoding."""
+        client = CmpClient(valid_context)
+        pki_message = Mock()
+        protected_message = Mock()
+        mock_encode.return_value = b'request_data'
+        mock_response = Mock(status_code=200, content=b'response_data')
+        mock_post.return_value = mock_response
+
+        with patch.object(client, '_add_protection_shared_secret', return_value=protected_message) as add_protection:
+            with patch.object(client, '_parse_response', return_value=Mock()):
+                client.send_pki_message(pki_message, add_shared_secret_protection=True)
+
+        add_protection.assert_called_once_with(pki_message)
+        mock_encode.assert_called_once_with(protected_message)
+
+    @patch('request.clients.cmp_client.requests.post')
+    @patch('request.clients.cmp_client.encoder.encode')
+    def test_send_pki_message_protection_error_is_preserved(
+        self, mock_encode, mock_post, valid_context: CmpBaseRequestContext
+    ) -> None:
+        """Test protection failures retain their exact client error."""
+        client = CmpClient(valid_context)
+        protection_error = CmpClientError('CMP shared secret is not set')
+
+        with patch.object(client, '_add_protection_shared_secret', side_effect=protection_error):
+            with pytest.raises(CmpClientError, match=r'^CMP shared secret is not set$'):
+                client.send_pki_message(Mock(), add_shared_secret_protection=True)
+
+        mock_encode.assert_not_called()
+        mock_post.assert_not_called()
+
+    @patch('request.clients.cmp_client.requests.post')
+    @patch('request.clients.cmp_client.encoder.encode')
     def test_send_pki_message_http_error(self, mock_encode, mock_post, valid_context: CmpBaseRequestContext) -> None:
         """Test sending PKI message fails with HTTP error."""
         client = CmpClient(valid_context)
@@ -259,7 +438,7 @@ class TestCmpClient:
 
         mock_pki_message = Mock()
 
-        with pytest.raises(CmpClientError, match='CMP server returned error status 500'):
+        with pytest.raises(CmpClientError, match=r'^CMP server returned error status 500: Internal Server Error$'):
             client.send_pki_message(mock_pki_message)
 
     @patch('request.clients.cmp_client.requests.post')
@@ -273,7 +452,10 @@ class TestCmpClient:
 
         mock_pki_message = Mock()
 
-        with pytest.raises(CmpClientError, match='Failed to communicate with CMP server'):
+        with pytest.raises(
+            CmpClientError,
+            match=r'^Failed to communicate with CMP server: Connection timed out$',
+        ):
             client.send_pki_message(mock_pki_message)
 
     @patch.object(CmpClient, 'send_pki_message')
@@ -406,3 +588,31 @@ class TestCmpClient:
 
         with pytest.raises(CmpClientError, match='No certificate responses in CMP message'):
             client._extract_issued_certificate(mock_message, b'raw_data')
+
+    def test_extract_issued_certificate_wraps_certificate_load_error(
+        self, valid_context: CmpBaseRequestContext
+    ) -> None:
+        """Test invalid extracted certificate bytes produce the client error."""
+        client = CmpClient(valid_context)
+        mock_cert_response = Mock()
+        mock_status = Mock()
+        mock_status.__getitem__ = Mock(return_value=0)
+        mock_cert_response.__getitem__ = Mock(return_value=mock_status)
+        mock_body = Mock()
+        mock_body.getName.return_value = 'cp'
+        mock_cert_rep_message = Mock()
+        mock_cert_rep_message.__getitem__ = Mock(return_value=[mock_cert_response])
+        mock_body.__getitem__ = Mock(return_value=mock_cert_rep_message)
+        mock_message = Mock()
+        mock_message.__getitem__ = Mock(return_value=mock_body)
+
+        with patch.object(client, '_extract_certs_from_raw_response', return_value=(b'bad', [])):
+            with patch(
+                'request.clients.cmp_client.x509.load_der_x509_certificate',
+                side_effect=ValueError('invalid certificate'),
+            ):
+                with pytest.raises(
+                    CmpClientError,
+                    match=r'^Failed to extract certificate from response: invalid certificate$',
+                ):
+                    client._extract_issued_certificate(mock_message, b'raw_data')
