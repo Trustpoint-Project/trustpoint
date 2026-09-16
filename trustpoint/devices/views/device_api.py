@@ -5,6 +5,7 @@
 
 from typing import Any, ClassVar
 
+from django.core.exceptions import PermissionDenied
 from django.utils.translation import gettext_lazy
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import viewsets
@@ -16,6 +17,7 @@ from devices.models import (
     DeviceModel,
 )
 from devices.serializers import DeviceSerializer
+from users.permissions import AppPermissions
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -180,7 +182,27 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
     )
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Create a new device, optionally with onboarding configuration."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         return super().create(request, *args, **kwargs)
+
+    def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Update an existing device, optionally with onboarding configuration."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Partially update an existing device, optionally with onboarding configuration."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Delete an existing device."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
+        return super().destroy(request, *args, **kwargs)
 
     def get_view_description(self, html: bool = False) -> str:  # noqa: FBT001, FBT002
         """Return a description for the given action."""

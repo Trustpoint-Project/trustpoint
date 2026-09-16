@@ -10,7 +10,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from management.models.organization import OrganizationModel
-from users.models import GroupProfile, Role
+from users.models import BuiltinRole, GroupProfile
 
 User = get_user_model()
 
@@ -95,7 +95,7 @@ class UserCreateViewTest(TestCase):
 
     def test_service_account_role_is_not_available(self) -> None:
         """The fixed service-account role is absent from the human-user form."""
-        service_group = Role.get_service_group()
+        service_group = BuiltinRole.get_service_group()
 
         response = self.client.get(self.url)
 
@@ -103,7 +103,7 @@ class UserCreateViewTest(TestCase):
 
     def test_service_account_role_cannot_be_submitted(self) -> None:
         """A crafted submission cannot assign the service-account role to a human user."""
-        service_group = Role.get_service_group()
+        service_group = BuiltinRole.get_service_group()
 
         response = self.client.post(self.url, {
             'username': 'not-a-service-account',

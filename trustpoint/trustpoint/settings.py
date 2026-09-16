@@ -93,8 +93,6 @@ PUBLIC_PATHS = [
 
 WSGI_APPLICATION = 'trustpoint.wsgi.application'
 
-
-
 DOCKER_CONTAINER = False
 
 

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -40,7 +41,10 @@ def api_client() -> APIClient:
 def user() -> AbstractBaseUser:
     """Create a test user."""
     user_model = get_user_model()
-    return user_model.objects.create_user(username='device_api_testuser', password='testpass123')  # noqa: S106
+    test_user = user_model.objects.create_user(username='device_api_testuser', password='testpass123')  # noqa: S106
+    manage_devices_perm = Permission.objects.get(codename='manage_devices')
+    test_user.role.permissions.add(manage_devices_perm)
+    return test_user
 
 
 @pytest.fixture

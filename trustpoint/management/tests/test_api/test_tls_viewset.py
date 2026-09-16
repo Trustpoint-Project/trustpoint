@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -24,7 +25,10 @@ def api_client() -> APIClient:
 def user():
     """Create a test user."""
     User = get_user_model()
-    return User.objects.create_user(username='tls_testuser', password='testpass123')
+    test_user = User.objects.create_user(username='tls_testuser', password='testpass123')
+    manage_tls_perm = Permission.objects.get(codename='manage_tls_webserver_configuration')
+    test_user.role.permissions.add(manage_tls_perm)
+    return test_user
 
 
 @pytest.fixture

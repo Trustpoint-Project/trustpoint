@@ -94,6 +94,56 @@ class TestCmpRevocationAuthorization:
             with pytest.raises(ValueError, match='Signer certificate is not associated'):
                 CmpRevocationAuthorization().authorize(ctx)
 
+    def test_self_revocation_authorizes_matching_signer_certificate(self) -> None:
+        ctx = CmpRevocationRequestContext(
+            operation='revocation', cert_serial_number='1234',
+            client_certificate=Mock(), domain=Mock()
+        )
+        issued = Mock(credential=Mock(certificate_or_error=Mock(serial_number='1234')))
+        with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
+            CmpRevocationAuthorization().authorize(ctx)
+        assert ctx.credential_to_revoke is issued
+
+    def test_domain_credential_revocation_rejects_other_device(self) -> None:
+        target_device = Mock()
+        ctx = CmpRevocationRequestContext(
+            operation='revocation', cert_serial_number='1234',
+            client_certificate=Mock(), domain=Mock(), device=target_device
+        )
+        issued = Mock(
+            credential=Mock(certificate_or_error=Mock(serial_number='5678')),
+            device=Mock(), is_valid_domain_credential=Mock(return_value=(True, None)),
+        )
+        with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
+            with pytest.raises(ValueError, match='Signer device does not match'):
+                CmpRevocationAuthorization().authorize(ctx)
+        assert ctx.http_response_status == 403
+
+        def test_self_revocation_authorizes_matching_signer_certificate(self) -> None:
+            ctx = CmpRevocationRequestContext(
+                operation='revocation', cert_serial_number='1234', client_certificate=Mock(), domain=Mock()
+            )
+            issued = Mock(credential=Mock(certificate_or_error=Mock(serial_number='1234')), common_name='device-cert')
+            with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
+                CmpRevocationAuthorization().authorize(ctx)
+            assert ctx.credential_to_revoke is issued
+
+        def test_domain_credential_revocation_rejects_other_device(self) -> None:
+            target_device = Mock()
+            ctx = CmpRevocationRequestContext(
+                operation='revocation', cert_serial_number='1234', client_certificate=Mock(),
+                domain=Mock(), device=target_device,
+            )
+            issued = Mock(
+                credential=Mock(certificate_or_error=Mock(serial_number='5678')),
+                device=Mock(),
+                is_valid_domain_credential=Mock(return_value=(True, None)),
+            )
+            with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
+                with pytest.raises(ValueError, match='Signer device does not match'):
+                    CmpRevocationAuthorization().authorize(ctx)
+            assert ctx.http_response_status == 403
+
 
 # ---------------------------------------------------------------------------
 # CmpCertConfAuthorization
@@ -235,6 +285,51 @@ class TestCmpPollAuthorization:
             with pytest.raises(ValueError, match='No CMP transaction found'):
                 CmpPollAuthorization().authorize(ctx)
 
+    def test_poll_request_operation_mismatch_is_rejected(self) -> None:
+        from request.cmp_transaction_state import CmpTransactionState
+
+        ctx = CmpPollRequestContext(
+            cmp_body_type='pollReq', cmp_transaction_id='tx',
+            poll_cert_req_id=0, operation='certification'
+        )
+        transaction = Mock(operation='initialization', cert_req_id=0, device_id=None, domain_id=None)
+        with patch.object(CmpTransactionState, 'get_by_transaction_id', return_value=transaction):
+            with pytest.raises(ValueError, match='operation mismatch'):
+                CmpPollAuthorization().authorize(ctx)
+        assert ctx.http_response_status == 403
+
+        @pytest.mark.parametrize(
+            ('field', 'value', 'message'),
+            [
+                ('operation', 'certification', 'operation mismatch'),
+                ('poll_cert_req_id', 9, 'certReqId mismatch'),
+            ],
+        )
+        def test_poll_request_mismatches_transaction_are_rejected(
+            self, field: str, value: object, message: str
+        ) -> None:
+            ctx = CmpPollRequestContext(
+                cmp_body_type='pollReq', cmp_transaction_id='tx', poll_cert_req_id=0,
+                operation='initialization',
+            )
+            setattr(ctx, field, value)
+            transaction = Mock(operation='initialization', cert_req_id=0, device_id=None, domain_id=None)
+            with patch('request.authorization.cmp.CmpTransactionState.get_by_transaction_id', return_value=transaction):
+                with pytest.raises(ValueError, match=message):
+                    CmpPollAuthorization().authorize(ctx)
+            assert ctx.http_response_status == 403
+
+        def test_poll_request_device_and_domain_mismatches_are_rejected(self) -> None:
+            ctx = CmpPollRequestContext(
+                cmp_body_type='pollReq', cmp_transaction_id='tx', poll_cert_req_id=0,
+                device=Mock(id=1), domain=Mock(id=2),
+            )
+            transaction = Mock(operation='initialization', cert_req_id=0, device_id=3, domain_id=4)
+            with patch('request.authorization.cmp.CmpTransactionState.get_by_transaction_id', return_value=transaction):
+                with pytest.raises(ValueError, match='device does not match'):
+                    CmpPollAuthorization().authorize(ctx)
+            assert ctx.http_response_status == 403
+
     @pytest.mark.django_db
     def test_valid_poll_request_hydrates_context(self) -> None:
         """A valid pollReq loads the stored transaction into the context."""
@@ -338,6 +433,16 @@ class TestCmpOperationAuthorization:
         ctx = CmpBaseRequestContext(operation='certification')
         ctx.parsed_message = msg
         CmpOperationAuthorization(['certification']).authorize(ctx)  # must not raise
+
+        def test_certconf_and_pollreq_bodies_are_allowed_for_enrollment_operations(self) -> None:
+            from pyasn1_modules.rfc4210 import PKIMessage
+
+            for operation, body_type in (('certification', 'certConf'), ('initialization', 'pollReq')):
+                msg = MagicMock()
+                msg.__class__ = PKIMessage
+                msg['body'].getName.return_value = body_type
+                ctx = CmpBaseRequestContext(operation=operation, parsed_message=msg)
+                CmpOperationAuthorization([operation]).authorize(ctx)
 
 
 # ---------------------------------------------------------------------------

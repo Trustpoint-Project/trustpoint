@@ -6,11 +6,22 @@
 from typing import Any
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import Client
 from django.urls import reverse
 
 from devices.models import DeviceModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
+
+
+@pytest.fixture(autouse=True)
+def grant_manage_devices_to_admin_client(admin_client: Client) -> None:
+    """Grant the shared web-test user access to protected device operations."""
+    user_id = admin_client.session['_auth_user_id']
+    user = get_user_model().objects.get(pk=user_id)
+    manage_devices_perm = Permission.objects.get(codename='manage_devices')
+    user.role.permissions.add(manage_devices_perm)
 
 
 @pytest.mark.django_db

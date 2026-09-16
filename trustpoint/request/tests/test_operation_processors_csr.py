@@ -11,6 +11,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from pki.models import CertificateModel
 
 try:
     from cryptography.hazmat.primitives.asymmetric import mldsa
@@ -400,3 +401,42 @@ class TestCertificateRevocationProcessor:
         ctx.domain.get_issuing_ca_or_value_error.return_value.get_credential.return_value = Mock()
         with pytest.raises(ValueError, match='Credential to revoke must be set'):
             CertificateRevocationProcessor().process_operation(ctx)
+
+    def test_local_ca_revocation_sets_issuer_and_revokes_credential(self) -> None:
+        ctx = CmpRevocationRequestContext()
+        ctx.domain = Mock(unique_name='example')
+        ctx.domain.issuing_ca = Mock()
+        ctx.device = Mock(common_name='device')
+        ctx.protocol = 'cmp'
+        credential = Mock()
+        credential.credential.certificate_or_error = Mock(
+            certificate_status=CertificateModel.CertificateStatus.OK,
+        )
+        ctx.credential_to_revoke = credential
+        ca = ctx.domain.get_issuing_ca_or_value_error.return_value
+        ca.get_credential.return_value = Mock()
+
+        with patch('request.operation_processor.revoke_cert.CaRolloverService.get_active_rollover', return_value=None), \
+            patch('request.operation_processor.revoke_cert.AuditLog.create_entry') as audit:
+            CertificateRevocationProcessor().process_operation(ctx)
+
+        assert ctx.issuer_credential is ca.get_credential.return_value
+        credential.revoke.assert_called_once_with()
+        audit.assert_called_once()
+
+    def test_local_ca_revocation_rejects_already_revoked_certificate(self) -> None:
+        ctx = CmpRevocationRequestContext(
+            domain=Mock(issuing_ca=Mock()), device=Mock(common_name='device'),
+            credential_to_revoke=Mock(),
+        )
+        ctx.domain.get_issuing_ca_or_value_error.return_value.get_credential.return_value = Mock()
+        ctx.credential_to_revoke.credential.certificate_or_error = Mock(
+            certificate_status=CertificateModel.CertificateStatus.REVOKED,
+        )
+
+        with patch('request.operation_processor.revoke_cert.CaRolloverService.get_active_rollover', return_value=None):
+            with pytest.raises(ValueError, match='already revoked'):
+                CertificateRevocationProcessor().process_operation(ctx)
+
+        assert ctx.http_response_status == 422
+        ctx.credential_to_revoke.revoke.assert_not_called()

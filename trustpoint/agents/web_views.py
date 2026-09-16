@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from django import forms
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
@@ -22,6 +23,7 @@ from agents.security import AgentSecurityMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_AGENTS_SUBCATEGORY, DEVICES_PAGE_CATEGORY, PageContextMixin
 from trustpoint.views.base import BulkDeleteView
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -178,6 +180,8 @@ class AgentProfileDefinitionConfigView(
 
     def form_valid(self, form: Any) -> Any:
         """Process form submission and parse profile JSON."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         # Convert profile JSON string to dict
         profile_data = form.cleaned_data.get('profile')
         parsed_profile = None
@@ -228,6 +232,8 @@ class AgentProfileDefinitionBulkDeleteConfirmView(AgentSecurityMixin, PageContex
 
     def form_valid(self, form: Any) -> HttpResponse:
         """Delete the selected profiles on valid form."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         queryset = self.get_queryset()
         deleted_count = queryset.count() if queryset else 0
 
@@ -355,6 +361,8 @@ class AgentAssignedProfileCreateView(
 
     def form_valid(self, form: AgentAssignedProfileForm) -> HttpResponse:
         """Save the assignment and show a success message."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         from django.utils import timezone  # noqa: PLC0415
 
         agent = self._get_agent()
@@ -401,6 +409,8 @@ class AgentAssignedProfileEditView(
 
     def form_valid(self, form: AgentAssignedProfileEditForm) -> HttpResponse:
         """Save the changes and show a success message."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         assignment: AgentAssignedProfile = form.save()
         messages.success(
             self.request,
@@ -447,6 +457,8 @@ class AgentAssignedProfileDeleteView(AgentSecurityMixin, PageContextMixin, BulkD
 
     def form_valid(self, form: Any) -> HttpResponse:
         """Delete selected assignments and redirect."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         queryset = self.get_queryset()
         deleted_count = queryset.count() if queryset else 0
         response = super().form_valid(form)
@@ -463,6 +475,8 @@ class AgentAssignedProfileForceUpdateView(AgentSecurityMixin, PageContextMixin, 
 
     def post(self, request: HttpRequest, agent_id: int, pk: int) -> HttpResponse:
         """Set next_certificate_update_scheduled to now and redirect back to list."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         from django.utils import timezone  # noqa: PLC0415
 
         assignment = get_object_or_404(

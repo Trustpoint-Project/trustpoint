@@ -8,7 +8,7 @@ from typing import Any
 from django.contrib.auth.models import Group, Permission
 from rest_framework import serializers
 
-from users.models import GroupProfile, Role
+from users.models import GroupProfile
 
 
 class PermissionSerializer(serializers.ModelSerializer[Permission]):
@@ -31,7 +31,8 @@ class RoleSerializer(serializers.ModelSerializer[Group]):
     )
     grants_staff = serializers.BooleanField(required=False, default=False)
     grants_superuser = serializers.BooleanField(required=False, default=False)
-    is_protected = serializers.SerializerMethodField()
+    is_modification_protected = serializers.SerializerMethodField()
+    is_deletion_protected = serializers.SerializerMethodField()
     user_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -44,13 +45,20 @@ class RoleSerializer(serializers.ModelSerializer[Group]):
             'permissions',
             'grants_staff',
             'grants_superuser',
-            'is_protected',
+            'is_modification_protected',
+            'is_deletion_protected',
             'user_count',
         )
 
-    def get_is_protected(self, obj: Group) -> bool:
-        """Return whether this role is a built-in, non-deletable role."""
-        return obj.name in {Role.ADMIN.value, Role.SERVICE.value}
+    def get_is_modification_protected(self, obj: Group) -> bool:
+        """Return whether this role is protected from modification."""
+        profile = getattr(obj, 'profile', None)
+        return bool(profile and profile.is_modification_protected)
+
+    def get_is_deletion_protected(self, obj: Group) -> bool:
+        """Return whether this role is protected from deletion."""
+        profile = getattr(obj, 'profile', None)
+        return bool(profile and profile.is_deletion_protected)
 
     def get_user_count(self, obj: Group) -> int:
         """Return how many users are currently assigned to this role."""

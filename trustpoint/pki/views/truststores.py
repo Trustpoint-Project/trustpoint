@@ -6,7 +6,7 @@
 from typing import Any, ClassVar, cast
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import ProtectedError, QuerySet
 from django.forms import Form
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
@@ -21,7 +21,7 @@ from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
@@ -42,6 +42,7 @@ from trustpoint.views.base import (
     PrimaryKeyListFromPrimaryKeyString,
     SortableTableMixin,
 )
+from users.permissions import AppPermissions
 
 # Import DeviceModel for runtime use
 try:
@@ -148,6 +149,8 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
 
     def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
         """If the form is valid, redirect to Truststore overview."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES):
+            raise PermissionDenied
         truststore = form.cleaned_data['truststore']
         domain_id = self.kwargs.get('pk')
 
@@ -420,6 +423,8 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
 
     def form_valid(self, form: Form) -> HttpResponse:
         """Attempts to delete the selected truststores on valid form."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES):
+            raise PermissionDenied
         queryset = self.get_queryset()
         deleted_count = queryset.count()
 
@@ -440,6 +445,17 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
 
         return response
 
+class CanManageTruststores(BasePermission):
+    """Allow only users permitted to manage truststores."""
+
+    def has_permission(self, request: Request, _view: Any) -> bool:
+        """Check if the user has permission to manage truststores."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES)
+        )
+
 @extend_schema(tags=['Truststore'])
 @extend_schema_view(
     retrieve=extend_schema(description='Retrieve a single Truststore by id.'),
@@ -456,7 +472,7 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
 
     queryset = TruststoreModel.objects.all().order_by('-created_at')
     serializer_class = TruststoreSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanManageTruststores,)
     filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['intended_usage']
     search_fields: ClassVar = ['unique_name']

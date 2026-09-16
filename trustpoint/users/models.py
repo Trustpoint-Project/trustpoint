@@ -3,7 +3,7 @@
 
 """Custom user model with role-based access control.
 
-Defines a ``Role`` enum whose values are human-readable group names
+Defines a ``BuiltinRole`` enum whose values are human-readable group names
 (e.g. ``'Admin'``) and a ``TrustpointUser`` model whose ``role`` field
 is a foreign key to ``django.contrib.auth.models.Group``.
 """
@@ -11,7 +11,7 @@ is a foreign key to ``django.contrib.auth.models.Group``.
 from __future__ import annotations
 
 import secrets
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.apps import apps
 from django.contrib.auth.models import AbstractUser, Group, Permission, UserManager
@@ -24,16 +24,18 @@ if TYPE_CHECKING:
     from management.models.organization import OrganizationModel
 
 
-class Role(models.TextChoices):
-    """Predefined roles that map to Django groups.
-
-    The *value* is the canonical Group name stored in the database.
-    Admin is the only protected group and cannot be deleted via the UI.
-    """
+class BuiltinRole(models.TextChoices):
+    """Canonical names of built-in Trustpoint roles."""
 
     ADMIN = 'Admin', _('Admin')
-    DEFAULT = 'Default', _('Default')
     SERVICE = 'Service Account', _('Service Account')
+
+    PKI_ADMIN = 'PKI Administrator', _('PKI Administrator')
+    DEVICE_OPERATOR = 'Device Operator', _('Device Operator')
+    SYSTEM_ADMIN = 'System Administrator', _('System Administrator')
+    WORKFLOW_ADMIN = 'Workflow Administrator', _('Workflow Administrator')
+    WORKFLOW_APPROVER = 'Workflow Approver', _('Workflow Approver')
+    SECURITY_AUDITOR = 'Security Auditor', _('Security Auditor')
 
     @classmethod
     def get_service_group(cls) -> Group:
@@ -76,6 +78,21 @@ class GroupProfile(models.Model):
         verbose_name=_('superuser status'),
         help_text=_('Users with this role have all permissions without explicitly assigning them.'),
     )
+    is_builtin = models.BooleanField(
+        default=False,
+        verbose_name=_('built-in role'),
+        help_text=_('Identifies a role provided by Trustpoint.'),
+    )
+    is_modification_protected = models.BooleanField(
+        default=False,
+        verbose_name=_('modification-protected role'),
+        help_text=_('Prevents the role from being modified.'),
+    )
+    is_deletion_protected = models.BooleanField(
+        default=False,
+        verbose_name=_('deletion-protected role'),
+        help_text=_('Prevents the role from being deleted.'),
+    )
 
     class Meta:
         """Metaclass for GroupProfile."""
@@ -116,7 +133,7 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
             The newly created superuser instance.
         """
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
-            admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN.value)
+            admin_group, _ = Group.objects.get_or_create(name=BuiltinRole.ADMIN.value)
             extra_fields['role'] = admin_group
         if 'organization' not in extra_fields:
             extra_fields['organization'] = self._get_default_org()
@@ -142,9 +159,9 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
         """
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
             if extra_fields.get('account_type') == TrustpointUser.AccountType.SERVICE:
-                extra_fields['role'] = Role.get_service_group()
+                extra_fields['role'] = BuiltinRole.get_service_group()
             else:
-                default_group, _ = Group.objects.get_or_create(name=Role.DEFAULT.value)
+                default_group, _ = Group.objects.get_or_create(name=BuiltinRole.DEVICE_OPERATOR.value)
                 extra_fields['role'] = default_group
         if 'organization' not in extra_fields:
             extra_fields['organization'] = self._get_default_org()
@@ -237,22 +254,123 @@ class TrustpointUser(AbstractUser):
         self.groups.set([self.role])
 
 class AppPermission(models.Model):
-    """Dummy model used only to host app-level permissions.
+    """Host model for Trustpoint-wide application permissions.
 
-    No database usage beyond auth_permission table.
+    This model is not intended to store database records.
+    Django creates the permissions declared in ``Meta.permissions``
+    in ``auth_permission`` during migrations.
     """
 
     class Meta:
-        """Define permissions."""
+        """Configure the unmanaged application-permission model."""
 
-        default_permissions = ()  # disables add/change/delete/view
-        permissions = (
-            ('manage_workflow', 'Can manage workflow'),
-            ('onboard_device', 'Can onboard device'),
-            ('manage_ca', 'Can manage CA'),
-            ('manage_role', 'Can manage role'),
-            ('use_rest_api', 'Can use REST API'),
-        )
+        managed = False
+        default_permissions = ()
+
+        permissions: ClassVar[list[tuple[str, Any]]] = [
+            # -----------------------------------------------------------------
+            # User and access management
+            # -----------------------------------------------------------------
+            ('manage_users', _('Can manage users')),
+            ('manage_roles', _('Can manage roles')),
+            ('manage_organizations', _('Can manage organizations')),
+            (
+                'manage_service_accounts',
+                _('Can manage service accounts'),
+            ),
+                ('use_rest_api', _('Can use the REST API')),
+
+            # -----------------------------------------------------------------
+            # PKI configuration
+            # -----------------------------------------------------------------
+            ('manage_cas', _('Can manage certificate authorities')),
+            ('manage_ras', _('Can manage registration authorities')),
+            ('manage_domains', _('Can manage domains')),
+            ('manage_truststores', _('Can manage trust stores')),
+            (
+                'manage_certificate_profiles',
+                _('Can manage certificate profiles'),
+            ),
+            (
+                'manage_crypto_backends',
+                _('Can manage cryptographic backends'),
+            ),
+
+            # -----------------------------------------------------------------
+            # Certificate lifecycle
+            # -----------------------------------------------------------------
+            (
+                'issue_certificates',
+                _('Can issue certificates'),
+            ),
+            (
+                'revoke_certificates',
+                _('Can revoke certificates'),
+            ),
+            (
+                'download_credentials',
+                _('Can download private credentials'),
+            ),
+            (
+                'view_help_pages',
+                _('Can view help pages'),
+            ),
+
+            # -----------------------------------------------------------------
+            # Device lifecycle
+            # -----------------------------------------------------------------
+            ('manage_devices', _('Can manage devices')),
+
+            # -----------------------------------------------------------------
+            # Automation and integration
+            # -----------------------------------------------------------------
+
+            (
+                'manage_certificate_discovery',
+                _('Can manage certificate discovery'),
+            ),
+            (
+                'manage_signer',
+                _('Can manage signer'),
+            ),
+
+            # -----------------------------------------------------------------
+            # Workflow engine
+            # -----------------------------------------------------------------
+            ('manage_workflows', _('Can manage workflows')),
+            (
+                'approve_workflows',
+                _('Can approve workflows'),
+            ),
+
+            # -----------------------------------------------------------------
+            # System administration
+            # -----------------------------------------------------------------
+            (
+                'manage_system_configuration',
+                _('Can manage system configuration'),
+            ),
+            (
+                'manage_security_configuration',
+                _('Can manage security configuration'),
+            ),
+            ('manage_backups', _('Can manage backups')),
+            (
+                'manage_notifications',
+                _('Can manage notification settings'),
+            ),
+            (
+                'manage_tls_webserver_configuration',
+                _('Can manage TLS webserver configuration'),
+            ),
+
+            # -----------------------------------------------------------------
+            # Monitoring and audit
+            # -----------------------------------------------------------------
+            ('view_audit_log', _('Can view the audit log')),
+            ('view_system_logs', _('Can view system logs')),
+            ('view_metrics', _('Can view system metrics')),
+        ]
 
     def __str__(self) -> str:
         """Return a string representation for the AppPermission."""

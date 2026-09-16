@@ -85,7 +85,7 @@ class Command(BaseCommand):
             _add_copyright_headers(migration_name, base_path)
         self.stdout.write('Running migrate...')
         call_command('migrate')
-        call_command('create_admin_group')
+        call_command('create_builtin_groups')
 
         # Add default models for development server
         if engine == ENGINE_SQLITE:

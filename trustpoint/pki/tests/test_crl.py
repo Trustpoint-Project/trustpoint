@@ -44,7 +44,8 @@ def api_client(issuing_ca_instance: dict[str, Any]) -> tuple[APIClient, Any]:
         content_type__model='apppermission',
         codename='use_rest_api',
     )
-    user.role.permissions.add(permission)
+    manage_cas_permission = Permission.objects.get(codename='manage_cas')
+    user.role.permissions.add(permission, manage_cas_permission)
     
     # Get JWT token
     response = client.post(

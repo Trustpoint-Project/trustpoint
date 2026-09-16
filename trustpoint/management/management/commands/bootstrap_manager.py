@@ -24,7 +24,7 @@ from management.util.output_wrapper import CommandOutputWrapper
 from management.util.startup_strategies import BootstrapTlsMaterialStrategy, StartupContext, WizardState
 from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
 from setup_wizard.tls_credential import load_staged_tls_credential
-from users.models import Role
+from users.models import BuiltinRole
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +133,8 @@ class Command(BaseCommand):
     @staticmethod
     def _ensure_admin_group() -> Group:
         """Ensure the protected Admin role and profile exist."""
-        call_command('create_admin_group', verbosity=0)
-        return Group.objects.get(name=Role.ADMIN.value)
+        call_command('create_builtin_groups', verbosity=0)
+        return Group.objects.get(name=BuiltinRole.ADMIN.value)
 
     @staticmethod
     def _seed_operational_database_defaults(config: SetupWizardConfigModel, output: CommandOutputWrapper) -> None:

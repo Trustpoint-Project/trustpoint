@@ -7,12 +7,24 @@ from typing import Any
 from unittest.mock import patch, Mock
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import Client
 from django.urls import reverse
 
 from devices.models import DeviceModel
 from onboarding.models import OnboardingProtocol
 from pki.models import CertificateModel
+
+
+@pytest.fixture(autouse=True)
+def grant_manage_devices_to_admin_client(admin_client: Client) -> None:
+    """Grant the shared web-test user access to protected device operations."""
+    user_id = admin_client.session['_auth_user_id']
+    user = get_user_model().objects.get(pk=user_id)
+    manage_devices_perm = Permission.objects.get(codename='manage_devices')
+    revoke_certificates_perm = Permission.objects.get(codename='revoke_certificates')
+    user.role.permissions.add(manage_devices_perm, revoke_certificates_perm)
 
 
 @pytest.mark.django_db

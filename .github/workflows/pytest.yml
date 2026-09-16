@@ -50,9 +50,12 @@ jobs:
           path: reports/
 
       - name: Render the report to the PR
-        uses: marocchino/sticky-pull-request-comment@v3  # Posts test results as a comment on PRs.
-        if: always()  # Always runs.
+        uses: marocchino/sticky-pull-request-comment@v3
+        if: >
+          always() &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
         with:
           header: test-report
-          recreate: true  # Replaces previous test reports to keep PR comments clean.
-          path: md-report.md  # Posts the markdown test report in the PR.
+          recreate: true
+          path: md-report.md

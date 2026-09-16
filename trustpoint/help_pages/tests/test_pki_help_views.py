@@ -7,17 +7,60 @@ from unittest.mock import Mock, patch
 
 from django.http import Http404
 from django.test import RequestFactory, TestCase
+from trustpoint_core import oid
 
 from pki.models import CaModel
-from ..help_section import ValueRenderType
+from ..help_section import HelpSection, ValueRenderType
 from ..pki_help_views import (
     BaseHelpView,
+    CaDetailView,
+    CaHelpView,
     CrlDownloadHelpView,
+    DevIdRegistrationDetailView,
+    DevIdRegistrationHelpView,
+    DomainDetailView,
+    DomainHelpView,
+    IssuedCredentialDetailView,
+    IssuedCredentialHelpView,
     OnboardingCmpIdevidRegistrationHelpView,
     OnboardingCmpIdevIdDomainCredentialStrategy,
     OnboardingEstIdevidRegistrationHelpView,
     OnboardingEstIdevIdDomainCredentialStrategy,
+    OwnerCredentialDetailView,
+    OwnerCredentialHelpView,
 )
+
+
+def _public_key_info() -> oid.PublicKeyInfo:
+    """Return a reusable RSA public-key descriptor for PKI help contexts."""
+    return oid.PublicKeyInfo(
+        public_key_algorithm_oid=oid.PublicKeyAlgorithmOid.RSA,
+        key_size=2048,
+    )
+
+
+def _domain() -> Mock:
+    """Return a lightweight domain mock."""
+    domain = Mock()
+    domain.unique_name = 'test-domain'
+    domain.public_key_info = _public_key_info()
+    domain.get_allowed_cert_profiles.return_value = []
+    domain.issuing_ca = Mock(pk=77)
+    return domain
+
+
+def _device(domain: Mock) -> Mock:
+    """Return a lightweight device mock."""
+    device = Mock()
+    device.common_name = 'device-1'
+    device.domain = domain
+    device.public_key_info = _public_key_info()
+    return device
+
+
+def _section(heading: str = 'Patched Section') -> HelpSection:
+    """Return a simple section for patched shared helpers."""
+    return HelpSection(heading, [])
 
 
 class BaseHelpViewTests(TestCase):
@@ -341,3 +384,216 @@ class CrlDownloadHelpViewTests(TestCase):
         assert 'curl' in der_row.value
         assert 'test-ca.der.crl' in der_row.value
         assert 'encoding=der' in der_row.value
+
+
+class PkiDetailAndHelpContextTests(TestCase):
+    """Test concrete PKI detail/help context builders."""
+
+    def setUp(self) -> None:
+        """Set up test fixtures."""
+        self.factory = RequestFactory()
+
+    def _prepare_view(self, view: object, obj: Mock) -> object:
+        view.object = obj
+        view.request = self.factory.get('/', HTTP_X_FORWARDED_PORT='9443')
+        return view
+
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.10')
+    def test_devid_registration_detail_context_contains_domain_endpoint_data(self, mock_ip: Mock) -> None:
+        """Test DevID registration detail context exposes domain and host details."""
+        domain = _domain()
+        registration = Mock(domain=domain)
+        view = self._prepare_view(DevIdRegistrationDetailView(), registration)
+
+        context = view.get_context_data()
+
+        assert context['devid_registration'] == registration
+        assert context['domain'] == domain
+        assert context['domain_unique_name'] == 'test-domain'
+        assert context['host_base'] == 'https://192.0.2.10:9443'
+        assert context['help_sections'] == []
+        assert mock_ip.called
+
+    @patch('help_pages.pki_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    @patch('help_pages.pki_help_views.build_issuing_ca_cert_section', return_value=_section('Issuing CA'))
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.10')
+    def test_devid_registration_help_context_builds_help_sections(
+        self, mock_ip: Mock, mock_issuing_ca: Mock, mock_tls: Mock
+    ) -> None:
+        """Test DevID registration help context includes generated helper sections."""
+        domain = _domain()
+        view = self._prepare_view(DevIdRegistrationHelpView(), Mock(domain=domain))
+
+        help_context = view._make_context()
+
+        assert [section.heading for section in help_context.help_sections] == [
+            'Key Generation',
+            'Issuing CA',
+            'TLS',
+        ]
+        assert 'idevid' in help_context.help_sections[0].rows[0].value
+        assert mock_ip.called
+        assert mock_issuing_ca.called
+        assert mock_tls.called
+
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.20')
+    def test_domain_detail_context_contains_allowed_profiles(self, mock_ip: Mock) -> None:
+        """Test domain detail context exposes allowed application profiles."""
+        domain = _domain()
+        allowed_profile = Mock()
+        domain.get_allowed_cert_profiles.return_value = [allowed_profile]
+        view = self._prepare_view(DomainDetailView(), domain)
+
+        context = view.get_context_data()
+
+        assert context['domain'] == domain
+        assert context['allowed_app_profiles'] == [allowed_profile]
+        assert context['host_base'] == 'https://192.0.2.20:9443'
+        assert mock_ip.called
+
+    @patch('help_pages.pki_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    @patch('help_pages.pki_help_views.build_issuing_ca_cert_section', return_value=_section('Issuing CA'))
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.20')
+    def test_domain_help_context_builds_application_certificate_sections(
+        self, mock_ip: Mock, mock_issuing_ca: Mock, mock_tls: Mock
+    ) -> None:
+        """Test domain help context includes app-certificate guidance sections."""
+        domain = _domain()
+        view = self._prepare_view(DomainHelpView(), domain)
+
+        help_context = view._make_context()
+
+        assert [section.heading for section in help_context.help_sections] == [
+            'Key Generation',
+            'Issuing CA',
+            'TLS',
+        ]
+        assert 'app_cert' in help_context.help_sections[0].rows[0].value
+        assert mock_ip.called
+        assert mock_issuing_ca.called
+        assert mock_tls.called
+
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.30')
+    def test_issued_credential_detail_context_contains_device_and_credential(self, mock_ip: Mock) -> None:
+        """Test issued credential detail context exposes device, domain, and credential."""
+        domain = _domain()
+        device = _device(domain)
+        issued_credential = Mock(device=device)
+        view = self._prepare_view(IssuedCredentialDetailView(), issued_credential)
+
+        context = view.get_context_data()
+
+        assert context['issued_credential'] == issued_credential
+        assert context['device'] == device
+        assert context['domain'] == domain
+        assert context['host_base'] == 'https://192.0.2.30:9443'
+        assert mock_ip.called
+
+    @patch('help_pages.pki_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    @patch('help_pages.pki_help_views.build_issuing_ca_cert_section', return_value=_section('Issuing CA'))
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.30')
+    def test_issued_credential_help_context_builds_app_certificate_sections(
+        self, mock_ip: Mock, mock_issuing_ca: Mock, mock_tls: Mock
+    ) -> None:
+        """Test issued credential help context includes app certificate helper sections."""
+        domain = _domain()
+        device = _device(domain)
+        view = self._prepare_view(IssuedCredentialHelpView(), Mock(device=device))
+
+        help_context = view._make_context()
+
+        assert [section.heading for section in help_context.help_sections] == [
+            'Key Generation',
+            'Issuing CA',
+            'TLS',
+        ]
+        assert 'app_cert' in help_context.help_sections[0].rows[0].value
+        assert mock_ip.called
+        assert mock_issuing_ca.called
+        assert mock_tls.called
+
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.40')
+    def test_owner_credential_detail_context_contains_device_and_credential(self, mock_ip: Mock) -> None:
+        """Test owner credential detail context exposes device, domain, and credential."""
+        domain = _domain()
+        device = _device(domain)
+        owner_credential = Mock(device=device)
+        view = self._prepare_view(OwnerCredentialDetailView(), owner_credential)
+
+        context = view.get_context_data()
+
+        assert context['owner_credential'] == owner_credential
+        assert context['device'] == device
+        assert context['domain_unique_name'] == 'test-domain'
+        assert context['host_base'] == 'https://192.0.2.40:9443'
+        assert mock_ip.called
+
+    @patch('help_pages.pki_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
+    @patch('help_pages.pki_help_views.build_issuing_ca_cert_section', return_value=_section('Issuing CA'))
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.40')
+    def test_owner_credential_help_context_builds_owner_certificate_sections(
+        self, mock_ip: Mock, mock_issuing_ca: Mock, mock_tls: Mock
+    ) -> None:
+        """Test owner credential help context includes owner certificate helper sections."""
+        domain = _domain()
+        device = _device(domain)
+        view = self._prepare_view(OwnerCredentialHelpView(), Mock(device=device))
+
+        help_context = view._make_context()
+
+        assert [section.heading for section in help_context.help_sections] == [
+            'Key Generation',
+            'Issuing CA',
+            'TLS',
+        ]
+        assert 'owner_cert' in help_context.help_sections[0].rows[0].value
+        assert mock_ip.called
+        assert mock_issuing_ca.called
+        assert mock_tls.called
+
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.50')
+    def test_ca_detail_context_uses_minimal_help_context(self, mock_ip: Mock) -> None:
+        """Test CA detail context exposes CA and host details without domain data."""
+        ca = Mock(pk=99)
+        view = self._prepare_view(CaDetailView(), ca)
+
+        context = view.get_context_data()
+
+        assert context['ca'] == ca
+        assert context['host_base'] == 'https://192.0.2.50:9443'
+        assert context['help_sections'] == []
+        assert mock_ip.called
+
+    @patch('help_pages.pki_help_views.reverse')
+    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.50')
+    def test_ca_help_context_builds_certificate_download_links(self, mock_ip: Mock, mock_reverse: Mock) -> None:
+        """Test CA help context includes CA certificate and chain download links."""
+        mock_reverse.side_effect = lambda name, kwargs: f'/{name}/{kwargs["pk"]}/{kwargs.get("file_format", "")}'
+        ca = Mock(pk=99)
+        view = self._prepare_view(CaHelpView(), ca)
+
+        help_context = view._make_context()
+
+        section = help_context.help_sections[0]
+
+        assert section.heading == 'CA Certificate'
+        assert 'Download CA Certificate (PEM)' in section.rows[0].value
+        assert 'Download CA Certificate Chain (PEM)' in section.rows[1].value
+        assert mock_ip.called
+
+    def test_detail_views_raise_for_missing_device_or_public_key_info(self) -> None:
+        """Test important error paths for credential detail contexts."""
+        domain = _domain()
+        device = _device(domain)
+        device.public_key_info = None
+
+        issued_view = self._prepare_view(IssuedCredentialDetailView(), Mock(device=None))
+        owner_view = self._prepare_view(OwnerCredentialDetailView(), Mock(device=None))
+        issued_missing_key_view = self._prepare_view(IssuedCredentialDetailView(), Mock(device=device))
+
+        with self.assertRaises(Http404):
+            issued_view._make_context()
+        with self.assertRaises(Http404):
+            owner_view._make_context()
+        with self.assertRaises(Http404):
+            issued_missing_key_view._make_context()

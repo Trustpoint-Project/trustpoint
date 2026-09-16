@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.core.management import call_command
 from django.db import connection
 from django.shortcuts import redirect
@@ -50,6 +51,8 @@ from management.security.mixins import SecurityLevelMixin
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
+from trustpoint.views.base import UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 from workflows2.models import Workflow2WorkerHeartbeat
 
 if TYPE_CHECKING:
@@ -438,6 +441,9 @@ class SettingsTabView(TemplateView):
         """Handle inline settings updates from the settings tab page."""
         form_name = request.POST.get('form_name')
 
+        if not request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
+            raise PermissionDenied
+
         if form_name == 'smtp_email':
             return self._post_smtp_email(request)
 
@@ -583,6 +589,9 @@ class InternationalizationSettingsView(SettingsFormViewMixin[Internationalizatio
 
     def form_valid(self, form: InternationalizationConfigForm) -> HttpResponse:
         """Handle valid internationalization form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
+            raise PermissionDenied
+
         date_format = form.cleaned_data['date_format']
         language = form.cleaned_data['language']
         timezone = form.cleaned_data['timezone']
@@ -634,6 +643,9 @@ class UISettingsView(SettingsFormViewMixin[UIConfigForm]):
 
     def form_valid(self, form: UIConfigForm) -> HttpResponse:
         """Handle valid UI form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
+            raise PermissionDenied
+
         view_mode = form.cleaned_data['view_mode']
 
         self.logger.info('Changing view mode to: %s', view_mode)
@@ -673,6 +685,9 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
 
     def form_valid(self, form: SecurityConfigForm) -> HttpResponse:
         """Handle valid security form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SECURITY_CONFIGURATION):
+            raise PermissionDenied
+
         old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
         form.save()
 
@@ -760,6 +775,9 @@ class LoggingSettingsView(SettingsFormViewMixin[LoggingConfigForm]):
 
     def form_valid(self, form: LoggingConfigForm) -> HttpResponse:
         """Handle valid logging form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
+            raise PermissionDenied
+
         level = form.cleaned_data['loglevel']
         crypto_backend_audit_enabled = bool(form.cleaned_data.get('crypto_backend_audit_enabled'))
         self.logger.info('Changing log level to: %s', level)
@@ -804,6 +822,9 @@ class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
 
     def form_valid(self, form: NotificationConfigForm) -> HttpResponse:
         """Handle valid notification form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
+            raise PermissionDenied
+
         notification_config = form.instance
         was_enabled = notification_config.enabled
 
@@ -863,12 +884,14 @@ class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
         return context
 
 
-class MetricsSettingsView(SettingsFormViewMixin[PrometheusConfigForm]):
+class MetricsSettingsView(UserPermissionRequiredMixin, SettingsFormViewMixin[PrometheusConfigForm]):
     """View for displaying runtime metrics and managing the Prometheus export toggle."""
 
     template_name = 'management/includes/metrics_configuration.html'
     form_class = PrometheusConfigForm
     setting_type = 'metrics'
+    permission_required = AppPermissions.VIEW_METRICS
+
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Load the singleton PrometheusConfig instance into the form."""
@@ -878,6 +901,8 @@ class MetricsSettingsView(SettingsFormViewMixin[PrometheusConfigForm]):
 
     def form_valid(self, form: PrometheusConfigForm) -> HttpResponse:
         """Save the Prometheus configuration and redirect back to the metrics tab."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
+            raise PermissionDenied
         form.save()
         messages.success(self.request, _('Prometheus configuration saved successfully.'))
         return redirect(self.get_success_url())

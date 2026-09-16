@@ -12,11 +12,14 @@ from unittest.mock import Mock, patch, sentinel
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.urls import reverse
 
 from discovery.models import DiscoveredDevice, DiscoveryPort
 from discovery.scanner import OTScanner
 from discovery.views import ScanManager
+
+pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture(autouse=True)
@@ -40,6 +43,8 @@ def authenticated_client(client):
     """Provide an authenticated client for views protected by login."""
     user_model = get_user_model()
     user = user_model.objects.create_user(username='discovery-tester', password='testpass123')
+    manage_discovery_perm = Permission.objects.get(codename='manage_certificate_discovery')
+    user.role.permissions.add(manage_discovery_perm)
     client.force_login(user)
     return client
 

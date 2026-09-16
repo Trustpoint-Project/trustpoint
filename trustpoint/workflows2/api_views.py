@@ -5,13 +5,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status, viewsets
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
+from users.permissions import AppPermissions
 from workflows2.models import Workflow2Definition
 from workflows2.serializers import Workflow2DefinitionSerializer
 from workflows2.services.definitions import WorkflowDefinitionService
@@ -48,6 +50,17 @@ YAML_REQUEST_EXAMPLE = OpenApiExample(
         media_type='application/yaml',
 )
 
+class CanManageWorkflows(BasePermission):
+    """Allow only users permitted to manage workflows."""
+
+    def has_permission(self, request: Request, _view: Any) -> bool:
+        """Check if the user has permission to manage workflows."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(AppPermissions.MANAGE_WORKFLOWS)
+        )
+
 
 @extend_schema(tags=['Workflows2'])
 class Workflow2DefinitionViewSet(viewsets.ModelViewSet[Workflow2Definition]):
@@ -58,7 +71,7 @@ class Workflow2DefinitionViewSet(viewsets.ModelViewSet[Workflow2Definition]):
 
     queryset = Workflow2Definition.objects.order_by('-created_at')
     serializer_class = Workflow2DefinitionSerializer
-
+    permission_classes = (CanManageWorkflows,)
     @staticmethod
     def _request_yaml_text(request: Request) -> str:
         """Return UTF-8 YAML text from the raw request body."""
