@@ -17,7 +17,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.utils import timezone, translation
+from django.utils import timezone
 from django.utils.timezone import now
 from django.utils.translation import gettext as _
 from django.views import View
@@ -25,7 +25,6 @@ from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
 
 from management.forms import (
-    InternationalizationConfigForm,
     LoggingConfigForm,
     NotificationConfigForm,
     PrometheusConfigForm,
@@ -36,7 +35,6 @@ from management.forms import (
     WorkflowExecutionConfigForm,
 )
 from management.models import (
-    InternationalizationConfig,
     LoggingConfig,
     NotificationConfig,
     PrometheusConfig,
@@ -321,8 +319,7 @@ def build_smtp_email_context(
 
 
 class SettingsFormViewMixin[FormType: (
-    InternationalizationConfigForm
-    | LoggingConfigForm
+    LoggingConfigForm
     | NotificationConfigForm
     | PrometheusConfigForm
     | SecurityConfigForm
@@ -381,12 +378,7 @@ class SettingsTabView(TemplateView):
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'management'
         context['page_name'] = 'settings'
-        context['active_tab'] = kwargs.get('active_tab', self.request.GET.get('tab', 'internationalization'))
-
-        internationalization_view = InternationalizationSettingsView()
-        internationalization_view.request = self.request
-        internationalization_view.setup(self.request)
-        context['internationalization_form'] = self._get_unbound_settings_form(internationalization_view)
+        context['active_tab'] = kwargs.get('active_tab', self.request.GET.get('tab', 'ui'))
 
         ui_view = UISettingsView()
         ui_view.request = self.request
@@ -555,76 +547,6 @@ class SettingsTabView(TemplateView):
             active_tab='workflow',
         )
         return self.render_to_response(context)
-
-
-class InternationalizationSettingsView(SettingsFormViewMixin[InternationalizationConfigForm]):
-    """View for managing internationalization settings."""
-
-    template_name = 'management/includes/internationalization_configuration.html'
-    form_class = InternationalizationConfigForm
-    setting_type = 'internationalization'
-
-    def get_initial(self) -> dict[str, Any]:
-        """Get initial form data with current internationalization settings."""
-        initial = super().get_initial()
-        current_language = translation.get_language() or InternationalizationConfig.LanguageChoices.EN
-        supported_languages = {choice.value for choice in InternationalizationConfig.LanguageChoices}
-        normalized_language = current_language.split('-', 1)[0].lower()
-        if normalized_language not in supported_languages:
-            normalized_language = InternationalizationConfig.LanguageChoices.EN
-
-        config, _ = InternationalizationConfig.objects.get_or_create(
-            id=1,
-            defaults={
-                'date_format': InternationalizationConfig.DateFormatChoices.YYYY_MM_DD_24_SEC,
-                'language': normalized_language,
-                'timezone': 'UTC',
-            },
-        )
-
-        initial['date_format'] = config.date_format
-        initial['language'] = config.language
-        initial['timezone'] = config.timezone
-        return initial
-
-    def form_valid(self, form: InternationalizationConfigForm) -> HttpResponse:
-        """Handle valid internationalization form submission."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
-            raise PermissionDenied
-
-        date_format = form.cleaned_data['date_format']
-        language = form.cleaned_data['language']
-        timezone = form.cleaned_data['timezone']
-
-        self.logger.info(
-            'Changing internationalization settings to: date_format=%s, language=%s, timezone=%s',
-            date_format,
-            language,
-            timezone,
-        )
-
-        InternationalizationConfig.objects.update_or_create(
-            id=1,
-            defaults={
-                'date_format': date_format,
-                'language': language,
-                'timezone': timezone,
-            },
-        )
-
-        translation.activate(language)
-
-        response = redirect(self.get_success_url())
-        response.set_cookie(
-            key='django_language',
-            value=language,
-            max_age=365 * 24 * 60 * 60,
-            path='/',
-            samesite='Lax',
-        )
-
-        messages.success(self.request, _('Internationalization configuration saved successfully.'))
-        return response
 
 
 class UISettingsView(SettingsFormViewMixin[UIConfigForm]):

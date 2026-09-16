@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import secrets
 from typing import TYPE_CHECKING, Any, ClassVar
+from zoneinfo import available_timezones
 
 from django.apps import apps
 from django.contrib.auth.models import AbstractUser, Group, Permission, UserManager
@@ -177,6 +178,30 @@ class TrustpointUser(AbstractUser):
     to exactly the group referenced by ``role``.
     """
 
+    class LanguageChoices(models.TextChoices):
+        """Supported UI languages for a user."""
+
+        DE = 'de', _('German')
+        EN = 'en', _('English')
+
+    class ThemeChoices(models.TextChoices):
+        """Supported themes for a user."""
+
+        LIGHT = 'light', _('Light')
+        DARK = 'dark', _('Dark')
+
+    class DateFormatChoices(models.TextChoices):
+        """Date/time display formats for a user."""
+
+        DD_MM_YYYY_24 = '0', 'dd/MM/yyyy HH:mm'
+        MM_DD_YYYY_24 = '1', 'MM/dd/yyyy HH:mm'
+        DD_MMM_YYYY_24 = '2', 'dd MMM yyyy HH:mm'
+        DD_MMM_YYYY_12 = '3', 'dd MMM yyyy hh:mm a'
+        DD_MMMM_YYYY_24_SEC = '4', 'dd MMMM yyyy HH:mm:ss'
+        DD_MMMM_YYYY_12_SEC = '5', 'dd MMMM yyyy hh:mm:ss a'
+        YYYY_MM_DD_24_SEC = '6', 'yyyy-MM-dd HH:mm:ss'
+        ISO_LIKE = '7', "yyyy-MM-dd'T'HH:mm:ss"
+
     class AccountType(models.TextChoices):
         """Account type choices."""
 
@@ -207,12 +232,57 @@ class TrustpointUser(AbstractUser):
         verbose_name=_('organization')
     )
 
+    language = models.CharField(
+        max_length=10,
+        choices=LanguageChoices.choices,
+        default=LanguageChoices.EN,
+        verbose_name=_('language'),
+        help_text=_('Language used for the web interface for this user.'),
+    )
+
+    timezone = models.CharField(
+        max_length=64,
+        choices=sorted((tz, tz) for tz in available_timezones()),
+        default='UTC',
+        verbose_name=_('timezone'),
+        help_text=_('Timezone used for displaying dates and times for this user.'),
+    )
+
+    date_format = models.CharField(
+        max_length=1,
+        choices=DateFormatChoices.choices,
+        default=DateFormatChoices.YYYY_MM_DD_24_SEC,
+        verbose_name=_('date format'),
+        help_text=_('Date and time format displayed for this user.'),
+    )
+
+    theme = models.CharField(
+        max_length=10,
+        choices=ThemeChoices.choices,
+        default=ThemeChoices.DARK,
+        verbose_name=_('theme'),
+        help_text=_('Preferred appearance mode for this user.'),
+    )
+
+    must_change_password = models.BooleanField(
+        default=False,
+        verbose_name=_('must change password'),
+        help_text=_('Require this user to change their password at the next login.'),
+    )
+
     objects = TrustpointUserManager()  # type: ignore[misc]
 
     def __str__(self) -> str:
         """Return a human-readable representation of the user."""
         account_type = f' ({self.get_account_type_display()})' if self.account_type != self.AccountType.HUMAN else ''
         return f'Username: {self.username}, Role: {self.role.name}{account_type}'
+
+    @property
+    def profile_initials(self) -> str:
+        """Return name initials, falling back to the username initial."""
+        if self.first_name and self.last_name:
+            return f'{self.first_name[0]}{self.last_name[0]}'.upper()
+        return self.username[:1].upper()
 
     def clean(self) -> None:
         """Validate model constraints."""

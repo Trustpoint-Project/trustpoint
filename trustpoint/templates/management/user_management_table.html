@@ -20,8 +20,8 @@
         <td>{{ user.role.name }}</td>
 
         <td class="text-end">
-            {# Change role link #}
-            <a href="{% url 'management:change_role' user.pk %}" class="btn btn-link text-body p-0 me-2" title="{% trans 'Change Role' %}">
+            {# Edit profile link #}
+            <a href="{% url 'users:user-profile' user.pk %}" class="btn btn-link text-body p-0 me-2" title="{% trans 'Edit' %}">
                 <i class="bi bi-pencil-square fs-5"></i>
             </a>
             {# Delete link — navigates to the confirmation page (GET) before deleting #}

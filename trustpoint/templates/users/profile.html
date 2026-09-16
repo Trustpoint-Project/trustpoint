@@ -1,0 +1,85 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h1 class="h4 mb-0">{% trans "Profile" %}</h1>
+                    <span class="badge bg-primary-subtle text-primary">{{ object.username }}</span>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_name" value="profile">
+                        <section class="mb-4" aria-labelledby="personal-information-heading">
+                            <h2 id="personal-information-heading" class="h5 mb-3">{% trans "Personal Information" %}</h2>
+                            <div class="row">
+                                <div class="col-md-6">{{ form.first_name|as_crispy_field }}</div>
+                                <div class="col-md-6">{{ form.last_name|as_crispy_field }}</div>
+                            </div>
+                            {{ form.email|as_crispy_field }}
+                            {{ form.date_joined|as_crispy_field }}
+                        </section>
+
+                        <section class="mb-4" aria-labelledby="access-organization-heading">
+                            <h2 id="access-organization-heading" class="h5 mb-3">{% trans "Access & Organization" %}</h2>
+                            <div class="row">
+                                <div class="col-md-6">{{ form.role|as_crispy_field }}</div>
+                                <div class="col-md-6">{{ form.organization|as_crispy_field }}</div>
+                            </div>
+                        </section>
+
+                        <section class="mb-4" aria-labelledby="internationalization-heading">
+                            <h2 id="internationalization-heading" class="h5 mb-3">{% trans "Internationalization" %}</h2>
+                            {{ form.language|as_crispy_field }}
+                            {{ form.timezone|as_crispy_field }}
+                            {{ form.date_format|as_crispy_field }}
+                        </section>
+
+                        <section aria-labelledby="appearance-heading">
+                            <h2 id="appearance-heading" class="h5 mb-3">{% trans "Appearance" %}</h2>
+                            {{ form.theme|as_crispy_field }}
+                        </section>
+                        <div class="d-flex justify-content-end mt-4">
+                            <button class="btn btn-primary" type="submit">{% trans "Save" %}</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if can_manage_account_security %}
+            <div class="card shadow-sm" id="account-security">
+                <div class="card-header">
+                    <h2 class="h4 mb-0">{% trans "Account Security" %}</h2>
+                </div>
+                <div class="card-body">
+                    {% if can_change_password %}
+                    <p class="text-body-secondary">{% trans "Change your account password." %}</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_name" value="password_change">
+                        {{ password_form|crispy }}
+                        <div class="d-flex justify-content-end mt-4">
+                            <button class="btn btn-primary" type="submit">{% trans "Change password" %}</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <p class="text-body-secondary">{% trans "You can require this user to change their password at the next login." %}</p>
+                    {% endif %}
+                    <hr class="my-4">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_name" value="require_password_change">
+                        <button class="btn btn-secondary" type="submit">{% trans "Require password change on next login" %}</button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
