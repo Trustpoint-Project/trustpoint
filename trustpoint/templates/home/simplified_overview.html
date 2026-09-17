@@ -228,7 +228,7 @@
                                                 {% else %}
                                                 <span class="badge bg-secondary">{{ notification.get_notification_type_display }}</span>
                                                 {% endif %}
-                                                <small class="text-muted">{{ notification.created_at|date:"Y-m-d H:i" }}</small>
+                                                <small class="text-muted">{{ notification.created_at|local_datetime }}</small>
                                             </div>
                                             <p class="mb-0 small">{{ notification.short_translated|truncatewords:20 }}</p>
                                         </a>

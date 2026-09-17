@@ -202,6 +202,24 @@ a.tp-primary:focus, a.tp-primary:hover, a.tp-primary:active,
     height: 1.5rem;
 }
 
+.tp-user-avatar {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 2rem !important;
+    width: 2rem !important;
+    height: 2rem !important;
+    min-width: 2rem !important;
+    min-height: 2rem !important;
+    max-width: 2rem !important;
+    max-height: 2rem !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    line-height: 1;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
 .tp-menu-head:hover, .tp-menu-head:focus {
     background-color: var(--bs-secondary-bg);
 }

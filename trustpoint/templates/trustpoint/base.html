@@ -1,15 +1,17 @@
 {% load static %}
 {% load i18n %}
 <!doctype html>
-<html lang="en" data-bs-theme="dark">
+<html lang="{{ request.LANGUAGE_CODE|default:'en' }}"
+    data-bs-theme="{% if request.user.is_authenticated and request.user.theme %}{{ request.user.theme }}{% else %}dark{% endif %}"
+    data-user-theme="{% if request.user.is_authenticated %}{{ request.user.theme }}{% endif %}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Trustpoint</title>
-        <script src="{% static 'js/theme.js' %}"></script>
         <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
         <link rel="stylesheet" href="{% static 'css/bootstrap-icons.min.css' %}">
         <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
+        <script src="{% static 'js/theme.js' %}?v=2" defer></script>
         <link rel="icon" href="{% static 'img/favicon-32.png' %}">
         {% block head %}{% endblock head %}
     </head>
@@ -173,14 +175,19 @@
 
             <div class="tp-menu-footer">
                 <div class="tp-menu-group">
-                    <button class="tp-menu-head theme-toggle" type="button">
-                        <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
-                            <use href="{% static 'img/icons.svg' %}#icon-sun"></use></svg>
-                        <span class="dark-only">{% trans "Light theme" %}</span>
-                        <svg class="bi theme-icon light-only" width="20" height="20" fill="#000000" role="img" aria-label="Change theme">
-                            <use href="{% static 'img/icons.svg' %}#icon-moon-stars"></use></svg>
-                            <span class="light-only">{% trans "Dark theme" %}</span>
-                    </button>
+                    {% if request.user.is_authenticated %}
+                    <a href="{% url 'users:profile' %}" class="tp-menu-head d-flex align-items-center justify-content-between gap-2 px-3 py-2" aria-label="{% trans 'Profile' %}">
+                        <div class="d-flex align-items-center gap-2 text-truncate">
+                            <span class="tp-user-avatar d-inline-flex align-items-center justify-content-center flex-shrink-0 rounded-circle bg-primary-subtle text-primary fw-bold small" style="width: 2rem; height: 2rem; min-width: 2rem; border-radius: 50%;" aria-hidden="true">
+                                {{ request.user.profile_initials }}
+                            </span>
+                            <span class="small text-truncate">{{ request.user.get_full_name|default:request.user.username }}</span>
+                        </div>
+                        <svg class="bi ms-auto" fill="currentColor" width="16" height="16" role="img" aria-hidden="true">
+                            <use href="{% static 'img/icons.svg' %}#icon-person-circle"></use>
+                        </svg>
+                    </a>
+                    {% endif %}
                     <a href="{% url 'management:help' %}" class="tp-menu-head">
                         <svg class="bi" fill="currentColor" width="16" height="16" role="img">
                             <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>

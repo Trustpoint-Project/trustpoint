@@ -7,14 +7,12 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
-from zoneinfo import available_timezones
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Fieldset, Layout
 from cryptography.x509 import Certificate
 from django import forms
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
@@ -28,13 +26,11 @@ from trustpoint_core.serializer import (
 from crypto.models import BackendKind, CryptoProviderProfileModel
 from management.models import (
     BackupOptions,
-    InternationalizationConfig,
     LoggingConfig,
     NotificationConfig,
     PrometheusConfig,
     SecurityConfig,
     SmtpEmailConfig,
-    UIConfig,
 )
 from management.models.organization import OrganizationModel
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -1117,83 +1113,6 @@ class LoggingConfigForm(forms.Form):
                 'crypto_backend_audit_enabled': crypto_backend_audit_enabled,
             },
         )
-
-class InternationalizationConfigForm(forms.Form):
-    """Form for managing internationalization configuration."""
-
-    DATE_FORMATS: ClassVar[list[tuple[str, str]]] = [
-        ('0', 'dd/MM/yyyy HH:mm'),
-        ('1', 'MM/dd/yyyy HH:mm'),
-        ('2', 'dd MMM yyyy HH:mm'),
-        ('3', 'dd MMM yyyy hh:mm a'),
-        ('4', 'dd MMMM yyyy HH:mm:ss'),
-        ('5', 'dd MMMM yyyy hh:mm:ss a'),
-        ('6', 'yyyy-MM-dd HH:mm:ss'),
-        ('7', "yyyy-MM-dd'T'HH:mm:ss"),
-    ]
-
-    TIMEZONES: ClassVar[list[tuple[str, str]]] = sorted(
-        (tz, tz) for tz in available_timezones()
-    )
-
-    date_format = forms.ChoiceField(
-        label=_('Date Format'),
-        choices=DATE_FORMATS,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    language = forms.ChoiceField(
-        label=_('System Language'),
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    timezone = forms.ChoiceField(
-        label=_('Timezone'),
-        choices=TIMEZONES,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the form."""
-        super().__init__(*args, **kwargs)
-
-        language_field = self.fields['language']
-        if isinstance(language_field, forms.ChoiceField):
-            language_field.choices = settings.LANGUAGES
-
-    def save(self) -> None:
-        """Save the internationalization configuration."""
-        InternationalizationConfig.objects.update_or_create(
-            id=1,
-            defaults={
-                'date_format': self.cleaned_data['date_format'],
-                'language': self.cleaned_data['language'],
-                'timezone': self.cleaned_data['timezone'],
-            }
-        )
-
-
-class UIConfigForm(forms.Form):
-    """Form for managing UI configuration."""
-
-    view_mode = forms.ChoiceField(
-        label=_('View Mode'),
-        choices=[
-            ('standard', _('Standard View')),
-            ('simplified', _('Simplified View')),
-        ],
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    def save(self) -> None:
-        """Save the UI configuration."""
-        UIConfig.objects.update_or_create(
-            id=1,
-            defaults={
-                'view_mode': self.cleaned_data['view_mode'],
-            }
-        )
-
 
 class OrganizationForm(forms.ModelForm[OrganizationModel]):
     """Form for creating and updating organizations."""

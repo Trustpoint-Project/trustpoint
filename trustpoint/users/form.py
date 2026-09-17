@@ -4,13 +4,15 @@
 """Forms for creating and updating Trustpoint users and managing groups."""
 
 from typing import Any, ClassVar, cast
+from zoneinfo import available_timezones
 
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import PasswordChangeForm, UserCreationForm
 from django.contrib.auth.models import Group, Permission
 from django.utils.translation import gettext_lazy as _
 
 from management.models.organization import OrganizationModel
+from users.permissions import AppPermissions
 
 from .models import BuiltinRole, GroupProfile, TrustpointUser
 
@@ -45,7 +47,15 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
         """Metaclass extending the standard UserCreationForm with the role field."""
 
         model = TrustpointUser
-        fields = (*UserCreationForm.Meta.fields, 'first_name', 'last_name', 'email', 'role', 'organization')
+        fields = (
+            *UserCreationForm.Meta.fields,
+            'first_name',
+            'last_name',
+            'email',
+            'role',
+            'organization',
+            'must_change_password',
+        )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Apply Bootstrap form-control class to every field widget."""
@@ -56,6 +66,8 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
         self.fields['last_name'].label = _('Last name (optional)')
         self.fields['email'].required = False
         self.fields['email'].label = _('Email (optional)')
+        self.fields['must_change_password'].label = _('Require password change on next login')
+        self.fields['must_change_password'].widget.attrs['class'] = 'form-check-input'
         role_field = cast('forms.ModelChoiceField[Group]', self.fields['role'])
         role_field.queryset = Group.objects.exclude(name=BuiltinRole.SERVICE.value)
         organization_field = cast('forms.ModelChoiceField[OrganizationModel]', self.fields['organization'])
@@ -63,7 +75,102 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
         organization_field.queryset = OrganizationModel.objects.all()
         organization_field.empty_label = _('No organization')
         for field in self.fields.values():
+            if field.widget.input_type != 'checkbox':
+                field.widget.attrs['class'] = 'form-control'
+
+
+class TrustpointUserProfileForm(forms.ModelForm[TrustpointUser]):
+    """Form for editing the authenticated user's profile and preferences."""
+
+    class Meta:
+        """Metaclass limiting the form to personal profile and preference fields."""
+
+        model = TrustpointUser
+        fields: ClassVar = [
+            'first_name',
+            'last_name',
+            'email',
+            'role',
+            'organization',
+            'language',
+            'timezone',
+            'date_format',
+            'theme',
+            'view_mode',
+            'date_joined',
+        ]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply the standard Bootstrap styling and populate permission-aware choices."""
+        self.user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        self.fields['first_name'].required = False
+        self.fields['last_name'].required = False
+        self.fields['email'].required = False
+        self.fields['date_joined'].label = _('Registration date')
+        self.fields['date_joined'].disabled = True
+
+        language_field = cast('forms.TypedChoiceField', self.fields['language'])
+        timezone_field = cast('forms.TypedChoiceField', self.fields['timezone'])
+        date_format_field = cast('forms.TypedChoiceField', self.fields['date_format'])
+        theme_field = cast('forms.TypedChoiceField', self.fields['theme'])
+        view_mode_field = cast('forms.TypedChoiceField', self.fields['view_mode'])
+
+        language_field.choices = TrustpointUser.LanguageChoices.choices
+        timezone_field.choices = sorted((tz, tz) for tz in available_timezones())
+        date_format_field.choices = TrustpointUser.DateFormatChoices.choices
+        theme_field.choices = TrustpointUser.ThemeChoices.choices
+        view_mode_field.choices = TrustpointUser.ViewModeChoices.choices
+        theme_field.widget.attrs['data-theme-selector'] = 'true'
+
+        can_manage_users = bool(
+            self.user and self.user.is_authenticated and self.user.has_perm(AppPermissions.MANAGE_USERS)
+        )
+        if not can_manage_users:
+            self.fields['role'].disabled = True
+            self.fields['organization'].disabled = True
+        elif (
+            self.instance.role.name == BuiltinRole.ADMIN
+            and TrustpointUser.objects.filter(role__name=BuiltinRole.ADMIN).count() == 1
+        ):
+            self.fields['role'].disabled = True
+
+        role_field = self.fields.get('role')
+        if role_field is not None:
+            role_model_field = cast('forms.ModelChoiceField[Group]', role_field)
+            role_model_field.queryset = Group.objects.exclude(name=BuiltinRole.SERVICE.value)
+            role_field.widget.attrs['class'] = 'form-select'
+
+        organization_field = self.fields.get('organization')
+        if organization_field is not None:
+            organization_field.required = False
+            organization_model_field = cast('forms.ModelChoiceField[OrganizationModel]', organization_field)
+            organization_model_field.queryset = OrganizationModel.objects.all()
+            organization_model_field.empty_label = _('No organization')
+            organization_field.widget.attrs['class'] = 'form-select'
+
+        for field in self.fields.values():
+            if not hasattr(field.widget, 'input_type') or field.widget.input_type != 'checkbox':
+                field.widget.attrs['class'] = 'form-control'
+
+
+class TrustpointPasswordChangeForm(PasswordChangeForm):
+    """Form for changing a user's password after verifying the current password."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply the standard Bootstrap styling to password fields."""
+        super().__init__(*args, **kwargs)
+        self.fields['old_password'].label = _('Current password')
+        for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
+
+    def clean_new_password1(self) -> str:
+        """Require the new password to differ from the current password."""
+        new_password = cast('str', self.cleaned_data['new_password1'])
+        old_password = self.cleaned_data.get('old_password')
+        if old_password and new_password == old_password:
+            raise forms.ValidationError(_('The new password must differ from the current password.'))
+        return new_password
 
 
 class TrustpointUserRoleForm(forms.ModelForm[TrustpointUser]):

@@ -1,5 +1,5 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n static %}
+{% load i18n static internationalization_tags %}
 {% block head %}
   {{ block.super }}
   <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
@@ -131,10 +131,10 @@
                   </div>
                 {% endif %}
               </td>
-              <td>{{ row.created_at|date:"Y-m-d H:i" }}</td>
+              <td>{{ row.created_at|local_datetime }}</td>
               <td>
                 {% if row.expires_at %}
-                  <span class="text-muted">{% trans "Expires" %}:</span> {{ row.expires_at|date:"Y-m-d H:i" }}
+                  <span class="text-muted">{% trans "Expires" %}:</span> {{ row.expires_at|local_datetime }}
                 {% else %}
                   {{ row.detail }}
                 {% endif %}
