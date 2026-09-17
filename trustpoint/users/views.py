@@ -135,7 +135,7 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
                     update_fields=['is_active', 'failed_login_attempts', 'blocked_by_failed_logins'],
                 )
                 messages.success(request, gettext('The user has been unblocked and can log in again.'))
-            return redirect(request.path)
+            return redirect(self.success_url)
 
         return super().post(request, *args, **kwargs)
 
