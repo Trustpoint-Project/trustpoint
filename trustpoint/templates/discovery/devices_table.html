@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n internationalization_tags %}
 {% block discovery_devices_table %}
 <table class="table" id="discovery-devices-table">
     <thead>
@@ -44,7 +44,7 @@
                 <span class="text-muted">{% trans "None" %}</span>
             {% endif %}
         </td>
-        <td data-col="last_seen">{{ d.last_seen|date:"Y-m-d H:i" }}</td>
+        <td data-col="last_seen">{{ d.last_seen|local_datetime }}</td>
         <td>
             <a href="{% url 'discovery:device_detail' d.id %}" class="btn btn-sm btn-primary">{% trans "Details" %}</a>
         </td>

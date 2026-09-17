@@ -62,7 +62,7 @@ class InternationalizationConfig(models.Model):
         )
         return config
 
-    def get_python_datetime_format(self) -> str:
+    def get_python_datetime_format(self, date_format: str | None = None) -> str:
         """Return the configured format as Python strftime format."""
         format_map: dict[str, str] = {
             '0': '%d/%m/%Y %H:%M',
@@ -74,9 +74,15 @@ class InternationalizationConfig(models.Model):
             '6': '%Y-%m-%d %H:%M:%S',
             '7': '%Y-%m-%dT%H:%M:%S',
         }
-        return format_map.get(self.date_format, '%Y-%m-%d %H:%M:%S')
+        return format_map.get(date_format or self.date_format, '%Y-%m-%d %H:%M:%S')
 
-    def format_datetime(self, value: datetime | None) -> str:
+    def format_datetime(
+        self,
+        value: datetime | None,
+        *,
+        date_format: str | None = None,
+        timezone_name: str | None = None,
+    ) -> str:
         """Format a datetime using the configured timezone and date format."""
         if value is None:
             return ''
@@ -84,5 +90,5 @@ class InternationalizationConfig(models.Model):
         if timezone.is_naive(value):
             value = timezone.make_aware(value, ZoneInfo('UTC'))
 
-        converted_value = value.astimezone(ZoneInfo(self.timezone))
-        return converted_value.strftime(self.get_python_datetime_format())
+        converted_value = value.astimezone(ZoneInfo(timezone_name or self.timezone))
+        return converted_value.strftime(self.get_python_datetime_format(date_format))

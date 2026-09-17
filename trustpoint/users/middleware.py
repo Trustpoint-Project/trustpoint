@@ -13,6 +13,8 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone, translation
 
+from management.i18n_context import reset_current_user, set_current_user
+
 from .models import TrustpointUser
 
 if TYPE_CHECKING:
@@ -31,6 +33,7 @@ class UserPreferencesMiddleware:
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """Activate the current user's settings for this request."""
         user = request.user
+        user_token = set_current_user(user if user.is_authenticated else None)
         if user.is_authenticated:
             language = getattr(user, 'language', None) or settings.LANGUAGE_CODE
             tz_name = getattr(user, 'timezone', None) or settings.TIME_ZONE
@@ -39,12 +42,13 @@ class UserPreferencesMiddleware:
             request.__dict__['LANGUAGE_CODE'] = language
             request.__dict__['timezone_name'] = tz_name
 
-        response = self.get_response(request)
-
-        if user.is_authenticated:
-            translation.deactivate()
-            timezone.deactivate()
-        return response
+        try:
+            return self.get_response(request)
+        finally:
+            reset_current_user(user_token)
+            if user.is_authenticated:
+                translation.deactivate()
+                timezone.deactivate()
 
 
 class PasswordChangeRequiredMiddleware:

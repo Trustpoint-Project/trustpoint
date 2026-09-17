@@ -1,5 +1,5 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n static %}
+{% load i18n static internationalization_tags %}
 
 {% block head %}
   {{ block.super }}
@@ -177,8 +177,8 @@
               <td>
                 <span class="badge {{ row.idempotency_badge }}">{{ row.idempotency_label }}</span>
               </td>
-              <td>{{ row.run.updated_at|date:"Y-m-d H:i" }}</td>
-              <td>{{ row.run.created_at|date:"Y-m-d H:i" }}</td>
+              <td>{{ row.run.updated_at|local_datetime }}</td>
+              <td>{{ row.run.created_at|local_datetime }}</td>
               <td class="text-end">
                 <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:runs-detail' row.run.id %}">
                   {% trans "Open" %}

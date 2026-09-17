@@ -5,11 +5,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.template import Context, Template
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
@@ -244,6 +246,22 @@ class TrustpointProfileViewTest(TestCase):
         form = TrustpointUserProfileForm(instance=self.user, user=self.user)
 
         self.assertEqual(form.fields['theme'].widget.attrs['data-theme-selector'], 'true')
+
+    def test_date_format_is_applied_to_local_datetime_filter(self) -> None:
+        """The selected user date format is used by shared datetime templates."""
+        self.user.date_format = User.DateFormatChoices.DD_MM_YYYY_24
+        self.user.timezone = 'UTC'
+        self.user.save(update_fields=['date_format', 'timezone'])
+        from management.i18n_context import reset_current_user, set_current_user
+
+        user_token = set_current_user(self.user)
+        try:
+            template = Template('{% load internationalization_tags %}{{ value|local_datetime }}')
+            rendered = template.render(Context({'value': datetime(2025, 12, 31, 13, 45)}))
+        finally:
+            reset_current_user(user_token)
+
+        self.assertEqual(rendered, '31/12/2025 13:45')
 
 
 class TrustpointLoginViewTest(TestCase):

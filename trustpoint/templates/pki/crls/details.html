@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load static %}
+{% load internationalization_tags %}
 
 {% block head %}
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
@@ -67,13 +68,13 @@
                         </div>
                         <div>
                             <div>{% trans 'This Update' %}</div>
-                            <div>{{ crl.this_update|date:"Y-m-d H:i:s" }} UTC</div>
+                            <div>{{ crl.this_update|local_datetime }}</div>
                         </div>
                         <div>
                             <div>{% trans 'Next Update' %}</div>
                             <div>
                                 {% if crl.next_update %}
-                                    {{ crl.next_update|date:"Y-m-d H:i:s" }} UTC
+                                    {{ crl.next_update|local_datetime }}
                                 {% else %}
                                     {% trans 'Not set' %}
                                 {% endif %}
@@ -134,11 +135,11 @@
                         </div>
                         <div>
                             <div>{% trans 'Created' %}</div>
-                            <div>{{ crl.created_at|date:"Y-m-d H:i:s" }} UTC</div>
+                            <div>{{ crl.created_at|local_datetime }}</div>
                         </div>
                         <div>
                             <div>{% trans 'Updated' %}</div>
-                            <div>{{ crl.updated_at|date:"Y-m-d H:i:s" }} UTC</div>
+                            <div>{{ crl.updated_at|local_datetime }}</div>
                         </div>
                     </div>
                 </div>
