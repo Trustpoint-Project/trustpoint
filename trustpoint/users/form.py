@@ -98,6 +98,7 @@ class TrustpointUserProfileForm(forms.ModelForm[TrustpointUser]):
             'theme',
             'view_mode',
             'date_joined',
+            'last_login',
         ]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -109,6 +110,8 @@ class TrustpointUserProfileForm(forms.ModelForm[TrustpointUser]):
         self.fields['email'].required = False
         self.fields['date_joined'].label = _('Registration date')
         self.fields['date_joined'].disabled = True
+        self.fields['last_login'].label = _('Last login')
+        self.fields['last_login'].disabled = True
 
         language_field = cast('forms.TypedChoiceField', self.fields['language'])
         timezone_field = cast('forms.TypedChoiceField', self.fields['timezone'])

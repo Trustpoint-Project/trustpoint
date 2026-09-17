@@ -83,6 +83,7 @@ class TrustpointProfileViewTest(TestCase):
         self.assertContains(response, 'Profile')
         self.assertContains(response, self.user.username)
         self.assertContains(response, 'Registration date')
+        self.assertContains(response, 'Last login')
         self.assertContains(response, 'Account Security')
         self.assertContains(response, 'Current password')
         self.assertContains(response, 'User Interface')
@@ -193,6 +194,13 @@ class TrustpointProfileViewTest(TestCase):
 
         self.assertEqual(form.fields['date_joined'].label, 'Registration date')
         self.assertTrue(form.fields['date_joined'].disabled)
+
+    def test_last_login_is_read_only(self) -> None:
+        """The last login timestamp is displayed but cannot be edited."""
+        form = TrustpointUserProfileForm(instance=self.user, user=self.user)
+
+        self.assertEqual(form.fields['last_login'].label, 'Last login')
+        self.assertTrue(form.fields['last_login'].disabled)
 
     def test_password_change_requires_current_password_and_confirmation(self) -> None:
         """A valid password change verifies the current password and confirmation."""
