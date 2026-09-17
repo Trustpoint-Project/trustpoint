@@ -466,6 +466,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'users.middleware.UserPreferencesMiddleware',
+    'users.middleware.IdleSessionTimeoutMiddleware',
     'users.middleware.PasswordChangeRequiredMiddleware',
     'users.middleware.ServiceAccountMiddleware',
     'trustpoint.middleware.SetupWizardRedirectMiddleware',

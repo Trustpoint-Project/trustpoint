@@ -3,8 +3,8 @@
 
 """Management app models."""
 
-from management.models.appversion import AppVersion
 from management.models.account_security import AccountSecurityConfig
+from management.models.appversion import AppVersion
 from management.models.audit_log import AuditLog
 from management.models.backup import BackupOptions
 from management.models.email import SmtpEmailConfig

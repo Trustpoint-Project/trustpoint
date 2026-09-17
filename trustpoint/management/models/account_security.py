@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -57,7 +57,7 @@ class AccountSecurityConfig(models.Model):
         config, _ = cls.objects.get_or_create(pk=1)
         return config
 
-    def password_expired(self, changed_at: timezone.datetime | None) -> bool:
+    def password_expired(self, changed_at: datetime | None) -> bool:
         """Return whether a password is expired under the current policy."""
         return bool(
             self.password_expiry_days
