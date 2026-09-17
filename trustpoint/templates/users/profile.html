@@ -22,7 +22,10 @@
                                 <div class="col-md-6">{{ form.last_name|as_crispy_field }}</div>
                             </div>
                             {{ form.email|as_crispy_field }}
-                            {{ form.date_joined|as_crispy_field }}
+                            <div class="row">
+                                <div class="col-md-6">{{ form.date_joined|as_crispy_field }}</div>
+                                <div class="col-md-6">{{ form.last_login|as_crispy_field }}</div>
+                            </div>
                         </section>
 
                         <section class="mb-4" aria-labelledby="access-organization-heading">
