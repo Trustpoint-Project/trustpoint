@@ -44,6 +44,10 @@
                             <h2 id="appearance-heading" class="h5 mb-3">{% trans "Appearance" %}</h2>
                             {{ form.theme|as_crispy_field }}
                         </section>
+                        <section class="mt-4" aria-labelledby="view-mode-heading">
+                            <h2 id="view-mode-heading" class="h5 mb-3">{% trans "User Interface" %}</h2>
+                            {{ form.view_mode|as_crispy_field }}
+                        </section>
                         <div class="d-flex justify-content-end mt-4">
                             <button class="btn btn-primary" type="submit">{% trans "Save" %}</button>
                         </div>

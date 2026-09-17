@@ -19,9 +19,9 @@ from django.views.generic.list import ListView
 
 from home.filters import NotificationFilter
 from home.views import ERROR, SUCCESS
+from management.i18n import format_datetime
 from management.i18n_context import get_current_user
 from management.models import NotificationModel, NotificationStatus
-from management.models.internationalization import InternationalizationConfig
 from pki.models import IssuedCredentialModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
@@ -106,7 +106,7 @@ class NotificationsListView(
     def _render_created_at(record: NotificationModel) -> SafeString:
         """Render the created_at field with a badge if the status is 'New'."""
         user = get_current_user()
-        created_at_display = InternationalizationConfig.get_current().format_datetime(
+        created_at_display = format_datetime(
             record.created_at,
             date_format=getattr(user, 'date_format', None),
             timezone_name=getattr(user, 'timezone', None),

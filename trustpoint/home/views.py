@@ -35,7 +35,6 @@ from devices.dashboard_filters import (
     filter_pending_devices,
 )
 from devices.models import DeviceModel
-from management.models import UIConfig
 from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models import CaModel, CertificateModel, CertificateProfileModel, IssuedCredentialModel
 from trustpoint.logger import LoggerMixin
@@ -52,8 +51,7 @@ class IndexView(RedirectView):
     def get_redirect_url(self, *args: Any, **kwargs: Any) -> str | None:
         """Get the redirect URL based on UI configuration."""
         del args, kwargs
-        ui_config = UIConfig.get_current()
-        if ui_config.is_simplified_mode:
+        if getattr(self.request.user, 'view_mode', 'standard') == 'simplified':
             return reverse('home:simplified_overview')
         return reverse('home:dashboard')
 

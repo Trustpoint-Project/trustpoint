@@ -31,7 +31,6 @@ from management.models import (
     PrometheusConfig,
     SecurityConfig,
     SmtpEmailConfig,
-    UIConfig,
 )
 from management.models.organization import OrganizationModel
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -1114,28 +1113,6 @@ class LoggingConfigForm(forms.Form):
                 'crypto_backend_audit_enabled': crypto_backend_audit_enabled,
             },
         )
-
-class UIConfigForm(forms.Form):
-    """Form for managing UI configuration."""
-
-    view_mode = forms.ChoiceField(
-        label=_('View Mode'),
-        choices=[
-            ('standard', _('Standard View')),
-            ('simplified', _('Simplified View')),
-        ],
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    def save(self) -> None:
-        """Save the UI configuration."""
-        UIConfig.objects.update_or_create(
-            id=1,
-            defaults={
-                'view_mode': self.cleaned_data['view_mode'],
-            }
-        )
-
 
 class OrganizationForm(forms.ModelForm[OrganizationModel]):
     """Form for creating and updating organizations."""

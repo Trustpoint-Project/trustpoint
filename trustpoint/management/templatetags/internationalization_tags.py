@@ -7,8 +7,8 @@ from datetime import datetime
 
 from django import template
 
+from management.i18n import format_datetime
 from management.i18n_context import get_current_user
-from management.models import InternationalizationConfig
 
 register = template.Library()
 
@@ -19,12 +19,11 @@ def local_datetime(value: datetime | str | None) -> str:
     if isinstance(value, str):
         return value
 
-    config = InternationalizationConfig.get_current()
     user = get_current_user()
     if user is not None and user.is_authenticated:
-        return config.format_datetime(
+        return format_datetime(
             value,
             date_format=getattr(user, 'date_format', None),
             timezone_name=getattr(user, 'timezone', None),
         )
-    return config.format_datetime(value)
+    return format_datetime(value)

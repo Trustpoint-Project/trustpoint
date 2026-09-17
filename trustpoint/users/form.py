@@ -96,6 +96,7 @@ class TrustpointUserProfileForm(forms.ModelForm[TrustpointUser]):
             'timezone',
             'date_format',
             'theme',
+            'view_mode',
             'date_joined',
         ]
 
@@ -113,11 +114,13 @@ class TrustpointUserProfileForm(forms.ModelForm[TrustpointUser]):
         timezone_field = cast('forms.TypedChoiceField', self.fields['timezone'])
         date_format_field = cast('forms.TypedChoiceField', self.fields['date_format'])
         theme_field = cast('forms.TypedChoiceField', self.fields['theme'])
+        view_mode_field = cast('forms.TypedChoiceField', self.fields['view_mode'])
 
         language_field.choices = TrustpointUser.LanguageChoices.choices
         timezone_field.choices = sorted((tz, tz) for tz in available_timezones())
         date_format_field.choices = TrustpointUser.DateFormatChoices.choices
         theme_field.choices = TrustpointUser.ThemeChoices.choices
+        view_mode_field.choices = TrustpointUser.ViewModeChoices.choices
         theme_field.widget.attrs['data-theme-selector'] = 'true'
 
         can_manage_users = bool(

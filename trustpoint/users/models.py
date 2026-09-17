@@ -190,6 +190,12 @@ class TrustpointUser(AbstractUser):
         LIGHT = 'light', _('Light')
         DARK = 'dark', _('Dark')
 
+    class ViewModeChoices(models.TextChoices):
+        """Available dashboard presentation modes for a user."""
+
+        STANDARD = 'standard', _('Standard View')
+        SIMPLIFIED = 'simplified', _('Simplified View')
+
     class DateFormatChoices(models.TextChoices):
         """Date/time display formats for a user."""
 
@@ -262,6 +268,14 @@ class TrustpointUser(AbstractUser):
         default=ThemeChoices.DARK,
         verbose_name=_('theme'),
         help_text=_('Preferred appearance mode for this user.'),
+    )
+
+    view_mode = models.CharField(
+        max_length=10,
+        choices=ViewModeChoices.choices,
+        default=ViewModeChoices.STANDARD,
+        verbose_name=_('view mode'),
+        help_text=_('Choose between standard and simplified views.'),
     )
 
     must_change_password = models.BooleanField(

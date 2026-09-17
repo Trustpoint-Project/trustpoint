@@ -9,7 +9,6 @@
 <div class="tp-settings-layout">
 
   <div class="tp-settings-tabs">
-    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=ui" data-settings-tab="panel-ui">{% trans "User Interface" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=security" data-settings-tab="panel-security">{% trans "Security" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=workflow" data-settings-tab="panel-workflow">{% trans "Workflow Execution" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=smtp-email" data-settings-tab="panel-smtp-email">{% trans "SMTP Email" %}</a>
@@ -19,10 +18,6 @@
   </div>
 
   <div class="tp-settings-content">
-
-    <div id="panel-ui" class="tp-settings-panel">
-      {% include 'management/includes/ui_configuration.html' with form=ui_form %}
-    </div>
 
     <div id="panel-security" class="tp-settings-panel">
       {% include 'management/includes/security_configuration.html' with form=security_form %}
@@ -279,7 +274,7 @@
 <script>
 (function () {
     var STORAGE_KEY = 'settings_tab_active';
-    var DEFAULT_TAB = 'panel-ui';
+    var DEFAULT_TAB = 'panel-security';
 
     var tabs = document.querySelectorAll('[data-settings-tab]');
     var panels = document.querySelectorAll('.tp-settings-panel');

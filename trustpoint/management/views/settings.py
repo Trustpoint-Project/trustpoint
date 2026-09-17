@@ -31,7 +31,6 @@ from management.forms import (
     SecurityConfigForm,
     SmtpEmailConfigForm,
     SmtpEmailTestForm,
-    UIConfigForm,
     WorkflowExecutionConfigForm,
 )
 from management.models import (
@@ -40,7 +39,6 @@ from management.models import (
     PrometheusConfig,
     SecurityConfig,
     SmtpEmailConfig,
-    UIConfig,
 )
 from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -323,7 +321,6 @@ class SettingsFormViewMixin[FormType: (
     | NotificationConfigForm
     | PrometheusConfigForm
     | SecurityConfigForm
-    | UIConfigForm
 )](
     PageContextMixin,
     SecurityLevelMixin,
@@ -379,11 +376,6 @@ class SettingsTabView(TemplateView):
         context['page_category'] = 'management'
         context['page_name'] = 'settings'
         context['active_tab'] = kwargs.get('active_tab', self.request.GET.get('tab', 'ui'))
-
-        ui_view = UISettingsView()
-        ui_view.request = self.request
-        ui_view.setup(self.request)
-        context['ui_form'] = ui_view.get_form()
 
         security_view = SecuritySettingsView()
         security_view.request = self.request
@@ -547,45 +539,6 @@ class SettingsTabView(TemplateView):
             active_tab='workflow',
         )
         return self.render_to_response(context)
-
-
-class UISettingsView(SettingsFormViewMixin[UIConfigForm]):
-    """View for managing UI settings."""
-
-    template_name = 'management/includes/ui_configuration.html'
-    form_class = UIConfigForm
-    setting_type = 'ui'
-
-    def get_initial(self) -> dict[str, Any]:
-        """Get initial form data with current UI settings."""
-        initial = super().get_initial()
-        config = UIConfig.get_current()
-        initial['view_mode'] = config.view_mode
-        return initial
-
-    def form_valid(self, form: UIConfigForm) -> HttpResponse:
-        """Handle valid UI form submission."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
-            raise PermissionDenied
-
-        view_mode = form.cleaned_data['view_mode']
-
-        self.logger.info('Changing view mode to: %s', view_mode)
-
-        UIConfig.objects.update_or_create(
-            id=1,
-            defaults={
-                'view_mode': view_mode,
-            },
-        )
-
-        messages.success(
-            self.request,
-            _('UI configuration saved successfully. Redirecting to apply changes...')
-        )
-        # Redirect to home to immediately show the new view mode
-        return redirect('home:index')
-
 
 
 class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):

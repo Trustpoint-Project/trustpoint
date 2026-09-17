@@ -85,6 +85,17 @@ class TrustpointProfileViewTest(TestCase):
         self.assertContains(response, 'Registration date')
         self.assertContains(response, 'Account Security')
         self.assertContains(response, 'Current password')
+        self.assertContains(response, 'User Interface')
+        self.assertContains(response, 'Standard View')
+        self.assertContains(response, 'Simplified View')
+
+    def test_view_mode_defaults_to_standard(self) -> None:
+        """New users use the standard dashboard view by default."""
+        self.assertEqual(self.user.view_mode, User.ViewModeChoices.STANDARD)
+
+        form = TrustpointUserProfileForm(instance=self.user, user=self.user)
+
+        self.assertEqual(form.initial['view_mode'], User.ViewModeChoices.STANDARD)
 
     def test_get_uses_saved_user_theme(self) -> None:
         """The base page exposes the persisted theme to the theme script."""
