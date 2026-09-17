@@ -126,6 +126,8 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
         user = cast('TrustpointUser', self.request.user)
         translation.activate(user.language)
         timezone.activate(user.timezone)
+        if self.object.pk == user.pk:
+            return redirect('home:index')
         return response
 
 

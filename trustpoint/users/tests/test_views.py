@@ -97,6 +97,46 @@ class TrustpointProfileViewTest(TestCase):
 
         self.assertEqual(form.initial['view_mode'], User.ViewModeChoices.STANDARD)
 
+    def test_saving_simplified_view_mode_redirects_to_user_dashboard(self) -> None:
+        """Saving Simplified View applies it immediately for the current user."""
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            self.profile_url,
+            {
+                'form_name': 'profile',
+                'first_name': '',
+                'last_name': '',
+                'email': '',
+                'language': 'en',
+                'timezone': 'UTC',
+                'date_format': '6',
+                'theme': 'dark',
+                'view_mode': User.ViewModeChoices.SIMPLIFIED,
+            },
+        )
+
+        self.assertRedirects(response, reverse('home:index'), fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.view_mode, User.ViewModeChoices.SIMPLIFIED)
+
+        dashboard_response = self.client.get(reverse('home:index'))
+        self.assertRedirects(dashboard_response, reverse('home:simplified_overview'), fetch_redirect_response=False)
+
+    def test_login_routes_simplified_user_to_simplified_view(self) -> None:
+        """Login enters the user-aware dashboard selector for simplified users."""
+        self.user.view_mode = User.ViewModeChoices.SIMPLIFIED
+        self.user.save(update_fields=['view_mode'])
+
+        response = self.client.post(
+            reverse('users:login'),
+            {'username': 'profileuser', 'password': 'testpass123'},
+        )
+
+        self.assertRedirects(response, reverse('home:index'), fetch_redirect_response=False)
+        dashboard_response = self.client.get(reverse('home:index'))
+        self.assertRedirects(dashboard_response, reverse('home:simplified_overview'), fetch_redirect_response=False)
+
     def test_get_uses_saved_user_theme(self) -> None:
         """The base page exposes the persisted theme to the theme script."""
         self.user.theme = User.ThemeChoices.LIGHT

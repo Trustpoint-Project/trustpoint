@@ -381,7 +381,7 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
 
 CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
-LOGIN_REDIRECT_URL = 'home:dashboard'
+LOGIN_REDIRECT_URL = 'home:index'
 LOGIN_URL = 'users:login'
 
 if TRUSTPOINT_IS_BOOTSTRAP:
