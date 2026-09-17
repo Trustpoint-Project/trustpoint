@@ -86,6 +86,11 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
             context['can_change_password']
             or self.request.user.has_perm(AppPermissions.MANAGE_USERS)
         )
+        context['failed_login_blocked'] = bool(profile_user.blocked_by_failed_logins)
+        context['can_unblock_failed_login'] = (
+            profile_user.blocked_by_failed_logins
+            and self.request.user.has_perm(AppPermissions.MANAGE_USERS)
+        )
         if context['can_change_password']:
             context.setdefault('password_form', TrustpointPasswordChangeForm(user=self.request.user))
         return context
@@ -116,6 +121,20 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
                     request,
                     gettext('The user will be required to change their password at their next login.'),
                 )
+            return redirect(request.path)
+
+        if request.POST.get('form_name') == 'unblock_failed_login':
+            self.object = self.get_object()
+            if not request.user.has_perm(AppPermissions.MANAGE_USERS):
+                raise PermissionDenied
+            if self.object.blocked_by_failed_logins:
+                self.object.is_active = True
+                self.object.failed_login_attempts = 0
+                self.object.blocked_by_failed_logins = False
+                self.object.save(
+                    update_fields=['is_active', 'failed_login_attempts', 'blocked_by_failed_logins'],
+                )
+                messages.success(request, gettext('The user has been unblocked and can log in again.'))
             return redirect(request.path)
 
         return super().post(request, *args, **kwargs)

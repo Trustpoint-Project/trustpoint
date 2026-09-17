@@ -29,6 +29,11 @@ urlpatterns = [
     # Settings URLs
     path('settings/', settings.SettingsTabView.as_view(), name='settings'),
     path('settings/security/', settings.SecuritySettingsView.as_view(), name='settings-security'),
+    path(
+        'settings/account-security/',
+        settings.AccountSecuritySettingsView.as_view(),
+        name='settings-account-security',
+    ),
     path('settings/logging/', settings.LoggingSettingsView.as_view(), name='settings-logging'),
     path('settings/notifications/', settings.NotificationSettingsView.as_view(), name='settings-notifications'),
     path('settings/metrics/', settings.MetricsSettingsView.as_view(), name='settings-metrics'),

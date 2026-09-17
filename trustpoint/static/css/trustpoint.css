@@ -1105,6 +1105,28 @@ input[readonly].readonly-field {
     display: block;
 }
 
+.account-security-configuration .account-security-field .form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.account-security-configuration .account-security-field .form-control {
+    max-width: 20rem;
+}
+
+.account-security-configuration .account-security-field .form-text {
+    margin-top: 0.5rem;
+}
+
+.account-security-configuration .account-security-checkbox .form-check {
+    margin-bottom: 0.35rem;
+}
+
+.account-security-configuration .account-security-checkbox .form-text {
+    margin-top: 0.35rem;
+    margin-bottom: 0.25rem;
+}
+
 /* ----- Backend configuration page ----- */
 
 .tp-backend-configuration {

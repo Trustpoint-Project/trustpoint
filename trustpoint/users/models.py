@@ -284,6 +284,11 @@ class TrustpointUser(AbstractUser):
         help_text=_('Require this user to change their password at the next login.'),
     )
 
+    password_changed_at = models.DateTimeField(null=True, blank=True, default=None)
+    previous_password = models.CharField(max_length=255, blank=True, default='')
+    failed_login_attempts = models.PositiveIntegerField(default=0)
+    blocked_by_failed_logins = models.BooleanField(default=False)
+
     objects = TrustpointUserManager()  # type: ignore[misc]
 
     def __str__(self) -> str:
@@ -332,10 +337,24 @@ class TrustpointUser(AbstractUser):
             self.is_superuser = False
             self.is_staff = False
 
+        if self.password_changed_at is None and self.has_usable_password():
+            self.password_changed_at = self.date_joined or timezone.now()
         super().save(*args, **kwargs)
 
         # Ensure the user belongs to exactly the role group.
         self.groups.set([self.role])
+
+    def set_password(self, raw_password: str | None) -> None:
+        """Hash a password while retaining only the immediately prior hash."""
+        if self.pk and self.has_usable_password():
+            self.previous_password = self.password
+        super().set_password(raw_password)
+        self.password_changed_at = timezone.now()
+
+    def password_is_expired(self) -> bool:
+        """Evaluate password expiry against the current global policy."""
+        config_model = apps.get_model('management', 'AccountSecurityConfig')
+        return config_model.get().password_expired(self.password_changed_at or self.date_joined)
 
 class AppPermission(models.Model):
     """Host model for Trustpoint-wide application permissions.

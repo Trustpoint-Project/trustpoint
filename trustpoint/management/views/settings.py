@@ -25,6 +25,7 @@ from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
 
 from management.forms import (
+    AccountSecurityConfigForm,
     LoggingConfigForm,
     NotificationConfigForm,
     PrometheusConfigForm,
@@ -34,6 +35,7 @@ from management.forms import (
     WorkflowExecutionConfigForm,
 )
 from management.models import (
+    AccountSecurityConfig,
     LoggingConfig,
     NotificationConfig,
     PrometheusConfig,
@@ -383,6 +385,11 @@ class SettingsTabView(TemplateView):
         context['security_form'] = self._get_unbound_settings_form(security_view)
         context['notification_configurations_json'] = SecurityConfig.get_settings_preview_json()
 
+        account_security_view = AccountSecuritySettingsView()
+        account_security_view.request = self.request
+        account_security_view.setup(self.request)
+        context['account_security_form'] = self._get_unbound_settings_form(account_security_view)
+
         logging_view = LoggingSettingsView()
         logging_view.request = self.request
         logging_view.setup(self.request)
@@ -425,6 +432,11 @@ class SettingsTabView(TemplateView):
         """Handle inline settings updates from the settings tab page."""
         form_name = request.POST.get('form_name')
 
+        if form_name == 'account_security':
+            if not request.user.has_perm(AppPermissions.MANAGE_SECURITY_CONFIGURATION):
+                raise PermissionDenied
+            return self._post_account_security(request)
+
         if not request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
             raise PermissionDenied
 
@@ -438,6 +450,21 @@ class SettingsTabView(TemplateView):
             return redirect(reverse_lazy('management:settings'))
 
         return self._post_workflow_execution(request)
+
+    def _post_account_security(self, request: HttpRequest) -> HttpResponse:
+        """Handle Account Security settings updates."""
+        form = AccountSecurityConfigForm(request.POST, instance=AccountSecurityConfig.get())
+        if form.is_valid():
+            form.save()
+            messages.success(request, _('Account security settings saved.'))
+            return redirect(f"{reverse_lazy('management:settings')}?tab=account-security")
+
+        messages.error(request, _('Please correct the account security settings errors.'))
+        context = self.get_context_data(
+            account_security_form=form,
+            active_tab='account-security',
+        )
+        return self.render_to_response(context)
 
     def _post_smtp_email(self, request: HttpRequest) -> HttpResponse:
         """Handle SMTP settings updates."""
@@ -749,6 +776,27 @@ class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
         self.logger.error('Notification form non-field errors: %s', form.non_field_errors())
         messages.error(self.request, _('Error saving notification configuration'))
         return super().form_invalid(form)
+
+
+class AccountSecuritySettingsView(UserPermissionRequiredMixin, FormView[AccountSecurityConfigForm]):
+    """Manage the global account-security policy."""
+
+    template_name = 'management/account_security_settings.html'
+    form_class = AccountSecurityConfigForm
+    permission_required = AppPermissions.MANAGE_SECURITY_CONFIGURATION
+    success_url = reverse_lazy('management:settings-account-security')
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Bind the form to the singleton configuration."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = AccountSecurityConfig.get()
+        return kwargs
+
+    def form_valid(self, form: AccountSecurityConfigForm) -> HttpResponse:
+        """Persist a validated policy."""
+        form.save()
+        messages.success(self.request, _('Account security settings saved.'))
+        return super().form_valid(form)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build the context dictionary for the notification settings page."""

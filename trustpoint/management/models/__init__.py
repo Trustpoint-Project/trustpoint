@@ -4,6 +4,7 @@
 """Management app models."""
 
 from management.models.appversion import AppVersion
+from management.models.account_security import AccountSecurityConfig
 from management.models.audit_log import AuditLog
 from management.models.backup import BackupOptions
 from management.models.email import SmtpEmailConfig
@@ -23,6 +24,7 @@ from management.models.security import SecurityConfig
 from management.models.tls import TlsSettings
 
 __all__ = [
+    'AccountSecurityConfig',
     'AppVersion',
     'AuditLog',
     'BackupOptions',

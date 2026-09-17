@@ -62,7 +62,13 @@ class PasswordChangeRequiredMiddleware:
         """Redirect flagged authenticated users until they change their password."""
         if (
             request.user.is_authenticated
-            and getattr(request.user, 'must_change_password', False)
+            and (
+                getattr(request.user, 'must_change_password', False)
+                or (
+                    getattr(request.user, 'account_type', None) == TrustpointUser.AccountType.HUMAN
+                    and request.user.password_is_expired()
+                )
+            )
             and not request.session.get('password_change_current_session')
             and request.path != reverse('users:password-change-required')
         ):

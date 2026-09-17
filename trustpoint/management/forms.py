@@ -25,6 +25,7 @@ from trustpoint_core.serializer import (
 
 from crypto.models import BackendKind, CryptoProviderProfileModel
 from management.models import (
+    AccountSecurityConfig,
     BackupOptions,
     LoggingConfig,
     NotificationConfig,
@@ -46,6 +47,79 @@ if TYPE_CHECKING:
     from typing import ClassVar
 
 MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+
+
+class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
+    """Form for the global account-security policy."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply the standard Bootstrap control classes."""
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-check-input'
+            else:
+                field.widget.attrs['class'] = 'form-control'
+
+    class Meta:
+        """Configure the account-security form."""
+
+        model = AccountSecurityConfig
+        fields = (
+            'password_minimum_length',
+            'password_similarity',
+            'password_common',
+            'password_numeric',
+            'password_prevent_reuse',
+            'password_expiry_days',
+            'api_credential_expiry_days',
+            'idle_timeout_minutes',
+            'failed_login_attempts',
+        )
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'password_minimum_length': forms.NumberInput(attrs={'min': 1}),
+            'password_expiry_days': forms.NumberInput(attrs={'min': 1}),
+            'api_credential_expiry_days': forms.NumberInput(attrs={'min': 1}),
+            'idle_timeout_minutes': forms.NumberInput(attrs={'min': 15, 'max': 43200}),
+            'failed_login_attempts': forms.NumberInput(attrs={'min': 1}),
+        }
+        labels = {
+            'password_minimum_length': _('Minimum password length'),
+            'password_similarity': _('Prevent similarity to personal information'),
+            'password_common': _('Reject commonly used passwords'),
+            'password_numeric': _('Reject entirely numeric passwords'),
+            'password_prevent_reuse': _('Prevent reuse of the previous password'),
+            'password_expiry_days': _('Expire passwords after this many days'),
+            'api_credential_expiry_days': _('Expire API credentials after this many days'),
+            'idle_timeout_minutes': _('Idle session duration in minutes'),
+            'failed_login_attempts': _('Block after this many failed login attempts'),
+        }
+        help_texts = {
+            'password_minimum_length': _('Passwords must contain at least this many characters.'),
+            'password_similarity': _('Reject passwords too similar to the username, name, or email address.'),
+            'password_common': _('Reject passwords found in Django\'s common-password list.'),
+            'password_numeric': _('Reject passwords made up of numbers only.'),
+            'password_prevent_reuse': _('A new password must differ from the immediately preceding password.'),
+            'password_expiry_days': _('Leave empty to keep passwords valid indefinitely.'),
+            'api_credential_expiry_days': _('Leave empty to keep API credentials valid indefinitely.'),
+            'idle_timeout_minutes': _('Users are logged out after this period without activity. Allowed range: 15 minutes to 30 days.'),
+            'failed_login_attempts': _('Leave empty to disable blocking. Successful login resets the consecutive failure count.'),
+        }
+
+    def clean_password_expiry_days(self) -> int | None:
+        """Accept an empty value to represent no password expiry."""
+        value = self.cleaned_data['password_expiry_days']
+        return value or None
+
+    def clean_api_credential_expiry_days(self) -> int | None:
+        """Accept an empty value to represent no credential expiry."""
+        value = self.cleaned_data['api_credential_expiry_days']
+        return value or None
+
+    def clean_failed_login_attempts(self) -> int | None:
+        """Accept an empty value to represent no failed-login blocking."""
+        value = self.cleaned_data['failed_login_attempts']
+        return value or None
 
 
 class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
