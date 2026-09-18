@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -54,6 +55,8 @@ class AccountSecurityConfig(models.Model):
     @classmethod
     def get(cls) -> AccountSecurityConfig:
         """Return the singleton, creating it with behavior-preserving defaults."""
+        if getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
+            return cls(pk=1)
         config, _ = cls.objects.get_or_create(pk=1)
         return config
 
