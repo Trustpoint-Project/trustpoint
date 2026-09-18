@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 from setup_wizard.models import SetupWizardCompletedModel
 from users.permissions import AppPermissions
 
-from .form import TrustpointPasswordChangeForm, TrustpointUserProfileForm
+from .form import TrustpointPasswordChangeForm, TrustpointPasswordSetForm, TrustpointUserProfileForm
 from .models import TrustpointUser
 
 
@@ -81,29 +81,30 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
         """Add the separate account-security form to the profile page."""
         context = super().get_context_data(**kwargs)
         profile_user = self.object
-        context['can_change_password'] = profile_user.pk == self.request.user.pk
+        context['can_change_password'] = (
+            profile_user.pk == self.request.user.pk
+            or self.request.user.has_perm(AppPermissions.MANAGE_USERS)
+        )
         context['can_manage_account_security'] = (
             context['can_change_password']
             or self.request.user.has_perm(AppPermissions.MANAGE_USERS)
         )
+        context['failed_login_blocked'] = bool(profile_user.blocked_by_failed_logins)
+        context['can_unblock_failed_login'] = (
+            profile_user.blocked_by_failed_logins
+            and self.request.user.has_perm(AppPermissions.MANAGE_USERS)
+        )
         if context['can_change_password']:
-            context.setdefault('password_form', TrustpointPasswordChangeForm(user=self.request.user))
+            if profile_user.pk == self.request.user.pk:
+                context.setdefault('password_form', TrustpointPasswordChangeForm(user=profile_user))
+            else:
+                context.setdefault('password_form', TrustpointPasswordSetForm(user=profile_user))
         return context
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle either profile preferences or account-security updates."""
         if request.POST.get('form_name') == 'password_change':
-            self.object = self.get_object()
-            if self.object.pk != request.user.pk:
-                raise PermissionDenied
-            password_form = TrustpointPasswordChangeForm(user=self.object, data=request.POST)
-            if password_form.is_valid():
-                password_form.save()
-                update_session_auth_hash(request, self.object)
-                messages.success(request, gettext('Password changed successfully.'))
-                return redirect(self.success_url)
-
-            return self.render_to_response(self.get_context_data(password_form=password_form))
+            return self._post_password_change(request)
 
         if request.POST.get('form_name') == 'require_password_change':
             self.object = self.get_object()
@@ -118,17 +119,55 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
                 )
             return redirect(request.path)
 
+        if request.POST.get('form_name') == 'unblock_failed_login':
+            self.object = self.get_object()
+            if not request.user.has_perm(AppPermissions.MANAGE_USERS):
+                raise PermissionDenied
+            if self.object.blocked_by_failed_logins:
+                self.object.is_active = True
+                self.object.failed_login_attempts = 0
+                self.object.blocked_by_failed_logins = False
+                self.object.save(
+                    update_fields=['is_active', 'failed_login_attempts', 'blocked_by_failed_logins'],
+                )
+                messages.success(request, gettext('The user has been unblocked and can log in again.'))
+            return redirect(request.path)
+
         return super().post(request, *args, **kwargs)
+
+    def _post_password_change(self, request: HttpRequest) -> HttpResponse:
+        """Change the current user's or a managed user's password."""
+        self.object = self.get_object()
+        is_self_change = self.object.pk == request.user.pk
+        if not is_self_change and not request.user.has_perm(AppPermissions.MANAGE_USERS):
+            raise PermissionDenied
+
+        if is_self_change:
+            password_form: TrustpointPasswordChangeForm | TrustpointPasswordSetForm = TrustpointPasswordChangeForm(
+                user=self.object,
+                data=request.POST,
+            )
+        else:
+            password_form = TrustpointPasswordSetForm(user=self.object, data=request.POST)
+
+        if not password_form.is_valid():
+            return self.render_to_response(self.get_context_data(password_form=password_form))
+
+        password_form.save()
+        if is_self_change:
+            update_session_auth_hash(request, self.object)
+        messages.success(request, gettext('Password changed successfully.'))
+        return redirect(request.path)
 
     def form_valid(self, form: TrustpointUserProfileForm) -> HttpResponse:
         """Persist the user and apply the chosen language/timezone immediately."""
-        response = super().form_valid(form)
+        super().form_valid(form)
         user = cast('TrustpointUser', self.request.user)
         translation.activate(user.language)
         timezone.activate(user.timezone)
         if self.object.pk == user.pk:
             return redirect('home:index')
-        return response
+        return redirect(self.request.path)
 
 
 class TrustpointLoginView(LoginView):

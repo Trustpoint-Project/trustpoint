@@ -65,7 +65,11 @@
                 </div>
                 <div class="card-body">
                     {% if can_change_password %}
+                    {% if object.pk == request.user.pk %}
                     <p class="text-body-secondary">{% trans "Change your account password." %}</p>
+                    {% else %}
+                    <p class="text-body-secondary">{% trans "Set a new password for this user. The current password is not required." %}</p>
+                    {% endif %}
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="form_name" value="password_change">
@@ -77,12 +81,25 @@
                     {% else %}
                     <p class="text-body-secondary">{% trans "You can require this user to change their password at the next login." %}</p>
                     {% endif %}
+                    {% if failed_login_blocked %}
+                    <div class="alert alert-danger mt-4" role="alert">
+                        <strong>{% trans "Blocked after failed login attempts" %}</strong>
+                        <p class="mb-0">{% trans "This account cannot authenticate until a user with permission to manage users unblocks it." %}</p>
+                    </div>
+                    {% endif %}
                     <hr class="my-4">
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="form_name" value="require_password_change">
                         <button class="btn btn-secondary" type="submit">{% trans "Require password change on next login" %}</button>
                     </form>
+                    {% if can_unblock_failed_login %}
+                    <form method="post" class="mt-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_name" value="unblock_failed_login">
+                        <button class="btn btn-success" type="submit">{% trans "Unblock user" %}</button>
+                    </form>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}

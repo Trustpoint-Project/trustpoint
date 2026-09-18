@@ -7,7 +7,7 @@ from typing import Any, ClassVar, cast
 from zoneinfo import available_timezones
 
 from django import forms
-from django.contrib.auth.forms import PasswordChangeForm, UserCreationForm
+from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import Group, Permission
 from django.utils.translation import gettext_lazy as _
 
@@ -174,6 +174,16 @@ class TrustpointPasswordChangeForm(PasswordChangeForm):
         if old_password and new_password == old_password:
             raise forms.ValidationError(_('The new password must differ from the current password.'))
         return new_password
+
+
+class TrustpointPasswordSetForm(SetPasswordForm[TrustpointUser]):
+    """Form for authorized managers to set another user's password."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply the standard Bootstrap styling to password fields."""
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-control'
 
 
 class TrustpointUserRoleForm(forms.ModelForm[TrustpointUser]):

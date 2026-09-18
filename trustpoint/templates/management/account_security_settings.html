@@ -1,0 +1,15 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="tp-settings-layout">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1>{% trans "Account Security" %}</h1>
+      <p class="text-muted mb-0">{% trans "Configure global password, credential, session, and login protection policies." %}</p>
+    </div>
+        <a class="btn btn-outline-secondary" href="{% url 'management:settings' %}?tab=account-security">{% trans "Back to settings" %}</a>
+  </div>
+        {% include 'management/includes/account_security_configuration.html' with form=form %}
+      </div>
+{% endblock content %}
