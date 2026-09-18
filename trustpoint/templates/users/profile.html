@@ -62,7 +62,11 @@
                 </div>
                 <div class="card-body">
                     {% if can_change_password %}
+                    {% if object.pk == request.user.pk %}
                     <p class="text-body-secondary">{% trans "Change your account password." %}</p>
+                    {% else %}
+                    <p class="text-body-secondary">{% trans "Set a new password for this user. The current password is not required." %}</p>
+                    {% endif %}
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="form_name" value="password_change">
