@@ -3,7 +3,7 @@
 
 """Credential issuance operation processor classes."""
 
-from cryptography.x509 import CertificateBuilder
+from cryptography import x509
 
 from pki.util.keys import KeyGenerator
 from request.operation_processor.issue_cert import CertificateIssueProcessor
@@ -24,14 +24,16 @@ class CredentialIssueProcessor(AbstractOperationProcessor, LoggerMixin):
         if not isinstance(context, BaseCredentialRequestContext):
             exc_msg = 'Credential issuance requires a subclass of BaseCredentialRequestContext.'
             raise TypeError(exc_msg)
-        if not context.cert_requested or not isinstance(context.cert_requested, CertificateBuilder):
+        if not context.cert_requested or not isinstance(
+            context.cert_requested, (x509.CertificateBuilder, x509.CertificateSigningRequest)
+        ):
             exc_msg = 'Credential issuance requires a certificate request in context.'
             raise ValueError(exc_msg)
         if not context.domain:
             exc_msg = 'Credential issuance requires a domain to be set in context.'
             raise ValueError(exc_msg)
         # generate a private key
-        if not context.private_key:
+        if not context.private_key and isinstance(context.cert_requested, x509.CertificateBuilder):
             private_key = KeyGenerator.generate_private_key(domain=context.domain)
             context.private_key = private_key
             context.cert_requested = context.cert_requested.public_key(private_key.as_crypto().public_key())

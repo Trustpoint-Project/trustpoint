@@ -59,7 +59,9 @@ class JSONCertRequestConverter:
         return ku_dict
 
     @staticmethod
-    def _extensions_to_json(extensions: list[x509.Extension[Any]]) -> dict[str, Any]:
+    def _extensions_to_json(
+        extensions: list[x509.Extension[Any]], *, reject_unsupported: bool = False
+    ) -> dict[str, Any]:
         req_ext = {}
         for ext in extensions:
             # Most essential extensions to handle:
@@ -81,11 +83,18 @@ class JSONCertRequestConverter:
                     bc['path_length'] = ext.value.path_length
                 req_ext['basic_constraints'] = bc
             else:
+                if reject_unsupported:
+                    error_message = f'Unsupported CSR extension: {ext.oid.dotted_string}'
+                    raise ValueError(error_message)
                 logger.debug('JSON Cert Request Adapter: Skipping unsupported extension: %s', ext.oid.dotted_string)
         return req_ext
 
     @staticmethod
-    def to_json(csr: x509.CertificateSigningRequest | x509.CertificateBuilder | None) -> dict[str, Any]:
+    def to_json(
+        csr: x509.CertificateSigningRequest | x509.CertificateBuilder | None,
+        *,
+        reject_unsupported_extensions: bool = False,
+    ) -> dict[str, Any]:
         """Convert a CSR to a JSON request dict."""
         if csr is None:
             exc_msg = 'CSR is None'
@@ -104,7 +113,9 @@ class JSONCertRequestConverter:
             attr_value_str = raw_attr_val.hex().upper() if isinstance(raw_attr_val, bytes) else raw_attr_val
             subj_dict[attr.oid.dotted_string] = str(attr_value_str)
         req['subj'] = subj_dict
-        req['ext'] = JSONCertRequestConverter._extensions_to_json(extensions)
+        req['ext'] = JSONCertRequestConverter._extensions_to_json(
+            extensions, reject_unsupported=reject_unsupported_extensions
+        )
 
         return req
 
