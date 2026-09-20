@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.ed448 import Ed448PrivateKey
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from trustpoint_core.serializer import CredentialSerializer
 
 from aoki.management.commands.aoki_gen_test_certs import AokiTestCertGenerator
@@ -27,6 +27,8 @@ from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any
+
+    from trustpoint_core.crypto_types import PrivateKey
 
 CERTS_DIR = (Path(__file__).resolve().parents[2] / 'tests' / 'certs').resolve()
 
@@ -181,8 +183,11 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             return
 
         domain_ca_cert = domain_ca.get_certificate()
+        if domain_ca_cert is None:
+            msg = 'The domain CA has no certificate, so a domain-based DevOwnerID cannot be issued.'
+            raise CommandError(msg)
         owner_ca_cert = x509.load_pem_x509_certificate(OWNER_CA_CERT_PATH.read_bytes())
-        owner_ca_key = load_pem_private_key(OWNER_CA_KEY_PATH.read_bytes(), password=None)
+        owner_ca_key = cast('PrivateKey', load_pem_private_key(OWNER_CA_KEY_PATH.read_bytes(), password=None))
 
         AokiTestCertGenerator.generate_domain_ca_owner_id_cert(
             domain_ca_cert=domain_ca_cert,
@@ -238,7 +243,9 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         )
         return registration
 
-    def _get_or_create_owner_credential(self, unique_name: str, cert_path: Path, key_path: Path, ca_cert_path: Path) -> OwnerCredentialModel:
+    def _get_or_create_owner_credential(
+        self, unique_name: str, cert_path: Path, key_path: Path, ca_cert_path: Path
+    ) -> OwnerCredentialModel:
         """Return an existing owner credential or create one from the generated DevOwnerID files."""
         if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
             self.log_and_stdout(

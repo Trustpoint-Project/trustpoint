@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from django.core.management.base import BaseCommand, CommandError
 
 from crypto.application.backend_factory import DefaultBackendAdapterFactory
@@ -13,21 +15,26 @@ from crypto.domain.errors import CryptoError
 from crypto.models import CryptoProviderProfileModel
 from crypto.repositories import CryptoProviderProfileRepository
 
+if TYPE_CHECKING:
+    from argparse import ArgumentParser
+
 
 class Command(BaseCommand):
     """Reprobe a configured crypto provider profile and persist the capability snapshot."""
 
-    help = "Reprobe a crypto provider profile and persist the capability snapshot."
+    help = 'Reprobe a crypto provider profile and persist the capability snapshot.'
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: ArgumentParser) -> None:
+        """Register the command line arguments."""
         parser.add_argument(
-            "--profile",
+            '--profile',
             type=str,
-            help="Provider profile name. If omitted, the configured instance backend profile is used.",
+            help='Provider profile name. If omitted, the configured instance backend profile is used.',
         )
 
-    def handle(self, *args, **options):
-        profile_name = options.get("profile")
+    def handle(self, *_args: Any, **options: Any) -> None:
+        """Reprobe the selected profile and write the outcome to stdout."""
+        profile_name = options.get('profile')
         repository = CryptoProviderProfileRepository()
         adapter_factory = DefaultBackendAdapterFactory()
 
@@ -35,12 +42,14 @@ class Command(BaseCommand):
             try:
                 profile = CryptoProviderProfileModel.objects.get(name=profile_name)
             except CryptoProviderProfileModel.DoesNotExist as exc:
-                raise CommandError(f"Provider profile {profile_name!r} does not exist.") from exc
+                msg = f'Provider profile {profile_name!r} does not exist.'
+                raise CommandError(msg) from exc
         else:
             try:
                 profile = repository.get_configured_profile()
             except CryptoProviderProfileModel.DoesNotExist as exc:
-                raise CommandError("No configured crypto backend profile exists for this Trustpoint instance.") from exc
+                msg = 'No configured crypto backend profile exists for this Trustpoint instance.'
+                raise CommandError(msg) from exc
 
         try:
             backend = adapter_factory.build(profile)
@@ -57,7 +66,8 @@ class Command(BaseCommand):
                 ).active_report()
         except CryptoError as exc:
             repository.record_probe_failure(profile=profile, error_summary=str(exc))
-            raise CommandError(f"Provider reprobe failed: {exc}") from exc
+            msg = f'Provider reprobe failed: {exc}'
+            raise CommandError(msg) from exc
 
         report_details = ''
         if report is not None:
@@ -68,9 +78,9 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Reprobe succeeded for profile {profile.name!r}. "
-                f"backend_kind={profile.backend_kind} "
-                f"snapshot_id={result.snapshot_id} changed={result.changed} hash={result.probe_hash}"
-                f"{report_details}"
+                f'Reprobe succeeded for profile {profile.name!r}. '
+                f'backend_kind={profile.backend_kind} '
+                f'snapshot_id={result.snapshot_id} changed={result.changed} hash={result.probe_hash}'
+                f'{report_details}'
             )
         )
