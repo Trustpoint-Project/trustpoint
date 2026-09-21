@@ -74,7 +74,7 @@ class IssuingCaImportMixin:
         try:
             CaModel._validate_ca_certificate(cert_crypto)  # noqa: SLF001
         except ValidationError as exc:
-            self._raise_validation_error(str(exc))
+            self._raise_validation_error('; '.join(str(message) for message in exc.messages))
 
     def _check_duplicate_issuing_ca(self, cert_crypto: x509.Certificate) -> None:
         """Checks if the certificate is already used by an existing Issuing CA."""

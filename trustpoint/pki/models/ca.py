@@ -524,7 +524,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if not bc_extension.value.ca:
             raise ValidationError(
                 _(
-                    'The provided certificate is not a valid CA certificate; '
+                    'The provided certificate is not a CA certificate; '
                     'it is an End Entity certificate.'
                 )
             )
@@ -562,7 +562,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if not bc_extension.value.ca:
             raise ValidationError(
                 _(
-                    'The provided certificate is not a valid CA certificate; '
+                    'The provided certificate is not a CA certificate; '
                     'it is an End Entity certificate.'
                 )
             )
@@ -572,8 +572,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         except x509.ExtensionNotFound as e:
             raise ValidationError(
                 _(
-                    'The provided certificate is not a valid CA certificate; '
-                    'it does not contain a KeyUsage extension.'
+                    'The provided certificate is not a CA certificate; '
+                    'KeyUsage extension is required.'
                 )
             ) from e
 
