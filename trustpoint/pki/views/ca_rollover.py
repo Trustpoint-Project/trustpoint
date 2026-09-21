@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -25,7 +25,6 @@ from pki.services.ca_rollover import CaRolloverError, CaRolloverService
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
-    from django import forms
     from django.http import HttpRequest, HttpResponse
 
 logger = logging.getLogger(__name__)
@@ -119,7 +118,7 @@ class RolloverRequestMethodSelectView(RolloverMethodSelectView):
 class RolloverCredentialView(LoginRequiredMixin, View):
     """Create a pending replacement CA using a shared acquisition form."""
 
-    form_class: type[forms.Form]
+    form_class: Any
     template_name = 'pki/issuing_cas/rollover/credential_form.html'
     strategy_type: CaRolloverStrategyType
     request_protocol: str | None = None

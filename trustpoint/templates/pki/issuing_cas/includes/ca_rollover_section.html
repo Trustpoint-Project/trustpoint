@@ -13,28 +13,34 @@
 
             <h3>{% trans 'Rollover Stages' %}</h3>
             <hr class="hr-m">
-            <div class="row text-center mb-4">
-                <div class="col-md-3 mb-3 mb-md-0">
+            <div class="row text-center align-items-stretch mb-4">
+                <div class="col-md mb-3 mb-md-0">
                     <div class="border rounded h-100 p-3">
-                        <strong>{% trans 'Step A' %}</strong>
-                        <div class="mt-2">{% trans 'Create or import the new CA credential.' %}</div>
+                        <strong>{% trans 'Planned' %}</strong>
+                        <div class="mt-2">{% trans 'Choose a rollover method and create the replacement CA credential.' %}</div>
                     </div>
                 </div>
-                <div class="col-md-3 mb-3 mb-md-0">
+                <div class="col-md mb-3 mb-md-0">
                     <div class="border rounded h-100 p-3">
-                        <strong>{% trans 'Step B' %}</strong>
-                        <div class="mt-2">{% trans 'Prepare the pending CA while the current CA remains active.' %}</div>
+                        <strong>{% trans 'Awaiting New CA' %}</strong>
+                        <div class="mt-2">{% trans 'Complete the certificate request when the replacement CA certificate is not available yet.' %}</div>
                     </div>
                 </div>
-                <div class="col-md-3 mb-3 mb-md-0">
+                <div class="col-md mb-3 mb-md-0">
                     <div class="border rounded h-100 p-3">
-                        <strong>{% trans 'Step C' %}</strong>
-                        <div class="mt-2">{% trans 'Transition certificate issuance to the new CA.' %}</div>
+                        <strong>{% trans 'Preparation' %}</strong>
+                        <div class="mt-2">{% trans 'Prepare the replacement CA while the current CA remains active.' %}</div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md mb-3 mb-md-0">
                     <div class="border rounded h-100 p-3">
-                        <strong>{% trans 'Step D' %}</strong>
+                        <strong>{% trans 'Transition' %}</strong>
+                        <div class="mt-2">{% trans 'Switch certificate issuance to the replacement CA.' %}</div>
+                    </div>
+                </div>
+                <div class="col-md">
+                    <div class="border rounded h-100 p-3">
+                        <strong>{% trans 'Completed' %}</strong>
                         <div class="mt-2">{% trans 'Complete the rollover and deactivate the old CA.' %}</div>
                     </div>
                 </div>
