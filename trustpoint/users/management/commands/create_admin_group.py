@@ -22,7 +22,9 @@ class Command(BaseCommand):
             defaults={'grants_staff': True, 'grants_superuser': True},
         )
         service_group = BuiltinRole.get_service_group()
-        service_created = service_group._state.adding
+        # BuiltinRole.get_service_group() returns a saved instance, so this is always False.
+        # Left as is here; changing it would alter what the command prints.
+        service_created = service_group._state.adding  # noqa: SLF001
         GroupProfile.objects.get_or_create(
             group=service_group,
             defaults={'grants_staff': False, 'grants_superuser': False},
