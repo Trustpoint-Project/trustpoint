@@ -7,6 +7,38 @@
             <h2>{% trans 'CA Rollover Management' %}</h2>
         </div>
         <div class="card-body">
+            <p>
+                {% trans 'CA rollover replaces the current locally managed Issuing CA with a new credential while keeping the active CA in service until the transition is completed.' %}
+            </p>
+
+            <h3>{% trans 'Rollover Stages' %}</h3>
+            <hr class="hr-m">
+            <div class="row text-center mb-4">
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="border rounded h-100 p-3">
+                        <strong>{% trans 'Step A' %}</strong>
+                        <div class="mt-2">{% trans 'Create or import the new CA credential.' %}</div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="border rounded h-100 p-3">
+                        <strong>{% trans 'Step B' %}</strong>
+                        <div class="mt-2">{% trans 'Prepare the pending CA while the current CA remains active.' %}</div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="border rounded h-100 p-3">
+                        <strong>{% trans 'Step C' %}</strong>
+                        <div class="mt-2">{% trans 'Transition certificate issuance to the new CA.' %}</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded h-100 p-3">
+                        <strong>{% trans 'Step D' %}</strong>
+                        <div class="mt-2">{% trans 'Complete the rollover and deactivate the old CA.' %}</div>
+                    </div>
+                </div>
+            </div>
 
             {# ── Active Rollover ── #}
             {% if active_rollover %}
@@ -108,41 +140,13 @@
             </div>
             {% endif %}
 
-            {# ── Plan New Rollover Form ── #}
-            {% if rollover_form %}
-            <h3>{% trans 'Plan New Rollover' %}</h3>
+            {% if not active_rollover and not rollover_completed %}
+            <h3>{% trans 'Start New Rollover' %}</h3>
             <hr class="hr-m">
-            <form method="post"
-                  action="{% url 'pki:issuing_cas-rollover-plan' pk=issuing_ca.pk %}"
-                  enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="strategy_type" value="import_ca">
-
-                {% for field in rollover_form %}
-                <div class="mb-3">
-                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.help_text %}
-                    <small class="form-text text-muted d-block">{{ field.help_text|safe }}</small>
-                    {% endif %}
-                    {% if field.errors %}
-                    <div class="invalid-feedback d-block">
-                        {% for error in field.errors %}{{ error }}{% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-
-                <button type="submit" class="btn btn-primary">
-                    {% trans 'Plan Rollover' %}
-                </button>
-            </form>
-            {% elif not active_rollover and rollover_completed %}
-            <p class="text-muted">
-                {% trans 'This Issuing CA has already been rolled over. A second rollover is not permitted.' %}
-            </p>
-            {% elif not active_rollover %}
-            <p class="text-muted">{% trans 'No rollover is currently active or planned.' %}</p>
+            <a href="{% url 'pki:issuing_cas-rollover-method-select' pk=issuing_ca.pk %}"
+               class="btn btn-primary">
+                {% trans 'Select CA Rollover Method' %}
+            </a>
             {% endif %}
 
             {# ── Rollover History ── #}

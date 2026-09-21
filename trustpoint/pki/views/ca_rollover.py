@@ -18,11 +18,14 @@ from django.views import View
 from management.models.audit_log import AuditLog
 from pki.models import CaModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverStrategyType
+from pki.rollover.generate_keypair import GenerateKeypairCmpRolloverForm, GenerateKeypairEstRolloverForm
+from pki.rollover.import_ca import ImportCaRolloverForm, SeparateFilesCaRolloverForm
 from pki.rollover.registry import rollover_registry
 from pki.services.ca_rollover import CaRolloverError, CaRolloverService
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
+    from django import forms
     from django.http import HttpRequest, HttpResponse
 
 logger = logging.getLogger(__name__)
@@ -30,7 +33,159 @@ logger = logging.getLogger(__name__)
 
 def _ensure_strategies_loaded() -> None:
     """Ensure all strategy modules are imported so they register themselves."""
-    import pki.rollover.import_ca  # noqa: F401, PLC0415
+
+
+def _get_local_issuing_ca(pk: int) -> CaModel:
+    """Return a locally managed issuing CA or reject rollover access."""
+    issuing_ca = get_object_or_404(CaModel, pk=pk)
+    local_types = {
+        CaModel.CaTypeChoice.AUTOGEN,
+        CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
+        CaModel.CaTypeChoice.LOCAL_PKCS11,
+    }
+    if issuing_ca.ca_type not in local_types:
+        raise PermissionDenied
+    return issuing_ca
+
+
+def _ensure_rollover_can_start(issuing_ca: CaModel) -> None:
+    """Reject a second or already completed rollover before showing methods."""
+    if CaRolloverService.get_active_rollover(issuing_ca) is not None:
+        raise PermissionDenied
+    if CaRolloverService.has_completed_rollover(issuing_ca):
+        raise PermissionDenied
+
+
+class RolloverMethodSelectView(LoginRequiredMixin, View):
+    """Select how a replacement credential should be acquired."""
+
+    template_name = 'pki/issuing_cas/rollover/method_select.html'
+
+    def get(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """Render the top-level rollover method selection page."""
+        issuing_ca = _get_local_issuing_ca(pk)
+        _ensure_rollover_can_start(issuing_ca)
+        return render(request, self.template_name, {'issuing_ca': issuing_ca})
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """Route the selected top-level rollover method."""
+        issuing_ca = _get_local_issuing_ca(pk)
+        _ensure_rollover_can_start(issuing_ca)
+        method = request.POST.get('method')
+        if method == 'import':
+            return redirect('pki:issuing_cas-rollover-file-method-select', pk=pk)
+        if method == 'generate':
+            return redirect('pki:issuing_cas-rollover-request-method-select', pk=pk)
+        messages.error(request, _('Invalid rollover method.'))
+        return redirect('pki:issuing_cas-config', pk=pk)
+
+
+class RolloverFileMethodSelectView(RolloverMethodSelectView):
+    """Select the file format for an imported replacement credential."""
+
+    template_name = 'pki/issuing_cas/rollover/file_method_select.html'
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """Route the selected file import method."""
+        issuing_ca = _get_local_issuing_ca(pk)
+        _ensure_rollover_can_start(issuing_ca)
+        method = request.POST.get('method')
+        if method == 'pkcs12':
+            return redirect('pki:issuing_cas-rollover-import-pkcs12', pk=pk)
+        if method == 'separate_files':
+            return redirect('pki:issuing_cas-rollover-import-separate-files', pk=pk)
+        messages.error(request, _('Invalid import method.'))
+        return redirect('pki:issuing_cas-rollover-method-select', pk=pk)
+
+
+class RolloverRequestMethodSelectView(RolloverMethodSelectView):
+    """Select the upstream protocol for a generated replacement keypair."""
+
+    template_name = 'pki/issuing_cas/rollover/request_method_select.html'
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """Route the selected EST or CMP request method."""
+        issuing_ca = _get_local_issuing_ca(pk)
+        _ensure_rollover_can_start(issuing_ca)
+        method = request.POST.get('method')
+        if method == 'est':
+            return redirect('pki:issuing_cas-rollover-request-est', pk=pk)
+        if method == 'cmp':
+            return redirect('pki:issuing_cas-rollover-request-cmp', pk=pk)
+        messages.error(request, _('Invalid certificate request method.'))
+        return redirect('pki:issuing_cas-rollover-method-select', pk=pk)
+
+
+class RolloverCredentialView(LoginRequiredMixin, View):
+    """Create a pending replacement CA using a shared acquisition form."""
+
+    form_class: type[forms.Form]
+    template_name = 'pki/issuing_cas/rollover/credential_form.html'
+    strategy_type: CaRolloverStrategyType
+    request_protocol: str | None = None
+
+    def get(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """Render the shared credential acquisition form."""
+        issuing_ca = _get_local_issuing_ca(pk)
+        _ensure_rollover_can_start(issuing_ca)
+        return render(request, self.template_name, {'issuing_ca': issuing_ca, 'form': self.form_class()})
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """Validate and persist a pending rollover credential."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
+        issuing_ca = _get_local_issuing_ca(pk)
+        _ensure_rollover_can_start(issuing_ca)
+        form = self.form_class(request.POST, request.FILES)
+        if not form.is_valid():
+            return render(request, self.template_name, {'issuing_ca': issuing_ca, 'form': form})
+        try:
+            rollover = CaRolloverService.plan_rollover(
+                old_ca=issuing_ca,
+                strategy_type=self.strategy_type,
+                form=form,
+                initiated_by=request.user if request.user.is_authenticated else None,
+            )
+        except CaRolloverError as exc:
+            form.add_error(None, str(exc))
+            return render(request, self.template_name, {'issuing_ca': issuing_ca, 'form': form})
+        messages.success(request, _('Pending CA rollover credential created.'))
+        if self.request_protocol and rollover.new_issuing_ca is not None:
+            return redirect(
+                f'pki:issuing_cas-define-cert-content-{self.request_protocol}',
+                pk=rollover.new_issuing_ca.pk,
+            )
+        return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
+
+
+class RolloverImportPkcs12View(RolloverCredentialView):
+    """Import a pending rollover CA using PKCS#12."""
+
+    form_class = ImportCaRolloverForm
+    strategy_type = CaRolloverStrategyType.IMPORT_CA
+
+
+class RolloverImportSeparateFilesView(RolloverCredentialView):
+    """Import a pending rollover CA from separate key and certificate files."""
+
+    form_class = SeparateFilesCaRolloverForm
+    strategy_type = CaRolloverStrategyType.IMPORT_CA
+
+
+class RolloverRequestEstView(RolloverCredentialView):
+    """Generate a managed key and configure an editable EST request."""
+
+    form_class = GenerateKeypairEstRolloverForm
+    strategy_type = CaRolloverStrategyType.GENERATE_KEYPAIR
+    request_protocol = 'est'
+
+
+class RolloverRequestCmpView(RolloverCredentialView):
+    """Generate a managed key and configure an editable CMP request."""
+
+    form_class = GenerateKeypairCmpRolloverForm
+    strategy_type = CaRolloverStrategyType.GENERATE_KEYPAIR
+    request_protocol = 'cmp'
 
 
 class PlanRolloverView(LoginRequiredMixin, View):

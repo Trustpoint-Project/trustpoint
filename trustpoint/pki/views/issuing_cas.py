@@ -1041,6 +1041,7 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
         try:
             self._perform_est_enrollment(ca, cert_content_data, request)
+            CaRolloverService.complete_awaiting_rollover_for_ca(ca)
             messages.success(
                 request,
                 _('Successfully enrolled certificate for Issuing CA {name} via EST.').format(name=ca.unique_name)
@@ -1241,6 +1242,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
         try:
             self._perform_cmp_enrollment(ca, cert_content_data, request, sender_kid=sender_kid)
+            CaRolloverService.complete_awaiting_rollover_for_ca(ca)
             messages.success(
                 request,
                 _('Successfully enrolled certificate for Issuing CA {name} via CMP.').format(name=ca.unique_name)
@@ -1291,17 +1293,18 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
     def _load_private_key(self, ca: CaModel) -> rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any:
         """Load the private key from the CA's credential."""
-        if not ca.credential or not ca.credential.private_key:
+        if not ca.credential:
             msg = 'No private key available for CA credential'
             raise ValueError(msg)
 
-        return cast(
-            'rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any',
-            serialization.load_pem_private_key(
-                ca.credential.private_key.encode(),
-                password=None,
-            ),
-        )
+        try:
+            return cast(
+                'rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any',
+                ca.credential.get_private_key(),
+            )
+        except (RuntimeError, TypeError, ValueError) as exc:
+            msg = 'No usable private key is available for the CA credential.'
+            raise ValueError(msg) from exc
 
     def _create_cmp_context(
         self,
