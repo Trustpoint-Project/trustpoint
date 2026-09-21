@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 """Security Configuration Model."""
+
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, ClassVar, TypedDict
+from typing import TYPE_CHECKING, ClassVar, TypedDict, cast
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -31,6 +32,7 @@ class _SecurityModeDefaults(TypedDict):
     allow_ca_issuance: bool
     allow_auto_gen_pki: bool
     allow_self_signed_ca: bool
+    allow_imported_private_keys: bool
     permitted_no_onboarding_pki_protocols: list[int]
     permitted_onboarding_protocols: list[int]
 
@@ -126,8 +128,7 @@ class SecurityConfig(models.Model):
         blank=True,
         default=2048,
         help_text=_(
-            'Minimum RSA key size in bits that certificates must meet. '
-            'Set to null to disallow RSA entirely.',
+            'Minimum RSA key size in bits that certificates must meet. Set to null to disallow RSA entirely.',
         ),
     )
 
@@ -241,15 +242,16 @@ class SecurityConfig(models.Model):
         # Lab / Development
         # ----------------------------------------------------------------
         SecurityModeChoices.LAB: {
-            'rsa_minimum_key_size': 0,             # any RSA key size allowed
+            'rsa_minimum_key_size': 0,  # any RSA key size allowed
             'not_permitted_ecc_curve_oids': [],
             'not_permitted_mldsa_variant_oids': [],
             'not_permitted_signature_algorithm_oids': [],
-            'max_cert_validity_days': None,        # no limit
-            'max_crl_validity_days': None,         # no limit
+            'max_cert_validity_days': None,  # no limit
+            'max_crl_validity_days': None,  # no limit
             'allow_ca_issuance': True,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
+            'allow_imported_private_keys': True,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -262,11 +264,12 @@ class SecurityConfig(models.Model):
             'not_permitted_ecc_curve_oids': [],
             'not_permitted_mldsa_variant_oids': [],
             'not_permitted_signature_algorithm_oids': [],
-            'max_cert_validity_days': 1825,        # 5 years
+            'max_cert_validity_days': 1825,  # 5 years
             'max_crl_validity_days': 365,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
+            'allow_imported_private_keys': True,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -290,6 +293,7 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
+            'allow_imported_private_keys': True,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -315,7 +319,8 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
+            'allow_imported_private_keys': False,
+            'permitted_no_onboarding_pki_protocols': [1, 4],  # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
         # ----------------------------------------------------------------
@@ -342,7 +347,8 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
+            'allow_imported_private_keys': False,
+            'permitted_no_onboarding_pki_protocols': [1, 4],  # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
     }
@@ -351,7 +357,7 @@ class SecurityConfig(models.Model):
         """Output as string."""
         return f'{self.security_mode}'
 
-    def apply_security_settings(self) -> None:
+    def apply_security_settings(self, *, save: bool = True) -> None:
         """Reset all thresholds to the defaults for the current security mode."""
         if not self.security_mode:
             return
@@ -370,21 +376,26 @@ class SecurityConfig(models.Model):
         self.allow_ca_issuance = defaults['allow_ca_issuance']
         self.allow_auto_gen_pki = defaults['allow_auto_gen_pki']
         self.allow_self_signed_ca = defaults['allow_self_signed_ca']
+        self.allow_imported_private_keys = defaults['allow_imported_private_keys']
         self.permitted_no_onboarding_pki_protocols = list(defaults['permitted_no_onboarding_pki_protocols'])
         self.permitted_onboarding_protocols = list(defaults['permitted_onboarding_protocols'])
-        self.save(update_fields=[
-            'rsa_minimum_key_size',
-            'not_permitted_ecc_curve_oids',
-            'not_permitted_mldsa_variant_oids',
-            'not_permitted_signature_algorithm_oids',
-            'max_cert_validity_days',
-            'max_crl_validity_days',
-            'allow_ca_issuance',
-            'allow_auto_gen_pki',
-            'allow_self_signed_ca',
-            'permitted_no_onboarding_pki_protocols',
-            'permitted_onboarding_protocols',
-        ])
+        if save:
+            self.save(
+                update_fields=[
+                    'rsa_minimum_key_size',
+                    'not_permitted_ecc_curve_oids',
+                    'not_permitted_mldsa_variant_oids',
+                    'not_permitted_signature_algorithm_oids',
+                    'max_cert_validity_days',
+                    'max_crl_validity_days',
+                    'allow_ca_issuance',
+                    'allow_auto_gen_pki',
+                    'allow_self_signed_ca',
+                    'allow_imported_private_keys',
+                    'permitted_no_onboarding_pki_protocols',
+                    'permitted_onboarding_protocols',
+                ]
+            )
 
     @classmethod
     def get_settings_preview_json(cls) -> str:
@@ -415,41 +426,43 @@ class SecurityConfig(models.Model):
                 'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
                 'permitted_no_onboarding_pki_protocols': [
-                    no_onboarding_labels.get(v, v)
-                    for v in defaults['permitted_no_onboarding_pki_protocols']
+                    no_onboarding_labels.get(v, v) for v in defaults['permitted_no_onboarding_pki_protocols']
                 ],
                 'permitted_onboarding_protocols': [
-                    onboarding_labels.get(v, v)
-                    for v in defaults['permitted_onboarding_protocols']
+                    onboarding_labels.get(v, v) for v in defaults['permitted_onboarding_protocols']
                 ],
                 'raw_permitted_no_onboarding_pki_protocols': defaults['permitted_no_onboarding_pki_protocols'],
                 'raw_permitted_onboarding_protocols': defaults['permitted_onboarding_protocols'],
             }
         return json.dumps(preview)
 
-    def check_mode_transition(self, target_mode: str) -> list[str]:
-        """Check whether the existing data satisfies all requirements of *target_mode*."""
-        defaults = self._MODE_DEFAULTS.get(target_mode)
-        if defaults is None:
-            msg = f'No defaults defined for security mode: {target_mode}'
-            raise ValueError(msg)
-
+    def check_policy_transition(
+        self, requested_policy: _SecurityModeDefaults, target_mode: str,
+    ) -> list[str]:
+        """Check existing data against an already-built requested policy."""
         mode_label = str(self.SecurityModeChoices(target_mode).label)
         violations: list[str] = []
 
         from devices.models import DeviceModel  # noqa: PLC0415
         from pki.models.ca import CaModel  # noqa: PLC0415
 
-        violations.extend(self._check_auto_gen_pki(defaults, mode_label))
-        violations.extend(self._check_self_signed_cas(defaults, mode_label, CaModel))
-        violations.extend(self._check_rsa_key_size(defaults, mode_label, CaModel))
-        violations.extend(self._check_ecc_curves(defaults, mode_label, CaModel))
-        violations.extend(self._check_mldsa_variants(defaults, mode_label, CaModel))
-        violations.extend(self._check_signature_algorithms(defaults, mode_label, CaModel))
-        violations.extend(self._check_crl_validity(defaults, mode_label, CaModel))
-        violations.extend(self._check_no_onboarding_protocols(defaults, mode_label, CaModel, DeviceModel))
-        violations.extend(self._check_onboarding_protocols(defaults, mode_label, DeviceModel))
+        violations.extend(self._check_auto_gen_pki(requested_policy, mode_label))
+        violations.extend(self._check_self_signed_cas(requested_policy, mode_label, CaModel))
+        violations.extend(self._check_rsa_key_size(requested_policy, mode_label, CaModel))
+        violations.extend(self._check_ecc_curves(requested_policy, mode_label, CaModel))
+        violations.extend(self._check_mldsa_variants(requested_policy, mode_label, CaModel))
+        violations.extend(self._check_signature_algorithms(requested_policy, mode_label, CaModel))
+        violations.extend(self._check_crl_validity(requested_policy, mode_label, CaModel))
+        violations.extend(self._check_no_onboarding_protocols(requested_policy, mode_label, CaModel, DeviceModel))
+        violations.extend(self._check_onboarding_protocols(requested_policy, mode_label, DeviceModel))
         return violations
+
+    def check_mode_transition(self, target_mode: str) -> list[str]:
+        """Check whether existing data satisfies the effective policy for *target_mode*."""
+        from management.security_env import effective_security_defaults  # noqa: PLC0415
+
+        defaults = cast('_SecurityModeDefaults', effective_security_defaults(target_mode))
+        return self.check_policy_transition(defaults, target_mode)
 
     # ------------------------------------------------------------------
     # Private helpers — one method per check group
@@ -458,14 +471,21 @@ class SecurityConfig(models.Model):
     def _check_auto_gen_pki(self, defaults: _SecurityModeDefaults, mode_label: str) -> list[str]:
         """Return a violation if auto-generated PKI is enabled but not permitted in the target mode."""
         if not defaults['allow_auto_gen_pki'] and self.auto_gen_pki:
-            return [str(_(
-                'Auto-generated PKI is currently enabled but is not permitted in %(mode)s.',
-            ) % {'mode': mode_label})]
+            return [
+                str(
+                    _(
+                        'Auto-generated PKI is currently enabled but is not permitted in %(mode)s.',
+                    )
+                    % {'mode': mode_label}
+                )
+            ]
         return []
 
     @staticmethod
     def _check_self_signed_cas(
-        defaults: _SecurityModeDefaults, mode_label: str, ca_model: type[CaModel],
+        defaults: _SecurityModeDefaults,
+        mode_label: str,
+        ca_model: type[CaModel],
     ) -> list[str]:
         """Return violations for self-signed issuing CAs when the target mode forbids them."""
         if defaults['allow_self_signed_ca']:
@@ -474,15 +494,20 @@ class SecurityConfig(models.Model):
             credential__certificate__is_self_signed=True,
         ).values_list('unique_name', flat=True)
         return [
-            str(_(
-                'Issuing CA "%(ca)s" has a self-signed certificate, which is not permitted in %(mode)s.',
-            ) % {'ca': n, 'mode': mode_label})
+            str(
+                _(
+                    'Issuing CA "%(ca)s" has a self-signed certificate, which is not permitted in %(mode)s.',
+                )
+                % {'ca': n, 'mode': mode_label}
+            )
             for n in names
         ]
 
     @staticmethod
     def _check_rsa_key_size(
-        defaults: _SecurityModeDefaults, mode_label: str, ca_model: type[CaModel],
+        defaults: _SecurityModeDefaults,
+        mode_label: str,
+        ca_model: type[CaModel],
     ) -> list[str]:
         """Return violations for CA RSA keys below the minimum (or any RSA if banned)."""
         rsa_oid = PublicKeyAlgorithmOid.RSA.dotted_string
@@ -492,9 +517,12 @@ class SecurityConfig(models.Model):
                 credential__certificate__spki_algorithm_oid=rsa_oid,
             ).values_list('unique_name', flat=True)
             return [
-                str(_(
-                    'Issuing CA "%(ca)s" uses an RSA key, which is not permitted in %(mode)s.',
-                ) % {'ca': n, 'mode': mode_label})
+                str(
+                    _(
+                        'Issuing CA "%(ca)s" uses an RSA key, which is not permitted in %(mode)s.',
+                    )
+                    % {'ca': n, 'mode': mode_label}
+                )
                 for n in names
             ]
         if min_rsa == 0:
@@ -505,16 +533,21 @@ class SecurityConfig(models.Model):
             credential__certificate__spki_key_size__lt=min_rsa,
         ).values_list('unique_name', 'credential__certificate__spki_key_size')
         return [
-            str(_(
-                'Issuing CA "%(ca)s" has an RSA key of %(size)d bits, below the minimum of %(min)d bits '
-                'required by %(mode)s.',
-            ) % {'ca': n, 'size': sz, 'min': min_rsa, 'mode': mode_label})
+            str(
+                _(
+                    'Issuing CA "%(ca)s" has an RSA key of %(size)d bits, below the minimum of %(min)d bits '
+                    'required by %(mode)s.',
+                )
+                % {'ca': n, 'size': sz, 'min': min_rsa, 'mode': mode_label}
+            )
             for n, sz in rows
         ]
 
     @staticmethod
     def _check_ecc_curves(
-        defaults: _SecurityModeDefaults, mode_label: str, ca_model: type[CaModel],
+        defaults: _SecurityModeDefaults,
+        mode_label: str,
+        ca_model: type[CaModel],
     ) -> list[str]:
         """Return violations for CA certificates using a blocked ECC curve."""
         blocked: list[str] = defaults['not_permitted_ecc_curve_oids']
@@ -527,15 +560,20 @@ class SecurityConfig(models.Model):
         ).values_list('unique_name', 'credential__certificate__spki_ec_curve_oid')
         curve_labels = dict(SecurityConfig.NamedCurveChoices.choices)
         return [
-            str(_(
-                'Issuing CA "%(ca)s" uses ECC curve %(curve)s, which is not permitted in %(mode)s.',
-            ) % {'ca': n, 'curve': curve_labels.get(oid, oid), 'mode': mode_label})
+            str(
+                _(
+                    'Issuing CA "%(ca)s" uses ECC curve %(curve)s, which is not permitted in %(mode)s.',
+                )
+                % {'ca': n, 'curve': curve_labels.get(oid, oid), 'mode': mode_label}
+            )
             for n, oid in rows
         ]
 
     @staticmethod
     def _check_mldsa_variants(
-        defaults: _SecurityModeDefaults, mode_label: str, ca_model: type[CaModel],
+        defaults: _SecurityModeDefaults,
+        mode_label: str,
+        ca_model: type[CaModel],
     ) -> list[str]:
         """Return violations for CA certificates using a blocked ML-DSA variant."""
         blocked: list[str] = defaults['not_permitted_mldsa_variant_oids']
@@ -546,15 +584,20 @@ class SecurityConfig(models.Model):
         ).values_list('unique_name', 'credential__certificate__spki_algorithm_oid')
         mldsa_labels = dict(SecurityConfig.MlDsaVariantChoices.choices)
         return [
-            str(_(
-                'Issuing CA "%(ca)s" uses ML-DSA variant %(variant)s, which is not permitted in %(mode)s.',
-            ) % {'ca': n, 'variant': mldsa_labels.get(oid, oid), 'mode': mode_label})
+            str(
+                _(
+                    'Issuing CA "%(ca)s" uses ML-DSA variant %(variant)s, which is not permitted in %(mode)s.',
+                )
+                % {'ca': n, 'variant': mldsa_labels.get(oid, oid), 'mode': mode_label}
+            )
             for n, oid in rows
         ]
 
     @staticmethod
     def _check_signature_algorithms(
-        defaults: _SecurityModeDefaults, mode_label: str, ca_model: type[CaModel],
+        defaults: _SecurityModeDefaults,
+        mode_label: str,
+        ca_model: type[CaModel],
     ) -> list[str]:
         """Return violations for CA certificates signed with a blocked hash algorithm."""
         blocked_hash_oids: list[str] = defaults['not_permitted_signature_algorithm_oids']
@@ -564,8 +607,7 @@ class SecurityConfig(models.Model):
         blocked_sig_oids = [
             alg_id.value.dotted_string
             for alg_id in AlgorithmIdentifier
-            if alg_id.hash_algorithm is not None
-            and alg_id.hash_algorithm.dotted_string in blocked_hash_oids
+            if alg_id.hash_algorithm is not None and alg_id.hash_algorithm.dotted_string in blocked_hash_oids
         ]
         if not blocked_sig_oids:
             return []
@@ -580,15 +622,22 @@ class SecurityConfig(models.Model):
                 label = hash_labels.get(hash_algo.dotted_string if hash_algo else '', sig_oid)
             except ValueError:
                 label = sig_oid
-            violations.append(str(_(
-                'Issuing CA "%(ca)s" uses signature algorithm with hash %(hash)s, '
-                'which is not permitted in %(mode)s.',
-            ) % {'ca': ca_name, 'hash': label, 'mode': mode_label}))
+            violations.append(
+                str(
+                    _(
+                        'Issuing CA "%(ca)s" uses signature algorithm with hash %(hash)s, '
+                        'which is not permitted in %(mode)s.',
+                    )
+                    % {'ca': ca_name, 'hash': label, 'mode': mode_label}
+                )
+            )
         return violations
 
     @staticmethod
     def _check_crl_validity(
-        defaults: _SecurityModeDefaults, mode_label: str, ca_model: type[CaModel],
+        defaults: _SecurityModeDefaults,
+        mode_label: str,
+        ca_model: type[CaModel],
     ) -> list[str]:
         """Return violations for CAs whose CRL validity exceeds the target mode maximum."""
         max_days: int | None = defaults['max_crl_validity_days']
@@ -599,10 +648,13 @@ class SecurityConfig(models.Model):
             crl_validity_hours__gt=max_hours,
         ).values_list('unique_name', 'crl_validity_hours')
         return [
-            str(_(
-                'Issuing CA "%(ca)s" has a CRL validity of %(hours).2f hours (%(days).1f days), '
-                'exceeding the maximum of %(max_days)d days in %(mode)s.',
-            ) % {'ca': n, 'hours': h, 'days': h / 24, 'max_days': max_days, 'mode': mode_label})
+            str(
+                _(
+                    'Issuing CA "%(ca)s" has a CRL validity of %(hours).2f hours (%(days).1f days), '
+                    'exceeding the maximum of %(max_days)d days in %(mode)s.',
+                )
+                % {'ca': n, 'hours': h, 'days': h / 24, 'max_days': max_days, 'mode': mode_label}
+            )
             for n, h in rows
         ]
 
@@ -625,36 +677,54 @@ class SecurityConfig(models.Model):
                 no_onboarding_config__isnull=False,
             ).values_list('unique_name', 'no_onboarding_config__pki_protocols'):
                 if bitmask is not None and (bitmask & proto.value) == proto.value:
-                    violations.append(str(_(
-                        'Issuing CA "%(ca)s" uses no-onboarding protocol "%(protocol)s", '
-                        'which is not permitted in %(mode)s.',
-                    ) % {'ca': ca_name, 'protocol': label, 'mode': mode_label}))
+                    violations.append(
+                        str(
+                            _(
+                                'Issuing CA "%(ca)s" uses no-onboarding protocol "%(protocol)s", '
+                                'which is not permitted in %(mode)s.',
+                            )
+                            % {'ca': ca_name, 'protocol': label, 'mode': mode_label}
+                        )
+                    )
             for dev_name, bitmask in device_model.objects.filter(
                 no_onboarding_config__isnull=False,
             ).values_list('common_name', 'no_onboarding_config__pki_protocols'):
                 if bitmask is not None and (bitmask & proto.value) == proto.value:
-                    violations.append(str(_(
-                        'Device "%(device)s" uses no-onboarding protocol "%(protocol)s", '
-                        'which is not permitted in %(mode)s.',
-                    ) % {'device': dev_name, 'protocol': label, 'mode': mode_label}))
+                    violations.append(
+                        str(
+                            _(
+                                'Device "%(device)s" uses no-onboarding protocol "%(protocol)s", '
+                                'which is not permitted in %(mode)s.',
+                            )
+                            % {'device': dev_name, 'protocol': label, 'mode': mode_label}
+                        )
+                    )
         return violations
 
     @staticmethod
     def _check_onboarding_protocols(
-        defaults: _SecurityModeDefaults, mode_label: str, device_model: type[DeviceModel],
+        defaults: _SecurityModeDefaults,
+        mode_label: str,
+        device_model: type[DeviceModel],
     ) -> list[str]:
         """Return violations for devices using an onboarding protocol blocked by the target mode."""
         permitted: list[int] = defaults['permitted_onboarding_protocols']
         proto_labels: dict[int, str] = {c.value: str(c.label) for c in OnboardingProtocol}
-        rows = device_model.objects.filter(
-            onboarding_config__isnull=False,
-        ).exclude(
-            onboarding_config__onboarding_protocol__in=permitted,
-        ).values_list('common_name', 'onboarding_config__onboarding_protocol')
+        rows = (
+            device_model.objects.filter(
+                onboarding_config__isnull=False,
+            )
+            .exclude(
+                onboarding_config__onboarding_protocol__in=permitted,
+            )
+            .values_list('common_name', 'onboarding_config__onboarding_protocol')
+        )
         return [
-            str(_(
-                'Device "%(device)s" uses onboarding protocol "%(protocol)s", '
-                'which is not permitted in %(mode)s.',
-            ) % {'device': n, 'protocol': proto_labels.get(p, str(p)), 'mode': mode_label})
+            str(
+                _(
+                    'Device "%(device)s" uses onboarding protocol "%(protocol)s", which is not permitted in %(mode)s.',
+                )
+                % {'device': n, 'protocol': proto_labels.get(p, str(p)), 'mode': mode_label}
+            )
             for n, p in rows
         ]
