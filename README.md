@@ -13,7 +13,6 @@ Trustpoint is an open-source PKI and machine identity platform built for operati
 [**Get Started**](#quickstart) · [**Documentation**](https://trustpoint.readthedocs.io/en/latest/) · [**Latest Release**](https://github.com/Trustpoint-Project/trustpoint/releases/latest) · [**Website**](https://industrial-security.io)
 
 [![GitHub stars](https://img.shields.io/github/stars/Trustpoint-Project/trustpoint?style=social)](https://github.com/Trustpoint-Project/trustpoint/stargazers)
-[![Status](https://img.shields.io/badge/status-technology%20preview-red)](https://github.com/Trustpoint-Project/trustpoint)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Read the Docs](https://img.shields.io/readthedocs/trustpoint)](https://trustpoint.readthedocs.io)
 [![Docker](https://img.shields.io/docker/automated/trustpointproject/trustpoint)](https://hub.docker.com/r/trustpointproject/trustpoint)
@@ -31,21 +30,6 @@ Trustpoint is an open-source PKI and machine identity platform built for operati
        alt="Trustpoint machine identity demo"
        width="900">
 </p>
-
-> [!CAUTION]
-> Trustpoint is currently a **technology preview (beta)** and is **not intended for production use**.
-
-<!--
-Recommended: add a short 15-30 second GIF here showing:
-1. Add/onboard a device
-2. Issue a certificate
-3. View it in the dashboard
-4. Show an automated renewal
-Example:
-<p align="center">
-  <img src=".github-assets/trustpoint_demo.gif" alt="Trustpoint machine identity demo" width="900">
-</p>
--->
 
 ## Why Trustpoint?
 
