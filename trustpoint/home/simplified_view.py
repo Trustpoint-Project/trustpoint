@@ -20,10 +20,11 @@ from django.views.generic import ListView
 
 from devices.filters import DeviceFilter
 from devices.models import DeviceModel
-from management.models import NotificationModel, UIConfig
+from management.models import NotificationModel
 from onboarding.enums import OnboardingStatus
 from pki.models import CaModel, CertificateModel, DomainModel, IssuedCredentialModel
 from trustpoint.views.base import ContextDataMixin
+from users.models import TrustpointUser
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -276,8 +277,8 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Check if simplified mode is enabled, otherwise redirect to standard dashboard."""
-        ui_config = UIConfig.get_current()
-        if not ui_config.is_simplified_mode:
+        view_mode = getattr(self.request.user, 'view_mode', TrustpointUser.ViewModeChoices.STANDARD)
+        if view_mode != TrustpointUser.ViewModeChoices.SIMPLIFIED:
             return redirect('home:dashboard')
 
         return super().dispatch(request, *args, **kwargs)
@@ -288,8 +289,8 @@ class EnableCrlCycleQuickActionView(View):
 
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         """Enable CRL cycle updates with preset values."""
-        ui_config = UIConfig.get_current()
-        if not ui_config.is_simplified_mode:
+        view_mode = getattr(request.user, 'view_mode', TrustpointUser.ViewModeChoices.STANDARD)
+        if view_mode != TrustpointUser.ViewModeChoices.SIMPLIFIED:
             return redirect('home:dashboard')
 
         issuing_ca = get_object_or_404(CaModel, pk=pk)

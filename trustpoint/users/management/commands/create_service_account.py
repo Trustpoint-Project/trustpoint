@@ -5,11 +5,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from datetime import timedelta
+from typing import TYPE_CHECKING, cast
 
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 
 from users.models import BuiltinRole, ServiceAccountCredential, TrustpointUser
 
@@ -47,12 +49,12 @@ class Command(BaseCommand):
             help='Number of days until the credential expires (optional)',
         )
 
-    def handle(self, *args: object, **options: object) -> None:
+    def handle(self, *_args: object, **options: object) -> None:
         """Execute the command."""
-        username = options['username']
-        role_name = options['role']
-        description = options['description']
-        expires_days = options.get('expires_days')
+        username = cast('str', options['username'])
+        role_name = cast('str', options['role'])
+        description = cast('str', options['description'])
+        expires_days = cast('int | None', options.get('expires_days'))
 
         try:
             role = Group.objects.get(name=role_name)
@@ -71,10 +73,10 @@ class Command(BaseCommand):
             service_account.save()
 
             self.stdout.write(self.style.SUCCESS(
-                f"Created service account: {username}"
+                f'Created service account: {username}'
             ))
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Failed to create service account: {e}"))
+        except Exception as e:  # noqa: BLE001  # any creation failure is reported to the operator, not raised
+            self.stdout.write(self.style.ERROR(f'Failed to create service account: {e}'))
             return
 
         client_id = ServiceAccountCredential.generate_client_id()
@@ -83,8 +85,6 @@ class Command(BaseCommand):
 
         expires_at = None
         if expires_days:
-            from django.utils import timezone
-            from datetime import timedelta
             expires_at = timezone.now() + timedelta(days=expires_days)
 
         # Create the credential
@@ -112,10 +112,13 @@ class Command(BaseCommand):
             ))
             self.stdout.write(self.style.SUCCESS('\nOAuth 2.0 client_credentials example:'))
             self.stdout.write('  POST /api/token/')
-            self.stdout.write(f'  {{"grant_type": "client_credentials", "client_id": "{credential.client_id}", "client_secret": "{secret}"}}')
+            self.stdout.write(
+                f'  {{"grant_type": "client_credentials", '
+                f'"client_id": "{credential.client_id}", "client_secret": "{secret}"}}'
+            )
             self.stdout.write(self.style.SUCCESS('=' * 70 + '\n'))
 
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Failed to create API key: {e}"))
+        except Exception as e:  # noqa: BLE001  # any creation failure is reported before the account is rolled back
+            self.stdout.write(self.style.ERROR(f'Failed to create API key: {e}'))
             # Clean up the service account if credential creation failed
             service_account.delete()

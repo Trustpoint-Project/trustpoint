@@ -7,14 +7,12 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
-from zoneinfo import available_timezones
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Fieldset, Layout
 from cryptography.x509 import Certificate
 from django import forms
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
@@ -27,14 +25,13 @@ from trustpoint_core.serializer import (
 
 from crypto.models import BackendKind, CryptoProviderProfileModel
 from management.models import (
+    AccountSecurityConfig,
     BackupOptions,
-    InternationalizationConfig,
     LoggingConfig,
     NotificationConfig,
     PrometheusConfig,
     SecurityConfig,
     SmtpEmailConfig,
-    UIConfig,
 )
 from management.models.organization import OrganizationModel
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -50,6 +47,85 @@ if TYPE_CHECKING:
     from typing import ClassVar
 
 MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+
+
+class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
+    """Form for the global account-security policy."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply the standard Bootstrap control classes."""
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-check-input'
+            else:
+                field.widget.attrs['class'] = 'form-control'
+
+    class Meta:
+        """Configure the account-security form."""
+
+        model = AccountSecurityConfig
+        fields = (
+            'password_minimum_length',
+            'password_similarity',
+            'password_common',
+            'password_numeric',
+            'password_prevent_reuse',
+            'password_expiry_days',
+            'api_credential_expiry_days',
+            'idle_timeout_minutes',
+            'failed_login_attempts',
+        )
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'password_minimum_length': forms.NumberInput(attrs={'min': 1}),
+            'password_expiry_days': forms.NumberInput(attrs={'min': 1}),
+            'api_credential_expiry_days': forms.NumberInput(attrs={'min': 1}),
+            'idle_timeout_minutes': forms.NumberInput(attrs={'min': 15, 'max': 43200}),
+            'failed_login_attempts': forms.NumberInput(attrs={'min': 1}),
+        }
+        labels: ClassVar[dict[str, Any]] = {
+            'password_minimum_length': _('Minimum password length'),
+            'password_similarity': _('Prevent similarity to personal information'),
+            'password_common': _('Reject commonly used passwords'),
+            'password_numeric': _('Reject entirely numeric passwords'),
+            'password_prevent_reuse': _('Prevent reuse of the previous password'),
+            'password_expiry_days': _('Expire passwords after this many days'),
+            'api_credential_expiry_days': _('Expire API credentials after this many days'),
+            'idle_timeout_minutes': _('Idle session duration in minutes'),
+            'failed_login_attempts': _('Block after this many failed login attempts'),
+        }
+        help_texts: ClassVar[dict[str, Any]] = {
+            'password_minimum_length': _('Passwords must contain at least this many characters.'),
+            'password_similarity': _('Reject passwords too similar to the username, name, or email address.'),
+            'password_common': _("Reject passwords found in Django's common-password list."),
+            'password_numeric': _('Reject passwords made up of numbers only.'),
+            'password_prevent_reuse': _('A new password must differ from the immediately preceding password.'),
+            'password_expiry_days': _('Leave empty to keep passwords valid indefinitely.'),
+            'api_credential_expiry_days': _('Leave empty to keep API credentials valid indefinitely.'),
+            'idle_timeout_minutes': _(
+                'Users are logged out after this period without activity. '
+                'Allowed range: 15 minutes to 30 days.',
+            ),
+            'failed_login_attempts': _(
+                'Leave empty to disable blocking. '
+                'Successful login resets the consecutive failure count.',
+            ),
+        }
+
+    def clean_password_expiry_days(self) -> int | None:
+        """Accept an empty value to represent no password expiry."""
+        value = self.cleaned_data['password_expiry_days']
+        return value or None
+
+    def clean_api_credential_expiry_days(self) -> int | None:
+        """Accept an empty value to represent no credential expiry."""
+        value = self.cleaned_data['api_credential_expiry_days']
+        return value or None
+
+    def clean_failed_login_attempts(self) -> int | None:
+        """Accept an empty value to represent no failed-login blocking."""
+        value = self.cleaned_data['failed_login_attempts']
+        return value or None
 
 
 class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
@@ -1117,83 +1193,6 @@ class LoggingConfigForm(forms.Form):
                 'crypto_backend_audit_enabled': crypto_backend_audit_enabled,
             },
         )
-
-class InternationalizationConfigForm(forms.Form):
-    """Form for managing internationalization configuration."""
-
-    DATE_FORMATS: ClassVar[list[tuple[str, str]]] = [
-        ('0', 'dd/MM/yyyy HH:mm'),
-        ('1', 'MM/dd/yyyy HH:mm'),
-        ('2', 'dd MMM yyyy HH:mm'),
-        ('3', 'dd MMM yyyy hh:mm a'),
-        ('4', 'dd MMMM yyyy HH:mm:ss'),
-        ('5', 'dd MMMM yyyy hh:mm:ss a'),
-        ('6', 'yyyy-MM-dd HH:mm:ss'),
-        ('7', "yyyy-MM-dd'T'HH:mm:ss"),
-    ]
-
-    TIMEZONES: ClassVar[list[tuple[str, str]]] = sorted(
-        (tz, tz) for tz in available_timezones()
-    )
-
-    date_format = forms.ChoiceField(
-        label=_('Date Format'),
-        choices=DATE_FORMATS,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    language = forms.ChoiceField(
-        label=_('System Language'),
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    timezone = forms.ChoiceField(
-        label=_('Timezone'),
-        choices=TIMEZONES,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the form."""
-        super().__init__(*args, **kwargs)
-
-        language_field = self.fields['language']
-        if isinstance(language_field, forms.ChoiceField):
-            language_field.choices = settings.LANGUAGES
-
-    def save(self) -> None:
-        """Save the internationalization configuration."""
-        InternationalizationConfig.objects.update_or_create(
-            id=1,
-            defaults={
-                'date_format': self.cleaned_data['date_format'],
-                'language': self.cleaned_data['language'],
-                'timezone': self.cleaned_data['timezone'],
-            }
-        )
-
-
-class UIConfigForm(forms.Form):
-    """Form for managing UI configuration."""
-
-    view_mode = forms.ChoiceField(
-        label=_('View Mode'),
-        choices=[
-            ('standard', _('Standard View')),
-            ('simplified', _('Simplified View')),
-        ],
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    def save(self) -> None:
-        """Save the UI configuration."""
-        UIConfig.objects.update_or_create(
-            id=1,
-            defaults={
-                'view_mode': self.cleaned_data['view_mode'],
-            }
-        )
-
 
 class OrganizationForm(forms.ModelForm[OrganizationModel]):
     """Form for creating and updating organizations."""

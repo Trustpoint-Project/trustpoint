@@ -1,5 +1,5 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n static %}
+{% load i18n static internationalization_tags %}
 
 {% block head %}
   {{ block.super }}
@@ -18,8 +18,8 @@
         <div class="text-muted small">
           <div><strong>{% trans "Trigger" %}:</strong> <code>{{ run.trigger_on }}</code></div>
           <div><strong>{% trans "Run ID" %}:</strong> <code>{{ run.id }}</code></div>
-          <div><strong>{% trans "Created" %}:</strong> {{ run.created_at|date:"Y-m-d H:i:s" }}</div>
-          <div><strong>{% trans "Last update" %}:</strong> {{ run.updated_at|date:"Y-m-d H:i:s" }}</div>
+          <div><strong>{% trans "Created" %}:</strong> {{ run.created_at|local_datetime }}</div>
+          <div><strong>{% trans "Last update" %}:</strong> {{ run.updated_at|local_datetime }}</div>
         </div>
       </div>
 
@@ -139,7 +139,7 @@
           {% endif %}
         </div>
         <div class="text-muted small">
-          <div>{% trans "Released" %}: {{ run.idempotency_released_at|date:"Y-m-d H:i:s" }}</div>
+                  <div>{% trans "Released" %}: {{ run.idempotency_released_at|local_datetime }}</div>
           {% if run.idempotency_released_by %}
             <div>{% trans "By" %}: {{ run.idempotency_released_by }}</div>
           {% endif %}
@@ -246,7 +246,7 @@
                   </td>
                   <td>
                     <div class="small text-muted">{% trans "Step runs" %}: {{ row.instance.run_count }}</div>
-                    <div class="small text-muted">{% trans "Updated" %}: {{ row.instance.updated_at|date:"Y-m-d H:i" }}</div>
+                    <div class="small text-muted">{% trans "Updated" %}: {{ row.instance.updated_at|local_datetime }}</div>
                   </td>
                   <td class="text-end">
                     <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:instances-detail' row.instance.id %}">

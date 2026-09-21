@@ -11,6 +11,31 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.CreateModel(
+            name='AccountSecurityConfig',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('password_minimum_length', models.PositiveIntegerField(default=8)),
+                ('password_similarity', models.BooleanField(default=True)),
+                ('password_common', models.BooleanField(default=True)),
+                ('password_numeric', models.BooleanField(default=True)),
+                ('password_prevent_reuse', models.BooleanField(default=True)),
+                ('password_expiry_days', models.PositiveIntegerField(blank=True, default=None, null=True)),
+                ('api_credential_expiry_days', models.PositiveIntegerField(blank=True, default=None, null=True)),
+                ('idle_timeout_minutes', models.PositiveIntegerField(default=30)),
+                ('failed_login_attempts', models.PositiveIntegerField(blank=True, default=None, null=True)),
+            ],
+            options={
+                'verbose_name': 'account security configuration',
+                'verbose_name_plural': 'account security configuration',
+            },
+        ),
+        migrations.DeleteModel(
+            name='InternationalizationConfig',
+        ),
+        migrations.DeleteModel(
+            name='UIConfig',
+        ),
         migrations.AddField(
             model_name='securityconfig',
             name='not_permitted_mldsa_variant_oids',

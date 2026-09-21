@@ -12,7 +12,6 @@ from django.db import transaction
 
 from users.models import AppPermission, BuiltinRole, GroupProfile
 
-
 ROLE_PERMISSION_CODENAMES: dict[BuiltinRole, frozenset[str] | None] = {
     BuiltinRole.ADMIN: None,
     BuiltinRole.SERVICE: frozenset({

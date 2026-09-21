@@ -4,9 +4,11 @@
 """Handles Request Conversion to JSON and Profile Validation."""
 import json
 
+from cryptography import x509
 from pydantic_core import ValidationError
 
 from cmp.util import PKIFailureInfo as CMPErrs
+from pki.services.csr import csr_to_request
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
@@ -30,7 +32,13 @@ class ProfileValidator(LoggerMixin):
                           http_status=500, cmp_code=CMPErrs.SYSTEM_FAILURE)
             raise TypeError(exc_msg)
 
-        cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
+        if context.csr_strict:
+            if not isinstance(context.cert_requested, x509.CertificateSigningRequest):
+                exc_msg = 'Strict CSR validation requires a certificate signing request.'
+                raise ValueError(exc_msg)
+            cert_request_json = csr_to_request(context.cert_requested)
+        else:
+            cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
         cls.logger.info('Cert Request JSON: %s', cert_request_json)
 
         if not context.certificate_profile_model:
@@ -41,6 +49,8 @@ class ProfileValidator(LoggerMixin):
 
         try:
             cert_profile = context.certificate_profile_model.profile
+            if context.csr_strict:
+                cert_profile = {**cert_profile, 'reject_mods': True}
         except json.JSONDecodeError as e:
             exc_msg = f'Error decoding certificate profile JSON: {e}'
             context.error('Certificate profile data is corrupted.',

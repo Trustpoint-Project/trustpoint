@@ -1,6 +1,6 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
-{% load static %}
+{% load static internationalization_tags %}
 
 {% block head %}
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
@@ -32,7 +32,7 @@
                                 {{ message.signature|truncatechars:50 }}
                             </a>
                         </td>
-                        <td>{{ message.created_at|date:"Y-m-d H:i:s" }}</td>
+                        <td>{{ message.created_at|local_datetime }}</td>
                     </tr>
                 {% empty %}
                     <tr>
@@ -82,7 +82,7 @@
 
                 <div class="mt-3">
                     <small class="text-muted">
-                        <strong>{% trans "Created" %}:</strong> {{ message.created_at|date:"Y-m-d H:i:s" }}
+                        <strong>{% trans "Created" %}:</strong> {{ message.created_at|local_datetime }}
                     </small>
                 </div>
             </div>

@@ -1,5 +1,5 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n static %}
+{% load i18n static internationalization_tags %}
 
 {% block head %}
   {{ block.super }}
@@ -203,9 +203,9 @@
                   <span class="badge text-bg-warning">{{ a.get_status_display }}</span>
                 </div>
                 <div class="text-muted small">
-                  <div>{% trans "Created" %}: {{ a.created_at|date:"Y-m-d H:i:s" }}</div>
+                  <div>{% trans "Created" %}: {{ a.created_at|local_datetime }}</div>
                   {% if a.expires_at %}
-                    <div>{% trans "Expires" %}: {{ a.expires_at|date:"Y-m-d H:i:s" }}</div>
+                    <div>{% trans "Expires" %}: {{ a.expires_at|local_datetime }}</div>
                   {% endif %}
                 </div>
 
@@ -322,9 +322,9 @@
                   </span>
                 </div>
                 <div class="text-muted small">
-                  <div>{% trans "Created" %}: {{ a.created_at|date:"Y-m-d H:i:s" }}</div>
+                  <div>{% trans "Created" %}: {{ a.created_at|local_datetime }}</div>
                   {% if a.decided_at %}
-                    <div>{% trans "Decided" %}: {{ a.decided_at|date:"Y-m-d H:i:s" }}</div>
+                    <div>{% trans "Decided" %}: {{ a.decided_at|local_datetime }}</div>
                   {% endif %}
                 </div>
                 <div class="d-flex gap-2 flex-wrap mt-3">
@@ -367,7 +367,7 @@
                             <span class="badge text-bg-secondary">{{ r.step_type }}</span>
                             <span class="badge {{ item.badge }}">{{ r.status }}</span>
                           </div>
-                          <div class="text-muted small">{{ r.created_at|date:"Y-m-d H:i:s" }}</div>
+                          <div class="text-muted small">{{ r.created_at|local_datetime }}</div>
                         </div>
 
                         <div class="text-muted small mt-1">
@@ -512,8 +512,8 @@
                     </span>
                   </div>
                   <div class="text-muted small">
-                    <div>{% trans "Created" %}: {{ j.created_at|date:"Y-m-d H:i:s" }}</div>
-                    <div>{% trans "Run after" %}: {{ j.run_after|date:"Y-m-d H:i:s" }}</div>
+                    <div>{% trans "Created" %}: {{ j.created_at|local_datetime }}</div>
+                    <div>{% trans "Run after" %}: {{ j.run_after|local_datetime }}</div>
                     <div>{% trans "Attempts" %}: {{ j.attempts }}/{{ j.max_attempts }}</div>
                   </div>
                   {% if j.last_error %}

@@ -1,5 +1,5 @@
 {% extends "trustpoint/base.html" %}
-{% load i18n static %}
+{% load i18n static internationalization_tags %}
 
 {% block content %}
 <div class="card" style="display: flex; flex-direction: column; height: calc(100vh - 120px);">
@@ -38,7 +38,7 @@
                                 </tr>
                                 <tr>
                                     <td class="text-muted fw-semibold">{% trans "Last Seen" %}:</td>
-                                    <td>{{ device.last_seen|date:"Y-m-d H:i" }}</td>
+                                    <td>{{ device.last_seen|local_datetime }}</td>
                                 </tr>
                             </tbody>
                         </table>

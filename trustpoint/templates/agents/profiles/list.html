@@ -1,5 +1,5 @@
 {% extends "trustpoint/base.html" %}
-{% load i18n %}
+{% load i18n internationalization_tags %}
 
 {% block content %}
 
@@ -43,8 +43,8 @@
                             <input type="checkbox" name="row_checkbox" value="{{ profile.id }}"/>
                         </td>
                         <td>{{ profile.name }}</td>
-                        <td>{{ profile.created_at }}</td>
-                        <td>{{ profile.updated_at }}</td>
+                        <td>{{ profile.created_at|local_datetime }}</td>
+                        <td>{{ profile.updated_at|local_datetime }}</td>
                         <td>{% if profile.is_active %} ✔ {% else %} ✘ {% endif %}</td>
                         <td><a href="{% url 'agents:profiles-config' pk=profile.pk %}" class="btn btn-primary tp-table-btn w-100">{% trans "Edit" %}</a></td>
                     </tr>

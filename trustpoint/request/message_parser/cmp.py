@@ -607,21 +607,22 @@ class CmpRevocationBodyValidation(LoggerMixin):
 class CmpCertConfBodyValidation(LoggerMixin):
     """Sub-component for validating and parsing a CMP certConf body (RFC 4210 Section 5.3.18).
 
-    Per RFC 9483 Section 4.1.1 the certConf body MUST contain exactly one
-    CertStatus element with:
-    - certHash  REQUIRED -- hash of the confirmed certificate
-    - certReqId REQUIRED -- MUST be 0
-    - statusInfo OPTIONAL -- if omitted, acceptance is implied; if present,
-      status MUST be 'accepted' (0) or 'rejection' (2)
+    RFC 9480 only relaxes CertStatus.certHash for CMP 2021 (pvno = 3).
+    CMP 2000 remains strict and still requires certHash.
     """
 
     def parse_certconf_body(self, context: CmpCertConfRequestContext, pki_body: rfc4210.PKIBody) -> None:
         """Extract and validate the CertStatus elements from a certConf PKIBody."""
         cert_status = self._extract_single_cert_status(pki_body)
 
-        if not cert_status['certHash'].hasValue():
-            self._raise_value_error('certHash is REQUIRED in CertStatus per RFC 9483.')
-        context.cert_hash = bytes(cert_status['certHash'])
+        context.cert_hash = None
+        cert_hash_present = cert_status['certHash'].hasValue()
+        if cert_hash_present:
+            context.cert_hash = bytes(cert_status['certHash'])
+        elif self._is_cmp2021(context):
+            self.logger.debug('certHash absent in certConf for pvno=3 (CMP 2021): accepted by RFC 9480.')
+        else:
+            self._raise_value_error('certHash is REQUIRED in CertStatus for CMP 2000 (pvno=2).')
 
         context.cert_req_id = self._parse_cert_req_id(cert_status)
         self._parse_cert_conf_status(cert_status, context)
@@ -645,6 +646,18 @@ class CmpCertConfBodyValidation(LoggerMixin):
                 'certConf MUST contain exactly one CertStatus element per RFC 9483, but found none.'
             )
         return cert_conf[0]
+
+    def _is_cmp2021(self, context: CmpCertConfRequestContext) -> bool:
+        """Return True when the enclosing CMP message uses pvno=3 (CMP 2021)."""
+        cmp_2021_pvno = 3
+        parsed_message = context.parsed_message
+        if parsed_message is None or not hasattr(parsed_message, '__getitem__'):
+            return False
+
+        try:
+            return int(parsed_message['header']['pvno']) == cmp_2021_pvno
+        except (KeyError, TypeError, ValueError):
+            return False
 
     def _parse_cert_req_id(self, cert_status: Any) -> int:
         """Validate certReqId from CertStatus and return it."""

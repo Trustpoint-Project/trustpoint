@@ -202,6 +202,24 @@ a.tp-primary:focus, a.tp-primary:hover, a.tp-primary:active,
     height: 1.5rem;
 }
 
+.tp-user-avatar {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 2rem !important;
+    width: 2rem !important;
+    height: 2rem !important;
+    min-width: 2rem !important;
+    min-height: 2rem !important;
+    max-width: 2rem !important;
+    max-height: 2rem !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    line-height: 1;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
 .tp-menu-head:hover, .tp-menu-head:focus {
     background-color: var(--bs-secondary-bg);
 }
@@ -1085,6 +1103,28 @@ input[readonly].readonly-field {
 
 .tp-settings-panel.active {
     display: block;
+}
+
+.account-security-configuration .account-security-field .form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.account-security-configuration .account-security-field .form-control {
+    max-width: 20rem;
+}
+
+.account-security-configuration .account-security-field .form-text {
+    margin-top: 0.5rem;
+}
+
+.account-security-configuration .account-security-checkbox .form-check {
+    margin-bottom: 0.35rem;
+}
+
+.account-security-configuration .account-security-checkbox .form-text {
+    margin-top: 0.35rem;
+    margin-bottom: 0.25rem;
 }
 
 /* ----- Backend configuration page ----- */

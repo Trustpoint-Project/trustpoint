@@ -10,24 +10,29 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
+from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.test import RequestFactory
 
+from pki.models import CaModel
 from pki.models.ca_rollover import CaRolloverStrategyType
 from pki.services.ca_rollover import CaRolloverError
 from pki.views.ca_rollover import (
     CancelRolloverView,
     CompleteRolloverView,
     PlanRolloverView,
+    RolloverFileMethodSelectView,
+    RolloverMethodSelectView,
+    RolloverRequestMethodSelectView,
     StartRolloverView,
     TransitionRolloverView,
 )
 
 
-def request(method: str = 'post', **data: str) -> object:
+def request(method: str = 'post', request_data: dict[str, str] | None = None, **data: str) -> object:
     """Build a request with an authenticated operator."""
     factory = RequestFactory()
-    test_request = getattr(factory, method)('/ca/rollover/', data=data)
+    test_request = getattr(factory, method)('/ca/rollover/', data=request_data or data)
     test_request.user = SimpleNamespace(is_authenticated=True, has_perm=lambda _permission: True)
     return test_request
 
@@ -165,3 +170,36 @@ def test_transition_reports_invalid_state() -> None:
     assert response.status_code == HTTPStatus.FOUND
 
     assert error.call_args.args[1] == 'wrong state'
+
+
+@pytest.mark.parametrize(
+    ('view_class', 'method', 'target'),
+    [
+        (RolloverMethodSelectView, 'import', 'pki:issuing_cas-rollover-file-method-select'),
+        (RolloverMethodSelectView, 'generate', 'pki:issuing_cas-rollover-request-method-select'),
+        (RolloverFileMethodSelectView, 'pkcs12', 'pki:issuing_cas-rollover-import-pkcs12'),
+        (RolloverFileMethodSelectView, 'separate_files', 'pki:issuing_cas-rollover-import-separate-files'),
+        (RolloverRequestMethodSelectView, 'est', 'pki:issuing_cas-rollover-request-est'),
+        (RolloverRequestMethodSelectView, 'cmp', 'pki:issuing_cas-rollover-request-cmp'),
+    ],
+)
+def test_rollover_method_selection_routes(method: str, view_class: type, target: str) -> None:
+    """Each selection step routes to the shared acquisition endpoint."""
+    issuing_ca = SimpleNamespace(ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11)
+    with (
+        patch('pki.views.ca_rollover.get_object_or_404', return_value=issuing_ca),
+        patch('pki.views.ca_rollover.CaRolloverService.get_active_rollover', return_value=None),
+        patch('pki.views.ca_rollover.CaRolloverService.has_completed_rollover', return_value=False),
+        patch('pki.views.ca_rollover.redirect', return_value=HttpResponse(status=302)) as redirect,
+    ):
+        response = view_class().post(request(request_data={'method': method}), pk=4)
+
+    assert response.status_code == HTTPStatus.FOUND
+    redirect.assert_called_once_with(target, pk=4)
+
+
+def test_rollover_method_selection_rejects_remote_ca() -> None:
+    """Remote and RA CAs cannot enter the local rollover workflow."""
+    issuing_ca = SimpleNamespace(ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_EST)
+    with patch('pki.views.ca_rollover.get_object_or_404', return_value=issuing_ca), pytest.raises(PermissionDenied):
+        RolloverMethodSelectView().get(request('get'), pk=4)

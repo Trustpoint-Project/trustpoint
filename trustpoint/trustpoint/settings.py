@@ -381,7 +381,7 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
 
 CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
-LOGIN_REDIRECT_URL = 'home:dashboard'
+LOGIN_REDIRECT_URL = 'home:index'
 LOGIN_URL = 'users:login'
 
 if TRUSTPOINT_IS_BOOTSTRAP:
@@ -465,6 +465,9 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'users.middleware.UserPreferencesMiddleware',
+    'users.middleware.IdleSessionTimeoutMiddleware',
+    'users.middleware.PasswordChangeRequiredMiddleware',
     'users.middleware.ServiceAccountMiddleware',
     'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
@@ -521,16 +524,7 @@ TEMPLATES: list[dict[str, Any]] = [
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        'NAME': 'users.password_validation.ConfigurablePasswordValidator',
     },
 ]
 
@@ -538,7 +532,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.0/ref/settings/#authentication-backends
 AUTHENTICATION_BACKENDS = [
     'users.authentication.ServiceAccountBackend',  # Service account authentication
-    'django.contrib.auth.backends.ModelBackend',    # Default Django authentication
+    'users.management_backend.TrustpointModelBackend',
 ]
 
 

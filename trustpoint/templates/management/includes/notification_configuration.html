@@ -1,6 +1,7 @@
 {% load i18n %}
 {% load static %}
 {% load crispy_forms_filters %}
+{% load internationalization_tags %}
 
 <div class="card">
     <div class="card-header"><h5 class="mb-0">{% trans "Notification Configuration" %}</h5></div>
@@ -10,7 +11,7 @@
             <i class="bi bi-clock me-2"></i>
             <strong>{% trans "Next Notification Check:" %}</strong>
             {% if notification_config.next_notification_check_scheduled_at %}
-                {{ notification_config.next_notification_check_scheduled_at|date:"Y-m-d H:i:s" }}
+                {{ notification_config.next_notification_check_scheduled_at|local_datetime }}
             {% else %}
                 <span class="text-muted">{% trans "Not yet scheduled" %}</span>
             {% endif %}

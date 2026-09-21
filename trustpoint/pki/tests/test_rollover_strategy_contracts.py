@@ -33,9 +33,9 @@ def test_strategy_metadata_is_stable(strategy, strategy_type, template) -> None:
     assert strategy.get_template_name() == template
 
 
-@pytest.mark.parametrize('strategy', [GenerateKeypairRolloverStrategy(), RemoteCaRolloverStrategy()])
+@pytest.mark.parametrize('strategy', [RemoteCaRolloverStrategy()])
 def test_unimplemented_strategy_operations_fail_explicitly(strategy, issuing_ca_model) -> None:
-    """Stub operations fail explicitly until their workflows are implemented."""
+    """Unimplemented strategy operations fail explicitly."""
     with pytest.raises(NotImplementedError, match='not yet implemented'):
         strategy.get_plan_form(issuing_ca_model)
     with pytest.raises(NotImplementedError, match='not yet implemented'):

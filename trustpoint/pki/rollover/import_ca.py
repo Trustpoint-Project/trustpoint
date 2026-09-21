@@ -15,6 +15,7 @@ from trustpoint_core.serializer import CredentialSerializer
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.errors import ProviderConfigurationError
 from pki.forms.issuing_cas import (
+    IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaImportMixin,
 )
 from pki.models.ca_rollover import CaRolloverStrategyType
@@ -138,6 +139,27 @@ class ImportCaRolloverForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
         return self._new_issuing_ca
 
 
+class SeparateFilesCaRolloverForm(IssuingCaAddFileImportSeparateFilesForm):
+    """Reuse the normal separate-file import validation for rollover."""
+
+    transition_scheduled_at = forms.DateTimeField(
+        required=False,
+        label=_('Scheduled Transition Time'),
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
+    )
+    notes = forms.CharField(required=False, label=_('Notes'), widget=forms.Textarea(attrs={'rows': 3}))
+
+    def _finalize_issuing_ca_creation(self, *args: Any, **kwargs: Any) -> CaModel:
+        issuing_ca = super()._finalize_issuing_ca_creation(*args, **kwargs)
+        self._new_issuing_ca = issuing_ca
+        return issuing_ca
+
+    @property
+    def new_issuing_ca(self) -> CaModel:
+        """Return the CA created by the shared import implementation."""
+        return self._new_issuing_ca
+
+
 class ImportCaRolloverStrategy(RolloverStrategy):
     """Rollover strategy: import a new Issuing CA from a PKCS#12 file."""
 
@@ -163,8 +185,8 @@ class ImportCaRolloverStrategy(RolloverStrategy):
     def create_new_ca(self, form: forms.Form, old_ca: CaModel) -> CaModel | None:
         """Return the new CA created during form validation."""
         _ = old_ca
-        if not isinstance(form, ImportCaRolloverForm):
-            msg = 'Expected ImportCaRolloverForm instance.'
+        if not isinstance(form, (ImportCaRolloverForm, SeparateFilesCaRolloverForm)):
+            msg = 'Expected ImportCaRolloverForm or SeparateFilesCaRolloverForm instance.'
             raise TypeError(msg)
         return form.new_issuing_ca
 
