@@ -805,13 +805,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
     def get_issued_certificates(self) -> QuerySet[CertificateModel, CertificateModel]:
         """Returns certificates issued by this CA, except its own in case of a self-signed CA.
 
-        This goes through all active certificates and checks issuance by this CA
-        based on cert.issuer_public_bytes == ca.subject_public_bytes.
-
-        Warning:
-            This means that it may inadvertently return certificates
-            that were issued by a different CA with the same subject name.
-
         Returns:
             QuerySet: Certificates issued by this CA, or empty queryset for RAs/keyless CAs.
         """
@@ -820,12 +813,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return CertificateModel.objects.none()
         if self.credential.certificate is None:
             return CertificateModel.objects.none()
-        ca_subject_public_bytes = self.credential.certificate_or_error.subject_public_bytes
+        ca_certificate = self.credential.certificate_or_error
 
         # do not return self-signed CA certificate
-        return CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(
-            subject_public_bytes=ca_subject_public_bytes
-        )
+        return CertificateModel.objects.filter(issuer_id=ca_certificate).exclude(pk=ca_certificate.pk)
 
     # ===== CRL Helper Methods =====
 

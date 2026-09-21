@@ -1525,12 +1525,7 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
             ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
         ), pk=self.kwargs['pk'])
 
-        # PyCharm TypeChecker issue - this passes mypy
-        # noinspection PyTypeChecker
-        # TODO(AlexHx8472): This is not a good query. Use issued credentials to get the certificates.  # noqa: FIX002
-        return CertificateModel.objects.filter(
-            issuer_public_bytes=issuing_ca.subject_public_bytes
-        )
+        return issuing_ca.get_issued_certificates().select_related('revoked_certificate')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the issuing ca model object to the context.
