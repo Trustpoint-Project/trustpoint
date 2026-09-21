@@ -176,11 +176,43 @@ urlpatterns = [
     ),
     path(
         (
+            'certificate-lifecycle-management/<int:pk>'
+            '/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/choose-method/'
+        ),
+        views.DeviceChooseIssuanceMethodView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_choose_issuance_method',
+    ),
+    path(
+        (
+            'certificate-lifecycle-management/<int:pk>'
+            '/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/csr/'
+        ),
+        views.DeviceIssueCsrCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_csr_credential',
+    ),
+    path(
+        (
             'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
             '/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/'
         ),
         views.OpcUaGdsIssueProfileCredentialView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_profile_credential',
+    ),
+    path(
+        (
+            'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
+            '/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/choose-method/'
+        ),
+        views.OpcUaGdsChooseIssuanceMethodView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_choose_issuance_method',
+    ),
+    path(
+        (
+            'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
+            '/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/csr/'
+        ),
+        views.OpcUaGdsIssueCsrCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_csr_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/cmp-shared-secret/',

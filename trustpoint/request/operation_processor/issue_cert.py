@@ -34,6 +34,7 @@ from request.request_context import (
     BaseRequestContext,
     EstCertificateRequestContext,
     HttpBaseRequestContext,
+    ManualIssuanceMethod,
 )
 from trustpoint.logger import LoggerMixin
 
@@ -182,14 +183,14 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
                     *issuing_credential.get_certificate_chain(),
                 ]
             )
-            context.issued_credential = saver.save_credential(
+            issued_credential = saver.save_credential(
                 credential,
                 common_name,
                 credential_type,
                 cert_profile_disp_name,
             )
         else: # keyless credential - standard for EST and CMP requests
-            saver.save_keyless_credential(
+            issued_credential = saver.save_keyless_credential(
                 signed_cert,
                 [
                     issuing_credential.get_certificate(),
@@ -199,6 +200,10 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
                 credential_type,
                 cert_profile_disp_name,
             )
+
+        if isinstance(context, BaseCredentialRequestContext):
+            context.issued_credential = issued_credential
+
         context.issued_certificate = signed_cert
         context.issued_certificate_chain = [
             issuing_credential.get_certificate(),
@@ -208,11 +213,20 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         domain_name = context.domain.unique_name if context.domain else 'unknown'
         device_name = context.device.common_name if context.device else 'unknown'
         protocol = context.protocol if hasattr(context, 'protocol') else 'unknown'
+        audit_details: dict[str, object] = {}
+        if isinstance(context, BaseCredentialRequestContext) and context.manual_issuance_method is not None:
+            method = ManualIssuanceMethod(context.manual_issuance_method)
+            issued_credential_id = context.issued_credential.pk if context.issued_credential else None
+            audit_details = {
+                'manual_issuance_method': method.name,
+                'issued_credential_id': issued_credential_id,
+            }
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.CREDENTIAL_ISSUED,
             target=context.device,
             target_display=f'Device: {device_name} | Domain: {domain_name} | Protocol: {protocol}',
             actor=context.actor,
+            details=audit_details,
         )
 
     def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0912, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
