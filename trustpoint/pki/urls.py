@@ -12,6 +12,13 @@ from pki.views.ca_rollover import (
     CancelRolloverView,
     CompleteRolloverView,
     PlanRolloverView,
+    RolloverFileMethodSelectView,
+    RolloverImportPkcs12View,
+    RolloverImportSeparateFilesView,
+    RolloverMethodSelectView,
+    RolloverRequestCmpView,
+    RolloverRequestEstView,
+    RolloverRequestMethodSelectView,
     StartRolloverView,
     TransitionRolloverView,
 )
@@ -167,6 +174,41 @@ urlpatterns = [
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     # CA Rollover management
+    path(
+        'issuing-cas/config/<int:pk>/rollover/method-select/',
+        RolloverMethodSelectView.as_view(),
+        name='issuing_cas-rollover-method-select',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/file-method-select/',
+        RolloverFileMethodSelectView.as_view(),
+        name='issuing_cas-rollover-file-method-select',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/request-method-select/',
+        RolloverRequestMethodSelectView.as_view(),
+        name='issuing_cas-rollover-request-method-select',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/import-pkcs12/',
+        RolloverImportPkcs12View.as_view(),
+        name='issuing_cas-rollover-import-pkcs12',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/import-separate-files/',
+        RolloverImportSeparateFilesView.as_view(),
+        name='issuing_cas-rollover-import-separate-files',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/request-est/',
+        RolloverRequestEstView.as_view(),
+        name='issuing_cas-rollover-request-est',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/request-cmp/',
+        RolloverRequestCmpView.as_view(),
+        name='issuing_cas-rollover-request-cmp',
+    ),
     path(
         'issuing-cas/config/<int:pk>/rollover/plan/',
         PlanRolloverView.as_view(),

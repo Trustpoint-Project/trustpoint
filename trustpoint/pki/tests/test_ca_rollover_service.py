@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -70,6 +70,40 @@ class TestCaRolloverServicePlan:
                 strategy_type=CaRolloverStrategyType.IMPORT_CA,
                 form=form,
             )
+
+    def test_plan_rollover_awaits_certificate(self, issuing_ca_model, second_issuing_ca_model):
+        """A strategy may keep its provisional CA in AWAITING_NEW_CA."""
+        form = MagicMock()
+        form.cleaned_data = {'transition_scheduled_at': None, 'notes': ''}
+        strategy = MagicMock()
+        strategy.create_new_ca.return_value = second_issuing_ca_model
+        strategy.awaits_new_ca_certificate = True
+
+        with patch.object(CaRolloverService, 'get_strategy', return_value=strategy):
+            rollover = CaRolloverService.plan_rollover(
+                old_ca=issuing_ca_model,
+                strategy_type=CaRolloverStrategyType.GENERATE_KEYPAIR,
+                form=form,
+            )
+
+        assert rollover.state == CaRolloverState.AWAITING_NEW_CA
+
+    def test_complete_awaiting_rollover(self, issuing_ca_model, second_issuing_ca_model):
+        """A valid managed certificate moves an awaiting rollover to PLANNED."""
+        rollover = CaRolloverModel.objects.create(
+            old_issuing_ca=issuing_ca_model,
+            new_issuing_ca=second_issuing_ca_model,
+            state=CaRolloverState.AWAITING_NEW_CA,
+            strategy_type=CaRolloverStrategyType.GENERATE_KEYPAIR,
+        )
+
+        completed = CaRolloverService.complete_awaiting_rollover_for_ca(second_issuing_ca_model)
+
+        assert completed is not None
+        rollover.refresh_from_db()
+        assert rollover.state == CaRolloverState.PLANNED
+        second_issuing_ca_model.refresh_from_db()
+        assert second_issuing_ca_model.ca_type == second_issuing_ca_model.CaTypeChoice.LOCAL_PKCS11
 
     def test_plan_rollover_blocked_after_completed(self, issuing_ca_model, second_issuing_ca_model):
         """Test that planning a rollover is blocked if a completed rollover exists."""
