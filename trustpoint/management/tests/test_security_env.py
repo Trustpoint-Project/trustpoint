@@ -95,7 +95,8 @@ class SecurityEnvironmentTest(TestCase):
             synchronize_security_config()
         config.refresh_from_db()
         self.assertEqual(config.rsa_minimum_key_size, 1024)
-        self.assertEqual(config.allow_imported_private_keys, False)
+        preset = SecurityConfig._MODE_DEFAULTS[SecurityConfig.SecurityModeChoices.BROWNFIELD]
+        self.assertEqual(config.allow_imported_private_keys, preset['allow_imported_private_keys'])
 
     def test_policy_conflict_keeps_existing_security_config_and_logs(self) -> None:
         config = SecurityConfig.objects.create(

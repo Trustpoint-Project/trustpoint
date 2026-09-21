@@ -5,7 +5,7 @@
 import tempfile
 from io import StringIO
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
 from django.conf import settings
 from django.core.management import call_command
@@ -211,7 +211,10 @@ class StartupManagerCommandTest(TestCase):
             out = StringIO()
             call_command('startup_manager', stdout=out)
 
-            mock_call_command.assert_called_once_with('migrate')
+            self.assertEqual(
+                mock_call_command.call_args_list,
+                [call('migrate'), call('sync_security_config')],
+            )
             mock_strategy_class.assert_called_once_with()
             mock_strategy.execute.assert_called_once_with(mock_context)
 
@@ -247,7 +250,10 @@ class StartupManagerCommandTest(TestCase):
             with self.assertRaises(CommandError):
                 call_command('startup_manager', stdout=out)
 
-            mock_call_command.assert_called_once_with('migrate')
+            self.assertEqual(
+                mock_call_command.call_args_list,
+                [call('migrate'), call('sync_security_config')],
+            )
             mock_strategy_class.assert_called_once_with()
 
     def test_startup_manager_version_parsing(self) -> None:
