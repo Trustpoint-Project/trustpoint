@@ -1,0 +1,322 @@
+```django
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+<div class="card">
+
+    {# ============================================================ #}
+    {# Header                                                      #}
+    {# ============================================================ #}
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Define Certificate Content for' %}
+            "{{ issuing_ca.unique_name }}"
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Configure the certificate subject, alternative names and validity period.' %}
+        </p>
+    </div>
+
+
+    {# ============================================================ #}
+    {# Content                                                     #}
+    {# ============================================================ #}
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+
+            <form
+                id="certificate-content-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <input
+                    type="hidden"
+                    name="cert_profile_pk"
+                    value="{{ cert_profile.pk }}"
+                >
+
+
+                {# ==================================================== #}
+                {# Form Errors                                         #}
+                {# ==================================================== #}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger mb-4" role="alert">
+                        {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+
+                {# ==================================================== #}
+                {# Certificate Profile                                 #}
+                {# ==================================================== #}
+                <section class="mb-5">
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h2 class="h4 mb-1">
+                                    {% trans 'Certificate Profile' %}
+                                </h2>
+
+                                <p class="text-muted mb-0">
+                                    {% trans 'Select the certificate profile that defines the available fields and certificate requirements.' %}
+                                </p>
+                            </div>
+
+                            <span class="badge text-bg-primary">
+                                {{ cert_profile.display_name|default:cert_profile.unique_name }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <hr class="mb-4">
+
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>
+                                {% trans 'Profile' %}
+                            </div>
+
+                            <div>
+                                <select
+                                    id="id_cert_profile_select"
+                                    class="form-select"
+                                >
+                                    {% for profile in available_profiles %}
+                                        <option
+                                            value="{{ profile.pk }}"
+                                            {% if profile.pk == cert_profile.pk %}selected{% endif %}
+                                        >
+                                            {{ profile.display_name|default:profile.unique_name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                </section>
+
+
+                {% if form.fields %}
+
+                    {# ==================================================== #}
+                    {# Subject                                             #}
+                    {# ==================================================== #}
+                    <section class="mb-5">
+
+                        <div class="mb-3">
+                            <h2 class="h4 mb-1">
+                                {% trans 'Subject' %}
+                            </h2>
+
+                            <p class="text-muted mb-0">
+                                {% trans 'Define the distinguished name of the Issuing CA certificate.' %}
+                            </p>
+                        </div>
+
+                        <hr class="mb-4">
+
+                        <div class="tp-kvp-list">
+                            {% for field in form %}
+                                {% if field.name in 'common_name,organization_name,organizational_unit_name,country_name,state_or_province_name,locality_name,email_address' %}
+                                    <div>
+                                        <div>
+                                            {{ field.label }}
+
+                                            {% if field.field.required %}
+                                                <span class="text-danger">*</span>
+                                            {% endif %}
+                                        </div>
+
+                                        <div>
+                                            {{ field }}
+
+                                            {% if field.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {% for error in field.errors %}
+                                                        <div>{{ error }}</div>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+
+                                            {% if field.help_text %}
+                                                <div class="form-text">
+                                                    {{ field.help_text }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                    </section>
+
+
+                    {# ==================================================== #}
+                    {# Subject Alternative Names                           #}
+                    {# ==================================================== #}
+                    <section class="mb-5">
+
+                        <div class="mb-3">
+                            <h2 class="h4 mb-1">
+                                {% trans 'Subject Alternative Names' %}
+                            </h2>
+
+                            <p class="text-muted mb-0">
+                                {% trans 'Add additional identities that should be included in the certificate.' %}
+                            </p>
+                        </div>
+
+                        <hr class="mb-4">
+
+                        <div class="tp-kvp-list">
+                            {% for field in form %}
+                                {% if field.name in 'dns_names,ip_addresses,rfc822_names,uris' %}
+                                    <div>
+                                        <div>
+                                            {{ field.label }}
+
+                                            {% if field.field.required %}
+                                                <span class="text-danger">*</span>
+                                            {% endif %}
+                                        </div>
+
+                                        <div>
+                                            {{ field }}
+
+                                            {% if field.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {% for error in field.errors %}
+                                                        <div>{{ error }}</div>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+
+                                            {% if field.help_text %}
+                                                <div class="form-text">
+                                                    {{ field.help_text }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                    </section>
+
+
+                    {# ==================================================== #}
+                    {# Validity                                            #}
+                    {# ==================================================== #}
+                    <section>
+
+                        <div class="mb-3">
+                            <h2 class="h4 mb-1">
+                                {% trans 'Validity Period' %}
+                            </h2>
+
+                            <p class="text-muted mb-0">
+                                {% trans 'Define the requested lifetime of the Issuing CA certificate.' %}
+                            </p>
+                        </div>
+
+                        <hr class="mb-4">
+
+                        <div class="tp-kvp-list">
+                            {% for field in form %}
+                                {% if field.name in 'days,hours,minutes,seconds' %}
+                                    <div>
+                                        <div>
+                                            {{ field.label }}
+
+                                            {% if field.field.required %}
+                                                <span class="text-danger">*</span>
+                                            {% endif %}
+                                        </div>
+
+                                        <div>
+                                            {{ field }}
+
+                                            {% if field.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {% for error in field.errors %}
+                                                        <div>{{ error }}</div>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+
+                                            {% if field.help_text %}
+                                                <div class="form-text">
+                                                    {{ field.help_text }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                    </section>
+
+                {% else %}
+
+                    <div class="alert alert-warning" role="alert">
+                        {% trans 'No configurable fields are available for this certificate profile.' %}
+                    </div>
+
+                {% endif %}
+
+            </form>
+
+        </div>
+    </div>
+
+
+    {# ============================================================ #}
+    {# Footer                                                      #}
+    {# ============================================================ #}
+    <div class="card-footer d-flex justify-content-between align-items-center">
+
+        <a
+            href="{% url 'pki:issuing_cas' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <button
+            type="submit"
+            form="certificate-content-form"
+            class="btn btn-primary"
+        >
+            {% trans 'Save Certificate Content' %}
+        </button>
+
+    </div>
+
+</div>
+
+
+<script>
+    const profileSelect = document.getElementById('id_cert_profile_select');
+
+    if (profileSelect) {
+        profileSelect.addEventListener('change', function () {
+            const url = new URL(window.location.href);
+            url.searchParams.set('cert_profile_pk', this.value);
+            window.location.href = url.toString();
+        });
+    }
+</script>
+{% endblock content %}
+```

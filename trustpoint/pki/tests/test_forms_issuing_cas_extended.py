@@ -22,6 +22,7 @@ from pki.forms.issuing_cas import (
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddRequestCmpForm,
     IssuingCaAddRequestEstForm,
+    IssuingCaAddRequestExternalCsrForm,
     IssuingCaAddRequestMixin,
     IssuingCaCrlCycleForm,
     IssuingCaImportMixin,
@@ -509,6 +510,15 @@ class TestIssuingCaRequestForms:
         assert form.fields['remote_path'].initial == '/.well-known/cmp/p/certification'
         assert form.fields['ca_type'].initial == CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
 
+    def test_external_csr_form_has_no_remote_fields(self) -> None:
+        """The external CSR form should expose the same key-type choices without remote PKI fields."""
+        form = IssuingCaAddRequestExternalCsrForm()
+
+        assert 'remote_host' not in form.fields
+        assert 'remote_port' not in form.fields
+        assert 'remote_path' not in form.fields
+        assert form.fields['ca_type'].initial == CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+
     def test_unsupported_key_type_is_rejected(self) -> None:
         """A key type the backend cannot generate is rejected."""
         form = IssuingCaAddRequestEstForm(
@@ -583,10 +593,10 @@ class TestIssuingCaTruststoreAssociationForm:
         assert 'Step 2/2' in str(form.fields['trust_store'].help_text)
 
     @pytest.mark.parametrize(
-        'ca_type', [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]
+        'ca_type', [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_ISSUING_CSR, CaModel.CaTypeChoice.REMOTE_CMP_RA]
     )
-    def test_cmp_requires_issuing_ca_chain(self, ca_type: CaModel.CaTypeChoice) -> None:
-        """CMP CAs and RAs only accept issuing CA chain truststores."""
+    def test_cmp_and_csr_require_issuing_ca_chain(self, ca_type: CaModel.CaTypeChoice) -> None:
+        """CMP and external-CSR CAs only accept issuing CA chain truststores."""
         chain_store = TruststoreModel.objects.create(
             unique_name='chain-store', intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
         )
