@@ -2,26 +2,31 @@
   <img src="../_static/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
 </p>
 
-# CRA Conformity Assessment
+# CRA Readiness & Reference Mapping
 
 
 <p>
   <strong>EU Cyber Resilience Act Self-Assessment</strong><br>
-  <em>Open Source Trust Anchor Software for Industrial Environments</em>
+  <em>Voluntary mapping of Trustpoint security features and project artefacts to the EU Cyber Resilience Act</em>
 </p>
 
 <p>
-  <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Version"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Effective-2026--07--01-success?style=for-the-badge" alt="Effective Date"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Review-Quarterly-orange?style=for-the-badge" alt="Review Cycle"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Status-In_Progress-yellow?style=for-the-badge" alt="Status"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Maintained_by-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Maintained by Trustpoint Project"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Document Version"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Last_Updated-2026--09--22-success?style=for-the-badge" alt="Last Updated"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Status-Informational-blue?style=for-the-badge" alt="Informational Status"/></a>
 </p>
 
-**📋 Document Owner:** Trustpoint Project Maintainers | **📄 Version:** 1.0 | **📅 Last Updated:** 2026-07-01 (UTC)  
-**🔄 Review Cycle:** Quarterly | **⏰ Next Review:** 2026-09-26
-
 ---
+
+
+> ### CRA Informational Notice
+>Trustpoint is free and open-source software provided under the MIT License. The Trustpoint project distributes the software as a non-commercial open-source project.
+>
+> This CRA documentation is provided for informational purposes only. It does not constitute an EU Declaration of Conformity, a formal conformity assessment, certification, or legal advice.
+>
+> The information may support users, integrators, and downstream manufacturers in their own CRA assessments. Responsibility for determining CRA applicability, classification, conformity assessment requirements, and regulatory obligations remains with the respective economic operator placing a product with digital elements on the EU market.
+
 
 ## **Purpose Statement**
 
@@ -76,7 +81,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | Field | Value |
 | ----- | ----- |
 | Product | Trustpoint Trust Anchor Software |
-| Version Tag | 0.6.0 (Beta - Technology Preview) |
+| Version Tag | 1.0.0 |
 | Repository | https://github.com/Trustpoint-Project/trustpoint |
 | Security Contact | trustpoint@campus-schwarzwald.de |
 | Purpose (1-2 lines) | Open-source trust anchor software for managing digital identities, PKI infrastructure, and certificate lifecycle operations in industrial and OT environments |
@@ -115,25 +120,32 @@ Threat Model → Risk Register → Controls → Evidence → Review
 ---
 
 {id="cra-scope--classification"}
-## 2️⃣ **CRA Scope & Classification**
 
-*Supports CRA Article 2 - Scope, Article 7 - Important Products with Digital Elements, Article 8 - Critical Products with Digital Elements, and Annex III / Annex IV classification assessment.*
+## 2️⃣ **CRA Scope & Reference Classification**
 
-### CRA Applicability: [![Non-commercial OSS](https://img.shields.io/badge/Applicability-Non--commercial_OSS-lightgreen?style=flat-square&logo=github&logoColor=white)](#cra-scope--classification)
+*References CRA Article 2 - Scope, Article 7 - Important Products with Digital Elements, Article 8 - Critical Products with Digital Elements, Article 32 - Conformity Assessment Procedures, and Annex III / Annex IV.*
 
-### Distribution Method: [![Community](https://img.shields.io/badge/Distribution-Community-green?style=flat-square&logo=users&logoColor=white)](#cra-scope--classification)
+### Current Distribution: [![Non-commercial OSS](https://img.shields.io/badge/Distribution-Non--commercial_OSS-lightgreen?style=flat-square&logo=github&logoColor=white)](#cra-scope--reference-classification)
 
-### CRA Classification: [![Important Class I](https://img.shields.io/badge/CRA-Important_Class_I-orange?style=flat-square&logo=clipboard-check&logoColor=white)](#cra-scope--classification)
+### License: [![MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square&logo=opensourceinitiative&logoColor=white)](#cra-scope--reference-classification)
 
-**Scope Justification:** Trustpoint is open-source software distributed via GitHub and Docker Hub under the MIT license. Trustpoint provides PKI, certificate lifecycle, certificate issuance, CA/RA, and machine identity management functionality for industrial environments. The CRA applicability analysis must therefore distinguish the current community / technology-preview distribution from any future placing on the EU market in the course of a commercial activity.
+### CRA Reference Classification: [![Annex III Class I](https://img.shields.io/badge/CRA_Reference-Annex_III_Class_I-orange?style=flat-square&logo=clipboard-check&logoColor=white)](#cra-scope--reference-classification)
 
-**Classification Rationale:**
+**Scope:** Trustpoint is free and open-source software distributed under the MIT License through public repositories such as GitHub and Docker Hub. The Trustpoint project currently provides the software on a non-monetised basis.
 
-* Trustpoint appears to match CRA Annex III Class I, point 9: public key infrastructure and digital certificate issuance software.
-* Trustpoint is not currently assessed as a CRA Annex IV critical product.
-* The conformity route for an Important Class I product depends on Article 32: internal control may be available where applicable harmonised standards, common specifications, or recognised certification schemes are applied; otherwise Module B+C or Module H may be required.
-* For free and open-source software that falls under Annex III, Article 32(5) should be considered: conformity can be demonstrated using one of the Article 32(1) procedures provided the Article 31 technical documentation is made public at the time of placing on the market.
-* The current document therefore records a conservative readiness classification as Important Class I Candidate / Technology Preview rather than a final CE-market classification.
+Under the CRA, free and open-source software is generally within scope for manufacturer obligations when it is made available on the market in the course of a commercial activity. Publication or hosting in a public software repository does not by itself constitute such commercial activity.
+
+**Reference Classification:**
+
+- Trustpoint's core functionality includes public key infrastructure (PKI), certificate issuance, CA/RA functionality, certificate lifecycle management, and machine identity management.
+- This functionality corresponds to **CRA Annex III, Class I, point 9: "Public key infrastructure and digital certificate issuance software."**
+- No corresponding functional mapping to a **CRA Annex IV critical product** has been identified.
+- The Annex III Class I designation in this document is therefore a **functional reference classification** and does not constitute a formal legal classification or conformity assessment of Trustpoint.
+- If Trustpoint is placed on the EU market in the course of a commercial activity, the responsible economic operator must determine the applicable CRA obligations and conformity assessment procedure.
+- Where free and open-source software falling under Annex III is commercially placed on the market by a manufacturer, CRA Article 32(5) provides specific conformity assessment provisions, subject to the conditions defined in the Regulation.
+
+Organizations incorporating Trustpoint into their own products remain responsible for determining the CRA applicability and classification of the resulting product.
+
 
 ---
 
@@ -149,7 +161,7 @@ This section follows the legal content requirements of CRA Article 31 and Annex 
 | CRA Annex VII Item | Status | Trustpoint Evidence / Gap | Primary Evidence |
 | ------------------ | ------ | ------------------------- | ---------------- |
 | **1(a) General product description and intended purpose** | ✅ | Product purpose, scope, PKI / certificate lifecycle functionality, and operating context are documented. | Section 1 · [README][readme] · [ReadTheDocs][readthedocs] |
-| **1(b) Software versions affecting compliance** | 🔄 | Current beta version is identified; v1.0 must define which software versions are covered by the conformity assessment and support period. | Section 1 · [Releases][releases] |
+| **1(b) Software versions affecting compliance** | 🔄 | A downstream manufacturer may need to identify the exact Trustpoint version incorporated into its product and account for that version in its technical documentation and support-period determination. | Section 1 · [Releases][releases] |
 | **1(c) Hardware photographs / layout** | N/A | Trustpoint is software; no hardware product documentation is applicable. | N/A |
 | **1(d) User information and instructions from Annex II** | 🔄 | Documentation exists, but Annex II-specific user information should be checked before v1.0, including secure installation, operation, update, support-period, vulnerability contact, and decommissioning guidance. | [ReadTheDocs][readthedocs] · [`SECURITY.md`][security] |
 | **2(a) Design and development information, including system architecture** | ✅ | System architecture, components, system boundaries, CA/RA logic, enrollment, device lifecycle, workflow engine, cryptography, key handling, security model, data management, deployment scenarios, operations, and extensions are fully documented in modular architecture documentation. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [Architecture Documentation][arch-docs] · [ReadTheDocs][readthedocs] |
@@ -158,8 +170,8 @@ This section follows the legal content requirements of CRA Article 31 and Annex 
 | **3 Cybersecurity risk assessment and Annex I applicability** | ✅ | Threat model, risk register, control mapping, inherent / residual risk, and treatment decisions are documented. | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) |
 | **4 Support-period determination information** | 🔄 | RTO/RPO and security maintenance are documented, but the formal support period and rationale under Article 13(8) must be defined before placing on the market. | Section 9 · [`SECURITY.md`][security] |
 | **5 Harmonised standards, common specifications, certification schemes, or alternative technical specifications** | 🔄 | Relevant standards are listed; formal harmonised-standard applicability and any alternative solution rationale must be completed when standards are available / selected. | Section 8 · Related Documents |
-| **6 Test reports verifying product and vulnerability-handling conformity with Annex I Parts I and II** | ✅ / 🔄 | Automated test, type-checking, lint, security review, dependency scan, and CI evidence exist; specific Annex I conformity test reports should be generated for v1.0. | [Pytest][pytest] · [codecov][codecov] · [MyPy][mypy] · [Ruff][ruff] |
-| **7 EU Declaration of Conformity** | 🔄 | Deferred until the product is placed on the EU market after technology-preview / beta phase. | Section 8 |
+| **6 Test reports verifying product and vulnerability-handling conformity with Annex I Parts I and II** | ✅ / 🔄 | Automated test, type-checking, lint, security review, dependency scan, and CI evidence exist. | [Pytest][pytest] · [codecov][codecov] · [MyPy][mypy] · [Ruff][ruff] |
+| **7 EU Declaration of Conformity** | 🔄 | Not applicable. | Section 8 |
 | **8 SBOM for market surveillance request, where applicable** | ✅ / 🔄 | CycloneDX / SPDX SBOM evidence exists; retention, access control, and response procedure for market-surveillance requests should be defined before v1.0. | [SBOMs][sbom-portal] |
 
 ### BSI TR-03183-1 Documentation Baseline
@@ -182,11 +194,11 @@ This section follows the legal content requirements of CRA Article 31 and Annex 
 | **Review and maintenance** | ✅ | Threats, risks, controls, and CRA evidence are reviewed quarterly and on major releases, architecture changes, security incidents, new protocols/deployment models, and CRA/BSI guidance updates. | This document · [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) |
 
 
-### Notes for v1.0 Hardening
+### Security Improvement Roadmap
 
 The following items should remain visible in the technical documentation until they are completed or formally accepted:
 
-* Complete release integrity improvements, including release attestations and SLSA provenance.
+* Further improve release integrity, including potential release attestations and provenance mechanisms.
 * Mature the vulnerability handling process, including supported-version communication and security update workflow.
 * Expand protocol security evidence for EST, CMP, AOKI, and OPC UA GDS Push.
 * Validate backup, recovery, and monitoring evidence against the stated RTO/RPO targets.
@@ -225,9 +237,9 @@ The following items should remain visible in the technical documentation until t
 | Medium | 6 | 4 |
 | Low | 3 | 5 |
 
-**Risk Statement:** MODERATE — Trustpoint has defined controls for core PKI, access control, lifecycle, supply chain, and vulnerability handling risks. Residual medium risks remain primarily in protocol hardening, service disruption resilience, and vulnerability handling process maturation before v1.0.
+**Risk Statement:** MODERATE — Trustpoint has defined controls for core PKI, access control, lifecycle, supply chain, and vulnerability handling risks. Residual medium risks remain primarily in protocol hardening, service disruption resilience, and vulnerability handling process maturity.
 
-**Risk Acceptance:** Trustpoint Project Maintainers — 2026-06-26
+**Risk Review**: Trustpoint Project Maintainers
 
 ### Risk, Threat, and Control Traceability
 
@@ -251,7 +263,7 @@ The following items should remain visible in the technical documentation until t
 
 * **R-TP-006 — Protocol Weaknesses:** Ongoing protocol security reviews, TLS/mTLS guidance, and protocol tests
 * **R-TP-008 — Service Disruption:** Continued improvement of backup/recovery, monitoring, deployment guidance, and operational resilience
-* **R-TP-009 — Incomplete Vulnerability Handling:** Process maturation before v1.0, including supported versions policy, triage, release notes, and update communication
+* **R-TP-009 — Incomplete Vulnerability Handling:** Ongoing improvement of vulnerability triage, supported-version communication, release notes and security update communication.
 
 ---
 
@@ -327,11 +339,10 @@ The following items should remain visible in the technical documentation until t
 
 **Evidence Status:**
 
-* ✅ Threat model, risk register, and control catalogue established
-* ✅ Test suite, type checking, code quality, dependency scanning, CI/CD verification, OpenSSF compliance, and SBOM generation available
-* 🔄 Release attestations planned for v1.0
-* 🔄 SLSA provenance planned for v1.0
-* 🔄 Vulnerability handling process and supported versions policy to mature before v1.0
+- ✅ Threat model, risk register, and security control catalogue available
+- ✅ Automated test suite, type checking, code quality checks, dependency scanning, CI/CD verification, OpenSSF-related practices, and SBOM generation available
+- 🔄 Release integrity mechanisms, including attestations and provenance, are areas of ongoing improvement
+- 🔄 Vulnerability handling, supported-version communication, and security update processes are continuously maintained and improved
 
 ---
 
@@ -358,49 +369,34 @@ The following items should remain visible in the technical documentation until t
 
 *Supports CRA Article 28 - EU Declaration of Conformity*
 
-> **To be completed when placing the product on the EU market after the technology preview / beta phase.**
+Organisations that incorporate Trustpoint into a product with digital elements and place that product on the EU market may have obligations under the Cyber Resilience Act.
 
-**Manufacturer:** Trustpoint Project  
-**Product:** Trustpoint Trust Anchor Software v0.6.0 
-**Classification:** Important Class I Candidate / Technology Preview  
-**Assessment:** Conformity route to be determined under CRA Article 32; Annex VIII Module A may be available where applicable harmonised standards, common specifications, or recognised certification schemes are applied, otherwise Module B+C or Module H may be required for Important Class I products.  
-**Standards and References:** RFC 7030 (EST), RFC 9483 (CMP), OPC UA GDS Push, Django Security, OWASP ASVS, BSI TR-03183-1-oriented risk management documentation
-
-**Status:** Pre-market / Technology Preview / Beta
+Trustpoint provides publicly available technical and security information—including architecture documentation, threat modelling, security controls, vulnerability-management information, test evidence and SBOMs—that may support a downstream manufacturer's conformity assessment.
 
 ---
 
-## 9️⃣ **Assessment Completion & Approval**
 
-*Supports internal approval for CRA Article 13 manufacturer obligations, Article 31 technical documentation, Article 32 conformity assessment preparation, Annex I essential cybersecurity requirements, and Annex VII technical documentation content.*
+## 9️⃣ Reference Mapping Status
 
-**Status:** IN_PROGRESS
+This document provides a voluntary CRA reference mapping based on the security, architecture, development, and operational evidence available within the Trustpoint project.
 
-**Completed:**
+**Status:** `INFORMATIONAL_REFERENCE_MAPPING`
 
-* ✅ Annex I requirements documented against Part I product security properties and Part II vulnerability handling requirements
-* ✅ Annex VII technical documentation structure established
-* ✅ Threat model created with 26 identified threats
-* ✅ Risk register created with 9 evaluated risks
-* ✅ Control catalogue created with 25 security controls
-* ✅ Article 6 / Annex I essential cybersecurity requirements mapped to risks and controls
-* ✅ Article 13 / Article 14 / Annex I Part II security maintenance and vulnerability handling procedures documented
-* ✅ SBOM automation in CI/CD
+The mapping may support users, integrators, and downstream manufacturers in their own CRA assessments. It does not constitute:
 
-**Outstanding:**
+- a formal conformity assessment,
+- an EU Declaration of Conformity,
+- CE marking,
+- certification, or
+- legal advice.
 
-1. Increase automated test coverage from [![codecov][badge-codecov]][codecov] toward the 80% target
-2. Mature vulnerability triage, supported versions policy, and release communication before v1.0
-3. Define the formal CRA support period and support-period rationale under Article 13(8)
-4. Complete release attestations and SLSA provenance planning for v1.0
-5. Complete production release v1.0 readiness review and Article 32 conformity-route decision
-6. Consider third-party security audit before or around v1.0
+Trustpoint is provided as free and open-source software under the MIT License. CRA-related activities documented here are not release criteria for the Trustpoint project.
 
-| Role | Name | Date | Attestation |
-| ---- | ---- | ---- | ----------- |
-| Security Assessment | Trustpoint Maintainers | 2026-06-26 | Essential requirements documented and linked to threat/risk/control evidence |
-| Product Responsibility | Trustpoint Project | 2026-06-26 | Technical documentation framework established |
-| Compliance Review | Trustpoint Project | 2026-06-30 | CRA evidence aligned with `THREAT_MODEL.md`, `RISK_REGISTER.md`, and `CONTROLS.md` |
+Organizations incorporating Trustpoint into products placed on the EU market remain responsible for determining their own CRA applicability, classification, conformity assessment requirements, and regulatory obligations.
+
+> **Note:** The availability of CRA-related documentation or technical evidence does not by itself establish CRA conformity of Trustpoint or of any product incorporating Trustpoint.
+
+
 
 ---
 
