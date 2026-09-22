@@ -263,6 +263,10 @@ class ProfileValidityModel(BaseModel):
     validity_max: timedelta | None = None
     validity_min: timedelta | None = None
 
+    allow: list[str] | Literal['*'] | None = None
+    reject_mods: bool = Field(default=False)
+    mutable: bool = False
+
     model_config = ConfigDict(extra='ignore', populate_by_name=True)
 
 class CertProfileBaseModel(ProfileValuePropertyModel):
@@ -333,7 +337,7 @@ class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
     display_name: str | None = None
-    credential_type: Literal['application', 'domain'] = 'application'
+    credential_type: Literal['application', 'domain', 'traceability_credential'] = 'application'
     subject: ProfileSubjectModel = Field(validation_alias='subj', default=ProfileSubjectModel())
     extensions: ProfileExtensionsModel = Field(validation_alias='ext', default=ProfileExtensionsModel())
     validity: ProfileValidityModel = Field(default=ProfileValidityModel(days=10))
@@ -467,7 +471,9 @@ class JSONProfileVerifier:
                     raise ProfileValidationError(msg)
                 request[field] = profile_value['value']
                 return
-        elif JSONProfileVerifier._is_simple_type(profile_value) and not profile_mutable:
+        elif JSONProfileVerifier._is_simple_type(profile_value):
+            if profile_mutable:
+                return
             if profile_reject_mods and request[field] != profile_value:
                 msg = f"Field '{field}' is not mutable in the profile."
                 raise ProfileValidationError(msg)

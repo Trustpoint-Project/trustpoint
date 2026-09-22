@@ -1,0 +1,40 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block title %}{{ form_title|default:_('Edit Traceability Credential') }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">{{ form_title|default:_('Edit Traceability Credential') }}</h3>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {% if field.name == 'purposes' %}
+                                <div class="d-flex flex-column gap-2">{{ field }}</div>
+                            {% else %}
+                                {{ field }}
+                            {% endif %}
+                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                            {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors }}</div>{% endif %}
+                        </div>
+                    {% endfor %}
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a class="btn btn-secondary" href="{% if credential %}{% url 'management:traceability_credential_detail' credential.pk %}{% else %}{% url 'management:traceability_credentials' %}{% endif %}">{% trans 'Cancel' %}</a>
+                        <button class="btn btn-primary" type="submit">{% trans 'Save' %}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -436,6 +436,10 @@ class AppPermission(models.Model):
                 'manage_signer',
                 _('Can manage signer'),
             ),
+            (
+                'manage_traceability_credentials',
+                _('Can manage Traceability Credentials'),
+            ),
 
             # -----------------------------------------------------------------
             # Workflow engine

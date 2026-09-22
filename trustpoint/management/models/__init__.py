@@ -8,6 +8,10 @@ from management.models.appversion import AppVersion
 from management.models.audit_log import AuditLog
 from management.models.backup import BackupOptions
 from management.models.email import SmtpEmailConfig
+from management.models.traceability import (
+    TraceabilityCredentialGenerationModel,
+    TraceabilityCredentialModel,
+)
 from management.models.logging import LoggingConfig
 from management.models.notifications import (
     NotificationConfig,
@@ -28,6 +32,8 @@ __all__ = [
     'AppVersion',
     'AuditLog',
     'BackupOptions',
+    'TraceabilityCredentialGenerationModel',
+    'TraceabilityCredentialModel',
     'LoggingConfig',
     'NotificationConfig',
     'NotificationMessage',

@@ -18,6 +18,7 @@ class CertificateProfileModel(models.Model):
         """Enum for credential types."""
         APPLICATION = 'application', _('Application Credential')
         DOMAIN = 'domain', _('Domain Credential')
+        EVIDENCE_SIGNING_CREDENTIAL = 'traceability_credential', _('Traceability Credential')
 
     unique_name = models.CharField(max_length=255, unique=True)
     display_name = models.CharField(max_length=255, blank=True, default='')
