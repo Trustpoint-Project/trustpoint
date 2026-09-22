@@ -443,11 +443,13 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 is_mutable = field_spec.get('mutable', True)
                 field_value = field_spec.get('value', field_spec.get('default', 0))
             else:
-                is_required = field_name in profile_validity.get('required', [])
-                is_mutable = (
-                    field_name in profile_validity.get('mutable', [])
-                    or field_name not in profile_validity.get('value', {})
+                required_setting = profile_validity.get('required', [])
+                mutable_setting = profile_validity.get('mutable', [])
+                is_required = required_setting if isinstance(required_setting, bool) else field_name in required_setting
+                field_is_mutable = (
+                    mutable_setting if isinstance(mutable_setting, bool) else field_name in mutable_setting
                 )
+                is_mutable = field_is_mutable
                 is_changeme = isinstance(sample_value, str) and sample_value.startswith('CHANGEME_')
                 field_value = 0 if is_changeme else (sample_value if sample_value is not None else 0)
 

@@ -46,6 +46,7 @@ class AppPermissions:
         f'{APP_LABEL}.manage_certificate_discovery'
     )
     MANAGE_SIGNER = f'{APP_LABEL}.manage_signer'
+    MANAGE_TRACEABILITY_CREDENTIALS = f'{APP_LABEL}.manage_traceability_credentials'
 
     # -------------------------------------------------------------------------
     # Workflow engine

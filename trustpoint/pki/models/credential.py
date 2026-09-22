@@ -29,6 +29,10 @@ from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
 
+EVIDENCE_SIGNING_NO_PEM = 'Traceability Credentials cannot store a private-key PEM.'
+EVIDENCE_SIGNING_NO_KEY = 'Traceability Credentials require a managed private key.'
+EVIDENCE_SIGNING_NO_CERTIFICATE = 'Traceability Credentials require a certificate.'
+
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
@@ -73,11 +77,13 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         ISSUED_CREDENTIAL = 3, _('Issued Credential')
         DEV_OWNER_ID = 4, _('DevOwnerID')
         SIGNER = 5, _('Signer')
+        EVIDENCE_SIGNING_CREDENTIAL = 6, _('Traceability Credential')
 
     BACKEND_MANAGED_SIGNING_TYPES: ClassVar[frozenset[CredentialTypeChoice]] = frozenset(
         {
             CredentialTypeChoice.ROOT_CA,
             CredentialTypeChoice.ISSUING_CA,
+            CredentialTypeChoice.EVIDENCE_SIGNING_CREDENTIAL,
         }
     )
 
@@ -133,6 +139,9 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             )
             raise ValidationError(exc_msg)
 
+        if self.credential_type == self.CredentialTypeChoice.EVIDENCE_SIGNING_CREDENTIAL:
+            self._clean_traceability_credential()
+
         qs = self.primarycredentialcertificate_set.filter(is_primary=True)
         if qs.count() > 1:
             exc_msg = 'A credential can only have one primary certificate.'
@@ -149,6 +158,15 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                        'marked primary in the primarycredentialcertificate_set.')
 
             raise ValidationError(exc_msg)
+
+    def _clean_traceability_credential(self) -> None:
+        """Validate the storage boundary for an Traceability Credential."""
+        if self.private_key:
+            raise ValidationError(EVIDENCE_SIGNING_NO_PEM)
+        if self.managed_private_key_id is None:
+            raise ValidationError(EVIDENCE_SIGNING_NO_KEY)
+        if self.certificate_id is None:
+            raise ValidationError(EVIDENCE_SIGNING_NO_CERTIFICATE)
 
     @property
     def certificate_or_error(self) -> CertificateModel:

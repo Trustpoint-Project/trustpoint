@@ -1,0 +1,19 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans 'Confirm Traceability Credential action' %}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header"><h1>{{ credential.name }}</h1></div>
+    <div class="card-body">
+        <p>{% if 'retire' in request.path %}{% trans 'Retirement is irreversible. The final generation will remain available for historical verification.' %}{% else %}{% trans 'A new backend-managed key and certificate will be generated.' %}{% endif %}</p>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            <button class="btn btn-primary" type="submit">{% trans 'Confirm' %}</button>
+            <a class="btn btn-secondary" href="{% url 'management:traceability_credential_detail' credential.pk %}">{% trans 'Cancel' %}</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

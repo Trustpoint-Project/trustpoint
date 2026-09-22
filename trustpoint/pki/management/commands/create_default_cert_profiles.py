@@ -9,9 +9,10 @@ import json
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
+from pydantic import ValidationError
+
 from pki.models.cert_profile import CertificateProfileModel
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
-from pydantic import ValidationError
 
 
 class Command(BaseCommand):
@@ -22,7 +23,7 @@ class Command(BaseCommand):
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Creates default certificate profiles."""
         default_profiles_path = Path(__file__).parent.parent.parent / 'default_certificate_profiles'
-        print(f'Loading default certificate profiles from: {default_profiles_path}')
+        self.stdout.write(f'Loading default certificate profiles from: {default_profiles_path}')
         profile_files = default_profiles_path.glob('*.json')
 
         for profile_file in profile_files:
@@ -37,23 +38,24 @@ class Command(BaseCommand):
                 display_name = profile_dict.get('display_name', '')
                 credential_type = profile_dict.get('credential_type', 'application')
             except (ValidationError, ValueError) as e:
-                print(f'Invalid JSON certificate profile in {profile_file}: {e}')
+                self.stderr.write(f'Invalid JSON certificate profile in {profile_file}: {e}')
                 continue
 
             # Set is_default based on profile name
             is_default = unique_name != 'issuing_ca'
 
-            _obj, created = CertificateProfileModel.objects.get_or_create(
+            defaults = {
+                'profile_json': profile_json,
+                'is_default': is_default,
+                'display_name': display_name,
+                'credential_type': credential_type,
+            }
+            _obj, created = CertificateProfileModel.objects.update_or_create(
                 unique_name=unique_name,
-                defaults={
-                    'profile_json': profile_json,
-                    'is_default': is_default,
-                    'display_name': display_name,
-                    'credential_type': credential_type
-                },
+                defaults=defaults,
             )
 
             if created:
-                print(f'Created certificate profile: {unique_name}')
+                self.stdout.write(f'Created certificate profile: {unique_name}')
             else:
-                print(f'Certificate profile already exists: {unique_name}')
+                self.stdout.write(f'Updated certificate profile: {unique_name}')

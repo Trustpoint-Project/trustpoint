@@ -5,7 +5,7 @@
 
 from django.urls import path, re_path
 
-from management.views import organization
+from management.views import organization, traceability_signing
 
 from .views import (
     IndexView,
@@ -134,6 +134,42 @@ urlpatterns = [
         'organization/<int:pk>/delete/',
         organization.OrganizationDeleteView.as_view(),
         name='delete_organization'
+    ),
+    # Traceability Credentials
+    path(
+        'traceability-credentials/',
+        traceability_signing.TraceabilityCredentialListView.as_view(),
+        name='traceability_credentials',
+    ),
+    path(
+        'traceability-credentials/create/',
+        traceability_signing.TraceabilityCredentialCreateView.as_view(),
+        name='traceability_credential_create',
+    ),
+    path(
+        'traceability-credentials/create/certificate/',
+        traceability_signing.TraceabilityCredentialCertificateView.as_view(),
+        name='traceability_credential_certificate',
+    ),
+    path(
+        'traceability-credentials/<int:pk>/',
+        traceability_signing.TraceabilityCredentialDetailView.as_view(),
+        name='traceability_credential_detail',
+    ),
+    path(
+        'traceability-credentials/<int:pk>/edit/',
+        traceability_signing.TraceabilityCredentialEditView.as_view(),
+        name='traceability_credential_edit',
+    ),
+    path(
+        'traceability-credentials/<int:pk>/rotate/',
+        traceability_signing.TraceabilityCredentialRotateView.as_view(),
+        name='traceability_credential_rotate',
+    ),
+    path(
+        'traceability-credentials/<int:pk>/retire/',
+        traceability_signing.TraceabilityCredentialRetireView.as_view(),
+        name='traceability_credential_retire',
     ),
     # Service Accounts
     path('service-accounts/', service_accounts.ServiceAccountListView.as_view(), name='service_account_list'),
