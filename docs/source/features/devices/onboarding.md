@@ -110,25 +110,6 @@ openssl cmp \
 Upon successful execution, the device will receive its domain credential certificate,
 enabling secure authentication with Trustpoint.
 
-### Using the Trustpoint Client (Work in Progress)
-
-Trustpoint provides a user-friendly client application that simplifies the onboarding process. The Trustpoint client is available at [Trustpoint Client GitHub](https://github.com/Trustpoint-Project/trustpoint-client). This method is recommended for users who prefer a guided approach to onboarding.
-
-**How It Works:**
-
-- A new device with the onboarding protocol **Trustpoint client** is added to Trustpoint
-- In **Devices** click **Start Onboarding** on the new device
-- Copy the provided command to your clipboard and execute it on the device
-- The device is onboarded
-- During the process, an initial certificate is issued, enabling secure device authentication with Trustpoint.
-
-**Requirements:**
-
-- Access to the Device.
-- Python 3.13 or greater on device.
-- Trustpoint-Client installed on the device (via `pip install trustpoint-client`).
-- A connection to communicate with Trustpoint services.
-
 ### OPC UA GDS Push Onboarding
 
 OPC UA Global Discovery Server (GDS) Push is a standardized mechanism for distributing and updating certificates, trust anchors, and Certificate Revocation Lists (CRLs) to OPC UA servers.
@@ -153,7 +134,7 @@ This method is particularly suited for industrial automation environments using 
 - Add the servers initial server certificate as a truststore
 - Finish onboarding by pushing the initial (Trustpoint) issued server certificate to the OPC UA server
 
-## Zero-Touch Onboarding (Work in Progress)
+## Zero-Touch Onboarding (Experimental)
 
 Trustpoint is actively developing a zero-touch onboarding feature. This mechanism will allow fully automated onboarding without any user intervention, simplifying the process even further. Zero-touch onboarding is designed for use in environments where many devices need to be onboarded without manual effort, providing a scalable solution for large deployments.
 
@@ -166,8 +147,8 @@ Trustpoint is actively developing a zero-touch onboarding feature. This mechanis
 
 - Network infrastructure to support automated onboarding.
 
-The Trustpoint beta release contains zero touch onboarding functionality for demonstration purposes only,
-based on the [AOKI](../aoki/index.md) protocol.
+Trustpoint includes an experimental zero-touch onboarding implementation based on the [AOKI](../aoki/index.md) protocol.
+This feature is not yet intended for production use.
 This is a simple protocol that uses mDNS to discover the Trustpoint server and then uses a simple REST API for mutual trust establishment.
 Afterwards, the device can use a standard PKI protocol (CMP or EST) to request a domain credential (LDevID).
 Before the device can be onboarded, it must possess a valid IDevID (Initial device identifier per IEEE 802.1AR) certificate.
