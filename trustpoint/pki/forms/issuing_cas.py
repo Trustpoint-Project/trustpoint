@@ -694,6 +694,12 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
                 msg = f'Remote CA connection validation failed: {e}'
                 raise forms.ValidationError(msg) from e
 
+        unique_name = cleaned_data.get('unique_name')
+        if unique_name and CryptoManagedKeyModel.objects.filter(alias=unique_name).exists():
+            self.add_error(
+                'unique_name', _('A cryptographic key with this name already exists.')
+            )
+
         return cleaned_data
 
     def _create_credential(self) -> CredentialModel:
@@ -714,10 +720,13 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         )
 
     def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
-        """Save the form and create the CA model with configuration."""
-        instance = super().save(commit=False)
+        """Save the form and create the CA model with configuration.
 
-        instance.credential = self._create_credential()
+        Credential/managed-key creation is intentionally not performed here; it is
+        the responsibility of subclasses, which decide whether and when a managed
+        key is required (e.g. not for RA-mode configurations).
+        """
+        instance = super().save(commit=False)
 
         if commit:
             instance.save()
@@ -761,28 +770,28 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
 
         If is_ra_mode is True, create a REMOTE_EST_RA (Registration Authority) instead of REMOTE_ISSUING_EST.
         """
-        if is_ra_mode:
+        with transaction.atomic():
             instance = super().save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
-            instance.credential = None
-            instance.certificate = None  # Will be set from truststore later
-        else:
-            instance = super().save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
-            instance.credential = self._create_credential()
+            if is_ra_mode:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
+                instance.credential = None
+                instance.certificate = None  # Will be set from truststore later
+            else:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
+                instance.credential = self._create_credential()
 
-        no_onboarding_config = NoOnboardingConfigModel.objects.create(
-            pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
-            est_password=self.cleaned_data['est_password'],
-            trust_store=None,  # Will be set later via truststore association
-        )
-        instance.no_onboarding_config = no_onboarding_config
-        instance.est_username = self.cleaned_data['est_username']
+            no_onboarding_config = NoOnboardingConfigModel.objects.create(
+                pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+                est_password=self.cleaned_data['est_password'],
+                trust_store=None,  # Will be set later via truststore association
+            )
+            instance.no_onboarding_config = no_onboarding_config
+            instance.est_username = self.cleaned_data['est_username']
 
-        PermittedProtocolsAuthorization().check(instance)
-        PkiSecurityAuthorization().check(instance)
+            PermittedProtocolsAuthorization().check(instance)
+            PkiSecurityAuthorization().check(instance)
 
-        instance.save()
+            instance.save()
         return instance
 
 
@@ -825,27 +834,27 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
 
         If is_ra_mode is True, create a REMOTE_CMP_RA (Registration Authority) instead of REMOTE_ISSUING_CMP.
         """
-        if is_ra_mode:
-            instance = super(IssuingCaAddRequestMixin, self).save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
-            instance.credential = None
-            instance.certificate = None  # Will be set from truststore later
-        else:
+        with transaction.atomic():
             instance = super().save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
-            instance.credential = self._create_credential()
+            if is_ra_mode:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
+                instance.credential = None
+                instance.certificate = None  # Will be set from truststore later
+            else:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+                instance.credential = self._create_credential()
 
-        no_onboarding_config = NoOnboardingConfigModel.objects.create(
-            pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
-            cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
-            trust_store=None,  # Will be set later via truststore association
-        )
-        instance.no_onboarding_config = no_onboarding_config
+            no_onboarding_config = NoOnboardingConfigModel.objects.create(
+                pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
+                cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
+                trust_store=None,  # Will be set later via truststore association
+            )
+            instance.no_onboarding_config = no_onboarding_config
 
-        PermittedProtocolsAuthorization().check(instance)
-        PkiSecurityAuthorization().check(instance)
+            PermittedProtocolsAuthorization().check(instance)
+            PkiSecurityAuthorization().check(instance)
 
-        instance.save()
+            instance.save()
         return instance
 
 
