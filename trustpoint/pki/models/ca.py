@@ -455,7 +455,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.onboarding_config and self.no_onboarding_config:
             raise ValidationError(_('Only one of onboarding or no-onboarding config can be set for remote CAs.'))
 
-    def _clean_remote_issuing_ca(self) -> None:
+    def _clean_remote_issuing_ca(self) -> None: # noqa: C901
         """Validates remote issuing CA fields."""
         if self.certificate is not None:
             raise ValidationError(_('Remote issuing CAs cannot have certificate set.'))
