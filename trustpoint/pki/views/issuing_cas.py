@@ -45,7 +45,9 @@ from pki.forms import (
     IssuingCaAddMethodSelectForm,
     IssuingCaAddRequestCmpForm,
     IssuingCaAddRequestEstForm,
+    IssuingCaAddRequestExternalCsrForm,
     IssuingCaCrlCycleForm,
+    IssuingCaExternalCsrCertificateForm,
     IssuingCaTruststoreAssociationForm,
     TruststoreAddForm,
 )
@@ -153,8 +155,14 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
         if not method_select:
             return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
 
-        if method_select and method_select == 'local_file_import':
+        if method_select == 'local_file_import':
             return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-file_import-file_type_select'))
+        if method_select == 'remote_est':
+            return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-request-est'))
+        if method_select == 'remote_csr':
+            return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-request-external-csr'))
+        if method_select == 'remote_cmp':
+            return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-request-cmp'))
 
         return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
 
@@ -323,7 +331,11 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
         Returns:
             The expected IntendedUsage value
         """
-        if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+        if ca.ca_type in [
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CSR,
+            CaModel.CaTypeChoice.REMOTE_CMP_RA,
+        ]:
             return TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
 
         if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
@@ -344,8 +356,12 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
         intended_usage_field = cast('ChoiceField', import_form.fields['intended_usage'])
 
         # Filter choices based on CA type
-        if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
-            # Only allow ISSUING_CA_CHAIN for CMP RAs
+        if ca.ca_type in [
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CSR,
+            CaModel.CaTypeChoice.REMOTE_CMP_RA,
+        ]:
+            # Only allow ISSUING_CA_CHAIN for CMP-like or CSR-based remote issuing CAs
             intended_usage_field.choices = [
                 choice for choice in intended_usage_field.choices  # type: ignore[union-attr]
                 if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
@@ -365,7 +381,8 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
                 ]
 
         context['import_form'] = import_form
-        # Add flag to differentiate between EST and CMP/RA for helpful hints
+        # Add flags to differentiate truststore guidance by protocol.
+        context['is_csr'] = ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
         context['is_cmp'] = ca.ca_type in [
             CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
             CaModel.CaTypeChoice.REMOTE_CMP_RA
@@ -435,6 +452,8 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
         )
         if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
             return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_CSR:
+            return redirect('pki:issuing_cas-define-cert-content-csr', pk=ca.pk)
         if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
             return redirect('pki:issuing_cas-config', pk=ca.pk)
         if ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
@@ -524,6 +543,7 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
         self.logger.info('Form cleaned_data: %s', form.cleaned_data)
         self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data
         self.request.session[f'cert_profile_pk_{self.ca.pk}'] = self.cert_profile.pk
+        self.request.session.modified = True
         messages.success(
             self.request,
             self.get_success_message()
@@ -540,13 +560,187 @@ class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormVie
     """View to define certificate content using the issuing_ca profile before requesting via EST."""
 
     form_class = CertificateIssuanceForm
-    template_name = 'pki/issuing_cas/define_cert_content_est.html'
+    template_name = 'pki/issuing_cas/define_cert_content.html'
     ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
     redirect_url_name = 'pki:issuing_cas-request-cert-est'
 
     def get_success_message(self) -> str:
         """Get the success message for the form submission."""
         return _('Certificate content defined. Please proceed to request the certificate via EST.')
+
+
+class IssuingCaDefineCertContentCsrView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
+    """Define certificate content for an externally issued CSR."""
+
+    form_class = CertificateIssuanceForm
+    template_name = 'pki/issuing_cas/define_cert_content.html'
+    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+    redirect_url_name = 'pki:issuing_cas-external-csr'
+
+    def get_success_message(self) -> str:
+        """Get the success message for the form submission."""
+        return _('Certificate content defined. Please download the CSR and upload the issued certificate.')
+
+
+class IssuingCaExternalCsrView(LoggerMixin, IssuingCaContextMixin, FormView[IssuingCaExternalCsrCertificateForm]):
+    """Generate and download a CSR, then accept its externally issued certificate."""
+
+    form_class = IssuingCaExternalCsrCertificateForm
+    template_name = 'pki/issuing_cas/external_csr.html'
+
+    def get_ca(self) -> CaModel:
+        """Get the pending external-CSR issuing CA."""
+        return get_object_or_404(
+            CaModel.objects.filter(ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_CSR),
+            pk=self.kwargs['pk'],
+        )
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Add the pending CA to the upload form."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = self.get_ca()
+        return kwargs
+
+    def _build_csr(self, ca: CaModel) -> x509.CertificateSigningRequest:
+        """Build the CSR from the selected certificate profile and saved content."""
+        cert_profile_pk = self.request.session.get(f'cert_profile_pk_{ca.pk}')
+        cert_content_data = self.request.session.get(f'cert_content_data_{ca.pk}')
+        if not cert_content_data:
+            msg = 'Certificate content is missing. Please define it first.'
+            raise ValueError(msg)
+        if not cert_profile_pk:
+            msg = 'Certificate profile is missing. Please define the certificate content again.'
+            raise ValueError(msg)
+        if ca.credential is None:
+            msg = 'Issuing CA credential is missing. The CSR cannot be generated.'
+            raise ValueError(msg)
+
+        cert_profile = CertificateProfileModel.objects.get(pk=cert_profile_pk)
+        request_data = self._build_request_data_from_form(cert_content_data)
+        context = CmpCertificateRequestContext(
+            operation='certification',
+            protocol='cmp',
+            domain=None,
+            cert_profile_str=cert_profile.unique_name,
+            certificate_profile_model=cert_profile,
+            allow_ca_certificate_request=True,
+        )
+        context.request_data = request_data
+        context.owner_credential = ca.credential
+        csr_builder = ProfileAwareCsrBuilder()
+        csr_builder.process_operation(context)
+        return csr_builder.get_csr()
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the generated CSR and pending CA to the page context."""
+        context = super().get_context_data(**kwargs)
+        ca = self.get_ca()
+        cert_content_data = self.request.session.get(f'cert_content_data_{ca.pk}')
+        context['has_cert_content'] = bool(cert_content_data)
+        if cert_content_data:
+            context['cert_content_summary'] = self._build_cert_content_summary(cert_content_data)
+        try:
+            csr = self._build_csr(ca)
+            context['csr_pem'] = csr.public_bytes(serialization.Encoding.PEM).decode('ascii')
+        except (CertificateProfileModel.DoesNotExist, ValueError, ProfileValidationError) as exception:
+            context['csr_error'] = str(exception)
+        context['issuing_ca'] = ca
+        return context
+
+    def _build_cert_content_summary(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
+        """Build the certificate-content summary shown on the CSR page."""
+        subject_labels = {
+            'common_name': 'Common Name (CN)',
+            'organization_name': 'Organization (O)',
+            'organizational_unit_name': 'Organizational Unit (OU)',
+            'country_name': 'Country (C)',
+            'state_or_province_name': 'State/Province (ST)',
+            'locality_name': 'Locality (L)',
+            'email_address': 'Email Address',
+        }
+        san_labels = {
+            'dns_names': 'DNS Names',
+            'ip_addresses': 'IP Addresses',
+            'rfc822_names': 'Email Addresses',
+            'uris': 'URIs',
+        }
+        subject = {
+            label: cert_content_data[field_name]
+            for field_name, label in subject_labels.items()
+            if cert_content_data.get(field_name)
+        }
+        san = {
+            label: cert_content_data[field_name]
+            for field_name, label in san_labels.items()
+            if cert_content_data.get(field_name)
+        }
+        validity_parts = [
+            f'{cert_content_data[field_name]} {label}'
+            for field_name, label in (
+                ('days', 'days'),
+                ('hours', 'hours'),
+                ('minutes', 'minutes'),
+                ('seconds', 'seconds'),
+            )
+            if cert_content_data.get(field_name)
+        ]
+        return {
+            'subject': subject,
+            'san': san,
+            'validity': ', '.join(validity_parts) if validity_parts else 'Not specified',
+        }
+
+    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
+        """Build the profile request data used to generate the external CSR."""
+        request_data: dict[str, Any] = {
+            'subj': {},
+            'ext': {'subject_alternative_name': {}},
+            'validity': {},
+        }
+        for field_name in ('common_name', 'organization_name', 'country_name', 'state_or_province_name'):
+            value = cert_content_data.get(field_name)
+            if value:
+                request_data['subj'][field_name] = value
+        for field_name in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
+            value = cert_content_data.get(field_name)
+            if value is not None:
+                request_data['ext']['subject_alternative_name'][field_name] = value
+        for field_name in ('days', 'hours', 'minutes', 'seconds'):
+            value = cert_content_data.get(field_name)
+            if value is not None:
+                request_data['validity'][field_name] = int(value)
+        return request_data
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Render the exchange page or download the generated CSR."""
+        if request.GET.get('download') == '1':
+            try:
+                csr = self._build_csr(self.get_ca())
+            except (CertificateProfileModel.DoesNotExist, ValueError, ProfileValidationError) as exception:
+                messages.error(request, _('Unable to generate CSR: {error}').format(error=str(exception)))
+                return redirect('pki:issuing_cas-external-csr', pk=self.kwargs['pk'])
+
+            response = HttpResponse(csr.public_bytes(serialization.Encoding.PEM), content_type='application/pkcs10')
+            response['Content-Disposition'] = f'attachment; filename="{self.get_ca().unique_name}.csr"'
+            return response
+        return super().get(request, *args, **kwargs)
+
+    def form_valid(self, form: IssuingCaExternalCsrCertificateForm) -> HttpResponse:
+        """Attach the externally issued certificate to the managed credential."""
+        ca = self.get_ca()
+        if ca.credential is None:
+            raise ValidationError(_('The Issuing CA credential is missing.'))
+
+        certificate_serializer = form.cleaned_data['certificate']
+        certificate_model = CertificateModel.save_certificate(certificate_serializer.as_crypto())
+        ca.credential.certificate = certificate_model
+        ca.credential.save()
+        PrimaryCredentialCertificate.objects.update_or_create(
+            credential=ca.credential,
+            defaults={'certificate': certificate_model, 'is_primary': True},
+        )
+        messages.success(self.request, _('Successfully uploaded the externally issued Issuing CA certificate.'))
+        return redirect('pki:issuing_cas-config', pk=ca.pk)
 
 
 class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
@@ -562,6 +756,33 @@ class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
         messages.success(
             self.request,
             _('Successfully configured CMP RA {name}. Please associate a trust store.').format(name=ca.unique_name)
+        )
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=ca,
+            target_display=f'CA: {ca.unique_name}',
+            actor=actor,
+        )
+        return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+class IssuingCaAddRequestExternalCsrView(IssuingCaContextMixin, FormView[IssuingCaAddRequestExternalCsrForm]):
+    """View to prepare an external PKI CSR-based Issuing CA configuration."""
+
+    form_class = IssuingCaAddRequestExternalCsrForm
+    template_name = 'pki/issuing_cas/add/request_external_csr.html'
+
+    def form_valid(self, form: IssuingCaAddRequestExternalCsrForm) -> HttpResponse:
+        """Handle successful form submission."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
+        ca = form.save()
+        messages.success(
+            self.request,
+            _('Successfully created Issuing CA {name}. Please associate a trust store.').format(
+                name=ca.unique_name
+            ),
         )
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
@@ -644,7 +865,7 @@ class IssuingCaDefineCertContentCmpView(IssuingCaDefineCertContentMixin, FormVie
     """View to define certificate content using the issuing_ca profile before requesting via CMP."""
 
     form_class = CertificateIssuanceForm
-    template_name = 'pki/issuing_cas/define_cert_content_cmp.html'
+    template_name = 'pki/issuing_cas/define_cert_content.html'
     ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
     redirect_url_name = 'pki:issuing_cas-request-cert-cmp'
 

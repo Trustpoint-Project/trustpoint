@@ -157,6 +157,11 @@ urlpatterns = [
         name='issuing_cas-add-request-cmp',
     ),
     path(
+        'issuing-cas/add/request-external-csr/',
+        issuing_cas.IssuingCaAddRequestExternalCsrView.as_view(),
+        name='issuing_cas-add-request-external-csr',
+    ),
+    path(
         'issuing-cas/add/cmp-ra/',
         issuing_cas.RemoteRaAddRequestCmpView.as_view(),
         name='issuing_cas-add-cmp-ra',
@@ -238,6 +243,16 @@ urlpatterns = [
         'issuing-cas/define-cert-content-est/<int:pk>/',
         issuing_cas.IssuingCaDefineCertContentEstView.as_view(),
         name='issuing_cas-define-cert-content-est',
+    ),
+    path(
+        'issuing-cas/define-cert-content-csr/<int:pk>/',
+        issuing_cas.IssuingCaDefineCertContentCsrView.as_view(),
+        name='issuing_cas-define-cert-content-csr',
+    ),
+    path(
+        'issuing-cas/external-csr/<int:pk>/',
+        issuing_cas.IssuingCaExternalCsrView.as_view(),
+        name='issuing_cas-external-csr',
     ),
     path(
         'issuing-cas/request-cert-est/<int:pk>/',

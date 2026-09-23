@@ -66,6 +66,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         REMOTE_CMP_RA = 5, _('Remote-CMP-RA')  # Trustpoint = RA
         REMOTE_ISSUING_EST = 6, _('Remote-Issuing-EST')  # Trustpoint = CA
         REMOTE_ISSUING_CMP = 7, _('Remote-Issuing-CMP')  # Trustpoint = CA
+        REMOTE_ISSUING_CSR = 8, _('Remote-Issuing-CSR')  # Trustpoint = CA, CSR external issuance
 
 
     unique_name = models.CharField(
@@ -237,7 +238,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
                 condition=(
                     models.Q(ca_type=-1, certificate__isnull=False, credential__isnull=True) |
                     models.Q(ca_type__in=[4, 5], credential__isnull=True) |
-                    models.Q(ca_type__in=[0, 1, 2, 3, 6, 7], certificate__isnull=True, credential__isnull=False)
+                    models.Q(ca_type__in=[0, 1, 2, 3, 6, 7, 8], certificate__isnull=True, credential__isnull=False)
                 ),
                 name='ca_mode_constraint',
                 violation_error_message=_('Invalid CA configuration')
@@ -428,7 +429,11 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             )
         if self.ca_type in (self.CaTypeChoice.REMOTE_EST_RA, self.CaTypeChoice.REMOTE_CMP_RA):
             self._clean_remote_non_issuing_ca()
-        elif self.ca_type in (self.CaTypeChoice.REMOTE_ISSUING_EST, self.CaTypeChoice.REMOTE_ISSUING_CMP):
+        elif self.ca_type in (
+            self.CaTypeChoice.REMOTE_ISSUING_EST,
+            self.CaTypeChoice.REMOTE_ISSUING_CMP,
+            self.CaTypeChoice.REMOTE_ISSUING_CSR,
+        ):
             self._clean_remote_issuing_ca()
         else:
             self._clean_local_or_keyless_ca()
@@ -450,7 +455,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.onboarding_config and self.no_onboarding_config:
             raise ValidationError(_('Only one of onboarding or no-onboarding config can be set for remote CAs.'))
 
-    def _clean_remote_issuing_ca(self) -> None:
+    def _clean_remote_issuing_ca(self) -> None: # noqa: C901
         """Validates remote issuing CA fields."""
         if self.certificate is not None:
             raise ValidationError(_('Remote issuing CAs cannot have certificate set.'))
@@ -459,14 +464,15 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('Remote issuing CAs must have credential set.'))
         if self.ca_type is None:
             raise ValidationError(_('ca_type must be set for remote issuing CAs.'))
-        if not self.remote_host:
-            raise ValidationError(_('Remote host must be set for remote issuing CAs.'))
-        if self.remote_port is None:
-            raise ValidationError(_('Remote port must be set for remote issuing CAs.'))
-        if not self.remote_path:
-            raise ValidationError(_('Remote path must be set for remote issuing CAs.'))
         if self.ca_type == self.CaTypeChoice.REMOTE_ISSUING_EST and not self.est_username:
             raise ValidationError(_('EST username must be set for remote EST issuing CAs.'))
+        if self.ca_type != self.CaTypeChoice.REMOTE_ISSUING_CSR:
+            if not self.remote_host:
+                raise ValidationError(_('Remote host must be set for remote issuing CAs.'))
+            if self.remote_port is None:
+                raise ValidationError(_('Remote port must be set for remote issuing CAs.'))
+            if not self.remote_path:
+                raise ValidationError(_('Remote path must be set for remote issuing CAs.'))
         if self.pk is not None and not (self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Either onboarding or no-onboarding config must be set for remote issuing CAs.'))
         if self.onboarding_config and self.no_onboarding_config:
@@ -631,6 +637,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             cls.CaTypeChoice.LOCAL_PKCS11,
             cls.CaTypeChoice.REMOTE_ISSUING_EST,
             cls.CaTypeChoice.REMOTE_ISSUING_CMP,
+            cls.CaTypeChoice.REMOTE_ISSUING_CSR,
         )
         if ca_type not in ca_types:
             exc_msg = f'CA Type {ca_type} is not supported for issuing CAs.'

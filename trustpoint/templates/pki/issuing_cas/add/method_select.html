@@ -1,45 +1,304 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST">
-        {% csrf_token %}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Add new Issuing CA' %}</h1>
-                </div>
+<div class="card">
+
+    <div class="card-header">
+        <h1 class="mb-1">{% trans 'Add new Issuing CA' %}</h1>
+        <p class="mb-0 text-muted">
+            {% trans 'Choose how the new Issuing CA should be created or connected.' %}
+        </p>
+    </div>
+
+    <div class="card-body">
+
+        {# ============================================================ #}
+        {# Import Existing CA                                           #}
+        {# ============================================================ #}
+        <section class="mb-5">
+
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Import existing Issuing CA' %}
+                </h2>
+                <p class="text-muted mb-0">
+                    {% trans 'Import an existing private key and CA certificate into Trustpoint.' %}
+                </p>
             </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    <h2>{% trans 'Import new Issuing CA from file' %}</h2>
-                    <hr class="mb-4">
-                    <a href="{% url 'pki:issuing_cas-add-file_import-pkcs12' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Import From PKCS#12 File' %}</a>
-                    <br>
-                    <a href="{% url 'pki:issuing_cas-add-file_import-separate_files' %}" class="btn btn-primary min-width-30 mb-5">{% trans 'Import From Separate Key and Certificate Files' %}</a>
 
-                    <h2>{% trans 'Generate a keypair and request an Issuing CA Certificate' %}</h2>
-                    <hr class="mb-4">
-                    <a href="{% url 'pki:issuing_cas-add-request-est' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Request Issuing CA Certificate Using EST' %}</a>
-                    <br>
-                    <a href="{% url 'pki:issuing_cas-add-request-cmp' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Request Issuing CA Certificate Using CMP' %}</a>
+            <div class="row g-3">
 
+                <div class="col-md-6">
+                    <a
+                        href="{% url 'pki:issuing_cas-add-file_import-pkcs12' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h3 class="h5 mb-2">
+                                            {% trans 'Import From PKCS#12 File' %}
+                                        </h3>
 
-                    <h2>{% trans 'Configure a Remote Issuing CA' %}</h2>
-                    <hr class="mb-4">
-                    <a href="{% url 'pki:issuing_cas-add-est-ra' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Configure A Remote Issuing CA Using EST' %}</a>
-                    <br>
-                    <a href="{% url 'pki:issuing_cas-add-cmp-ra' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Configure A Remote Issuing CA Using CMP' %}</a>
+                                        <span class="badge text-bg-primary">
+                                            {% trans 'CA' %}
+                                        </span>
+                                    </div>
 
+                                <p class="text-muted mb-3">
+                                    {% trans 'Import the private key and CA certificate from a single PKCS#12 container.' %}
+                                </p>
 
+                                <span class="btn btn-primary">
+                                    {% trans 'Import PKCS#12' %}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
                 </div>
-            </div>
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+
+                <div class="col-md-6">
+                    <a
+                        href="{% url 'pki:issuing_cas-add-file_import-separate_files' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h3 class="h5 mb-2">
+                                            {% trans 'Import From Separate Key and Certificate Files' %}
+                                        </h3>
+
+                                        <span class="badge text-bg-primary">
+                                            {% trans 'CA' %}
+                                        </span>
+                                    </div>
+
+                                <p class="text-muted mb-3">
+                                    {% trans 'Import the private key and CA certificate from separate files.' %}
+                                </p>
+
+                                <span class="btn btn-primary">
+                                    {% trans 'Import Files' %}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
                 </div>
+
             </div>
-        </div>
-    </form>
+        </section>
+
+
+        {# ============================================================ #}
+        {# Generate Keypair                                             #}
+        {# ============================================================ #}
+        <section class="mb-5">
+
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Generate keypair and request certificate' %}
+                </h2>
+                <p class="text-muted mb-0">
+                    {% trans 'Generate and securely store the CA keypair in Trustpoint and request the certificate from an external PKI.' %}
+                </p>
+            </div>
+
+            <div class="row g-3">
+
+                <div class="col-lg-4">
+                    <a
+                        href="{% url 'pki:issuing_cas-add-request-est' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h3 class="h5 mb-2">
+                                            {% trans 'EST' %}
+                                        </h3>
+
+                                        <span class="badge text-bg-primary">
+                                            {% trans 'CA' %}
+                                        </span>
+                                    </div>
+
+                                    <p class="text-muted">
+                                        {% trans 'Automatically request the Issuing CA certificate using Enrollment over Secure Transport.' %}
+                                    </p>
+                                </div>
+
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">
+                                        {% trans 'Use EST' %}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-lg-4">
+                    <a
+                        href="{% url 'pki:issuing_cas-add-request-cmp' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h3 class="h5 mb-2">
+                                            {% trans 'CMP' %}
+                                        </h3>
+
+                                        <span class="badge text-bg-primary">
+                                            {% trans 'CA' %}
+                                        </span>
+                                    </div>
+        
+
+                                    <p class="text-muted">
+                                        {% trans 'Automatically request the Issuing CA certificate using the Certificate Management Protocol.' %}
+                                    </p>
+                                </div>
+
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">
+                                        {% trans 'Use CMP' %}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-lg-4">
+                    <a
+                        href="{% url 'pki:issuing_cas-add-request-external-csr' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h3 class="h5 mb-2">
+                                            {% trans 'External PKI' %}
+                                        </h3>
+
+                                        <span class="badge text-bg-primary">
+                                            {% trans 'CA' %}
+                                        </span>
+                                    </div>
+
+                                    <p class="text-muted">
+                                        {% trans 'Generate a CSR in Trustpoint, have it signed by an external PKI and upload the issued certificate.' %}
+                                    </p>
+                                </div>
+
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">
+                                        {% trans 'Use External PKI' %}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+            </div>
+        </section>
+
+
+        {# ============================================================ #}
+        {# Remote Issuing CA                                            #}
+        {# ============================================================ #}
+        <section>
+
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Configure Remote Issuing CA' %}
+                </h2>
+                <p class="text-muted mb-0">
+                    {% trans 'Connect Trustpoint to an existing remote CA and use Trustpoint as a Registration Authority.' %}
+                </p>
+            </div>
+
+            <div class="row g-3">
+
+                <div class="col-md-6">
+                    <a
+                        href="{% url 'pki:issuing_cas-add-est-ra' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <h3 class="h5 mb-2">
+                                        {% trans 'Remote CA using EST' %}
+                                    </h3>
+
+                                    <span class="badge text-bg-primary">
+                                        {% trans 'RA' %}
+                                    </span>
+                                </div>                                
+
+                                <p class="text-muted mb-3">
+                                    {% trans 'Configure an external CA using EST and operate Trustpoint as a Registration Authority.' %}
+                                </p>
+
+                                <span class="btn btn-primary">
+                                    {% trans 'Configure EST' %}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a
+                        href="{% url 'pki:issuing_cas-add-cmp-ra' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <h3 class="h5 mb-2">
+                                        {% trans 'Remote CA using CMP' %}
+                                    </h3>
+
+                                    <span class="badge text-bg-primary">
+                                        {% trans 'RA' %}
+                                    </span>
+                                </div>                                
+
+                                <p class="text-muted mb-3">
+                                    {% trans 'Configure an external CA using CMP and operate Trustpoint as a Registration Authority.' %}
+                                </p>
+
+                                <span class="btn btn-primary">
+                                    {% trans 'Configure CMP' %}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+            </div>
+        </section>
+
+    </div>
+
+
+    <div class="card-footer">
+        <a
+            href="{% url 'pki:issuing_cas' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+    </div>
+
+</div>
 {% endblock content %}

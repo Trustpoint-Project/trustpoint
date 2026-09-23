@@ -186,6 +186,13 @@
             <div class="alert alert-info">
                 {% trans 'Certificate is pending. Once the certificate is issued, full details will be available here.'
                 %}
+                {% if issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_CSR %}
+                <div class="mt-3">
+                    <a href="{% url 'pki:issuing_cas-external-csr' pk=issuing_ca.pk %}" class="btn btn-primary">
+                        {% trans 'Download CSR or Upload Certificate' %}
+                    </a>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
 
