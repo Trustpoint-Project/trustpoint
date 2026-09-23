@@ -1,92 +1,208 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 {% load internationalization_tags %}
 
 {% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Download Certificate Revocation List" %}
+        </h1>
 
-    <form method="GET">
-        {% csrf_token %}
+        <p class="mb-0 text-muted">
+            {% trans "Review the CRL and choose the file format to download." %}
+        </p>
+    </div>
 
-        <div class="card">
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
 
-            <div class="card-header">
-                <div>
-                    <h1>{% trans "Download Certificate Revocation List" %}</h1>
+            {# ======================================================== #}
+            {# CRL Information                                          #}
+            {# ======================================================== #}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "CRL" %}
+                    </h2>
                 </div>
-            </div>
 
-            <div class="card-body">
-                <div class="tp-card-centered-content">
+                <hr class="mb-4">
 
-                    <h2>{% trans "CRL" %}</h2>
-                    <hr class="hr-m">
-
-                    <div class="tp-kvp-list mb-0">
-                        <div>
-                            <div>{% trans 'CA Name' %}</div>
-                            <div>{{ crl.ca.unique_name }}</div>
-                        </div>
-                        <div>
-                            <div>{% trans 'CRL Number' %}</div>
-                            <div>
-                                {% if crl.crl_number %}
-                                    {{ crl.crl_number }}
-                                {% else %}
-                                    {% trans 'No number' %}
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div>
-                            <div>{% trans 'This Update' %}</div>
-                            <div>{{ crl.this_update|local_datetime }}</div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Next Update' %}</div>
-                            <div>
-                                {% if crl.next_update %}
-                                    {{ crl.next_update|local_datetime }}
-                                {% else %}
-                                    {% trans 'Not set' %}
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Revoked Certificates' %}</div>
-                            <div>{{ crl.get_revoked_serial_numbers|length }}</div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Status' %}</div>
-                            <div>
-                                {% if crl.is_active %}
-                                    {% trans 'Active' %}
-                                {% else %}
-                                    {% trans 'Inactive' %}
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    <a class="btn btn-primary min-width-15 my-2" href="{% url 'pki:crl-detail' pk=crl.id %}">{% trans 'CRL Details' %}</a><br>
-                    <hr>
-
-                    <h2>{% trans 'Download CRL' %}</h2>
-                    <hr>
+                <div class="tp-kvp-list">
                     <div>
-                        <a class="btn btn-primary min-width-15 mb-3" href="{% url 'pki:crl-file-download' pk=crl.id file_format='pem' %}">{% trans 'Download as PEM' %}</a><br>
-                        <a class="btn btn-primary min-width-15 mb-3" href="{% url 'pki:crl-file-download' pk=crl.id file_format='der' %}">{% trans 'Download as DER' %}</a><br>
-                        <a class="btn btn-primary min-width-15 mb-3" href="{% url 'pki:crl-file-download' pk=crl.id file_format='pkcs7_pem' %}">{% trans 'Download as PKCS#7 (PEM)' %}</a><br>
-                        <a class="btn btn-primary min-width-15" href="{% url 'pki:crl-file-download' pk=crl.id file_format='pkcs7_der' %}">{% trans 'Download as PKCS#7 (DER)' %}</a><br>
+                        <div>
+                            {% trans 'CA Name' %}
+                        </div>
+
+                        <div>
+                            {{ crl.ca.unique_name }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans 'CRL Number' %}
+                        </div>
+
+                        <div>
+                            {% if crl.crl_number %}
+                                {{ crl.crl_number }}
+                            {% else %}
+                                <span class="text-muted">
+                                    {% trans 'No number' %}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans 'This Update' %}
+                        </div>
+
+                        <div>
+                            {{ crl.this_update|local_datetime }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans 'Next Update' %}
+                        </div>
+
+                        <div>
+                            {% if crl.next_update %}
+                                {{ crl.next_update|local_datetime }}
+                            {% else %}
+                                <span class="text-muted">
+                                    {% trans 'Not set' %}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans 'Revoked Certificates' %}
+                        </div>
+
+                        <div>
+                            {{ crl.get_revoked_serial_numbers|length }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans 'Status' %}
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-1">
+                            {% if crl.is_active %}
+                                <span class="badge text-bg-success">
+                                    {% trans 'Active' %}
+                                </span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">
+                                    {% trans 'Inactive' %}
+                                </span>
+                            {% endif %}
+
+                            {% if crl.is_expired %}
+                                <span class="badge text-bg-warning">
+                                    {% trans 'Expired' %}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <a
+                        href="{% url 'pki:crl-detail' pk=crl.id %}"
+                        class="btn btn-outline-secondary"
+                    >
+                        {% trans 'CRL Details' %}
+                    </a>
+                </div>
+            </section>
+
+
+            {# ======================================================== #}
+            {# Download Format                                          #}
+            {# ======================================================== #}
+            <section>
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans 'Download Format' %}
+                    </h2>
+
+                    <p class="mb-0 text-muted">
+                        {% trans 'Choose the encoding and container format for the CRL.' %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <div class="row g-3">
+
+                    <div class="col-md-6">
+                        <a
+                            href="{% url 'pki:crl-file-download' pk=crl.id file_format='pem' %}"
+                            class="btn btn-outline-secondary w-100 text-start py-3"
+                        >
+                            {% trans 'PEM' %}
+                        </a>
+                    </div>
+
+                    <div class="col-md-6">
+                        <a
+                            href="{% url 'pki:crl-file-download' pk=crl.id file_format='der' %}"
+                            class="btn btn-outline-secondary w-100 text-start py-3"
+                        >
+                            {% trans 'DER' %}
+                        </a>
+                    </div>
+
+                    <div class="col-md-6">
+                        <a
+                            href="{% url 'pki:crl-file-download' pk=crl.id file_format='pkcs7_pem' %}"
+                            class="btn btn-outline-secondary w-100 text-start py-3"
+                        >
+                            {% trans 'PKCS#7 (PEM)' %}
+                        </a>
+                    </div>
+
+                    <div class="col-md-6">
+                        <a
+                            href="{% url 'pki:crl-file-download' pk=crl.id file_format='pkcs7_der' %}"
+                            class="btn btn-outline-secondary w-100 text-start py-3"
+                        >
+                            {% trans 'PKCS#7 (DER)' %}
+                        </a>
                     </div>
 
                 </div>
-            </div>
+            </section>
 
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                    <a href="{% url 'pki:crls' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                </div>
-            </div>
         </div>
-    </form>
+    </div>
+
+    <div class="card-footer d-flex gap-2">
+        <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="history.back()"
+        >
+            {% trans 'Back' %}
+        </button>
+
+        <a
+            href="{% url 'pki:crls' %}"
+            class="btn btn-outline-secondary"
+        >
+            {% trans 'CRLs' %}
+        </a>
+    </div>
+</div>
 {% endblock content %}

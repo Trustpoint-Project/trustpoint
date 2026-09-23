@@ -5,32 +5,71 @@
 {% block title %}{% trans "Import CRL" %}{% endblock %}
 
 {% block content %}
-    <form method="POST" autocomplete="off" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Import CRL' %}</h1>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    <h2>{% trans 'File Import' %}</h2>
-                    <hr>
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Import CRL' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Import an existing Certificate Revocation List into Trustpoint.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="crl-import-form"
+                method="post"
+                enctype="multipart/form-data"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans 'File Import' %}
+                        </h2>
+
+                        <p class="mb-0 text-muted">
+                            {% trans 'Select the CRL file that should be imported.' %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
+
                     {{ form|crispy }}
-                </div>
-            </div>
-            <div class="card-footer d-flex justify-content-between">
-                <div class="tp-card-btn-footer m-1">
-                    <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">
-                        {% trans 'Back' %}
-                    </button>
-                    <a href="{% url 'pki:crls' %}" class="btn btn-secondary btn-half">{% trans 'Cancel' %}</a>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-upload"></i> {% trans 'Import CRL' %}
-                    </button>
-                </div>
-            </div>
+                </section>
+            </form>
         </div>
-    </form>
+    </div>
+
+    <div class="card-footer d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+        <div class="d-flex flex-wrap gap-2">
+            <button
+                type="button"
+                class="btn btn-secondary"
+                onclick="history.back()"
+            >
+                {% trans 'Back' %}
+            </button>
+
+            <a
+                href="{% url 'pki:crls' %}"
+                class="btn btn-outline-secondary"
+            >
+                {% trans 'Cancel' %}
+            </a>
+        </div>
+
+        <button
+            type="submit"
+            form="crl-import-form"
+            class="btn btn-primary"
+        >
+            {% trans 'Import CRL' %}
+        </button>
+    </div>
+</div>
 {% endblock %}

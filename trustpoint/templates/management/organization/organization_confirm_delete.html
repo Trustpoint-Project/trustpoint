@@ -2,28 +2,51 @@
 {% load i18n %}
 
 {% block content %}
-<form method="post" autocomplete="off">
-    {% csrf_token %}
-    <div class="card">
-        <div class="card-header">
-            <h1>{% trans 'Confirm Organization Deletion' %}</h1>
-        </div>
-        <div class="card-body">
-            <div class="tp-card-centered-content">
-                <p>
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Confirm Organization Deletion' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Review the organization before permanently removing it from Trustpoint.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="delete-organization-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <div class="alert alert-warning mb-0" role="alert">
                     {% blocktranslate with name=object.name %}
                         Are you sure you want to delete the organization <strong>{{ name }}</strong>?
                         This action cannot be undone.
                     {% endblocktranslate %}
-                </p>
-            </div>
-        </div>
-        <div class="card-footer d-flex">
-            <div class="tp-card-btn-footer m-1">
-                <a href="{% url 'management:organization' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                <button type="submit" class="btn btn-danger">{% trans 'Delete' %}</button>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
-</form>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'management:organization' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <button
+            type="submit"
+            form="delete-organization-form"
+            class="btn btn-danger"
+        >
+            {% trans 'Delete Organization' %}
+        </button>
+    </div>
+</div>
 {% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'trustpoint/base.html' %}
+{% load static i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'User Management' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Manage users and access to Trustpoint.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Users' %}
+                </h2>
+
+                <p class="text-muted mb-0">
+                    {% trans 'Review and manage the users configured in Trustpoint.' %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+            {% include 'management/users/user_management_table.html' %}
+        </section>
+    </div>
+
+    <div class="card-footer d-flex justify-content-end align-items-center">
+        <a
+            href="{% url 'management:add_user' %}"
+            class="btn btn-primary"
+        >
+            {% trans 'Add User' %}
+        </a>
+    </div>
+</div>
+{% endblock %}

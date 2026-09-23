@@ -3,25 +3,60 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST" autocomplete="off">
-        {% csrf_token %}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Add new CMP RA' %}</h1>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Configure CMP Registration Authority' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Connect Trustpoint to a remote Issuing CA using the Certificate Management Protocol (CMP).' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="create-cmp-ra-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans 'CMP RA Configuration' %}
+                        </h2>
+
+                        <p class="mb-0 text-muted">
+                            {% trans 'Configure the remote CMP service and the parameters Trustpoint should use as a Registration Authority.' %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
+
                     {{ form|crispy }}
-                </div>
-            </div>
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
-                    <button type="submit" class="btn btn-primary">{% trans 'Create CMP RA' %}</button>
-                </div>
-            </div>
+                </section>
+            </form>
         </div>
-    </form>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'pki:issuing_cas-add-method_select' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Back' %}
+        </a>
+
+        <button
+            type="submit"
+            form="create-cmp-ra-form"
+            class="btn btn-primary"
+        >
+            {% trans 'Create CMP RA' %}
+        </button>
+    </div>
+</div>
 {% endblock content %}

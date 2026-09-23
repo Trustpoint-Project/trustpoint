@@ -1,40 +1,73 @@
 {% extends 'trustpoint/base.html' %}
 {% load crispy_forms_tags %}
 {% load i18n %}
+
 {% block content %}
-    <div class="card">
-        <div class="card-header d-flex">
+<div class="card">
+
+    <div class="card-header">
+        <h1 class="mb-1">
             {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
-                <h1>{% trans 'Create new Device' %}</h1>
+                {% trans 'Create New Device' %}
             {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
-                <h1>{% trans 'Create new OPC UA GDS Server' %}</h1>
+                {% trans 'Create New OPC UA GDS Server' %}
             {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
-                <h1>{% trans 'Create new OPC UA GDS Push Application' %}</h1>
+                {% trans 'Create New OPC UA GDS Push Application' %}
             {% elif page_name == DEVICES_PAGE_AGENTS_SUBCATEGORY %}
-                <h1>{% trans 'Create new 1-to-1 Agent' %}</h1>
-    
+                {% trans 'Create New 1-to-1 Agent' %}
             {% endif %}
-        </div>
-        <form method="POST" id="add-device-form">
-            <div class="card-body py-3">
-                {% crispy form %}
-            </div>
-            <div class="card-footer d-flex justify-content-between align-items-center">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url cancel_create_url %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                    <button type="submit" class="btn btn-primary">
-                        {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
-                            {% trans 'Create new Device' %}
-                        {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
-                            {% trans 'Create new OPC UA GDS Server' %}
-                        {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
-                            {% trans 'Create new OPC UA GDS Push Application' %}
-                        {% elif page_name == DEVICES_PAGE_AGENTS_SUBCATEGORY %}
-                            {% trans 'Create 1-to-1 Agent' %}
-                        {% endif %}
-                    </button>
-                </div>
-            </div>
-        </form>
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
+                {% trans 'Register a new device and define its initial configuration in Trustpoint.' %}
+            {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
+                {% trans 'Register a new OPC UA GDS server for certificate and trust management.' %}
+            {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
+                {% trans 'Register a new OPC UA application that will receive certificates through the GDS Push model.' %}
+            {% elif page_name == DEVICES_PAGE_AGENTS_SUBCATEGORY %}
+                {% trans 'Create a dedicated 1-to-1 agent and assign it to its target system.' %}
+            {% endif %}
+        </p>
     </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="add-device-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+                {% crispy form %}
+            </form>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url cancel_create_url %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <button
+            type="submit"
+            form="add-device-form"
+            class="btn btn-primary"
+        >
+            {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
+                {% trans 'Create Device' %}
+            {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
+                {% trans 'Create OPC UA GDS Server' %}
+            {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
+                {% trans 'Create OPC UA GDS Push Application' %}
+            {% elif page_name == DEVICES_PAGE_AGENTS_SUBCATEGORY %}
+                {% trans 'Create 1-to-1 Agent' %}
+            {% endif %}
+        </button>
+    </div>
+
+</div>
 {% endblock content %}

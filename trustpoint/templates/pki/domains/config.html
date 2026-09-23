@@ -2,132 +2,315 @@
 {% load i18n %}
 {% load crispy_forms_filters %}
 {% load internationalization_tags %}
+{% load static %}
 
 {% block content %}
-    {% load static %}
-    <script src="{% static 'js/domains.js' %}"></script>
-    <div class="card">
-        <div class="card-header">
-            <h1>{{ domain.unique_name }} {% trans "Configuration" %}</h1>
-        </div>
-        <form method="post">
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    {% csrf_token %}
-                    <h2>{% trans "General" %}</h2>
-                    <hr class="hr-m">
-                    <div class="tp-kvp-list">
-                        <div>
-                            <div>{% trans 'Unique Name' %}</div>
-                            <div>{{ domain.unique_name }}</div>
-                        </div>
-                        <div>
-                            <div>{% trans 'URL Path Segment' %}</div>
-                            <div>{{ domain.unique_name.lower }}</div>
+
+<script src="{% static 'js/domains.js' %}"></script>
+
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% blocktranslate with name=domain.unique_name %}
+                Domain "{{ name }}"
+            {% endblocktranslate %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans "Review and configure domain settings, certificate profiles and device registration policies." %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <form
+            id="domain-configuration-form"
+            method="post"
+            autocomplete="off"
+        >
+            {% csrf_token %}
+
+            {# ======================================================== #}
+            {# General                                                  #}
+            {# ======================================================== #}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "General" %}
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        {% trans "Review the domain identifier and the devices currently assigned to this domain." %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <div class="tp-kvp-list mb-4">
+                    <div>
+                        <div>{% trans 'Unique Name' %}</div>
+                        <div>{{ domain.unique_name }}</div>
+                    </div>
+
+                    <div>
+                        <div>{% trans 'URL Path Segment' %}</div>
+                        <div class="font-monospace">
+                            {{ domain.unique_name.lower }}
                         </div>
                     </div>
-                    <h5 class="mb-2 ms-2">{% trans 'Devices in Domain' %}</h5>
-                    <div class="tp-kvp-list">
-                        <div>
-                            <div>{% trans 'Total devices' %}</div>
-                            <div>{{ domain.devices.count|default:0 }}</div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Pending devices' %}</div>
-                            <div>{{ devices_count.P|default:0 }}</div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Running devices' %}</div>
-                            <div>{{ devices_count.R|default:0 }}</div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Onboarded devices' %}</div>
-                            <div>{{ devices_count.O|default:0 }}</div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Failed devices' %}</div>
-                            <div>{{ devices_count.F|default:0 }}</div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Revoked devices' %}</div>
-                            <div>{{ devices_count.D|default:0 }}</div>
+                </div>
+
+
+                <h3 class="h6 mb-3">
+                    {% trans 'Devices in Domain' %}
+                </h3>
+
+                <div class="row g-3">
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="small text-muted mb-1">
+                                    {% trans 'Total' %}
+                                </div>
+                                <div class="h4 mb-0">
+                                    {{ domain.devices.count|default:0 }}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <h2>{% trans "Issuing CA" %}</h2>
-                    <hr class="hr-m">
-                    <div class="tp-kvp-list">
-                        <div>
-                            <div>{% trans 'Issuing CA' %}</div>
-                            <div>
-                                <a href="{% url 'pki:issuing_cas-config' pk=domain.issuing_ca.id %}">
-                                    {{ domain.issuing_ca.unique_name }}
-                                </a>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="small text-muted mb-1">
+                                    {% trans 'Pending' %}
+                                </div>
+                                <div class="h4 mb-0">
+                                    {{ devices_count.P|default:0 }}
+                                </div>
                             </div>
                         </div>
-                        <div>
-                            <div>{% trans 'Expiry Date' %}</div>
-                            <div>{{ domain.issuing_ca.credential.certificate.not_valid_after|local_datetime }}</div>
+                    </div>
+
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="small text-muted mb-1">
+                                    {% trans 'Running' %}
+                                </div>
+                                <div class="h4 mb-0">
+                                    {{ devices_count.R|default:0 }}
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="small text-muted mb-1">
+                                    {% trans 'Onboarded' %}
+                                </div>
+                                <div class="h4 mb-0">
+                                    {{ devices_count.O|default:0 }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="small text-muted mb-1">
+                                    {% trans 'Failed' %}
+                                </div>
+                                <div class="h4 mb-0">
+                                    {{ devices_count.F|default:0 }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="small text-muted mb-1">
+                                    {% trans 'Revoked' %}
+                                </div>
+                                <div class="h4 mb-0">
+                                    {{ devices_count.D|default:0 }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            {# ======================================================== #}
+            {# Issuing CA                                               #}
+            {# ======================================================== #}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "Issuing CA" %}
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        {% trans "Review the Certificate Authority responsible for issuing credentials in this domain." %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans 'Issuing CA' %}</div>
                         <div>
-                            <div>{% trans 'Certificates Issued:' %}</div>
-                            <div>
-                                {% if certificates %}
-                                    <a href="{% url 'pki:domain-issued_certificates' pk=domain.pk %}"
-                                    >
-                                        {{ certificates|length }}
-                                    </a>
-                                {% else %}
+                            <a href="{% url 'pki:issuing_cas-config' pk=domain.issuing_ca.id %}">
+                                {{ domain.issuing_ca.unique_name }}
+                            </a>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>{% trans 'Expiry Date' %}</div>
+                        <div>
+                            {{ domain.issuing_ca.credential.certificate.not_valid_after|local_datetime }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>{% trans 'Certificates Issued' %}</div>
+                        <div>
+                            {% if certificates %}
+                                <a href="{% url 'pki:domain-issued_certificates' pk=domain.pk %}">
                                     {{ certificates|length }}
-                                {% endif %}
-                            </div>
-
+                                </a>
+                            {% else %}
+                                {{ certificates|length }}
+                            {% endif %}
                         </div>
                     </div>
+                </div>
+            </section>
 
-                    <h2 class="mt-3">{% trans 'DevID Registration Patterns' %}</h2>
-                    <hr class="hr-m">
-                    <a href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
-                       class="btn btn-primary tp-table-btn min-width-20">
-                        {% trans 'Create new DevID Registration Pattern' %}
+
+            {# ======================================================== #}
+            {# DevID Registration Patterns                              #}
+            {# ======================================================== #}
+            <section class="mb-5">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">
+                            {% trans 'DevID Registration Patterns' %}
+                        </h2>
+
+                        <p class="text-muted mb-0">
+                            {% trans 'Manage rules used to identify and register devices for this domain.' %}
+                        </p>
+                    </div>
+
+                    <a
+                        href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
+                        class="btn btn-primary flex-shrink-0"
+                    >
+                        {% trans 'Create DevID Registration Pattern' %}
                     </a>
+                </div>
 
-                    {% include 'pki/devid_registration/table.html' %}
+                <hr class="mb-4">
 
-                    <h2 class="mt-3">{% trans 'Domain Credential Profile' %}</h2>
-                    <hr class="hr-m">
-                    <div class="tp-kvp-list mb-3">
-                        <div>
-                            <div>{% trans 'Certificate Profile for Domain Credential' %}</div>
-                            <div>
-                                <select class="form-select" name="domain_credential_profile">
-                                    <option value="">{% trans 'Default (domain_credential)' %}</option>
-                                    {% for profile in domain_credential_profiles %}
-                                    <option value="{{ profile.id }}"
-                                        {% if profile.id == current_domain_credential_profile_id %}selected{% endif %}>
-                                        {{ profile.display_name|default:profile.unique_name }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
+                {% include 'pki/devid_registration/table.html' %}
+            </section>
 
-                    <h2 class="mt-3">{% trans 'Allowed Certificate Profiles' %}</h2>
-                    <hr class="hr-m">
+
+            {# ======================================================== #}
+            {# Domain Credential Profile                                #}
+            {# ======================================================== #}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans 'Domain Credential Profile' %}
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        {% trans 'Select the certificate profile used when issuing domain credentials.' %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <div class="tp-card-centered-content">
                     <div class="mb-3">
-                    {% include 'pki/cert_profiles/domain_table.html' %}
+                        <label
+                            for="domain-credential-profile"
+                            class="form-label"
+                        >
+                            {% trans 'Certificate Profile for Domain Credential' %}
+                        </label>
+
+                        <select
+                            id="domain-credential-profile"
+                            class="form-select"
+                            name="domain_credential_profile"
+                        >
+                            <option value="">
+                                {% trans 'Default (domain_credential)' %}
+                            </option>
+
+                            {% for profile in domain_credential_profiles %}
+                                <option
+                                    value="{{ profile.id }}"
+                                    {% if profile.id == current_domain_credential_profile_id %}selected{% endif %}
+                                >
+                                    {{ profile.display_name|default:profile.unique_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
-            </div>
-            <div class="card-footer d-flex justify-content-between align-items-center">
-                <div class="tp-card-btn-footer m-1">
-                    <button type="button" value="Back" class="btn btn-secondary btn-half"
-                            onClick="history.back()">{% trans 'Back' %}</button>
-                    <button type="submit"
-                            class="btn btn-primary">{% trans "Save" %}</button>
+            </section>
+
+
+            {# ======================================================== #}
+            {# Allowed Certificate Profiles                             #}
+            {# ======================================================== #}
+            <section>
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans 'Allowed Certificate Profiles' %}
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        {% trans 'Define which application certificate profiles may be used within this domain.' %}
+                    </p>
                 </div>
-            </div>
+
+                <hr class="mb-4">
+
+                {% include 'pki/cert_profiles/domain_table.html' %}
+            </section>
+
         </form>
     </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="history.back()"
+        >
+            {% trans 'Back' %}
+        </button>
+
+        <button
+            type="submit"
+            form="domain-configuration-form"
+            class="btn btn-primary"
+        >
+            {% trans "Save Domain Configuration" %}
+        </button>
+    </div>
+</div>
+
 {% endblock content %}

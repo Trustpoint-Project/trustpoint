@@ -1,69 +1,154 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 
 {% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Download Certificate" %}
+        </h1>
 
-    <form method="GET">
-        {% csrf_token %}
+        <p class="mb-0 text-muted">
+            {% trans "Review the certificate and choose the file format to download." %}
+        </p>
+    </div>
 
-        <div class="card">
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
 
-            <div class="card-header">
-                <div>
-                    <h1>{% trans "Download Certificate" %}</h1>
+            {# ======================================================== #}
+            {# Certificate                                              #}
+            {# ======================================================== #}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "Certificate" %}
+                    </h2>
                 </div>
-            </div>
 
-            <div class="card-body">
-                <div class="tp-card-centered-content">
+                <hr class="mb-4">
 
-                    <h2>{% trans "Certificate" %}</h2>
-                    <hr class="hr-m">
-                
-                    <div class="tp-kvp-list mb-0">
+                <div class="tp-kvp-list">
+                    {% if certificate.common_name %}
                         <div>
-                            {% if certificate.common_name %}
-                                <div>{% trans 'Common Name' %}</div>
-                                <div>
-                                    {{ certificate.common_name }}
-                                </div>
-                            {% endif %}
-                            <div>{% trans 'Subject' %}</div>
                             <div>
-                                {% for entry in certificate.subject.all %}
-                                    {{ entry }}
-                                    <br>
-                                {% endfor %}
+                                {% trans 'Common Name' %}
+                            </div>
+                            <div>
+                                {{ certificate.common_name }}
                             </div>
                         </div>
+                    {% endif %}
+
+                    <div>
                         <div>
-                            <div>{% trans 'Serial Number' %}</div>
-                            <div>{{ certificate.serial_number }}</div>
+                            {% trans 'Subject' %}
+                        </div>
+                        <div>
+                            {% for entry in certificate.subject.all %}
+                                {{ entry }}{% if not forloop.last %}<br>{% endif %}
+                            {% empty %}
+                                <span class="text-muted">—</span>
+                            {% endfor %}
                         </div>
                     </div>
-                    <a class="btn btn-primary min-width-15 my-2" href="{% url 'pki:certificate-detail' pk=certificate.id %}">Certificate Details</a><br>
-                    <hr>
-                
-                    <h2>{% trans 'Download Certificate' %}</h2>
-                    <hr>
-                    <div>
-                        <a class="btn btn-primary min-width-15 mb-3" href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='pem' %}">Download as PEM</a><br>
-                        <a class="btn btn-primary min-width-15 mb-3" href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='der' %}">Download as DER</a><br>
-                        <a class="btn btn-primary min-width-15 mb-3" href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='pkcs7_pem' %}">Download as PKCS#7 (PEM)</a><br>
-                        <a class="btn btn-primary min-width-15" href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='pkcs7_der' %}">Download as PKCS#7 (DER)</a><br>
-                    </div>
-                
-                </div>
-            </div>
 
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                    <a href="{% url 'pki:certificates' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                    <!-- <button type="submit" class="btn btn-primary">{% trans 'Download' %}</button> -->
+                    <div>
+                        <div>
+                            {% trans 'Serial Number' %}
+                        </div>
+                        <div class="font-monospace">
+                            {{ certificate.serial_number }}
+                        </div>
+                    </div>
                 </div>
-            </div>
+
+                <div class="mt-4">
+                    <a
+                        href="{% url 'pki:certificate-detail' pk=certificate.id %}"
+                        class="btn btn-outline-secondary"
+                    >
+                        {% trans 'Certificate Details' %}
+                    </a>
+                </div>
+            </section>
+
+
+            {# ======================================================== #}
+            {# Download Format                                          #}
+            {# ======================================================== #}
+            <section>
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans 'Download Format' %}
+                    </h2>
+
+                    <p class="mb-0 text-muted">
+                        {% trans 'Choose the encoding and container format for the certificate download.' %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <div class="row g-3">
+
+                    <div class="col-md-6">
+                        <a
+                            href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='pem' %}"
+                            class="btn btn-outline-secondary w-100 text-start py-3"
+                        >
+                            {% trans 'PEM' %}
+                        </a>
+                    </div>
+
+                    <div class="col-md-6">
+                        <a
+                            href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='der' %}"
+                            class="btn btn-outline-secondary w-100 text-start py-3"
+                        >
+                            {% trans 'DER' %}
+                        </a>
+                    </div>
+
+                    <div class="col-md-6">
+                        <a
+                            href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='pkcs7_pem' %}"
+                            class="btn btn-outline-secondary w-100 text-start py-3"
+                        >
+                            {% trans 'PKCS#7 (PEM)' %}
+                        </a>
+                    </div>
+
+                    <div class="col-md-6">
+                        <a
+                            href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='pkcs7_der' %}"
+                            class="btn btn-outline-secondary w-100 text-start py-3"
+                        >
+                            {% trans 'PKCS#7 (DER)' %}
+                        </a>
+                    </div>
+
+                </div>
+            </section>
+
         </div>
-    </form>
+    </div>
+
+    <div class="card-footer d-flex gap-2">
+        <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="history.back()"
+        >
+            {% trans 'Back' %}
+        </button>
+
+        <a
+            href="{% url 'pki:certificates' %}"
+            class="btn btn-outline-secondary"
+        >
+            {% trans 'Certificates' %}
+        </a>
+    </div>
+</div>
 {% endblock content %}

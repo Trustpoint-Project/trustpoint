@@ -3,27 +3,92 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST">
-        {% csrf_token %}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Add new Signer' %}</h1>
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Add New Signer" %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans "Choose how the signer credential should be created or imported." %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans "Signer Creation Method" %}
+                </h2>
+
+                <p class="mb-0 text-muted">
+                    {% trans "Select the method that should be used to provision the new signer." %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <div>
+                                <h3 class="h5 mb-2">
+                                    {% trans "Generate With Crypto Backend" %}
+                                </h3>
+
+                                <p class="text-muted mb-4">
+                                    {% trans "Generate a new key pair using the configured cryptographic backend and create a signer credential in Trustpoint." %}
+                                </p>
+                            </div>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="{% url 'signer:signer-add-generate' %}"
+                                    class="btn btn-primary"
+                                >
+                                    {% trans "Generate Signer" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <div>
+                                <h3 class="h5 mb-2">
+                                    {% trans "Import From File" %}
+                                </h3>
+
+                                <p class="text-muted mb-4">
+                                    {% trans "Import an existing signer credential from a supported file format." %}
+                                </p>
+                            </div>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="{% url 'signer:signer-add-file_import-file_type_select' %}"
+                                    class="btn btn-primary"
+                                >
+                                    {% trans "Import Signer" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    <h2>{% trans 'Create Signer' %}</h2>
-                    <hr class="mb-4">
-                    <a href="{% url 'signer:signer-add-generate' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Generate With Crypto Backend' %}</a>
-                    <a href="{% url 'signer:signer-add-file_import-file_type_select' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Import From File' %}</a>
-                </div>
-            </div>
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                </div>
-            </div>
-        </div>
-    </form>
+        </section>
+    </div>
+
+    <div class="card-footer">
+        <a
+            href="{% url 'signer:signer_list' %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Cancel" %}
+        </a>
+    </div>
+</div>
 {% endblock content %}

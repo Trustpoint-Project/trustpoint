@@ -1,254 +1,651 @@
 {% load static %}
 {% load i18n %}
+
 <!doctype html>
-<html lang="{{ request.LANGUAGE_CODE|default:'en' }}"
+<html
+    lang="{{ request.LANGUAGE_CODE|default:'en' }}"
     data-bs-theme="{% if request.user.is_authenticated and request.user.theme %}{{ request.user.theme }}{% else %}dark{% endif %}"
-    data-user-theme="{% if request.user.is_authenticated %}{{ request.user.theme }}{% endif %}">
+    data-user-theme="{% if request.user.is_authenticated %}{{ request.user.theme }}{% endif %}"
+>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Trustpoint</title>
-        <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
-        <link rel="stylesheet" href="{% static 'css/bootstrap-icons.min.css' %}">
-        <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
-        <script src="{% static 'js/theme.js' %}?v=2" defer></script>
-        <link rel="icon" href="{% static 'img/favicon-32.png' %}">
+
+        <title>
+            {% block title %}{% trans "Trustpoint" %}{% endblock %}
+        </title>
+
+        <link
+            rel="stylesheet"
+            href="{% static 'css/bootstrap.min.css' %}"
+        >
+        <link
+            rel="stylesheet"
+            href="{% static 'css/bootstrap-icons.min.css' %}"
+        >
+        <link
+            rel="stylesheet"
+            href="{% static 'css/trustpoint.css' %}"
+        >
+
+        <script
+            src="{% static 'js/theme.js' %}?v=2"
+            defer
+        ></script>
+
+        <link
+            rel="icon"
+            href="{% static 'img/favicon-32.png' %}"
+        >
+
         {% block head %}{% endblock head %}
     </head>
 
     <body id="bs-override">
         <div class="tp-content-wrapper">
+
+            {# ======================================================== #}
+            {# Application Header                                       #}
+            {# ======================================================== #}
             <header class="tp-page-header navbar border-bottom border-body">
                 <div class="menu-icon">
-                    <svg id="menu-icon-menu" class="bi bi-size100" fill="currentColor" role="img" aria-label="Show Menu">
-                        <use href="{% static 'img/icons.svg' %}#icon-menu"></use></svg>
-                    <svg id="menu-icon-back" class="bi bi-size100 d-none" fill="currentColor" role="img" aria-label="Hide Menu">
-                        <use href="{% static 'img/icons.svg' %}#icon-x"></use></svg>
+                    <svg
+                        id="menu-icon-menu"
+                        class="bi bi-size100"
+                        fill="currentColor"
+                        role="img"
+                        aria-label="{% trans 'Show Menu' %}"
+                    >
+                        <use href="{% static 'img/icons.svg' %}#icon-menu"></use>
+                    </svg>
+
+                    <svg
+                        id="menu-icon-back"
+                        class="bi bi-size100 d-none"
+                        fill="currentColor"
+                        role="img"
+                        aria-label="{% trans 'Hide Menu' %}"
+                    >
+                        <use href="{% static 'img/icons.svg' %}#icon-x"></use>
+                    </svg>
                 </div>
-                <a class="navbar-brand tp-primary" href="{% url 'home:index' %}">
-                    <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" id="tp-logo" class="light-only">
-                    <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only">
+
+                <a
+                    class="navbar-brand tp-primary"
+                    href="{% url 'home:index' %}"
+                    aria-label="{% trans 'Trustpoint Dashboard' %}"
+                >
+                    <img
+                        src="{% static 'img/tp-logo-horizontal-512.png' %}"
+                        alt="{% trans 'Trustpoint' %}"
+                        id="tp-logo"
+                        class="light-only"
+                    >
+
+                    <img
+                        src="{% static 'img/tp-logo-horizontal-white-point.png' %}"
+                        alt="{% trans 'Trustpoint' %}"
+                        id="tp-logo"
+                        class="dark-only"
+                    >
                 </a>
-                <div><!-- Intentionally empty for flex layout --></div>
+
+                <div aria-hidden="true"></div>
             </header>
 
 
-{#    <div class="container-fluid p-0 m-0 d-flex">#}
-        <nav class="tp-sidenav">
-            {% if notification_alert_total > 0 %}
-                <div class="mb-2">
-                    <a href="{% url 'management:notifications' %}?unread_only=1" class="text-decoration-none d-flex flex-column gap-1">
-                        {% if notification_alert_critical_count > 0 %}
-                            <span class="badge bg-danger d-flex align-items-center gap-1 px-2 py-2" style="font-size: 0.8rem; border-radius: 0.5rem;">
-                                <i class="bi bi-exclamation-triangle-fill"></i>
-                                {{ notification_alert_critical_count }} {% trans "Critical" %}
-                            </span>
-                        {% endif %}
-                        {% if notification_alert_warning_count > 0 %}
-                            <span class="badge bg-warning text-dark d-flex align-items-center gap-1 px-2 py-2" style="font-size: 0.8rem; border-radius: 0.5rem;">
-                                <i class="bi bi-exclamation-triangle-fill"></i>
-                                {{ notification_alert_warning_count }} {% trans "Warning" %}
-                            </span>
-                        {% endif %}
-                    </a>
-                </div>
-            {% endif %}
-            <div class="tp-menu-group">
-                <a href="{% url 'home:index' %}" class="tp-menu-head {% if page_name == 'dashboard' or page_name == 'simplified_overview' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-home"></use></svg>
-                    {% translate "Dashboard" %}
-                </a>
-            </div>
+            {# ======================================================== #}
+            {# Main Navigation                                          #}
+            {# ======================================================== #}
+            <nav class="tp-sidenav">
 
-            <div class="tp-menu-group">
-                <a href="{% url 'devices:devices' %}" class="tp-menu-head {% if page_category == 'devices' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-boxes"></use></svg>
-                    {% translate "Devices" %}
-                    <div class="btn-collapse" data-category="devices"
-                        aria-expanded="{% if page_category == 'devices' %}true{% else %}false{% endif %}">
-                    </div>
-                </a>
-                <div class="tp-menu-collapse {% if page_category == 'devices' %}show{% endif %}">
-                    <a href="{% url 'devices:devices' %}" class="tp-menu-item {% if page_name == 'devices' %}tp-menu-active{% endif %}">{% trans 'Devices' %}</a>
-                    <a href="{% url 'devices:opc_ua_gds' %}" class="tp-menu-item {% if page_name == 'opc_ua_gds' %}tp-menu-active{% endif %}">{% trans 'OPC UA GDS' %}</a>
-                    <a href="{% url 'devices:zero_touch_credentials' %}" class="tp-menu-item {% if page_name == 'zero_touch_credentials' %}tp-menu-active{% endif %}">{% trans 'Zero-Touch Onboarding' %}</a>
-                    <a href="{% url 'devices:agents' %}" class="tp-menu-item {% if page_name == 'agents' %}tp-menu-active{% endif %}">{% trans 'Agents' %}</a>
-                </div>
-            </div>
+                {# --- Notification status --- #}
+                {% if notification_alert_total > 0 %}
+                    <div class="mb-2">
+                        <a
+                            href="{% url 'management:notifications' %}?unread_only=1"
+                            class="text-decoration-none d-flex flex-column gap-1"
+                        >
+                            {% if notification_alert_critical_count > 0 %}
+                                <span class="badge text-bg-danger d-flex align-items-center gap-1 px-2 py-2 rounded-3">
+                                    <i
+                                        class="bi bi-exclamation-triangle-fill"
+                                        aria-hidden="true"
+                                    ></i>
 
+                                    <span>
+                                        {{ notification_alert_critical_count }}
+                                        {% trans "Critical" %}
+                                    </span>
+                                </span>
+                            {% endif %}
 
+                            {% if notification_alert_warning_count > 0 %}
+                                <span class="badge text-bg-warning d-flex align-items-center gap-1 px-2 py-2 rounded-3">
+                                    <i
+                                        class="bi bi-exclamation-triangle-fill"
+                                        aria-hidden="true"
+                                    ></i>
 
-            <div class="tp-menu-group">
-                <a href="{% url 'pki:domains' %}" class="tp-menu-head {% if page_category == 'pki' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-key"></use></svg>
-                    {% translate "PKI" %}
-                    <div class="btn-collapse" data-category="pki"
-                        aria-expanded="{% if page_category == 'pki' %}true{% else %}false{% endif %}">
-                    </div>
-                </a>
-                <div class="tp-menu-collapse {% if page_category == 'pki' %}show{% endif %}">
-                    <a href="{% url 'pki:domains' %}" class="tp-menu-item {% if page_name == 'domains' %}tp-menu-active{% endif %}">{% trans 'Domains' %}</a>
-                    <a href="{% url 'pki:cas' %}" class="tp-menu-item {% if page_name == 'cas' %}tp-menu-active{% endif %}">{% trans 'Certificate Authorities' %}</a>
-                    <a href="{% url 'pki:crls' %}" class="tp-menu-item {% if page_name == 'crls' %}tp-menu-active{% endif %}">{% trans 'CRLs' %}</a>
-                    <a href="{% url 'pki:certificates' %}" class="tp-menu-item {% if page_name == 'certificates' %}tp-menu-active{% endif %}">{% trans 'Certificates' %}</a>
-                    <a href="{% url 'pki:cert_profiles' %}" class="tp-menu-item {% if page_name == 'cert_profiles' %}tp-menu-active{% endif %}">{% trans 'Certificate Profiles' %}</a>
-                    <a href="{% url 'pki:truststores' %}" class="tp-menu-item {% if page_name == 'truststores' %}tp-menu-active{% endif %}">{% trans 'Truststores' %}</a>
-                </div>
-            </div>
-
-            <div class="tp-menu-group">
-               <a href="{% url 'management:settings' %}" class="tp-menu-head {% if page_category == 'management' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-settings"></use></svg>
-                        {% translate "Management" %}
-                    <div class="btn-collapse" data-category="management"
-                        aria-expanded="{% if page_category == 'management' %}true{% else %}false{% endif %}">
-                    </div>
-                </a>
-                <div class="tp-menu-collapse {% if page_category == 'management' %}show{% endif %}">
-                    <a href="{% url 'management:settings' %}" class="tp-menu-item {% if page_name == 'settings' %}tp-menu-active{% endif %}">{% trans "Settings" %}</a>
-                    <a href="{% url 'management:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
-                    <a href="{% url 'management:audit-log' %}" class="tp-menu-item {% if page_name == 'audit_log' %}tp-menu-active{% endif %}">{% trans "Audit Log" %}</a>
-                    <a href="{% url 'management:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
-                    <a href="{% url 'management:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backups" %}</a>
-                    <a href="{% url 'management:backend_configuration' %}" class="tp-menu-item {% if page_name == 'backend_configuration' %}tp-menu-active{% endif %}">{% trans "Crypto Backend" %}</a>
-                    <a href="{% url 'management:notifications' %}" class="tp-menu-item {% if page_name == 'notifications' %}tp-menu-active{% endif %}">{% trans "Notifications" %}</a>
-                    <a href="{% url 'management:organization' %}" class="tp-menu-item {% if page_name == 'organization' %}tp-menu-active{% endif %}">{% trans "Organizations" %}</a>
-                    {% if perms.users.manage_role %}
-                    <a href="{% url 'management:service_account_list' %}" class="tp-menu-item {% if page_name == 'service_accounts' %}tp-menu-active{% endif %}">{% trans "Service Accounts" %}</a>
-                    <a href="{% url 'management:user_management' %}" class="tp-menu-item {% if page_name == 'user_management' %}tp-menu-active{% endif %}">{% trans "Users" %}</a>
-                    <a href="{% url 'management:role_management' %}" class="tp-menu-item {% if page_name == 'role_management' %}tp-menu-active{% endif %}">{% trans "Roles" %}</a>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="tp-menu-group">
-                <a href="{% url 'workflows2:definitions_list' %}"
-                class="tp-menu-head {% if page_category == 'workflows2' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-card-checklist"></use>
-                    </svg>
-                    {% translate "Workflows" %}
-                    <div class="btn-collapse" data-category="workflows2"
-                        aria-expanded="{% if page_category == 'workflows2' %}true{% else %}false{% endif %}">
-                    </div>
-                </a>
-
-                <div class="tp-menu-collapse {% if page_category == 'workflows2' %}show{% endif %}">
-                    <a href="{% url 'workflows2:definitions_list' %}"
-                    class="tp-menu-item {% if page_name == 'definitions_list' %}tp-menu-active{% endif %}">
-                        {% trans "Definitions" %}
-                    </a>
-
-                    <a href="{% url 'workflows2:runs-list' %}"
-                    class="tp-menu-item {% if page_name == 'runs-list' %}tp-menu-active{% endif %}">
-                        {% trans "Runs" %}
-                    </a>
-
-                    <a href="{% url 'workflows2:waiting-list' %}"
-                    class="tp-menu-item tp-menu-item-with-badge {% if page_name == 'waiting-list' %}tp-menu-active{% endif %}">
-                        <span>{% trans "Waiting" %}</span>
-                        {% if workflow_waiting_total %}
-                          <span class="badge rounded-pill text-bg-warning">{{ workflow_waiting_total }}</span>
-                        {% endif %}
-                    </a>
-                </div>
-            </div>
-
-            <div class="tp-menu-group">
-                <a href="{% url 'signer:signer_list' %}" class="tp-menu-head {% if page_category == 'tools' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-flag"></use></svg>
-                    {% translate "Tools" %}
-                    <div class="btn-collapse" data-category="tools"
-                        aria-expanded="{% if page_category == 'tools' %}true{% else %}false{% endif %}">
-                    </div>
-                </a>
-                <div class="tp-menu-collapse {% if page_category == 'tools' %}show{% endif %}">
-                    <a href="{% url 'signer:signer_list' %}" class="tp-menu-item {% if page_name == 'signer' %}tp-menu-active{% endif %}">{% trans 'Signing' %}</a>
-                    <a href="{% url 'discovery:device_list' %}" class="tp-menu-item {% if page_name == 'discovery' %}tp-menu-active{% endif %}">{% trans 'Network Discovery' %}</a>
-                </div>
-            </div>
-
-
-            <div class="tp-menu-footer">
-                <div class="tp-menu-group">
-                    {% if request.user.is_authenticated %}
-                    <a href="{% url 'users:profile' %}" class="tp-menu-head d-flex align-items-center justify-content-between gap-2 px-3 py-2" aria-label="{% trans 'Profile' %}">
-                        <div class="d-flex align-items-center gap-2 text-truncate">
-                            <span class="tp-user-avatar d-inline-flex align-items-center justify-content-center flex-shrink-0 rounded-circle bg-primary-subtle text-primary fw-bold small" style="width: 2rem; height: 2rem; min-width: 2rem; border-radius: 50%;" aria-hidden="true">
-                                {{ request.user.profile_initials }}
-                            </span>
-                            <span class="small text-truncate">{{ request.user.get_full_name|default:request.user.username }}</span>
-                        </div>
-                        <svg class="bi ms-auto" fill="currentColor" width="16" height="16" role="img" aria-hidden="true">
-                            <use href="{% static 'img/icons.svg' %}#icon-person-circle"></use>
-                        </svg>
-                    </a>
-                    {% endif %}
-                    <a href="{% url 'management:help' %}" class="tp-menu-head">
-                        <svg class="bi" fill="currentColor" width="16" height="16" role="img">
-                            <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
-                        </svg>
-                        {% trans "Help & Support" %}
-                    </a>
-                    <form method="POST" action="{% url 'users:logout' %}">
-                        {% csrf_token %}
-                        <button class="tp-menu-head" type="submit">
-                            <svg class="bi" fill="currentColor" role="img">
-                            <use href="{% static 'img/icons.svg' %}#icon-door"></use></svg>
-                            {% translate "Logout" %}
-                        </button>
-                    </form>
-
-                </div>
-                <div id="tp-version">
-                    {% if "dev" in APP_VERSION %}
-                        v{{ APP_VERSION }}
-                    {% else %}
-                        <a href="https://github.com/Trustpoint-Project/trustpoint/releases/tag/v{{ APP_VERSION }}"
-                            target="_blank"
-                            rel="noopener noreferrer">
-                            v{{ APP_VERSION }}
+                                    <span>
+                                        {{ notification_alert_warning_count }}
+                                        {% trans "Warning" %}
+                                    </span>
+                                </span>
+                            {% endif %}
                         </a>
-                    {% endif %}
+                    </div>
+                {% endif %}
+
+
+                {# --- Dashboard --- #}
+                <div class="tp-menu-group">
+                    <a
+                        href="{% url 'home:index' %}"
+                        class="tp-menu-head {% if page_name == 'dashboard' or page_name == 'simplified_overview' %}tp-menu-active{% endif %}"
+                    >
+                        <svg
+                            class="bi"
+                            fill="currentColor"
+                            role="img"
+                            aria-hidden="true"
+                        >
+                            <use href="{% static 'img/icons.svg' %}#icon-home"></use>
+                        </svg>
+
+                        {% trans "Dashboard" %}
+                    </a>
                 </div>
-            </div>
-        </nav>
 
-        <main class="tp-main">
-            {% include 'includes/trustpoint_runtime_banner.html' %}
-            {% if messages %}
-                <div class="messages tp-messages text-center">
-                    {% for message in messages %}
-                        <div class="tp-message alert
-                            {% if message.tags %}
-                                {% if message.tags == "error" %}
-                                    alert-danger
-                                {% else %}
-                                    alert-{{ message.tags }}
-                                {% endif %}
-                            {% endif %} d-flex" role="alert">
 
-                            <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
-                                <use xlink:href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
-                            <div>
-                              {{ message }}
+                {# --- Devices --- #}
+                <div class="tp-menu-group">
+                    <a
+                        href="{% url 'devices:devices' %}"
+                        class="tp-menu-head {% if page_category == 'devices' %}tp-menu-active{% endif %}"
+                    >
+                        <svg
+                            class="bi"
+                            fill="currentColor"
+                            role="img"
+                            aria-hidden="true"
+                        >
+                            <use href="{% static 'img/icons.svg' %}#icon-boxes"></use>
+                        </svg>
+
+                        {% trans "Devices" %}
+
+                        <div
+                            class="btn-collapse"
+                            data-category="devices"
+                            aria-expanded="{% if page_category == 'devices' %}true{% else %}false{% endif %}"
+                        ></div>
+                    </a>
+
+                    <div class="tp-menu-collapse {% if page_category == 'devices' %}show{% endif %}">
+                        <a
+                            href="{% url 'devices:devices' %}"
+                            class="tp-menu-item {% if page_name == 'devices' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Devices' %}
+                        </a>
+
+                        <a
+                            href="{% url 'devices:opc_ua_gds' %}"
+                            class="tp-menu-item {% if page_name == 'opc_ua_gds' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'OPC UA GDS' %}
+                        </a>
+
+                        <a
+                            href="{% url 'devices:zero_touch_credentials' %}"
+                            class="tp-menu-item {% if page_name == 'zero_touch_credentials' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Zero-Touch Onboarding' %}
+                        </a>
+
+                        <a
+                            href="{% url 'devices:agents' %}"
+                            class="tp-menu-item {% if page_name == 'agents' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Agents' %}
+                        </a>
+                    </div>
+                </div>
+
+
+                {# --- PKI --- #}
+                <div class="tp-menu-group">
+                    <a
+                        href="{% url 'pki:domains' %}"
+                        class="tp-menu-head {% if page_category == 'pki' %}tp-menu-active{% endif %}"
+                    >
+                        <svg
+                            class="bi"
+                            fill="currentColor"
+                            role="img"
+                            aria-hidden="true"
+                        >
+                            <use href="{% static 'img/icons.svg' %}#icon-key"></use>
+                        </svg>
+
+                        {% trans "PKI" %}
+
+                        <div
+                            class="btn-collapse"
+                            data-category="pki"
+                            aria-expanded="{% if page_category == 'pki' %}true{% else %}false{% endif %}"
+                        ></div>
+                    </a>
+
+                    <div class="tp-menu-collapse {% if page_category == 'pki' %}show{% endif %}">
+                        <a
+                            href="{% url 'pki:domains' %}"
+                            class="tp-menu-item {% if page_name == 'domains' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Domains' %}
+                        </a>
+
+                        <a
+                            href="{% url 'pki:cas' %}"
+                            class="tp-menu-item {% if page_name == 'cas' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Certificate Authorities' %}
+                        </a>
+
+                        <a
+                            href="{% url 'pki:crls' %}"
+                            class="tp-menu-item {% if page_name == 'crls' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'CRLs' %}
+                        </a>
+
+                        <a
+                            href="{% url 'pki:certificates' %}"
+                            class="tp-menu-item {% if page_name == 'certificates' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Certificates' %}
+                        </a>
+
+                        <a
+                            href="{% url 'pki:cert_profiles' %}"
+                            class="tp-menu-item {% if page_name == 'cert_profiles' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Certificate Profiles' %}
+                        </a>
+
+                        <a
+                            href="{% url 'pki:truststores' %}"
+                            class="tp-menu-item {% if page_name == 'truststores' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Truststores' %}
+                        </a>
+                    </div>
+                </div>
+
+
+                {# --- Management --- #}
+                <div class="tp-menu-group">
+                    <a
+                        href="{% url 'management:settings' %}"
+                        class="tp-menu-head {% if page_category == 'management' %}tp-menu-active{% endif %}"
+                    >
+                        <svg
+                            class="bi"
+                            fill="currentColor"
+                            role="img"
+                            aria-hidden="true"
+                        >
+                            <use href="{% static 'img/icons.svg' %}#icon-settings"></use>
+                        </svg>
+
+                        {% trans "Management" %}
+
+                        <div
+                            class="btn-collapse"
+                            data-category="management"
+                            aria-expanded="{% if page_category == 'management' %}true{% else %}false{% endif %}"
+                        ></div>
+                    </a>
+
+                    <div class="tp-menu-collapse {% if page_category == 'management' %}show{% endif %}">
+                        <a
+                            href="{% url 'management:settings' %}"
+                            class="tp-menu-item {% if page_name == 'settings' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "Settings" %}
+                        </a>
+
+                        <a
+                            href="{% url 'management:logging-files' %}"
+                            class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "Logging" %}
+                        </a>
+
+                        <a
+                            href="{% url 'management:audit-log' %}"
+                            class="tp-menu-item {% if page_name == 'audit_log' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "Audit Log" %}
+                        </a>
+
+                        <a
+                            href="{% url 'management:tls' %}"
+                            class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "TLS" %}
+                        </a>
+
+                        <a
+                            href="{% url 'management:backups' %}"
+                            class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "Backups" %}
+                        </a>
+
+                        <a
+                            href="{% url 'management:backend_configuration' %}"
+                            class="tp-menu-item {% if page_name == 'backend_configuration' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "Crypto Backend" %}
+                        </a>
+
+                        <a
+                            href="{% url 'management:notifications' %}"
+                            class="tp-menu-item {% if page_name == 'notifications' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "Notifications" %}
+                        </a>
+
+                        <a
+                            href="{% url 'management:organization' %}"
+                            class="tp-menu-item {% if page_name == 'organization' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "Organizations" %}
+                        </a>
+
+                        {% if perms.users.manage_role %}
+                            <a
+                                href="{% url 'management:service_account_list' %}"
+                                class="tp-menu-item {% if page_name == 'service_accounts' %}tp-menu-active{% endif %}"
+                            >
+                                {% trans "Service Accounts" %}
+                            </a>
+
+                            <a
+                                href="{% url 'management:user_management' %}"
+                                class="tp-menu-item {% if page_name == 'user_management' %}tp-menu-active{% endif %}"
+                            >
+                                {% trans "Users" %}
+                            </a>
+
+                            <a
+                                href="{% url 'management:role_management' %}"
+                                class="tp-menu-item {% if page_name == 'role_management' %}tp-menu-active{% endif %}"
+                            >
+                                {% trans "Roles" %}
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+
+
+                {# --- Workflows --- #}
+                <div class="tp-menu-group">
+                    <a
+                        href="{% url 'workflows2:definitions_list' %}"
+                        class="tp-menu-head {% if page_category == 'workflows2' %}tp-menu-active{% endif %}"
+                    >
+                        <svg
+                            class="bi"
+                            fill="currentColor"
+                            role="img"
+                            aria-hidden="true"
+                        >
+                            <use href="{% static 'img/icons.svg' %}#icon-card-checklist"></use>
+                        </svg>
+
+                        {% trans "Workflows" %}
+
+                        <div
+                            class="btn-collapse"
+                            data-category="workflows2"
+                            aria-expanded="{% if page_category == 'workflows2' %}true{% else %}false{% endif %}"
+                        ></div>
+                    </a>
+
+                    <div class="tp-menu-collapse {% if page_category == 'workflows2' %}show{% endif %}">
+                        <a
+                            href="{% url 'workflows2:definitions_list' %}"
+                            class="tp-menu-item {% if page_name == 'definitions_list' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "Definitions" %}
+                        </a>
+
+                        <a
+                            href="{% url 'workflows2:runs-list' %}"
+                            class="tp-menu-item {% if page_name == 'runs-list' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans "Runs" %}
+                        </a>
+
+                        <a
+                            href="{% url 'workflows2:waiting-list' %}"
+                            class="tp-menu-item tp-menu-item-with-badge {% if page_name == 'waiting-list' %}tp-menu-active{% endif %}"
+                        >
+                            <span>
+                                {% trans "Waiting" %}
+                            </span>
+
+                            {% if workflow_waiting_total %}
+                                <span class="badge rounded-pill text-bg-warning">
+                                    {{ workflow_waiting_total }}
+                                </span>
+                            {% endif %}
+                        </a>
+                    </div>
+                </div>
+
+
+                {# --- Tools --- #}
+                <div class="tp-menu-group">
+                    <a
+                        href="{% url 'signer:signer_list' %}"
+                        class="tp-menu-head {% if page_category == 'tools' %}tp-menu-active{% endif %}"
+                    >
+                        <svg
+                            class="bi"
+                            fill="currentColor"
+                            role="img"
+                            aria-hidden="true"
+                        >
+                            <use href="{% static 'img/icons.svg' %}#icon-flag"></use>
+                        </svg>
+
+                        {% trans "Tools" %}
+
+                        <div
+                            class="btn-collapse"
+                            data-category="tools"
+                            aria-expanded="{% if page_category == 'tools' %}true{% else %}false{% endif %}"
+                        ></div>
+                    </a>
+
+                    <div class="tp-menu-collapse {% if page_category == 'tools' %}show{% endif %}">
+                        <a
+                            href="{% url 'signer:signer_list' %}"
+                            class="tp-menu-item {% if page_name == 'signer' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Signing' %}
+                        </a>
+
+                        <a
+                            href="{% url 'discovery:device_list' %}"
+                            class="tp-menu-item {% if page_name == 'discovery' %}tp-menu-active{% endif %}"
+                        >
+                            {% trans 'Network Discovery' %}
+                        </a>
+                    </div>
+                </div>
+
+
+                {# ==================================================== #}
+                {# Navigation Footer                                    #}
+                {# ==================================================== #}
+                <div class="tp-menu-footer">
+                    <div class="tp-menu-group">
+
+                        {% if request.user.is_authenticated %}
+                            <a
+                                href="{% url 'users:profile' %}"
+                                class="tp-menu-head d-flex align-items-center justify-content-between gap-2 px-3 py-2 {% if page_name == 'profile' %}tp-menu-active{% endif %}"
+                                aria-label="{% trans 'Profile' %}"
+                            >
+                                <div class="d-flex align-items-center gap-2 text-truncate">
+                                    <span
+                                        class="tp-user-avatar d-inline-flex align-items-center justify-content-center flex-shrink-0 rounded-circle bg-primary-subtle text-primary fw-bold small"
+                                        style="width: 2rem; height: 2rem; min-width: 2rem;"
+                                        aria-hidden="true"
+                                    >
+                                        {{ request.user.profile_initials }}
+                                    </span>
+
+                                    <span class="small text-truncate">
+                                        {{ request.user.get_full_name|default:request.user.username }}
+                                    </span>
+                                </div>
+
+                                <svg
+                                    class="bi ms-auto"
+                                    fill="currentColor"
+                                    width="16"
+                                    height="16"
+                                    role="img"
+                                    aria-hidden="true"
+                                >
+                                    <use href="{% static 'img/icons.svg' %}#icon-person-circle"></use>
+                                </svg>
+                            </a>
+                        {% endif %}
+
+
+                        <a
+                            href="{% url 'management:help' %}"
+                            class="tp-menu-head {% if page_name == 'help' %}tp-menu-active{% endif %}"
+                        >
+                            <svg
+                                class="bi"
+                                fill="currentColor"
+                                width="16"
+                                height="16"
+                                role="img"
+                                aria-hidden="true"
+                            >
+                                <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
+                            </svg>
+
+                            {% trans "Help & Support" %}
+                        </a>
+
+
+                        <form
+                            method="post"
+                            action="{% url 'users:logout' %}"
+                        >
+                            {% csrf_token %}
+
+                            <button
+                                class="tp-menu-head"
+                                type="submit"
+                            >
+                                <svg
+                                    class="bi"
+                                    fill="currentColor"
+                                    role="img"
+                                    aria-hidden="true"
+                                >
+                                    <use href="{% static 'img/icons.svg' %}#icon-door"></use>
+                                </svg>
+
+                                {% trans "Logout" %}
+                            </button>
+                        </form>
+
+                    </div>
+
+
+                    <div id="tp-version">
+                        {% if "dev" in APP_VERSION %}
+                            v{{ APP_VERSION }}
+                        {% else %}
+                            <a
+                                href="https://github.com/Trustpoint-Project/trustpoint/releases/tag/v{{ APP_VERSION }}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                v{{ APP_VERSION }}
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </nav>
+
+
+            {# ======================================================== #}
+            {# Main Page Content                                        #}
+            {# ======================================================== #}
+            <main class="tp-main">
+
+                {% include 'includes/trustpoint_runtime_banner.html' %}
+
+                {% if messages %}
+                    <div class="messages tp-messages text-center">
+                        {% for message in messages %}
+                            <div
+                                class="
+                                    tp-message
+                                    alert
+                                    {% if message.tags %}
+                                        {% if message.tags == 'error' %}
+                                            alert-danger
+                                        {% else %}
+                                            alert-{{ message.tags }}
+                                        {% endif %}
+                                    {% endif %}
+                                    d-flex
+                                "
+                                role="alert"
+                            >
+                                <svg
+                                    class="bi flex-shrink-0 tp-msg-icon-margin"
+                                    width="20"
+                                    height="20"
+                                    fill="currentColor"
+                                    role="img"
+                                    aria-hidden="true"
+                                >
+                                    <use xlink:href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use>
+                                </svg>
+
+                                <div>
+                                    {{ message }}
+                                </div>
                             </div>
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-            {% block content %}{% endblock content %}
-        </main>
+                        {% endfor %}
+                    </div>
+                {% endif %}
 
-    </div>
+                {% block content %}{% endblock content %}
+
+            </main>
+
+        </div>
+
 
         <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
         <script src="{% static 'js/trustpoint.js' %}"></script>
         <script src="{% static 'js/chart.js' %}"></script>
     </body>
-
 </html>
