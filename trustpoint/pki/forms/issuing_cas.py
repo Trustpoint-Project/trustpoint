@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from typing import Any, ClassVar, NoReturn, cast
-from uuid import uuid4
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -705,7 +704,7 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         key_spec = self._key_spec_for_key_type(key_type)
 
         key_ref = TrustpointCryptoBackend().generate_managed_key(
-            alias=f'issuing-ca-{uuid4()}',
+            alias=self.cleaned_data['unique_name'],
             key_spec=key_spec,
             policy=KeyPolicy.managed_signing_key(
                 signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
