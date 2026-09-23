@@ -61,7 +61,7 @@ class RoleTableView(
     """List view displaying all Django groups in a table."""
 
     model = Group
-    template_name = 'management/role_management.html'
+    template_name = 'management/roles/role_management.html'
     context_object_name = 'groups'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -88,7 +88,7 @@ class RoleCreateView(
 
     model = Group
     form_class = GroupPermissionForm
-    template_name = 'management/role_add.html'
+    template_name = 'management/roles/role_form.html'
     success_url = reverse_lazy('management:role_management')
 
     def form_valid(self, form: BaseModelForm[Group]) -> HttpResponse:
@@ -125,7 +125,7 @@ class RoleEditView(
 
     model = Group
     form_class = GroupPermissionForm
-    template_name = 'management/role_edit.html'
+    template_name = 'management/roles/role_form.html'
     success_url = reverse_lazy('management:role_management')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -190,7 +190,7 @@ class RoleDeleteView(
     """
 
     model: type[Group] = Group
-    template_name = 'management/role_confirm_delete.html'
+    template_name = 'management/roles/role_confirm_delete.html'
     success_url = reverse_lazy('management:role_management')
 
     def form_valid(self, form: Any) -> HttpResponse:

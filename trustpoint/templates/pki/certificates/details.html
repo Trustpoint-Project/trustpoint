@@ -4,53 +4,195 @@
 
 {% block head %}
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
+
+    <style>
+        .tp-certificate-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            border-bottom: 1px solid var(--bs-border-color);
+        }
+
+        .tp-certificate-tabs .nav-item {
+            flex: 0 0 auto;
+        }
+
+        .tp-certificate-tabs .nav-link {
+            width: auto !important;
+            min-width: 0 !important;
+            flex: 0 0 auto !important;
+
+            padding: 0.75rem 0.25rem;
+            margin: 0;
+
+            border: 0 !important;
+            border-bottom: 2px solid transparent !important;
+            border-radius: 0 !important;
+
+            background: transparent !important;
+            color: var(--bs-secondary-color);
+
+            font-weight: 500;
+            box-shadow: none !important;
+        }
+
+        .tp-certificate-tabs .nav-link:hover,
+        .tp-certificate-tabs .nav-link:focus {
+            color: var(--bs-body-color);
+            background: transparent !important;
+            border-bottom-color: var(--bs-border-color) !important;
+        }
+
+        .tp-certificate-tabs .nav-link.active {
+            color: var(--bs-primary);
+            background: transparent !important;
+            border-bottom-color: var(--bs-primary) !important;
+            font-weight: 600;
+        }
+
+        .tp-pem-content {
+            max-height: 60vh;
+            white-space: pre;
+        }
+    </style>
 {% endblock head %}
 
+
 {% block content %}
-
-<div class="card" style="display: flex; flex-direction: column; height: calc(100vh - 120px);">
+<div class="card">
     <div class="card-header">
-        <h1>{% trans "Certificate Details" %}</h1>
+        <h1 class="mb-1">
+            {% trans "Certificate Details" %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% if cert.common_name %}
+                {% blocktranslate with common_name=cert.common_name %}
+                    Review certificate information for "{{ common_name }}".
+                {% endblocktranslate %}
+            {% else %}
+                {% trans "Review certificate identity, validity, cryptographic properties, extensions and hierarchy." %}
+            {% endif %}
+        </p>
     </div>
-    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; padding-top: 0;">
-        <ul class="nav nav-tabs mt-3" role="tablist">
+
+
+    <div class="card-body text-start">
+
+        {# ======================================================== #}
+        {# Navigation                                               #}
+        {# ======================================================== #}
+        <ul
+            class="nav tp-certificate-tabs mb-4"
+            id="certificate-detail-tabs"
+            role="tablist"
+        >
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="tab1-tab" data-bs-toggle="tab" data-bs-target="#tab1-panel"
-                    type="button" role="tab">{% trans "Profile" %}</button>
+                <button
+                    class="nav-link active"
+                    id="profile-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#profile-panel"
+                    type="button"
+                    role="tab"
+                    aria-controls="profile-panel"
+                    aria-selected="true"
+                >
+                    {% trans "Profile" %}
+                </button>
             </li>
 
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab3-tab" data-bs-toggle="tab" data-bs-target="#tab3-panel" type="button"
-                    role="tab">{% trans "Key & Signature" %}</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab4-tab" data-bs-toggle="tab" data-bs-target="#tab4-panel" type="button"
-                    role="tab">{% trans "Extensions" %}</button>
+                <button
+                    class="nav-link"
+                    id="key-signature-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#key-signature-panel"
+                    type="button"
+                    role="tab"
+                    aria-controls="key-signature-panel"
+                    aria-selected="false"
+                >
+                    {% trans "Key & Signature" %}
+                </button>
             </li>
 
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab5-tab" data-bs-toggle="tab" data-bs-target="#tab5-panel" type="button"
-                    role="tab">{% trans "Hierarchy & Additional" %}</button>
+                <button
+                    class="nav-link"
+                    id="extensions-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#extensions-panel"
+                    type="button"
+                    role="tab"
+                    aria-controls="extensions-panel"
+                    aria-selected="false"
+                >
+                    {% trans "Extensions" %}
+                </button>
+            </li>
+
+            <li class="nav-item" role="presentation">
+                <button
+                    class="nav-link"
+                    id="hierarchy-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#hierarchy-panel"
+                    type="button"
+                    role="tab"
+                    aria-controls="hierarchy-panel"
+                    aria-selected="false"
+                >
+                    {% trans "Hierarchy & Additional" %}
+                </button>
             </li>
         </ul>
-        <div class="tab-content pt-4">
-            <div class="tab-pane fade show active" id="tab1-panel" role="tabpanel">
+
+
+        {# ======================================================== #}
+        {# Tab Content                                              #}
+        {# ======================================================== #}
+        <div class="tab-content">
+
+            {# Profile #}
+            <div
+                class="tab-pane fade show active"
+                id="profile-panel"
+                role="tabpanel"
+                aria-labelledby="profile-tab"
+                tabindex="0"
+            >
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/subject_and_names.html' %}
-
                     {% include 'pki/certificates/components/general.html' %}
                     {% include 'pki/certificates/components/validity.html' %}
                 </div>
             </div>
 
 
-            <div class="tab-pane fade" id="tab3-panel" role="tabpanel">
+            {# Key & Signature #}
+            <div
+                class="tab-pane fade"
+                id="key-signature-panel"
+                role="tabpanel"
+                aria-labelledby="key-signature-tab"
+                tabindex="0"
+            >
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/subject_public_key_info.html' %}
                     {% include 'pki/certificates/components/signature.html' %}
                 </div>
             </div>
-            <div class="tab-pane fade" id="tab4-panel" role="tabpanel">
+
+
+            {# Extensions #}
+            <div
+                class="tab-pane fade"
+                id="extensions-panel"
+                role="tabpanel"
+                aria-labelledby="extensions-tab"
+                tabindex="0"
+            >
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/extensions/key_usage_extension.html' %}
                     {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
@@ -60,87 +202,127 @@
             </div>
 
 
-            <div class="tab-pane fade" id="tab5-panel" role="tabpanel">
+            {# Hierarchy & Additional #}
+            <div
+                class="tab-pane fade"
+                id="hierarchy-panel"
+                role="tabpanel"
+                aria-labelledby="hierarchy-tab"
+                tabindex="0"
+            >
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/hierarchy.html' %}
+
                     {% if cert.credential_set.first.issued_credential %}
-                    {% include 'pki/certificates/components/additional.html' %}
+                        {% include 'pki/certificates/components/additional.html' %}
                     {% endif %}
                 </div>
             </div>
 
         </div>
     </div>
-    <div class="card-footer d-flex justify-content-between align-items-center">
-        <div class="tp-card-btn-footer m-1">
-            <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">{% trans 'Back' %}</button>
-            <a href="{% url 'pki:certificates' %}" class="btn btn-secondary btn-half">{% trans 'Cancel' %}</a>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pemModal">{% trans 'Show PEM' %}</button>
-            <a href="{% url 'pki:certificate-download' pk=cert.id %}" class="btn btn-primary">{% trans 'Download' %}</a>
+
+
+    <div class="card-footer d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+        <div class="d-flex flex-wrap gap-2">
+            <button
+                type="button"
+                class="btn btn-secondary"
+                onclick="history.back()"
+            >
+                {% trans 'Back' %}
+            </button>
+
+            <a
+                href="{% url 'pki:certificates' %}"
+                class="btn btn-outline-secondary"
+            >
+                {% trans 'Certificates' %}
+            </a>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <button
+                type="button"
+                class="btn btn-outline-secondary"
+                data-bs-toggle="modal"
+                data-bs-target="#pemModal"
+            >
+                {% trans 'Show PEM' %}
+            </button>
+
+            <a
+                href="{% url 'pki:certificate-download' pk=cert.id %}"
+                class="btn btn-primary"
+            >
+                {% trans 'Download Certificate' %}
+            </a>
         </div>
     </div>
 </div>
 
-<!-- PEM Modal -->
-<div class="modal fade" id="pemModal" tabindex="-1" aria-labelledby="pemModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+
+{# ============================================================ #}
+{# PEM Modal                                                    #}
+{# ============================================================ #}
+<div
+    class="modal fade"
+    id="pemModal"
+    tabindex="-1"
+    aria-labelledby="pemModalLabel"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content">
+
             <div class="modal-header">
-                <h5 class="modal-title" id="pemModalLabel">{% trans "Certificate PEM" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"
-                    aria-label="{% trans 'Close' %}"></button>
+                <div>
+                    <h2
+                        class="modal-title h5 mb-1"
+                        id="pemModalLabel"
+                    >
+                        {% trans "Certificate PEM" %}
+                    </h2>
+
+                    <p class="mb-0 text-muted small">
+                        {% trans "PEM-encoded representation of this certificate." %}
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="{% trans 'Close' %}"
+                ></button>
             </div>
+
             <div class="modal-body">
-                <div class="copy-container" style="position: relative;">
-                    <pre class="command-text"
-                        style="background-color: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 12px; max-height: 500px;">{{ cert.cert_pem }}</pre>
-                    <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
-                        aria-label="Copy to clipboard" style="position: absolute; top: 10px; right: 10px;">
-                        <svg class="icon icon-copy" width="24" height="24" fill="currentColor">
+                <div class="copy-container position-relative">
+                    <pre
+                        class="command-text tp-pem-content bg-body-tertiary border rounded p-3 mb-0 overflow-auto font-monospace"
+                    ><code>{{ cert.cert_pem }}</code></pre>
+
+                    <button
+                        type="button"
+                        class="copy-button position-absolute top-0 end-0 m-2"
+                        data-tooltip="{% trans 'Copy to clipboard' %}"
+                        aria-label="{% trans 'Copy to clipboard' %}"
+                    >
+                        <svg
+                            class="icon icon-copy"
+                            width="24"
+                            height="24"
+                            fill="currentColor"
+                            aria-hidden="true"
+                        >
                             <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
                         </svg>
                     </button>
                 </div>
             </div>
+
         </div>
     </div>
 </div>
-
-
-<style>
-    .nav-tabs {
-        border-bottom: 1px solid #34373c;
-        background: none;
-    }
-
-    .nav-tabs .nav-link {
-
-        border: none !important;
-        border-bottom: 3px solid transparent !important;
-        background: none !important;
-        color: #b7b8be;
-        font-weight: 500;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-        margin-bottom: -1px;
-        transition: color 0.16s, border-bottom 0.16s;
-    }
-
-    .nav-tabs .nav-link.active {
-        color: #5196ff;
-        border-bottom: 3px solid #5196ff !important;
-        background: none !important;
-        font-weight: 600;
-        box-shadow: none !important;
-    }
-
-    .nav-tabs .nav-link:hover:not(.active),
-    .nav-tabs .nav-link:focus:not(.active) {
-        color: #dde8ff;
-        border-bottom: 3px solid #363b40;
-        background: none !important;
-        box-shadow: none !important;
-    }
-</style>
-
 {% endblock content %}

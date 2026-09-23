@@ -84,7 +84,10 @@ class BaseHelpView(UserPermissionRequiredMixin, DetailView[DevIdRegistration]):
         sections, heading = self.strategy.build_sections(help_context)
         context['help_page'] = HelpPage(heading=heading, sections=sections)
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
+        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
+        context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
         context['back_url'] = 'pki:domains-config'
+        context['back_url_pk'] = help_context.domain.pk
         return context
 
 
@@ -918,6 +921,7 @@ class CrlDownloadHelpView(CaDetailView):
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
         context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
         context['back_url'] = 'pki:issuing_cas-config'
+        context['back_url_pk'] = ca.pk
         context['back_button_text'] = _non_lazy('Back to Issuing CA Configuration')
 
         return context

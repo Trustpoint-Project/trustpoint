@@ -3,28 +3,61 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST" autocomplete="off" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Add new Issuing CA' %}</h1>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    <h2>{% trans 'File Import' %}</h2>
-                    <hr>
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Import Issuing CA' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Import an existing Issuing CA, including its private key and certificate material, into Trustpoint.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="import-issuing-ca-form"
+                method="post"
+                enctype="multipart/form-data"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans 'File Import' %}
+                        </h2>
+
+                        <p class="mb-0 text-muted">
+                            {% trans 'Select the required files and provide the information needed to import the Issuing CA.' %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
 
                     {{ form|crispy }}
-                </div>
-            </div>
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                    <button type="submit" class="btn btn-primary">{% trans 'Add new Issuing CA' %}</button>
-                </div>
-            </div>
+                </section>
+            </form>
         </div>
-    </form>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'pki:issuing_cas-add-method_select' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Back' %}
+        </a>
+
+        <button
+            type="submit"
+            form="import-issuing-ca-form"
+            class="btn btn-primary"
+        >
+            {% trans 'Import Issuing CA' %}
+        </button>
+    </div>
+</div>
 {% endblock content %}

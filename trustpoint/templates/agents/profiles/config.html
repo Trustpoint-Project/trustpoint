@@ -8,75 +8,211 @@
     {% else %}
         {% trans "Edit Agent Profile Definition" %}
     {% endif %}
-{% endblock %}
+{% endblock title %}
 
 {% block content %}
 <div class="card">
-
     <div class="card-header">
-        <div class="">
-            {% if is_new %}
-                <h1>{% trans "Create Agent Profile Definition" %}</h1>
-            {% else %}
-                <h1>{% trans "Edit Agent Profile Definition" %}</h1>
-            {% endif %}
+        {% if is_new %}
+            <h1 class="mb-1">
+                {% trans "Create Agent Profile Definition" %}
+            </h1>
+
+            <p class="mb-0 text-muted">
+                {% trans "Create a reusable profile definition for certificate management agents." %}
+            </p>
+        {% else %}
+            <h1 class="mb-1">
+                {% trans "Edit Agent Profile Definition" %}
+            </h1>
+
+            <p class="mb-0 text-muted">
+                {% trans "Review and update the profile definition used by certificate management agents." %}
+            </p>
+        {% endif %}
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="agent-profile-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger mb-4" role="alert">
+                        {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+
+                {# ==================================================== #}
+                {# General                                              #}
+                {# ==================================================== #}
+                <section class="mb-5">
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans "General" %}
+                        </h2>
+
+                        <p class="mb-0 text-muted">
+                            {% trans "Define the profile name and whether the profile can currently be used." %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
+
+                    <div class="mb-4">
+                        <label
+                            for="unique_name"
+                            class="form-label"
+                        >
+                            {% trans "Unique Name" %}
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control{% if form.name.errors %} is-invalid{% endif %}"
+                            name="name"
+                            value="{{ form.name.value|default_if_none:'' }}"
+                            id="unique_name"
+                            {% if form.name.errors %}aria-describedby="unique_name_error"{% endif %}
+                        >
+
+                        {% for error in form.name.errors %}
+                            <div
+                                class="invalid-feedback"
+                                id="unique_name_error"
+                            >
+                                {{ error }}
+                            </div>
+                        {% endfor %}
+
+                        {% if form.name.help_text %}
+                            <div class="form-text">
+                                {{ form.name.help_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-check">
+                        <input
+                            type="checkbox"
+                            class="form-check-input"
+                            name="is_active"
+                            id="is_active"
+                            {% if form.is_active.value %}checked{% endif %}
+                        >
+
+                        <label
+                            class="form-check-label"
+                            for="is_active"
+                        >
+                            {% trans "Active" %}
+                        </label>
+
+                        {% if form.is_active.help_text %}
+                            <div class="form-text">
+                                {{ form.is_active.help_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </section>
+
+
+                {# ==================================================== #}
+                {# Profile Definition                                   #}
+                {# ==================================================== #}
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans "Profile Definition" %}
+                        </h2>
+
+                        <p class="mb-0 text-muted">
+                            {% trans "Define the agent profile configuration as JSON." %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
+
+                    <label
+                        for="json-editor"
+                        class="form-label"
+                    >
+                        {% trans "Profile JSON" %}
+                    </label>
+
+                    <textarea
+                        class="form-control font-monospace{% if form.profile.errors %} is-invalid{% endif %}"
+                        id="json-editor"
+                        name="profile"
+                        rows="16"
+                        spellcheck="false"
+                        {% if form.profile.errors %}aria-describedby="profile_json_error"{% endif %}
+                    >{{ profile_json }}</textarea>
+
+                    {% for error in form.profile.errors %}
+                        <div
+                            class="invalid-feedback"
+                            id="profile_json_error"
+                        >
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+
+                    {% if form.profile.help_text %}
+                        <div class="form-text">
+                            {{ form.profile.help_text }}
+                        </div>
+                    {% endif %}
+                </section>
+            </form>
         </div>
     </div>
-    <form method="post">
-        <div class="card-body">
-            <div class="tp-card-centered-content">
-                {% csrf_token %}
-                {% for error in form.non_field_errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-                <h2>{% trans "General" %}</h2>
-                <hr class="hr-m">
-                <div class="tp-kvp-list">
-                    <div>
-                        <div>{% trans "Unique Name" %}</div>
-                        <div><input type="text" class="form-control {% if form.name.errors %}is-invalid{% endif %}"
-                            name="name" value="{{ form.name.value }}" id="unique_name" aria-describedby="unique_name_error" />
-                        {% for error in form.name.errors %}
-                            <div class="invalid-feedback" id="unique_name_error">{{ error }}</div>
-                        {% endfor %}
-                        </div>
-                    </div>
-                    <div>
-                        <div>{% trans "Is active" %}</div>
-                        <div>
-                            <input type="checkbox" name="is_active" {% if form.is_active.value %}checked{% endif %} />
-                        </div>
-                    </div>
-                </div>
-                <h2>{% trans "Profile Details" %}</h2>
-                <hr class="hr-m">
-                <div style="position: relative; display: flex;">
-                    <div style="flex: 1;">
-                        <textarea class="form-control {% if form.profile.errors %}is-invalid{% endif %}"
-                            id="json-editor" name="profile" rows="10" aria-describedby="profile_json_error">{{ profile_json }}</textarea>
-                        {% for error in form.profile.errors %}
-                            <div class="invalid-feedback" id="profile_json_error">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                </div>
 
-            </div>
-        </div>
-        <div class="card-footer d-flex">
-            <div class="tp-card-btn-footer m-1">
-                <a href="{% url 'agents:profiles' %}" class="btn btn-secondary">{% trans "Back" %}</a>
-                <button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
-            </div>
-        </div>
-    </form>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'agents:profiles' %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Back" %}
+        </a>
+
+        <button
+            type="submit"
+            form="agent-profile-form"
+            class="btn btn-primary"
+        >
+            {% if is_new %}
+                {% trans "Create Profile" %}
+            {% else %}
+                {% trans "Save Changes" %}
+            {% endif %}
+        </button>
+    </div>
 </div>
+
 
 {% if json_valid %}
     {{ profile_json|json_script:"json-data" }}
+
     <script>
-        const data = JSON.parse(document.getElementById("json-data").textContent);
-        document.getElementById("json-editor").textContent = JSON.stringify(data, null, 2);
+        document.addEventListener('DOMContentLoaded', function () {
+            const jsonData = document.getElementById('json-data');
+            const jsonEditor = document.getElementById('json-editor');
+
+            if (!jsonData || !jsonEditor) {
+                return;
+            }
+
+            const data = JSON.parse(jsonData.textContent);
+            jsonEditor.value = JSON.stringify(data, null, 2);
+        });
     </script>
 {% endif %}
-
 {% endblock content %}

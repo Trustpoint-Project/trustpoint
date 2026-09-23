@@ -2,19 +2,42 @@
 {% load static i18n %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+<div class="card">
     <div class="card-header">
-        <h1>{% trans 'Organization Management' %}</h1>
+        <h1 class="mb-1">
+            {% trans 'Organization Management' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Manage organizations and their configuration in Trustpoint.' %}
+        </p>
     </div>
 
-    <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
-        {% include 'management/organization/organization_management_table.html' %}
+    <div class="card-body text-start">
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Organizations' %}
+                </h2>
+
+                <p class="text-muted mb-0">
+                    {% trans 'Review and manage the organizations configured in Trustpoint.' %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+            {% include 'management/organization/organization_management_table.html' %}
+        </section>
     </div>
 
-    <div class="card-footer d-flex flex-column flex-md-row justify-content-end tp-sticky-footer">
-        <div class="m-1 d-flex flex-wrap justify-content-md-end gap-2">
-            <a class="btn btn-primary" href="{% url 'management:add_organization' %}">{% trans 'Add Organization' %}</a>
-        </div>
+    <div class="card-footer d-flex justify-content-end align-items-center">
+        <a
+            href="{% url 'management:add_organization' %}"
+            class="btn btn-primary"
+        >
+            {% trans 'Add Organization' %}
+        </a>
     </div>
 </div>
 {% endblock %}

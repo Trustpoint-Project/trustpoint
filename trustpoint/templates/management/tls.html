@@ -1,117 +1,424 @@
 {% extends 'trustpoint/base.html' %}
-{% load crispy_forms_filters %}
 {% load i18n %}
 {% load internationalization_tags %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-  <div class="card-header">
-      <h1>{% trans 'TLS Certificates' %}</h1>
-  </div>
-  <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
-    <div>
-      <table class="table">
-        <thead>
-          <tr>
-              <th id="checkbox-column"><input type="checkbox"/></th>
-              <th>
-                  <a href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
-                      {% trans 'Common Name' %}
-                  </a>
-              </th>
-              <th>
-                  <a href="?sort={% if current_sort == 'not_valid_after' %}-{% endif %}not_valid_after">
-                      {% trans 'Not valid after (UTC)' %}
-                  </a>
-              </th>
-              <th>
-                  <a href="?sort={% if current_sort == 'spki_algorithm' %}-{% endif %}spki_algorithm">
-                      {% trans 'Public Key Algorithm' %}
-                  </a>
-              </th>
-              <th>
-                  <a href="?sort={% if current_sort == 'spki_key_size' %}-{% endif %}spki_key_size">
-                      {% trans 'Public Key Size' %}
-                  </a>
-              </th>
-              <th>
-                  <a href="?sort={% if current_sort == 'spki_ec_curve' %}-{% endif %}spki_ec_curve">
-                      {% trans 'Public Key Curve (ECC)' %}
-                  </a>
-              </th>
-              <th>
-                  <a
-                      href="?sort={% if current_sort == 'certificate_status' %}-{% endif %}certificate_status">
-                      {% trans 'Status' %}
-                  </a>
-              </th>
-              <th>
-                  <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                      {% trans 'Created at' %}
-                  </a>
-              </th>
-              <th>
-                  <a href="?sort={% if current_sort == 'is_self_signed' %}-{% endif %}is_self_signed">
-                      {% trans 'Self-Signed' %}
-                  </a>
-              </th>
-              <th>{% trans 'Details' %}</th>
-              <th>{% trans 'Download' %}</th>
-              <th>{% trans 'In Use' %}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for tls_certificate in tls_certificates %}
-          <tr>
-              <td class="row_checkbox">
-                  <input type="checkbox" name="row_checkbox" value="{{ tls_certificate.id }}" />
-              </td>
-              <td>{{ tls_certificate.common_name }}</td>
-              <td>{{ tls_certificate.not_valid_after|local_datetime }}</td>
-              <td>{{ tls_certificate.spki_algorithm }}</td>
-              <td>{{ tls_certificate.spki_key_size }}</td>
-              <td>{% if tls_certificate.spki_ec_curve%} {{ tls_certificate.spki_ec_curve }} {% else %}—{% endif %}</td>
-              <td>{{ tls_certificate.certificate_status }}</td>
-              <td>{{ tls_certificate.created_at|local_datetime }}</td>
-              <td>{% if tls_certificate.is_self_signed == 1 %} ✔ {% else %} ✘ {% endif %}</td>
-              <td><a href="{% url 'pki:certificate-detail' pk=tls_certificate.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Details' %}</a></td>
-              <td><a href="{% url 'pki:certificate-download' pk=tls_certificate.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Download' %}</a></td>
-               <td>
-                {% if certificate and tls_certificate.pk == certificate.pk %}
-                 ✔
-                {% else %}
-                <form method="POST" action="{% url 'management:activate-tls' pk=tls_certificate.id %}">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-primary tp-table-btn w-100">{% trans 'Activate' %}</button>
-                </form>
-                {% endif %}
-              </td>
-          </tr>
-          {% empty %}
-          <tr>
-              <td colspan="11" class="middle">{% trans 'No TLS certificates are available. Add or generate one first.' %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<div class="card">
 
-      {% include 'trustpoint/pagination.html' %}
+    {# ============================================================ #}
+    {# Header                                                      #}
+    {# ============================================================ #}
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'TLS Certificates' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Manage the TLS certificates available to Trustpoint and select the certificate used by the application.' %}
+        </p>
     </div>
-  </div>
-  <div class="card-footer d-flex justify-content-between">
-      <div class="tp-card-btn-footer m-1">
-         <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-            data-tp-url="delete">{% trans 'Delete selected' %}</button>
-        <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download/tar.gz">
-            {% trans "Download selected (tar.gz)" %}
-        </button>
-        <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download/zip">
-            {% trans "Download selected (zip)" %}
-        </button>
-         <a class="btn btn-primary ms-2" href="{% url 'management:tls-add-method_select' %}">
-              {% trans 'Add new TLS Certificate' %}
-          </a>
-      </div>
-  </div>
+
+
+    {# ============================================================ #}
+    {# Content                                                     #}
+    {# ============================================================ #}
+    <div class="card-body text-start">
+
+        <section>
+
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Available TLS Certificates' %}
+                </h2>
+
+                <p class="text-muted mb-0">
+                    {% trans 'Review certificate properties, download certificates or activate another certificate for Trustpoint.' %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+
+                    <thead>
+                        <tr>
+
+                            {# Selection #}
+                            <th
+                                id="checkbox-column"
+                                class="text-center"
+                                style="width: 48px;"
+                            >
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all TLS certificates' %}"
+                                >
+                            </th>
+
+
+                            {# Common Name #}
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'Common Name' %}
+
+                                    {% if current_sort == 'common_name' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-common_name' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+
+                            {# Validity #}
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'not_valid_after' %}-{% endif %}not_valid_after"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'Valid Until' %}
+
+                                    {% if current_sort == 'not_valid_after' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-not_valid_after' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+
+                            {# Algorithm #}
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'spki_algorithm' %}-{% endif %}spki_algorithm"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'Algorithm' %}
+
+                                    {% if current_sort == 'spki_algorithm' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-spki_algorithm' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+
+                            {# Key Size #}
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'spki_key_size' %}-{% endif %}spki_key_size"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'Key Size' %}
+
+                                    {% if current_sort == 'spki_key_size' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-spki_key_size' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+
+                            {# Curve #}
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'spki_ec_curve' %}-{% endif %}spki_ec_curve"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'ECC Curve' %}
+
+                                    {% if current_sort == 'spki_ec_curve' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-spki_ec_curve' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+
+                            {# Status #}
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'certificate_status' %}-{% endif %}certificate_status"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'Status' %}
+
+                                    {% if current_sort == 'certificate_status' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-certificate_status' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+
+                            {# Created #}
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'Created' %}
+
+                                    {% if current_sort == 'created_at' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-created_at' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+
+                            {# Self Signed #}
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'is_self_signed' %}-{% endif %}is_self_signed"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'Self-Signed' %}
+
+                                    {% if current_sort == 'is_self_signed' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-is_self_signed' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+
+                            <th>
+                                {% trans 'Usage' %}
+                            </th>
+
+                            <th class="text-end">
+                                {% trans 'Actions' %}
+                            </th>
+
+                        </tr>
+                    </thead>
+
+
+                    <tbody>
+                        {% for tls_certificate in tls_certificates %}
+
+                            <tr>
+
+                                {# Selection #}
+                                <td class="row_checkbox text-center">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ tls_certificate.id }}"
+                                        aria-label="{% blocktrans with name=tls_certificate.common_name %}Select {{ name }}{% endblocktrans %}"
+                                    >
+                                </td>
+
+
+                                {# Common Name #}
+                                <td>
+                                    <a
+                                        href="{% url 'pki:certificate-detail' pk=tls_certificate.id %}"
+                                        class="text-decoration-none fw-semibold"
+                                    >
+                                        {{ tls_certificate.common_name }}
+                                    </a>
+                                </td>
+
+
+                                {# Validity #}
+                                <td class="text-nowrap">
+                                    {{ tls_certificate.not_valid_after|local_datetime }}
+                                </td>
+
+
+                                {# Algorithm #}
+                                <td>
+                                    {{ tls_certificate.spki_algorithm }}
+                                </td>
+
+
+                                {# Key Size #}
+                                <td>
+                                    {% if tls_certificate.spki_key_size %}
+                                        {{ tls_certificate.spki_key_size }} Bit
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+
+                                {# Curve #}
+                                <td>
+                                    {% if tls_certificate.spki_ec_curve %}
+                                        {{ tls_certificate.spki_ec_curve }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+
+                                {# Certificate Status #}
+                                <td>
+                                    {{ tls_certificate.certificate_status }}
+                                </td>
+
+
+                                {# Created #}
+                                <td class="text-nowrap">
+                                    {{ tls_certificate.created_at|local_datetime }}
+                                </td>
+
+
+                                {# Self Signed #}
+                                <td>
+                                    {% if tls_certificate.is_self_signed == 1 %}
+                                        <span class="badge text-bg-secondary">
+                                            {% trans 'Yes' %}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">
+                                            {% trans 'No' %}
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+
+                                {# Current TLS Certificate #}
+                                <td>
+                                    {% if certificate and tls_certificate.pk == certificate.pk %}
+
+                                        <span class="badge text-bg-success">
+                                            {% trans 'Active' %}
+                                        </span>
+
+                                    {% else %}
+
+                                        <form
+                                            method="post"
+                                            action="{% url 'management:activate-tls' pk=tls_certificate.id %}"
+                                        >
+                                            {% csrf_token %}
+
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-outline-primary"
+                                            >
+                                                {% trans 'Activate' %}
+                                            </button>
+                                        </form>
+
+                                    {% endif %}
+                                </td>
+
+
+                                {# Actions #}
+                                <td class="text-end">
+
+                                    <div class="d-flex justify-content-end gap-2">
+
+                                        <a
+                                            href="{% url 'pki:certificate-detail' pk=tls_certificate.id %}"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            {% trans 'Details' %}
+                                        </a>
+
+                                        <a
+                                            href="{% url 'pki:certificate-download' pk=tls_certificate.id %}"
+                                            class="btn btn-sm btn-outline-secondary"
+                                        >
+                                            {% trans 'Download' %}
+                                        </a>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+
+
+                        {% empty %}
+
+                            <tr>
+                                <td
+                                    colspan="11"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans 'No TLS certificates are available. Add or generate one first.' %}
+                                </td>
+                            </tr>
+
+                        {% endfor %}
+                    </tbody>
+
+                </table>
+            </div>
+
+
+            {# ==================================================== #}
+            {# Pagination                                          #}
+            {# ==================================================== #}
+            <div class="mt-3">
+                {% include 'trustpoint/pagination.html' %}
+            </div>
+
+        </section>
+
+    </div>
+
+
+    {# ============================================================ #}
+    {# Footer                                                      #}
+    {# ============================================================ #}
+    <div class="card-footer d-flex justify-content-between align-items-center">
+
+        <div class="d-flex flex-wrap gap-2">
+
+            <button
+                type="button"
+                class="btn btn-outline-danger tp-table-select-btn"
+                data-tp-url="delete"
+            >
+                {% trans 'Delete Selected' %}
+            </button>
+
+            <button
+                type="button"
+                class="btn btn-outline-primary tp-table-select-btn"
+                data-tp-url="download/tar.gz"
+            >
+                {% trans 'Download Selected (.tar.gz)' %}
+            </button>
+
+            <button
+                type="button"
+                class="btn btn-outline-primary tp-table-select-btn"
+                data-tp-url="download/zip"
+            >
+                {% trans 'Download Selected (.zip)' %}
+            </button>
+
+        </div>
+
+
+        <a
+            class="btn btn-primary"
+            href="{% url 'management:tls-add-method_select' %}"
+        >
+            {% trans 'Add new TLS Certificate' %}
+        </a>
+
+    </div>
+
 </div>
 {% endblock %}

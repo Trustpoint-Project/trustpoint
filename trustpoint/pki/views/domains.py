@@ -69,7 +69,7 @@ class DomainTableView(ExportMixin, DomainContextMixin, SortableTableMixin[Domain
     """Domain Table View."""
 
     model = DomainModel
-    template_name = 'pki/domains/domain.html'  # Template file
+    template_name = 'pki/domains/domain_table.html'  # Template file
     context_object_name = 'domain-new'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'

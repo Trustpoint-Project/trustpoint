@@ -2,112 +2,245 @@
 {% load i18n %}
 {% load crispy_forms_filters %}
 {% load internationalization_tags %}
-{% block content %}
-    <div class="card tp-card-centered">
-        <div class="card-header">
-            <h2>{{ signer.unique_name }} {% trans 'Configuration' %}</h2>
-        </div>
 
-        <div class="card tp-card-centered">
-            <div class="card-body">
-                <h3>{% trans 'General' %}</h3>
-                <hr class="hr-m">
-                <div class="tp-kvp-list">
-                    <div>
-                        <div>{% trans 'Unique Name' %}</div>
-                        <div>{{ signer.unique_name }}</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'Updated' %}</div>
-                        <div>{{ signer.updated_at|local_datetime }}</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'Created' %}</div>
-                        <div>{{ signer.created_at|local_datetime }}</div>
-                    </div>
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {{ signer.unique_name }}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans "Review signer configuration, certificate details and signing activity." %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+
+            {# ==================================================== #}
+            {# General                                              #}
+            {# ==================================================== #}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "General" %}
+                    </h2>
+
+                    <p class="mb-0 text-muted">
+                        {% trans "General information about this signer." %}
+                    </p>
                 </div>
 
-                <h3>{% trans 'Signer Certificate' %}</h3>
-                <hr class="hr-m">
+                <hr class="mb-4">
+
                 <div class="tp-kvp-list">
                     <div>
-                        <div>{% trans 'Certificate' %}</div>
+                        <div>
+                            {% trans "Unique Name" %}
+                        </div>
+
+                        <div>
+                            {{ signer.unique_name }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans "Created" %}
+                        </div>
+
+                        <div>
+                            {{ signer.created_at|local_datetime }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans "Updated" %}
+                        </div>
+
+                        <div>
+                            {{ signer.updated_at|local_datetime }}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            {# ==================================================== #}
+            {# Signer Certificate                                   #}
+            {# ==================================================== #}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "Signer Certificate" %}
+                    </h2>
+
+                    <p class="mb-0 text-muted">
+                        {% trans "Certificate and public-key information used by this signer." %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>
+                            {% trans "Certificate" %}
+                        </div>
+
                         <div>
                             <a href="{% url 'pki:certificate-detail' pk=signer.credential.certificate.id %}">
                                 {% if signer.credential.certificate.common_name %}
                                     CN: {{ signer.credential.certificate.common_name }}
                                 {% else %}
-                                    {% trans 'Signer Certificate' %}
+                                    {% trans "Signer Certificate" %}
                                 {% endif %}
                             </a>
                         </div>
                     </div>
+
                     <div>
-                        <div>{% trans 'Issuing CA Certificate' %}</div>
+                        <div>
+                            {% trans "Issuing CA Certificate" %}
+                        </div>
+
                         <div>
                             {% if signer.credential.certificate.issuer_certificate %}
                                 <a href="{% url 'pki:certificate-detail' pk=signer.credential.certificate.issuer_certificate.id %}">
                                     {% if signer.credential.certificate.issuer_certificate.common_name %}
                                         CN: {{ signer.credential.certificate.issuer_certificate.common_name }}
                                     {% else %}
-                                        -
+                                        <span class="text-muted">—</span>
                                     {% endif %}
                                 </a>
                             {% else %}
-                                -
+                                <span class="text-muted">—</span>
                             {% endif %}
                         </div>
                     </div>
-                    <div>
-                        <div>{% trans 'Serial Number' %}</div>
-                        <div>{{ signer.credential.certificate.serial_number }}</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'Public Key Algorithm' %}</div>
-                        <div>{{ signer.credential.certificate.spki_algorithm }}</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'Public Key Size' %}</div>
-                        <div>{{ signer.credential.certificate.spki_key_size }} bits</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'Signature Algorithm' %}</div>
-                        <div>{{ signer.credential.certificate.signature_algorithm }}</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'Valid From' %}</div>
-                        <div>{{ signer.credential.certificate.not_valid_before|local_datetime }}</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'Valid Until' %}</div>
-                        <div>{{ signer.credential.certificate.not_valid_after|local_datetime }}</div>
-                    </div>
-                </div>
 
-                <h3>{% trans 'Signed Messages' %}</h3>
-                <hr class="hr-m">
-                <div class="tp-kvp-list">
                     <div>
-                        <div>{% trans 'Total Signed Messages' %}</div>
                         <div>
-                            <a href="{% url 'signer:signer-signed_messages' pk=signer.id %}"
-                                class="btn btn-sm btn-primary">{% trans 'View Signed Messages' %}</a>
+                            {% trans "Serial Number" %}
+                        </div>
+
+                        <div class="font-monospace">
+                            {% if signer.credential.certificate.serial_number %}
+                                {{ signer.credential.certificate.serial_number }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans "Public Key Algorithm" %}
+                        </div>
+
+                        <div>
+                            {% if signer.credential.certificate.spki_algorithm %}
+                                {{ signer.credential.certificate.spki_algorithm }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans "Public Key Size" %}
+                        </div>
+
+                        <div>
+                            {% if signer.credential.certificate.spki_key_size %}
+                                {{ signer.credential.certificate.spki_key_size }} {% trans "bits" %}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans "Signature Algorithm" %}
+                        </div>
+
+                        <div>
+                            {% if signer.credential.certificate.signature_algorithm %}
+                                {{ signer.credential.certificate.signature_algorithm }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans "Valid From" %}
+                        </div>
+
+                        <div>
+                            {{ signer.credential.certificate.not_valid_before|local_datetime }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            {% trans "Valid Until" %}
+                        </div>
+
+                        <div>
+                            {{ signer.credential.certificate.not_valid_after|local_datetime }}
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </section>
 
-        <div class="card-footer d-flex justify-content-between align-items-center">
-            <div class="tp-card-btn-footer m-1">
-                <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Back to Signer List' %}</a>
-            </div>
-            <div class="tp-card-btn-footer m-1">
-                <a href="{% url 'signer:signer-delete_confirm' pks=signer.id|stringformat:'s/' %}"
-                   class="btn btn-danger">
-                    {% trans 'Delete Signer' %}
+
+            {# ==================================================== #}
+            {# Signed Messages                                      #}
+            {# ==================================================== #}
+            <section>
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "Signed Messages" %}
+                    </h2>
+
+                    <p class="mb-0 text-muted">
+                        {% trans "Review messages that have been signed with this signer." %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <a
+                    href="{% url 'signer:signer-signed_messages' pk=signer.id %}"
+                    class="btn btn-outline-secondary"
+                >
+                    {% trans "View Signed Messages" %}
                 </a>
-            </div>
+            </section>
+
         </div>
     </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'signer:signer_list' %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Back to Signers" %}
+        </a>
+
+        <a
+            href="{% url 'signer:signer-delete_confirm' pks=signer.id|stringformat:'s/' %}"
+            class="btn btn-outline-danger"
+        >
+            {% trans "Delete Signer" %}
+        </a>
+    </div>
+</div>
 {% endblock content %}

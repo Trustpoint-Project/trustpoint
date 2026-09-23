@@ -3,78 +3,128 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST">
-        {% csrf_token %}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Sign Hash Value' %}</h1>
-                </div>
-            </div>
-            <div class="card-body">
-                <p class="mb-4">
-                    {% trans 'Use this form to sign a hash value with a selected signer. The hash must be provided in hexadecimal format.' %}
-                </p>
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Sign Hash Value" %}
+        </h1>
 
-                <div class="mb-3">
-                    {{ form.signer|as_crispy_field }}
-                </div>
+        <p class="mb-0 text-muted">
+            {% trans "Sign a hexadecimal hash value using one of the configured signers." %}
+        </p>
+    </div>
 
-                <div class="mb-3" id="hash-algorithm-info" style="display: none;">
-                    <div class="alert alert-info">
-                        <strong>{% trans 'Hash Algorithm:' %}</strong> 
-                        <span id="hash-algorithm-name"></span>
-                        <br>
-                        <small>{% trans 'This algorithm is determined by the selected signer\'s certificate.' %}</small>
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="sign-hash-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans "Signing Parameters" %}
+                        </h2>
+
+                        <p class="mb-0 text-muted">
+                            {% trans "Select the signer and provide the hash value that should be signed." %}
+                        </p>
                     </div>
-                </div>
 
-                <div class="mb-3">
-                    {{ form.hash_value|as_crispy_field }}
-                </div>
+                    <hr class="mb-4">
 
-                <div class="alert alert-info" role="alert">
-                    <strong>{% trans 'Note:' %}</strong>
-                    {% trans 'The hash value must be in hexadecimal format without any prefix (e.g., no "0x"). Ensure the hash length matches the signer\'s algorithm.' %}
-                </div>
-            </div>
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                </div>
-                <div class="tp-card-btn-footer m-1">
-                    <button type="submit" class="btn btn-primary">{% trans 'Sign Hash' %}</button>
-                </div>
-            </div>
+                    <div class="mb-4">
+                        {{ form.signer|as_crispy_field }}
+                    </div>
+
+
+                    <div
+                        class="alert alert-info d-none mb-4"
+                        id="hash-algorithm-info"
+                        role="status"
+                    >
+                        <div class="fw-semibold">
+                            {% trans "Hash Algorithm" %}
+                        </div>
+
+                        <div id="hash-algorithm-name"></div>
+
+                        <div class="small mt-1">
+                            {% trans "The hash algorithm is determined by the selected signer's certificate." %}
+                        </div>
+                    </div>
+
+
+                    <div class="mb-4">
+                        {{ form.hash_value|as_crispy_field }}
+                    </div>
+
+
+                    <div class="alert alert-info mb-0" role="alert">
+                        <strong>
+                            {% trans "Input Format:" %}
+                        </strong>
+
+                        {% trans 'Enter the hash value in hexadecimal format without a prefix such as "0x". The hash length must match the algorithm required by the selected signer.' %}
+                    </div>
+                </section>
+            </form>
         </div>
-    </form>
+    </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const signerSelect = document.getElementById('id_signer');
-            const hashAlgorithmInfo = document.getElementById('hash-algorithm-info');
-            const hashAlgorithmName = document.getElementById('hash-algorithm-name');
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'signer:signer_list' %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Cancel" %}
+        </a>
 
-            // Signer data with hash algorithms
-            const signerData = {
-                {% for signer in form.signer.field.queryset %}
-                    '{{ signer.pk }}': '{{ signer.hash_algorithm }}',
-                {% endfor %}
-            };
+        <button
+            type="submit"
+            form="sign-hash-form"
+            class="btn btn-primary"
+        >
+            {% trans "Sign Hash" %}
+        </button>
+    </div>
+</div>
 
-            function updateHashAlgorithm() {
-                const selectedSignerId = signerSelect.value;
-                if (selectedSignerId && signerData[selectedSignerId]) {
-                    const algorithm = signerData[selectedSignerId];
-                    hashAlgorithmName.textContent = algorithm;
-                    hashAlgorithmInfo.style.display = 'block';
-                } else {
-                    hashAlgorithmInfo.style.display = 'none';
-                }
-            }
 
-            signerSelect.addEventListener('change', updateHashAlgorithm);
-            updateHashAlgorithm(); // Initialize on page load
-        });
-    </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const signerSelect = document.getElementById('id_signer');
+    const hashAlgorithmInfo = document.getElementById('hash-algorithm-info');
+    const hashAlgorithmName = document.getElementById('hash-algorithm-name');
+
+    if (!signerSelect || !hashAlgorithmInfo || !hashAlgorithmName) {
+        return;
+    }
+
+    const signerData = {
+        {% for signer in form.signer.field.queryset %}
+            '{{ signer.pk }}': '{{ signer.hash_algorithm }}',
+        {% endfor %}
+    };
+
+    function updateHashAlgorithm() {
+        const selectedSignerId = signerSelect.value;
+        const algorithm = signerData[selectedSignerId];
+
+        if (selectedSignerId && algorithm) {
+            hashAlgorithmName.textContent = algorithm;
+            hashAlgorithmInfo.classList.remove('d-none');
+        } else {
+            hashAlgorithmName.textContent = '';
+            hashAlgorithmInfo.classList.add('d-none');
+        }
+    }
+
+    signerSelect.addEventListener('change', updateHashAlgorithm);
+    updateHashAlgorithm();
+});
+</script>
 {% endblock content %}

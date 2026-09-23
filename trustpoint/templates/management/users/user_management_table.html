@@ -1,0 +1,91 @@
+{% load i18n %}
+
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th scope="col" class="text-nowrap">
+                    {% trans 'Username' %}
+                </th>
+                <th scope="col" class="text-nowrap">
+                    {% trans 'First Name' %}
+                </th>
+                <th scope="col" class="text-nowrap">
+                    {% trans 'Last Name' %}
+                </th>
+                <th scope="col" class="text-nowrap">
+                    {% trans 'Email' %}
+                </th>
+                <th scope="col" class="text-nowrap">
+                    {% trans 'Role' %}
+                </th>
+                <th scope="col" class="text-end">
+                    {% trans 'Actions' %}
+                </th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for user in users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>
+                        {% if user.first_name %}
+                            {{ user.first_name }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user.last_name %}
+                            {{ user.last_name }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user.email %}
+                            {{ user.email }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user.role %}
+                            {{ user.role.name }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="text-end">
+                        <div class="d-flex justify-content-end gap-2">
+                            <a
+                                href="{% url 'users:user-profile' user.pk %}"
+                                class="btn btn-sm btn-outline-primary"
+                            >
+                                {% trans 'Edit' %}
+                            </a>
+
+                            <a
+                                href="{% url 'management:delete_user' user.pk %}"
+                                class="btn btn-sm btn-outline-secondary"
+                            >
+                                {% trans 'Delete' %}
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td
+                        colspan="6"
+                        class="text-center text-muted py-5"
+                    >
+                        {% trans 'No users have been added yet.' %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

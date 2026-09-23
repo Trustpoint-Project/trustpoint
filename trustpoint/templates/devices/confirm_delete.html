@@ -3,56 +3,113 @@
 {% load static %}
 
 {% block content %}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Confirm Device Deletion' %}</h1>
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Confirm Device Deletion' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Review the selected devices before permanently deleting them.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+
+            <form
+                id="delete-devices-form"
+                action="{% url device_delete_url %}"
+                method="post"
+            >
+                {% csrf_token %}
+                {{ delete_form.pks }}
+
+                <div class="alert alert-warning mb-4" role="alert">
+                    {% trans 'The selected devices will be permanently deleted. This action cannot be undone.' %}
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    {% for device in devices %}
-                        <h2>({{ forloop.counter }}) {% trans 'device' %}: {{ device.common_name }}</h2>
-                        <hr class="hr-m">
+
+                {% for device in devices %}
+                    <section class="{% if not forloop.last %}mb-5{% endif %}">
+                        <div class="mb-3">
+                            <h2 class="h4 mb-1">
+                                {% blocktranslate with number=forloop.counter name=device.common_name %}
+                                    Device {{ number }}: {{ name }}
+                                {% endblocktranslate %}
+                            </h2>
+                        </div>
+
+                        <hr class="mb-4">
+
                         <div class="tp-kvp-list">
                             <div>
-                                <div>{% trans 'Unique Name' %}</div>
-                                <div>{{ device.common_name }}</div>
-                            </div>
-                            <div>
-                                <div>{% trans 'Domain' %}</div>
                                 <div>
-                                {% if device.domain %}
-                                <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
-                                        {{ device.domain.unique_name }}
-                                    </a>
+                                    {% trans 'Name' %}
                                 </div>
-                                {% endif %}
+
+                                <div>
+                                    {% if device.common_name %}
+                                        {{ device.common_name }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
                             </div>
+
                             <div>
-                                <div>{% trans 'Issued Credentials' %}</div>
-                                <div>{{ device.issued_credentials.count }}</div>
+                                <div>
+                                    {% trans 'Domain' %}
+                                </div>
+
+                                <div>
+                                    {% if device.domain %}
+                                        <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
+                                            {{ device.domain.unique_name }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div>
+                                    {% trans 'Issued Credentials' %}
+                                </div>
+
+                                <div>
+                                    {{ device.issued_credentials.count }}
+                                </div>
                             </div>
                         </div>
-                        {% if not forloop.last %}
+                    </section>
 
-                        {% endif %}
-                    {% endfor %}
+                {% empty %}
+                    <div class="text-center text-muted py-5">
+                        {% trans 'No devices are selected for deletion.' %}
+                    </div>
+                {% endfor %}
+            </form>
 
-
-                </div>
-            </div>
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'devices:devices' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                    <form action="{% url device_delete_url %}" method="post" style="display: inline;">
-                        {% csrf_token %}
-                        {{ delete_form.pks }}
-                        <button type="submit" class="btn btn-danger">
-                            {% trans 'Delete selected devices' %}
-                        </button>
-                    </form>
-                </div>
-            </div>
         </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'devices:devices' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <button
+            type="submit"
+            form="delete-devices-form"
+            class="btn btn-danger"
+            {% if not devices %}disabled{% endif %}
+        >
+            {% trans 'Delete Selected Devices' %}
+        </button>
+    </div>
+</div>
 {% endblock content %}
