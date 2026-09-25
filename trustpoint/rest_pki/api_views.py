@@ -19,6 +19,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from devices.models import DeviceModel
+from devices.revocation import DeviceCredentialRevocation
+from management.models.audit_log import AuditLog
+from pki.models import IssuedCredentialModel
+from pki.models.certificate import CertificateModel
 from request.authorization import RestAuthorization
 from request.message_parser import RestMessageParser
 from request.message_responder import RestErrorMessageResponder, RestMessageResponder
@@ -28,9 +32,15 @@ from request.request_validator import RestHttpRequestValidator
 from request.workflow2_issuance import release_delivered_workflow2_request
 from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
+from users.permissions import AppPermissions
 from workflows2.events.request_events import Events
 
-from .serializers import CertificateEnrollRequestSerializer, CertificateEnrollResponseSerializer
+from .serializers import (
+    CertificateEnrollRequestSerializer,
+    CertificateEnrollResponseSerializer,
+    CertificateRevokeRequestSerializer,
+    CertificateRevokeResponseSerializer,
+)
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
@@ -117,6 +127,21 @@ def _resolve_device(device_id: int) -> DeviceModel | Response:
     except DeviceModel.DoesNotExist:
         return Response(
             {'detail': f'Device with id {device_id} not found.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+
+def _resolve_issued_credential(issued_credential_id: int) -> IssuedCredentialModel | Response:
+    """Look up an issued credential by primary key and return it or a 404 Response."""
+    try:
+        return IssuedCredentialModel.objects.select_related(
+            'credential__certificate__revoked_certificate',
+            'device',
+            'domain__issuing_ca',
+        ).get(pk=issued_credential_id)
+    except IssuedCredentialModel.DoesNotExist:
+        return Response(
+            {'detail': f'Issued credential with id {issued_credential_id} not found.'},
             status=status.HTTP_404_NOT_FOUND,
         )
 
@@ -234,3 +259,133 @@ class ApplicationCertificateEnrollView(LoggerMixin, APIView):
 
         drf_status = http_response.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
         return Response(body, status=drf_status)
+
+
+@extend_schema(tags=['REST PKI'])
+class CertificateRevokeView(LoggerMixin, APIView):
+    """Revoke a certificate belonging to an issued credential."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        summary='Revoke a certificate belonging to an issued credential',
+        request=CertificateRevokeRequestSerializer,
+        responses={
+            200: CertificateRevokeResponseSerializer,
+            400: OpenApiResponse(description='Bad Request - validation error or invalid revocation reason'),
+            401: OpenApiResponse(description='Unauthorized - authentication required'),
+            403: OpenApiResponse(description='Forbidden - user lacks the revoke_certificates permission'),
+            404: OpenApiResponse(description='Not Found - issued credential does not exist'),
+            422: OpenApiResponse(description='Unprocessable Entity - certificate already revoked or expired'),
+            500: OpenApiResponse(description='Internal Server Error - revocation failed'),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        """Revoke the certificate of the given issued credential."""
+        if not request.user.has_perm(AppPermissions.REVOKE_CERTIFICATES):
+            return Response(
+                {'detail': 'You do not have permission to revoke certificates.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = CertificateRevokeRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        issued_credential_id: int = serializer.validated_data['issued_credential_id']
+        revocation_reason: str = serializer.validated_data['revocation_reason']
+
+        credential_or_response = _resolve_issued_credential(issued_credential_id)
+        if isinstance(credential_or_response, Response):
+            return credential_or_response
+        issued_credential = credential_or_response
+
+        guard_response = self._check_certificate_status(issued_credential)
+        if guard_response is not None:
+            return guard_response
+
+        # CertificateRevocationProcessor requires an EST/CMP BaseRevocationRequestContext.
+        # Use the web view's shared service directly to keep REST revocation self-contained.
+        try:
+            revoked_successfully, message = DeviceCredentialRevocation.revoke_certificate(
+                issued_credential_id, revocation_reason
+            )
+        except Exception:
+            self.logger.exception('Failed to revoke issued credential %s', issued_credential_id)
+            revoked_successfully = False
+            message = 'Failed to revoke certificate. See logs for more information.'
+        if not revoked_successfully:
+            return self._map_revocation_failure(message)
+
+        self._write_audit_log(request, issued_credential)
+
+        response_serializer = CertificateRevokeResponseSerializer(
+            {'detail': message, 'issued_credential_id': issued_credential_id}
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+    def _check_certificate_status(self, issued_credential: IssuedCredentialModel) -> Response | None:
+        """Refuse revocation of already-revoked or expired certificates before calling the revocation logic."""
+        try:
+            certificate = issued_credential.credential.certificate_or_error
+        except ValueError:
+            return Response(
+                {'detail': 'The associated certificate to revoke was not found.'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        # Only REVOKED and EXPIRED are refused here, matching the web revoke view
+        # (devices/views/revoke.py). A NOT_YET_VALID certificate remains revocable,
+        # deliberately mirroring the web UI's behaviour rather than diverging from it.
+        cert_status = certificate.certificate_status
+        if cert_status == CertificateModel.CertificateStatus.REVOKED:
+            return Response(
+                {'detail': 'Certificate is already revoked. Cannot revoke a revoked certificate again.'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        if cert_status == CertificateModel.CertificateStatus.EXPIRED:
+            return Response(
+                {'detail': 'Credential is already expired. Cannot revoke expired certificates.'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        return None
+
+    def _map_revocation_failure(self, message: str) -> Response:
+        """Map a failed revocation message from the revocation logic to an appropriate HTTP response.
+
+        The pre-checks in :meth:`_resolve_issued_credential` and
+        :meth:`_check_certificate_status` already cover the missing-credential,
+        missing-certificate and already-revoked conditions before the revocation
+        logic runs. These branches therefore act as defense-in-depth for the
+        narrow time-of-check/time-of-use window in which state changes between
+        the guard and :meth:`DeviceCredentialRevocation.revoke_certificate`
+        performing its own lookup. The compared strings mirror the messages
+        returned by that method. The status codes are kept consistent with the
+        pre-check responses (already-revoked/missing-certificate -> 422,
+        missing-credential -> 404).
+        """
+        if message == 'The certificate is already revoked.':
+            return Response({'detail': message}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        if message == 'The associated certificate to revoke was not found.':
+            return Response({'detail': message}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        if message == 'The credential to revoke does not exist.':
+            return Response({'detail': message}, status=status.HTTP_404_NOT_FOUND)
+
+        self.logger.error('Failed to revoke certificate: %s', message)
+        return Response({'detail': message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _write_audit_log(self, request: Request, issued_credential: IssuedCredentialModel) -> None:
+        """Write an audit log entry after a successful revocation, mirroring the web revoke view."""
+        device = issued_credential.device
+        actor = request.user if request.user.is_authenticated else None
+        domain_name = issued_credential.domain.unique_name if issued_credential.domain else 'unknown'
+        cred_display = (
+            f'Device: {device.common_name} | Domain: {domain_name}'
+            f' | Credential: {issued_credential.common_name}'
+        )
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CREDENTIAL_REVOKED,
+            target=device,
+            target_display=cred_display,
+            actor=actor,
+        )
