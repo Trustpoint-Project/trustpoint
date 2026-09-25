@@ -5,13 +5,14 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
-from devices.models import DeviceModel
-from onboarding.models import OnboardingStatus
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
+from devices.models import DeviceModel
 from management.models import NotificationModel, NotificationStatus
+from onboarding.models import OnboardingStatus
 
 
 class Command(BaseCommand):
@@ -43,8 +44,8 @@ class Command(BaseCommand):
 
         for device in non_onboarded_devices:
             if not NotificationModel.objects.filter(event='DEVICE_NOT_ONBOARDED', device=device).exists():
-                device_name = cast(DeviceModel, device).common_name
-                unique_name = cast(DeviceModel, device).domain.unique_name
+                device_name = device.common_name
+                unique_name = device.domain.unique_name if device.domain is not None else ''
 
                 message_data = {'device': device_name, 'domain': unique_name}
 

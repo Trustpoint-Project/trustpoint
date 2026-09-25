@@ -615,3 +615,22 @@ class NotificationCommandImportTest(TestCase):
         ) as mock_get_or_create:
             importlib.import_module(module)
         mock_get_or_create.assert_not_called()
+
+    def test_non_onboarded_device_without_domain(self) -> None:
+        """Test that a pending device with no domain still gets a notification."""
+        from devices.models import DeviceModel  # noqa: PLC0415
+        from onboarding.models import OnboardingConfigModel, OnboardingProtocol  # noqa: PLC0415
+
+        from management.models import NotificationModel  # noqa: PLC0415
+
+        onboarding_config = OnboardingConfigModel.objects.create(onboarding_protocol=OnboardingProtocol.MANUAL)
+        device = DeviceModel.objects.create(
+            common_name='no-domain-device',
+            serial_number='SN-NO-DOMAIN',
+            domain=None,
+            onboarding_config=onboarding_config,
+        )
+
+        call_command('check_non_onboarded_devices', stdout=StringIO())
+
+        self.assertTrue(NotificationModel.objects.filter(event='DEVICE_NOT_ONBOARDED', device=device).exists())
