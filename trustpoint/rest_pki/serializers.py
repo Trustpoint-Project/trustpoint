@@ -7,6 +7,8 @@ from typing import Any
 
 from rest_framework import serializers
 
+from pki.models.certificate import RevokedCertificateModel
+
 
 class CertificateEnrollRequestSerializer(serializers.Serializer[Any]):
     r"""Serializer for certificate enrollment requests."""
@@ -38,4 +40,28 @@ class CertificateEnrollResponseSerializer(serializers.Serializer[Any]):
     certificate_chain = serializers.ListField(
         child=serializers.CharField(),
         help_text='List of PEM-encoded CA certificates forming the chain.',
+    )
+
+
+class CertificateRevokeRequestSerializer(serializers.Serializer[Any]):
+    r"""Serializer for certificate revocation requests."""
+
+    issued_credential_id = serializers.IntegerField(
+        help_text='Primary key of the issued credential whose certificate shall be revoked.',
+    )
+    revocation_reason = serializers.ChoiceField(
+        choices=RevokedCertificateModel.ReasonCode.choices,
+        default=RevokedCertificateModel.ReasonCode.UNSPECIFIED,
+        help_text='RFC 5280 revocation reason code. Defaults to "unspecified".',
+    )
+
+
+class CertificateRevokeResponseSerializer(serializers.Serializer[Any]):
+    """Serializer for the certificate revocation response."""
+
+    detail = serializers.CharField(
+        help_text='Human-readable outcome of the revocation.',
+    )
+    issued_credential_id = serializers.IntegerField(
+        help_text='Primary key of the issued credential that was revoked.',
     )
