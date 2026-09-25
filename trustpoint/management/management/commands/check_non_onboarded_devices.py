@@ -13,8 +13,6 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from management.models import NotificationModel, NotificationStatus
 
-new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
-
 
 class Command(BaseCommand):
     """Management command to check for devices not onboarded.
@@ -38,6 +36,7 @@ class Command(BaseCommand):
 
     def _check_non_onboarded_devices(self) -> None:
         """Task to create an info notification if a device is not onboarded."""
+        new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
         non_onboarded_devices = DeviceModel.objects.filter(
             onboarding_config__onboarding_status=OnboardingStatus.PENDING
         ).select_related('domain')
