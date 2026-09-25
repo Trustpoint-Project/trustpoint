@@ -7,26 +7,22 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
 
 from cryptography.hazmat.primitives import hashes
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.translation import gettext as _
+
 from management.nginx_paths import (
     NGINX_CERT_CHAIN_PATH,
     NGINX_CERT_PATH,
     NGINX_KEY_PATH,
 )
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from trustpoint.logger import LoggerMixin
 
 SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL = Path('/etc/trustpoint/wizard/update_tls.sh')
 
-
-from trustpoint.logger import LoggerMixin
-
-if TYPE_CHECKING:
-    from typing import Any
 
 class Command(LoggerMixin, BaseCommand):
     """A Django management command to restore the Trustpoint container.
@@ -36,7 +32,7 @@ class Command(LoggerMixin, BaseCommand):
 
     help = 'Updates Nginx TLS config to the current active TLS server credential.'
 
-    def handle(self, **options: Any) -> None:
+    def handle(self, **_options: object) -> None:
         """Entrypoint for the command."""
         try:
             self.logger.debug('Extracting TLS cert and preparing for update of Nginx config...')
@@ -48,6 +44,10 @@ class Command(LoggerMixin, BaseCommand):
             raise CommandError(error_msg) from e
 
         tls_server_credential_model = active_tls.credential
+        if tls_server_credential_model is None:
+            error_msg = _('Active TLS server credential has no credential set')
+            self.stdout.write(self.style.ERROR(error_msg))
+            raise CommandError(error_msg)
 
         private_key_pem = tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
         certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
@@ -88,6 +88,6 @@ class Command(LoggerMixin, BaseCommand):
             self.logger.debug('TLS update script executed successfully')
 
         self.stdout.write('Nginx TLS credential update successful.')
-        sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())
+        sha256_fingerprint = tls_server_credential_model.get_certificate().fingerprint(hashes.SHA256())
         formatted = ':'.join(f'{b:02X}' for b in sha256_fingerprint)
         self.stdout.write(f'TLS SHA256 fingerprint: {(formatted)}')

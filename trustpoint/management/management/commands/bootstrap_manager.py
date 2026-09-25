@@ -10,14 +10,15 @@ import logging
 import os
 import secrets
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand
 from django.db import connection
+from django.db.models import Field
 from packaging.version import InvalidVersion, Version
 
 from management.util.output_wrapper import CommandOutputWrapper
@@ -25,6 +26,10 @@ from management.util.startup_strategies import BootstrapTlsMaterialStrategy, Sta
 from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
 from setup_wizard.tls_credential import load_staged_tls_credential
 from users.models import BuiltinRole
+
+if TYPE_CHECKING:
+    from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+    from django.db.models import Model
 
 logger = logging.getLogger(__name__)
 
@@ -84,20 +89,23 @@ class Command(BaseCommand):
         bootstrap_models = (SetupWizardCompletedModel, SetupWizardConfigModel)
         with connection.schema_editor() as schema_editor:
             for model in bootstrap_models:
-                if model._meta.db_table not in existing_tables:
+                if model._meta.db_table not in existing_tables:  # noqa: SLF001  # _meta is Django's public model API
                     schema_editor.create_model(model)
                 else:
                     Command._add_missing_bootstrap_columns(schema_editor, model)
 
     @staticmethod
-    def _add_missing_bootstrap_columns(schema_editor: object, model: type[object]) -> None:
+    def _add_missing_bootstrap_columns(schema_editor: BaseDatabaseSchemaEditor, model: type[Model]) -> None:
         """Add newly introduced bootstrap columns without running operational migrations."""
         with connection.cursor() as cursor:
             existing_columns = {
                 column.name
-                for column in connection.introspection.get_table_description(cursor, model._meta.db_table)
+                for column in connection.introspection.get_table_description(
+                    cursor,
+                    model._meta.db_table,  # noqa: SLF001  # _meta is Django's public model API
+                )
             }
-        for field in model._meta.local_fields:
+        for field in model._meta.local_fields:  # noqa: SLF001  # _meta is Django's public model API
             if field.primary_key or field.column in existing_columns:
                 continue
             schema_editor.add_field(model, field)
@@ -154,12 +162,15 @@ class Command(BaseCommand):
             if env_value in (None, ''):
                 continue
 
-            field = config._meta.get_field(field_name)
+            field = config._meta.get_field(field_name)  # noqa: SLF001  # _meta is Django's public model API
+            if not isinstance(field, Field):
+                continue
             default_value = field.get_default()
             current_value = getattr(config, field_name)
             if current_value not in ('', None, default_value):
                 continue
 
+            value: int | str
             if field_name == 'operational_db_port':
                 try:
                     value = int(env_value)

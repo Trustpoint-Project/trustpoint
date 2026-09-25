@@ -12,10 +12,9 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
-from django.db import DatabaseError, transaction
+from django.db import DatabaseError, connection, transaction
 from django.db.models import ProtectedError
 
-from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from appsecrets.models import (
     AppSecretBackendKind,
     AppSecretBackendModel,
@@ -28,12 +27,12 @@ from crypto.models import (
     CryptoProviderSoftwareConfigModel,
     SoftwareKeyEncryptionSource,
 )
+from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.models import SetupWizardCompletedModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from setup_wizard.views import execute_shell_script
-
 
 UPDATE_TLS_NGINX = Path('/etc/trustpoint/wizard/update_tls_nginx.sh')
 
@@ -157,12 +156,12 @@ class Command(BaseCommand):
                     credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
                 )
 
-            self.stdout.write(self.style.SUCCESS('TLS server credential generated'))
-            return credential_model
-
         except (ValueError, DjangoValidationError, ProtectedError, TypeError) as e:
             err_msg = f'Failed to generate TLS credential: {e}'
             raise CommandError(err_msg) from e
+        else:
+            self.stdout.write(self.style.SUCCESS('TLS server credential generated'))
+            return credential_model
 
     def _apply_tls_credential(self, credential_model: CredentialModel) -> None:
         """Apply TLS credential to nginx."""
@@ -194,7 +193,7 @@ class Command(BaseCommand):
         elif NGINX_CERT_CHAIN_PATH.exists():
             NGINX_CERT_CHAIN_PATH.unlink()
 
-    def handle(self, *args: Any, **options: Any) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:  # noqa: PLR0915
         """Execute the auto-setup command."""
         del args
         del options
@@ -227,7 +226,7 @@ class Command(BaseCommand):
             tls_ipv4_raw = self._env_value('TP_TLS_IPV4_ADDRESSES', required=False, default='') or ''
             tls_ipv6_raw = self._env_value('TP_TLS_IPV6_ADDRESSES', required=False, default='') or ''
             tls_dns_raw = self._env_value('TP_TLS_DNS_NAMES', required=False, default='') or ''
-            
+
             tls_ipv4 = self._parse_csv_list(tls_ipv4_raw)
             tls_ipv6 = self._parse_csv_list(tls_ipv6_raw)
             tls_dns = self._parse_csv_list(tls_dns_raw)
@@ -240,8 +239,8 @@ class Command(BaseCommand):
             with transaction.atomic():
                 if not isinstance(username, str) or not isinstance(password, str):
                     err_msg = 'Username and password must be strings'
-                    raise CommandError(err_msg)
-                
+                    raise CommandError(err_msg)  # noqa: TRY301
+
                 self._ensure_admin_role()
                 self._create_superuser(username, password, email)
 
@@ -266,7 +265,6 @@ class Command(BaseCommand):
                 # Mark setup as complete
                 # Note: setup_wizard migrations are disabled in operational mode,
                 # so we need to ensure the table exists first
-                from django.db import connection
                 with connection.cursor() as cursor:
                     # Create table if it doesn't exist (PostgreSQL syntax)
                     cursor.execute("""
