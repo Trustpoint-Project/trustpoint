@@ -81,6 +81,8 @@ class BaseHelpView(UserPermissionRequiredMixin, DetailView[DevIdRegistration]):
             err_msg = _('No strategy configured.')
             raise RuntimeError(err_msg)
         help_context = self._make_context()
+        if help_context.domain is None:
+            raise Http404(_('Failed to get domain from DevidRegistration.'))
         sections, heading = self.strategy.build_sections(help_context)
         context['help_page'] = HelpPage(heading=heading, sections=sections)
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
