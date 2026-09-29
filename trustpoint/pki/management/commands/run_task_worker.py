@@ -6,10 +6,14 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING, Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.utils.translation import gettext as _
+
+if TYPE_CHECKING:
+    from argparse import ArgumentParser
 
 
 class Command(BaseCommand):
@@ -17,7 +21,7 @@ class Command(BaseCommand):
 
     help = _('Run a background worker that processes pending CRL generation tasks')
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: ArgumentParser) -> None:
         """Add command arguments."""
         parser.add_argument(
             '--interval',
@@ -26,7 +30,7 @@ class Command(BaseCommand):
             help=_('Check interval in seconds (default: 60)'),
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *_args: object, **options: Any) -> None:
         """Execute the command."""
         from pki.models import CaModel  # noqa: PLC0415
 
@@ -63,7 +67,7 @@ class Command(BaseCommand):
                                     self.stdout.write(
                                         self.style.WARNING(f'  ⚠ Failed: {ca.unique_name}')
                                     )
-                            except Exception as exc:
+                            except Exception as exc:  # noqa: BLE001  # one CA failing must not stop the worker
                                 self.stdout.write(
                                     self.style.ERROR(f'  ✗ Error for {ca.unique_name}: {exc}')
                                 )
@@ -75,7 +79,7 @@ class Command(BaseCommand):
 
                 except KeyboardInterrupt:
                     raise
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001  # the worker loop keeps running past any single failure
                     self.stdout.write(
                         self.style.ERROR(f'Error in worker loop: {exc}')
                     )
