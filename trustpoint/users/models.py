@@ -10,15 +10,26 @@ is a foreign key to ``django.contrib.auth.models.Group``.
 
 from __future__ import annotations
 
+import hashlib
+import re
 import secrets
+import sys
+import time
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.apps import apps
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, Group, Permission, UserManager
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.core.validators import RegexValidator
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.debug import sensitive_variables
+from django_otp.models import Device, ThrottlingMixin, TimestampMixin
+from django_otp.oath import TOTP
+
+from util.encrypted_fields import EncryptedTextField
 
 if TYPE_CHECKING:
     from management.models.organization import OrganizationModel
@@ -492,3 +503,156 @@ class ServiceAccountCredential(models.Model):
     def generate_secret() -> str:
         """Generate a secure random API secret."""
         return secrets.token_urlsafe(48)
+
+
+class UserClientCertificate(models.Model):
+    """Associate each client certificate with one user, allowing multiple certificates per user."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='client_certificates',
+        verbose_name=_('user'),
+    )
+    certificate = models.OneToOneField(
+        'pki.CertificateModel',
+        on_delete=models.PROTECT,
+        related_name='user_client_certificate',
+        verbose_name=_('client certificate'),
+    )
+
+    class Meta:
+        """Model metadata."""
+
+        verbose_name = _('user client certificate')
+        verbose_name_plural = _('user client certificates')
+
+    def __str__(self) -> str:
+        """Identify the certificate and its associated user."""
+        return f'Client certificate {self.certificate_id} for user {self.user_id}'
+
+
+MAX_TOKEN_LENGTH = 64
+RECOVERY_CODE_COUNT = 10
+
+
+def new_otp_key() -> str:
+    """Generate a cryptographically random 160-bit authenticator secret."""
+    return secrets.token_hex(20)
+
+
+class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):
+    """One encrypted authenticator per human user.
+
+    Use django_otp.verify_token() for atomic verification of a freshly loaded,
+    locked device. For enrollment, load the unconfirmed device with
+    select_for_update() inside transaction.atomic(), verify its first code, then
+    set confirmed=True. Only confirmed devices may be used to complete a login.
+    Password checks and enrollment session expiry belong in the calling flow.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='otp_devices',
+        limit_choices_to={'account_type': 'HUMAN'},
+    )
+    name = models.CharField(max_length=64, default='Authenticator')
+    key = EncryptedTextField(
+        default=new_otp_key, editable=False,
+        validators=[RegexValidator(r'\A[0-9a-f]{40}\Z', _('Invalid OTP secret.'))],
+    )
+    confirmed = models.BooleanField(default=False, editable=False)
+    last_t = models.BigIntegerField(default=-1, editable=False)
+
+    class Meta(Device.Meta):
+        """Enforce one device per user and require verification before confirmation."""
+
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(fields=['user'], name='unique_user_otp_device'),
+            models.CheckConstraint(condition=models.Q(last_t__gte=-1), name='user_otp_valid_last_t'),
+            models.CheckConstraint(
+                condition=models.Q(confirmed=False) | models.Q(last_t__gte=0),
+                name='user_otp_confirmed_has_verified_token',
+            ),
+        ]
+
+    def get_throttle_factor(self) -> int:
+        """Use django-otp's exponential backoff, starting at one second."""
+        return 1
+
+    @sensitive_variables()
+    def verify_token(self, token: str) -> bool:
+        """Verify a TOTP or consume a recovery code; the caller must lock this device."""
+        if (
+            self.pk is None or not settings.TRUSTPOINT_IS_OPERATIONAL
+            or settings.TRUSTPOINT_IS_BOOTSTRAP
+            or not self.user.is_active or self.user.account_type != 'HUMAN'
+        ):
+            return False
+        allowed, _details = self.verify_is_allowed()
+        if not allowed:
+            return False
+        token = token.strip() if isinstance(token, str) and len(token) <= MAX_TOKEN_LENGTH else ''
+        verified = False
+        if re.fullmatch(r'[0-9]{6}', token):
+            totp = TOTP(bytes.fromhex(self.key), step=30, digits=6)
+            totp.time = time.time()
+            verified = totp.verify(int(token), tolerance=1, min_t=self.last_t + 1)
+            if verified:
+                self.last_t = totp.t()
+        elif self.confirmed and re.fullmatch(r'[0-9a-fA-F-]{32,35}', token):
+            digest = hashlib.sha256(token.replace('-', '').lower().encode('ascii')).hexdigest()
+            verified = self.recovery_codes.filter(code_hash=digest, used_at__isnull=True).update(
+                used_at=timezone.now(),
+            ) == 1
+        if verified:
+            self.throttle_reset(commit=False)
+            self.set_last_used_timestamp(commit=False)
+            self.save(update_fields=[
+                'last_t', 'last_used_at', 'throttling_failure_count', 'throttling_failure_timestamp',
+            ])
+        else:
+            self.throttle_increment()
+        return verified
+
+    @sensitive_variables()
+    def generate_recovery_codes(self) -> list[str]:
+        """Replace recovery codes after caller reauthentication; return plaintext once."""
+        if not settings.TRUSTPOINT_IS_OPERATIONAL or settings.TRUSTPOINT_IS_BOOTSTRAP:
+            raise ValidationError(_('OTP is unavailable during initial setup.'))
+        with transaction.atomic(using=self._state.db):
+            device = type(self).objects.using(self._state.db).select_for_update().get(pk=self.pk, user_id=self.user_id)
+            if not device.confirmed or not device.user.is_active or device.user.account_type != 'HUMAN':
+                raise ValidationError(_('Recovery codes require an active human account and confirmed authenticator.'))
+            # 128 random bits per code permit SHA-256 storage without a password-derived hash.
+            codes = [secrets.token_hex(16) for _index in range(RECOVERY_CODE_COUNT)]
+            device.recovery_codes.all().delete()
+            device.recovery_codes.bulk_create([
+                UserOTPRecoveryCode(device=device, code_hash=hashlib.sha256(code.encode('ascii')).hexdigest())
+                for code in codes
+            ])
+            return ['-'.join(code[i:i + 8] for i in range(0, len(code), 8)) for code in codes]
+
+
+class UserOTPRecoveryCode(models.Model):
+    """A single-use recovery-code hash belonging to an authenticator."""
+
+    device = models.ForeignKey(UserOTPDevice, on_delete=models.CASCADE, related_name='recovery_codes')
+    code_hash = models.CharField(max_length=64, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        """Keep recovery-code hashes unique within each device."""
+
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(fields=['device', 'code_hash'], name='unique_user_otp_recovery_code'),
+        ]
+
+    def __str__(self) -> str:
+        """Identify the record without exposing the hash."""
+        return f'OTP recovery code {self.pk} for device {self.device_id}'
+
+
+# Preserve the import path used by existing migrations without keeping a separate model module.
+sys.modules['users.otp_models'] = sys.modules[__name__]
+sys.modules['users'].otp_models = sys.modules[__name__]

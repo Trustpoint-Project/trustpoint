@@ -118,6 +118,7 @@
                     {% if perms.users.manage_role %}
                     <a href="{% url 'management:service_account_list' %}" class="tp-menu-item {% if page_name == 'service_accounts' %}tp-menu-active{% endif %}">{% trans "Service Accounts" %}</a>
                     <a href="{% url 'management:user_management' %}" class="tp-menu-item {% if page_name == 'user_management' %}tp-menu-active{% endif %}">{% trans "Users" %}</a>
+                    <a href="{% url 'management:user_authentication' %}" class="tp-menu-item {% if page_name == 'user_authentication' %}tp-menu-active{% endif %}">{% trans "User Authentication" %}</a>
                     <a href="{% url 'management:role_management' %}" class="tp-menu-item {% if page_name == 'role_management' %}tp-menu-active{% endif %}">{% trans "Roles" %}</a>
                     {% endif %}
                 </div>

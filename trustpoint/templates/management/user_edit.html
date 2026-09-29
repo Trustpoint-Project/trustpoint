@@ -1,0 +1,22 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n crispy_forms_filters %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{{ view.page_title }}: {{ object.username }}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
+        <form method="post" id="user-edit-form">
+            {% csrf_token %}
+            {{ form|crispy }}
+        </form>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <a href="{% url 'management:configure_user' object.pk %}" class="btn btn-secondary m-1">{% trans 'Back' %}</a>
+        <button type="submit" form="user-edit-form" class="btn btn-primary m-1">{% trans 'Save changes' %}</button>
+    </div>
+</div>
+{% endblock %}
