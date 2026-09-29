@@ -1,0 +1,160 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load internationalization_tags %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Domains' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Manage domains, their Issuing CAs and associated devices.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <section>
+            {% include 'pki/domains/table_filter.html' with table_url='pki:domains' %}
+
+            <div class="table-responsive mt-4">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th id="checkbox-column" scope="col">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all domains' %}"
+                                >
+                            </th>
+
+                            <th scope="col">
+                                <a
+                                    href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans 'Domain Name' %}
+                                </a>
+                            </th>
+
+                            <th scope="col">
+                                <a
+                                    href="?sort={% if current_sort == 'issuing_ca__unique_name' %}-{% endif %}issuing_ca__unique_name"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans 'Issuing CA Name' %}
+                                </a>
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans '# Devices' %}
+                            </th>
+
+                            <th scope="col">
+                                {% trans 'Signature Suite' %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                <a
+                                    href="?sort={% if created_at == 'created_at' %}-{% endif %}created_at"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans 'Created at' %}
+                                </a>
+                            </th>
+
+                            <th scope="col" class="text-end">
+                                {% trans 'Actions' %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for domain in page_obj %}
+                            <tr{% if not domain.is_active %} class="text-muted"{% endif %}>
+                                <td class="row_checkbox">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ domain.id }}"
+                                        aria-label="{% blocktranslate with name=domain.unique_name %}Select domain {{ name }}{% endblocktranslate %}"
+                                    >
+                                </td>
+
+                                <td>
+                                    {{ domain.unique_name }}
+                                </td>
+
+                                <td>
+                                    <a href="{% url 'pki:issuing_cas-detail' domain.issuing_ca.pk %}">
+                                        {{ domain.issuing_ca.unique_name }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {{ domain.devices.count }}
+                                </td>
+
+                                <td>
+                                    {{ domain.signature_suite_display }}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ domain.created_at|local_datetime }}
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <a
+                                            href="config/{{ domain.id }}/"
+                                            class="btn btn-sm btn-outline-secondary"
+                                        >
+                                            {% trans 'Configure' %}
+                                        </a>
+
+                                        <a
+                                            href="delete/{{ domain.id }}/"
+                                            class="btn btn-sm btn-outline-danger"
+                                        >
+                                            {% trans 'Delete' %}
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+
+                        {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-5">
+                                    {% trans 'No domains are configured yet.' %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include 'trustpoint/pagination.html' %}
+        </section>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <button
+            type="button"
+            class="btn btn-outline-danger tp-table-select-btn"
+            data-tp-url="delete"
+        >
+            {% trans 'Delete Selected' %}
+        </button>
+
+        <a
+            href="{% url 'pki:domains-add' %}"
+            class="btn btn-primary"
+        >
+            {% trans 'Add Domain' %}
+        </a>
+    </div>
+</div>
+{% endblock content %}

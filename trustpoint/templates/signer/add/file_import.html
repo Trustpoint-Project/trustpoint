@@ -3,29 +3,70 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST" autocomplete="off" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Add new Signer' %}</h1>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    <h2>{% trans 'File Import' %}</h2>
-                    <hr>
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Import Signer" %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans "Import an existing signer credential from the selected file format." %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="import-signer-form"
+                method="post"
+                autocomplete="off"
+                enctype="multipart/form-data"
+            >
+                {% csrf_token %}
+
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans "File Import" %}
+                        </h2>
+
+                        <p class="mb-0 text-muted">
+                            {% trans "Select the required credential files and provide any additional import information." %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
 
                     {{ form|crispy }}
-                </div>
-            </div>
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'signer:signer-add-file_import-file_type_select' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
-                    <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                    <button type="submit" class="btn btn-primary">{% trans 'Add new Signer' %}</button>
-                </div>
-            </div>
+                </section>
+            </form>
         </div>
-    </form>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="d-flex flex-wrap gap-2">
+            <a
+                href="{% url 'signer:signer-add-file_import-file_type_select' %}"
+                class="btn btn-secondary"
+            >
+                {% trans "Back" %}
+            </a>
+
+            <a
+                href="{% url 'signer:signer_list' %}"
+                class="btn btn-outline-secondary"
+            >
+                {% trans "Cancel" %}
+            </a>
+        </div>
+
+        <button
+            type="submit"
+            form="import-signer-form"
+            class="btn btn-primary"
+        >
+            {% trans "Import Signer" %}
+        </button>
+    </div>
+</div>
 {% endblock content %}

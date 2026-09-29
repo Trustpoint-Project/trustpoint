@@ -1,0 +1,286 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+<div class="card">
+
+    {# ============================================================ #}
+    {# Header                                                      #}
+    {# ============================================================ #}
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h1 class="mb-1">
+                    {% trans 'External PKI' %}: {{ issuing_ca.unique_name }}
+                </h1>
+
+                <p class="mb-0 text-muted">
+                    {% trans 'The Issuing CA is waiting for a certificate from the external PKI.' %}
+                </p>
+            </div>
+
+            <span class="badge text-bg-primary">
+                {% trans 'CSR' %}
+            </span>
+        </div>
+    </div>
+
+
+    {# ============================================================ #}
+    {# Content                                                     #}
+    {# ============================================================ #}
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+
+            {# ==================================================== #}
+            {# Pending State                                       #}
+            {# ==================================================== #}
+            <div class="alert alert-info mb-5" role="alert">
+                <strong>{% trans 'Certificate pending' %}</strong>
+                <br>
+                {% trans 'Submit the generated CSR to your external PKI. Once the Issuing CA certificate has been issued, upload it below to complete the setup.' %}
+            </div>
+
+
+            {# ==================================================== #}
+            {# Certificate Content Summary                         #}
+            {# ==================================================== #}
+            <section class="mb-5">
+
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans 'Certificate Content' %}
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        {% trans 'Review the certificate content included in the generated request.' %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                {% if has_cert_content %}
+
+                    <div class="alert alert-info mt-3" role="alert">
+
+                        {% if cert_content_summary.subject %}
+                            <h5>{% trans 'Subject:' %}</h5>
+
+                            <ul class="mb-3">
+                                {% for label, value in cert_content_summary.subject.items %}
+                                    <li>
+                                        <strong>{{ label }}:</strong> {{ value }}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+
+
+                        {% if cert_content_summary.san %}
+                            <h5>{% trans 'Subject Alternative Names:' %}</h5>
+
+                            <ul class="mb-3">
+                                {% for label, value in cert_content_summary.san.items %}
+                                    <li>
+                                        <strong>{{ label }}:</strong> {{ value }}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+
+
+                        <h5>{% trans 'Validity Period:' %}</h5>
+
+                        <p class="mb-0">
+                            {{ cert_content_summary.validity }}
+                        </p>
+
+                    </div>
+
+                {% else %}
+
+                    <div class="alert alert-warning mt-3" role="alert">
+                        <strong>{% trans 'Certificate content missing' %}</strong>
+                        <br>
+                        {% trans 'No certificate content has been defined yet. Please define the certificate content before continuing.' %}
+                    </div>
+
+                {% endif %}
+
+            </section>
+
+
+            {# ==================================================== #}
+            {# Certificate Signing Request                         #}
+            {# ==================================================== #}
+            <section class="mb-5">
+
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">
+                            {% trans 'Certificate Signing Request' %}
+                        </h2>
+
+                        <p class="text-muted mb-0">
+                            {% trans 'Copy or download the CSR and submit it to your external PKI.' %}
+                        </p>
+                    </div>
+                </div>
+
+                <hr class="mb-4">
+
+
+                {% if csr_pem %}
+
+                    <div class="mb-3">
+                        <label
+                            for="id_csr_pem"
+                            class="form-label"
+                        >
+                            {% trans 'CSR in PEM format' %}
+                        </label>
+
+                        <textarea
+                            id="id_csr_pem"
+                            class="form-control font-monospace"
+                            rows="12"
+                            readonly
+                        >{{ csr_pem }}</textarea>
+                    </div>
+
+
+                    <div class="d-flex flex-wrap gap-2">
+
+                        <button
+                            type="button"
+                            class="btn btn-outline-primary"
+                            id="copy-csr-button"
+                        >
+                            {% trans 'Copy CSR' %}
+                        </button>
+
+                        <a
+                            href="?download=1"
+                            class="btn btn-outline-primary"
+                        >
+                            {% trans 'Download CSR' %}
+                        </a>
+
+                    </div>
+
+                {% elif csr_error %}
+
+                    <div class="alert alert-danger" role="alert">
+                        <strong>
+                            {% trans 'The CSR could not be generated.' %}
+                        </strong>
+
+                        <div class="mt-1">
+                            {{ csr_error }}
+                        </div>
+                    </div>
+
+                {% endif %}
+
+            </section>
+
+
+            {# ==================================================== #}
+            {# Upload Issued Certificate                           #}
+            {# ==================================================== #}
+            <section>
+
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans 'Upload Issued Certificate' %}
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        {% trans 'Upload the Issuing CA certificate returned by your external PKI.' %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+
+                <form
+                    id="certificate-upload-form"
+                    method="post"
+                    enctype="multipart/form-data"
+                >
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                </form>
+
+            </section>
+
+        </div>
+    </div>
+
+
+    {# ============================================================ #}
+    {# Footer                                                      #}
+    {# ============================================================ #}
+    <div class="card-footer d-flex justify-content-between align-items-center">
+
+        <a
+            href="{% url 'pki:issuing_cas-config' pk=issuing_ca.pk %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <div class="d-flex gap-2">
+
+            <a
+                href="{% url 'pki:issuing_cas-define-cert-content-csr' pk=issuing_ca.pk %}"
+                class="btn btn-outline-secondary"
+            >
+                {% trans 'Edit Certificate Content' %}
+            </a>
+
+            <button
+                type="submit"
+                form="certificate-upload-form"
+                class="btn btn-primary"
+            >
+                {% trans 'Upload Certificate' %}
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+{# ================================================================ #}
+{# Copy CSR                                                        #}
+{# ================================================================ #}
+<script>
+    const copyButton = document.getElementById('copy-csr-button');
+    const csrField = document.getElementById('id_csr_pem');
+
+    if (copyButton && csrField) {
+        copyButton.addEventListener('click', async function () {
+            try {
+                await navigator.clipboard.writeText(csrField.value);
+
+                const originalText = copyButton.textContent;
+
+                copyButton.textContent = "{% trans 'Copied' %}";
+
+                setTimeout(function () {
+                    copyButton.textContent = originalText;
+                }, 1500);
+
+            } catch (error) {
+                csrField.select();
+                document.execCommand('copy');
+            }
+        });
+    }
+</script>
+
+{% endblock content %}

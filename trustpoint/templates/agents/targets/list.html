@@ -2,79 +2,168 @@
 {% load i18n %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-    <div class="card-header d-flex align-items-center justify-content-between">
-        <h1 class="mb-0">
-            {% blocktrans with agent_name=agent.name %}Managed Devices — {{ agent_name }}{% endblocktrans %}
-        </h1>
-        <a href="{% url 'devices:agents' %}" class="btn btn-sm btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> {% trans "Back to Agents" %}
+<div class="card">
+    <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+        <div>
+            <h1 class="mb-1">
+                {% blocktrans with agent_name=agent.name %}
+                    Managed Devices — {{ agent_name }}
+                {% endblocktrans %}
+            </h1>
+
+            <p class="mb-0 text-muted">
+                {% trans "Manage the devices assigned to this certificate management agent." %}
+            </p>
+        </div>
+
+        <a
+            href="{% url 'devices:agents' %}"
+            class="btn btn-sm btn-outline-secondary flex-shrink-0"
+        >
+            {% trans "Back to Agents" %}
         </a>
     </div>
 
-    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th id="checkbox-column"><input type="checkbox"/></th>
-                    <th>{% trans "Device Name" %}</th>
-                    <th>{% trans "Serial Number" %}</th>
-                    <th>{% trans "IP Address" %}</th>
-                    <th>{% trans "Domain" %}</th>
-                    <th>{% trans "Actions" %}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {# colspan must match the number of columns above #}
-                {% for device in page_obj %}
-                    <tr>
-                        <td class="row_checkbox">
-                            <input type="checkbox" name="row_checkbox" value="{{ device.pk }}"/>
-                        </td>
-                        <td>{{ device.common_name }}</td>
-                        <td>{{ device.serial_number|default:"—" }}</td>
-                        <td>{{ device.ip_address|default:"—" }}</td>
-                        <td>
-                            {% if device.domain %}
-                                {{ device.domain }}
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-nowrap">
-                            {% for device_agent in device.agents.all %}
-                                <a href="{% url 'agents:assigned-profiles-list' agent_id=device_agent.pk %}"
-                                   class="btn btn-sm btn-primary">
-                                    <i class="fas fa-id-card"></i> {% trans "Profiles" %}
-                                </a>
-                            {% endfor %}
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="6" class="middle">
-                            {% trans "No managed devices found in this agent's domain." %}
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="card-body text-start">
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans "Managed Devices" %}
+                </h2>
 
-        {% include "trustpoint/pagination.html" %}
+                <p class="mb-0 text-muted">
+                    {% trans "Review devices managed by this agent and access their assigned profiles." %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th id="checkbox-column" scope="col">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all managed devices' %}"
+                                >
+                            </th>
+
+                            <th scope="col">
+                                {% trans "Device Name" %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans "Serial Number" %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans "IP Address" %}
+                            </th>
+
+                            <th scope="col">
+                                {% trans "Domain" %}
+                            </th>
+
+                            <th scope="col" class="text-end">
+                                {% trans "Actions" %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for device in page_obj %}
+                            <tr>
+                                <td class="row_checkbox">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ device.pk }}"
+                                        aria-label="{% blocktranslate with name=device.common_name %}Select device {{ name }}{% endblocktranslate %}"
+                                    >
+                                </td>
+
+                                <td>
+                                    {% if device.common_name %}
+                                        {{ device.common_name }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {% if device.serial_number %}
+                                        {{ device.serial_number }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {% if device.ip_address %}
+                                        {{ device.ip_address }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if device.domain %}
+                                        {{ device.domain }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="d-inline-flex flex-wrap justify-content-end gap-2">
+                                        {% for device_agent in device.agents.all %}
+                                            <a
+                                                href="{% url 'agents:assigned-profiles-list' agent_id=device_agent.pk %}"
+                                                class="btn btn-sm btn-outline-secondary"
+                                            >
+                                                {% trans "Profiles" %}
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                            </tr>
+
+                        {% empty %}
+                            <tr>
+                                <td
+                                    colspan="6"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans "No managed devices found in this agent's domain." %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include "trustpoint/pagination.html" %}
+        </section>
     </div>
 
-    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-        <div class="tp-card-btn-footer m-1">
-            <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-                    data-tp-url="{% url 'agents:targets-delete_confirm' agent_id=agent.pk %}">
-                {% trans "Delete selected" %}
-            </button>
-        </div>
-        <div class="m-1">
-            <a class="btn btn-primary ms-2" href="{% url 'agents:targets-create' agent_id=agent.pk %}">
-                <i class="fas fa-plus"></i> {% trans "Add Device" %}
-            </a>
-        </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <button
+            type="button"
+            class="btn btn-outline-danger tp-table-select-btn"
+            data-tp-url="{% url 'agents:targets-delete_confirm' agent_id=agent.pk %}"
+        >
+            {% trans "Remove Selected" %}
+        </button>
+
+        <a
+            href="{% url 'agents:targets-create' agent_id=agent.pk %}"
+            class="btn btn-primary"
+        >
+            {% trans "Add Device" %}
+        </a>
     </div>
 </div>
 {% endblock content %}

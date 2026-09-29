@@ -10,6 +10,7 @@ from typing import Any, ClassVar, NoReturn, cast
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -290,6 +291,7 @@ class IssuingCaAddMethodSelectForm(forms.Form):
             ('local_file_import', _('Import a new Issuing CA from file')),
             ('local_request', _('Generate a key-pair and request an Issuing CA certificate')),
             ('remote_est', _('Configure a remote Issuing CA')),
+            ('remote_csr', _('External PKI (CSR)')),
         ],
         initial='local_file_import',
         required=True,
@@ -796,6 +798,80 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
 
 
 
+class IssuingCaAddRequestExternalCsrForm(IssuingCaAddRequestMixin):
+    """Form for generating a CSR for an external PKI issuance flow."""
+
+    class Meta:
+        """Meta class for IssuingCaAddRequestExternalCsrForm."""
+        model = CaModel
+        fields: ClassVar[list[str]] = ['unique_name', 'ca_type']
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form."""
+        super().__init__(*args, **kwargs)
+        self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+        self.fields['ca_type'].widget = forms.HiddenInput()
+
+    def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
+        """Save the CSR-based external-PKI CA configuration."""
+        instance = super().save(commit=False)
+        instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+        instance.credential = self._create_credential()
+
+        no_onboarding_config = NoOnboardingConfigModel()
+        no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.MANUAL])
+        no_onboarding_config.save()
+        instance.no_onboarding_config = no_onboarding_config
+
+        PermittedProtocolsAuthorization().check(instance)
+        PkiSecurityAuthorization().check(instance)
+
+        if commit:
+            instance.save()
+        return instance
+
+
+class IssuingCaExternalCsrCertificateForm(forms.Form):
+    """Form for uploading the certificate issued for an external CSR."""
+
+    certificate = forms.FileField(
+        label=_('Issued Issuing CA Certificate (.cer, .der, .pem)'),
+        required=True,
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form with the pending issuing CA."""
+        self.instance: CaModel = kwargs.pop('instance')
+        super().__init__(*args, **kwargs)
+
+    def clean_certificate(self) -> CertificateSerializer:
+        """Parse and validate the externally issued CA certificate."""
+        certificate_file = self.cleaned_data['certificate']
+        if certificate_file.size > 64 * 1024:
+            raise forms.ValidationError(_('Certificate file is too large, max. 64 kiB.'))
+
+        try:
+            certificate_serializer = CertificateSerializer.from_bytes(certificate_file.read())
+            certificate = certificate_serializer.as_crypto()
+            basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except Exception as exception:
+            raise forms.ValidationError(_('Failed to parse the Issuing CA certificate.')) from exception
+
+        if not basic_constraints.ca:
+            raise forms.ValidationError(_('The provided certificate is not a CA certificate.'))
+
+        if self.instance.credential is None:
+            raise forms.ValidationError(_('The Issuing CA credential is missing.'))
+
+        expected_public_key = self.instance.credential.get_private_key().public_key()
+        expected_public_key_der = expected_public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        actual_public_key_der = certificate.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        if actual_public_key_der != expected_public_key_der:
+            raise forms.ValidationError(_('The uploaded certificate does not match the generated CSR.'))
+
+        return certificate_serializer
+
+
 class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
     """Generic form for configuring a remote CMP endpoint (CA or RA).
 
@@ -895,12 +971,16 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
                 trust_store_field.help_text = _(
                     'EST RA (Step 2/2): Import the TLS server certificate (used for HTTPS connection security).'
                 )
-        elif self.instance.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+        elif self.instance.ca_type in [
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CSR,
+            CaModel.CaTypeChoice.REMOTE_CMP_RA,
+        ]:
             trust_store_field.queryset = TruststoreModel.objects.filter(
                 intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
             )
             trust_store_field.help_text = _(
-                'CMP: Only "Issuing CA Chain" truststores can be associated.'
+                'Only "Issuing CA Chain" truststores can be associated.'
             )
         else:
             trust_store_field.queryset = TruststoreModel.objects.filter(

@@ -35,17 +35,18 @@ def step_then_ca_page_show_options(context: runner.Context) -> None:  # noqa: AR
         context (runner.Context): Behave context.
     """
     html = context.response.content
+    visible_text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
     assert b'/pki/issuing-cas/add/file-import/pkcs12' in html, \
         "Missing link for importing from PKCS#12 file"
 
-    assert b'Import From PKCS#12 File' in html, \
-        "Missing text for PKCS#12 import option"
+    assert 'Import From PKCS#12 File' in visible_text and 'Import PKCS#12' in visible_text, \
+        "Missing PKCS#12 file import option"
 
     assert b'/pki/issuing-cas/add/file-import/separate-files' in html, \
         "Missing link for importing from separate files"
 
-    assert b'Import From Separate Key and Certificate Files' in html, \
-        "Missing text for separate file import option"
+    assert 'Import From Separate Key and Certificate Files' in visible_text and 'Import Files' in visible_text, \
+        "Missing separate file import option"
 
 @then('the system should display a form page where a file can be uploaded')
 def step_then_load_form(context: runner.Context) -> None:  # noqa: ARG001

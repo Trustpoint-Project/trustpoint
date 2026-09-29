@@ -1,46 +1,110 @@
 {% extends 'trustpoint/base.html' %}
 {% load crispy_forms_tags %}
 {% load i18n %}
+
 {% block content %}
-    <div class="card">
-        <div class="card-header d-flex">
-            {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
-                <h1>{% trans 'Choose Onboarding Mechanism' %}</h1>
-            {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
-                <h1>{% trans 'Create new OPC UA GDS' %}</h1>
-            {% endif %}
-        </div>
+<div class="card">
+    <div class="card-header">
+        {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
+            <h1 class="mb-1">
+                {% trans 'Choose Onboarding Mechanism' %}
+            </h1>
 
-        <div class="card-body py-3">
+            <p class="mb-0 text-muted">
+                {% trans 'Select how the device should be securely onboarded into Trustpoint.' %}
+            </p>
 
+        {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
+            <h1 class="mb-1">
+                {% trans 'Create new OPC UA GDS' %}
+            </h1>
 
-            <div class="d-flex gap-3 mt-3">
-                <div class="card flex-fill d-flex flex-column">
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><strong>IDevID</strong></h5>
-                        <hr class="hr-m">
-                        <p class="card-text flex-grow-1">IDevID onboarding enables secure, Zero-Touch onboarding of industrial devices using their built-in manufacturer identity (IEEE 802.1AR). Devices authenticate automatically with their Initial Device ID, allowing Trustpoint to verify authenticity and issue operational certificates without manual intervention.</p>
-                        <a href="{% url use_onboarding_url_name  %}" class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
-                            IDevID Onboarding
-                        </a>
-                    </div>
+            <p class="mb-0 text-muted">
+                {% trans 'Select the onboarding mechanism to use for the new OPC UA GDS.' %}
+            </p>
+        {% endif %}
+    </div>
+
+    <div class="card-body text-start">
+        <section>
+            <div class="row g-3">
+
+                {# ================================================= #}
+                {# IDevID Onboarding                                 #}
+                {# ================================================= #}
+                <div class="col-12 col-lg-6">
+                    <a
+                        href="{% url use_onboarding_url_name %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div>
+                                    <h3 class="h5 mb-2">
+                                        {% trans 'IDevID' %}
+                                    </h3>
+
+                                    <p class="text-muted mb-4">
+                                        {% blocktrans %}
+                                            IDevID onboarding enables secure Zero-Touch onboarding of industrial devices using their built-in manufacturer identity based on IEEE 802.1AR. Devices authenticate with their Initial Device ID so Trustpoint can verify their identity and issue operational certificates.
+                                        {% endblocktrans %}
+                                    </p>
+                                </div>
+
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">
+                                        {% trans 'IDevID Onboarding' %}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
                 </div>
-                <div class="card flex-fill d-flex flex-column">
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><strong>Zero Touch Onboarding</strong></h5>
-                        <hr class="hr-m">
-                        <p class="card-text flex-grow-1">AOKI (Automated Onboarding Key Infrastructure) enables Zero-Touch onboarding of industrial devices by automatically discovering the owner environment and issuing operational certificates. It builds on device identities and standardized discovery to integrate devices securely without manual configuration.</p>
-                        <a href="{% url 'devices:zero_touch_credentials-add' %}" class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
-                            AOKI Onboarding
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <div class="card-footer d-flex justify-content-between align-items-center">
-            <div class="tp-card-btn-footer m-1">
-                <a href="{% url cancel_create_url %}" class="btn btn-secondary min-width-20">{% trans 'Cancel' %}</a>
+
+                {# ================================================= #}
+                {# AOKI Onboarding                                   #}
+                {# ================================================= #}
+                <div class="col-12 col-lg-6">
+                    <a
+                        href="{% url 'devices:zero_touch_credentials-add' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div>
+                                    <h3 class="h5 mb-2">
+                                        {% trans 'AOKI Zero-Touch Onboarding' %}
+                                    </h3>
+
+                                    <p class="text-muted mb-4">
+                                        {% blocktrans %}
+                                            AOKI (Automated Onboarding Key Infrastructure) enables Zero-Touch onboarding by automatically discovering the owner environment and provisioning operational certificates using device identities and standardized discovery mechanisms.
+                                        {% endblocktrans %}
+                                    </p>
+                                </div>
+
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">
+                                        {% trans 'AOKI Onboarding' %}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
             </div>
-        </div>
+        </section>
+    </div>
+
+    <div class="card-footer">
+        <a
+            href="{% url cancel_create_url %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+    </div>
+</div>
 {% endblock content %}

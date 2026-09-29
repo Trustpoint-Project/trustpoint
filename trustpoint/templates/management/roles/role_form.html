@@ -1,0 +1,284 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% if object %}
+                {% blocktranslate with name=object.name %}
+                    Edit Role "{{ name }}"
+                {% endblocktranslate %}
+            {% else %}
+                {% trans "Create Role" %}
+            {% endif %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% if object %}
+                {% trans "Review the role configuration, administrative privileges and assigned permissions." %}
+            {% else %}
+                {% trans "Create a new role and define its administrative privileges and permissions." %}
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <form
+            id="role-form"
+            method="post"
+            autocomplete="off"
+        >
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger mb-4" role="alert">
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if is_modification_protected %}
+                <div class="alert alert-info mb-4" role="alert">
+                    {% trans "This is a protected built-in role. Its configuration cannot be modified." %}
+                </div>
+            {% endif %}
+
+            {# --- Role details --- #}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "Role Details" %}
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        {% trans "Define the name used to identify this role in Trustpoint." %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <div class="mb-3">
+                    <label
+                        for="{{ form.name.id_for_label }}"
+                        class="form-label"
+                    >
+                        {{ form.name.label }}
+                    </label>
+
+                    {% if is_modification_protected %}
+                        <input
+                            type="text"
+                            id="{{ form.name.id_for_label }}"
+                            class="form-control"
+                            value="{{ object.name }}"
+                            readonly
+                        >
+                        <input
+                            type="hidden"
+                            name="name"
+                            value="{{ object.name }}"
+                        >
+                    {% else %}
+                        {{ form.name }}
+                    {% endif %}
+
+                    {% if form.name.help_text %}
+                        <div class="form-text">
+                            {{ form.name.help_text }}
+                        </div>
+                    {% endif %}
+
+                    {% if form.name.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.name.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            {# --- Administrative privileges --- #}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "Administrative Privileges" %}
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        {% trans "Configure whether users assigned to this role receive staff or superuser privileges." %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <div class="mb-3 form-check">
+                    {% if is_modification_protected %}
+                        <input
+                            type="checkbox"
+                            id="{{ form.grants_staff.id_for_label }}"
+                            class="form-check-input"
+                            {% if form.grants_staff.value %}checked{% endif %}
+                            disabled
+                        >
+                        <input
+                            type="hidden"
+                            name="grants_staff"
+                            value="{{ form.grants_staff.value|yesno:'on,' }}"
+                        >
+                    {% else %}
+                        {{ form.grants_staff }}
+                    {% endif %}
+
+                    <label
+                        for="{{ form.grants_staff.id_for_label }}"
+                        class="form-check-label"
+                    >
+                        {{ form.grants_staff.label }}
+                    </label>
+
+                    {% if form.grants_staff.help_text %}
+                        <div class="form-text">
+                            {{ form.grants_staff.help_text }}
+                        </div>
+                    {% endif %}
+
+                    {% if form.grants_staff.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.grants_staff.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3 form-check">
+                    {% if is_modification_protected %}
+                        <input
+                            type="checkbox"
+                            id="{{ form.grants_superuser.id_for_label }}"
+                            class="form-check-input"
+                            {% if form.grants_superuser.value %}checked{% endif %}
+                            disabled
+                        >
+                        <input
+                            type="hidden"
+                            name="grants_superuser"
+                            value="{{ form.grants_superuser.value|yesno:'on,' }}"
+                        >
+                    {% else %}
+                        {{ form.grants_superuser }}
+                    {% endif %}
+
+                    <label
+                        for="{{ form.grants_superuser.id_for_label }}"
+                        class="form-check-label"
+                    >
+                        {{ form.grants_superuser.label }}
+                    </label>
+
+                    {% if form.grants_superuser.help_text %}
+                        <div class="form-text">
+                            {{ form.grants_superuser.help_text }}
+                        </div>
+                    {% endif %}
+
+                    {% if form.grants_superuser.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.grants_superuser.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            {# --- Permissions --- #}
+            <section>
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans "Permissions" %}
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        {% if is_modification_protected %}
+                            {% trans "Review the permissions assigned to this protected role." %}
+                        {% else %}
+                            {% trans "Select the permissions granted to users assigned to this role." %}
+                        {% endif %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                {% if is_modification_protected %}
+                    <ul class="list-group">
+                        {% for permission in fixed_permissions %}
+                            <li class="list-group-item">
+                                {{ permission.name }}
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-muted">
+                                {% trans "No permissions are assigned to this role." %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div id="permissions-section">
+                        {% include "management/includes/dual_listbox.html" %}
+                    </div>
+                {% endif %}
+            </section>
+        </form>
+
+        {% if not is_modification_protected %}
+            <script>
+                (function () {
+                    const checkbox = document.getElementById(
+                        '{{ form.grants_superuser.id_for_label }}'
+                    );
+                    const permissionsSection =
+                        document.getElementById('permissions-section');
+
+                    if (!checkbox || !permissionsSection) {
+                        return;
+                    }
+
+                    function togglePermissions() {
+                        permissionsSection.style.display =
+                            checkbox.checked ? 'none' : '';
+                    }
+
+                    checkbox.addEventListener('change', togglePermissions);
+                    togglePermissions();
+                })();
+            </script>
+        {% endif %}
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'management:role_management' %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Cancel" %}
+        </a>
+
+        {% if not is_modification_protected %}
+            <button
+                type="submit"
+                form="role-form"
+                class="btn btn-primary"
+            >
+                {% if object %}
+                    {% trans "Save Role" %}
+                {% else %}
+                    {% trans "Create Role" %}
+                {% endif %}
+            </button>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

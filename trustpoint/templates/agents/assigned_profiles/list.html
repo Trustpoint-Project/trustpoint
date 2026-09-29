@@ -3,105 +3,195 @@
 {% load internationalization_tags %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-    <div class="card-header d-flex align-items-center justify-content-between">
-        <h1 class="mb-0">
-            {% blocktrans with agent_name=agent.name %}Assigned Profiles — {{ agent_name }}{% endblocktrans %}
-        </h1>
-        <a href="{% url 'devices:agents' %}" class="btn btn-sm btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> {% trans "Back to Agents" %}
+<div class="card">
+    <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+        <div>
+            <h1 class="mb-1">
+                {% blocktrans with agent_name=agent.name %}
+                    Assigned Profiles — {{ agent_name }}
+                {% endblocktrans %}
+            </h1>
+
+            <p class="mb-0 text-muted">
+                {% trans "Manage the certificate management profiles assigned to this agent." %}
+            </p>
+        </div>
+
+        <a
+            href="{% url 'devices:agents' %}"
+            class="btn btn-sm btn-outline-secondary flex-shrink-0"
+        >
+            {% trans "Back to Agents" %}
         </a>
     </div>
 
-    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th id="checkbox-column"><input type="checkbox"/></th>
-                    <th>{% trans "Agent Profile" %}</th>
-                    <th>{% trans "Renewal Threshold (days)" %}</th>
-                    <th>{% trans "Last Update" %}</th>
-                    <th>{% trans "Next Update" %}</th>
-                    <th>{% trans "Enabled" %}</th>
-                    <th>{% trans "Actions" %}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {# colspan must match the number of columns above #}
-                {% for assignment in page_obj %}
-                    <tr>
-                        <td class="row_checkbox">
-                            <input type="checkbox" name="row_checkbox" value="{{ assignment.pk }}"/>
-                        </td>
-                        <td>
-                            <a href="{% url 'agents:profiles-config' pk=assignment.workflow_definition.pk %}">
-                                {{ assignment.workflow_definition.name }}
-                            </a>
-                        </td>
-                        <td>{{ assignment.renewal_threshold_days }}</td>
-                        <td>
-                            {% if assignment.last_certificate_update %}
-                                {{ assignment.last_certificate_update|local_datetime }}
-                            {% else %}
-                                <span class="text-muted">{% trans "Never" %}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if assignment.next_certificate_update_scheduled %}
-                                {{ assignment.next_certificate_update_scheduled|local_datetime }}
-                            {% else %}
-                                <span class="text-muted">{% trans "Not scheduled" %}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if assignment.enabled %}
-                                <span class="badge bg-success">{% trans "Active" %}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{% trans "Disabled" %}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{% url 'agents:assigned-profiles-edit' agent_id=agent.pk pk=assignment.pk %}"
-                               class="btn btn-sm btn-primary me-1"
-                               title="{% trans 'Configure' %}">
-                                {% trans "Configure" %}
-                            </a>
-                            <form method="post" action="{% url 'agents:assigned-profiles-force-update' agent_id=agent.pk pk=assignment.pk %}" style="display: inline;">
-                                {% csrf_token %}
-                                <button type="submit" 
-                                        class="btn btn-sm btn-primary" 
-                                        title="{% trans 'Force immediate certificate update' %}">
-                                    {% trans "Force Update" %}
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="7" class="middle">
-                            {% trans "No profiles have been assigned to this agent yet." %}
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="card-body text-start">
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans "Profile Assignments" %}
+                </h2>
 
-        {% include "trustpoint/pagination.html" %}
+                <p class="mb-0 text-muted">
+                    {% trans "Review renewal settings, update schedules and certificate management state for assigned profiles." %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th id="checkbox-column" scope="col">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all profile assignments' %}"
+                                >
+                            </th>
+
+                            <th scope="col">
+                                {% trans "Agent Profile" %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans "Renewal Threshold (days)" %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans "Last Update" %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans "Next Update" %}
+                            </th>
+
+                            <th scope="col">
+                                {% trans "Status" %}
+                            </th>
+
+                            <th scope="col" class="text-end">
+                                {% trans "Actions" %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for assignment in page_obj %}
+                            <tr>
+                                <td class="row_checkbox">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ assignment.pk }}"
+                                        aria-label="{% blocktranslate with name=assignment.workflow_definition.name %}Select profile assignment {{ name }}{% endblocktranslate %}"
+                                    >
+                                </td>
+
+                                <td>
+                                    <a href="{% url 'agents:profiles-config' pk=assignment.workflow_definition.pk %}">
+                                        {{ assignment.workflow_definition.name }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {{ assignment.renewal_threshold_days }}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {% if assignment.last_certificate_update %}
+                                        {{ assignment.last_certificate_update|local_datetime }}
+                                    {% else %}
+                                        <span class="text-muted">
+                                            {% trans "Never" %}
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {% if assignment.next_certificate_update_scheduled %}
+                                        {{ assignment.next_certificate_update_scheduled|local_datetime }}
+                                    {% else %}
+                                        <span class="text-muted">
+                                            {% trans "Not scheduled" %}
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if assignment.enabled %}
+                                        <span class="badge text-bg-success">
+                                            {% trans "Active" %}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">
+                                            {% trans "Disabled" %}
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="d-inline-flex flex-wrap justify-content-end gap-2">
+                                        <a
+                                            href="{% url 'agents:assigned-profiles-edit' agent_id=agent.pk pk=assignment.pk %}"
+                                            class="btn btn-sm btn-outline-secondary"
+                                        >
+                                            {% trans "Configure" %}
+                                        </a>
+
+                                        <form
+                                            method="post"
+                                            action="{% url 'agents:assigned-profiles-force-update' agent_id=agent.pk pk=assignment.pk %}"
+                                        >
+                                            {% csrf_token %}
+
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-outline-secondary"
+                                                title="{% trans 'Force immediate certificate update' %}"
+                                            >
+                                                {% trans "Force Update" %}
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+
+                        {% empty %}
+                            <tr>
+                                <td
+                                    colspan="7"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans "No profiles have been assigned to this agent yet." %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include "trustpoint/pagination.html" %}
+        </section>
     </div>
 
-    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-        <div class="tp-card-btn-footer m-1">
-            <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-                    data-tp-url="{% url 'agents:assigned-profiles-delete_confirm' agent_id=agent.pk %}">
-                {% trans "Remove selected" %}
-            </button>
-        </div>
-        <div class="m-1">
-            <a class="btn btn-primary ms-2"
-               href="{% url 'agents:assigned-profiles-create' agent_id=agent.pk %}">
-                {% trans "Assign Profile" %}
-            </a>
-        </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <button
+            type="button"
+            class="btn btn-outline-danger tp-table-select-btn"
+            data-tp-url="{% url 'agents:assigned-profiles-delete_confirm' agent_id=agent.pk %}"
+        >
+            {% trans "Remove Selected" %}
+        </button>
+
+        <a
+            href="{% url 'agents:assigned-profiles-create' agent_id=agent.pk %}"
+            class="btn btn-primary"
+        >
+            {% trans "Assign Profile" %}
+        </a>
     </div>
 </div>
 {% endblock content %}

@@ -75,3 +75,4 @@ Welcome to Trustpoint's documentation!
    development/testing/test_plan
    development/testing/ci_cd
    development/testing/test_report
+   development/trustpoint_view_design_guidelines

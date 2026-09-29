@@ -169,6 +169,12 @@ class TestIssuingCaAddMethodSelectForm:
         assert form.is_valid()
         assert form.cleaned_data['method_select'] == 'remote_est'
 
+    def test_form_valid_with_remote_csr(self):
+        """Test form is valid when remote_csr is selected."""
+        form = IssuingCaAddMethodSelectForm(data={'method_select': 'remote_csr'})
+        assert form.is_valid()
+        assert form.cleaned_data['method_select'] == 'remote_csr'
+
     def test_form_invalid_with_empty_data(self):
         """Test form is invalid when no method is selected."""
         form = IssuingCaAddMethodSelectForm(data={})
@@ -180,10 +186,10 @@ class TestIssuingCaAddMethodSelectForm:
         form = IssuingCaAddMethodSelectForm()
         assert form.fields['method_select'].initial == 'local_file_import'
 
-    def test_form_has_three_choices(self):
-        """Test that form has exactly three choices."""
+    def test_form_has_four_choices(self):
+        """Test that form has exactly four choices."""
         form = IssuingCaAddMethodSelectForm()
-        assert len(form.fields['method_select'].choices) == 3
+        assert len(form.fields['method_select'].choices) == 4
 
 
 class TestIssuingCaFileTypeSelectForm:
