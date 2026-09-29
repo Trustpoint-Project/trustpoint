@@ -12,7 +12,7 @@ from django.utils.translation import gettext_lazy as _
 
 from management.models.organization import OrganizationModel
 
-from .models import BuiltinRole, GroupProfile, TrustpointUser
+from .models import BuiltinRole, GroupProfile, TrustpointUser, UserClientCertificate
 
 
 class TrustpointSuperUserCreationForm(UserCreationForm[TrustpointUser]):
@@ -74,6 +74,23 @@ class TrustpointUserDetailsForm(forms.ModelForm[TrustpointUser]):
 
         model = TrustpointUser
         fields: ClassVar = ['first_name', 'last_name', 'email']
+
+
+class UserClientCertificateForm(forms.ModelForm[UserClientCertificate]):
+    """Choose an identifier that is unique among the current user's certificates."""
+
+    class Meta:
+        """Expose only the user-chosen identifier."""
+
+        model = UserClientCertificate
+        fields: ClassVar = ['identifier']
+
+    def clean_identifier(self) -> str:
+        """Reject identifiers already assigned to this user, including disabled certificates."""
+        identifier: str = self.cleaned_data['identifier']
+        if UserClientCertificate.objects.filter(user_id=self.instance.user_id, identifier=identifier).exists():
+            raise forms.ValidationError(_('You already have a client certificate with this identifier.'))
+        return identifier
 
 
 class TrustpointUserSetPasswordForm(SetPasswordForm):

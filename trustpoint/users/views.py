@@ -9,37 +9,259 @@ import base64
 import hashlib
 import time
 from io import BytesIO
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from urllib.parse import quote, urlencode
 
 from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
-from django.contrib.auth.views import LoginView
-from django.db import DatabaseError, transaction
-from django.shortcuts import redirect, render, resolve_url
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import LoginView, PasswordChangeView
+from django.core.exceptions import ValidationError
+from django.core.management import CommandError
+from django.db import DatabaseError, IntegrityError, transaction
+from django.db.models import ProtectedError
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404, redirect, render, resolve_url
+from django.urls import reverse_lazy
 from django.utils.crypto import constant_time_compare
 from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
+from django.views import View
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
-from django.views.generic.edit import FormView
+from django.views.generic.base import TemplateView
+from django.views.generic.edit import FormView, UpdateView
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp import login as otp_login
 from django_otp.qr import write_qrcode_image
+from trustpoint_core.serializer import CredentialFileFormat, CredentialSerializer
 
-from management.models import PasswordPolicy
+from crypto.domain.errors import CryptoError
+from management.models import CertificateAuthenticationConfig, PasswordPolicy
+from pki.management.commands.create_user_client_certificate import create_user_client_certificate
+from pki.models import CertificateModel
+from pki.services.management_ca import ManagementCAService
 from setup_wizard.models import SetupWizardCompletedModel
-from users.models import MAX_TOKEN_LENGTH, TrustpointUser, UserOTPDevice, new_otp_key
+from trustpoint.views.base import ContextDataMixin
+from users.authentication import CERTIFICATE_LOGIN_ERROR_SESSION_KEY, REJECTED_CERTIFICATE_SESSION_KEY
+from users.form import TrustpointUserDetailsForm, UserClientCertificateForm
+from users.models import MAX_TOKEN_LENGTH, TrustpointUser, UserClientCertificate, UserOTPDevice, new_otp_key
 
 if TYPE_CHECKING:
     from typing import Any
 
-    from django.contrib.auth.forms import AuthenticationForm
+    from cryptography import x509
+    from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+    from django.db.models import QuerySet
     from django.http import HttpRequest, HttpResponse
+
+
+class UserProfileMixin(ContextDataMixin, LoginRequiredMixin):
+    """Share profile navigation and bind its context to the signed-in user."""
+
+    template_name = 'users/profile_form.html'
+    context_page_category = 'users'
+    context_page_name = 'profile'
+    success_url = reverse_lazy('users:profile')
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Use the authenticated user for the profile's configuration links."""
+        context = super().get_context_data(**kwargs)
+        context['object'] = self.request.user
+        return context
+
+
+class UserProfileView(UserProfileMixin, TemplateView):
+    """Display a separate profile page for the signed-in user."""
+
+    template_name = 'users/profile.html'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Show certificate authentication configuration when it is enabled."""
+        context = super().get_context_data(**kwargs)
+        context['certificate_authentication_enabled'] = CertificateAuthenticationConfig.objects.filter(
+            enabled=True,
+        ).exists()
+        return context
+
+
+@method_decorator(never_cache, name='dispatch')
+class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserClientCertificateForm]):
+    """List the user's client certificates and download newly generated credentials once."""
+
+    template_name = 'users/profile_certificate_authentication.html'
+    form_class = UserClientCertificateForm
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Bind the new certificate association to the authenticated user only."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = UserClientCertificate(user=self.request.user)
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Show only certificates owned by the current user."""
+        context = super().get_context_data(**kwargs)
+        context['client_certificates'] = UserClientCertificate.objects.filter(
+            user=self.request.user,
+        ).select_related('certificate').order_by('identifier')
+        context['certificate_authentication_enabled'] = CertificateAuthenticationConfig.objects.filter(
+            enabled=True,
+        ).exists()
+        return context
+
+    @staticmethod
+    def _get_issuing_certificate() -> x509.Certificate:
+        """Lock and validate the enabled management CA inside the creation transaction."""
+        root_ca, issuing_ca = ManagementCAService.get_hierarchy(lock=True)
+        if issuing_ca is None or not ManagementCAService.is_complete(root_ca, issuing_ca):
+            raise ValidationError(_('The management CA is not ready.'))
+        if not CertificateAuthenticationConfig.objects.filter(issuing_ca=issuing_ca, enabled=True).exists():
+            raise ValidationError(_('Certificate based authentication is not enabled.'))
+        issuing_certificate = issuing_ca.get_certificate()
+        if issuing_certificate is None:
+            raise ValidationError(_('The management CA has no certificate.'))
+        return issuing_certificate
+
+    @sensitive_variables()
+    def form_valid(self, form: UserClientCertificateForm) -> HttpResponse:
+        """Serialize the key in memory and persist only the certificate and its user association."""
+        identifier = form.cleaned_data['identifier']
+        try:
+            with transaction.atomic():
+                user = get_object_or_404(TrustpointUser.objects.select_for_update(), pk=self.request.user.pk)
+                if UserClientCertificate.objects.filter(user=user, identifier=identifier).exists():
+                    form.add_error('identifier', _('You already have a client certificate with this identifier.'))
+                    return self.form_invalid(form)
+                issuing_certificate = self._get_issuing_certificate()
+                certificate, private_key = create_user_client_certificate(user.pk, identifier)
+                credential = CredentialSerializer(
+                    private_key=private_key, certificate=certificate, additional_certificates=[issuing_certificate],
+                )
+                pkcs12_data = credential.as_pkcs12(friendly_name=identifier.encode('utf-8'))
+                certificate_model = CertificateModel.save_certificate(certificate)
+                association = UserClientCertificate.objects.create(
+                    user=user, certificate=certificate_model, identifier=identifier, is_active=True,
+                )
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        except IntegrityError:
+            if UserClientCertificate.objects.filter(user=self.request.user, identifier=identifier).exists():
+                form.add_error('identifier', _('You already have a client certificate with this identifier.'))
+            else:
+                form.add_error(None, _('The client certificate could not be created.'))
+        except CommandError as exc:
+            form.add_error(None, str(exc))
+        except (CryptoError, ValueError, RuntimeError):
+            form.add_error(
+                None, _('The client certificate could not be created. Check the management CA configuration.'),
+            )
+        else:
+            response = FileResponse(
+                BytesIO(pkcs12_data), as_attachment=True,
+                filename=f'trustpoint-client-certificate-{user.pk}-{association.pk}.p12',
+                content_type=CredentialFileFormat.PKCS12.mime_type,
+            )
+            response['Cache-Control'] = 'private, no-store'
+            response['X-Content-Type-Options'] = 'nosniff'
+            return cast('HttpResponse', response)
+        return self.form_invalid(form)
+
+
+class UserProfileClientCertificateActionView(UserProfileMixin, View):
+    """Enable, disable, or delete a certificate belonging to the current user."""
+
+    http_method_names = ('post',)
+
+    def post(self, request: HttpRequest, pk: int, action: str) -> HttpResponse:
+        """Apply an explicit action after checking ownership on the server."""
+        if action not in {'enable', 'disable', 'delete'}:
+            raise Http404
+        with transaction.atomic():
+            association = get_object_or_404(
+                UserClientCertificate.objects.select_for_update(), pk=pk, user=request.user,
+            )
+            if action == 'delete':
+                certificate = association.certificate
+                association.delete()
+                try:
+                    with transaction.atomic():
+                        certificate.delete()
+                except ProtectedError:
+                    # Keep public certificates that are still referenced elsewhere in the PKI.
+                    pass
+            else:
+                association.is_active = action == 'enable'
+                association.save(update_fields=['is_active'])
+        success_messages = {
+            'enable': _('Client certificate enabled.'),
+            'disable': _('Client certificate disabled.'),
+            'delete': _('Client certificate deleted.'),
+        }
+        messages.success(request, success_messages[action])
+        return redirect('users:profile_certificate_authentication')
+
+
+class UserProfileDetailsView(UserProfileMixin, UpdateView[TrustpointUser, TrustpointUserDetailsForm]):
+    """Allow a user to edit only their own name and email address."""
+
+    form_class = TrustpointUserDetailsForm
+    page_title = _('Details')
+
+    def get_object(self, queryset: QuerySet[TrustpointUser] | None = None) -> TrustpointUser:
+        """Ignore supplied user IDs and always load the authenticated user."""
+        if queryset is None:
+            queryset = TrustpointUser.objects.all()
+        return get_object_or_404(queryset, pk=self.request.user.pk)
+
+    def form_valid(self, form: TrustpointUserDetailsForm) -> HttpResponse:
+        """Save the current user's personal details."""
+        response = super().form_valid(form)
+        messages.success(self.request, _('Your details have been saved.'))
+        return response
+
+
+class UserProfileRoleView(UserProfileMixin, TemplateView):
+    """Show the current user's assigned role and organization without allowing self-promotion."""
+
+    template_name = 'users/profile_role.html'
+
+
+class UserProfilePasswordChangeView(UserProfileMixin, PasswordChangeView):
+    """Change only the signed-in user's password, requiring their current password."""
+
+    page_title = _('Change Password')
+
+    def get_form(self, form_class: type[PasswordChangeForm] | None = None) -> PasswordChangeForm:
+        """Hide password requirements help text to match the original form."""
+        form = super().get_form(form_class)
+        form.fields['new_password1'].help_text = ''
+        return form
+
+    def form_valid(self, form: PasswordChangeForm) -> HttpResponse:
+        """Save the password and keep the current session authenticated."""
+        response = super().form_valid(form)
+        messages.success(self.request, _('Your password has been changed.'))
+        return response
+
+
+class UserProfileResetOTPView(UserProfileMixin, View):
+    """Reset only the signed-in user's authenticator and recovery codes."""
+
+    http_method_names = ('post',)
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Remove the current user's authenticator while holding their user row lock."""
+        with transaction.atomic():
+            user = get_object_or_404(TrustpointUser.objects.select_for_update(), pk=request.user.pk)
+            device = UserOTPDevice.objects.select_for_update().filter(user=user).first()
+            if device is not None:
+                device.delete()
+        messages.success(request, _('Your authenticator has been reset. Set it up again when signing in.'))
+        return redirect('users:profile')
 
 
 class TrustpointLoginView(LoginView):
@@ -62,6 +284,7 @@ class TrustpointLoginView(LoginView):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add context about initial bootstrap login if applicable."""
         context = super().get_context_data(**kwargs)
+        context['certificate_login_error'] = self.request.session.pop(CERTIFICATE_LOGIN_ERROR_SESSION_KEY, None)
 
         username = getattr(settings, 'TRUSTPOINT_BOOTSTRAP_USERNAME', 'admin')
         user_model = get_user_model()
@@ -143,7 +366,10 @@ def begin_otp_login(request: HttpRequest, user: TrustpointUser, next_url: str) -
             device.key = new_otp_key()
             device.last_t = -1
             device.save(update_fields=['key', 'last_t'])
+        rejected_certificate = request.session.get(REJECTED_CERTIFICATE_SESSION_KEY)
         request.session.flush()
+        if rejected_certificate:
+            request.session[REJECTED_CERTIFICATE_SESSION_KEY] = rejected_certificate
         request.session[PENDING_OTP_SESSION_KEY] = {
             'user_id': user.pk,
             'backend': user.backend,

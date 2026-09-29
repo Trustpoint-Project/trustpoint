@@ -188,6 +188,12 @@
                         </svg>
                         {% trans "Help & Support" %}
                     </a>
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'users:profile' %}" class="tp-menu-head {% if page_name == 'profile' %}tp-menu-active{% endif %}">
+                        <i class="bi bi-person-circle" aria-hidden="true"></i>
+                        {% trans "User Profile" %}
+                    </a>
+                    {% endif %}
                     <form method="POST" action="{% url 'users:logout' %}">
                         {% csrf_token %}
                         <button class="tp-menu-head" type="submit">

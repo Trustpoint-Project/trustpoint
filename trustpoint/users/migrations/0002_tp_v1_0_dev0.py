@@ -42,18 +42,6 @@ class Migration(migrations.Migration):
             field=models.CharField(choices=[('HUMAN', 'Human'), ('SERVICE', 'Service')], default='HUMAN', help_text='Human accounts have interactive Web UI login; service accounts use API credentials or mTLS.', max_length=10, verbose_name='account type'),
         ),
         migrations.CreateModel(
-            name='UserClientCertificate',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('certificate', models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='user_client_certificate', to='pki.certificatemodel', verbose_name='client certificate')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='client_certificates', to=settings.AUTH_USER_MODEL, verbose_name='user')),
-            ],
-            options={
-                'verbose_name': 'user client certificate',
-                'verbose_name_plural': 'user client certificates',
-            },
-        ),
-        migrations.CreateModel(
             name='UserOTPDevice',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
@@ -99,6 +87,21 @@ class Migration(migrations.Migration):
                 'verbose_name': 'service account credential',
                 'verbose_name_plural': 'service account credentials',
                 'indexes': [models.Index(fields=['client_id'], name='users_servi_client__3dcb30_idx'), models.Index(fields=['service_account', 'is_active'], name='users_servi_service_1c6986_idx')],
+            },
+        ),
+        migrations.CreateModel(
+            name='UserClientCertificate',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('identifier', models.CharField(max_length=255, verbose_name='Identifier')),
+                ('is_active', models.BooleanField(default=True, verbose_name='active')),
+                ('certificate', models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='user_client_certificate', to='pki.certificatemodel', verbose_name='client certificate')),
+                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='client_certificates', to=settings.AUTH_USER_MODEL, verbose_name='user')),
+            ],
+            options={
+                'verbose_name': 'user client certificate',
+                'verbose_name_plural': 'user client certificates',
+                'constraints': [models.UniqueConstraint(fields=('user', 'identifier'), name='unique_user_client_certificate_identifier')],
             },
         ),
         migrations.AddConstraint(

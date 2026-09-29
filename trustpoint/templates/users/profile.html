@@ -1,0 +1,63 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% blocktranslate with username=object.username %}User Profile: {{ username }}{% endblocktranslate %}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
+        <div class="table-responsive">
+            <table class="table align-middle tp-configuration-table">
+                <tbody>
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Details' %}</th>
+                        <td>{% trans 'First name, last name and email address.' %}</td>
+                        <td class="text-end">
+                            <a href="{% url 'users:profile_details' %}" class="btn btn-primary btn-sm">{% trans 'Configure' %}</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Roles & Organization' %}</th>
+                        <td>{% trans 'View your assigned role and organization.' %}</td>
+                        <td class="text-end">
+                            <a href="{% url 'users:profile_role' %}" class="btn btn-primary btn-sm">{% trans 'View' %}</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Change Password' %}</th>
+                        <td>{% trans 'Change your password.' %}</td>
+                        <td class="text-end">
+                            <a href="{% url 'users:profile_password' %}" class="btn btn-primary btn-sm">{% trans 'Configure' %}</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Reset Authenticator' %}</th>
+                        <td>{% trans 'Remove your current authenticator and recovery codes. You will set up your authenticator again when signing in.' %}</td>
+                        <td class="text-end">
+                            <form method="post" action="{% url 'users:profile_reset_otp' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-primary btn-sm">{% trans 'Reset' %}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% if certificate_authentication_enabled %}
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Certificate Based Authentication' %}</th>
+                        <td></td>
+                        <td class="text-end">
+                            <a href="{% url 'users:profile_certificate_authentication' %}" class="btn btn-primary btn-sm">{% trans 'Configure' %}</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex tp-sticky-footer">
+        <a href="{% url 'home:index' %}" class="btn btn-secondary m-1">{% trans 'Back' %}</a>
+    </div>
+</div>
+{% endblock %}

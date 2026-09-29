@@ -508,6 +508,9 @@ class ServiceAccountCredential(models.Model):
 class UserClientCertificate(models.Model):
     """Associate each client certificate with one user, allowing multiple certificates per user."""
 
+    identifier = models.CharField(max_length=255, verbose_name=_('Identifier'))
+    is_active = models.BooleanField(default=True, verbose_name=_('active'))
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -526,10 +529,13 @@ class UserClientCertificate(models.Model):
 
         verbose_name = _('user client certificate')
         verbose_name_plural = _('user client certificates')
+        constraints: ClassVar = [
+            models.UniqueConstraint(fields=['user', 'identifier'], name='unique_user_client_certificate_identifier'),
+        ]
 
     def __str__(self) -> str:
         """Identify the certificate and its associated user."""
-        return f'Client certificate {self.certificate_id} for user {self.user_id}'
+        return f'{self.identifier} for user {self.user_id}'
 
 
 MAX_TOKEN_LENGTH = 64

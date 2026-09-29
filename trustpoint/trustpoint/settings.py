@@ -465,6 +465,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'users.middleware.ClientCertificateAuthenticationMiddleware',
     'users.middleware.ServiceAccountMiddleware',
     'users.middleware.PasswordOTPRequiredMiddleware',
     'trustpoint.middleware.SetupWizardRedirectMiddleware',
@@ -542,8 +543,17 @@ if TRUSTPOINT_IS_OPERATIONAL:
 # https://docs.djangoproject.com/en/5.0/ref/settings/#authentication-backends
 AUTHENTICATION_BACKENDS = [
     'users.authentication.ServiceAccountBackend',  # Service account authentication
+    'users.authentication.ClientCertificateBackend',  # TLS client certificate sessions
     'django.contrib.auth.backends.ModelBackend',    # Default Django authentication
 ]
+
+# Only these direct peers may assert TLS client identity. They must overwrite the
+# SSL-Client-Cert, X-SSL-Client-Verify, and X-Forwarded-Proto request headers.
+CLIENT_CERTIFICATE_TRUSTED_PROXY_IPS = tuple(
+    address.strip()
+    for address in os.getenv('TRUSTPOINT_CLIENT_CERTIFICATE_PROXY_IPS', '127.0.0.1,::1').split(',')
+    if address.strip()
+)
 
 
 def _bootstrap_database_path() -> Path:
