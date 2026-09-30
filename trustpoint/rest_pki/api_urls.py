@@ -5,12 +5,17 @@
 
 from django.urls import path
 
-from .api_views import ApplicationCertificateEnrollView
+from .api_views import ApplicationCertificateEnrollView, CertificateRevokeView
 
 urlpatterns = [
     path(
         'rest-pki/enroll/',
         ApplicationCertificateEnrollView.as_view(),
         name='rest-pki-enroll',
+    ),
+    path(
+        'rest-pki/revoke/',
+        CertificateRevokeView.as_view(),
+        name='rest-pki-revoke',
     ),
 ]
