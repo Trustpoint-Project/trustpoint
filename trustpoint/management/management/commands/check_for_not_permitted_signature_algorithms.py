@@ -9,6 +9,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
 from management.models import NotificationModel, NotificationStatus, SecurityConfig
 from pki.models import CertificateModel
 
@@ -35,7 +36,9 @@ class Command(BaseCommand):
             return
         not_permitted_algorithms = config.not_permitted_signature_algorithm_oids
 
-        not_permitted_certificates = CertificateModel.objects.filter(signature_algorithm_oid__in=not_permitted_algorithms)
+        not_permitted_certificates = CertificateModel.objects.filter(
+            signature_algorithm_oid__in=not_permitted_algorithms
+        )
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
 
         for cert in not_permitted_certificates:
