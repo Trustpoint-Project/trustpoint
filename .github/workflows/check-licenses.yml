@@ -48,24 +48,28 @@ jobs:
           echo "Checking licenses..."
 
           # Reject GPL licenses, excluding LGPL.
-          if echo "$LICENSES" \
-            | grep -iE "GPL-[0-9]|GPLv[0-9]" \
-            | grep -v "LGPL"; then
-
-            echo "::error::Found GPL-licensed dependencies which may require review"
+          GPL_LICENSES="$(
             echo "$LICENSES" \
               | grep -iE "GPL-[0-9]|GPLv[0-9]" \
-              | grep -v "LGPL"
+              | grep -vi "LGPL" \
+              || true
+          )"
 
+          if [ -n "$GPL_LICENSES" ]; then
+            echo "::error::Found GPL-licensed dependencies which may require review"
+            echo "GPL licenses found:"
+            echo "$GPL_LICENSES"
             exit 1
           fi
 
           # qrcode is BSD-licensed, but its PyPI metadata also contains
           # the "Other/Proprietary License" classifier.
+          # It has been manually reviewed and is therefore excluded here.
           PROPRIETARY="$(
             echo "$LICENSES" \
               | grep -iE "Proprietary|Commercial" \
-              | grep -viE "^[[:space:]]*qrcode[[:space:]]"
+              | grep -viE "^[[:space:]]*qrcode[[:space:]]" \
+              || true
           )"
 
           if [ -n "$PROPRIETARY" ]; then
