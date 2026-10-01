@@ -253,6 +253,16 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
             self.logger.warning(
                 'Device %s (ID: %s) has no CMP shared secret configured', device.common_name, sender_kid)
             self._raise_cmp_error(error_message)
+
+        # Enforce optional expiry (TTL) on the CMP shared secret. Only OnboardingConfigModel
+        # carries an expiry; NoOnboardingConfigModel secrets never expire.
+        if isinstance(device_config, OnboardingConfigModel) and device_config.is_cmp_shared_secret_expired():
+            error_message = 'CMP shared secret authentication failed: Shared secret has expired.'
+            self.logger.warning(
+                'Device %s (ID: %s) presented an expired CMP shared secret (expired at %s)',
+                device.common_name, sender_kid, device_config.cmp_shared_secret_expires_at)
+            self._raise_cmp_error(error_message)
+
         return device_config
 
     def _verify_hmac_protection(self, context: CmpBaseRequestContext, shared_secret: str) -> None:

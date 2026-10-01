@@ -114,6 +114,13 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
     est_password = EncryptedCharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
     cmp_shared_secret = EncryptedCharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
+    # Optional expiry for the CMP shared secret (challenge password). When set, the
+    # shared secret is only accepted for CMP authentication before this timestamp.
+    # Null means the secret never expires (legacy behaviour).
+    cmp_shared_secret_expires_at = models.DateTimeField(
+        verbose_name=_('CMP Shared Secret Expiry'), null=True, blank=True, default=None
+    )
+
     opc_user = models.CharField(verbose_name=_('OPC User'), max_length=128, blank=True, default='')
     opc_password = EncryptedCharField(verbose_name=_('OPC Password'), max_length=128, blank=True, default='')
 
@@ -154,6 +161,18 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             f'cmp_shared_secret:{bool(self.cmp_shared_secret)}, '
             f'est_password:{bool(self.est_password)})'
         )
+
+    def is_cmp_shared_secret_expired(self) -> bool:
+        """Checks whether the CMP shared secret has expired.
+
+        Returns:
+            True if an expiry is set and the current time is past it, False otherwise
+            (including when no expiry is configured).
+        """
+        if self.cmp_shared_secret_expires_at is None:
+            return False
+        from django.utils import timezone
+        return timezone.now() >= self.cmp_shared_secret_expires_at
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Executes full_clean() before saving.
