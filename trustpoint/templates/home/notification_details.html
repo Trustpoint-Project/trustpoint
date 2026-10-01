@@ -1,5 +1,5 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n %}
+{% load i18n internationalization_tags %}
 {% load static %}
 {% load crispy_forms_filters %}
 
@@ -103,7 +103,7 @@
 
                 <div class="mb-3">
                     <strong>{% trans "Created At:" %}</strong>
-                    <span>{{ notification.created_at|date:"SHORT_DATETIME_FORMAT" }}</span>
+                    <span>{{ notification.created_at|local_datetime }}</span>
                 </div>
 
             </div>

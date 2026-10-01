@@ -5,6 +5,7 @@
 
 from .cert_profiles import CertificateIssuanceForm, CertProfileConfigForm, ProfileBasedFormFieldBuilder
 from .certificates import CertificateDownloadForm
+from .csr import CsrIssuanceForm
 from .devids import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from .issuing_cas import (
     IssuingCaAddFileImportPkcs12Form,
@@ -12,7 +13,9 @@ from .issuing_cas import (
     IssuingCaAddMethodSelectForm,
     IssuingCaAddRequestCmpForm,
     IssuingCaAddRequestEstForm,
+    IssuingCaAddRequestExternalCsrForm,
     IssuingCaCrlCycleForm,
+    IssuingCaExternalCsrCertificateForm,
     IssuingCaFileTypeSelectForm,
     IssuingCaTruststoreAssociationForm,
 )
@@ -29,6 +32,7 @@ __all__ = [
     'CertProfileConfigForm',
     'CertificateDownloadForm',
     'CertificateIssuanceForm',
+    'CsrIssuanceForm',
     'DevIdAddMethodSelectForm',
     'DevIdRegistrationForm',
     'IssuingCaAddFileImportPkcs12Form',
@@ -36,7 +40,9 @@ __all__ = [
     'IssuingCaAddMethodSelectForm',
     'IssuingCaAddRequestCmpForm',
     'IssuingCaAddRequestEstForm',
+    'IssuingCaAddRequestExternalCsrForm',
     'IssuingCaCrlCycleForm',
+    'IssuingCaExternalCsrCertificateForm',
     'IssuingCaFileTypeSelectForm',
     'IssuingCaTruststoreAssociationForm',
     'OwnerCredentialAddRequestEstNoOnboardingForm',

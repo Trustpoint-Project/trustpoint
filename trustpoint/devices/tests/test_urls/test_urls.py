@@ -18,6 +18,16 @@ from devices import views
         ('devices:devices_create_onboarding', {}, views.DeviceCreateOnboardingView),
         # Certificate Lifecycle Management
         ('devices:devices_certificate_lifecycle_management', {'pk': 1}, views.DeviceCertificateLifecycleManagementSummaryView),
+        (
+            'devices:devices_certificate_lifecycle_management_choose_issuance_method',
+            {'pk': 1, 'profile_id': 1},
+            views.DeviceChooseIssuanceMethodView,
+        ),
+        (
+            'devices:devices_certificate_lifecycle_management_issue_csr_credential',
+            {'pk': 1, 'profile_id': 1},
+            views.DeviceIssueCsrCredentialView,
+        ),
         # OPC UA GDS
         ('devices:opc_ua_gds', {}, views.OpcUaGdsTableView),
         # ('devices:opc_ua_gds-add', {}, views.CreateOpcUaGdsView),

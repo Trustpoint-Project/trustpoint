@@ -62,7 +62,7 @@ class Command(BaseCommand):
             except CommandError:
                 self.stdout.write(self.style.ERROR(f'CommandError while running {command}'))
                 failed_commands.append(command)
-            except Exception:
+            except Exception:  # noqa: BLE001  # one failing check must not stop the rest
                 self.stdout.write(self.style.ERROR(f'Unexpected error while running {command}'))
                 failed_commands.append(command)
 

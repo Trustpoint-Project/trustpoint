@@ -129,6 +129,21 @@ class UserCreateViewTest(TestCase):
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('newuser' in str(m) for m in messages))
 
+    def test_create_user_can_require_password_change_on_next_login(self) -> None:
+        """The creation form persists the next-login password requirement."""
+        plain_group = _create_plain_group()
+        response = self.client.post(self.url, {
+            'username': 'forced-change-user',
+            'password1': 'StrongPass123!',
+            'password2': 'StrongPass123!',
+            'role': plain_group.pk,
+            'must_change_password': 'on',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        created = User.objects.get(username='forced-change-user')
+        self.assertTrue(created.must_change_password)
+
     def test_create_user_duplicate_username(self) -> None:
         """Duplicate username re-renders the form without creating a second user."""
         plain_group = _create_plain_group()

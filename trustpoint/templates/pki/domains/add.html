@@ -3,30 +3,46 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Add New Domain' %}
+        </h1>
 
-    <form method="POST" autocomplete="off">
-        {% csrf_token %}
+        <p class="mb-0 text-muted">
+            {% trans 'Create a new domain and define its initial configuration in Trustpoint.' %}
+        </p>
+    </div>
 
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Add new Domain' %}</h1>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    <h2>{% trans 'New Domain' %}</h2>
-                    <hr class="hr-m">
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="add-domain-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
 
-                    {{ form|crispy }}
-                </div>
-            </div>
-            <div class="card-footer d-flex justify-content-between align-items-center tp-sticky-footer">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'pki:domains' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                    <button type="submit" class="btn btn-primary">{% trans 'Add new Domain' %}</button>
-                </div>
-            </div>
+                {{ form|crispy }}
+            </form>
         </div>
-    </form>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'pki:domains' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <button
+            type="submit"
+            form="add-domain-form"
+            class="btn btn-primary"
+        >
+            {% trans 'Create Domain' %}
+        </button>
+    </div>
+</div>
 {% endblock content %}

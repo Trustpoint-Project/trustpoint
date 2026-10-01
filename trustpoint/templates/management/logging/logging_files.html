@@ -1,75 +1,232 @@
+```django id="x7g2qa"
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load static %}
 {% load internationalization_tags %}
 
 {% block content %}
-    <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-        <div class="card-header">
-            <h1>{% trans 'Logging' %}</h1>
-        </div>
-        <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
-            <div>
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th id="checkbox-column"><input type="checkbox"/></th>
-                    <th>
-                      <a href="?sort={% if current_sort == 'filename' %}-{% endif %}filename">
-                        {% trans 'Log file' %}
-                      </a>
-                    </th>
-                    <th>
-                      <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                        {% trans 'First log entry' %}
-                      </a>
-                    </th>
-                    <th>
-                      <a href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at">
-                        {% trans 'Last log entry' %}
-                      </a>
-                    </th>
-                    <th>{% trans 'View' %}</th>
-                    <th>{% trans 'Download' %}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for logfile in log_files %}
-                  <tr>
-                    <td class="row_checkbox">
-                      <input type="checkbox" name="row_checkbox" value="{{ logfile.filename }}" />
-                    </td>
-                    <td><a href="{% url 'management:logging-files-details' filename=logfile.filename %}">{{ logfile.filename }}</a></td>
-                    <td>{{ logfile.created_at|local_datetime }}</td>
-                    <td>{{ logfile.updated_at|local_datetime }}</td>
-                    <td><a href="{% url 'management:logging-files-details' filename=logfile.filename %}"
-                        class="btn btn-primary tp-table-btn">{% trans 'View' %}</a>
-                    </td>
-                    <td><a href="{% url 'management:logging-files-download' filename=logfile.filename %}"
-                        class="btn btn-primary tp-table-btn">{% trans 'Download' %}</a>
-                    </td>
-                  </tr>
-                  {% empty %}
-                  <tr>
-                    <td colspan="6">{% trans 'No log files available.' %}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-        
-              {% include 'trustpoint/pagination.html' %}
-            </div>
-        </div>
-        <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-            <div class="tp-card-btn-footer m-1">
-                <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download/tar.gz">
-                    {% trans "Download selected (tar.gz)" %}
-                </button>
-                <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download/zip">
-                    {% trans "Download selected (zip)" %}
-                </button>
-            </div>
-        </div>
+<div class="card">
+
+    {# ============================================================ #}
+    {# Header                                                      #}
+    {# ============================================================ #}
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Logging' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Review, download and manage Trustpoint log files.' %}
+        </p>
     </div>
-    
+
+
+    {# ============================================================ #}
+    {# Content                                                     #}
+    {# ============================================================ #}
+    <div class="card-body text-start">
+
+        <section>
+
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Log Files' %}
+                </h2>
+
+                <p class="text-muted mb-0">
+                    {% trans 'Select individual log files to view or download, or select multiple files for bulk download.' %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+
+                    <thead>
+                        <tr>
+
+                            <th
+                                id="checkbox-column"
+                                class="text-center"
+                                style="width: 48px;"
+                            >
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all log files' %}"
+                                >
+                            </th>
+
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'filename' %}-{% endif %}filename"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'Log File' %}
+
+                                    {% if current_sort == 'filename' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-filename' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'First Log Entry' %}
+
+                                    {% if current_sort == 'created_at' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-created_at' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+                            <th>
+                                <a
+                                    href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at"
+                                    class="text-decoration-none"
+                                >
+                                    {% trans 'Last Log Entry' %}
+
+                                    {% if current_sort == 'updated_at' %}
+                                        <span class="ms-1">↑</span>
+                                    {% elif current_sort == '-updated_at' %}
+                                        <span class="ms-1">↓</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
+                            <th class="text-end">
+                                {% trans 'Actions' %}
+                            </th>
+
+                        </tr>
+                    </thead>
+
+
+                    <tbody>
+                        {% for logfile in log_files %}
+
+                            <tr>
+
+                                <td class="row_checkbox text-center">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ logfile.filename }}"
+                                        aria-label="{% blocktrans with filename=logfile.filename %}Select {{ filename }}{% endblocktrans %}"
+                                    >
+                                </td>
+
+                                <td>
+                                    <a
+                                        href="{% url 'management:logging-files-details' filename=logfile.filename %}"
+                                        class="text-decoration-none fw-semibold"
+                                    >
+                                        {{ logfile.filename }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {{ logfile.created_at|local_datetime }}
+                                </td>
+
+                                <td>
+                                    {{ logfile.updated_at|local_datetime }}
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="d-flex justify-content-end gap-2">
+
+                                        <a
+                                            href="{% url 'management:logging-files-details' filename=logfile.filename %}"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            {% trans 'View' %}
+                                        </a>
+
+                                        <a
+                                            href="{% url 'management:logging-files-download' filename=logfile.filename %}"
+                                            class="btn btn-sm btn-outline-secondary"
+                                        >
+                                            {% trans 'Download' %}
+                                        </a>
+
+                                    </div>
+                                </td>
+
+                            </tr>
+
+                        {% empty %}
+
+                            <tr>
+                                <td
+                                    colspan="5"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans 'No log files available.' %}
+                                </td>
+                            </tr>
+
+                        {% endfor %}
+                    </tbody>
+
+                </table>
+            </div>
+
+
+            {# ==================================================== #}
+            {# Pagination                                          #}
+            {# ==================================================== #}
+            <div class="mt-3">
+                {% include 'trustpoint/pagination.html' %}
+            </div>
+
+        </section>
+
+    </div>
+
+
+    {# ============================================================ #}
+    {# Footer                                                      #}
+    {# ============================================================ #}
+    <div class="card-footer d-flex justify-content-between align-items-center tp-sticky-footer">
+
+        <div class="text-muted small">
+            {% trans 'Select one or more log files to enable bulk download.' %}
+        </div>
+
+        <div class="d-flex gap-2">
+
+            <button
+                type="button"
+                class="btn btn-outline-primary tp-table-select-btn"
+                data-tp-url="download/tar.gz"
+            >
+                {% trans 'Download Selected (.tar.gz)' %}
+            </button>
+
+            <button
+                type="button"
+                class="btn btn-primary tp-table-select-btn"
+                data-tp-url="download/zip"
+            >
+                {% trans 'Download Selected (.zip)' %}
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
 {% endblock %}
+```

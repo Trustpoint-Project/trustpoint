@@ -1,0 +1,52 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div><h1>{% trans 'Select CA Rollover Method' %}</h1></div>
+    </div>
+    <div class="card-body">
+        <div class="row justify-content-center">
+            <div class="col-md-5 d-flex align-items-stretch">
+                <div class="card w-100 mb-3">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title"><strong>{% trans 'Import New Issuing CA From File' %}</strong></h5>
+                        <hr>
+                        <p class="card-text flex-grow-1">
+                            {% trans 'Import an existing CA private key and certificate from a PKCS#12 file or separate files.' %}
+                        </p>
+                        <form method="post" class="mt-auto">
+                            {% csrf_token %}
+                            <button class="btn btn-primary w-100" name="method" value="import" type="submit">
+                                {% trans 'Import CA Credential' %}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-5 d-flex align-items-stretch">
+                <div class="card w-100 mb-3">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title"><strong>{% trans 'Generate a Keypair and Request an Issuing CA Certificate' %}</strong></h5>
+                        <hr>
+                        <p class="card-text flex-grow-1">
+                            {% trans 'Generate a new CA keypair through the configured crypto backend and request its certificate using EST or CMP.' %}
+                        </p>
+                        <form method="post" class="mt-auto">
+                            {% csrf_token %}
+                            <button class="btn btn-primary w-100" name="method" value="generate" type="submit">
+                                {% trans 'Generate and Request Certificate' %}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="tp-card-btn-footer m-1">
+        <a href="{% url 'pki:issuing_cas-config' pk=issuing_ca.pk %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+        </div>
+    </div>
+</div>
+{% endblock content %}

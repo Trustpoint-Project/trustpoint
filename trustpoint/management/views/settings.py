@@ -17,7 +17,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.utils import timezone, translation
+from django.utils import timezone
 from django.utils.timezone import now
 from django.utils.translation import gettext as _
 from django.views import View
@@ -25,24 +25,22 @@ from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
 
 from management.forms import (
-    InternationalizationConfigForm,
+    AccountSecurityConfigForm,
     LoggingConfigForm,
     NotificationConfigForm,
     PrometheusConfigForm,
     SecurityConfigForm,
     SmtpEmailConfigForm,
     SmtpEmailTestForm,
-    UIConfigForm,
     WorkflowExecutionConfigForm,
 )
 from management.models import (
-    InternationalizationConfig,
+    AccountSecurityConfig,
     LoggingConfig,
     NotificationConfig,
     PrometheusConfig,
     SecurityConfig,
     SmtpEmailConfig,
-    UIConfig,
 )
 from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -321,12 +319,10 @@ def build_smtp_email_context(
 
 
 class SettingsFormViewMixin[FormType: (
-    InternationalizationConfigForm
-    | LoggingConfigForm
+    LoggingConfigForm
     | NotificationConfigForm
     | PrometheusConfigForm
     | SecurityConfigForm
-    | UIConfigForm
 )](
     PageContextMixin,
     SecurityLevelMixin,
@@ -381,23 +377,18 @@ class SettingsTabView(TemplateView):
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'management'
         context['page_name'] = 'settings'
-        context['active_tab'] = kwargs.get('active_tab', self.request.GET.get('tab', 'internationalization'))
-
-        internationalization_view = InternationalizationSettingsView()
-        internationalization_view.request = self.request
-        internationalization_view.setup(self.request)
-        context['internationalization_form'] = self._get_unbound_settings_form(internationalization_view)
-
-        ui_view = UISettingsView()
-        ui_view.request = self.request
-        ui_view.setup(self.request)
-        context['ui_form'] = ui_view.get_form()
+        context['active_tab'] = kwargs.get('active_tab', self.request.GET.get('tab', 'ui'))
 
         security_view = SecuritySettingsView()
         security_view.request = self.request
         security_view.setup(self.request)
         context['security_form'] = self._get_unbound_settings_form(security_view)
         context['notification_configurations_json'] = SecurityConfig.get_settings_preview_json()
+
+        account_security_view = AccountSecuritySettingsView()
+        account_security_view.request = self.request
+        account_security_view.setup(self.request)
+        context['account_security_form'] = self._get_unbound_settings_form(account_security_view)
 
         logging_view = LoggingSettingsView()
         logging_view.request = self.request
@@ -441,6 +432,11 @@ class SettingsTabView(TemplateView):
         """Handle inline settings updates from the settings tab page."""
         form_name = request.POST.get('form_name')
 
+        if form_name == 'account_security':
+            if not request.user.has_perm(AppPermissions.MANAGE_SECURITY_CONFIGURATION):
+                raise PermissionDenied
+            return self._post_account_security(request)
+
         if not request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
             raise PermissionDenied
 
@@ -454,6 +450,21 @@ class SettingsTabView(TemplateView):
             return redirect(reverse_lazy('management:settings'))
 
         return self._post_workflow_execution(request)
+
+    def _post_account_security(self, request: HttpRequest) -> HttpResponse:
+        """Handle Account Security settings updates."""
+        form = AccountSecurityConfigForm(request.POST, instance=AccountSecurityConfig.get())
+        if form.is_valid():
+            form.save()
+            messages.success(request, _('Account security settings saved.'))
+            return redirect(f"{reverse_lazy('management:settings')}?tab=account-security")
+
+        messages.error(request, _('Please correct the account security settings errors.'))
+        context = self.get_context_data(
+            account_security_form=form,
+            active_tab='account-security',
+        )
+        return self.render_to_response(context)
 
     def _post_smtp_email(self, request: HttpRequest) -> HttpResponse:
         """Handle SMTP settings updates."""
@@ -555,115 +566,6 @@ class SettingsTabView(TemplateView):
             active_tab='workflow',
         )
         return self.render_to_response(context)
-
-
-class InternationalizationSettingsView(SettingsFormViewMixin[InternationalizationConfigForm]):
-    """View for managing internationalization settings."""
-
-    template_name = 'management/includes/internationalization_configuration.html'
-    form_class = InternationalizationConfigForm
-    setting_type = 'internationalization'
-
-    def get_initial(self) -> dict[str, Any]:
-        """Get initial form data with current internationalization settings."""
-        initial = super().get_initial()
-        current_language = translation.get_language() or InternationalizationConfig.LanguageChoices.EN
-        supported_languages = {choice.value for choice in InternationalizationConfig.LanguageChoices}
-        normalized_language = current_language.split('-', 1)[0].lower()
-        if normalized_language not in supported_languages:
-            normalized_language = InternationalizationConfig.LanguageChoices.EN
-
-        config, _ = InternationalizationConfig.objects.get_or_create(
-            id=1,
-            defaults={
-                'date_format': InternationalizationConfig.DateFormatChoices.YYYY_MM_DD_24_SEC,
-                'language': normalized_language,
-                'timezone': 'UTC',
-            },
-        )
-
-        initial['date_format'] = config.date_format
-        initial['language'] = config.language
-        initial['timezone'] = config.timezone
-        return initial
-
-    def form_valid(self, form: InternationalizationConfigForm) -> HttpResponse:
-        """Handle valid internationalization form submission."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
-            raise PermissionDenied
-
-        date_format = form.cleaned_data['date_format']
-        language = form.cleaned_data['language']
-        timezone = form.cleaned_data['timezone']
-
-        self.logger.info(
-            'Changing internationalization settings to: date_format=%s, language=%s, timezone=%s',
-            date_format,
-            language,
-            timezone,
-        )
-
-        InternationalizationConfig.objects.update_or_create(
-            id=1,
-            defaults={
-                'date_format': date_format,
-                'language': language,
-                'timezone': timezone,
-            },
-        )
-
-        translation.activate(language)
-
-        response = redirect(self.get_success_url())
-        response.set_cookie(
-            key='django_language',
-            value=language,
-            max_age=365 * 24 * 60 * 60,
-            path='/',
-            samesite='Lax',
-        )
-
-        messages.success(self.request, _('Internationalization configuration saved successfully.'))
-        return response
-
-
-class UISettingsView(SettingsFormViewMixin[UIConfigForm]):
-    """View for managing UI settings."""
-
-    template_name = 'management/includes/ui_configuration.html'
-    form_class = UIConfigForm
-    setting_type = 'ui'
-
-    def get_initial(self) -> dict[str, Any]:
-        """Get initial form data with current UI settings."""
-        initial = super().get_initial()
-        config = UIConfig.get_current()
-        initial['view_mode'] = config.view_mode
-        return initial
-
-    def form_valid(self, form: UIConfigForm) -> HttpResponse:
-        """Handle valid UI form submission."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
-            raise PermissionDenied
-
-        view_mode = form.cleaned_data['view_mode']
-
-        self.logger.info('Changing view mode to: %s', view_mode)
-
-        UIConfig.objects.update_or_create(
-            id=1,
-            defaults={
-                'view_mode': view_mode,
-            },
-        )
-
-        messages.success(
-            self.request,
-            _('UI configuration saved successfully. Redirecting to apply changes...')
-        )
-        # Redirect to home to immediately show the new view mode
-        return redirect('home:index')
-
 
 
 class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
@@ -874,6 +776,27 @@ class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
         self.logger.error('Notification form non-field errors: %s', form.non_field_errors())
         messages.error(self.request, _('Error saving notification configuration'))
         return super().form_invalid(form)
+
+
+class AccountSecuritySettingsView(UserPermissionRequiredMixin, FormView[AccountSecurityConfigForm]):
+    """Manage the global account-security policy."""
+
+    template_name = 'management/account_security_settings.html'
+    form_class = AccountSecurityConfigForm
+    permission_required = AppPermissions.MANAGE_SECURITY_CONFIGURATION
+    success_url = reverse_lazy('management:settings-account-security')
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Bind the form to the singleton configuration."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = AccountSecurityConfig.get()
+        return kwargs
+
+    def form_valid(self, form: AccountSecurityConfigForm) -> HttpResponse:
+        """Persist a validated policy."""
+        form.save()
+        messages.success(self.request, _('Account security settings saved.'))
+        return super().form_valid(form)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build the context dictionary for the notification settings page."""

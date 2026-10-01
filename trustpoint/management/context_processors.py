@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from management.models import NotificationModel, NotificationStatus, UIConfig
+from management.models import NotificationModel, NotificationStatus
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -40,10 +40,7 @@ def ui_config(request: HttpRequest) -> dict[str, Any]:
     if not hasattr(request, 'user') or not request.user.is_authenticated:
         return {}
 
-    config = UIConfig.get_current()
-
     return {
-        'ui_config': config,
-        'is_simplified_mode': config.is_simplified_mode,
+        'is_simplified_mode': request.user.view_mode == 'simplified',
     }
 

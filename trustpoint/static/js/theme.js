@@ -24,7 +24,14 @@
     }
 
     function initTheme() {
-        // set theme defined in localStorage if there is one, or fallback to auto mode
+        // Authenticated users get the server-persisted preference on every page load.
+        const serverTheme = document.documentElement.dataset.userTheme;
+        if (serverTheme === "light" || serverTheme === "dark") {
+            setTheme(serverTheme);
+            return;
+        }
+
+        // Anonymous pages use the browser preference when no local choice exists.
         const currentTheme = localStorage.getItem("theme");
         currentTheme ? setTheme(currentTheme) : setTheme("auto");
     }
@@ -35,11 +42,17 @@
         Array.from(buttons).forEach((btn) => {
             btn.addEventListener("click", cycleTheme);
         });
+
+        const selectors = document.querySelectorAll("[data-theme-selector]");
+        selectors.forEach((selector) => {
+            selector.addEventListener("change", (event) => {
+                setTheme(event.target.value);
+            });
+        });
     }
 
-    window.addEventListener('load', function(e) {
+    window.addEventListener('DOMContentLoaded', function() {
+        initTheme();
         setupTheme();
     });
-
-    initTheme();
 }

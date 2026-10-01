@@ -6,11 +6,12 @@
 
 {% block head %}
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
+
     <script>
         function updateRevocationCommand() {
             const selectedReason = document.getElementById('revreason-select');
             const credNumberInput = document.getElementById('cred-number-input');
-            
+
             // Update reason code section visibility
             if (selectedReason) {
                 const reasonValue = selectedReason.value;
@@ -25,24 +26,37 @@
                     targetSection.hidden = false;
                 }
             }
-            
+
             // Update credential number in commands and display text
             if (credNumberInput) {
                 const credNumber = credNumberInput.value || '1';
-                
+
                 // Update display spans
                 document.querySelectorAll('[id^="cred-display-"]').forEach(span => {
                     span.textContent = credNumber;
                 });
-                
+
                 document.querySelectorAll('[id^="rr-"]').forEach(section => {
                     const codeBlock = section.querySelector('code');
+
                     if (codeBlock) {
                         let commandText = codeBlock.textContent;
-                        // Replace certificate-X.pem, key-X.pem, full-chain-X.pem patterns
-                        commandText = commandText.replace(/certificate-\d+\.pem/g, 'certificate-' + credNumber + '.pem');
-                        commandText = commandText.replace(/key-\d+\.pem/g, 'key-' + credNumber + '.pem');
-                        commandText = commandText.replace(/full-chain-\d+\.pem/g, 'full-chain-' + credNumber + '.pem');
+
+                        commandText = commandText.replace(
+                            /certificate-\d+\.pem/g,
+                            'certificate-' + credNumber + '.pem'
+                        );
+
+                        commandText = commandText.replace(
+                            /key-\d+\.pem/g,
+                            'key-' + credNumber + '.pem'
+                        );
+
+                        commandText = commandText.replace(
+                            /full-chain-\d+\.pem/g,
+                            'full-chain-' + credNumber + '.pem'
+                        );
+
                         codeBlock.textContent = commandText;
                     }
                 });
@@ -51,108 +65,180 @@
     </script>
 {% endblock head %}
 
-{% block content %}
 
-    <div class="card">
-        <div class="card-header">
-            <div>
-                <h1>{{ help_page.heading }}</h1>
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {{ help_page.heading }}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Follow the instructions below to complete this workflow.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+
+        {# ======================================================== #}
+        {# Command Configuration                                    #}
+        {# ======================================================== #}
+        <section class="mb-5">
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Configuration' %}
+                </h2>
+
+                <p class="mb-0 text-muted">
+                    {% trans 'Adjust the parameters used to generate the commands shown below.' %}
+                </p>
             </div>
-        </div>
-        <div class="card-body">
-            <form method="get" class="row g-2 align-items-end mb-2">
-              <div class="col-auto ms-1">
-                <label for="{{ form.host_ip.id_for_label }}" class="form-label">
-                  {% trans form.host_ip.label_tag %}
-                </label>
-              </div>
-              <div class="col-auto ms-1">
-                {{ form.host_ip }}
-              </div>
+
+            <hr class="mb-4">
+
+            <form method="get" class="row g-3 align-items-end mb-3">
+                <div class="col-auto">
+                    <label
+                        for="{{ form.host_ip.id_for_label }}"
+                        class="form-label"
+                    >
+                        {% trans form.host_ip.label_tag %}
+                    </label>
+
+                    {{ form.host_ip }}
+                </div>
             </form>
 
-            <div class="form-check mb-2 ms-1">
-              <input class="form-check-input" type="checkbox" id="showWindowsCommands">
-              <label class="form-check-label" for="showWindowsCommands">
-                {% trans 'Show Windows-specific commands' %}
-              </label>
+            <div class="form-check">
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="showWindowsCommands"
+                >
+
+                <label
+                    class="form-check-label"
+                    for="showWindowsCommands"
+                >
+                    {% trans 'Show Windows-specific commands' %}
+                </label>
             </div>
+        </section>
 
-            <hr>
-            {% for section in help_page.sections %}
-                <div{% if section.css_id %} id="{{ section.css_id }}"{% endif %}{% if section.css_class %} class="{{ section.css_class }}"{% endif %}{% if section.hidden %} hidden{% endif %}>
-                    <h2>{{ section.heading }}</h2>
-                    <hr>
-            
-                    <ul class="tp-kvp-list">
-                        {% for row in section.rows %}
-                            <li{% if row.css_id %} id="{{ row.css_id }}"{% endif %}{% if row.css_class %} class="{{ row.css_class }}"{% endif %}{% if row.hidden %} hidden{% endif %}>
-                                <div class="row-key-container">{{ row.key }}</div>
-                                {% if row.value_render_type.value == ValueRenderType_CODE %}
-                                    <div class="copy-container" style="position: relative;">
 
-                                            <code class="command-text language-bash" style="padding: 0;">
-                                                {{ row.value|linebreaksbr }}
-                                            </code>
-                            
-                                            <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
-                                                aria-label="Copy to clipboard">
-                                                <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
-                                                    <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
-                                                </svg>
-                                            </button>
-                                    </div>
-                                {% elif row.value_render_type.value == ValueRenderType_HTML %}
-                                    <div class="no-copy-container" style="position:relative;">
-                                        {{ row.value|replace_csrf:request }}
-                                    </div>
-                                {% elif row.value_render_type.value == ValueRenderType_PLAIN %}
-                                    <div class="no-copy-container" style="position:relative;">
-                                        {{ row.value|linebreaksbr }}
-                                    </div>
-                                
-                                {% endif %}
-                            </li>
-                        {% endfor %}
-                    </ul>
+        {# ======================================================== #}
+        {# Help Sections                                            #}
+        {# ======================================================== #}
+        {% for section in help_page.sections %}
+            <section
+                {% if not forloop.last %}class="mb-5{% if section.css_class %} {{ section.css_class }}{% endif %}"{% elif section.css_class %}class="{{ section.css_class }}"{% endif %}
+                {% if section.css_id %}id="{{ section.css_id }}"{% endif %}
+                {% if section.hidden %}hidden{% endif %}
+            >
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {{ section.heading }}
+                    </h2>
                 </div>
-            {% endfor %}
-        </div>
-        <div class="card-footer">
-            <div class="tp-card-btn-footer">
-                {% if clm_url %}
-                    <a href="{% url clm_url pk=device.pk %}" class="btn btn-primary">
-                        {% trans 'Back to Certificate Lifecycle Management Summary' %}
-                    </a>
-                {% elif back_url %}
-                    <a href="{% url back_url pk=idevid_registration.domain.pk %}" class="btn btn-primary">
-                        {% if back_button_text %}
-                            {{ back_button_text }}
-                        {% else %}
-                            {% trans 'Back to Domain Configuration' %}
-                        {% endif %}
-                    </a>
-                {% endif %}
-            </div>
-        </div>
+
+                <hr class="mb-4">
+
+                <ul class="tp-kvp-list mb-0">
+                    {% for row in section.rows %}
+                        <li
+                            {% if row.css_id %}id="{{ row.css_id }}"{% endif %}
+                            {% if row.css_class %}class="{{ row.css_class }}"{% endif %}
+                            {% if row.hidden %}hidden{% endif %}
+                        >
+                            <div class="row-key-container">
+                                {{ row.key }}
+                            </div>
+
+                            {% if row.value_render_type.value == ValueRenderType_CODE %}
+                                <div class="copy-container position-relative">
+                                    <code class="command-text language-bash p-0">
+                                        {{ row.value|linebreaksbr }}
+                                    </code>
+
+                                    <button
+                                        type="button"
+                                        class="copy-button"
+                                        data-tooltip="{% trans 'Copy to clipboard' %}"
+                                        aria-label="{% trans 'Copy to clipboard' %}"
+                                    >
+                                        <svg
+                                            class="icon icon-copy"
+                                            width="40"
+                                            height="40"
+                                            fill="currentColor"
+                                            aria-hidden="true"
+                                        >
+                                            <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                                        </svg>
+                                    </button>
+                                </div>
+
+                            {% elif row.value_render_type.value == ValueRenderType_HTML %}
+                                <div class="no-copy-container position-relative">
+                                    {{ row.value|replace_csrf:request }}
+                                </div>
+
+                            {% elif row.value_render_type.value == ValueRenderType_PLAIN %}
+                                <div class="no-copy-container position-relative">
+                                    {{ row.value|linebreaksbr }}
+                                </div>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endfor %}
+
     </div>
-    <script>
-      document.addEventListener('DOMContentLoaded', function () {
+
+    <div class="card-footer">
+        {% if clm_url %}
+            <a
+                href="{% url clm_url pk=device.pk %}"
+                class="btn btn-secondary"
+            >
+                {% trans 'Back to Certificate Lifecycle Management' %}
+            </a>
+
+        {% elif back_url %}
+            <a
+                href="{% url back_url pk=back_url_pk %}"
+                class="btn btn-secondary"
+            >
+                {% if back_button_text %}
+                    {{ back_button_text }}
+                {% else %}
+                    {% trans 'Back to Domain Configuration' %}
+                {% endif %}
+            </a>
+        {% endif %}
+    </div>
+</div>
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
         var windowsCheckbox = document.getElementById('showWindowsCommands');
+
         if (!windowsCheckbox) {
-          return;
+            return;
         }
 
         function updateVisibility() {
-          var windowsElems = document.querySelectorAll('.platform-windows');
-          windowsElems.forEach(function (el) {
-            el.style.display = windowsCheckbox.checked ? '' : 'none';
-          });
+            var windowsElems = document.querySelectorAll('.platform-windows');
+
+            windowsElems.forEach(function (el) {
+                el.style.display = windowsCheckbox.checked ? '' : 'none';
+            });
         }
 
         windowsCheckbox.addEventListener('change', updateVisibility);
         updateVisibility();
-      });
-    </script>
-
+    });
+</script>
 {% endblock content %}

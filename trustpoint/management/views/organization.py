@@ -52,7 +52,7 @@ class OrganizationCreateView(
 
     model = OrganizationModel
     form_class = OrganizationForm
-    template_name = 'management/organization/organization_add.html'
+    template_name = 'management/organization/organization_form.html'
     success_url = reverse_lazy('management:organization')
 
     def form_valid(self, form: BaseModelForm[OrganizationModel]) -> HttpResponse:
@@ -89,7 +89,7 @@ class OrganizationEditView(
 
     model = OrganizationModel
     form_class = OrganizationForm
-    template_name = 'management/organization/organization_edit.html'
+    template_name = 'management/organization/organization_form.html'
     success_url = reverse_lazy('management:organization')
 
     def form_valid(self, form: BaseModelForm[OrganizationModel]) -> HttpResponse:

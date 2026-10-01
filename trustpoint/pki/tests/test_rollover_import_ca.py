@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
 
 import pytest
@@ -14,18 +14,19 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import NoEncryption, pkcs12
 from django import forms
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from crypto.domain.errors import ProviderConfigurationError
 from management.models.security import SecurityConfig
-from pki.models import CaModel
+from pki.models import CaModel, DomainModel
 from pki.models.ca_rollover import CaRolloverStrategyType
 from pki.rollover.import_ca import ImportCaRolloverForm, ImportCaRolloverStrategy
 from pki.rollover.registry import rollover_registry
 
 
 @pytest.fixture(autouse=True)
-def allow_imported_keys():
+def allow_imported_keys() -> SecurityConfig:
     """Ensure imported private keys are allowed for these tests."""
     security_config, _created = SecurityConfig.objects.get_or_create(
         id=1,
@@ -37,7 +38,7 @@ def allow_imported_keys():
 
 
 @pytest.fixture
-def sample_ca_pkcs12():
+def sample_ca_pkcs12() -> dict[str, object]:
     """Create a sample CA PKCS#12 file for testing."""
     # Generate RSA key
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -55,8 +56,8 @@ def sample_ca_pkcs12():
         .issuer_name(issuer)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(dt_timezone.utc))
-        .not_valid_after(datetime.now(dt_timezone.utc) + timedelta(days=3650))
+        .not_valid_before(datetime.now(UTC))
+        .not_valid_after(datetime.now(UTC) + timedelta(days=3650))
         .add_extension(
             x509.BasicConstraints(ca=True, path_length=None),
             critical=True,
@@ -97,7 +98,7 @@ def sample_ca_pkcs12():
 
 
 @pytest.fixture
-def sample_ec_ca_pkcs12():
+def sample_ec_ca_pkcs12() -> dict[str, object]:
     """Create a sample EC CA PKCS#12 file for testing."""
     # Generate EC key
     private_key = ec.generate_private_key(ec.SECP256R1())
@@ -114,8 +115,8 @@ def sample_ec_ca_pkcs12():
         .issuer_name(issuer)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(dt_timezone.utc))
-        .not_valid_after(datetime.now(dt_timezone.utc) + timedelta(days=3650))
+        .not_valid_before(datetime.now(UTC))
+        .not_valid_after(datetime.now(UTC) + timedelta(days=3650))
         .add_extension(
             x509.BasicConstraints(ca=True, path_length=None),
             critical=True,
@@ -154,7 +155,7 @@ def sample_ec_ca_pkcs12():
 
 
 @pytest.fixture
-def sample_non_ca_pkcs12():
+def sample_non_ca_pkcs12() -> dict[str, object]:
     """Create a sample non-CA PKCS#12 file for testing."""
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -168,8 +169,8 @@ def sample_non_ca_pkcs12():
         .issuer_name(issuer)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(dt_timezone.utc))
-        .not_valid_after(datetime.now(dt_timezone.utc) + timedelta(days=365))
+        .not_valid_before(datetime.now(UTC))
+        .not_valid_after(datetime.now(UTC) + timedelta(days=365))
         .add_extension(
             x509.BasicConstraints(ca=False, path_length=None),
             critical=True,
@@ -192,10 +193,32 @@ def sample_non_ca_pkcs12():
     }
 
 
+def test_ca_model_validate_ca_certificate_requires_key_usage() -> None:
+    """CA validation should reject certificates that are CA-signed but missing required key usage."""
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([
+        x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'Missing KeyUsage CA'),
+    ])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.now(UTC))
+        .not_valid_after(datetime.now(UTC) + timedelta(days=365))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(private_key, hashes.SHA256())
+    )
+
+    with pytest.raises(ValidationError, match='KeyUsage'):
+        CaModel._validate_ca_certificate(cert)  # noqa: SLF001
+
+
 class TestImportCaRolloverForm:
     """Test cases for ImportCaRolloverForm."""
 
-    def test_form_has_required_fields(self):
+    def test_form_has_required_fields(self) -> None:
         """Test that the form has all required fields."""
         form = ImportCaRolloverForm()
         assert 'unique_name' in form.fields
@@ -204,7 +227,7 @@ class TestImportCaRolloverForm:
         assert 'transition_scheduled_at' in form.fields
         assert 'notes' in form.fields
 
-    def test_form_field_requirements(self):
+    def test_form_field_requirements(self) -> None:
         """Test that field requirements are correct."""
         form = ImportCaRolloverForm()
         assert form.fields['pkcs12_file'].required is True
@@ -213,13 +236,13 @@ class TestImportCaRolloverForm:
         assert form.fields['transition_scheduled_at'].required is False
         assert form.fields['notes'].required is False
 
-    def test_clean_missing_pkcs12_file(self):
+    def test_clean_missing_pkcs12_file(self) -> None:
         """Test validation fails when PKCS#12 file is missing."""
         form = ImportCaRolloverForm(data={})
         assert not form.is_valid()
         assert 'pkcs12_file' in form.errors
 
-    def test_clean_with_valid_ca_certificate(self, sample_ca_pkcs12):
+    def test_clean_with_valid_ca_certificate(self, sample_ca_pkcs12: dict[str, object]) -> None:
         """Test form validation with valid CA certificate."""
         pkcs12_file = SimpleUploadedFile(
             'test_ca.p12',
@@ -237,7 +260,7 @@ class TestImportCaRolloverForm:
         assert form.new_issuing_ca is not None
         assert isinstance(form.new_issuing_ca, CaModel)
 
-    def test_clean_with_ec_ca_certificate(self, sample_ec_ca_pkcs12):
+    def test_clean_with_ec_ca_certificate(self, sample_ec_ca_pkcs12: dict[str, object]) -> None:
         """Test form validation with EC CA certificate."""
         pkcs12_file = SimpleUploadedFile(
             'test_ec_ca.p12',
@@ -253,7 +276,7 @@ class TestImportCaRolloverForm:
         assert form.is_valid()
         assert hasattr(form, '_new_issuing_ca')
 
-    def test_clean_without_unique_name(self, sample_ca_pkcs12):
+    def test_clean_without_unique_name(self, sample_ca_pkcs12: dict[str, object]) -> None:
         """Test form generates unique name when not provided."""
         pkcs12_file = SimpleUploadedFile(
             'test_ca.p12',
@@ -270,7 +293,7 @@ class TestImportCaRolloverForm:
         assert form.new_issuing_ca.unique_name is not None
         assert 'Test Rollover CA' in form.new_issuing_ca.unique_name
 
-    def test_clean_invalid_pkcs12_file(self):
+    def test_clean_invalid_pkcs12_file(self) -> None:
         """Test validation fails with invalid PKCS#12 file."""
         pkcs12_file = SimpleUploadedFile(
             'invalid.p12',
@@ -286,7 +309,7 @@ class TestImportCaRolloverForm:
         assert not form.is_valid()
         assert any('parse' in str(error).lower() for errors in form.errors.values() for error in errors)
 
-    def test_clean_wrong_password(self, sample_ca_pkcs12):
+    def test_clean_wrong_password(self, sample_ca_pkcs12: dict[str, object]) -> None:
         """Test validation fails with wrong password."""
         # Create password-protected PKCS#12
         password = b'correct_password'
@@ -311,7 +334,7 @@ class TestImportCaRolloverForm:
 
         assert not form.is_valid()
 
-    def test_clean_non_ca_certificate(self, sample_non_ca_pkcs12):
+    def test_clean_non_ca_certificate(self, sample_non_ca_pkcs12: dict[str, object]) -> None:
         """Test validation fails with non-CA certificate."""
         pkcs12_file = SimpleUploadedFile(
             'not_ca.p12',
@@ -327,8 +350,9 @@ class TestImportCaRolloverForm:
         assert not form.is_valid()
         assert any('CA certificate' in str(error) for errors in form.errors.values() for error in errors)
 
-    def test_clean_duplicate_ca(self, sample_ca_pkcs12, issuing_ca_model):
+    def test_clean_duplicate_ca(self, sample_ca_pkcs12: dict[str, object], issuing_ca_model: CaModel) -> None:
         """Test validation fails when CA certificate already exists."""
+        _ = issuing_ca_model
         # First, import the CA
         pkcs12_file1 = SimpleUploadedFile(
             'test_ca1.p12',
@@ -357,7 +381,7 @@ class TestImportCaRolloverForm:
         assert not form2.is_valid()
         assert any('already configured' in str(error).lower() for errors in form2.errors.values() for error in errors)
 
-    def test_clean_with_provider_configuration_error(self, sample_ca_pkcs12):
+    def test_clean_with_provider_configuration_error(self, sample_ca_pkcs12: dict[str, object]) -> None:
         """Test validation handles ProviderConfigurationError gracefully."""
         pkcs12_file = SimpleUploadedFile(
             'test_ca.p12',
@@ -378,7 +402,7 @@ class TestImportCaRolloverForm:
             assert not form.is_valid()
             assert any('disabled' in str(error).lower() for errors in form.errors.values() for error in errors)
 
-    def test_clean_with_transition_scheduled_at(self, sample_ca_pkcs12):
+    def test_clean_with_transition_scheduled_at(self, sample_ca_pkcs12: dict[str, object]) -> None:
         """Test form accepts transition_scheduled_at field."""
         pkcs12_file = SimpleUploadedFile(
             'test_ca.p12',
@@ -386,7 +410,7 @@ class TestImportCaRolloverForm:
             content_type='application/x-pkcs12'
         )
 
-        transition_time = datetime.now(dt_timezone.utc) + timedelta(days=7)
+        transition_time = datetime.now(UTC) + timedelta(days=7)
         form = ImportCaRolloverForm(
             data={
                 'unique_name': 'test-ca',
@@ -397,7 +421,7 @@ class TestImportCaRolloverForm:
 
         assert form.is_valid()
 
-    def test_clean_with_notes(self, sample_ca_pkcs12):
+    def test_clean_with_notes(self, sample_ca_pkcs12: dict[str, object]) -> None:
         """Test form accepts notes field."""
         pkcs12_file = SimpleUploadedFile(
             'test_ca.p12',
@@ -416,7 +440,7 @@ class TestImportCaRolloverForm:
         assert form.is_valid()
         assert form.cleaned_data['notes'] == 'Test rollover notes'
 
-    def test_new_issuing_ca_property(self, sample_ca_pkcs12):
+    def test_new_issuing_ca_property(self, sample_ca_pkcs12: dict[str, object]) -> None:
         """Test new_issuing_ca property returns the created CA."""
         pkcs12_file = SimpleUploadedFile(
             'test_ca.p12',
@@ -438,37 +462,37 @@ class TestImportCaRolloverForm:
 class TestImportCaRolloverStrategy:
     """Test cases for ImportCaRolloverStrategy."""
 
-    def test_strategy_registered(self):
+    def test_strategy_registered(self) -> None:
         """Test that the strategy is registered in the registry."""
         strategy = rollover_registry.get(CaRolloverStrategyType.IMPORT_CA)
         assert isinstance(strategy, ImportCaRolloverStrategy)
 
-    def test_strategy_type(self):
+    def test_strategy_type(self) -> None:
         """Test strategy_type property returns correct value."""
         strategy = ImportCaRolloverStrategy()
         assert strategy.strategy_type == CaRolloverStrategyType.IMPORT_CA
 
-    def test_display_name(self):
+    def test_display_name(self) -> None:
         """Test display_name property returns a non-empty string."""
         strategy = ImportCaRolloverStrategy()
         assert isinstance(strategy.display_name, str)
         assert len(strategy.display_name) > 0
         assert 'import' in strategy.display_name.lower()
 
-    def test_get_plan_form(self, issuing_ca_model):
+    def test_get_plan_form(self, issuing_ca_model: CaModel) -> None:
         """Test get_plan_form returns an ImportCaRolloverForm."""
         strategy = ImportCaRolloverStrategy()
         form = strategy.get_plan_form(old_ca=issuing_ca_model)
         assert isinstance(form, ImportCaRolloverForm)
 
-    def test_get_plan_form_with_data(self, issuing_ca_model):
+    def test_get_plan_form_with_data(self, issuing_ca_model: CaModel) -> None:
         """Test get_plan_form passes data to the form."""
         strategy = ImportCaRolloverStrategy()
         data = {'unique_name': 'test-ca'}
         form = strategy.get_plan_form(old_ca=issuing_ca_model, data=data)
         assert form.data == data
 
-    def test_create_new_ca(self, issuing_ca_model, second_issuing_ca_model):
+    def test_create_new_ca(self, issuing_ca_model: CaModel, second_issuing_ca_model: CaModel) -> None:
         """Test create_new_ca returns the CA from the form."""
         strategy = ImportCaRolloverStrategy()
         form = Mock(spec=ImportCaRolloverForm)
@@ -477,7 +501,7 @@ class TestImportCaRolloverStrategy:
         result = strategy.create_new_ca(form, issuing_ca_model)
         assert result == second_issuing_ca_model
 
-    def test_create_new_ca_wrong_form_type(self, issuing_ca_model):
+    def test_create_new_ca_wrong_form_type(self, issuing_ca_model: CaModel) -> None:
         """Test create_new_ca raises TypeError with wrong form type."""
         strategy = ImportCaRolloverStrategy()
         wrong_form = Mock(spec=forms.Form)
@@ -485,10 +509,10 @@ class TestImportCaRolloverStrategy:
         with pytest.raises(TypeError, match='Expected ImportCaRolloverForm'):
             strategy.create_new_ca(wrong_form, issuing_ca_model)
 
-    def test_on_complete_reassigns_domains(self, issuing_ca_model, second_issuing_ca_model):
+    def test_on_complete_reassigns_domains(
+        self, issuing_ca_model: CaModel, second_issuing_ca_model: CaModel
+    ) -> None:
         """Test on_complete reassigns domains from old CA to new CA."""
-        from pki.models import DomainModel
-
         # Create a domain assigned to the old CA
         domain = DomainModel.objects.create(
             unique_name='test-domain',
@@ -507,7 +531,9 @@ class TestImportCaRolloverStrategy:
         domain.refresh_from_db()
         assert domain.issuing_ca == second_issuing_ca_model
 
-    def test_on_complete_deactivates_old_ca(self, issuing_ca_model, second_issuing_ca_model):
+    def test_on_complete_deactivates_old_ca(
+        self, issuing_ca_model: CaModel, second_issuing_ca_model: CaModel
+    ) -> None:
         """Test on_complete deactivates the old CA."""
         rollover = Mock()
         rollover.old_issuing_ca = issuing_ca_model
@@ -521,7 +547,7 @@ class TestImportCaRolloverStrategy:
         issuing_ca_model.refresh_from_db()
         assert issuing_ca_model.is_active is False
 
-    def test_on_complete_with_no_new_ca(self, issuing_ca_model):
+    def test_on_complete_with_no_new_ca(self, issuing_ca_model: CaModel) -> None:
         """Test on_complete handles case where new CA is None."""
         rollover = Mock()
         rollover.old_issuing_ca = issuing_ca_model
@@ -533,7 +559,7 @@ class TestImportCaRolloverStrategy:
         issuing_ca_model.refresh_from_db()
         assert issuing_ca_model.is_active is False
 
-    def test_get_template_name(self):
+    def test_get_template_name(self) -> None:
         """Test get_template_name returns the correct template path."""
         strategy = ImportCaRolloverStrategy()
         template_name = strategy.get_template_name()

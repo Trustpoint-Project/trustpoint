@@ -1,125 +1,306 @@
 {% load i18n %}
 {% load sort_tags %}
 {% load internationalization_tags %}
-{% block devices_table %}
-<table class="table" id="devices-table">
-    <thead>
-    <tr>
-        <th id="checkbox-column"><input type="checkbox"/></th>
-        <th class="text-nowrap" data-col="name">
-            <a href="{% url_sort 'common_name' %}">
-                {% trans 'Name' %} {{ request|sort_icon:'common_name' }}
-            </a>
-        </th>
-        <th class="text-nowrap" data-col="domain">
-            <a href="{% url_sort 'domain' %}">
-                {% trans 'Domain' %} {{ request|sort_icon:'domain' }}
-            </a>
-        </th>
-        {% if page_name != 'opc_ua_gds' %}
-        <th class="text-nowrap" data-col="serial_number">
-            <a href="{% url_sort 'serial_number' %}">
-                {% trans 'Serial Number' %} {{ request|sort_icon:'serial_number' }}
-            </a>
-        </th>
-        {% endif %}
-        <th class="text-nowrap" data-col="created_at">
-            <a href="{% url_sort 'created_at' %}">
-                {% trans 'Created at' %} {{ request|sort_icon:'created_at' }}
-            </a>
-        </th>
-        <th class="text-nowrap" data-col="enrollment">
-            <a href="{% url_sort 'enrollment_sort' %}">
-                {% trans 'Enrollment' %} {{ request|sort_icon:'enrollment_sort' }}
-            </a>
-        </th>
-        <th class="text-nowrap" data-col="domain_credential">
-            <a href="{% url_sort 'domain_credential_sort' %}">
-                {% trans 'Domain Credential' %} {{ request|sort_icon:'domain_credential_sort' }}
-            </a>
-        </th>
-        <th class="text-nowrap" data-col="application_certificates">
-            <a href="{% url_sort 'application_certificate_sort' %}">
-                {% trans 'Application Certificates' %} {{ request|sort_icon:'application_certificate_sort' }}
-            </a>
-        </th>
-        <th class="text-nowrap" data-col="onboarding_protocol">
-            <a href="{% url_sort 'onboarding_protocol_sort' %}">
-                {% trans 'Onboarding Protocol' %} {{ request|sort_icon:'onboarding_protocol_sort' }}
-            </a>
-        </th>
-        <th class="text-nowrap" data-col="pki_protocols">
-            <a href="{% url_sort 'pki_protocols_sort' %}">
-                {% trans 'PKI Protocols' %} {{ request|sort_icon:'pki_protocols_sort' }}
-            </a>
-        </th>
-        <th class="text-nowrap" data-col="clm">{% trans 'Certificate Management' %}</th>
-    </tr>
-    </thead>
-    <tbody>
-    {% for device in page_obj %}
-    <tr>
-        <td class="row_checkbox">
-            <input type="checkbox" name="row_checkbox" value="{{ device.id }}"/>
-        </td>
-        <td data-col="name">{{ device.common_name }}</td>
-        <td data-col="domain">
-            {% if device.domain %}
-            <a href="{% url 'pki:domains-detail' device.domain.pk %}">{{ device.domain }}</a>
-            {% else %}
-            No domain
-            {% endif %}
-        </td>
-        {% if page_name != 'opc_ua_gds' %}
-        <td data-col="serial_number">{{ device.serial_number }}</td>
-        {% endif %}
-        <td data-col="created_at">{{ device.created_at|local_datetime }}</td>
-        <td data-col="enrollment">
-            {% with p=device.onboarding_progress %}
-            <span class="tp-status-badge tp-status-{{ p.status_key }}"
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="top"
-                  data-bs-html="true"
-                  title="{{ p.tooltip }}">
-                <span class="tp-status-dot"></span>
-                {{ p.status_label }}
-            </span>
-            {% endwith %}
-        </td>
-        <td data-col="domain_credential">
-            {% with p=device.domain_credential_status %}
-            <span class="tp-status-badge tp-status-{{ p.status_key }}"
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="top"
-                  data-bs-html="true"
-                  title="{{ p.tooltip }}">
-                <span class="tp-status-dot"></span>
-                {{ p.status_label }}
-            </span>
-            {% endwith %}
-        </td>
-        <td data-col="application_certificates">
-            {% with p=device.application_certificate_status %}
-            <span class="tp-status-badge tp-status-{{ p.status_key }}"
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="top"
-                  data-bs-html="true"
-                  title="{{ p.tooltip }}">
-                <span class="tp-status-dot"></span>
-                {{ p.status_label }}
-            </span>
-            {% endwith %}
-        </td>
-        <td data-col="onboarding_protocol">{{ device.onboarding_progress.onboarding_protocol }}</td>
-        <td data-col="pki_protocols">{{ device.onboarding_progress.pki_protocols }}</td>
-        <td data-col="clm">{{ device.clm_button| safe }}</td>
-    </tr>
-    {% empty %}
-    <tr>
-        <td colspan="12" class="middle">{% trans 'No devices have been added yet.' %}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-</table>
 
+{% block devices_table %}
+<div class="table-responsive">
+    <table
+        class="table table-hover align-middle"
+        id="devices-table"
+    >
+        <thead>
+            <tr>
+                <th
+                    id="checkbox-column"
+                    scope="col"
+                >
+                    <input
+                        type="checkbox"
+                        class="form-check-input"
+                        aria-label="{% trans 'Select all devices' %}"
+                    >
+                </th>
+
+                <th
+                    scope="col"
+                    class="text-nowrap"
+                    data-col="name"
+                >
+                    <a
+                        href="{% url_sort 'common_name' %}"
+                        class="text-decoration-none text-body"
+                    >
+                        {% trans 'Name' %}
+                        {{ request|sort_icon:'common_name' }}
+                    </a>
+                </th>
+
+                <th
+                    scope="col"
+                    class="text-nowrap"
+                    data-col="domain"
+                >
+                    <a
+                        href="{% url_sort 'domain' %}"
+                        class="text-decoration-none text-body"
+                    >
+                        {% trans 'Domain' %}
+                        {{ request|sort_icon:'domain' }}
+                    </a>
+                </th>
+
+                {% if page_name != 'opc_ua_gds' %}
+                    <th
+                        scope="col"
+                        class="text-nowrap"
+                        data-col="serial_number"
+                    >
+                        <a
+                            href="{% url_sort 'serial_number' %}"
+                            class="text-decoration-none text-body"
+                        >
+                            {% trans 'Serial Number' %}
+                            {{ request|sort_icon:'serial_number' }}
+                        </a>
+                    </th>
+                {% endif %}
+
+                <th
+                    scope="col"
+                    class="text-nowrap"
+                    data-col="created_at"
+                >
+                    <a
+                        href="{% url_sort 'created_at' %}"
+                        class="text-decoration-none text-body"
+                    >
+                        {% trans 'Created at' %}
+                        {{ request|sort_icon:'created_at' }}
+                    </a>
+                </th>
+
+                <th
+                    scope="col"
+                    class="text-nowrap"
+                    data-col="enrollment"
+                >
+                    <a
+                        href="{% url_sort 'enrollment_sort' %}"
+                        class="text-decoration-none text-body"
+                    >
+                        {% trans 'Enrollment' %}
+                        {{ request|sort_icon:'enrollment_sort' }}
+                    </a>
+                </th>
+
+                <th
+                    scope="col"
+                    class="text-nowrap"
+                    data-col="domain_credential"
+                >
+                    <a
+                        href="{% url_sort 'domain_credential_sort' %}"
+                        class="text-decoration-none text-body"
+                    >
+                        {% trans 'Domain Credential' %}
+                        {{ request|sort_icon:'domain_credential_sort' }}
+                    </a>
+                </th>
+
+                <th
+                    scope="col"
+                    class="text-nowrap"
+                    data-col="application_certificates"
+                >
+                    <a
+                        href="{% url_sort 'application_certificate_sort' %}"
+                        class="text-decoration-none text-body"
+                    >
+                        {% trans 'Application Certificates' %}
+                        {{ request|sort_icon:'application_certificate_sort' }}
+                    </a>
+                </th>
+
+                <th
+                    scope="col"
+                    class="text-nowrap"
+                    data-col="onboarding_protocol"
+                >
+                    <a
+                        href="{% url_sort 'onboarding_protocol_sort' %}"
+                        class="text-decoration-none text-body"
+                    >
+                        {% trans 'Onboarding Protocol' %}
+                        {{ request|sort_icon:'onboarding_protocol_sort' }}
+                    </a>
+                </th>
+
+                <th
+                    scope="col"
+                    class="text-nowrap"
+                    data-col="pki_protocols"
+                >
+                    <a
+                        href="{% url_sort 'pki_protocols_sort' %}"
+                        class="text-decoration-none text-body"
+                    >
+                        {% trans 'PKI Protocols' %}
+                        {{ request|sort_icon:'pki_protocols_sort' }}
+                    </a>
+                </th>
+
+                <th
+                    scope="col"
+                    class="text-nowrap text-end"
+                    data-col="clm"
+                >
+                    {% trans 'Certificate Management' %}
+                </th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for device in page_obj %}
+                <tr>
+                    <td class="row_checkbox">
+                        <input
+                            type="checkbox"
+                            class="form-check-input"
+                            name="row_checkbox"
+                            value="{{ device.id }}"
+                            aria-label="{% blocktranslate with name=device.common_name %}Select device {{ name }}{% endblocktranslate %}"
+                        >
+                    </td>
+
+                    <td data-col="name">
+                        {{ device.common_name }}
+                    </td>
+
+                    <td data-col="domain">
+                        {% if device.domain %}
+                            <a
+                                href="{% url 'pki:domains-detail' device.domain.pk %}"
+                                class="text-decoration-none"
+                            >
+                                {{ device.domain }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted">
+                                {% trans 'No domain' %}
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    {% if page_name != 'opc_ua_gds' %}
+                        <td data-col="serial_number">
+                            {% if device.serial_number %}
+                                {{ device.serial_number }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    {% endif %}
+
+                    <td
+                        data-col="created_at"
+                        class="text-nowrap"
+                    >
+                        {{ device.created_at|local_datetime }}
+                    </td>
+
+                    <td data-col="enrollment">
+                        {% with p=device.onboarding_progress %}
+                            <span
+                                class="tp-status-badge tp-status-{{ p.status_key }}"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top"
+                                data-bs-html="true"
+                                title="{{ p.tooltip }}"
+                            >
+                                <span
+                                    class="tp-status-dot"
+                                    aria-hidden="true"
+                                ></span>
+                                {{ p.status_label }}
+                            </span>
+                        {% endwith %}
+                    </td>
+
+                    <td data-col="domain_credential">
+                        {% with p=device.domain_credential_status %}
+                            <span
+                                class="tp-status-badge tp-status-{{ p.status_key }}"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top"
+                                data-bs-html="true"
+                                title="{{ p.tooltip }}"
+                            >
+                                <span
+                                    class="tp-status-dot"
+                                    aria-hidden="true"
+                                ></span>
+                                {{ p.status_label }}
+                            </span>
+                        {% endwith %}
+                    </td>
+
+                    <td data-col="application_certificates">
+                        {% with p=device.application_certificate_status %}
+                            <span
+                                class="tp-status-badge tp-status-{{ p.status_key }}"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top"
+                                data-bs-html="true"
+                                title="{{ p.tooltip }}"
+                            >
+                                <span
+                                    class="tp-status-dot"
+                                    aria-hidden="true"
+                                ></span>
+                                {{ p.status_label }}
+                            </span>
+                        {% endwith %}
+                    </td>
+
+                    <td data-col="onboarding_protocol">
+                        {% if device.onboarding_progress.onboarding_protocol %}
+                            {{ device.onboarding_progress.onboarding_protocol }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+
+                    <td data-col="pki_protocols">
+                        {% if device.onboarding_progress.pki_protocols %}
+                            {{ device.onboarding_progress.pki_protocols }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+
+                    <td
+                        data-col="clm"
+                        class="text-end"
+                    >
+                        {{ device.clm_button|safe }}
+                    </td>
+                </tr>
+
+            {% empty %}
+                <tr>
+                    <td
+                        {% if page_name != 'opc_ua_gds' %}
+                            colspan="11"
+                        {% else %}
+                            colspan="10"
+                        {% endif %}
+                        class="text-center text-muted py-5"
+                    >
+                        {% trans 'No devices have been added yet.' %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% endblock devices_table %}

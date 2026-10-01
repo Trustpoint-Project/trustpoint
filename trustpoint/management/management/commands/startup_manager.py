@@ -57,6 +57,9 @@ class Command(BaseCommand):
         output.write('Running database migrations...')
         call_command('migrate')
 
+        output.write('Applying security configuration from environment...')
+        call_command('sync_security_config')
+
         app_version = AppVersion.objects.first()
         if app_version is None:
             output.write('App version from DB: None')

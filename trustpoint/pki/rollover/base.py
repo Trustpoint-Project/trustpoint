@@ -59,6 +59,11 @@ class RolloverStrategy(ABC):
         msg = f'Strategy {self.strategy_type} does not support provide_new_ca.'
         raise NotImplementedError(msg)
 
+    @property
+    def awaits_new_ca_certificate(self) -> bool:
+        """Return whether provisioning creates a CA before its certificate arrives."""
+        return False
+
     def on_start(self, rollover: CaRolloverModel) -> None:
         """Hook called when a rollover transitions to PREPARATION."""
         _ = rollover

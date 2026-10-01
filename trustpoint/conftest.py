@@ -3,6 +3,7 @@
 
 """pytest configuration for the tests in the PKI app."""
 import base64
+import uuid
 from typing import Any
 
 import pytest
@@ -158,13 +159,14 @@ def issuing_ca_instance(settings: Any) -> dict[str, Any]:
     settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
     settings.TRUSTPOINT_IS_OPERATIONAL = True
     settings.DOCKER_CONTAINER = False
+    unique_name = f'{UNIQUE_NAME}-{uuid.uuid4().hex[:8]}'
     priv_key = generate_managed_signing_private_key(
-        alias=f'{UNIQUE_NAME}-fixture',
+        alias=f'{unique_name}-fixture',
         key_spec=RsaKeySpec(key_size=2048),
     )
     cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME, private_key=priv_key)
     issuing_ca = CertificateGenerator.save_issuing_ca(
-        issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE
+        issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=unique_name, ca_type=CA_TYPE
     )
     return {'issuing_ca': issuing_ca, 'cert': cert, 'priv_key': priv_key}
 
@@ -182,7 +184,8 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     ):
         msg = 'Issuing CA not created properly'
         raise TypeError(msg)
-    domain = DomainModel.objects.create(unique_name=DOMAIN_UNIQUE_NAME, issuing_ca=issuing_ca, is_active=True)
+    unique_name = f'{DOMAIN_UNIQUE_NAME}-{uuid.uuid4().hex[:8]}'
+    domain = DomainModel.objects.create(unique_name=unique_name, issuing_ca=issuing_ca, is_active=True)
     issuing_ca_instance.update({'domain': domain})
     return issuing_ca_instance
 
@@ -191,16 +194,17 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
 def cert_profile_instance(domain_instance: dict[str, Any]) -> None:
     """Fixture to create a domain_credential CertificateProfileModel instance linked to the domain fixture."""
     domain: DomainModel = domain_instance['domain']
-
-    cert_profile = CertificateProfileModel.objects.create(
+    cert_profile, _ = CertificateProfileModel.objects.get_or_create(
         unique_name='domain_credential',
-        profile_json='{"type": "cert_profile", "subj": {"allow":"*"}, "ext": {}, "validity": {"days": 30}}',
+        defaults={
+            'profile_json': '{"type": "cert_profile", "subj": {"allow":"*"}, "ext": {}, "validity": {"days": 30}}',
+        },
     )
 
-    DomainAllowedCertificateProfileModel.objects.create(
+    DomainAllowedCertificateProfileModel.objects.update_or_create(
         domain=domain,
         certificate_profile=cert_profile,
-        alias='test_profile_alias'
+        defaults={'alias': 'test_profile_alias'},
     )
 
 
@@ -208,16 +212,17 @@ def cert_profile_instance(domain_instance: dict[str, Any]) -> None:
 def cert_profile_instance_tls_server(domain_instance: dict[str, Any]) -> None:
     """Fixture to create a tls_server CertificateProfileModel instance linked to the domain fixture."""
     domain: DomainModel = domain_instance['domain']
-
-    cert_profile = CertificateProfileModel.objects.create(
+    cert_profile, _ = CertificateProfileModel.objects.get_or_create(
         unique_name='tls_server',
-        profile_json='{"type": "cert_profile", "subj": {"allow":"*"}, "ext": {}, "validity": {"days": 10}}',
+        defaults={
+            'profile_json': '{"type": "cert_profile", "subj": {"allow":"*"}, "ext": {}, "validity": {"days": 10}}',
+        },
     )
 
-    DomainAllowedCertificateProfileModel.objects.create(
+    DomainAllowedCertificateProfileModel.objects.update_or_create(
         domain=domain,
         certificate_profile=cert_profile,
-        alias='test_profile_alias_tls'
+        defaults={'alias': 'test_profile_alias_tls'},
     )
 
 

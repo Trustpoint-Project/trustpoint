@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for Django management commands."""
+import importlib
+import sys
 import tempfile
 from io import StringIO
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
 from django.conf import settings
 from django.core.management import call_command
@@ -211,7 +213,10 @@ class StartupManagerCommandTest(TestCase):
             out = StringIO()
             call_command('startup_manager', stdout=out)
 
-            mock_call_command.assert_called_once_with('migrate')
+            self.assertEqual(
+                mock_call_command.call_args_list,
+                [call('migrate'), call('sync_security_config')],
+            )
             mock_strategy_class.assert_called_once_with()
             mock_strategy.execute.assert_called_once_with(mock_context)
 
@@ -247,7 +252,10 @@ class StartupManagerCommandTest(TestCase):
             with self.assertRaises(CommandError):
                 call_command('startup_manager', stdout=out)
 
-            mock_call_command.assert_called_once_with('migrate')
+            self.assertEqual(
+                mock_call_command.call_args_list,
+                [call('migrate'), call('sync_security_config')],
+            )
             mock_strategy_class.assert_called_once_with()
 
     def test_startup_manager_version_parsing(self) -> None:
@@ -592,3 +600,37 @@ class ManagePyOverrideTest(TestCase):
             self.assertIsNotNone(override_makemigrations)
         except ImportError as e:
             self.fail(f'Failed to import managepy_override: {e}')
+
+
+class NotificationCommandImportTest(TestCase):
+    """Importing a notification command must not query the database."""
+
+    def test_import_does_not_create_notification_status(self) -> None:
+        """Test that the NEW status is looked up when the command runs, not on import."""
+        module = 'management.management.commands.check_non_onboarded_devices'
+        sys.modules.pop(module, None)
+        with patch(
+            'management.models.NotificationStatus.objects.get_or_create',
+            return_value=(Mock(), False),
+        ) as mock_get_or_create:
+            importlib.import_module(module)
+        mock_get_or_create.assert_not_called()
+
+    def test_non_onboarded_device_without_domain(self) -> None:
+        """Test that a pending device with no domain still gets a notification."""
+        from devices.models import DeviceModel  # noqa: PLC0415
+        from onboarding.models import OnboardingConfigModel, OnboardingProtocol  # noqa: PLC0415
+
+        from management.models import NotificationModel  # noqa: PLC0415
+
+        onboarding_config = OnboardingConfigModel.objects.create(onboarding_protocol=OnboardingProtocol.MANUAL)
+        device = DeviceModel.objects.create(
+            common_name='no-domain-device',
+            serial_number='SN-NO-DOMAIN',
+            domain=None,
+            onboarding_config=onboarding_config,
+        )
+
+        call_command('check_non_onboarded_devices', stdout=StringIO())
+
+        self.assertTrue(NotificationModel.objects.filter(event='DEVICE_NOT_ONBOARDED', device=device).exists())

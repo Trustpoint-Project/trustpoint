@@ -1,4 +1,5 @@
 {% load i18n %}
+{% load internationalization_tags %}
 
 {% block validity %}
     <h2>{% trans 'Lifecycle' %}</h2>
@@ -22,11 +23,11 @@
         </div>
         <div>
             <div>{% trans 'Not valid before' %}</div>
-            <div>{{ cert.not_valid_before|date:"Y-m-d H:i:s" }} UTC</div>
+            <div>{{ cert.not_valid_before|local_datetime }}</div>
         </div>
         <div>
             <div>{% trans 'Not valid after' %}</div>
-            <div>{{ cert.not_valid_after|date:"Y-m-d H:i:s" }} UTC</div>
+            <div>{{ cert.not_valid_after|local_datetime }}</div>
         </div>
         <div>
             <div>{% trans 'Days Until Expiration' %}</div>

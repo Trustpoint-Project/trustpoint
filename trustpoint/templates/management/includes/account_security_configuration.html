@@ -1,0 +1,74 @@
+{% load i18n %}
+
+<div class="card account-security-configuration">
+  <div class="card-header">
+    <h5 class="mb-0">{% trans "Account Security Configuration" %}</h5>
+  </div>
+  <div class="card-body pt-4 pb-4">
+    <form method="post" action="{% url 'management:settings' %}" id="account_security_configuration">
+      {% csrf_token %}
+      <input type="hidden" name="form_name" value="account_security">
+      {{ form.non_field_errors }}
+
+      <fieldset class="form-group tp-form-group">
+        <section class="mb-4" aria-labelledby="account-security-password-heading">
+          <h2 id="account-security-password-heading" class="h5">{% trans "Password" %}</h2>
+          <p class="text-muted">{% trans "Set the rules that apply whenever a human user chooses or changes a password." %}</p>
+          {% with field=form.password_minimum_length %}
+            <div class="mb-3 account-security-field">{{ field.errors }}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}<div class="form-text">{{ field.help_text }}</div></div>
+          {% endwith %}
+          <div class="border rounded p-3">
+            <h3 class="h6">{% trans "Password protections" %}</h3>
+            <div class="d-grid gap-3">
+              {% with field=form.password_similarity %}
+                <div class="account-security-checkbox">{{ field.errors }}<div class="form-check">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div><div class="form-text ms-4">{{ field.help_text }}</div></div>
+              {% endwith %}
+              {% with field=form.password_common %}
+                <div class="account-security-checkbox">{{ field.errors }}<div class="form-check">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div><div class="form-text ms-4">{{ field.help_text }}</div></div>
+              {% endwith %}
+              {% with field=form.password_numeric %}
+                <div class="account-security-checkbox">{{ field.errors }}<div class="form-check">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div><div class="form-text ms-4">{{ field.help_text }}</div></div>
+              {% endwith %}
+              {% with field=form.password_prevent_reuse %}
+                <div class="account-security-checkbox">{{ field.errors }}<div class="form-check">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div><div class="form-text ms-4">{{ field.help_text }}</div></div>
+              {% endwith %}
+            </div>
+          </div>
+        </section>
+
+        <section class="mb-4" aria-labelledby="account-security-password-expiry-heading">
+          <h2 id="account-security-password-expiry-heading" class="h5">{% trans "Password expiry" %}</h2>
+          {% with field=form.password_expiry_days %}
+            <div class="account-security-field">{{ field.errors }}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}<div class="form-text">{{ field.help_text }}</div></div>
+          {% endwith %}
+        </section>
+
+        <section class="mb-4" aria-labelledby="account-security-api-heading">
+          <h2 id="account-security-api-heading" class="h5">{% trans "API credentials" %}</h2>
+          {% with field=form.api_credential_expiry_days %}
+            <div class="account-security-field">{{ field.errors }}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}<div class="form-text">{{ field.help_text }}</div></div>
+          {% endwith %}
+        </section>
+
+        <section class="mb-4" aria-labelledby="account-security-session-heading">
+          <h2 id="account-security-session-heading" class="h5">{% trans "Sessions" %}</h2>
+          {% with field=form.idle_timeout_minutes %}
+            <div class="account-security-field">{{ field.errors }}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}<div class="form-text">{{ field.help_text }}</div></div>
+          {% endwith %}
+        </section>
+
+        <section aria-labelledby="account-security-login-heading">
+          <h2 id="account-security-login-heading" class="h5">{% trans "Failed login protection" %}</h2>
+          {% with field=form.failed_login_attempts %}
+            <div class="account-security-field">{{ field.errors }}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}<div class="form-text">{{ field.help_text }}</div></div>
+          {% endwith %}
+        </section>
+      </fieldset>
+    </form>
+  </div>
+  <div class="card-footer d-flex justify-content-between">
+    <div class="tp-card-btn-footer m-1">
+      <button class="btn btn-primary" type="submit" form="account_security_configuration">{% trans "Save" %}</button>
+    </div>
+  </div>
+</div>

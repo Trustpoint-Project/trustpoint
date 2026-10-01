@@ -4,60 +4,129 @@
 {% load static %}
 
 {% block content %}
-    <form action="{% url device_revoke_url %}" method="post" style="display: inline;">
-        {% csrf_token %}
-        {{ revoke_form.pks }}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Confirm Device Revocation' %}
+        </h1>
 
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Confirm Device Revokation' %}</h1>
+        <p class="mb-0 text-muted">
+            {% trans 'Review the selected devices and choose a revocation reason before revoking their credentials.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <form
+            id="revoke-devices-form"
+            action="{% url device_revoke_url %}"
+            method="post"
+        >
+            {% csrf_token %}
+            {{ revoke_form.pks }}
+
+            <div class="tp-card-centered-content">
+                <div class="alert alert-warning mb-4" role="alert">
+                    {% trans 'The credentials associated with the selected devices will be revoked. This action cannot be undone.' %}
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    {% for device in devices %}
-                        <h2>({{ forloop.counter }}) {% trans 'device' %}: {{ device.common_name }}</h2>
-                        <hr class="hr-m">
+
+                {% for device in devices %}
+                    <section class="{% if not forloop.last %}mb-5{% endif %}">
+                        <div class="mb-3">
+                            <h2 class="h4 mb-1">
+                                {% blocktranslate with number=forloop.counter name=device.common_name %}
+                                    Device {{ number }}: {{ name }}
+                                {% endblocktranslate %}
+                            </h2>
+                        </div>
+
+                        <hr class="mb-4">
+
                         <div class="tp-kvp-list">
                             <div>
-                                <div>{% trans 'Unique Name' %}</div>
-                                <div>{{ device.common_name }}</div>
-                            </div>
-                            <div>
-                                <div>{% trans 'Domain' %}</div>
                                 <div>
-                                {% if device.domain %}
-                                <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
-                                        {{ device.domain.unique_name }}
-                                    </a>
+                                    {% trans 'Name' %}
                                 </div>
-                                {% endif %}
+
+                                <div>
+                                    {% if device.common_name %}
+                                        {{ device.common_name }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
                             </div>
+
                             <div>
-                                <div>{% trans 'Issued Credentials' %}</div>
-                                <div>{{ device.issued_credentials.count }}</div>
+                                <div>
+                                    {% trans 'Domain' %}
+                                </div>
+
+                                <div>
+                                    {% if device.domain %}
+                                        <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
+                                            {{ device.domain.unique_name }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div>
+                                    {% trans 'Issued Credentials' %}
+                                </div>
+
+                                <div>
+                                    {{ device.issued_credentials.count }}
+                                </div>
                             </div>
                         </div>
-                        {% if not forloop.last %}
+                    </section>
 
-                        {% endif %}
-                    {% endfor %}
-                </div>
-
-                <hr>
-                {{ revoke_form.revocation_reason | as_crispy_field }}
-
+                {% empty %}
+                    <div class="text-center text-muted py-5">
+                        {% trans 'No devices are selected for revocation.' %}
+                    </div>
+                {% endfor %}
             </div>
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'devices:devices' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                        <button type="submit" class="btn btn-danger">
-                            {% trans 'Revokes selected devices' %}
-                        </button>
-                    </form>
+
+            <section class="mt-5">
+                <div class="tp-card-centered-content">
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans 'Revocation Reason' %}
+                        </h2>
+
+                        <p class="mb-0 text-muted">
+                            {% trans 'Select the reason that should be recorded for the revoked device credentials.' %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
+
+                    {{ revoke_form.revocation_reason|as_crispy_field }}
                 </div>
-            </div>
-        </div>
-    </form>
+            </section>
+        </form>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'devices:devices' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <button
+            type="submit"
+            form="revoke-devices-form"
+            class="btn btn-danger"
+            {% if not devices %}disabled{% endif %}
+        >
+            {% trans 'Revoke Selected Devices' %}
+        </button>
+    </div>
+</div>
 {% endblock content %}

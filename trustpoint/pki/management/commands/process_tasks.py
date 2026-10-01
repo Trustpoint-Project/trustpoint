@@ -15,7 +15,7 @@ class Command(BaseCommand):
 
     help = _('Check for scheduled CRL generations and execute them if due')
 
-    def handle(self, *args, **options):
+    def handle(self, *_args: object, **_options: object) -> None:
         """Execute the command."""
         from pki.models import CaModel  # noqa: PLC0415
 
@@ -43,7 +43,7 @@ class Command(BaseCommand):
                     ca.schedule_next_crl_generation()
                 else:
                     self.stdout.write(self.style.WARNING(f'⚠ CRL generation failed for {ca.unique_name}'))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001  # one CA failing must not stop the rest of the run
                 self.stdout.write(
                     self.style.ERROR(f'✗ Error processing {ca.unique_name}: {exc}')
                 )

@@ -199,6 +199,11 @@ class TestCertificateProfileAuthorization:
         context = MagicMock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = 'domain_credential'
         context.domain = domain_instance['domain']
+        context.device = Mock()
+        context.device.onboarding_config = Mock()
+        context.device.common_name = 'test-device'
+        context.cert_requested = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048))
+        context.csr_strict = False
 
         # Should not raise an exception
         auth.authorize(context)
@@ -247,6 +252,11 @@ class TestCertificateProfileAuthorization:
         context = MagicMock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = 'test_profile_alias' # Using alias for profile 'domain_credential'
         context.domain = domain_instance['domain']
+        context.device = Mock()
+        context.device.onboarding_config = Mock()
+        context.device.common_name = 'test-device'
+        context.cert_requested = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048))
+        context.csr_strict = False
 
         # Should not raise an exception
         auth.authorize(context)
@@ -676,6 +686,8 @@ class TestEstAuthorization:
         context.device.common_name = 'test-device'
         context.device.onboarding_config = None
         context.domain = domain_credential_est_onboarding['domain']
+        context.cert_requested = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048))
+        context.csr_strict = False
 
         # Should not raise an exception
         auth.authorize(context)
@@ -692,6 +704,8 @@ class TestEstAuthorization:
         context.device.domain = domain_credential_est_onboarding['domain']
         context.device.onboarding_config = None
         context.domain = domain_credential_est_onboarding['domain']
+        context.cert_requested = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048))
+        context.csr_strict = False
 
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
@@ -710,6 +724,8 @@ class TestEstAuthorization:
         context.device.domain = domain_credential_est_onboarding['domain']
         context.device.onboarding_config = None
         context.domain = domain_credential_est_onboarding['domain']
+        context.cert_requested = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048))
+        context.csr_strict = False
 
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
@@ -727,6 +743,8 @@ class TestEstAuthorization:
         context.device = Mock()
         context.device.domain = domain_credential_est_onboarding['domain']
         context.domain = domain_credential_est_onboarding['domain']
+        context.cert_requested = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048))
+        context.csr_strict = False
 
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)

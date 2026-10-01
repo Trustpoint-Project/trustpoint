@@ -198,6 +198,7 @@ class TestRequestContext:
             'est_username', 'est_password',
             'client_certificate', 'client_intermediate_certificate',
             'cert_requested_profile_validated', 'issued_certificate',
+            'csr_strict',
             'owner_credential', 'issuer_credential',
             'actor',
             'http_response_status', 'http_response_content',

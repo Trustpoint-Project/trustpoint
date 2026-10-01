@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.core.management.base import BaseCommand
+
 from pki.models import CertificateModel
 
 from .base_commands import CertificateCreationCommandMixin

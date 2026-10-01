@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any, cast
+from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
 from management.models import NotificationConfig, NotificationModel, NotificationStatus
 from pki.models import CaModel
 
@@ -55,28 +56,20 @@ class Command(BaseCommand):
         # Handle expiring Issuing CAs
         for ca in expiring_cas:
             self._create_notification(
-                issuing_ca=cast(CaModel, ca),
+                issuing_ca=ca,
                 event='ISSUING_CA_EXPIRING',
-                notification_type=cast(
-                    'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.WARNING
-                ),
-                message_type=cast(
-                    'NotificationModel.NotificationMessageType', NotificationModel.NotificationMessageType.CERT_EXPIRING
-                ),
+                notification_type=NotificationModel.NotificationTypes.WARNING,
+                message_type=NotificationModel.NotificationMessageType.CERT_EXPIRING,
                 new_status=new_status,
             )
 
         # Handle expired Issuing CAs
         for ca in expired_cas:
             self._create_notification(
-                issuing_ca=cast(CaModel, ca),
+                issuing_ca=ca,
                 event='ISSUING_CA_EXPIRED',
-                notification_type=cast(
-                    'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.CRITICAL
-                ),
-                message_type=cast(
-                    'NotificationModel.NotificationMessageType', NotificationModel.NotificationMessageType.CERT_EXPIRED
-                ),
+                notification_type=NotificationModel.NotificationTypes.CRITICAL,
+                message_type=NotificationModel.NotificationMessageType.CERT_EXPIRED,
                 new_status=new_status,
             )
 
@@ -95,6 +88,9 @@ class Command(BaseCommand):
         Otherwise, creates a single notification without domain association.
         """
         from pki.models import DomainModel  # noqa: PLC0415
+
+        if issuing_ca.credential is None:
+            return
 
         message_data = {
             'unique_name': issuing_ca.unique_name,
@@ -117,15 +113,14 @@ class Command(BaseCommand):
                         message_data=message_data,
                     )
                     notification.statuses.add(new_status)
-        else:
-            if not NotificationModel.objects.filter(event=event, issuing_ca=issuing_ca, domain__isnull=True).exists():
-                notification = NotificationModel.objects.create(
-                    issuing_ca=issuing_ca,
-                    created_at=timezone.now(),
-                    notification_source=NotificationModel.NotificationSource.ISSUING_CA,
-                    notification_type=notification_type,
-                    message_type=message_type,
-                    event=event,
-                    message_data=message_data,
-                )
-                notification.statuses.add(new_status)
+        elif not NotificationModel.objects.filter(event=event, issuing_ca=issuing_ca, domain__isnull=True).exists():
+            notification = NotificationModel.objects.create(
+                issuing_ca=issuing_ca,
+                created_at=timezone.now(),
+                notification_source=NotificationModel.NotificationSource.ISSUING_CA,
+                notification_type=notification_type,
+                message_type=message_type,
+                event=event,
+                message_data=message_data,
+            )
+            notification.statuses.add(new_status)

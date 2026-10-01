@@ -34,6 +34,23 @@ def get_private_key_location_from_config() -> PrivateKeyLocation:
     return configured_private_key_location()
 
 
+def validate_signing_certificate(cert_crypto: x509.Certificate | None) -> None:
+    """Validate that a certificate can be used for signing."""
+    if cert_crypto is None:
+        msg = 'Certificate is missing from credential serializer.'
+        raise ValidationError(msg)
+
+    try:
+        key_usage_ext = cert_crypto.extensions.get_extension_for_class(x509.KeyUsage)
+    except x509.ExtensionNotFound as exc:
+        msg = 'The provided certificate does not have a KeyUsage extension and cannot be used for signing.'
+        raise ValidationError(msg) from exc
+
+    if not key_usage_ext.value.digital_signature:
+        msg = 'The provided certificate does not have digitalSignature key usage and cannot be used for signing.'
+        raise ValidationError(msg)
+
+
 class SignerAddMethodSelectForm(forms.Form):
     """Form for selecting the method to add a Signer."""
 
@@ -227,19 +244,7 @@ class SignerAddFileImportPkcs12Form(LoggerMixin, forms.Form):
 
     def _validate_certificate(self, cert_crypto: x509.Certificate) -> None:
         """Validates the certificate for required extensions."""
-        if cert_crypto is None:
-            self._raise_validation_error('Certificate is missing from credential serializer.')
-
-        try:
-            key_usage_ext = cert_crypto.extensions.get_extension_for_class(x509.KeyUsage)
-            if not key_usage_ext.value.digital_signature:
-                self._raise_validation_error(
-                    'The provided certificate does not have digitalSignature key usage and cannot be used for signing.'
-                )
-        except x509.ExtensionNotFound:
-            self._raise_validation_error(
-                'The provided certificate does not have a KeyUsage extension and cannot be used for signing.'
-            )
+        validate_signing_certificate(cert_crypto)
 
     def _save_signer(self, cleaned_data: dict[str, Any], credential_serializer: CredentialSerializer) -> None:
         """Saves the signer to the database."""
@@ -333,18 +338,7 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             self._raise_validation_error(err_msg)
 
         cert_crypto = certificate_serializer.as_crypto()
-
-        try:
-            key_usage_ext = cert_crypto.extensions.get_extension_for_class(x509.KeyUsage)
-            if not key_usage_ext.value.digital_signature:
-                err_msg = (
-                    'The provided certificate does not have digitalSignature key usage '
-                    'and cannot be used for signing.'
-                )
-                self._raise_validation_error(err_msg)
-        except x509.ExtensionNotFound:
-            err_msg = 'The provided certificate does not have a KeyUsage extension and cannot be used for signing.'
-            self._raise_validation_error(err_msg)
+        validate_signing_certificate(cert_crypto)
 
         certificate_in_db = CertificateModel.get_cert_by_sha256_fingerprint(
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()

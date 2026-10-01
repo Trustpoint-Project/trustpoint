@@ -195,6 +195,7 @@ if [ "$ROLE" = "worker" ]; then
 
   exec su -s /bin/bash www-data -c "export TRUSTPOINT_PHASE='${PHASE}' && \
     export DJANGO_SETTINGS_MODULE='${DJANGO_SETTINGS_MODULE}' && \
+    uv run trustpoint/manage.py sync_security_config && \
     uv run trustpoint/manage.py workflows2_worker \
     --id '${WORKFLOWS2_WORKER_ID:-$(hostname)}' \
     --lease '${WORKFLOWS2_WORKER_LEASE:-30}' \

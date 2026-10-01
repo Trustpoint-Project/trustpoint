@@ -1,5 +1,5 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n static %}
+{% load i18n static internationalization_tags %}
 
 {% block head %}
   {{ block.super }}
@@ -116,11 +116,11 @@
                 <div class="small text-muted">
                   {% if timeout_context.expires_at %}
                     {% if timeout_context.is_expired %}
-                      {% blocktrans with expires_at=timeout_context.expires_at|date:"Y-m-d H:i:s" %}
+                      {% blocktrans with expires_at=timeout_context.expires_at|local_datetime %}
                         Expired at {{ expires_at }}.
                       {% endblocktrans %}
                     {% else %}
-                      {% blocktrans with expires_at=timeout_context.expires_at|date:"Y-m-d H:i:s" %}
+                      {% blocktrans with expires_at=timeout_context.expires_at|local_datetime %}
                         Expires at {{ expires_at }}.
                       {% endblocktrans %}
                     {% endif %}
@@ -158,7 +158,7 @@
               </div>
               <div class="small">
                 {% if approval.decided_at %}
-                  <div><strong>{% trans "Decided" %}:</strong> {{ approval.decided_at|date:"Y-m-d H:i:s" }}</div>
+                  <div><strong>{% trans "Decided" %}:</strong> {{ approval.decided_at|local_datetime }}</div>
                 {% endif %}
                 {% if approval.decided_by %}
                   <div><strong>{% trans "Decided by" %}:</strong> {{ approval.decided_by }}</div>

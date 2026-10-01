@@ -10,6 +10,7 @@ from typing import Any, ClassVar, NoReturn, cast
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -67,20 +68,14 @@ class IssuingCaImportMixin:
         Raises:
             ValidationError: Always raised with the provided message.
         """
-        raise ValidationError(message)
+        raise ValidationError(str(message))
 
     def _validate_ca_certificate(self, cert_crypto: x509.Certificate) -> None:
-        """Validates that the certificate is a CA certificate with required extensions."""
-        if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
-            self._raise_validation_error('The provided certificate is not a CA certificate.')
+        """Validate a CA certificate through the canonical model-level CA checks."""
         try:
-            key_usage_ext = cert_crypto.extensions.get_extension_for_class(x509.KeyUsage)
-            if not key_usage_ext.value.key_cert_sign:
-                self._raise_validation_error('The provided certificate must have keyCertSign usage enabled.')
-            if not key_usage_ext.value.crl_sign:
-                self._raise_validation_error('The provided certificate must have cRLSign usage enabled.')
-        except x509.ExtensionNotFound:
-            self._raise_validation_error('KeyUsage extension is required for CA certificates.')
+            CaModel._validate_ca_certificate(cert_crypto)  # noqa: SLF001
+        except ValidationError as exc:
+            self._raise_validation_error('; '.join(str(message) for message in exc.messages))
 
     def _check_duplicate_issuing_ca(self, cert_crypto: x509.Certificate) -> None:
         """Checks if the certificate is already used by an existing Issuing CA."""
@@ -201,15 +196,19 @@ class IssuingCaImportMixin:
     def _create_protected_import_issuing_ca(
         self,
         *,
-        unique_name: str,
+        unique_name: str | None,
         cert: x509.Certificate,
         credential_serializer: CredentialSerializer,
         chain: list[x509.Certificate],
+        backend_class: type[TrustpointCryptoBackend] | None = None,
     ) -> CaModel:
         """Create an issuing CA whose imported key is managed by the crypto backend."""
         ca_type = get_ca_type_from_config()
         CaModel._validate_ca_certificate(cert)  # noqa: SLF001
         CaModel._validate_ca_type(ca_type)  # noqa: SLF001
+
+        if unique_name is None:
+            unique_name = CaModel._generate_unique_name(cert)  # noqa: SLF001
 
         private_key = credential_serializer.private_key
         if private_key is None:
@@ -217,7 +216,8 @@ class IssuingCaImportMixin:
         if not isinstance(private_key, (rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)):
             self._raise_validation_error('Only RSA and elliptic-curve CA private keys can be imported.')
 
-        key_ref = TrustpointCryptoBackend().import_managed_private_key(
+        backend_impl = (backend_class or TrustpointCryptoBackend)()
+        key_ref = backend_impl.import_managed_private_key(
             alias=unique_name,
             private_key=private_key,
             policy=KeyPolicy.managed_signing_key(
@@ -291,6 +291,7 @@ class IssuingCaAddMethodSelectForm(forms.Form):
             ('local_file_import', _('Import a new Issuing CA from file')),
             ('local_request', _('Generate a key-pair and request an Issuing CA certificate')),
             ('remote_est', _('Configure a remote Issuing CA')),
+            ('remote_csr', _('External PKI (CSR)')),
         ],
         initial='local_file_import',
         required=True,
@@ -695,6 +696,12 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
                 msg = f'Remote CA connection validation failed: {e}'
                 raise forms.ValidationError(msg) from e
 
+        unique_name = cleaned_data.get('unique_name')
+        if unique_name and CryptoManagedKeyModel.objects.filter(alias=unique_name).exists():
+            self.add_error(
+                'unique_name', _('A cryptographic key with this name already exists.')
+            )
+
         return cleaned_data
 
     def _create_credential(self) -> CredentialModel:
@@ -715,10 +722,13 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         )
 
     def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
-        """Save the form and create the CA model with configuration."""
-        instance = super().save(commit=False)
+        """Save the form and create the CA model with configuration.
 
-        instance.credential = self._create_credential()
+        Credential/managed-key creation is intentionally not performed here; it is
+        the responsibility of subclasses, which decide whether and when a managed
+        key is required (e.g. not for RA-mode configurations).
+        """
+        instance = super().save(commit=False)
 
         if commit:
             instance.save()
@@ -762,30 +772,104 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
 
         If is_ra_mode is True, create a REMOTE_EST_RA (Registration Authority) instead of REMOTE_ISSUING_EST.
         """
-        if is_ra_mode:
+        with transaction.atomic():
             instance = super().save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
-            instance.credential = None
-            instance.certificate = None  # Will be set from truststore later
-        else:
-            instance = super().save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
-            instance.credential = self._create_credential()
+            if is_ra_mode:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
+                instance.credential = None
+                instance.certificate = None  # Will be set from truststore later
+            else:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
+                instance.credential = self._create_credential()
 
-        no_onboarding_config = NoOnboardingConfigModel.objects.create(
-            pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
-            est_password=self.cleaned_data['est_password'],
-            trust_store=None,  # Will be set later via truststore association
-        )
+            no_onboarding_config = NoOnboardingConfigModel.objects.create(
+                pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+                est_password=self.cleaned_data['est_password'],
+                trust_store=None,  # Will be set later via truststore association
+            )
+            instance.no_onboarding_config = no_onboarding_config
+            instance.est_username = self.cleaned_data['est_username']
+
+            PermittedProtocolsAuthorization().check(instance)
+            PkiSecurityAuthorization().check(instance)
+
+            instance.save()
+        return instance
+
+
+
+class IssuingCaAddRequestExternalCsrForm(IssuingCaAddRequestMixin):
+    """Form for generating a CSR for an external PKI issuance flow."""
+
+    class Meta:
+        """Meta class for IssuingCaAddRequestExternalCsrForm."""
+        model = CaModel
+        fields: ClassVar[list[str]] = ['unique_name', 'ca_type']
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form."""
+        super().__init__(*args, **kwargs)
+        self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+        self.fields['ca_type'].widget = forms.HiddenInput()
+
+    def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
+        """Save the CSR-based external-PKI CA configuration."""
+        instance = super().save(commit=False)
+        instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+        instance.credential = self._create_credential()
+
+        no_onboarding_config = NoOnboardingConfigModel()
+        no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.MANUAL])
+        no_onboarding_config.save()
         instance.no_onboarding_config = no_onboarding_config
-        instance.est_username = self.cleaned_data['est_username']
 
         PermittedProtocolsAuthorization().check(instance)
         PkiSecurityAuthorization().check(instance)
 
-        instance.save()
+        if commit:
+            instance.save()
         return instance
 
+
+class IssuingCaExternalCsrCertificateForm(forms.Form):
+    """Form for uploading the certificate issued for an external CSR."""
+
+    certificate = forms.FileField(
+        label=_('Issued Issuing CA Certificate (.cer, .der, .pem)'),
+        required=True,
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form with the pending issuing CA."""
+        self.instance: CaModel = kwargs.pop('instance')
+        super().__init__(*args, **kwargs)
+
+    def clean_certificate(self) -> CertificateSerializer:
+        """Parse and validate the externally issued CA certificate."""
+        certificate_file = self.cleaned_data['certificate']
+        if certificate_file.size > 64 * 1024:
+            raise forms.ValidationError(_('Certificate file is too large, max. 64 kiB.'))
+
+        try:
+            certificate_serializer = CertificateSerializer.from_bytes(certificate_file.read())
+            certificate = certificate_serializer.as_crypto()
+            basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except Exception as exception:
+            raise forms.ValidationError(_('Failed to parse the Issuing CA certificate.')) from exception
+
+        if not basic_constraints.ca:
+            raise forms.ValidationError(_('The provided certificate is not a CA certificate.'))
+
+        if self.instance.credential is None:
+            raise forms.ValidationError(_('The Issuing CA credential is missing.'))
+
+        expected_public_key = self.instance.credential.get_private_key().public_key()
+        expected_public_key_der = expected_public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        actual_public_key_der = certificate.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        if actual_public_key_der != expected_public_key_der:
+            raise forms.ValidationError(_('The uploaded certificate does not match the generated CSR.'))
+
+        return certificate_serializer
 
 
 class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
@@ -826,27 +910,27 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
 
         If is_ra_mode is True, create a REMOTE_CMP_RA (Registration Authority) instead of REMOTE_ISSUING_CMP.
         """
-        if is_ra_mode:
-            instance = super(IssuingCaAddRequestMixin, self).save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
-            instance.credential = None
-            instance.certificate = None  # Will be set from truststore later
-        else:
+        with transaction.atomic():
             instance = super().save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
-            instance.credential = self._create_credential()
+            if is_ra_mode:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
+                instance.credential = None
+                instance.certificate = None  # Will be set from truststore later
+            else:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+                instance.credential = self._create_credential()
 
-        no_onboarding_config = NoOnboardingConfigModel.objects.create(
-            pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
-            cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
-            trust_store=None,  # Will be set later via truststore association
-        )
-        instance.no_onboarding_config = no_onboarding_config
+            no_onboarding_config = NoOnboardingConfigModel.objects.create(
+                pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
+                cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
+                trust_store=None,  # Will be set later via truststore association
+            )
+            instance.no_onboarding_config = no_onboarding_config
 
-        PermittedProtocolsAuthorization().check(instance)
-        PkiSecurityAuthorization().check(instance)
+            PermittedProtocolsAuthorization().check(instance)
+            PkiSecurityAuthorization().check(instance)
 
-        instance.save()
+            instance.save()
         return instance
 
 
@@ -887,12 +971,16 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
                 trust_store_field.help_text = _(
                     'EST RA (Step 2/2): Import the TLS server certificate (used for HTTPS connection security).'
                 )
-        elif self.instance.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+        elif self.instance.ca_type in [
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CSR,
+            CaModel.CaTypeChoice.REMOTE_CMP_RA,
+        ]:
             trust_store_field.queryset = TruststoreModel.objects.filter(
                 intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
             )
             trust_store_field.help_text = _(
-                'CMP: Only "Issuing CA Chain" truststores can be associated.'
+                'Only "Issuing CA Chain" truststores can be associated.'
             )
         else:
             trust_store_field.queryset = TruststoreModel.objects.filter(

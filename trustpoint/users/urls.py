@@ -18,6 +18,7 @@ from users.views import (
     UserProfileRoleView,
     UserProfileView,
 )
+from users.views import PasswordChangeRequiredView, TrustpointLoginView, TrustpointProfileView
 
 app_name = 'users'
 urlpatterns = [
@@ -37,6 +38,9 @@ urlpatterns = [
         name='profile_client_certificate_action',
     ),
     path('login/', TrustpointLoginView.as_view(template_name='users/login.html'), name='login'),
+    path('profile/', TrustpointProfileView.as_view(), name='profile'),
+    path('profile/<int:pk>/', TrustpointProfileView.as_view(), name='user-profile'),
+    path('password-change-required/', PasswordChangeRequiredView.as_view(), name='password-change-required'),
     path('logout/', auth_views.LogoutView.as_view(template_name='users/logout.html'), name='logout'),
 ]
 

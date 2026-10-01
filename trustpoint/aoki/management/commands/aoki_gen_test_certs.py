@@ -8,10 +8,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from aoki.views import AokiServiceMixin
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from django.core.management.base import BaseCommand
+
+from aoki.views import AokiServiceMixin
 from pki.util.x509 import CertificateGenerator
 
 if TYPE_CHECKING:
@@ -43,7 +44,9 @@ class Command(BaseCommand):
         del args, kwargs  # Unused
         idevid_cert = AokiTestCertGenerator.generate_idevid_pki()
         owner_ca_cert, owner_ca_key = AokiTestCertGenerator.generate_owner_id_ca()
-        AokiTestCertGenerator.generate_owner_id_cert(idevid_cert, owner_ca_cert=owner_ca_cert, owner_ca_key=owner_ca_key)
+        AokiTestCertGenerator.generate_owner_id_cert(
+            idevid_cert, owner_ca_cert=owner_ca_cert, owner_ca_key=owner_ca_key
+        )
         print('Certificates generated successfully.')
 
 
@@ -125,7 +128,7 @@ class AokiTestCertGenerator:
         # If the IDevID Subject Serial Number is not present, '' shall be used as a placeholder
         idevid_san_uri = f'dev-owner:cert:{TEST_SERIAL_NUMBER}_{idevid_sha256_fingerprint}'
         print(f'DeviceOwnerID SAN URI: {idevid_san_uri}')
-        idevid_san_uuid_uris = AokiServiceMixin.get_idevid_owner_san_uris_from_san(idevid_cert=idevid_cert)
+        idevid_san_uuid_uris = AokiServiceMixin.get_idevid_owner_san_uris_from_san(idevid_cert=idevid_cert) or []
         san_ext_list = [x509.UniformResourceIdentifier(idevid_san_uri)]
         san_ext_list.extend([x509.UniformResourceIdentifier(uri) for uri in idevid_san_uuid_uris])
 

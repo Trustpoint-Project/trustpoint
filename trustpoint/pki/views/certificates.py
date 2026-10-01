@@ -140,21 +140,12 @@ class CertificateTableView(
             self.request.GET.get(key)
             for key in ('common_name', 'status', 'expiry_window', 'is_self_signed', 'created_at_from', 'created_at_to')
         )
-        for certificate in context['certificates']:
-            certificate.table_status = self._get_table_status(certificate)
         return context
 
     @staticmethod
     def _get_table_status(certificate: CertificateModel) -> str:
         """Return the status label displayed in the certificates table."""
-        now = timezone.now()
-        if hasattr(certificate, 'revoked_certificate'):
-            return 'Revoked'
-        if certificate.not_valid_before > now:
-            return 'Not Yet Valid'
-        if certificate.not_valid_after <= now:
-            return 'Expired'
-        return 'OK'
+        return certificate.table_status
 
 
 OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}

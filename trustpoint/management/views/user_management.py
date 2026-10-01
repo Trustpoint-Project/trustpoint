@@ -83,7 +83,7 @@ class UserTableView(
     """List view displaying all Trustpoint users in a sortable table."""
 
     model = TrustpointUser
-    template_name = 'management/user_management.html'
+    template_name = 'management/users/user_management.html'
     context_object_name = 'users'
     default_sort_param = 'username'
 
@@ -102,7 +102,7 @@ class UserCreateView(
 
     model = TrustpointUser
     form_class = TrustpointUserCreationForm
-    template_name = 'management/user_add.html'
+    template_name = 'management/users/user_add.html'
     success_url = reverse_lazy('management:user_management')
 
     def form_valid(self, form: BaseModelForm[TrustpointUser]) -> HttpResponse:
@@ -137,7 +137,7 @@ class UserDeleteView(
     """
 
     model: type[TrustpointUser] = TrustpointUser
-    template_name = 'management/user_confirm_delete.html'
+    template_name = 'management/users/user_confirm_delete.html'
     success_url = reverse_lazy('management:user_management')
 
     def form_valid(self, form: Any) -> HttpResponse:
@@ -217,6 +217,8 @@ class UserChangeRoleView(
     """
 
     form_class = TrustpointUserRoleForm
+    template_name = 'management/users/user_change_role.html'
+    success_url = reverse_lazy('management:user_management')
     page_title = _('Roles & Organization')
 
     def form_valid(self, form: BaseModelForm[TrustpointUser]) -> HttpResponse:

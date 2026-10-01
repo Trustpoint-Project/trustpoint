@@ -40,7 +40,7 @@ CA_UNIQUE_NAME = 'DevOwnerIDCA'
 DOMAIN_UNIQUE_NAME = 'DevOwnerIDDomain'
 DEVICE_COMMON_NAME = 'DevOwnerIDDevice'
 DEVICE_SERIAL_NUMBER = 'DEVOWNERID-EST-001'
-EST_PASSWORD = 'devownerid123'
+EST_PASSWORD = 'devownerid123'  # noqa: S105  # fixed credential for the local DevOwnerID test environment
 
 OWNER_CRED_UNIQUE_NAME = 'DevOwnerIDOwnerCred'
 TRUSTSTORE_UNIQUE_NAME = 'DevOwnerIDTLSTruststore'

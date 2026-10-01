@@ -459,13 +459,18 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     @property
     def certificate_status(self) -> CertificateStatus:
         """Status of the certificate."""
-        if RevokedCertificateModel.objects.filter(certificate=self).exists():
+        if hasattr(self, 'revoked_certificate'):
             return self.CertificateStatus.REVOKED
         if datetime.datetime.now(datetime.UTC) < self.not_valid_before:
             return self.CertificateStatus.NOT_YET_VALID
         if datetime.datetime.now(datetime.UTC) > self.not_valid_after:
             return self.CertificateStatus.EXPIRED
         return self.CertificateStatus.OK
+
+    @property
+    def table_status(self) -> str:
+        """Return the certificate status label displayed in tables."""
+        return str(self.certificate_status.label)
 
     @property
     def days_left(self) -> int:

@@ -37,6 +37,7 @@ Full Name is required, all other fields are optional.
 ## Project Authors
 
 * Alexander Harig
+* Chirag Gupta (chiruu12)
 * Christian Schwinne (Aircoookie) <christian.schwinne A hshl.de> - Hamm-Lippstadt University of Applied Sciences
 * Dominik Isaak
 * Florian Handke (FHatCSW) <florian.handke A campus-schwarzwald.de> - Campus Schwarzwald gGmbH
@@ -46,6 +47,7 @@ Full Name is required, all other fields are optional.
 * Marvin Siegel 
 * Mohammad Zeeshan
 * Omkar Joglekar
+* Ricardo Cristino
 * Rohit Bohara
 * Sven Bergmann <sven.bergmann A achelos.de> - achelos GmbH
 

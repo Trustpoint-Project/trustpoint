@@ -61,4 +61,5 @@ audit_logs
 tls_settings
 backups
 notifications
+environment_configuration
 ```

@@ -252,7 +252,6 @@ class SecuritySettingsViewTest(TestCase):
 
         context = mock_render_to_response.call_args.args[0]
         self.assertEqual(context['security_form'], form)
-        self.assertIn('ui_form', context)
         self.assertIn('workflow_execution_form', context)
         self.assertIn('smtp_email_form', context)
         self.assertIn('prometheus_form', context)

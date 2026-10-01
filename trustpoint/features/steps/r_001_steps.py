@@ -118,17 +118,7 @@ def step_verify_device_deletion(context: runner.Context, name: str) -> None:  # 
     assert name not in context.response, "Device still exist in the list"
 
 
-@when('the admin attempts to view the details of a non-existent device {non_existent_device_id}')
-def step_attempt_view_nonexistent(context: runner.Context, non_existent_device_id: str) -> None:  # noqa: ARG001
-    """Attempts to view details of a non-existent device.
-
-    Args:
-        context (runner.Context): Behave context.
-        non_existent_device_id (str): The id a non-existent device.
-    """
-    #Navigate (GET request) to the device detailed page
-    context.response = context.authenticated_client.get(f"/devices/details/{non_existent_device_id}")
-    
+   
 @then('the system should display an error message')
 def step_device_list(context: runner.Context) -> None:  # noqa: ARG001
     """Verifies that the new device appears in the device list.

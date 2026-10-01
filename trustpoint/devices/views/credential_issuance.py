@@ -41,14 +41,16 @@ from onboarding.models import (
 )
 from pki.forms import TruststoreAddForm
 from pki.forms.cert_profiles import CertificateIssuanceForm
+from pki.forms.csr import CsrIssuanceForm
 from pki.models import IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import TruststoreModel
+from pki.services.csr import csr_to_request
 from request.authorization import ManualAuthorization
 from request.gds_push import GdsPushService
 from request.operation_processor.issue_cred import CredentialIssueProcessor
-from request.request_context import ManualCredentialRequestContext
+from request.request_context import ManualCredentialRequestContext, ManualIssuanceMethod
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -250,9 +252,49 @@ class AbstractSelectCertificateProfileNewApplicationCredentialView(PageContextMi
             context['cert_profile_list'][profile_id] = display_name
 
         context['profile_issuance_url'] = \
-            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_profile_credential'
+            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_choose_issuance_method'
 
         return context
+
+
+class AbstractChooseIssuanceMethodView(PageContextMixin, DetailView[DeviceModel]):
+    """Choose between Trustpoint-generated and external-CSR issuance."""
+
+    http_method_names = ('get',)
+    model = DeviceModel
+    context_object_name = 'device'
+    template_name = 'devices/credentials/issuance_method_select.html'
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Dispatch the request, ensuring the selected profile exists."""
+        self.profile = get_object_or_404(CertificateProfileModel, pk=kwargs['profile_id'])
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the selected profile and issuance-method URLs to the context."""
+        context = super().get_context_data(**kwargs)
+        context['profile'] = self.profile
+        context['generated_url'] = (
+            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_profile_credential'
+        )
+        context['csr_url'] = (
+            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_csr_credential'
+        )
+        return context
+
+
+class DeviceChooseIssuanceMethodView(AbstractChooseIssuanceMethodView):
+    """Choose an issuance method within the devices section."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsChooseIssuanceMethodView(AbstractChooseIssuanceMethodView):
+    """Choose an issuance method within the OPC UA GDS section."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class DeviceSelectCertificateProfileNewApplicationCredentialView(
@@ -835,6 +877,7 @@ class AbstractIssueProfileCredentialView(
             domain=device.domain,
             cert_profile_str=self.profile.unique_name,
             actor=self.request.user if self.request.user.is_authenticated else None,
+            manual_issuance_method=ManualIssuanceMethod.TRUSTPOINT_GENERATED,
         )
 
         cert_builder = form.get_certificate_builder(request_context=ctx)
@@ -846,6 +889,75 @@ class AbstractIssueProfileCredentialView(
             err_msg = 'Issued credential not in context.'
             raise ValueError(err_msg)
         return ctx.issued_credential
+
+
+class AbstractIssueCsrCredentialView(AbstractIssueCredentialView[CsrIssuanceForm, BaseTlsCredentialIssuer]):
+    """Issue an application credential from an externally generated CSR."""
+
+    issuer_class = BaseTlsCredentialIssuer
+    form_class = CsrIssuanceForm
+    template_name = 'devices/credentials/csr_issuance.html'
+    friendly_name = 'Certificate Profile Credential'
+    page_name: str
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Dispatch the request, ensuring the selected profile exists."""
+        self.profile = get_object_or_404(CertificateProfileModel, pk=kwargs['profile_id'])
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Add uploaded files to the CSR form arguments."""
+        kwargs: dict[str, Any] = {}
+        if self.request.method == 'POST':
+            kwargs['data'] = self.request.POST
+            kwargs['files'] = self.request.FILES
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the selected profile and method-navigation URL to the context."""
+        context = super().get_context_data(**kwargs)
+        context['profile'] = self.profile
+        context['method_url'] = (
+            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_choose_issuance_method'
+        )
+        return context
+
+    def issue_credential(self, device: DeviceModel, form: forms.Form) -> IssuedCredentialModel:
+        """Issue a keyless application credential from the validated CSR."""
+        if not isinstance(form, CsrIssuanceForm):
+            err_msg = 'Invalid form type. Expected CsrIssuanceForm.'
+            raise TypeError(err_msg)
+        if not device.domain:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+        csr = form.cleaned_data['csr']
+        ctx = ManualCredentialRequestContext(
+            device=device,
+            domain=device.domain,
+            cert_profile_str=self.profile.unique_name,
+            actor=self.request.user if self.request.user.is_authenticated else None,
+            cert_requested=csr,
+            csr_strict=True,
+            manual_issuance_method=ManualIssuanceMethod.EXTERNAL_CSR,
+        )
+        csr_to_request(csr)
+        ManualAuthorization().authorize(ctx)
+        CredentialIssueProcessor().process_operation(ctx)
+        if not ctx.issued_credential:
+            err_msg = 'Issued credential not in context.'
+            raise ValueError(err_msg)
+        return ctx.issued_credential
+
+
+class DeviceIssueCsrCredentialView(AbstractIssueCsrCredentialView):
+    """Issue a CSR-backed credential within the devices section."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsIssueCsrCredentialView(AbstractIssueCsrCredentialView):
+    """Issue a CSR-backed credential within the OPC UA GDS section."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class DeviceIssueProfileCredentialView(AbstractIssueProfileCredentialView):

@@ -1,156 +1,288 @@
 {% load i18n %}
 
 {% block table_filter %}
+<div class="d-flex flex-wrap gap-2 align-items-center">
 
-  <div class="card-body pb-0 d-flex gap-2 align-items-center">
+    {# ======================================================== #}
+    {# Filters                                                  #}
+    {# ======================================================== #}
+    <div class="dropdown">
+        <button
+            class="btn btn-sm {% if filters_active %}btn-primary{% else %}btn-outline-secondary{% endif %} dropdown-toggle"
+            type="button"
+            id="tp-filter-dropdown-btn"
+            data-bs-toggle="dropdown"
+            data-bs-auto-close="outside"
+            aria-expanded="false"
+        >
+            {% trans 'Filters' %}
 
-    {# --- Filters dropdown --- #}
-    <div class="dropdown mb-1">
-      <button class="btn btn-sm {% if filters_active %}btn-primary{% else %}btn-outline-secondary{% endif %} dropdown-toggle"
-              type="button"
-              id="tp-filter-dropdown-btn"
-              data-bs-toggle="dropdown"
-              data-bs-auto-close="outside"
-              aria-expanded="{% if filters_active %}true{% else %}false{% endif %}">
-        {% trans 'Filters' %}{% if filters_active %} <span class="badge bg-white text-primary ms-1">{% trans 'active' %}</span>{% endif %}
-      </button>
-      <div class="dropdown-menu p-3" id="tp-filter-dropdown-menu" style="min-width: 22rem;">
-        <form method="get" class="d-flex flex-column gap-2">
+            {% if filters_active %}
+                <span class="ms-1">
+                    · {% trans 'Active' %}
+                </span>
+            {% endif %}
+        </button>
 
-          <div>
-            <label for="{{ filter.form.common_name.id_for_label }}" class="form-label mb-1 fw-semibold">
-              {{ filter.form.common_name.label }}
-            </label>
-            {{ filter.form.common_name }}
-          </div>
+        <div
+            class="dropdown-menu p-3"
+            id="tp-filter-dropdown-menu"
+            style="min-width: 22rem;"
+        >
+            <form method="get">
 
-          <div>
-            <label for="{{ filter.form.serial_number.id_for_label }}" class="form-label mb-1 fw-semibold">
-              {{ filter.form.serial_number.label }}
-            </label>
-            {{ filter.form.serial_number }}
-          </div>
+                <div class="mb-3">
+                    <label
+                        for="{{ filter.form.common_name.id_for_label }}"
+                        class="form-label"
+                    >
+                        {{ filter.form.common_name.label }}
+                    </label>
 
-          <div>
-            <label for="{{ filter.form.domain.id_for_label }}" class="form-label mb-1 fw-semibold">
-              {{ filter.form.domain.label }}
-            </label>
-            {{ filter.form.domain }}
-          </div>
+                    {{ filter.form.common_name }}
+                </div>
 
-          <div>
-            <label for="{{ filter.form.enrollment_state.id_for_label }}" class="form-label mb-1 fw-semibold">
-              {{ filter.form.enrollment_state.label }}
-            </label>
-            {{ filter.form.enrollment_state }}
-          </div>
+                <div class="mb-3">
+                    <label
+                        for="{{ filter.form.serial_number.id_for_label }}"
+                        class="form-label"
+                    >
+                        {{ filter.form.serial_number.label }}
+                    </label>
 
-          <div>
-            <label for="{{ filter.form.domain_credential_state.id_for_label }}" class="form-label mb-1 fw-semibold">
-              {{ filter.form.domain_credential_state.label }}
-            </label>
-            {{ filter.form.domain_credential_state }}
-          </div>
+                    {{ filter.form.serial_number }}
+                </div>
 
-          <div>
-            <label for="{{ filter.form.application_certificate_state.id_for_label }}" class="form-label mb-1 fw-semibold">
-              {{ filter.form.application_certificate_state.label }}
-            </label>
-            {{ filter.form.application_certificate_state }}
-          </div>
+                <div class="mb-3">
+                    <label
+                        for="{{ filter.form.domain.id_for_label }}"
+                        class="form-label"
+                    >
+                        {{ filter.form.domain.label }}
+                    </label>
 
-          <div class="d-flex gap-2">
-            <div class="flex-fill">
-              <label for="{{ filter.form.created_at_from.id_for_label }}" class="form-label mb-1 fw-semibold">
-                {{ filter.form.created_at_from.label }}
-              </label>
-              {{ filter.form.created_at_from }}
-            </div>
-            <div class="flex-fill">
-              <label for="{{ filter.form.created_at_to.id_for_label }}" class="form-label mb-1 fw-semibold">
-                {{ filter.form.created_at_to.label }}
-              </label>
-              {{ filter.form.created_at_to }}
-            </div>
-          </div>
+                    {{ filter.form.domain }}
+                </div>
 
-          <div class="d-flex gap-2 mt-1">
-            <button type="submit" class="btn btn-primary btn-sm flex-fill">
-              {% trans 'Apply' %}
-            </button>
-            <a href="{% url table_url %}" class="btn btn-outline-secondary btn-sm flex-fill">
-              {% trans 'Reset' %}
-            </a>
-          </div>
+                <div class="mb-3">
+                    <label
+                        for="{{ filter.form.enrollment_state.id_for_label }}"
+                        class="form-label"
+                    >
+                        {{ filter.form.enrollment_state.label }}
+                    </label>
 
-        </form>
-      </div>
+                    {{ filter.form.enrollment_state }}
+                </div>
+
+                <div class="mb-3">
+                    <label
+                        for="{{ filter.form.domain_credential_state.id_for_label }}"
+                        class="form-label"
+                    >
+                        {{ filter.form.domain_credential_state.label }}
+                    </label>
+
+                    {{ filter.form.domain_credential_state }}
+                </div>
+
+                <div class="mb-3">
+                    <label
+                        for="{{ filter.form.application_certificate_state.id_for_label }}"
+                        class="form-label"
+                    >
+                        {{ filter.form.application_certificate_state.label }}
+                    </label>
+
+                    {{ filter.form.application_certificate_state }}
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col">
+                        <label
+                            for="{{ filter.form.created_at_from.id_for_label }}"
+                            class="form-label"
+                        >
+                            {{ filter.form.created_at_from.label }}
+                        </label>
+
+                        {{ filter.form.created_at_from }}
+                    </div>
+
+                    <div class="col">
+                        <label
+                            for="{{ filter.form.created_at_to.id_for_label }}"
+                            class="form-label"
+                        >
+                            {{ filter.form.created_at_to.label }}
+                        </label>
+
+                        {{ filter.form.created_at_to }}
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between gap-2">
+                    <a
+                        href="{% url table_url %}"
+                        class="btn btn-sm btn-outline-secondary"
+                    >
+                        {% trans 'Reset' %}
+                    </a>
+
+                    <button
+                        type="submit"
+                        class="btn btn-sm btn-primary"
+                    >
+                        {% trans 'Apply Filters' %}
+                    </button>
+                </div>
+
+            </form>
+        </div>
     </div>
 
-    {# --- Column visibility dropdown --- #}
-    <div class="dropdown mb-1">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-              data-bs-toggle="dropdown" aria-expanded="false"
-              data-bs-auto-close="outside">
-        {% trans 'Columns' %}
-      </button>
-      <ul class="dropdown-menu" id="tp-column-toggle-menu">
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="name" checked> {% trans 'Name' %}
-          </label>
-        </li>
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="domain" checked> {% trans 'Domain' %}
-          </label>
-        </li>
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="serial_number"> {% trans 'Serial Number' %}
-          </label>
-        </li>
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="created_at"> {% trans 'Created at' %}
-          </label>
-        </li>
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="enrollment" checked> {% trans 'Enrollment' %}
-          </label>
-        </li>
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="domain_credential" checked> {% trans 'Domain Credential' %}
-          </label>
-        </li>
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="application_certificates" checked> {% trans 'Application Certificates' %}
-          </label>
-        </li>
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="onboarding_protocol"> {% trans 'Onboarding Protocol' %}
-          </label>
-        </li>
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="pki_protocols"> {% trans 'PKI Protocols' %}
-          </label>
-        </li>
-        <li>
-          <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="clm" checked> {% trans 'Certificate Management' %}
-          </label>
-        </li>
-      </ul>
+
+    {# ======================================================== #}
+    {# Column Visibility                                       #}
+    {# ======================================================== #}
+    <div class="dropdown">
+        <button
+            class="btn btn-sm btn-outline-secondary dropdown-toggle"
+            type="button"
+            data-bs-toggle="dropdown"
+            data-bs-auto-close="outside"
+            aria-expanded="false"
+        >
+            {% trans 'Columns' %}
+        </button>
+
+        <ul
+            class="dropdown-menu"
+            id="tp-column-toggle-menu"
+        >
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="name"
+                        checked
+                    >
+                    {% trans 'Name' %}
+                </label>
+            </li>
+
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="domain"
+                        checked
+                    >
+                    {% trans 'Domain' %}
+                </label>
+            </li>
+
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="serial_number"
+                    >
+                    {% trans 'Serial Number' %}
+                </label>
+            </li>
+
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="created_at"
+                    >
+                    {% trans 'Created at' %}
+                </label>
+            </li>
+
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="enrollment"
+                        checked
+                    >
+                    {% trans 'Enrollment' %}
+                </label>
+            </li>
+
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="domain_credential"
+                        checked
+                    >
+                    {% trans 'Domain Credential' %}
+                </label>
+            </li>
+
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="application_certificates"
+                        checked
+                    >
+                    {% trans 'Application Certificates' %}
+                </label>
+            </li>
+
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="onboarding_protocol"
+                    >
+                    {% trans 'Onboarding Protocol' %}
+                </label>
+            </li>
+
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="pki_protocols"
+                    >
+                    {% trans 'PKI Protocols' %}
+                </label>
+            </li>
+
+            <li>
+                <label class="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                        type="checkbox"
+                        class="tp-col-toggle form-check-input mt-0"
+                        data-col="clm"
+                        checked
+                    >
+                    {% trans 'Certificate Management' %}
+                </label>
+            </li>
+        </ul>
     </div>
 
-    {# --- CSV export button --- #}
+
+    {# ======================================================== #}
+    {# Export                                                   #}
+    {# ======================================================== #}
     {% include "shared/partials/export_button.html" %}
 
-  </div>
-
+</div>
 {% endblock table_filter %}
