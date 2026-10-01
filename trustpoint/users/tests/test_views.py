@@ -118,7 +118,7 @@ class TrustpointProfileViewTest(TestCase):
         self.assertContains(response, 'Registration date')
         self.assertContains(response, 'Last login')
         self.assertContains(response, 'Account Security')
-        self.assertContains(response, 'Current password')
+        self.assertContains(response, 'Change Password')
         self.assertContains(response, 'User Interface')
         self.assertContains(response, 'Standard View')
         self.assertContains(response, 'Simplified View')

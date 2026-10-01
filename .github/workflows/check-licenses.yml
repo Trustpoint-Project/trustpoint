@@ -62,11 +62,10 @@ jobs:
 
           # qrcode is BSD-licensed, but its PyPI metadata also contains
           # the "Other/Proprietary License" classifier.
-          # Exclude this reviewed false positive from the proprietary check.
           PROPRIETARY="$(
             echo "$LICENSES" \
               | grep -iE "Proprietary|Commercial" \
-              | grep -viE "^qrcode[[:space:]]"
+              | grep -viE "^[[:space:]]*qrcode[[:space:]]"
           )"
 
           if [ -n "$PROPRIETARY" ]; then
