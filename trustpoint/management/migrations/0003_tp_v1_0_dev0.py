@@ -1,6 +1,8 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
+import django.core.validators
+import django.db.models.deletion
 from django.db import migrations, models
 
 
@@ -8,6 +10,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('management', '0002_initial'),
+        ('pki', '0002_initial'),
     ]
 
     operations = [
@@ -28,6 +31,37 @@ class Migration(migrations.Migration):
             options={
                 'verbose_name': 'account security configuration',
                 'verbose_name_plural': 'account security configuration',
+            },
+        ),
+        migrations.CreateModel(
+            name='CertificateAuthenticationConfig',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('enabled', models.BooleanField(default=False, verbose_name='Enable certificate authentication')),
+                ('issuing_ca', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='user_authentication_config', to='pki.camodel')),
+            ],
+            options={
+                'verbose_name': 'Certificate authentication configuration',
+                'verbose_name_plural': 'Certificate authentication configurations',
+            },
+        ),
+        migrations.CreateModel(
+            name='PasswordPolicy',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('require_otp', models.BooleanField(default=False, help_text='Require an authenticator code for every password login. Users without OTP must set it up first.', verbose_name='Require OTP')),
+                ('minimum_length', models.PositiveIntegerField(default=8, help_text='Minimum number of characters in a password.')),
+                ('user_similarity_enabled', models.BooleanField(default=True, help_text='Reject passwords that are too similar to the user information checked by Django.')),
+                ('max_similarity', models.FloatField(default=0.7, help_text='Similarity threshold from 0.1 to 1.0. Lower values make the check stricter.', validators=[django.core.validators.MinValueValidator(0.1), django.core.validators.MaxValueValidator(1.0)])),
+                ('reject_common_passwords', models.BooleanField(default=True, help_text='Reject passwords found in the common-password list.')),
+                ('common_password_list_data', models.BinaryField(blank=True, default=bytes, help_text='Custom common-password list contents in plain text or gzip format, included in database backups.')),
+                ('common_password_list_name', models.CharField(blank=True, default='', help_text='Original filename of the custom common-password list.', max_length=255)),
+                ('reject_numeric_passwords', models.BooleanField(default=True, help_text='Reject passwords that consist entirely of digits.')),
+                ('last_updated', models.DateTimeField(auto_now=True)),
+            ],
+            options={
+                'verbose_name': 'Password Policy',
+                'verbose_name_plural': 'Password Policies',
             },
         ),
         migrations.DeleteModel(
