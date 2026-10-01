@@ -1,14 +1,9 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n static internationalization_tags %}
 
-{% block head %}
-  {{ block.super }}
-  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
-{% endblock head %}
-
 {% block content %}
-<div class="container-fluid py-3 wf2-page">
-  <div class="card border-0 shadow-sm mb-3">
+<div class="container-fluid py-3">
+  <div class="card mb-3">
     <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
       <div>
         <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
@@ -74,7 +69,7 @@
   </div>
 
   {% if pending_approvals and inst.status == "awaiting" %}
-    <div class="alert alert-warning shadow-sm mb-3">
+    <div class="alert alert-warning mb-3">
       <div class="fw-semibold">{% trans "Approval required" %}</div>
       <div class="small mt-1">
         {% blocktrans count count=pending_approvals|length %}
@@ -85,7 +80,7 @@
       </div>
     </div>
   {% elif inst.status == "error" %}
-    <div class="alert alert-danger shadow-sm mb-3">
+    <div class="alert alert-danger mb-3">
       <div class="fw-semibold">{% trans "Instance error" %}</div>
       <div class="small mt-1">
         <div class="text-muted mb-1">{% trans "Resume continues from the current step; it does not restart from the beginning." %}</div>
@@ -93,32 +88,32 @@
           <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
         {% endif %}
         {% if inst.status_message %}
-          <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+          <div class="text-break">{{ inst.status_message }}</div>
         {% elif latest_failed_step_run and latest_failed_step_run.error %}
-          <div class="wf2-pre-wrap">{{ latest_failed_step_run.error }}</div>
+          <div class="text-break">{{ latest_failed_step_run.error }}</div>
         {% elif latest_failed_job and latest_failed_job.last_error %}
-          <div class="wf2-pre-wrap">{{ latest_failed_job.last_error }}</div>
+          <div class="text-break">{{ latest_failed_job.last_error }}</div>
         {% else %}
           {% trans "The last workflow step errored. Review the execution timeline below for details." %}
         {% endif %}
       </div>
     </div>
   {% elif inst.status == "rejected" %}
-    <div class="alert alert-danger shadow-sm mb-3">
+    <div class="alert alert-danger mb-3">
       <div class="fw-semibold">{% trans "Instance rejected" %}</div>
       <div class="small mt-1">
         {% if inst.status_reason %}
           <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
         {% endif %}
         {% if inst.status_message %}
-          <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+          <div class="text-break">{{ inst.status_message }}</div>
         {% else %}
           {% trans "This workflow instance reached a rejected terminal state." %}
         {% endif %}
       </div>
     </div>
   {% elif inst.status == "paused" %}
-    <div class="alert alert-warning shadow-sm mb-3">
+    <div class="alert alert-warning mb-3">
       <div class="fw-semibold">{% trans "Instance paused" %}</div>
       <div class="small mt-1">
         <div class="text-muted mb-1">{% trans "Resume continues from the current step; it does not restart from the beginning." %}</div>
@@ -126,28 +121,28 @@
           <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
         {% endif %}
         {% if inst.status_message %}
-          <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+          <div class="text-break">{{ inst.status_message }}</div>
         {% else %}
           {% trans "Execution stopped before completion and can be resumed." %}
         {% endif %}
       </div>
     </div>
   {% elif inst.status == "stopped" %}
-    <div class="alert alert-secondary shadow-sm mb-3">
+    <div class="alert alert-secondary mb-3">
       <div class="fw-semibold">{% trans "Instance stopped" %}</div>
       <div class="small mt-1">
         {% if inst.status_reason %}
           <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
         {% endif %}
         {% if inst.status_message %}
-          <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+          <div class="text-break">{{ inst.status_message }}</div>
         {% else %}
           {% trans "This workflow instance was stopped intentionally." %}
         {% endif %}
       </div>
     </div>
   {% elif inst.status == "timed_out" %}
-    <div class="alert alert-danger shadow-sm mb-3">
+    <div class="alert alert-danger mb-3">
       <div class="fw-semibold">{% trans "Instance timed out" %}</div>
       {% if inst.status_reason or inst.status_message %}
         <div class="small mt-1">
@@ -155,13 +150,13 @@
             <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
           {% endif %}
           {% if inst.status_message %}
-            <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+            <div class="text-break">{{ inst.status_message }}</div>
           {% endif %}
         </div>
       {% endif %}
     </div>
   {% elif inst.status == "approved" %}
-    <div class="alert alert-success shadow-sm mb-3">
+    <div class="alert alert-success mb-3">
       <div class="fw-semibold">{% trans "Instance approved" %}</div>
       {% if inst.status_reason or inst.status_message %}
         <div class="small mt-1">
@@ -169,13 +164,13 @@
             <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
           {% endif %}
           {% if inst.status_message %}
-            <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+            <div class="text-break">{{ inst.status_message }}</div>
           {% endif %}
         </div>
       {% endif %}
     </div>
   {% elif inst.status == "finished" %}
-    <div class="alert alert-success shadow-sm mb-3">
+    <div class="alert alert-success mb-3">
       <div class="fw-semibold">{% trans "Instance finished" %}</div>
       {% if inst.status_reason or inst.status_message %}
         <div class="small mt-1">
@@ -183,7 +178,7 @@
             <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
           {% endif %}
           {% if inst.status_message %}
-            <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+            <div class="text-break">{{ inst.status_message }}</div>
           {% endif %}
         </div>
       {% endif %}
@@ -191,7 +186,7 @@
   {% endif %}
 
   {% if pending_approvals %}
-    <div class="card shadow-sm mb-3">
+    <div class="card mb-3">
       <div class="card-header bg-body fw-semibold">{% trans "Action required" %}</div>
       <div class="card-body">
         <div class="row g-3">
@@ -238,7 +233,7 @@
 
   <div class="row g-3 mb-3">
     <div class="col-12 col-xl-3">
-      <div class="card h-100 shadow-sm">
+      <div class="card h-100">
         <div class="card-header bg-body fw-semibold">{% trans "Current position" %}</div>
         <div class="card-body">
           {% if current_step %}
@@ -268,7 +263,7 @@
     </div>
 
     <div class="col-12 col-xl-4">
-      <div class="card h-100 shadow-sm">
+      <div class="card h-100">
         <div class="card-header bg-body fw-semibold">{% trans "Source and event" %}</div>
         <div class="card-body">
           <div class="mb-3">
@@ -285,7 +280,7 @@
     </div>
 
     <div class="col-12 col-xl-5">
-      <div class="card h-100 shadow-sm">
+      <div class="card h-100">
         <div class="card-header bg-body fw-semibold">{% trans "Current workflow vars" %}</div>
         <div class="card-body">
           {% if vars_summary %}
@@ -308,7 +303,7 @@
   </div>
 
   {% if resolved_approvals %}
-    <div class="card shadow-sm mb-3">
+    <div class="card mb-3">
       <div class="card-header bg-body fw-semibold">{% trans "Approval history" %}</div>
       <div class="card-body">
         <div class="row g-3">
@@ -342,7 +337,7 @@
 
   <div class="row g-3">
     <div class="col-12 col-xl-8">
-      <div class="card shadow-sm">
+      <div class="card">
         <div class="card-header d-flex align-items-center justify-content-between gap-2 bg-body">
           <div class="fw-semibold">{% trans "Execution timeline" %}</div>
           <div class="text-muted small">{{ step_run_items|length }} {% trans "step run(s)" %}</div>
@@ -424,7 +419,7 @@
                               </h2>
                               <div id="stepErrorBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepErrorHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
                                 <div class="accordion-body">
-                                  <pre class="mb-0 wf2-pre-wrap">{{ r.error }}</pre>
+                                  <pre class="mb-0 text-break">{{ r.error }}</pre>
                                 </div>
                               </div>
                             </div>
@@ -439,7 +434,7 @@
                               </h2>
                               <div id="stepVarsBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepVarsHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
                                 <div class="accordion-body">
-                                  <pre class="mb-0 wf2-pre-wrap">{{ item.vars_delta_pretty }}</pre>
+                                  <pre class="mb-0 text-break">{{ item.vars_delta_pretty }}</pre>
                                 </div>
                               </div>
                             </div>
@@ -454,7 +449,7 @@
                               </h2>
                               <div id="stepOutputBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepOutputHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
                                 <div class="accordion-body">
-                                  <pre class="mb-0 wf2-pre-wrap">{{ item.output_pretty }}</pre>
+                                  <pre class="mb-0 text-break">{{ item.output_pretty }}</pre>
                                 </div>
                               </div>
                             </div>
@@ -469,7 +464,7 @@
                               </h2>
                               <div id="stepDefBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepDefHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
                                 <div class="accordion-body">
-                                  <pre class="mb-0 wf2-pre-wrap">{{ item.params_pretty }}</pre>
+                                  <pre class="mb-0 text-break">{{ item.params_pretty }}</pre>
                                 </div>
                               </div>
                             </div>
@@ -495,7 +490,7 @@
     </div>
 
     <div class="col-12 col-xl-4">
-      <div class="card shadow-sm mb-3">
+      <div class="card mb-3">
         <div class="card-header d-flex align-items-center justify-content-between gap-2 bg-body">
           <div class="fw-semibold">{% trans "Jobs" %}</div>
           <div class="text-muted small">{{ jobs|length }}</div>
@@ -517,7 +512,7 @@
                     <div>{% trans "Attempts" %}: {{ j.attempts }}/{{ j.max_attempts }}</div>
                   </div>
                   {% if j.last_error %}
-                    <div class="small text-danger mt-2 wf2-pre-wrap">{{ j.last_error }}</div>
+                    <div class="small text-danger mt-2 text-break">{{ j.last_error }}</div>
                   {% endif %}
                 </div>
               {% endfor %}
@@ -528,7 +523,7 @@
         </div>
       </div>
 
-      <div class="card shadow-sm">
+      <div class="card">
         <div class="card-header bg-body fw-semibold">{% trans "Technical details" %}</div>
         <div class="card-body">
           <div class="accordion" id="instanceTechnical">
@@ -540,7 +535,7 @@
               </h2>
               <div id="instanceVarsBody" class="accordion-collapse collapse" aria-labelledby="instanceVarsHeading" data-bs-parent="#instanceTechnical">
                 <div class="accordion-body">
-                  <pre class="mb-0 wf2-pre-wrap">{{ vars_pretty }}</pre>
+                  <pre class="mb-0 text-break">{{ vars_pretty }}</pre>
                 </div>
               </div>
             </div>
@@ -553,7 +548,7 @@
               </h2>
               <div id="instanceEventBody" class="accordion-collapse collapse" aria-labelledby="instanceEventHeading" data-bs-parent="#instanceTechnical">
                 <div class="accordion-body">
-                  <pre class="mb-0 wf2-pre-wrap">{{ event_pretty }}</pre>
+                  <pre class="mb-0 text-break">{{ event_pretty }}</pre>
                 </div>
               </div>
             </div>

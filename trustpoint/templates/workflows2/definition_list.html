@@ -1,14 +1,9 @@
 {% extends "trustpoint/base.html" %}
-{% load i18n static %}
+{% load i18n %}
 {% load internationalization_tags %}
 
-{% block head %}
-    {{ block.super }}
-    <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
-{% endblock head %}
-
 {% block content %}
-<div class="card wf2-list-page">
+<div class="card">
     <div class="card-header">
         <h1 class="mb-1">
             {% trans "Workflows" %}
