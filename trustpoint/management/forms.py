@@ -9,8 +9,6 @@ import gzip
 import logging
 import zlib
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast, override
-from zoneinfo import available_timezones
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
@@ -74,41 +72,21 @@ class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
 
         model = AccountSecurityConfig
         fields = (
-            'password_minimum_length',
-            'password_similarity',
-            'password_common',
-            'password_numeric',
-            'password_prevent_reuse',
-            'password_expiry_days',
             'api_credential_expiry_days',
             'idle_timeout_minutes',
             'failed_login_attempts',
         )
         widgets: ClassVar[dict[str, forms.Widget]] = {
-            'password_minimum_length': forms.NumberInput(attrs={'min': 1}),
-            'password_expiry_days': forms.NumberInput(attrs={'min': 1}),
             'api_credential_expiry_days': forms.NumberInput(attrs={'min': 1}),
             'idle_timeout_minutes': forms.NumberInput(attrs={'min': 15, 'max': 43200}),
             'failed_login_attempts': forms.NumberInput(attrs={'min': 1}),
         }
         labels: ClassVar[dict[str, Any]] = {
-            'password_minimum_length': _('Minimum password length'),
-            'password_similarity': _('Prevent similarity to personal information'),
-            'password_common': _('Reject commonly used passwords'),
-            'password_numeric': _('Reject entirely numeric passwords'),
-            'password_prevent_reuse': _('Prevent reuse of the previous password'),
-            'password_expiry_days': _('Expire passwords after this many days'),
             'api_credential_expiry_days': _('Expire API credentials after this many days'),
             'idle_timeout_minutes': _('Idle session duration in minutes'),
             'failed_login_attempts': _('Block after this many failed login attempts'),
         }
         help_texts: ClassVar[dict[str, Any]] = {
-            'password_minimum_length': _('Passwords must contain at least this many characters.'),
-            'password_similarity': _('Reject passwords too similar to the username, name, or email address.'),
-            'password_common': _("Reject passwords found in Django's common-password list."),
-            'password_numeric': _('Reject passwords made up of numbers only.'),
-            'password_prevent_reuse': _('A new password must differ from the immediately preceding password.'),
-            'password_expiry_days': _('Leave empty to keep passwords valid indefinitely.'),
             'api_credential_expiry_days': _('Leave empty to keep API credentials valid indefinitely.'),
             'idle_timeout_minutes': _(
                 'Users are logged out after this period without activity. '
@@ -119,11 +97,6 @@ class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
                 'Successful login resets the consecutive failure count.',
             ),
         }
-
-    def clean_password_expiry_days(self) -> int | None:
-        """Accept an empty value to represent no password expiry."""
-        value = self.cleaned_data['password_expiry_days']
-        return value or None
 
     def clean_api_credential_expiry_days(self) -> int | None:
         """Accept an empty value to represent no credential expiry."""
@@ -1247,6 +1220,8 @@ class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):
         model = PasswordPolicy
         fields: ClassVar[tuple[str, ...]] = (
             'minimum_length',
+            'prevent_password_reuse',
+            'password_expiry_days',
             'user_similarity_enabled',
             'max_similarity',
             'reject_common_passwords',
@@ -1256,15 +1231,24 @@ class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):
         )
         labels: ClassVar[dict[str, Any]] = {
             'minimum_length': _('Minimum password length'),
+            'prevent_password_reuse': _('Prevent reuse of the previous password'),
+            'password_expiry_days': _('Expire passwords after this many days'),
             'user_similarity_enabled': _('Reject passwords similar to user information'),
             'max_similarity': _('Maximum similarity'),
             'reject_common_passwords': _('Reject common passwords'),
             'reject_numeric_passwords': _('Reject entirely numeric passwords'),
         }
         widgets: ClassVar[dict[str, forms.Widget]] = {
+            'minimum_length': forms.NumberInput(attrs={'min': 1}),
+            'password_expiry_days': forms.NumberInput(attrs={'min': 1}),
             'max_similarity': forms.NumberInput(attrs={'min': '0.1', 'max': '1.0', 'step': '0.01'}),
             'require_otp': forms.CheckboxInput(attrs={'id': 'require-otp'}),
         }
+
+    def clean_password_expiry_days(self) -> int | None:
+        """Accept an empty value to represent no password expiry."""
+        value = self.cleaned_data['password_expiry_days']
+        return value or None
 
     def clean_common_password_list(self) -> UploadedFile | None:
         """Validate new uploads and rewind them for storage without modifying their contents."""

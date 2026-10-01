@@ -28,6 +28,7 @@ class TrustpointProfileViewTest(TestCase):
     def setUp(self) -> None:
         self.factory = RequestFactory()
         self.profile_url = reverse('users:profile')
+        self.password_change_url = reverse('users:profile_password')
         self.user = User.objects.create_user(username='profileuser', password='testpass123')
 
     def test_get_requires_login(self) -> None:
@@ -70,6 +71,38 @@ class TrustpointProfileViewTest(TestCase):
         self.client.force_login(self.user)
 
         response = self.client.get(reverse('users:user-profile', kwargs={'pk': other_user.pk}))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_manager_can_set_another_users_password(self) -> None:
+        """A user manager can set a human user's password without their current password."""
+        other_user = User.objects.create_user(username='otheruser', password='testpass123')
+        permission = Permission.objects.get(codename='manage_users')
+        self.user.user_permissions.add(permission)
+        self.client.force_login(self.user)
+        password_url = reverse('users:user-profile-password', kwargs={'pk': other_user.pk})
+
+        response = self.client.get(password_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, other_user.username)
+        self.assertNotContains(response, 'Current password')
+
+        response = self.client.post(
+            password_url,
+            {'new_password1': 'ManagerSetPass456!', 'new_password2': 'ManagerSetPass456!'},
+        )
+
+        self.assertRedirects(response, reverse('users:user-profile', kwargs={'pk': other_user.pk}))
+        other_user.refresh_from_db()
+        self.assertTrue(other_user.check_password('ManagerSetPass456!'))
+
+    def test_user_without_manage_permission_cannot_set_another_users_password(self) -> None:
+        """A regular user cannot open the manager password-reset view."""
+        other_user = User.objects.create_user(username='otheruser', password='testpass123')
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('users:user-profile-password', kwargs={'pk': other_user.pk}))
 
         self.assertEqual(response.status_code, 403)
 
@@ -207,9 +240,8 @@ class TrustpointProfileViewTest(TestCase):
         self.client.force_login(self.user)
 
         response = self.client.post(
-            self.profile_url,
+            self.password_change_url,
             {
-                'form_name': 'password_change',
                 'old_password': 'testpass123',
                 'new_password1': 'NewTestPass456!',
                 'new_password2': 'NewTestPass456!',
@@ -224,9 +256,8 @@ class TrustpointProfileViewTest(TestCase):
         self.client.force_login(self.user)
 
         response = self.client.post(
-            self.profile_url,
+            self.password_change_url,
             {
-                'form_name': 'password_change',
                 'old_password': 'wrong-password',
                 'new_password1': 'NewTestPass456!',
                 'new_password2': 'NewTestPass456!',

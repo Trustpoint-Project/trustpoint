@@ -17,6 +17,7 @@ from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
+from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, PasswordChangeView
 from django.core.exceptions import ValidationError
@@ -36,6 +37,7 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
 from django.views.generic.base import TemplateView
 from django.views.generic.edit import FormView, UpdateView
+from django.views.generic.edit import DeleteView, FormView, UpdateView
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp import login as otp_login
 from django_otp.qr import write_qrcode_image
@@ -51,6 +53,14 @@ from trustpoint.views.base import ContextDataMixin
 from users.authentication import CERTIFICATE_LOGIN_ERROR_SESSION_KEY, REJECTED_CERTIFICATE_SESSION_KEY
 from users.form import TrustpointUserDetailsForm, UserClientCertificateForm
 from users.models import MAX_TOKEN_LENGTH, TrustpointUser, UserClientCertificate, UserOTPDevice, new_otp_key
+from users.models import (
+    MAX_TOKEN_LENGTH,
+    TrustpointUser,
+    UserClientCertificate,
+    UserOTPDevice,
+    is_last_admin_user,
+    new_otp_key,
+)
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
@@ -132,6 +142,8 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
             profile_user.pk == self.request.user.pk
             or self.request.user.has_perm(AppPermissions.MANAGE_USERS)
         )
+        context['can_delete_user'] = context['can_change_password']
+        context['can_require_password_change'] = self.request.user.has_perm(AppPermissions.MANAGE_USERS)
         context['can_manage_account_security'] = (
             context['can_change_password']
             or self.request.user.has_perm(AppPermissions.MANAGE_USERS)
@@ -141,29 +153,23 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
             profile_user.blocked_by_failed_logins
             and self.request.user.has_perm(AppPermissions.MANAGE_USERS)
         )
-        if context['can_change_password']:
-            if profile_user.pk == self.request.user.pk:
-                context.setdefault('password_form', TrustpointPasswordChangeForm(user=profile_user))
-            else:
-                context.setdefault('password_form', TrustpointPasswordSetForm(user=profile_user))
+        context['certificate_authentication_enabled'] = CertificateAuthenticationConfig.objects.filter(
+            enabled=True,
+        ).exists()
         return context
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle either profile preferences or account-security updates."""
-        if request.POST.get('form_name') == 'password_change':
-            return self._post_password_change(request)
-
         if request.POST.get('form_name') == 'require_password_change':
             self.object = self.get_object()
-            if self.object.pk == request.user.pk or request.user.has_perm(AppPermissions.MANAGE_USERS):
-                self.object.must_change_password = True
-                self.object.save(update_fields=['must_change_password'])
-                if self.object.pk == request.user.pk:
-                    request.session['password_change_current_session'] = True
-                messages.success(
-                    request,
-                    gettext('The user will be required to change their password at their next login.'),
-                )
+            if not request.user.has_perm(AppPermissions.MANAGE_USERS):
+                raise PermissionDenied
+            self.object.must_change_password = True
+            self.object.save(update_fields=['must_change_password'])
+            messages.success(
+                request,
+                gettext('The user will be required to change their password at their next login.'),
+            )
             return redirect(request.path)
 
         if request.POST.get('form_name') == 'unblock_failed_login':
@@ -182,30 +188,6 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
 
         return super().post(request, *args, **kwargs)
 
-    def _post_password_change(self, request: HttpRequest) -> HttpResponse:
-        """Change the current user's or a managed user's password."""
-        self.object = self.get_object()
-        is_self_change = self.object.pk == request.user.pk
-        if not is_self_change and not request.user.has_perm(AppPermissions.MANAGE_USERS):
-            raise PermissionDenied
-
-        if is_self_change:
-            password_form: TrustpointPasswordChangeForm | TrustpointPasswordSetForm = TrustpointPasswordChangeForm(
-                user=self.object,
-                data=request.POST,
-            )
-        else:
-            password_form = TrustpointPasswordSetForm(user=self.object, data=request.POST)
-
-        if not password_form.is_valid():
-            return self.render_to_response(self.get_context_data(password_form=password_form))
-
-        password_form.save()
-        if is_self_change:
-            update_session_auth_hash(request, self.object)
-        messages.success(request, gettext('Password changed successfully.'))
-        return redirect(request.path)
-
     def form_valid(self, form: TrustpointUserProfileForm) -> HttpResponse:
         """Persist the user and apply the chosen language/timezone immediately."""
         super().form_valid(form)
@@ -215,6 +197,50 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
         if self.object.pk == user.pk:
             return redirect('home:index')
         return redirect(self.request.path)
+
+
+class UserProfileDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, forms.Form]):
+    """Delete the signed-in user's account or a selected account as a user manager."""
+
+    model = TrustpointUser
+    template_name = 'users/confirm_account_delete.html'
+
+    def get_object(self, queryset: QuerySet[TrustpointUser] | None = None) -> TrustpointUser:
+        """Allow self-deletion and require manage-users permission for another account."""
+        current_user = cast('TrustpointUser', self.request.user)
+        target_pk = self.kwargs.get('pk')
+        if target_pk is None or target_pk == current_user.pk:
+            return current_user
+        if not current_user.has_perm(AppPermissions.MANAGE_USERS):
+            raise PermissionDenied
+        user_queryset = queryset or TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.HUMAN)
+        return get_object_or_404(user_queryset, pk=target_pk)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Identify whether confirmation deletes the signed-in account."""
+        context = super().get_context_data(**kwargs)
+        context['is_self_delete'] = self.object.pk == self.request.user.pk
+        return context
+
+    def form_valid(self, form: forms.Form) -> HttpResponse:
+        """Delete after confirmation, retaining the final-admin protection."""
+        self.object = self.get_object()
+        is_self_delete = self.object.pk == self.request.user.pk
+        if is_last_admin_user(self.object):
+            messages.error(self.request, _('The final administrator account cannot be deleted.'))
+            if is_self_delete:
+                return redirect('users:profile')
+            return redirect('users:user-profile', pk=self.object.pk)
+
+        username = self.object.username
+        self.object.delete()
+        if is_self_delete:
+            logout(self.request)
+            messages.success(self.request, _('Your account was deleted.'))
+            return redirect('users:login')
+
+        messages.success(self.request, _('User "%(username)s" deleted.') % {'username': username})
+        return redirect('users:profile')
 
 
 class UserProfileMixin(ContextDataMixin, LoginRequiredMixin):
@@ -403,6 +429,54 @@ class UserProfilePasswordChangeView(UserProfileMixin, PasswordChangeView):
         response = super().form_valid(form)
         messages.success(self.request, _('Your password has been changed.'))
         return response
+
+
+class ManagedUserPasswordChangeView(UserProfileMixin, FormView[TrustpointPasswordSetForm]):
+    """Allow users with MANAGE_USERS to set another human user's password."""
+
+    template_name = 'users/profile_form.html'
+    form_class = TrustpointPasswordSetForm
+    page_title = _('Change Password')
+    target_user: TrustpointUser
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Require user-management permission before loading the target account."""
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        if not request.user.has_perm(AppPermissions.MANAGE_USERS):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_target_user(self) -> TrustpointUser:
+        """Load only a human account as the password-reset target."""
+        if not hasattr(self, 'target_user'):
+            self.target_user = get_object_or_404(
+                TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.HUMAN),
+                pk=self.kwargs['pk'],
+            )
+        return self.target_user
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Bind the set-password form to the selected target account."""
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.get_target_user()
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Show the selected user in the shared profile form layout."""
+        context = super().get_context_data(**kwargs)
+        context['object'] = self.get_target_user()
+        return context
+
+    def form_valid(self, form: TrustpointPasswordSetForm) -> HttpResponse:
+        """Save the new password and return to the target user's profile."""
+        target_user = self.get_target_user()
+        form.save()
+        messages.success(
+            self.request,
+            _('Password for %(username)s changed.') % {'username': target_user.username},
+        )
+        return redirect('users:user-profile', pk=target_user.pk)
 
 
 class UserProfileResetOTPView(UserProfileMixin, View):

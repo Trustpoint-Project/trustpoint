@@ -37,7 +37,7 @@ from users.form import (
     TrustpointUserRoleForm,
     TrustpointUserSetPasswordForm,
 )
-from users.models import BuiltinRole, TrustpointUser, UserOTPDevice
+from users.models import BuiltinRole, TrustpointUser, UserOTPDevice, is_last_admin_user
 from users.permissions import AppPermissions
 
 
@@ -158,7 +158,7 @@ class UserDeleteView(
 
         self.object = self.get_object()
 
-        if _is_last_admin(self.object):
+        if is_last_admin_user(self.object):
             messages.error(
                 self.request,
                 _('Cannot delete "%(username)s": at least one admin must remain.') % {'username': self.object.username},
@@ -239,7 +239,7 @@ class UserChangeRoleView(
         user: TrustpointUser = self.get_object()
         new_role = form.cleaned_data['role']
 
-        if _is_last_admin(user) and new_role.name != BuiltinRole.ADMIN:
+        if is_last_admin_user(user) and new_role.name != BuiltinRole.ADMIN:
             messages.error(
                 self.request,
                 _('Cannot change role of "%(username)s": at least one admin must remain.')
@@ -330,7 +330,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
         if not request.user.has_perm(AppPermissions.MANAGE_USERS):
             raise PermissionDenied
         instance = self.get_object()
-        if _is_last_admin(instance):
+        if is_last_admin_user(instance):
             return Response(
                 {'detail': 'Cannot delete this user: at least one admin must remain.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -347,7 +347,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
             raise PermissionDenied
         instance = self.get_object()
         new_role = request.data.get('role') if isinstance(request.data, dict) else None
-        if _is_last_admin(instance) and new_role is not None and str(new_role) != str(instance.role_id):
+        if is_last_admin_user(instance) and new_role is not None and str(new_role) != str(instance.role_id):
             return Response(
                 {'detail': 'Cannot change role of this user: at least one admin must remain.'},
                 status=status.HTTP_400_BAD_REQUEST,

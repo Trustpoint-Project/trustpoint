@@ -364,8 +364,20 @@ class TrustpointUser(AbstractUser):
 
     def password_is_expired(self) -> bool:
         """Evaluate password expiry against the current global policy."""
-        config_model = apps.get_model('management', 'AccountSecurityConfig')
-        return config_model.get().password_expired(self.password_changed_at or self.date_joined)
+        if settings.TRUSTPOINT_IS_BOOTSTRAP:
+            return False
+        policy_model = apps.get_model('management', 'PasswordPolicy')
+        policy = policy_model.objects.filter(pk=1).first() or policy_model()
+        return policy.password_expired(self.password_changed_at or self.date_joined)
+
+
+def is_last_admin_user(user: TrustpointUser) -> bool:
+    """Return whether deleting or demoting this user would remove the final admin."""
+    return (
+        user.role.name == BuiltinRole.ADMIN
+        and TrustpointUser.objects.filter(role__name=BuiltinRole.ADMIN).count() == 1
+    )
+
 
 class AppPermission(models.Model):
     """Host model for Trustpoint-wide application permissions.

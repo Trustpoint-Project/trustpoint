@@ -524,14 +524,7 @@ TEMPLATES: list[dict[str, Any]] = [
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'users.password_validation.ConfigurablePasswordValidator',
-    },
-]
-
-if TRUSTPOINT_IS_OPERATIONAL:
-    AUTH_PASSWORD_VALIDATORS = [{'NAME': 'management.password_validation.PasswordPolicyValidator'}]
+AUTH_PASSWORD_VALIDATORS = [{'NAME': 'management.password_validation.PasswordPolicyValidator'}]
 
 # Authentication backends
 # https://docs.djangoproject.com/en/5.0/ref/settings/#authentication-backends

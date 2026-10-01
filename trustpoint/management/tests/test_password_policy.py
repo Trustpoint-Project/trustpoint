@@ -1,0 +1,242 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
+"""Tests for the consolidated password policy."""
+
+from datetime import timedelta
+
+import pytest
+from django.contrib.auth.hashers import make_password
+from django.core.exceptions import ValidationError
+from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
+
+from management.forms import AccountSecurityConfigForm, PasswordPolicyForm
+from management.models import AccountSecurityConfig, PasswordPolicy
+from management.password_validation import PasswordPolicyValidator
+from users.models import TrustpointUser
+
+MINIMUM_LENGTH = 12
+HTTP_OK = 200
+HTTP_REDIRECT = 302
+PASSWORD_POLICY_MINIMUM_LENGTH = 14
+PASSWORD_EXPIRY_DAYS = 60
+API_CREDENTIAL_EXPIRY_DAYS = 120
+IDLE_TIMEOUT_MINUTES = 45
+FAILED_LOGIN_ATTEMPTS = 7
+UPDATED_API_EXPIRY_DAYS = 90
+UPDATED_IDLE_TIMEOUT_MINUTES = 60
+UPDATED_FAILED_LOGIN_ATTEMPTS = 5
+INITIAL_PASSWORD_MINIMUM_LENGTH = 10
+CUSTOM_LIST_FILENAME = 'custom.txt'
+
+
+@override_settings(TRUSTPOINT_IS_OPERATIONAL=True, TRUSTPOINT_IS_BOOTSTRAP=False)
+class PasswordPolicyValidatorTest(TestCase):
+    """Check each password rule against the saved singleton policy."""
+
+    def setUp(self) -> None:
+        """Create a default policy for each independent validation case."""
+        self.policy = PasswordPolicy.objects.create()
+        self.validator = PasswordPolicyValidator()
+
+    def assert_rejected(self, password: str, user: TrustpointUser | None = None) -> None:
+        """Assert that the active policy rejects the supplied password."""
+        with pytest.raises(ValidationError):
+            self.validator.validate(password, user)
+
+    def test_minimum_length_is_configurable(self) -> None:
+        """Enforce the configured minimum length."""
+        self.policy.minimum_length = MINIMUM_LENGTH
+        self.policy.save()
+
+        self.assert_rejected('Short!')
+
+    def test_similarity_can_be_disabled_and_threshold_is_used(self) -> None:
+        """Honor the similarity toggle and configured threshold."""
+        user = TrustpointUser(username='alice')
+        self.policy.user_similarity_enabled = False
+        self.policy.minimum_length = 5
+        self.policy.reject_common_passwords = False
+        self.policy.save()
+        self.validator.validate('alice123!', user)
+
+        self.policy.user_similarity_enabled = True
+        self.policy.max_similarity = 0.1
+        self.policy.save()
+        self.assert_rejected('alice123!', user)
+
+    def test_common_password_validation_can_be_disabled(self) -> None:
+        """Honor the common-password toggle."""
+        self.policy.reject_common_passwords = True
+        self.policy.save()
+        self.assert_rejected('password')
+
+        self.policy.reject_common_passwords = False
+        self.policy.save()
+        self.validator.validate('password')
+
+    def test_custom_common_password_list_is_used(self) -> None:
+        """Validate against the uploaded common-password list."""
+        self.policy.common_password_list_data = b'customsecret\n'
+        self.policy.common_password_list_name = CUSTOM_LIST_FILENAME
+        self.policy.save()
+
+        self.assert_rejected('customsecret')
+
+    def test_numeric_only_password_validation_can_be_disabled(self) -> None:
+        """Reject numeric-only passwords unless that rule is disabled."""
+        self.policy.reject_common_passwords = False
+        self.policy.save()
+        self.assert_rejected('12345678')
+
+        self.policy.reject_numeric_passwords = False
+        self.policy.reject_common_passwords = False
+        self.policy.save()
+        self.validator.validate('12345678')
+
+    def test_previous_password_reuse_is_configurable(self) -> None:
+        """Prevent reuse of the immediately preceding password when enabled."""
+        user = TrustpointUser(username='alice', previous_password=make_password('PriorPass!'))
+        self.assert_rejected('PriorPass!', user)
+
+        self.policy.prevent_password_reuse = False
+        self.policy.save()
+        self.validator.validate('PriorPass!', user)
+
+    def test_password_expiry_and_empty_value(self) -> None:
+        """Expire old passwords and treat an empty expiry value as unlimited."""
+        self.policy.password_expiry_days = 30
+        self.policy.save()
+        assert self.policy.password_expired(timezone.now() - timedelta(days=31))
+        assert not self.policy.password_expired(timezone.now())
+
+        self.policy.password_expiry_days = None
+        assert not self.policy.password_expired(timezone.now() - timedelta(days=365))
+
+    @override_settings(TRUSTPOINT_IS_OPERATIONAL=True, TRUSTPOINT_IS_BOOTSTRAP=False)
+    def test_otp_requirement_uses_password_policy(self) -> None:
+        """Read the global OTP requirement from PasswordPolicy."""
+        self.policy.require_otp = True
+        self.policy.save()
+
+        assert PasswordPolicy.is_otp_required()
+
+
+class PasswordPolicyFormOwnershipTest(SimpleTestCase):
+    """Keep password settings and non-password settings on their respective forms."""
+
+    def test_account_security_form_only_exposes_non_password_settings(self) -> None:
+        """Limit Account Security to API credentials, sessions, and login protection."""
+        non_password_fields = {'api_credential_expiry_days', 'idle_timeout_minutes', 'failed_login_attempts'}
+        assert set(AccountSecurityConfigForm.Meta.fields) == non_password_fields
+        assert set(AccountSecurityConfigForm().fields) == non_password_fields
+
+    def test_password_form_exposes_password_and_otp_settings(self) -> None:
+        """Expose all password and OTP controls in one form."""
+        fields = set(PasswordPolicyForm().fields)
+        password_fields = {
+            'minimum_length', 'prevent_password_reuse', 'password_expiry_days', 'user_similarity_enabled',
+            'max_similarity', 'reject_common_passwords', 'common_password_list', 'reject_numeric_passwords',
+            'require_otp',
+        }
+        assert password_fields.issubset(fields)
+
+    def test_account_security_model_no_longer_has_password_fields(self) -> None:
+        """Ensure password policy fields are absent from AccountSecurityConfig."""
+        assert not hasattr(AccountSecurityConfig, 'password_minimum_length')
+        assert not hasattr(AccountSecurityConfig, 'password_similarity')
+        assert not hasattr(AccountSecurityConfig, 'password_common')
+        assert not hasattr(AccountSecurityConfig, 'password_numeric')
+        assert not hasattr(AccountSecurityConfig, 'password_prevent_reuse')
+        assert not hasattr(AccountSecurityConfig, 'password_expiry_days')
+
+
+class PasswordPolicyPageViewTest(TestCase):
+    """Verify settings pages render and save only their owned configuration."""
+
+    def setUp(self) -> None:
+        """Create an authenticated settings administrator and both configurations."""
+        self.user = TrustpointUser.objects.create_user(username='policy-admin')
+        TrustpointUser.objects.filter(pk=self.user.pk).update(is_superuser=True, is_staff=True)
+        self.user.refresh_from_db()
+        self.client.force_login(self.user)
+        self.account_security = AccountSecurityConfig.objects.create(
+            pk=1,
+            api_credential_expiry_days=API_CREDENTIAL_EXPIRY_DAYS,
+            idle_timeout_minutes=IDLE_TIMEOUT_MINUTES,
+            failed_login_attempts=FAILED_LOGIN_ATTEMPTS,
+        )
+        self.password_policy = PasswordPolicy.objects.create(minimum_length=INITIAL_PASSWORD_MINIMUM_LENGTH)
+
+    def test_password_policy_page_has_password_and_otp_controls(self) -> None:
+        """Render all password and OTP controls on Password + OTP."""
+        response = self.client.get(reverse('management:password_policy'))
+
+        assert response.status_code == HTTP_OK
+        for label in (
+            'Minimum password length',
+            'Reject entirely numeric passwords',
+            'Prevent reuse of the previous password',
+            'Expire passwords after this many days',
+            'Maximum similarity',
+            'Upload a custom common-password list',
+            'Require OTP',
+        ):
+            self.assertContains(response, label)
+
+    def test_account_security_page_has_only_non_password_controls(self) -> None:
+        """Render non-password controls without password-policy fields."""
+        response = self.client.get(reverse('management:settings-account-security'))
+
+        assert response.status_code == HTTP_OK
+        self.assertContains(response, 'Expire API credentials after this many days')
+        self.assertContains(response, 'Idle session duration in minutes')
+        self.assertContains(response, 'Block after this many failed login attempts')
+        self.assertNotContains(response, 'Minimum password length')
+        self.assertNotContains(response, 'Password expiry')
+
+    def test_password_policy_save_does_not_change_account_security(self) -> None:
+        """Save password settings without changing API, session, or login limits."""
+        response = self.client.post(
+            reverse('management:password_policy'),
+            {
+                'minimum_length': str(PASSWORD_POLICY_MINIMUM_LENGTH),
+                'password_expiry_days': str(PASSWORD_EXPIRY_DAYS),
+                'user_similarity_enabled': 'on',
+                'max_similarity': '0.65',
+                'reject_common_passwords': 'on',
+                'reject_numeric_passwords': 'on',
+                'require_otp': 'on',
+            },
+        )
+
+        assert response.status_code == HTTP_REDIRECT
+        self.password_policy.refresh_from_db()
+        self.account_security.refresh_from_db()
+        assert self.password_policy.minimum_length == PASSWORD_POLICY_MINIMUM_LENGTH
+        assert self.password_policy.password_expiry_days == PASSWORD_EXPIRY_DAYS
+        assert self.password_policy.require_otp
+        assert self.account_security.api_credential_expiry_days == API_CREDENTIAL_EXPIRY_DAYS
+        assert self.account_security.idle_timeout_minutes == IDLE_TIMEOUT_MINUTES
+        assert self.account_security.failed_login_attempts == FAILED_LOGIN_ATTEMPTS
+
+    def test_account_security_save_does_not_change_password_policy(self) -> None:
+        """Save Account Security without changing PasswordPolicy."""
+        response = self.client.post(
+            reverse('management:settings-account-security'),
+            {
+                'api_credential_expiry_days': str(UPDATED_API_EXPIRY_DAYS),
+                'idle_timeout_minutes': str(UPDATED_IDLE_TIMEOUT_MINUTES),
+                'failed_login_attempts': str(UPDATED_FAILED_LOGIN_ATTEMPTS),
+            },
+        )
+
+        assert response.status_code == HTTP_REDIRECT
+        self.password_policy.refresh_from_db()
+        self.account_security.refresh_from_db()
+        assert self.account_security.api_credential_expiry_days == UPDATED_API_EXPIRY_DAYS
+        assert self.account_security.idle_timeout_minutes == UPDATED_IDLE_TIMEOUT_MINUTES
+        assert self.account_security.failed_login_attempts == UPDATED_FAILED_LOGIN_ATTEMPTS
+        assert self.password_policy.minimum_length == INITIAL_PASSWORD_MINIMUM_LENGTH

@@ -8,6 +8,8 @@ from __future__ import annotations
 import gzip
 from typing import TYPE_CHECKING, Any
 
+from django.conf import settings
+from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import (
     CommonPasswordValidator,
     MinimumLengthValidator,
@@ -16,11 +18,13 @@ from django.contrib.auth.password_validation import (
     password_validators_help_texts,
     validate_password,
 )
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 
 from management.models import PasswordPolicy
 
 if TYPE_CHECKING:
-    from django.contrib.auth.base_user import AbstractBaseUser
+    from users.models import TrustpointUser
 
 
 class StoredCommonPasswordValidator(CommonPasswordValidator):
@@ -37,8 +41,13 @@ class PasswordPolicyValidator:
     """Read the current policy for each check so saved changes apply across workers."""
 
     @staticmethod
-    def _get_validators() -> list[Any]:
-        policy = PasswordPolicy.objects.filter(pk=PasswordPolicy.SINGLETON_ID).first() or PasswordPolicy()
+    def _get_policy() -> PasswordPolicy:
+        if settings.TRUSTPOINT_IS_BOOTSTRAP or not settings.TRUSTPOINT_IS_OPERATIONAL:
+            return PasswordPolicy()
+        return PasswordPolicy.objects.filter(pk=PasswordPolicy.SINGLETON_ID).first() or PasswordPolicy()
+
+    @staticmethod
+    def _get_validators(policy: PasswordPolicy) -> list[Any]:
         validators: list[Any] = []
         if policy.user_similarity_enabled:
             validators.append(UserAttributeSimilarityValidator(max_similarity=policy.max_similarity))
@@ -53,10 +62,19 @@ class PasswordPolicyValidator:
             validators.append(NumericPasswordValidator())
         return validators
 
-    def validate(self, password: str, user: AbstractBaseUser | None = None) -> None:
+    def validate(self, password: str, user: TrustpointUser | None = None) -> None:
         """Apply the selected validators, preserving Django's validation errors and their order."""
-        validate_password(password, user=user, password_validators=self._get_validators())
+        policy = self._get_policy()
+        validate_password(password, user=user, password_validators=self._get_validators(policy))
+        previous_password = getattr(user, 'previous_password', '') if user is not None else ''
+        if (
+            policy.prevent_password_reuse
+            and previous_password
+            and check_password(password, previous_password)
+        ):
+            raise ValidationError(_('You cannot reuse your immediately previous password.'))
 
     def get_help_text(self) -> str:
         """Describe the currently enforced policy in Django's password forms."""
-        return ' '.join(password_validators_help_texts(self._get_validators()))
+        policy = self._get_policy()
+        return ' '.join(password_validators_help_texts(self._get_validators(policy)))

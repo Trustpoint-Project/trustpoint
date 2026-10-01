@@ -5,11 +5,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any, ClassVar
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
@@ -27,6 +30,16 @@ class PasswordPolicy(models.Model):
     minimum_length = models.PositiveIntegerField(
         default=8,
         help_text=_('Minimum number of characters in a password.'),
+    )
+    prevent_password_reuse = models.BooleanField(
+        default=True,
+        help_text=_('Require a new password to differ from the immediately preceding password.'),
+    )
+    password_expiry_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_('Leave empty to keep passwords valid indefinitely.'),
     )
 
     user_similarity_enabled = models.BooleanField(
@@ -74,6 +87,22 @@ class PasswordPolicy(models.Model):
         """Persist the global policy under the fixed primary key ``1``."""
         self.pk = self.SINGLETON_ID
         super().save(*args, **kwargs)
+
+    def clean(self) -> None:
+        """Validate numeric policy values independently of form constraints."""
+        super().clean()
+        if self.minimum_length < 1:
+            raise ValidationError({'minimum_length': _('The minimum password length must be positive.')})
+        if self.password_expiry_days is not None and self.password_expiry_days < 1:
+            raise ValidationError({'password_expiry_days': _('This value must be positive.')})
+
+    def password_expired(self, changed_at: datetime | None) -> bool:
+        """Return whether the password has expired under this policy."""
+        return bool(
+            self.password_expiry_days
+            and changed_at
+            and timezone.now() >= changed_at + timedelta(days=self.password_expiry_days)
+        )
 
     @property
     def uses_default_common_password_list(self) -> bool:

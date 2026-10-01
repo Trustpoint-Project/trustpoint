@@ -22,7 +22,7 @@
         </p>
     </div>
 
-    <div class="card-body text-start">
+    <div class="card-body text-start" style="overflow-y: auto; flex: 1 1 auto; min-height: 0;">
         <form
             id="profile-form"
             method="post"
@@ -167,8 +167,7 @@
 {# Account Security                                             #}
 {# ============================================================ #}
 {% if can_manage_account_security %}
-<div class="card" id="account-security">
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+<div class="card" id="account-security" style="height: min(70vh, 720px); min-height: 360px; display: flex; flex-direction: column;">
     <div class="card-header">
         <h1>{% blocktranslate with username=object.username %}User Profile: {{ username }}{% endblocktranslate %}</h1>
         <h1 class="mb-1">
@@ -180,83 +179,7 @@
         </p>
     </div>
 
-    <div class="card-body text-start">
-
-        {# --- Password --- #}
-        <section
-            class="{% if failed_login_blocked or can_unblock_failed_login %}mb-5{% endif %}"
-            aria-labelledby="password-heading"
-        >
-            <div class="mb-3">
-                <h2
-                    id="password-heading"
-                    class="h4 mb-1"
-                >
-                    {% trans "Password" %}
-                </h2>
-
-                <p class="text-muted mb-0">
-                    {% if can_change_password %}
-                        {% if object.pk == request.user.pk %}
-                            {% trans "Change the password used to authenticate this account." %}
-                        {% else %}
-                            {% trans "Set a new password for this user without requiring the current password." %}
-                        {% endif %}
-                    {% else %}
-                        {% trans "Control whether this user must choose a new password during the next login." %}
-                    {% endif %}
-                </p>
-            </div>
-
-            <hr class="mb-4">
-
-            {% if can_change_password %}
-                <form
-                    id="password-change-form"
-                    method="post"
-                    autocomplete="off"
-                >
-                    {% csrf_token %}
-                    <input
-                        type="hidden"
-                        name="form_name"
-                        value="password_change"
-                    >
-
-                    {{ password_form|crispy }}
-
-                    <div class="d-flex justify-content-end mt-4">
-                        <button
-                            class="btn btn-primary"
-                            type="submit"
-                        >
-                            {% trans "Change Password" %}
-                        </button>
-                    </div>
-                </form>
-            {% endif %}
-
-
-            <form
-                method="post"
-                class="{% if can_change_password %}mt-4{% endif %}"
-            >
-                {% csrf_token %}
-                <input
-                    type="hidden"
-                    name="form_name"
-                    value="require_password_change"
-                >
-
-                <button
-                    class="btn btn-outline-secondary"
-                    type="submit"
-                >
-                    {% trans "Require Password Change on Next Login" %}
-                </button>
-            </form>
-        </section>
-
+    <div class="card-body text-start" style="overflow-y: auto; flex: 1 1 auto; min-height: 0;">
 
         {# --- Authentication State --- #}
         {% if failed_login_blocked or can_unblock_failed_login %}
@@ -288,50 +211,67 @@
                     </div>
                 {% endif %}
 
-                {% if can_unblock_failed_login %}
-                    <form method="post">
-                        {% csrf_token %}
-                        <input
-                            type="hidden"
-                            name="form_name"
-                            value="unblock_failed_login"
-                        >
-
-                        <button
-                            class="btn btn-outline-secondary"
-                            type="submit"
-                        >
-                            {% trans "Unblock User" %}
-                        </button>
-                    </form>
-                {% endif %}
             </section>
         {% endif %}
-    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
         <div class="table-responsive">
             <table class="table align-middle tp-configuration-table">
                 <tbody>
                     <tr>
-                        <th scope="row" class="fw-normal ps-0">{% trans 'Details' %}</th>
-                        <td>{% trans 'First name, last name and email address.' %}</td>
-                        <td class="text-end">
-                            <a href="{% url 'users:profile_details' %}" class="btn btn-primary btn-sm">{% trans 'Configure' %}</a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row" class="fw-normal ps-0">{% trans 'Roles & Organization' %}</th>
-                        <td>{% trans 'View your assigned role and organization.' %}</td>
-                        <td class="text-end">
-                            <a href="{% url 'users:profile_role' %}" class="btn btn-primary btn-sm">{% trans 'View' %}</a>
-                        </td>
-                    </tr>
-                    <tr>
                         <th scope="row" class="fw-normal ps-0">{% trans 'Change Password' %}</th>
-                        <td>{% trans 'Change your password.' %}</td>
+                        <td>
+                            {% if object.pk == request.user.pk %}
+                                {% trans 'Change your password.' %}
+                            {% else %}
+                                {% trans 'Set a new password for this user.' %}
+                            {% endif %}
+                        </td>
                         <td class="text-end">
+                            {% if object.pk == request.user.pk %}
                             <a href="{% url 'users:profile_password' %}" class="btn btn-primary btn-sm">{% trans 'Configure' %}</a>
+                            {% else %}
+                            <a href="{% url 'users:user-profile-password' pk=object.pk %}" class="btn btn-primary btn-sm">{% trans 'Configure' %}</a>
+                            {% endif %}
                         </td>
                     </tr>
+                    {% if can_require_password_change %}
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Require Password Change on Next Login' %}</th>
+                        <td>{% trans 'Require this user to choose a new password at their next login.' %}</td>
+                        <td class="text-end">
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="form_name" value="require_password_change">
+                                <button type="submit" class="btn btn-primary btn-sm">{% trans 'Require' %}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if can_unblock_failed_login %}
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Unblock User' %}</th>
+                        <td>{% trans 'Restore this user account after failed-login blocking.' %}</td>
+                        <td class="text-end">
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="form_name" value="unblock_failed_login">
+                                <button type="submit" class="btn btn-primary btn-sm">{% trans 'Unblock' %}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if can_delete_user %}
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Delete Account' %}</th>
+                        <td>{% trans 'Permanently delete this user account.' %}</td>
+                        <td class="text-end">
+                            {% if object.pk == request.user.pk %}
+                            <a href="{% url 'users:profile_delete' %}" class="btn btn-outline-danger btn-sm">{% trans 'Delete' %}</a>
+                            {% else %}
+                            <a href="{% url 'users:user-profile-delete' pk=object.pk %}" class="btn btn-outline-danger btn-sm">{% trans 'Delete' %}</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
                     <tr>
                         <th scope="row" class="fw-normal ps-0">{% trans 'Reset Authenticator' %}</th>
                         <td>{% trans 'Remove your current authenticator and recovery codes. You will set up your authenticator again when signing in.' %}</td>
@@ -356,7 +296,7 @@
         </div>
     </div>
 
-    <div class="card-footer d-flex tp-sticky-footer">
+    <div class="card-footer d-flex flex-shrink-0">
         <a href="{% url 'home:index' %}" class="btn btn-secondary m-1">{% trans 'Back' %}</a>
     </div>
 </div>
