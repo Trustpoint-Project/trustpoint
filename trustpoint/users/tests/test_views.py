@@ -296,16 +296,15 @@ class TrustpointProfileViewTest(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('The new password must differ from the current password.', form.errors['new_password1'])
 
-    def test_user_can_require_password_change_on_next_login(self) -> None:
-        """The Account Security action marks the account for the next login."""
+    def test_regular_user_cannot_require_password_change_on_self(self) -> None:
+        """Only user managers can require an account to change its password."""
         self.client.force_login(self.user)
 
         response = self.client.post(self.profile_url, {'form_name': 'require_password_change'})
 
-        self.assertRedirects(response, self.profile_url)
+        self.assertEqual(response.status_code, 403)
         self.user.refresh_from_db()
-        self.assertTrue(self.user.must_change_password)
-        self.assertTrue(self.client.session.get('password_change_current_session'))
+        self.assertFalse(self.user.must_change_password)
 
     def test_required_password_change_redirects_and_clears_flag(self) -> None:
         """A flagged user is forced to change the password and the flag is cleared."""

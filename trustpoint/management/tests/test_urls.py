@@ -197,22 +197,22 @@ class SettingsUrlsTestCase(TestCase):
 class UserManagementUrlsTestCase(TestCase):
     def test_user_management_url(self):
         url = reverse('management:user_management')
-        self.assertEqual(url, '/management/user_management/')
+        self.assertEqual(url, '/management/user-management/')
         self.assertEqual(resolve(url).func.view_class, UserTableView)
 
     def test_user_add_url(self):
         url = reverse('management:add_user')
-        self.assertEqual(url, '/management/user_management/add_user/')
+        self.assertEqual(url, '/management/user-management/add_user/')
         self.assertEqual(resolve(url).func.view_class, UserCreateView)
 
     def test_user_delete_url(self):
         url = reverse('management:delete_user', kwargs={'pk': 1})
-        self.assertEqual(url, '/management/user_management/1/delete/')
+        self.assertEqual(url, '/management/user-management/1/delete/')
         self.assertEqual(resolve(url).func.view_class, UserDeleteView)
 
     def test_user_change_role_url(self):
         url = reverse('management:change_role', kwargs={'pk': 1})
-        self.assertEqual(url, '/management/user_management/1/change_role/')
+        self.assertEqual(url, '/management/user-management/1/change_role/')
         self.assertEqual(resolve(url).func.view_class, UserChangeRoleView)
 
 
