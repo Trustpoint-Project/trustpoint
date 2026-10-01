@@ -662,7 +662,7 @@ def new_otp_key() -> str:
     return secrets.token_hex(20)
 
 
-class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):
+class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[misc]
     """One encrypted authenticator per human user.
 
     Use django_otp.verify_token() for atomic verification of a freshly loaded,
@@ -684,7 +684,7 @@ class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):
     confirmed = models.BooleanField(default=False, editable=False)
     last_t = models.BigIntegerField(default=-1, editable=False)
 
-    class Meta(Device.Meta):
+    class Meta(Device.Meta):  # type: ignore[misc]
         """Enforce one device per user and require verification before confirmation."""
 
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -776,4 +776,4 @@ class UserOTPRecoveryCode(models.Model):
 
 # Preserve the import path used by existing migrations without keeping a separate model module.
 sys.modules['users.otp_models'] = sys.modules[__name__]
-sys.modules['users'].otp_models = sys.modules[__name__]
+sys.modules['users'].__dict__['otp_models'] = sys.modules[__name__]

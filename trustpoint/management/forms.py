@@ -1250,7 +1250,7 @@ class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):
         value = self.cleaned_data['password_expiry_days']
         return value or None
 
-    def clean_common_password_list(self) -> UploadedFile | None:
+    def clean_common_password_list(self) -> UploadedFile[Any] | None:
         """Validate new uploads and rewind them for storage without modifying their contents."""
         upload = self.cleaned_data.get('common_password_list')
         if upload is None:
@@ -1290,7 +1290,7 @@ class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):
             raise ValidationError(
                 _('Use one lowercase password per line, without control characters.'), code='invalid_password_list',
             )
-        return upload
+        return cast('UploadedFile[Any]', upload)
 
     def clean(self) -> dict[str, Any]:
         """Reject selecting both a replacement upload and the default list."""

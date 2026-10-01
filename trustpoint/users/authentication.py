@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
@@ -41,9 +41,11 @@ class ClientCertificateBackend(ModelBackend):
     def authenticate(
         self,
         request: HttpRequest | None = None,
+        username: str | None = None,  # noqa: ARG002
+        password: str | None = None,  # noqa: ARG002
         *,
         certificate_login: bool = False,
-        **_kwargs: object,
+        **_kwargs: Any,
     ) -> TrustpointUser | None:
         """Authenticate only explicit certificate attempts; never accept password credentials here."""
         if not certificate_login or request is None:

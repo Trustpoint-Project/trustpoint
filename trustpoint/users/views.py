@@ -9,35 +9,35 @@ import base64
 import hashlib
 import time
 from io import BytesIO
-from typing import TYPE_CHECKING, cast
-from urllib.parse import quote, urlencode
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import quote, urlencode
 
 from django import forms
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import get_user_model, login
-from django.contrib.auth import get_user_model, login, logout
+from django.contrib.auth import get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, PasswordChangeView
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.management import CommandError
 from django.db import DatabaseError, IntegrityError, transaction
 from django.db.models import ProtectedError
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseBase
 from django.shortcuts import get_object_or_404, redirect, render, resolve_url
 from django.urls import reverse_lazy
+from django.utils import timezone, translation
 from django.utils.crypto import constant_time_compare
 from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
+from django.views.generic import FormView, UpdateView
 from django.views.generic.base import TemplateView
-from django.views.generic.edit import FormView, UpdateView
-from django.views.generic.edit import DeleteView, FormView, UpdateView
+from django.views.generic.edit import DeleteView
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp import login as otp_login
 from django_otp.qr import write_qrcode_image
@@ -52,7 +52,6 @@ from setup_wizard.models import SetupWizardCompletedModel
 from trustpoint.views.base import ContextDataMixin
 from users.authentication import CERTIFICATE_LOGIN_ERROR_SESSION_KEY, REJECTED_CERTIFICATE_SESSION_KEY
 from users.form import TrustpointUserDetailsForm, UserClientCertificateForm
-from users.models import MAX_TOKEN_LENGTH, TrustpointUser, UserClientCertificate, UserOTPDevice, new_otp_key
 from users.models import (
     MAX_TOKEN_LENGTH,
     TrustpointUser,
@@ -61,18 +60,8 @@ from users.models import (
     is_last_admin_user,
     new_otp_key,
 )
-from django.contrib.auth import get_user_model, update_session_auth_hash
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView
-from django.core.exceptions import PermissionDenied
-from django.db import DatabaseError
-from django.shortcuts import redirect
-from django.utils import timezone, translation
-from django.utils.translation import gettext
-from django.views.generic import FormView, UpdateView
 
 if TYPE_CHECKING:
-    from django.db.models import QuerySet
     from typing import Any
 
     from cryptography import x509
@@ -80,11 +69,9 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
     from django.http import HttpRequest, HttpResponse
 
-from setup_wizard.models import SetupWizardCompletedModel
 from users.permissions import AppPermissions
 
 from .form import TrustpointPasswordChangeForm, TrustpointPasswordSetForm, TrustpointUserProfileForm
-from .models import TrustpointUser
 
 
 class PasswordChangeRequiredView(LoginRequiredMixin, FormView[TrustpointPasswordChangeForm]):
@@ -222,12 +209,12 @@ class UserProfileDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, forms
         context['is_self_delete'] = self.object.pk == self.request.user.pk
         return context
 
-    def form_valid(self, form: forms.Form) -> HttpResponse:
+    def form_valid(self, _form: forms.Form) -> HttpResponse:
         """Delete after confirmation, retaining the final-admin protection."""
         self.object = self.get_object()
         is_self_delete = self.object.pk == self.request.user.pk
         if is_last_admin_user(self.object):
-            messages.error(self.request, _('The final administrator account cannot be deleted.'))
+            messages.error(self.request, _('The default administrator account cannot be deleted.'))
             if is_self_delete:
                 return redirect('users:profile')
             return redirect('users:user-profile', pk=self.object.pk)
@@ -246,11 +233,9 @@ class UserProfileDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, forms
 class UserProfileMixin(ContextDataMixin, LoginRequiredMixin):
     """Share profile navigation and bind its context to the signed-in user."""
 
-    template_name = 'users/profile_form.html'
+    request: HttpRequest
     context_page_category = 'users'
     context_page_name = 'profile'
-    success_url = reverse_lazy('users:profile')
-
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Use the authenticated user for the profile's configuration links."""
         context = super().get_context_data(**kwargs)
@@ -282,14 +267,14 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserCl
     def get_form_kwargs(self) -> dict[str, Any]:
         """Bind the new certificate association to the authenticated user only."""
         kwargs = super().get_form_kwargs()
-        kwargs['instance'] = UserClientCertificate(user=self.request.user)
+        kwargs['instance'] = UserClientCertificate(user=cast('TrustpointUser', self.request.user))
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Show only certificates owned by the current user."""
         context = super().get_context_data(**kwargs)
         context['client_certificates'] = UserClientCertificate.objects.filter(
-            user=self.request.user,
+            user=cast('TrustpointUser', self.request.user),
         ).select_related('certificate').order_by('identifier')
         context['certificate_authentication_enabled'] = CertificateAuthenticationConfig.objects.filter(
             enabled=True,
@@ -332,7 +317,9 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserCl
         except ValidationError as exc:
             form.add_error(None, exc)
         except IntegrityError:
-            if UserClientCertificate.objects.filter(user=self.request.user, identifier=identifier).exists():
+            if UserClientCertificate.objects.filter(
+                user=cast('TrustpointUser', self.request.user), identifier=identifier,
+            ).exists():
                 form.add_error('identifier', _('You already have a client certificate with this identifier.'))
             else:
                 form.add_error(None, _('The client certificate could not be created.'))
@@ -392,6 +379,8 @@ class UserProfileDetailsView(UserProfileMixin, UpdateView[TrustpointUser, Trustp
     """Allow a user to edit only their own name and email address."""
 
     form_class = TrustpointUserDetailsForm
+    template_name = 'users/profile_form.html'
+    success_url = reverse_lazy('users:profile')
     page_title = _('Details')
 
     def get_object(self, queryset: QuerySet[TrustpointUser] | None = None) -> TrustpointUser:
@@ -417,6 +406,8 @@ class UserProfilePasswordChangeView(UserProfileMixin, PasswordChangeView):
     """Change only the signed-in user's password, requiring their current password."""
 
     page_title = _('Change Password')
+    template_name = 'users/profile_form.html'
+    success_url = reverse_lazy('users:profile')
 
     def get_form(self, form_class: type[PasswordChangeForm] | None = None) -> PasswordChangeForm:
         """Hide password requirements help text to match the original form."""
@@ -439,7 +430,7 @@ class ManagedUserPasswordChangeView(UserProfileMixin, FormView[TrustpointPasswor
     page_title = _('Change Password')
     target_user: TrustpointUser
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Require user-management permission before loading the target account."""
         if not request.user.is_authenticated:
             return self.handle_no_permission()
@@ -623,11 +614,17 @@ class OTPLoginView(FormView[OTPTokenForm]):
     form_class = OTPTokenForm
     template_name = 'users/otp.html'
     http_method_names = ('get', 'post')
+    pending: dict[str, Any]
+    user: TrustpointUser
+    device: UserOTPDevice
 
     @sensitive_variables()
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Validate password proof and lock the user and device for the entire OTP operation."""
-        self.pending = request.session.get(PENDING_OTP_SESSION_KEY)
+        pending = request.session.get(PENDING_OTP_SESSION_KEY)
+        if not isinstance(pending, dict):
+            return self.restart_login()
+        self.pending = pending
         if (
             not PasswordPolicy.is_otp_required() or not self.pending
             or not 0 <= time.time() - self.pending['issued_at'] < OTP_LOGIN_TIMEOUT
@@ -635,13 +632,14 @@ class OTPLoginView(FormView[OTPTokenForm]):
         ):
             return self.restart_login()
         with transaction.atomic():
-            self.user = TrustpointUser.objects.select_for_update().filter(
+            user = TrustpointUser.objects.select_for_update().filter(
                 pk=self.pending['user_id'], is_active=True, account_type='HUMAN',
             ).first()
-            if self.user is None or not constant_time_compare(
-                self.user.get_session_auth_hash(), self.pending['auth_hash'],
+            if user is None or not constant_time_compare(
+                user.get_session_auth_hash(), self.pending['auth_hash'],
             ):
                 return self.restart_login()
+            self.user = user
             self.device = UserOTPDevice.objects.select_for_update().filter(
                 pk=self.pending['device_id'], user=self.user, confirmed=not self.pending['enrolling'],
             ).first()
@@ -649,12 +647,12 @@ class OTPLoginView(FormView[OTPTokenForm]):
                 hashlib.sha256(self.device.key.encode('ascii')).hexdigest(), self.pending['key_hash'],
             ):
                 return self.restart_login()
-            return super().dispatch(request, *args, **kwargs)
+            return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def restart_login(self) -> HttpResponse:
         """Discard expired or superseded password proof."""
         self.request.session.pop(PENDING_OTP_SESSION_KEY, None)
-        return redirect('users:login')
+        return cast('HttpResponse', redirect('users:login'))
 
     @sensitive_variables()
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:

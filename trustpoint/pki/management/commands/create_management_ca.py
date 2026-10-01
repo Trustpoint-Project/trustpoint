@@ -37,7 +37,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                 or root_ca.credential_id is None
                 or issuing_ca.credential_id is None
             ):
-                raise CommandError('The Management CA hierarchy is incomplete or inconsistent.')
+                msg = 'The Management CA hierarchy is incomplete or inconsistent.'
+                raise CommandError(msg)
             self.stdout.write('Management CA hierarchy already exists, skipping creation.')
             return
 

@@ -178,7 +178,7 @@ class PasswordPolicyListDownloadView(LoginRequiredMixin, SuperuserRequiredMixin,
         policy = PasswordPolicy.objects.filter(pk=PasswordPolicy.SINGLETON_ID).first() or PasswordPolicy()
         try:
             if policy.uses_default_common_password_list:
-                password_file = CommonPasswordValidator().DEFAULT_PASSWORD_LIST_PATH.open('rb')
+                password_file: Any = CommonPasswordValidator().DEFAULT_PASSWORD_LIST_PATH.open('rb')
                 filename = 'django-common-passwords.txt.gz'
             else:
                 password_file = BytesIO(bytes(policy.common_password_list_data))

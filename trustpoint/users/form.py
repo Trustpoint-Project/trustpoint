@@ -7,7 +7,6 @@ from typing import Any, ClassVar, cast
 from zoneinfo import available_timezones
 
 from django import forms
-from django.contrib.auth.forms import SetPasswordForm, UserCreationForm
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import Group, Permission
 from django.utils.translation import gettext_lazy as _
@@ -214,7 +213,7 @@ class UserClientCertificateForm(forms.ModelForm[UserClientCertificate]):
         return identifier
 
 
-class TrustpointUserSetPasswordForm(SetPasswordForm):
+class TrustpointUserSetPasswordForm(SetPasswordForm[TrustpointUser]):
     """Set a user's password and optionally reset their authenticator."""
 
     reset_otp = forms.BooleanField(

@@ -3,11 +3,11 @@
 
 """Views for the User Management section of the management app."""
 
-from typing import Any
+from typing import Any, cast
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
-from django.contrib.auth.forms import SetPasswordForm
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import PasswordChangeView
 from django.core.exceptions import PermissionDenied
@@ -176,9 +176,11 @@ class UserConfigurationMixin(UserContextMixin, LoginRequiredMixin, SuperuserRequ
     """Share access rules and navigation for configuring a human user."""
 
     model = TrustpointUser
-    queryset = TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.HUMAN)
-    template_name = 'management/user_edit.html'
     object: TrustpointUser
+
+    def get_user_queryset(self) -> QuerySet[TrustpointUser]:
+        """Return human users available to configuration views."""
+        return TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.HUMAN)
 
     def get_success_url(self) -> str:
         """Return to the selected user's configuration page after saving."""
@@ -195,6 +197,7 @@ class UserDetailsView(UserConfigurationMixin, UpdateView[TrustpointUser, BaseMod
     """Edit the user's name and email address."""
 
     form_class = TrustpointUserDetailsForm
+    template_name = 'management/user_edit.html'
     page_title = _('Details')
 
     def form_valid(self, form: BaseModelForm[TrustpointUser]) -> HttpResponse:
@@ -258,10 +261,11 @@ class UserChangeRoleView(
 class UserChangePasswordView(UserConfigurationMixin, PasswordChangeView):
     """Allow an administrator to set a password using the configured password policy."""
 
-    form_class = TrustpointUserSetPasswordForm
+    form_class = cast('type[PasswordChangeForm]', TrustpointUserSetPasswordForm)
+    template_name = 'management/user_edit.html'
     page_title = _('Change Password')
 
-    def get_form(self, form_class: type[SetPasswordForm] | None = None) -> SetPasswordForm:
+    def get_form(self, form_class: type[PasswordChangeForm] | None = None) -> PasswordChangeForm:
         """Hide password requirements help text."""
         form = super().get_form(form_class)
         form.fields['new_password1'].help_text = ''
@@ -270,7 +274,7 @@ class UserChangePasswordView(UserConfigurationMixin, PasswordChangeView):
     def get_form_kwargs(self) -> dict[str, Any]:
         """Pass the selected user to Django's password-setting form."""
         kwargs = super().get_form_kwargs()
-        self.object = get_object_or_404(self.queryset, pk=self.kwargs['pk'])
+        self.object = get_object_or_404(self.get_user_queryset(), pk=self.kwargs['pk'])
         kwargs['user'] = self.object
         return kwargs
 
@@ -280,12 +284,12 @@ class UserChangePasswordView(UserConfigurationMixin, PasswordChangeView):
         context['object'] = self.object
         return context
 
-    def form_valid(self, form: SetPasswordForm) -> HttpResponse:
+    def form_valid(self, form: PasswordChangeForm) -> HttpResponse:
         """Save the password and optional authenticator reset in one transaction."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_USERS):
             raise PermissionDenied
         with transaction.atomic():
-            form.user = get_object_or_404(self.queryset.select_for_update(), pk=self.object.pk)
+            form.user = get_object_or_404(self.get_user_queryset().select_for_update(), pk=self.object.pk)
             user = form.save()
             if form.cleaned_data['reset_otp']:
                 _reset_user_otp(user)
@@ -308,7 +312,7 @@ class UserResetOTPView(UserConfigurationMixin, View):
         if not request.user.has_perm(AppPermissions.MANAGE_USERS):
             raise PermissionDenied
         with transaction.atomic():
-            self.object = get_object_or_404(self.queryset.select_for_update(), pk=self.kwargs['pk'])
+            self.object = get_object_or_404(self.get_user_queryset().select_for_update(), pk=self.kwargs['pk'])
             _reset_user_otp(self.object)
         messages.success(request, _('Authenticator reset. The user will need to set it up again when signing in.'))
         return HttpResponseRedirect(self.get_success_url())

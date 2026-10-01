@@ -14,15 +14,13 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect, resolve_url
 from django.urls import reverse
+from django.utils import timezone, translation
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django_otp import DEVICE_ID_SESSION_KEY
-from django.utils import timezone, translation
 
 from management.i18n_context import reset_current_user, set_current_user
-from management.models import AccountSecurityConfig
-
-from management.models import PasswordPolicy
+from management.models import AccountSecurityConfig, PasswordPolicy
 
 from .authentication import (
     CERTIFICATE_BACKEND,

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -21,6 +21,7 @@ from users.models import TrustpointUser
 from .create_management_ca import ISSUING_CA_NAME
 
 if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPublicKeyTypes
     from django.core.management.base import CommandParser
 
 
@@ -37,33 +38,40 @@ def create_user_client_certificate(
     generated only in memory; persistence and delivery are left to the caller.
     """
     if validity_days <= 0:
-        raise CommandError('The validity period must be a positive number of days.')
+        msg = 'The validity period must be a positive number of days.'
+        raise CommandError(msg)
 
     try:
         user = TrustpointUser.objects.get(
             pk=user_id, account_type=TrustpointUser.AccountType.HUMAN, is_active=True,
         )
     except TrustpointUser.DoesNotExist as exc:
-        raise CommandError(f'No active human user exists with ID {user_id}.') from exc
+        msg = f'No active human user exists with ID {user_id}.'
+        raise CommandError(msg) from exc
 
     issuing_ca = CaModel.objects.select_related('credential__certificate').filter(unique_name=ISSUING_CA_NAME).first()
     if issuing_ca is None or issuing_ca.credential is None:
-        raise CommandError('The Management Issuing CA is missing. Run create_management_ca first.')
+        msg = 'The Management Issuing CA is missing. Run create_management_ca first.'
+        raise CommandError(msg)
     issuer_certificate = issuing_ca.get_certificate()
     if issuer_certificate is None:
-        raise CommandError('The Management Issuing CA has no certificate.')
+        msg = 'The Management Issuing CA has no certificate.'
+        raise CommandError(msg)
 
     try:
         basic_constraints = issuer_certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
         key_usage = issuer_certificate.extensions.get_extension_for_class(x509.KeyUsage).value
     except x509.ExtensionNotFound as exc:
-        raise CommandError('The Management Issuing CA is missing required CA extensions.') from exc
+        msg = 'The Management Issuing CA is missing required CA extensions.'
+        raise CommandError(msg) from exc
     if not basic_constraints.ca or not key_usage.key_cert_sign:
-        raise CommandError('The Management Issuing CA certificate does not permit certificate signing.')
+        msg = 'The Management Issuing CA certificate does not permit certificate signing.'
+        raise CommandError(msg)
 
     now = timezone.now()
     if not issuer_certificate.not_valid_before_utc <= now < issuer_certificate.not_valid_after_utc:
-        raise CommandError('The Management Issuing CA certificate is not currently valid.')
+        msg = 'The Management Issuing CA certificate is not currently valid.'
+        raise CommandError(msg)
     remaining_days = (issuer_certificate.not_valid_after_utc - now).days + 1
     not_valid_after = min(
         now + timedelta(days=min(validity_days, remaining_days)), issuer_certificate.not_valid_after_utc,
@@ -82,7 +90,9 @@ def create_user_client_certificate(
         issuer_key_identifier = issuer_certificate.extensions.get_extension_for_class(x509.SubjectKeyIdentifier).value
         authority_key_identifier = x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(issuer_key_identifier)
     except x509.ExtensionNotFound:
-        authority_key_identifier = x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_certificate.public_key())
+        authority_key_identifier = x509.AuthorityKeyIdentifier.from_issuer_public_key(
+            cast('CertificateIssuerPublicKeyTypes', issuer_certificate.public_key()),
+        )
 
     builder = (
         x509.CertificateBuilder()
