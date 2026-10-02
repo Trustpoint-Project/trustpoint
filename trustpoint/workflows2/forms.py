@@ -29,5 +29,5 @@ class Workflow2DefinitionForm(forms.Form):
                 'style': 'white-space: pre; tab-size: 2;',
             }
         ),
-        help_text=_('YAML workflow definition (v2).'),
+        help_text=_('YAML workflow definition.'),
     )

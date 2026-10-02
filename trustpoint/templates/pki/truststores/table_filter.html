@@ -1,16 +1,15 @@
 {% load i18n %}
 
 {% block table_filter %}
-
-  <div class="card-body pb-0 d-flex gap-2 align-items-center">
+  <div class="d-flex flex-wrap gap-2 align-items-center">
     <div class="dropdown mb-1">
       <button class="btn btn-sm {% if filters_active %}btn-primary{% else %}btn-outline-secondary{% endif %} dropdown-toggle"
               type="button"
               id="tp-filter-dropdown-btn"
               data-bs-toggle="dropdown"
               data-bs-auto-close="outside"
-              aria-expanded="{% if filters_active %}true{% else %}false{% endif %}">
-        {% trans 'Filters' %}{% if filters_active %} <span class="badge bg-white text-primary ms-1">{% trans 'active' %}</span>{% endif %}
+                aria-expanded="false">
+              {% trans 'Filters' %}{% if filters_active %}<span class="ms-1">· {% trans 'Active' %}</span>{% endif %}
       </button>
       <div class="dropdown-menu p-3" id="tp-filter-dropdown-menu" style="min-width: 22rem;">
         <form method="get" class="d-flex flex-column gap-2">
@@ -29,13 +28,13 @@
             {{ filter.form.intended_usage }}
           </div>
 
-          <div class="d-flex gap-2 mt-1">
-            <button type="submit" class="btn btn-primary btn-sm flex-fill">
-              {% trans 'Apply' %}
-            </button>
-            <a href="{% url table_url %}" class="btn btn-outline-secondary btn-sm flex-fill">
+          <div class="d-flex justify-content-between gap-2 mt-1">
+            <a href="{% url table_url %}" class="btn btn-outline-secondary btn-sm">
               {% trans 'Reset' %}
             </a>
+            <button type="submit" class="btn btn-primary btn-sm">
+              {% trans 'Apply Filters' %}
+            </button>
           </div>
 
         </form>

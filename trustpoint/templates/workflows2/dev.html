@@ -1,45 +1,44 @@
 {% extends "trustpoint/base.html" %}
-{% load static %}
-
-{% block head %}
-  {{ block.super }}
-  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
-{% endblock head %}
+{% load i18n static %}
 
 {% block content %}
-<div class="container py-4 wf2-template-max-width">
-  <h1 class="mb-3">Workflows v2 — YAML → IR (dev)</h1>
-
-  <form method="post" class="mb-4">
+<div class="card">
+  <div class="card-header">
+    <h1 class="mb-1">{% trans 'Compile Workflow YAML' %}</h1>
+    <p class="mb-0 text-muted">{% trans 'Compile a workflow definition and inspect its intermediate representation.' %}</p>
+  </div>
+  <div class="card-body text-start">
+  <form method="post" id="workflow-yaml-compile-form" class="mb-4">
     {% csrf_token %}
 
     <div class="mb-3">
-      <label for="yaml_text" class="form-label">YAML</label>
+      <label for="yaml_text" class="form-label">{% trans 'Workflow YAML' %}</label>
       <textarea
         id="yaml_text"
         name="yaml_text"
-        class="form-control wf2-font-mono"
+        class="form-control font-monospace"
         rows="20"
       >{{ yaml_text }}</textarea>
     </div>
 
-    <button type="submit" class="btn btn-primary">Compile</button>
+    <button type="submit" class="btn btn-primary">{% trans 'Compile' %}</button>
   </form>
 
   {% if error %}
-    <div class="alert alert-danger">
-      <strong>Compile error:</strong><br>
-      <pre class="wf2-pre-wrap-no-margin">{{ error }}</pre>
+    <div class="alert alert-danger" role="alert">
+      <strong>{% trans 'Compile error' %}</strong>
+      <pre class="mb-0 mt-2 text-break">{{ error }}</pre>
     </div>
   {% endif %}
 
   {% if ir_json %}
-    <h2 class="h4 mt-4">IR</h2>
-    <pre class="p-3 bg-light border rounded wf2-pre-wrap wf2-font-mono">
+    <h2 class="h4 mt-4">{% trans 'Intermediate Representation' %}</h2>
+    <pre class="p-3 bg-body-tertiary border rounded font-monospace text-break">
 {{ ir_json|json_script:"ir_data" }}
     </pre>
 
     <script defer src="{% static 'js/workflows2/dev.js' %}"></script>
   {% endif %}
+  </div>
 </div>
 {% endblock %}

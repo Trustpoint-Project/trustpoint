@@ -202,8 +202,6 @@ class Workflow2HttpViewTests(TestCase):
         response = self.client.get(reverse("workflows2:definitions_list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "workflows2_editor.css")
-        self.assertContains(response, "wf2-list-page")
 
     def test_definition_create_uses_yaml_name_and_form_enabled_flag(self) -> None:
         self.client.force_login(self.user)
