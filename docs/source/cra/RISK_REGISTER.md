@@ -5,22 +5,21 @@
 # Risk Register
 
 <p>
-  <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Version"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Effective-2026--07--01-success?style=for-the-badge" alt="Effective Date"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Review-Quarterly-orange?style=for-the-badge" alt="Review Cycle"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Maintained_by-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Maintained by Trustpoint Project"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Document Version"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Last_Updated-2026--09--22-success?style=for-the-badge" alt="Last Updated"/></a>
 </p>
-
-**📋 Document Owner:** Trustpoint Project Maintainers | **📄 Version:** 1.0 | **📅 Last Updated:** 2026-07-01
-**🔄 Review Cycle:** Quarterly | **⏰ Next Review:** 2026-09-26
 
 ---
 
+> **Note:** This document is provided as part of Trustpoint's open-source security documentation. It may support CRA-related assessments but does not constitute a formal conformity assessment, certification, or declaration of conformity.
+
+
 ## **Purpose**
 
-Risk register documenting identified cybersecurity risks for Trustpoint's PKI management platform, supporting CRA readiness, BSI TR-03183-aligned risk management, and security excellence.
+Risk register documenting identified cybersecurity risks for Trustpoint's PKI management platform. It provides security evidence that may support CRA-related assessments, BSI TR-03183-aligned risk management, and broader security assurance activities.
 
-This document evaluates and treats risks derived from the threats identified in [`THREAT_MODEL.md`](./THREAT_MODEL.md).
+This document evaluates and defines treatment measures for risks derived from the threats identified in [`THREAT_MODEL.md`](./THREAT_MODEL.md).
 
 ---
 

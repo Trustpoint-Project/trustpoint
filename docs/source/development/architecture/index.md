@@ -2,7 +2,7 @@
 
 Trustpoint is an open-source platform for managing digital machine identities and certificate lifecycles in industrial IT and OT environments. It provides device onboarding, certificate issuance and renewal, policy enforcement, revocation management, and integration with industrial workflows through standardized enrollment protocols and APIs.
 
-> **Project status:** Trustpoint is currently a technology preview (beta). The architecture described here reflects the current implementation in the repository. Features, APIs, and deployment patterns may evolve between releases.
+> **Project status:** Trustpoint 1.0 is the first stable release of the platform. The architecture described here reflects the current implementation. Features, APIs, and deployment patterns may evolve in future releases; incompatible changes are documented in the corresponding release notes.
 
 ---
 

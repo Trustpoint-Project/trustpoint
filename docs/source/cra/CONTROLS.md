@@ -4,24 +4,22 @@
 
 # Security Controls
 
-<p">
-  <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Version"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Effective-2026--07--01-success?style=for-the-badge" alt="Effective Date"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Review-Quarterly-orange?style=for-the-badge" alt="Review Cycle"/></a>
+<p>
+  <a href="#"><img src="https://img.shields.io/badge/Maintained_by-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Maintained by Trustpoint Project"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Document Version"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Last_Updated-2026--09--22-success?style=for-the-badge" alt="Last Updated"/></a>
 </p>
-
-**📋 Document Owner:** Trustpoint Project Maintainers | **📄 Version:** 1.0 | **📅 Last Updated:** 2026-07-01
-**🔄 Review Cycle:** Quarterly | **⏰ Next Review:** 2026-09-26
 
 ---
 
+> **Note:** This document is provided as part of Trustpoint's open-source security documentation. It may support CRA-related assessments but does not constitute a formal conformity assessment, certification, or declaration of conformity.
+
+
 ## **Purpose**
 
-This document describes the technical and organizational security controls used to reduce cybersecurity risks for Trustpoint.
+This document describes the technical and organizational security controls implemented in Trustpoint to reduce identified cybersecurity risks.
 
-The controls are derived from the threats identified in `THREAT_MODEL.md` and the risks evaluated in `RISK_REGISTER.md`.
-
+The controls are derived from the threats documented in [`THREAT_MODEL.md`](./THREAT_MODEL.md) and the risks evaluated in [`RISK_REGISTER.md`](./RISK_REGISTER.md). They may also provide supporting security evidence for CRA-related assessments and other security assurance activities.
 
 ---
 
