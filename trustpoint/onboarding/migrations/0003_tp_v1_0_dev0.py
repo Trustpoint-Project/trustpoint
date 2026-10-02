@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name='onboardingconfigmodel',
-            name='cmp_shared_secret_expires_at',
-            field=models.DateTimeField(blank=True, default=None, null=True, verbose_name='CMP Shared Secret Expiry'),
+            name='credential_expires_at',
+            field=models.DateTimeField(blank=True, default=None, help_text='Expiry for CMP shared-secret and EST/REST password authentication. Null means no expiry.', null=True, verbose_name='Credential Expiry'),
         ),
     ]
