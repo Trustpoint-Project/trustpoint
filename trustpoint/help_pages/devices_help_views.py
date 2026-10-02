@@ -7,13 +7,17 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import secrets
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, override
 
 from cryptography import x509
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.core.management import call_command
+from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
@@ -47,6 +51,8 @@ from help_pages.commands import (
 )
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
+from management.models import SecurityConfig
+from onboarding.models import OnboardingConfigModel, OnboardingProtocol
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -65,6 +71,8 @@ from users.permissions import AppPermissions
 if TYPE_CHECKING:
     from typing import Any
 
+    from django.http import HttpRequest
+
     from pki.models import CaModel, CredentialModel
 
 
@@ -75,7 +83,7 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
     """Base help view that constructs the context."""
 
     template_name = 'help/help_page.html'
-    http_method_names = ('get',)
+    http_method_names = ('get', 'post')
     model = DeviceModel
     context_object_name = 'device'
     permission_required = AppPermissions.VIEW_HELP_PAGES
@@ -83,6 +91,48 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
     strategy: HelpPageStrategy
+
+    def uses_onboarding_credential(self) -> bool:
+        """Return whether this help page uses an onboarding password or shared secret."""
+        return isinstance(self.strategy, (
+            OnboardingDomainCredentialCmpSharedSecretStrategy,
+            OnboardingDomainCredentialEstUsernamePasswordStrategy,
+            OnboardingDomainCredentialRestUsernamePasswordStrategy,
+            AgentSetupProfileStrategy,
+        ))
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
+        """Rotate an expired onboarding credential and restart its configured lifetime."""
+        del args, kwargs
+        if not request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
+        self.object = self.get_object()
+        if not self.uses_onboarding_credential() or not self.object.onboarding_config_id:
+            raise Http404(_('No renewable onboarding credential is configured for this device.'))
+        with transaction.atomic():
+            config = OnboardingConfigModel.objects.select_for_update().get(pk=self.object.onboarding_config_id)
+            if config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
+                credential_field = 'cmp_shared_secret'
+            elif config.onboarding_protocol in (
+                OnboardingProtocol.EST_USERNAME_PASSWORD,
+                OnboardingProtocol.REST_USERNAME_PASSWORD,
+                OnboardingProtocol.AGENT,
+            ):
+                credential_field = 'est_password'
+            else:
+                raise Http404(_('No renewable onboarding credential is configured for this device.'))
+            if config.is_credential_expired() and getattr(config, credential_field):
+                security_config = SecurityConfig.objects.filter(pk=1).first()
+                ttl_seconds = security_config.credential_ttl_seconds if security_config is not None else None
+                setattr(config, credential_field, secrets.token_urlsafe(32))
+                config.credential_expires_at = (
+                    timezone.now() + timedelta(seconds=ttl_seconds) if ttl_seconds is not None else None
+                )
+                config.save(update_fields=[credential_field, 'credential_expires_at'])
+                messages.success(request, _('The onboarding credential was renewed.'))
+            else:
+                messages.warning(request, _('The onboarding credential is not expired or is no longer available.'))
+        return HttpResponseRedirect(request.get_full_path())
 
     def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
         device = self.object
@@ -165,6 +215,13 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
 
         sections, heading = self.strategy.build_sections(help_context=help_context)
 
+        onboarding_config = self.object.onboarding_config
+        context['credential_expired'] = bool(
+            self.uses_onboarding_credential()
+            and onboarding_config
+            and onboarding_config.is_credential_expired()
+        )
+        context['can_renew_credential'] = self.request.user.has_perm(AppPermissions.MANAGE_DEVICES)
         context['help_page'] = HelpPage(heading=heading, sections=sections)
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
         context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
