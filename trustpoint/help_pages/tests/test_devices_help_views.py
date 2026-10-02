@@ -233,6 +233,8 @@ class BaseHelpViewTests(TestCase):
         self.view.page_category = 'devices'
         self.view.page_name = 'devices'
         request = self.factory.get('/')
+        request.user = Mock()
+        request.user.has_perm.return_value = True
         self.view.request = request
 
         with patch('help_pages.devices_help_views.settings') as mock_settings:
@@ -241,6 +243,7 @@ class BaseHelpViewTests(TestCase):
 
         assert 'help_page' in context
         assert context['help_page'].heading == 'Test Heading'
+        assert context['can_renew_credential'] is True
         assert context['ValueRenderType_CODE'] == ValueRenderType.CODE.value
         assert context['clm_url'] == 'devices:devices_certificate_lifecycle_management'
 
