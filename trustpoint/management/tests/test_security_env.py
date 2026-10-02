@@ -24,6 +24,40 @@ from management.security_env import (
 class SecurityEnvironmentTest(TestCase):
     """Test parsing and monotonic application of security restrictions."""
 
+    def test_credential_ttl_environment_policy(self) -> None:
+        for mode in SecurityConfig.SecurityModeChoices:
+            hardened = mode in (SecurityConfig.SecurityModeChoices.HARDENED, SecurityConfig.SecurityModeChoices.CRITICAL)
+            with self.subTest(mode=mode):
+                defaults = effective_security_defaults(mode, parse_security_restrictions({}))
+                self.assertEqual(defaults['credential_ttl_seconds'], 600 if hardened else None)
+                for value in ('300', '600', '601', 'null'):
+                    restrictions = parse_security_restrictions({'TP_SECURITY_CREDENTIAL_TTL_SECONDS': value})
+                    if hardened and value in ('601', 'null'):
+                        with self.assertRaisesRegex(SecurityConfigurationError, 'credential_ttl_seconds'):
+                            effective_security_defaults(mode, restrictions)
+                    else:
+                        defaults = effective_security_defaults(mode, restrictions)
+                        self.assertEqual(defaults['credential_ttl_seconds'], None if value == 'null' else int(value))
+
+    def test_invalid_credential_ttl_is_rejected(self) -> None:
+        for value in ('0', '-1', '', 'invalid', '1.5'):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                SecurityConfigurationError, 'TP_SECURITY_CREDENTIAL_TTL_SECONDS',
+            ):
+                parse_security_restrictions({'TP_SECURITY_CREDENTIAL_TTL_SECONDS': value})
+
+    def test_credential_ttl_synchronization(self) -> None:
+        for value, expected in (('300', 300), ('null', None)):
+            with self.subTest(value=value), patch.dict('os.environ', {
+                'TP_SECURITY_MODE': 'LAB',
+                'TP_SECURITY_CREDENTIAL_TTL_SECONDS': value,
+            }, clear=True):
+                self.assertTrue(synchronize_security_config())
+                self.assertEqual(SecurityConfig.objects.get(pk=1).credential_ttl_seconds, expected)
+        with patch.dict('os.environ', {'TP_SECURITY_MODE': 'HARDENED'}, clear=True):
+            self.assertTrue(synchronize_security_config())
+            self.assertEqual(SecurityConfig.objects.get(pk=1).credential_ttl_seconds, 600)
+
     def test_security_mode_names_are_mapped(self) -> None:
         for name, choice in SecurityConfig.SecurityModeChoices.__members__.items():
             self.assertEqual(security_mode_from_environment({'TP_SECURITY_MODE': name}), choice.value)

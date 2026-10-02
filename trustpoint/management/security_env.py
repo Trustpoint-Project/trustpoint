@@ -49,6 +49,7 @@ class SecurityRestrictions:
     rsa_minimum_key_size: int | _Unset | None = UNSET
     max_cert_validity_days: int | _Unset | None = UNSET
     max_crl_validity_days: int | _Unset | None = UNSET
+    credential_ttl_seconds: int | _Unset | None = UNSET
     allow_ca_issuance: bool | _Unset = UNSET
     allow_auto_gen_pki: bool | _Unset = UNSET
     allow_self_signed_ca: bool | _Unset = UNSET
@@ -118,7 +119,14 @@ def _parse_protocols(
 
 def parse_security_restrictions(environment: Mapping[str, str] | None = None) -> SecurityRestrictions:
     """Parse all optional ``TP_SECURITY_*`` restrictions."""
+    credential_ttl_seconds = _parse_nullable_integer(
+        'TP_SECURITY_CREDENTIAL_TTL_SECONDS',
+        _raw_environment(environment, 'TP_SECURITY_CREDENTIAL_TTL_SECONDS'),
+    )
+    if credential_ttl_seconds == 0:
+        _fail('TP_SECURITY_CREDENTIAL_TTL_SECONDS must be a positive integer or null.')
     return SecurityRestrictions(
+        credential_ttl_seconds=credential_ttl_seconds,
         rsa_minimum_key_size=_parse_nullable_integer(
             'TP_SECURITY_RSA_MINIMUM_KEY_SIZE',
             _raw_environment(environment, 'TP_SECURITY_RSA_MINIMUM_KEY_SIZE'),
@@ -204,7 +212,7 @@ def effective_security_defaults(
     )
     restrictions = restrictions or parse_security_restrictions()
 
-    for field in ('rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days'):
+    for field in ('rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days', 'credential_ttl_seconds'):
         value = getattr(restrictions, field)
         if _is_unset(value):
             continue
@@ -309,6 +317,7 @@ def synchronize_security_config() -> bool:
                     'rsa_minimum_key_size',
                     'max_cert_validity_days',
                     'max_crl_validity_days',
+                    'credential_ttl_seconds',
                 }
             ):
                 setattr(config, field, value)

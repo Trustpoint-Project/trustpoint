@@ -1,6 +1,7 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
+import django.core.validators
 from django.db import migrations, models
 
 
@@ -35,6 +36,11 @@ class Migration(migrations.Migration):
         ),
         migrations.DeleteModel(
             name='UIConfig',
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='credential_ttl_seconds',
+            field=models.PositiveIntegerField(blank=True, default=None, help_text='Default lifetime in seconds for CMP, EST, and REST onboarding credentials. Blank means no expiry.', null=True, validators=[django.core.validators.MinValueValidator(1)]),
         ),
         migrations.AddField(
             model_name='securityconfig',

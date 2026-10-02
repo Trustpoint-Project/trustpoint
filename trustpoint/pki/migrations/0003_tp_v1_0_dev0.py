@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('onboarding', '0002_initial'),
+        ('onboarding', '0003_tp_v1_0_dev0'),
         ('pki', '0002_initial'),
     ]
 

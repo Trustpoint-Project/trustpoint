@@ -5,10 +5,13 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from onboarding.enums import (
@@ -114,6 +117,14 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
     est_password = EncryptedCharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
     cmp_shared_secret = EncryptedCharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
+    credential_expires_at = models.DateTimeField(
+        verbose_name=_('Credential Expiry'),
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_('Expiry for CMP shared-secret and EST/REST password authentication. Null means no expiry.'),
+    )
+
     opc_user = models.CharField(verbose_name=_('OPC User'), max_length=128, blank=True, default='')
     opc_password = EncryptedCharField(verbose_name=_('OPC Password'), max_length=128, blank=True, default='')
 
@@ -162,6 +173,20 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             *args: Positional arguments are passed to super().save().
             **kwargs: Keyword arguments are passed to super().save().
         """
+        if (
+            self._state.adding
+            and self.credential_expires_at is None
+            and self.onboarding_protocol in (
+                OnboardingProtocol.CMP_SHARED_SECRET,
+                OnboardingProtocol.EST_USERNAME_PASSWORD,
+                OnboardingProtocol.REST_USERNAME_PASSWORD,
+                OnboardingProtocol.AGENT,
+            )
+            and (self.cmp_shared_secret or self.est_password)
+        ):
+            security_config = apps.get_model('management', 'SecurityConfig').objects.filter(pk=1).first()
+            if security_config is not None and security_config.credential_ttl_seconds is not None:
+                self.credential_expires_at = timezone.now() + timedelta(seconds=security_config.credential_ttl_seconds)
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -170,6 +195,17 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         error_messages = self._dispatch_protocol_validation()
         if error_messages:
             raise ValidationError(error_messages)
+
+    def is_credential_expired(self) -> bool:
+        """Checks whether the shared authentication credential has expired.
+
+        Returns:
+            True if an expiry is set and the current time is past it, False otherwise
+            (including when no expiry is configured).
+        """
+        if self.credential_expires_at is None:
+            return False
+        return timezone.now() >= self.credential_expires_at
 
     def _dispatch_protocol_validation(self) -> dict[str, str]:
         """Dispatch validation to the appropriate handler based on the onboarding protocol."""
@@ -345,14 +381,10 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         error_messages = {}
 
         if self.cmp_shared_secret != '':
-            error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must not be set for Agent onboarding.'  # noqa: S105
-            )
+            error_messages['cmp_shared_secret'] = 'CMP shared-secret must not be set for Agent onboarding.'  # noqa: S105
 
         if self.idevid_trust_store is not None:
-            error_messages['idevid_trust_store'] = (
-                'IDevID truststore must not be set for Agent onboarding.'
-            )
+            error_messages['idevid_trust_store'] = 'IDevID truststore must not be set for Agent onboarding.'
 
         allowed_protocols = self.get_pki_protocols()
         if OnboardingPkiProtocol.REST not in allowed_protocols:

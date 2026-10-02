@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, ClassVar, TypedDict, cast
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, NamedCurve, PublicKeyAlgorithmOid
@@ -29,6 +30,7 @@ class _SecurityModeDefaults(TypedDict):
     not_permitted_signature_algorithm_oids: list[str]
     max_cert_validity_days: int | None
     max_crl_validity_days: int | None
+    credential_ttl_seconds: int | None
     allow_ca_issuance: bool
     allow_auto_gen_pki: bool
     allow_self_signed_ca: bool
@@ -181,6 +183,16 @@ class SecurityConfig(models.Model):
         ),
     )
 
+    credential_ttl_seconds = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        default=None,
+        validators=[MinValueValidator(1)],
+        help_text=_(
+            'Default lifetime in seconds for CMP, EST, and REST onboarding credentials. Blank means no expiry.'
+        ),
+    )
+
     # -- Certificate policy flags -----------------------------------------
 
     allow_ca_issuance = models.BooleanField(
@@ -248,6 +260,7 @@ class SecurityConfig(models.Model):
             'not_permitted_signature_algorithm_oids': [],
             'max_cert_validity_days': None,  # no limit
             'max_crl_validity_days': None,  # no limit
+            'credential_ttl_seconds': None,
             'allow_ca_issuance': True,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
@@ -266,6 +279,7 @@ class SecurityConfig(models.Model):
             'not_permitted_signature_algorithm_oids': [],
             'max_cert_validity_days': 1825,  # 5 years
             'max_crl_validity_days': 365,
+            'credential_ttl_seconds': None,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
@@ -290,6 +304,7 @@ class SecurityConfig(models.Model):
             ],
             'max_cert_validity_days': 365,
             'max_crl_validity_days': 180,
+            'credential_ttl_seconds': None,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
@@ -316,6 +331,7 @@ class SecurityConfig(models.Model):
             ],
             'max_cert_validity_days': 365,
             'max_crl_validity_days': 90,
+            'credential_ttl_seconds': 600,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
@@ -344,6 +360,7 @@ class SecurityConfig(models.Model):
             ],
             'max_cert_validity_days': 180,
             'max_crl_validity_days': 90,
+            'credential_ttl_seconds': 600,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
@@ -373,6 +390,7 @@ class SecurityConfig(models.Model):
         self.not_permitted_signature_algorithm_oids = list(defaults['not_permitted_signature_algorithm_oids'])
         self.max_cert_validity_days = defaults['max_cert_validity_days']
         self.max_crl_validity_days = defaults['max_crl_validity_days']
+        self.credential_ttl_seconds = defaults['credential_ttl_seconds']
         self.allow_ca_issuance = defaults['allow_ca_issuance']
         self.allow_auto_gen_pki = defaults['allow_auto_gen_pki']
         self.allow_self_signed_ca = defaults['allow_self_signed_ca']
@@ -388,6 +406,7 @@ class SecurityConfig(models.Model):
                     'not_permitted_signature_algorithm_oids',
                     'max_cert_validity_days',
                     'max_crl_validity_days',
+                    'credential_ttl_seconds',
                     'allow_ca_issuance',
                     'allow_auto_gen_pki',
                     'allow_self_signed_ca',
@@ -422,6 +441,7 @@ class SecurityConfig(models.Model):
                 ],
                 'max_cert_validity_days': defaults['max_cert_validity_days'],
                 'max_crl_validity_days': defaults['max_crl_validity_days'],
+                'credential_ttl_seconds': defaults['credential_ttl_seconds'],
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
                 'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],

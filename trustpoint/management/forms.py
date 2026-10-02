@@ -190,6 +190,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 'rsa_minimum_key_size',
                 'max_cert_validity_days',
                 'max_crl_validity_days',
+                'credential_ttl_seconds',
                 Field('allow_ca_issuance', wrapper_class='form-check form-switch'),
                 Field('allow_auto_gen_pki', wrapper_class='form-check form-switch'),
                 Field('allow_self_signed_ca', wrapper_class='form-check form-switch'),
@@ -251,6 +252,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         fields: ClassVar[list[str]] = [
             'security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm',
             'rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days',
+            'credential_ttl_seconds',
             'allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca',
             'allow_imported_private_keys',
             'permitted_no_onboarding_pki_protocols',
@@ -329,7 +331,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         """Validate that submitted values comply with the given security mode defaults."""
         defaults = SecurityConfig._MODE_DEFAULTS[mode]   # noqa: SLF001
 
-        for field in ['max_cert_validity_days', 'max_crl_validity_days']:
+        for field in ['max_cert_validity_days', 'max_crl_validity_days', 'credential_ttl_seconds']:
             val = cleaned.get(field)
             default_val = defaults.get(field)
             if default_val is not None and (val is None or val > default_val):
