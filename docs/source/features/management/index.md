@@ -21,12 +21,23 @@ Additional management pages are available directly in the sidebar.
 
 | Page | Purpose |
 |---|---|
+| User Authentication | Configure password, optional OTP, and certificate-based user authentication. |
 | Logging | View and configure application log output. |
 | Audit Log | Review security-relevant actions and configuration changes. |
 | TLS | Configure TLS settings for the Trustpoint web interface and services. |
 | Backups | Create, download, and manage Trustpoint backups. |
 | Crypto Backend | Configure cryptographic backend settings. |
 | Notifications | Manage notification settings and delivery behavior. |
+
+## User Authentication
+
+The **User Authentication** page controls how human users can sign in to Trustpoint.
+
+Trustpoint supports:
+
+- username and password authentication
+- optional OTP verification for password-based login
+- certificate-based authentication using TLS client certificates
 
 ## Logging
 
@@ -56,10 +67,12 @@ The **Notifications** page controls notification behavior. Depending on the conf
 :maxdepth: 2
 
 settings
+user_authentication
 logging
 audit_logs
 tls_settings
 backups
 notifications
 environment_configuration
+
 ```

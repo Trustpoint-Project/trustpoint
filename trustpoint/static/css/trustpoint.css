@@ -558,6 +558,11 @@ table .tp-onboarding-btn {
     width: 12rem;
 }
 
+.tp-configuration-table > tbody > tr > td:last-child .btn {
+    width: 8rem;
+    white-space: nowrap;
+}
+
 .row_checkbox {
     vertical-align: middle;
 }

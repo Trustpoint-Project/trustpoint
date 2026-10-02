@@ -17,5 +17,10 @@ class AccountSecurityConfigTest(SimpleTestCase):
         config = AccountSecurityConfig.get()
 
         assert config.pk == 1
-        assert config.password_similarity
         assert config.failed_login_attempts is None
+        assert not hasattr(AccountSecurityConfig, 'password_minimum_length')
+        assert not hasattr(AccountSecurityConfig, 'password_similarity')
+        assert not hasattr(AccountSecurityConfig, 'password_common')
+        assert not hasattr(AccountSecurityConfig, 'password_numeric')
+        assert not hasattr(AccountSecurityConfig, 'password_prevent_reuse')
+        assert not hasattr(AccountSecurityConfig, 'password_expiry_days')

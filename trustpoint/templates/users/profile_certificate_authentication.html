@@ -1,0 +1,113 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n crispy_forms_filters %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans 'Certificate Based Authentication' %}: {{ object.username }}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col" class="ps-0">{% trans 'Identifier' %}</th>
+                        <th scope="col">{% trans 'Status' %}</th>
+                        <th scope="col">{% trans 'Expires' %}</th>
+                        <th scope="col" class="text-end">{% trans 'Actions' %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for client_certificate in client_certificates %}
+                    <tr>
+                        <td class="ps-0">{{ client_certificate.identifier }}</td>
+                        <td>
+                            {% if client_certificate.is_active %}
+                                <span class="badge text-bg-success">{% trans 'Active' %}</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">{% trans 'Disabled' %}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ client_certificate.certificate.not_valid_after|date:'Y-m-d H:i' }}</td>
+                        <td class="text-end">
+                            {% if client_certificate.is_active %}
+                            <form method="post" action="{% url 'users:profile_client_certificate_action' client_certificate.pk 'disable' %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-secondary btn-sm">{% trans 'Disable' %}</button>
+                            </form>
+                            {% else %}
+                            <form method="post" action="{% url 'users:profile_client_certificate_action' client_certificate.pk 'enable' %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-primary btn-sm">{% trans 'Enable' %}</button>
+                            </form>
+                            {% endif %}
+                            <form method="post" action="{% url 'users:profile_client_certificate_action' client_certificate.pk 'delete' %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger btn-sm">{% trans 'Delete' %}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-muted text-center">{% trans 'No client certificates yet.' %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if certificate_authentication_enabled %}
+        <h2 class="h5 mt-4">{% trans 'Add client certificate' %}</h2>
+        <p id="certificate-download-error" class="alert alert-danger" role="alert" hidden>{% trans 'The download failed. Refresh the list before trying again.' %}</p>
+        <form method="post" action="{% url 'users:profile_certificate_authentication' %}" id="client-certificate-form">
+            {% csrf_token %}
+            {{ form|crispy }}
+            <button type="submit" class="btn btn-primary">{% trans 'Add and download' %}</button>
+        </form>
+        {% else %}
+        <p class="text-muted">{% trans 'Certificate based authentication is not enabled.' %}</p>
+        {% endif %}
+    </div>
+
+    <div class="card-footer d-flex tp-sticky-footer">
+        <a href="{% url 'users:profile' %}" class="btn btn-secondary m-1">{% trans 'Back' %}</a>
+        <a href="{% url 'users:profile_certificate_authentication' %}" class="btn btn-secondary m-1">{% trans 'Refresh' %}</a>
+    </div>
+</div>
+{% if certificate_authentication_enabled %}
+<script>
+document.getElementById('client-certificate-form').addEventListener('submit', async function (event) {
+    event.preventDefault();
+    const button = this.querySelector('button[type="submit"]');
+    if (button.disabled) return;
+    button.disabled = true;
+    const error = document.getElementById('certificate-download-error');
+    error.hidden = true;
+    try {
+        const response = await fetch(this.action, {method: 'POST', body: new FormData(this)});
+        if (!response.ok) throw new Error();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        if (!disposition.startsWith('attachment;')) {
+            const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const form = page.getElementById(this.id);
+            if (!form) throw new Error();
+            this.innerHTML = form.innerHTML;
+            return;
+        }
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = disposition.match(/filename="?([^";]+)"?/)?.[1] || 'client-certificate.p12';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => { URL.revokeObjectURL(url); window.location.assign(this.action); }, 1000);
+    } catch {
+        error.hidden = false;
+        button.disabled = false;
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

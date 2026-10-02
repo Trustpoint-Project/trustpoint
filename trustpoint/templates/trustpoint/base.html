@@ -381,7 +381,8 @@
                             </a>
 
                             <a
-                                href="{% url 'management:role_management' %}"
+                                href="{% url 'management:user_authentication' %}" class="tp-menu-item {% if page_name == 'user_authentication' %}tp-menu-active{% endif %}">{% trans "User Authentication" %}</a>
+                    <a href="{% url 'management:role_management' %}"
                                 class="tp-menu-item {% if page_name == 'role_management' %}tp-menu-active{% endif %}"
                             >
                                 {% trans "Roles" %}
@@ -540,17 +541,12 @@
                                 width="16"
                                 height="16"
                                 role="img"
-                                aria-hidden="true"
-                            >
-                                <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
-                            </svg>
-
-                            {% trans "Help & Support" %}
-                        </a>
-
-
-                        <form
-                            method="post"
+                                aria-hidden="true">
+                            <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
+                        </svg>
+                        {% trans "Help & Support" %}
+                    </a>
+                    <form method="post"
                             action="{% url 'users:logout' %}"
                         >
                             {% csrf_token %}

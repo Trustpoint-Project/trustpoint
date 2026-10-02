@@ -1,0 +1,78 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans 'Configure Certificate Authentication' %}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
+        {{ form.non_field_errors }}
+        {% if form.action.errors %}<div class="alert alert-danger">{% trans 'Choose a valid management CA action.' %}</div>{% endif %}
+        {% if form.root_ca_id.errors or form.issuing_ca_id.errors %}
+            <div class="alert alert-danger">{% trans 'Reload the page and try again.' %}</div>
+        {% endif %}
+
+        <h2 class="h5 border-bottom pb-2 mb-3">{% trans 'Management CA' %}</h2>
+        <p>{% trans 'The management CA issues certificates for user authentication.' %}</p>
+        <p class="mb-4">
+            {% trans 'Status:' %}
+            {% if management_ca_complete %}
+                <span class="badge text-bg-success">{% trans 'Generated' %}</span>
+            {% elif management_ca_exists %}
+                <span class="badge text-bg-warning">{% trans 'Incomplete' %}</span>
+            {% else %}
+                <span class="badge text-bg-secondary">{% trans 'Not generated' %}</span>
+            {% endif %}
+        </p>
+
+        <div class="table-responsive">
+            <table class="table align-middle tp-configuration-table">
+                <tbody>
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Generate management CA' %}</th>
+                        <td>{% trans 'Create the management CA for the first time.' %}</td>
+                        <td class="text-end">
+                            <form method="post" action="{% url 'management:certificate_authentication' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="root_ca_id" value="{{ root_ca.pk|default_if_none:'' }}">
+                                <input type="hidden" name="issuing_ca_id" value="{{ issuing_ca.pk|default_if_none:'' }}">
+                                <button type="submit" name="action" value="generate" class="btn btn-primary btn-sm"{% if management_ca_exists %} disabled{% endif %}>{% trans 'Generate' %}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Replace management CA' %}</th>
+                        <td>{% trans 'Replace the existing management CA with a newly generated one.' %}</td>
+                        <td class="text-end">
+                            <form method="post" action="{% url 'management:certificate_authentication' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="root_ca_id" value="{{ root_ca.pk|default_if_none:'' }}">
+                                <input type="hidden" name="issuing_ca_id" value="{{ issuing_ca.pk|default_if_none:'' }}">
+                                <button type="submit" name="action" value="replace" class="btn btn-primary btn-sm"{% if not management_ca_complete %} disabled{% endif %}>{% trans 'Replace' %}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">{% trans 'Delete management CA' %}</th>
+                        <td>{% trans 'Remove the management CA without generating a replacement.' %}</td>
+                        <td class="text-end">
+                            <form method="post" action="{% url 'management:certificate_authentication' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="root_ca_id" value="{{ root_ca.pk|default_if_none:'' }}">
+                                <input type="hidden" name="issuing_ca_id" value="{{ issuing_ca.pk|default_if_none:'' }}">
+                                <button type="submit" name="action" value="delete" class="btn btn-danger btn-sm"{% if not management_ca_exists %} disabled{% endif %}>{% trans 'Delete' %}</button>
+                            </form>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex tp-sticky-footer">
+        <a href="{% url 'management:user_authentication' %}" class="btn btn-secondary m-1">{% trans 'Back' %}</a>
+    </div>
+</div>
+{% endblock %}

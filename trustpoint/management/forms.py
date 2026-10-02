@@ -5,8 +5,10 @@
 
 from __future__ import annotations
 
+import gzip
 import logging
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
+import zlib
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast, override
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
@@ -14,7 +16,7 @@ from crispy_forms.layout import HTML, Fieldset, Layout
 from cryptography.x509 import Certificate
 from django import forms
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import FileExtensionValidator, RegexValidator
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -29,6 +31,7 @@ from management.models import (
     BackupOptions,
     LoggingConfig,
     NotificationConfig,
+    PasswordPolicy,
     PrometheusConfig,
     SecurityConfig,
     SmtpEmailConfig,
@@ -46,7 +49,10 @@ from trustpoint.logger import LoggerMixin
 if TYPE_CHECKING:
     from typing import ClassVar
 
+    from django.core.files.uploadedfile import UploadedFile
+
 MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+MAX_PASSWORD_LIST_BYTES = 10 * 1024 * 1024
 
 
 class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
@@ -66,41 +72,21 @@ class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
 
         model = AccountSecurityConfig
         fields = (
-            'password_minimum_length',
-            'password_similarity',
-            'password_common',
-            'password_numeric',
-            'password_prevent_reuse',
-            'password_expiry_days',
             'api_credential_expiry_days',
             'idle_timeout_minutes',
             'failed_login_attempts',
         )
         widgets: ClassVar[dict[str, forms.Widget]] = {
-            'password_minimum_length': forms.NumberInput(attrs={'min': 1}),
-            'password_expiry_days': forms.NumberInput(attrs={'min': 1}),
             'api_credential_expiry_days': forms.NumberInput(attrs={'min': 1}),
             'idle_timeout_minutes': forms.NumberInput(attrs={'min': 15, 'max': 43200}),
             'failed_login_attempts': forms.NumberInput(attrs={'min': 1}),
         }
         labels: ClassVar[dict[str, Any]] = {
-            'password_minimum_length': _('Minimum password length'),
-            'password_similarity': _('Prevent similarity to personal information'),
-            'password_common': _('Reject commonly used passwords'),
-            'password_numeric': _('Reject entirely numeric passwords'),
-            'password_prevent_reuse': _('Prevent reuse of the previous password'),
-            'password_expiry_days': _('Expire passwords after this many days'),
             'api_credential_expiry_days': _('Expire API credentials after this many days'),
             'idle_timeout_minutes': _('Idle session duration in minutes'),
             'failed_login_attempts': _('Block after this many failed login attempts'),
         }
         help_texts: ClassVar[dict[str, Any]] = {
-            'password_minimum_length': _('Passwords must contain at least this many characters.'),
-            'password_similarity': _('Reject passwords too similar to the username, name, or email address.'),
-            'password_common': _("Reject passwords found in Django's common-password list."),
-            'password_numeric': _('Reject passwords made up of numbers only.'),
-            'password_prevent_reuse': _('A new password must differ from the immediately preceding password.'),
-            'password_expiry_days': _('Leave empty to keep passwords valid indefinitely.'),
             'api_credential_expiry_days': _('Leave empty to keep API credentials valid indefinitely.'),
             'idle_timeout_minutes': _(
                 'Users are logged out after this period without activity. '
@@ -111,11 +97,6 @@ class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
                 'Successful login resets the consecutive failure count.',
             ),
         }
-
-    def clean_password_expiry_days(self) -> int | None:
-        """Accept an empty value to represent no password expiry."""
-        value = self.cleaned_data['password_expiry_days']
-        return value or None
 
     def clean_api_credential_expiry_days(self) -> int | None:
         """Accept an empty value to represent no credential expiry."""
@@ -1195,6 +1176,151 @@ class LoggingConfigForm(forms.Form):
                 'crypto_backend_audit_enabled': crypto_backend_audit_enabled,
             },
         )
+
+class CertificateAuthenticationEnabledForm(forms.Form):
+    """Save the certificate authentication switch for the displayed management CA."""
+
+    enabled = forms.BooleanField(required=False, label=_('Enable certificate authentication'))
+    issuing_ca_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
+
+
+class ManagementCAActionForm(forms.Form):
+    """Validate an explicit management CA action and the hierarchy shown to the administrator."""
+
+    action = forms.ChoiceField(
+        choices=[('generate', _('Generate')), ('replace', _('Generate new CA')), ('delete', _('Delete'))],
+        widget=forms.HiddenInput,
+    )
+    root_ca_id = forms.IntegerField(required=False, min_value=1, widget=forms.HiddenInput)
+    issuing_ca_id = forms.IntegerField(required=False, min_value=1, widget=forms.HiddenInput)
+
+
+class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):
+    """Edit the policy used for password creation and changes."""
+
+    common_password_list = forms.FileField(
+        required=False,
+        max_length=255,
+        label=_('Upload a custom common-password list'),
+        validators=[FileExtensionValidator(allowed_extensions=['txt', 'gz'])],
+        widget=forms.FileInput(attrs={'accept': '.txt,.gz'}),
+        help_text=_(
+            'UTF-8 text or gzip, with one lowercase password per line. '
+            'Maximum 10 MiB, including after decompression. '
+            'Leave empty to keep the currently selected list.'
+        ),
+    )
+    restore_default_list = forms.BooleanField(
+        required=False,
+        label=_('Restore Django default list'),
+        help_text=_('Use the bundled Django list after saving. Other policy settings are preserved.'),
+    )
+
+    class Meta:
+        """Editable policy fields; defaults and current values come from the model instance."""
+
+        model = PasswordPolicy
+        fields: ClassVar[tuple[str, ...]] = (
+            'minimum_length',
+            'prevent_password_reuse',
+            'password_expiry_days',
+            'user_similarity_enabled',
+            'max_similarity',
+            'reject_common_passwords',
+            'common_password_list',
+            'reject_numeric_passwords',
+            'require_otp',
+        )
+        labels: ClassVar[dict[str, Any]] = {
+            'minimum_length': _('Minimum password length'),
+            'prevent_password_reuse': _('Prevent reuse of the previous password'),
+            'password_expiry_days': _('Expire passwords after this many days'),
+            'user_similarity_enabled': _('Reject passwords similar to user information'),
+            'max_similarity': _('Maximum similarity'),
+            'reject_common_passwords': _('Reject common passwords'),
+            'reject_numeric_passwords': _('Reject entirely numeric passwords'),
+        }
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'minimum_length': forms.NumberInput(attrs={'min': 1}),
+            'password_expiry_days': forms.NumberInput(attrs={'min': 1}),
+            'max_similarity': forms.NumberInput(attrs={'min': '0.1', 'max': '1.0', 'step': '0.01'}),
+            'require_otp': forms.CheckboxInput(attrs={'id': 'require-otp'}),
+        }
+
+    def clean_password_expiry_days(self) -> int | None:
+        """Accept an empty value to represent no password expiry."""
+        value = self.cleaned_data['password_expiry_days']
+        return value or None
+
+    def clean_common_password_list(self) -> UploadedFile[Any] | None:
+        """Validate new uploads and rewind them for storage without modifying their contents."""
+        upload = self.cleaned_data.get('common_password_list')
+        if upload is None:
+            return None
+
+        if upload.size is not None and upload.size > MAX_PASSWORD_LIST_BYTES:
+            raise ValidationError(_('The password list must not exceed 10 MiB.'), code='file_too_large')
+
+        try:
+            compressed = upload.read(2) == b'\x1f\x8b'
+            upload.seek(0)
+            if compressed:
+                with gzip.GzipFile(fileobj=upload) as password_file:
+                    content = password_file.read(MAX_PASSWORD_LIST_BYTES + 1)
+            else:
+                content = upload.read(MAX_PASSWORD_LIST_BYTES + 1)
+        except (OSError, EOFError, zlib.error) as exc:
+            raise ValidationError(_('The gzip password list could not be read.'), code='invalid_gzip') from exc
+        finally:
+            upload.seek(0)
+
+        if len(content) > MAX_PASSWORD_LIST_BYTES:
+            raise ValidationError(
+                _('The password list must not exceed 10 MiB after decompression.'), code='file_too_large',
+            )
+        try:
+            text = content.decode('utf-8')
+        except UnicodeDecodeError as exc:
+            raise ValidationError(
+                _('The password list must contain UTF-8 text.'), code='invalid_encoding',
+            ) from exc
+
+        passwords = [line.strip() for line in text.split('\n') if line.strip()]
+        if not passwords:
+            raise ValidationError(_('The password list must contain at least one password.'), code='empty_list')
+        if any(password != password.lower() or not password.isprintable() for password in passwords):
+            raise ValidationError(
+                _('Use one lowercase password per line, without control characters.'), code='invalid_password_list',
+            )
+        return cast('UploadedFile[Any]', upload)
+
+    def clean(self) -> dict[str, Any]:
+        """Reject selecting both a replacement upload and the default list."""
+        cleaned = super().clean() or {}
+        if cleaned.get('restore_default_list') and cleaned.get('common_password_list'):
+            self.add_error(
+                'common_password_list', _('Choose either an upload or restoring the Django default list.'),
+            )
+        return cleaned
+
+    @override
+    def save(self, commit: bool = True) -> PasswordPolicy:
+        """Store validated uploads in the database, or clear them to restore Django's default."""
+        policy = super().save(commit=False)
+        upload = self.cleaned_data.get('common_password_list')
+        if self.cleaned_data.get('restore_default_list'):
+            policy.common_password_list_data = b''
+            policy.common_password_list_name = ''
+        elif upload is not None:
+            upload.seek(0)
+            policy.common_password_list_data = upload.read()
+            policy.common_password_list_name = upload.name
+            upload.seek(0)
+        if commit:
+            policy.save()
+            self.save_m2m()
+        return policy
+
 
 class OrganizationForm(forms.ModelForm[OrganizationModel]):
     """Form for creating and updating organizations."""
