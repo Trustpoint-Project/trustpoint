@@ -8,6 +8,7 @@ from typing import Never
 from cryptography import x509
 
 from devices.models import DeviceModel
+from onboarding.models import OnboardingConfigModel
 from pki.models import CredentialModel, IssuedCredentialModel
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
@@ -54,6 +55,10 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
 
             if not device_config.est_password:
                 self.logger.warning('Authentication failed: No EST password set for %s', username)
+                self._raise_authentication_error()
+
+            if isinstance(device_config, OnboardingConfigModel) and device_config.is_credential_expired():
+                self.logger.warning('Authentication failed: Credential has expired for %s', username)
                 self._raise_authentication_error()
 
             # Use proper password hashing instead of plaintext comparison

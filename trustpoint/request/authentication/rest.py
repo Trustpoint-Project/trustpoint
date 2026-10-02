@@ -6,6 +6,7 @@
 from typing import Never
 
 from devices.models import DeviceModel
+from onboarding.models import OnboardingConfigModel
 from request.request_context import BaseRequestContext, RestBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -51,6 +52,10 @@ class RestUsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
 
             if not device_config.est_password:
                 self.logger.warning('REST authentication failed: No password set for %s', username)
+                self._raise_authentication_error()
+
+            if isinstance(device_config, OnboardingConfigModel) and device_config.is_credential_expired():
+                self.logger.warning('REST authentication failed: Credential has expired for %s', username)
                 self._raise_authentication_error()
 
             if password != device_config.est_password:

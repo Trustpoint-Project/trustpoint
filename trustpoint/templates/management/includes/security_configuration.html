@@ -229,7 +229,8 @@
         try {
             [
                 'max_cert_validity_days',
-                'max_crl_validity_days'
+                'max_crl_validity_days',
+                'credential_ttl_seconds'
             ].forEach(field => {
 
                 const input = document.querySelector(
@@ -446,7 +447,8 @@
         try {
             [
                 'max_cert_validity_days',
-                'max_crl_validity_days'
+                'max_crl_validity_days',
+                'credential_ttl_seconds'
             ].forEach(field => {
 
                 const input = document.querySelector(

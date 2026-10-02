@@ -8,8 +8,10 @@ of Device model instances to and from JSON.
 """
 
 import secrets
+from datetime import timedelta
 from typing import Any, ClassVar
 
+from django.utils import timezone
 from rest_framework import serializers
 
 from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
@@ -53,6 +55,18 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
         )
     )
 
+    credential_ttl_seconds = serializers.IntegerField(
+        required=False,
+        write_only=True,
+        min_value=1,
+        help_text=(
+            'Optional validity window (in seconds) for CMP, EST, and REST credentials. '
+            'When provided, credential_expires_at is set to now + ttl. '
+            'If omitted, new credentials use the TTL from Security Configuration '
+            'unless an expiry is explicitly given.'
+        ),
+    )
+
     class Meta:
         """Metadata for OnboardingConfigSerializer."""
 
@@ -64,6 +78,8 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
             'pki_protocols',
             'est_password',
             'cmp_shared_secret',
+            'credential_expires_at',
+            'credential_ttl_seconds',
             'opc_user',
             'opc_password',
             'idevid_trust_store',
@@ -86,6 +102,25 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
                 'help_text': 'Shared secret for CMP. Auto-generated if omitted for CMP protocols.'
             },
         }
+
+    def _apply_credential_expiry(
+        self,
+        data: dict[str, Any],
+        ttl_seconds: int | None,
+    ) -> None:
+        """Resolve the credential expiry into data['credential_expires_at'].
+
+        Precedence:
+        1. An explicit credential_expires_at already in data is left untouched.
+        2. An explicit ttl_seconds sets expiry to now + ttl.
+        3. The model applies the security configuration default when saving a new credential.
+        """
+        if data.get('credential_expires_at') is not None:
+            return
+
+        if ttl_seconds is not None:
+            data['credential_expires_at'] = timezone.now() + timedelta(seconds=ttl_seconds)
+            return
 
     def _generate_secure_secret(self, length: int = 32) -> str:
         """Generate a cryptographically secure random secret.
@@ -138,6 +173,7 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
         - EST_USERNAME_PASSWORD or REST_USERNAME_PASSWORD: generates est_password
         """
         pki_protocol_values = validated_data.pop('pki_protocols', [])
+        ttl_seconds = validated_data.pop('credential_ttl_seconds', None)
         onboarding_protocol = validated_data.get('onboarding_protocol')
 
         if onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET and not validated_data.get('cmp_shared_secret'):
@@ -146,6 +182,8 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
         if (onboarding_protocol in (OnboardingProtocol.EST_USERNAME_PASSWORD, OnboardingProtocol.REST_USERNAME_PASSWORD)
             and not validated_data.get('est_password')):
             validated_data['est_password'] = self._generate_secure_secret()
+
+        self._apply_credential_expiry(validated_data, ttl_seconds)
 
         instance = OnboardingConfigModel(**validated_data)
 
@@ -159,6 +197,12 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
     def update(self, instance: OnboardingConfigModel, validated_data: dict[str, Any]) -> OnboardingConfigModel:
         """Update OnboardingConfigModel instance with proper PKI protocol handling."""
         pki_protocol_values = validated_data.pop('pki_protocols', None)
+        ttl_seconds = validated_data.pop('credential_ttl_seconds', None)
+
+        # Resolve an explicit TTL into an expiry timestamp. A TTL always takes
+        # precedence over any expiry already present in the update payload.
+        if ttl_seconds is not None:
+            validated_data['credential_expires_at'] = timezone.now() + timedelta(seconds=ttl_seconds)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

@@ -69,6 +69,7 @@ class SecurityConfigFormTest(TestCase):
             'rsa_minimum_key_size': 4096,
             'max_cert_validity_days': 365,
             'max_crl_validity_days': 90,
+            'credential_ttl_seconds': 600,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
@@ -175,6 +176,7 @@ class SecurityConfigFormTest(TestCase):
                 'rsa_minimum_key_size': defaults['rsa_minimum_key_size'] or '',
                 'max_cert_validity_days': defaults['max_cert_validity_days'],
                 'max_crl_validity_days': defaults['max_crl_validity_days'],
+                'credential_ttl_seconds': defaults['credential_ttl_seconds'],
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
                 'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
@@ -204,6 +206,31 @@ class SecurityConfigFormTest(TestCase):
         saved = form.save()
 
         assert saved.allow_imported_private_keys
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('mode', list(SecurityConfig.SecurityModeChoices))
+@pytest.mark.parametrize('ttl_seconds', [None, 0, 300, 600, 601])
+def test_credential_ttl_form_policy(mode: str, ttl_seconds: int | None) -> None:
+    """The form permits custom TTLs without weakening the hardened presets."""
+    defaults = SecurityConfig._MODE_DEFAULTS[mode]
+    config = SecurityConfig.objects.create(security_mode=mode)
+    form = SecurityConfigForm(data={
+        'security_mode': mode,
+        'rsa_minimum_key_size': defaults['rsa_minimum_key_size'] or '',
+        'max_cert_validity_days': defaults['max_cert_validity_days'],
+        'max_crl_validity_days': defaults['max_crl_validity_days'],
+        'credential_ttl_seconds': ttl_seconds,
+    }, instance=config)
+    hardened = mode in (SecurityConfig.SecurityModeChoices.HARDENED, SecurityConfig.SecurityModeChoices.CRITICAL)
+    valid = ttl_seconds != 0 and (not hardened or (ttl_seconds is not None and ttl_seconds <= 600))
+    assert form.is_valid() == valid, form.errors
+    if valid:
+        form.save()
+        config.refresh_from_db()
+        assert config.credential_ttl_seconds == ttl_seconds
+    else:
+        assert 'credential_ttl_seconds' in form.errors
 
 
 @pytest.mark.django_db
