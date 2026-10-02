@@ -234,7 +234,7 @@ def step_security_option_configure(context: runner.Context, opt_name: str, opt_v
 
         assert SecurityConfig.objects.filter(id=1).exists(), 'SecurityConfig does not exist'
         form = response.context['security_form']
-        data = form.initial.copy()
+        data = {name: '' if value is None else value for name, value in form.initial.items()}
 
         data['max_cert_validity_days'] = 1825
         data['max_crl_validity_days'] = 365
