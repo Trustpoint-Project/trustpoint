@@ -3,16 +3,18 @@
 
 """Tests for the consolidated password policy."""
 
+import gzip
 from datetime import timedelta
 
 import pytest
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from management.forms import AccountSecurityConfigForm, PasswordPolicyForm
+from management.forms import MAX_PASSWORD_LIST_BYTES, AccountSecurityConfigForm, PasswordPolicyForm
 from management.models import AccountSecurityConfig, PasswordPolicy
 from management.password_validation import PasswordPolicyValidator
 from users.models import TrustpointUser
@@ -151,6 +153,120 @@ class PasswordPolicyFormOwnershipTest(SimpleTestCase):
         assert not hasattr(AccountSecurityConfig, 'password_numeric')
         assert not hasattr(AccountSecurityConfig, 'password_prevent_reuse')
         assert not hasattr(AccountSecurityConfig, 'password_expiry_days')
+
+
+class PasswordPolicyCustomListTest(TestCase):
+    """Exercise validation and persistence of administrator-supplied common-password lists."""
+
+    def setUp(self) -> None:
+        self.policy = PasswordPolicy.objects.create()
+
+    def make_form(
+        self,
+        upload: SimpleUploadedFile | None = None,
+        *,
+        restore_default_list: bool = False,
+    ) -> PasswordPolicyForm:
+        """Build a minimally valid bound form around a password-list operation."""
+        data = {
+            'minimum_length': '8',
+            'max_similarity': '0.7',
+        }
+        if restore_default_list:
+            data['restore_default_list'] = 'on'
+        files = {'common_password_list': upload} if upload is not None else None
+        return PasswordPolicyForm(data=data, files=files, instance=self.policy)
+
+    def test_plaintext_list_is_persisted_exactly(self) -> None:
+        """Store validated UTF-8 bytes and the original filename."""
+        upload = SimpleUploadedFile('custom.txt', b'alpha\nbeta\n', content_type='text/plain')
+        form = self.make_form(upload)
+
+        assert form.is_valid(), form.errors
+        form.save()
+
+        self.policy.refresh_from_db()
+        assert bytes(self.policy.common_password_list_data) == b'alpha\nbeta\n'
+        assert self.policy.common_password_list_name == 'custom.txt'
+
+    def test_gzip_list_is_validated_and_persisted_compressed(self) -> None:
+        """Validate gzip contents while preserving the compressed database representation."""
+        compressed = gzip.compress(b'compressedsecret\n')
+        upload = SimpleUploadedFile('custom.gz', compressed, content_type='application/gzip')
+        form = self.make_form(upload)
+
+        assert form.is_valid(), form.errors
+        form.save()
+
+        self.policy.refresh_from_db()
+        assert bytes(self.policy.common_password_list_data) == compressed
+        assert self.policy.common_password_list_name == 'custom.gz'
+
+    def test_malformed_gzip_is_rejected(self) -> None:
+        """Reject files with gzip magic that cannot actually be decompressed."""
+        form = self.make_form(SimpleUploadedFile('broken.gz', b'\x1f\x8bnot-a-gzip-stream'))
+
+        assert not form.is_valid()
+        assert form.errors.as_data()['common_password_list'][0].code == 'invalid_gzip'
+
+    def test_invalid_utf8_and_empty_lists_are_rejected(self) -> None:
+        """Password-list parsing requires non-empty UTF-8 text."""
+        cases = [
+            ('invalid.txt', b'\xff\xfe', 'invalid_encoding'),
+            ('empty.txt', b'\n \n\t\n', 'empty_list'),
+        ]
+        for filename, content, error_code in cases:
+            with self.subTest(filename=filename):
+                form = self.make_form(SimpleUploadedFile(filename, content))
+
+                assert not form.is_valid()
+                assert form.errors.as_data()['common_password_list'][0].code == error_code
+
+    def test_non_lowercase_or_control_character_entries_are_rejected(self) -> None:
+        """Reject entries that violate the normalized lowercase printable format."""
+        for content in (b'Password\n', b'valid\x00value\n'):
+            with self.subTest(content=content):
+                form = self.make_form(SimpleUploadedFile('custom.txt', content))
+
+                assert not form.is_valid()
+                assert form.errors.as_data()['common_password_list'][0].code == 'invalid_password_list'
+
+    def test_decompressed_size_limit_is_enforced(self) -> None:
+        """A small gzip upload may not expand beyond the configured 10 MiB limit."""
+        compressed = gzip.compress(b'a' * (MAX_PASSWORD_LIST_BYTES + 1))
+        form = self.make_form(SimpleUploadedFile('oversized.gz', compressed))
+
+        assert not form.is_valid()
+        assert form.errors.as_data()['common_password_list'][0].code == 'file_too_large'
+
+    def test_upload_and_restore_default_are_mutually_exclusive(self) -> None:
+        """Reject ambiguous requests that both replace and clear the custom list."""
+        form = self.make_form(
+            SimpleUploadedFile('custom.txt', b'alpha\n'),
+            restore_default_list=True,
+        )
+
+        assert not form.is_valid()
+        assert 'common_password_list' in form.errors
+
+    def test_restore_default_clears_custom_list_without_changing_other_policy_fields(self) -> None:
+        """Restoring Django's list clears only the stored custom-list fields."""
+        self.policy.minimum_length = 19
+        self.policy.common_password_list_data = b'custom\n'
+        self.policy.common_password_list_name = 'old.txt'
+        self.policy.save()
+        form = PasswordPolicyForm(
+            data={'minimum_length': '19', 'max_similarity': '0.7', 'restore_default_list': 'on'},
+            instance=self.policy,
+        )
+
+        assert form.is_valid(), form.errors
+        form.save()
+
+        self.policy.refresh_from_db()
+        assert self.policy.minimum_length == 19
+        assert self.policy.uses_default_common_password_list
+        assert self.policy.common_password_list_name == ''
 
 
 class PasswordPolicyPageViewTest(TestCase):

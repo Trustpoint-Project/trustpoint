@@ -148,10 +148,23 @@ class UserClientCertificateCreationTest(SimpleTestCase):
     def test_non_positive_validity_is_rejected(self) -> None:
         for validity_days in [0, -1]:
             with self.subTest(validity_days=validity_days):
-                with (
-                    pytest.raises(CommandError, match='positive number of days'),
-                ):
+                with pytest.raises(CommandError, match='positive number of days'):
                     create_user_client_certificate(1, 'device', validity_days=validity_days)
+
+    def test_only_active_human_users_can_receive_client_certificates(self) -> None:
+        """Issuance must query for both the HUMAN account type and active state."""
+        with patch(
+            'pki.management.commands.create_user_client_certificate.TrustpointUser.objects.get',
+            side_effect=TrustpointUser.DoesNotExist,
+        ) as get_user:
+            with pytest.raises(CommandError, match='No active human user exists'):
+                create_user_client_certificate(42, 'device')
+
+        get_user.assert_called_once_with(
+            pk=42,
+            account_type=TrustpointUser.AccountType.HUMAN,
+            is_active=True,
+        )
 
     def test_missing_management_issuing_ca_is_rejected(self) -> None:
         user = SimpleNamespace(
@@ -171,6 +184,34 @@ class UserClientCertificateCreationTest(SimpleTestCase):
         ):
             select_related.return_value.filter.return_value.first.return_value = None
             with pytest.raises(CommandError, match='Management Issuing CA is missing'):
+                create_user_client_certificate(user.pk, 'device')
+
+    def test_issuing_ca_missing_required_extensions_is_rejected(self) -> None:
+        """A CA record without BasicConstraints/KeyUsage must never be used for client issuance."""
+        issuer_certificate, issuer_key = self.create_issuer()
+        incomplete_certificate = (
+            x509.CertificateBuilder()
+            .subject_name(issuer_certificate.subject)
+            .issuer_name(issuer_certificate.subject)
+            .public_key(issuer_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(issuer_certificate.not_valid_before_utc)
+            .not_valid_after(issuer_certificate.not_valid_after_utc)
+            .sign(issuer_key, hashes.SHA256())
+        )
+        user, issuing_ca = self.patch_dependencies(incomplete_certificate, issuer_key)
+
+        with (
+            patch(
+                'pki.management.commands.create_user_client_certificate.TrustpointUser.objects.get',
+                return_value=user,
+            ),
+            patch(
+                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
+            ) as select_related,
+        ):
+            select_related.return_value.filter.return_value.first.return_value = issuing_ca
+            with pytest.raises(CommandError, match='missing required CA extensions'):
                 create_user_client_certificate(user.pk, 'device')
 
     def test_ca_without_signing_permission_is_rejected(self) -> None:

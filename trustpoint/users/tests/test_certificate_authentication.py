@@ -14,6 +14,8 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase, override_settings
 
+from management.models import CertificateAuthenticationConfig
+from pki.models import CertificateModel
 from users.authentication import ClientCertificateBackend
 from users.models import TrustpointUser
 
@@ -39,6 +41,17 @@ class ClientCertificateBackendProxyTest(TestCase):
             REMOTE_ADDR='127.0.0.1',
             HTTP_X_FORWARDED_PROTO='https',
             HTTP_X_SSL_CLIENT_VERIFY='SUCCESS',
+        )
+
+        self.backend._validate_proxy(request)  # noqa: SLF001
+
+    def test_validate_proxy_accepts_optional_no_ca_failure_for_local_validation(self) -> None:
+        """Allow nginx optional_no_ca proof so Trustpoint can validate the configured issuer itself."""
+        request = self.factory.get(
+            '/',
+            REMOTE_ADDR='127.0.0.1',
+            HTTP_X_FORWARDED_PROTO='https',
+            HTTP_X_SSL_CLIENT_VERIFY='FAILED:self-signed certificate in certificate chain',
         )
 
         self.backend._validate_proxy(request)  # noqa: SLF001
@@ -185,6 +198,49 @@ class ClientCertificateBackendAuthenticationTest(TestCase):
 
         with pytest.raises(ValidationError, match='Service accounts'):
             self.authenticate_with_association(self.association)
+
+    def test_registered_fingerprint_must_match_stored_certificate(self) -> None:
+        """A database association is insufficient when the supplied certificate bytes differ."""
+        supplied = Mock()
+        supplied.fingerprint.return_value = b'new-certificate'
+        configured_crypto = Mock()
+        configured_crypto.fingerprint.return_value = b'stored-certificate'
+        configured = Mock()
+        configured.get_certificate_serializer.return_value.as_crypto.return_value = configured_crypto
+
+        with pytest.raises(ValidationError, match='does not match'):
+            self.backend._validate_registered_fingerprint(supplied, configured)  # noqa: SLF001
+
+    def test_certificate_status_must_be_ok(self) -> None:
+        """Reject certificates whose persisted lifecycle status is not OK."""
+        certificate = Mock()
+        certificate.certificate_status = CertificateModel.CertificateStatus.REVOKED
+
+        with pytest.raises(ValidationError, match='Certificate validation failed'):
+            self.backend._validate_status(certificate)  # noqa: SLF001
+
+
+class ClientCertificateIssuerTest(TestCase):
+    """Protect the management-CA trust boundary used by certificate login."""
+
+    @patch('users.authentication.CertificateAuthenticationConfig.objects.select_related')
+    def test_issuer_validation_requires_enabled_configuration(self, select_related: Mock) -> None:
+        """A valid-looking certificate must not authenticate while certificate login is disabled."""
+        select_related.return_value.filter.return_value.first.return_value = None
+
+        with pytest.raises(ValidationError, match='not enabled'):
+            ClientCertificateBackend._validate_issuer(Mock())  # noqa: SLF001
+
+    @patch('users.authentication.CertificateAuthenticationConfig.objects.select_related')
+    def test_issuer_validation_requires_management_ca_certificate(self, select_related: Mock) -> None:
+        """An enabled switch without an issuing-CA certificate is not a usable trust anchor."""
+        config = Mock(spec=CertificateAuthenticationConfig)
+        config.issuing_ca = Mock()
+        config.issuing_ca.ca_certificate_model = None
+        select_related.return_value.filter.return_value.first.return_value = config
+
+        with pytest.raises(ValidationError, match='has no certificate'):
+            ClientCertificateBackend._validate_issuer(Mock())  # noqa: SLF001
 
 
 class ClientCertificateUsageTest(TestCase):
