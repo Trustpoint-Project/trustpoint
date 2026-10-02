@@ -43,9 +43,9 @@ class ClientCertificateBackendProxyTest(TestCase):
 
         self.backend._validate_proxy(request)  # noqa: SLF001
 
-    @pytest.mark.parametrize(
-        ('headers', 'message'),
-        [
+    def test_validate_proxy_rejects_invalid_proxy_proof(self) -> None:
+        """Reject spoofed, insecure, or unverified proxy metadata."""
+        invalid_proofs = [
             (
                 {
                     'REMOTE_ADDR': '192.0.2.1',
@@ -70,14 +70,13 @@ class ClientCertificateBackendProxyTest(TestCase):
                 },
                 'did not confirm',
             ),
-        ],
-    )
-    def test_validate_proxy_rejects_invalid_proxy_proof(self, headers: dict[str, str], message: str) -> None:
-        """Reject spoofed, insecure, or unverified proxy metadata."""
-        request = self.factory.get('/', **headers)
+        ]
+        for headers, message in invalid_proofs:
+            with self.subTest(headers=headers):
+                request = self.factory.get('/', **headers)
 
-        with pytest.raises(ValidationError, match=message):
-            self.backend._validate_proxy(request)  # noqa: SLF001
+                with pytest.raises(ValidationError, match=message):
+                    self.backend._validate_proxy(request)  # noqa: SLF001
 
 
 class ClientCertificateSubjectTest(TestCase):
@@ -100,12 +99,13 @@ class ClientCertificateSubjectTest(TestCase):
 
         assert ClientCertificateBackend._get_subject_user(certificate) == self.user  # noqa: SLF001
 
-    @pytest.mark.parametrize('value', ['', '0', '-1', 'abc', str(2**63)])
-    def test_subject_rejects_invalid_user_ids(self, value: str) -> None:
-        certificate = self.certificate_with_user_ids(value)
+    def test_subject_rejects_invalid_user_ids(self) -> None:
+        for value in ['', '0', '-1', 'abc', str(2**63)]:
+            with self.subTest(value=value):
+                certificate = self.certificate_with_user_ids(value)
 
-        with pytest.raises(ValidationError, match='invalid user ID'):
-            ClientCertificateBackend._get_subject_user(certificate)  # noqa: SLF001
+                with pytest.raises(ValidationError, match='invalid user ID'):
+                    ClientCertificateBackend._get_subject_user(certificate)  # noqa: SLF001
 
     def test_subject_requires_exactly_one_user_id(self) -> None:
         certificate = self.certificate_with_user_ids(str(self.user.pk), str(self.user.pk))
@@ -218,28 +218,22 @@ class ClientCertificateUsageTest(TestCase):
 
         ClientCertificateBackend._validate_client_usage(certificate)  # noqa: SLF001
 
-    @pytest.mark.parametrize(
-        ('ca', 'digital_signature', 'client_auth'),
-        [
+    def test_invalid_client_usage_is_rejected(self) -> None:
+        invalid_usages = [
             (True, True, True),
             (False, False, True),
             (False, True, False),
-        ],
-    )
-    def test_invalid_client_usage_is_rejected(
-        self,
-        ca: bool,
-        digital_signature: bool,
-        client_auth: bool,
-    ) -> None:
-        certificate = self.certificate_with_usage(
-            ca=ca,
-            digital_signature=digital_signature,
-            client_auth=client_auth,
-        )
+        ]
+        for ca, digital_signature, client_auth in invalid_usages:
+            with self.subTest(ca=ca, digital_signature=digital_signature, client_auth=client_auth):
+                certificate = self.certificate_with_usage(
+                    ca=ca,
+                    digital_signature=digital_signature,
+                    client_auth=client_auth,
+                )
 
-        with pytest.raises(ValidationError, match='does not permit TLS client authentication'):
-            ClientCertificateBackend._validate_client_usage(certificate)  # noqa: SLF001
+                with pytest.raises(ValidationError, match='does not permit TLS client authentication'):
+                    ClientCertificateBackend._validate_client_usage(certificate)  # noqa: SLF001
 
     def test_missing_required_extension_is_rejected(self) -> None:
         certificate = Mock()

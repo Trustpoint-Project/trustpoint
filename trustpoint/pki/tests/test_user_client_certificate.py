@@ -145,10 +145,13 @@ class UserClientCertificateCreationTest(SimpleTestCase):
 
         assert certificate.not_valid_after_utc == issuer_certificate.not_valid_after_utc
 
-    @pytest.mark.parametrize('validity_days', [0, -1])
-    def test_non_positive_validity_is_rejected(self, validity_days: int) -> None:
-        with pytest.raises(CommandError, match='positive number of days'):
-            create_user_client_certificate(1, 'device', validity_days=validity_days)
+    def test_non_positive_validity_is_rejected(self) -> None:
+        for validity_days in [0, -1]:
+            with self.subTest(validity_days=validity_days):
+                with (
+                    pytest.raises(CommandError, match='positive number of days'),
+                ):
+                    create_user_client_certificate(1, 'device', validity_days=validity_days)
 
     def test_missing_management_issuing_ca_is_rejected(self) -> None:
         user = SimpleNamespace(

@@ -9,12 +9,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.test import SimpleTestCase
+from django.test import TestCase
 
 from pki.services.management_ca import ManagementCAService
 
 
-class ManagementCAServiceTest(SimpleTestCase):
+class ManagementCAServiceTest(TestCase):
     """Validate action guards before management-CA hierarchy changes are applied."""
 
     @staticmethod
@@ -31,21 +31,18 @@ class ManagementCAServiceTest(SimpleTestCase):
 
         assert ManagementCAService.is_complete(root, issuing)
 
-    @pytest.mark.parametrize(
-        ('root', 'issuing'),
-        [
+    def test_is_complete_rejects_incomplete_or_inconsistent_hierarchy(self) -> None:
+        hierarchies = [
             (None, None),
             (Mock(pk=1, parent_ca_id=None, credential_id=1), None),
             (None, Mock(pk=2, parent_ca_id=None, credential_id=1)),
             (Mock(pk=1, parent_ca_id=9, credential_id=1), Mock(pk=2, parent_ca_id=1, credential_id=1)),
             (Mock(pk=1, parent_ca_id=None, credential_id=None), Mock(pk=2, parent_ca_id=1, credential_id=1)),
             (Mock(pk=1, parent_ca_id=None, credential_id=1), Mock(pk=2, parent_ca_id=9, credential_id=1)),
-        ],
-    )
-    def test_is_complete_rejects_incomplete_or_inconsistent_hierarchy(
-        self, root: Mock | None, issuing: Mock | None,
-    ) -> None:
-        assert not ManagementCAService.is_complete(root, issuing)
+        ]
+        for root, issuing in hierarchies:
+            with self.subTest(root=root, issuing=issuing):
+                assert not ManagementCAService.is_complete(root, issuing)
 
     def test_apply_rejects_unknown_action(self) -> None:
         with pytest.raises(ValidationError, match='valid management CA action'):
