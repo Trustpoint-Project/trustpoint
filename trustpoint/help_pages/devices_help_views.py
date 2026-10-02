@@ -72,6 +72,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from django.http import HttpRequest
+
     from pki.models import CaModel, CredentialModel
 
 
