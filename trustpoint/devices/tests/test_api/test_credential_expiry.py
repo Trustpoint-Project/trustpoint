@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Tests for protocol-independent credential expiry API inputs."""
 
 from datetime import datetime, timedelta, timezone
