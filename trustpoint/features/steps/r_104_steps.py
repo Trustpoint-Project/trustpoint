@@ -96,7 +96,8 @@ def step_delete_truststore(context: runner.Context, name: str) -> None:  # noqa:
     )
 
     assert context.response.status_code == 200, "Truststore delete form submission failed"
-    assert b"Confirm Truststore Deletion" in context.response.content
+    soup = BeautifulSoup(context.response.content, "html.parser")
+    assert soup.select_one('form#delete-truststores-form[method="post"]') is not None
     context.response = context.authenticated_client.post(f"/pki/truststores/delete/{context.truststore.id}/", data={}, follow=True)
     assert context.response.status_code == 200, "Truststore deletion response"
     assert not TruststoreModel.objects.filter(id=context.truststore.id).exists(), f"Deletion of Truststore with name {name} failed"
