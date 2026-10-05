@@ -34,6 +34,19 @@ class SecurityConfigFormTest(TestCase):
         form = SecurityConfigForm()
         self.assertIsNotNone(form.fields['security_mode'])
 
+    def test_unsupported_onboarding_protocol_is_not_offered(self) -> None:
+        """Test the security policy cannot permit the unsupported BRSKI protocol."""
+        form = SecurityConfigForm()
+        choices = [value for value, _label in form.fields['permitted_onboarding_protocols'].choices]
+        assert OnboardingProtocol.BRSKI.value not in choices
+
+    def test_security_mode_defaults_exclude_unsupported_onboarding_protocol(self) -> None:
+        """Test no security preset includes the unsupported BRSKI protocol."""
+        for mode in SecurityConfig.SecurityModeChoices:
+            config = SecurityConfig(security_mode=mode)
+            config.apply_security_settings(save=False)
+            assert OnboardingProtocol.BRSKI.value not in config.permitted_onboarding_protocols
+
     def test_security_mode_field_is_radio_select(self):
         """Test that security_mode uses RadioSelect widget."""
         form = SecurityConfigForm()

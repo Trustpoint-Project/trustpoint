@@ -163,6 +163,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             Fieldset(
                 _('Security level presets'),
                 'security_mode',
+                css_class='border border-primary-subtle rounded-2 bg-body-tertiary p-3 mb-4',
             ),
             Fieldset(
                 _('Advanced security settings'),
@@ -182,7 +183,13 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         )
 
     security_mode = forms.ChoiceField(
-        choices=SecurityConfig.SecurityModeChoices, widget=forms.RadioSelect(), label=''
+        choices=SecurityConfig.SecurityModeChoices,
+        widget=forms.RadioSelect(),
+        label='',
+        help_text=_(
+            'Select a preset to populate the security requirements and permitted features. '
+            'Higher levels apply stricter restrictions.'
+        ),
     )
 
     auto_gen_pki = forms.BooleanField(
@@ -220,11 +227,25 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
     permitted_no_onboarding_pki_protocols = forms.MultipleChoiceField(
         choices=[(c.value, c.label) for c in NoOnboardingPkiProtocol],
-        widget=forms.CheckboxSelectMultiple, required=False
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        help_text=_(
+            'Choose protocols that may issue credentials without an onboarding PKI. '
+            'Available choices depend on the selected security level.'
+        ),
     )
     permitted_onboarding_protocols = forms.MultipleChoiceField(
-        choices=[(c.value, c.label) for c in OnboardingProtocol],
-        widget=forms.CheckboxSelectMultiple, required=False
+        choices=[
+            (c.value, c.label)
+            for c in OnboardingProtocol
+            if c is not OnboardingProtocol.BRSKI
+        ],
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        help_text=_(
+            'Choose supported protocols that may onboard devices. '
+            'Available choices depend on the selected security level.'
+        ),
     )
 
     class Meta:
