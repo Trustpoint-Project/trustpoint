@@ -760,12 +760,13 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'CMP with a shared-secret' in heading
         assert sections[0].rows[3].value == 'cmp-secret'
-        assert sections[3].css_id == 'server_alias'
-        assert sections[3].hidden is False
-        assert sections[4].css_id == 'client_auth'
-        assert sections[4].hidden is True
-        assert 'server_alias/certification' in sections[3].rows[0].value
-        assert '-secret pass:cmp-secret' in sections[3].rows[0].value
+        assert sections[3].heading == 'Certificate Parameters'
+        assert sections[4].css_id == 'server_alias'
+        assert sections[4].hidden is False
+        assert sections[5].css_id == 'client_auth'
+        assert sections[5].hidden is True
+        assert 'server_alias/certification' in sections[4].rows[0].value
+        assert '-secret pass:cmp-secret' in sections[4].rows[0].value
 
     @patch('help_pages.devices_help_views.JSONProfileVerifier', side_effect=ValueError('invalid profile'))
     def test_no_onboarding_cmp_shared_secret_reports_malformed_profile(self, mock_verifier: Mock) -> None:
@@ -777,8 +778,8 @@ class DeviceStrategyGeneratedContentTests(TestCase):
             _help_context(device, domain, [_profile()])
         )
 
-        assert sections[3].rows[0].value_render_type == ValueRenderType.PLAIN
-        assert 'Certificate Profile is malformed' in sections[3].rows[0].value
+        assert sections[4].rows[0].value_render_type == ValueRenderType.PLAIN
+        assert 'Certificate Profile is malformed' in sections[4].rows[0].value
         mock_verifier.assert_called_once()
 
     @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
@@ -797,7 +798,7 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'EST with username and password' in heading
         assert mock_tls.called
-        profile_section = sections[4]
+        profile_section = sections[5]
         assert profile_section.css_id == 'server_alias'
         assert [row.key for row in profile_section.rows] == [
             'Generate CSR with OpenSSL',
@@ -867,9 +868,9 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         assert 'REST with username and password' in heading
         assert mock_tls.called
         assert '/rest/test-domain/<certificate_profile>/enroll/' in sections[0].rows[0].value
-        assert '--user "device-1:rest-secret"' in sections[4].rows[1].value
-        assert 'certificate-7.json' in sections[4].rows[1].value
-        assert 'certificate-7.pem' in sections[4].rows[2].value
+        assert '--user "device-1:rest-secret"' in sections[5].rows[1].value
+        assert 'certificate-7.json' in sections[5].rows[1].value
+        assert 'certificate-7.pem' in sections[5].rows[2].value
 
     @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
     def test_onboarding_rest_username_password_builds_domain_credential_steps(self, mock_tls: Mock) -> None:
@@ -926,8 +927,9 @@ class DeviceStrategyGeneratedContentTests(TestCase):
             _help_context(onboarding_device, domain, [_profile()])
         )
 
-        assert no_onboarding_sections[4].rows[0].value_render_type == ValueRenderType.PLAIN
-        assert 'Certificate Profile is malformed' in no_onboarding_sections[4].rows[0].value
+        assert no_onboarding_sections[4].heading == 'Certificate Parameters'
+        assert no_onboarding_sections[5].rows[0].value_render_type == ValueRenderType.PLAIN
+        assert 'Certificate Profile is malformed' in no_onboarding_sections[5].rows[0].value
         assert app_sections[4].rows[0].value_render_type == ValueRenderType.PLAIN
         assert 'Certificate Profile is malformed' in app_sections[4].rows[0].value
         assert mock_verifier.call_count == 2

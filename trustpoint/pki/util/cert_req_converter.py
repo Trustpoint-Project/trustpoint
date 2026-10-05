@@ -306,7 +306,7 @@ class JSONCertRequestCommandExtractor:
                 san_parts += san_values + ' ' if isinstance(san_values, str) else ''.join([f'{v} ' for v in san_values])
             else:
                 logger.debug('JSON Cert Request Command Extractor: Skipping SAN type: %s', san_type)
-        if san.get('critical', False):
+        if san_parts and san.get('critical', False):
             san_parts = 'critical, ' + san_parts
         return san_parts.strip()
 
@@ -328,7 +328,7 @@ class JSONCertRequestCommandExtractor:
                     else ''.join([f'IP:{v}, ' for v in san_values])
             else:
                 logger.debug('JSON Cert Request Command Extractor: Skipping SAN type: %s', san_type)
-        if san.get('critical', False):
+        if san_parts and san.get('critical', False):
             san_parts = 'critical, ' + san_parts
         return san_parts.rstrip(', ')
 
