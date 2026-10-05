@@ -345,7 +345,9 @@ class TestNoOnboardingIssueApplicationCredentialView:
         assert response.status_code == 200
         assert 'sections' in response.context
         sections = response.context['sections']
-        assert len(sections) == 4
+        assert len(sections) == 6
+        headings = {str(section['heading']) for section in sections}
+        assert {'EST with WebUI', 'CMP with WebUI'} <= headings
         
         # Check that all protocols are enabled
         assert all(section['enabled'] for section in sections)
