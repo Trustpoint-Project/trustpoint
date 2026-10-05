@@ -113,7 +113,12 @@ def build_keygen_section(help_context: HelpContext, file_name: str) -> HelpSecti
     )
 
 
-def build_profile_select_section(app_cert_profiles: list[DomainAllowedCertificateProfileModel]) -> HelpSection:
+def build_profile_select_section(
+    app_cert_profiles: list[DomainAllowedCertificateProfileModel],
+    *,
+    select_id: str = 'cert-profile-select',
+    selected_profile: str | None = None,
+) -> HelpSection:
     """Builds the profile select section.
 
     Returns:
@@ -125,7 +130,7 @@ def build_profile_select_section(app_cert_profiles: list[DomainAllowedCertificat
         options += format_html(
             '<option value="{}"{}>{}</option>',
             unique_name,
-            ' selected' if i == 0 else '',
+            ' selected' if unique_name == selected_profile or (selected_profile is None and i == 0) else '',
             display_name,
         )
 
@@ -133,8 +138,9 @@ def build_profile_select_section(app_cert_profiles: list[DomainAllowedCertificat
         options = format_html('<option value="" selected disabled>{}</option>',
                               _('No application certificate profiles allowed in domain.'))
     select = format_html(
-        '<select id="cert-profile-select" class="form-select" aria-label="Certificate Profile Select">{}</select>',
-        options,
+        '<select id="{}" class="form-select cert-profile-select" '
+        'aria-label="Certificate Profile Select">{}</select>',
+        select_id, options,
     )
     return HelpSection(
         _non_lazy('Certificate Profile Selection'),

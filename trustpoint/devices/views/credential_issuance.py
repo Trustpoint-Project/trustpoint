@@ -105,6 +105,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
         sections.append(
             {
                 'heading': gettext_lazy('CMP with OpenSSL (shared-secret)'),
+                'group': 'CMP',
                 'description': gettext_lazy(
                     'This option will guide you through all steps and commands that are '
                     'required to issue a new application certificate '
@@ -119,6 +120,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
         sections.append(
             {
                 'heading': gettext_lazy('EST with OpenSSL and curL (username & password)'),
+                'group': 'EST',
                 'description': gettext_lazy(
                     'This option will guide you through all steps and commands that are '
                     'required to issue a new application certificate using EST using OpenSSL and curL.'
@@ -134,6 +136,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
         sections.append(
             {
                 'heading': gettext_lazy('Manual Issuance'),
+                'group': gettext_lazy('Manual'),
                 'description': gettext_lazy(
                     'This option will allow you to issue a new domain credential on the Trustpoint. '
                     'The domain credential can then be downloaded for manual injection into the device, '
@@ -148,6 +151,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
         sections.append(
             {
                 'heading': gettext_lazy('REST with curl (username & password)'),
+                'group': 'REST',
                 'description': gettext_lazy(
                     'This option will guide you through all steps and commands that are '
                     'required to issue a new application certificate using REST with curl.'
@@ -159,9 +163,22 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
                 'url': f'{self.page_category}:{self.page_name}_no_onboarding_rest_username_password_help',
             }
         )
-
-
-
+        sections.insert(1, {
+            'heading': gettext_lazy('CMP with WebUI'),
+            'group': 'CMP',
+            'description': gettext_lazy('Configure CMP enrollment in the device WebUI using a shared secret.'),
+            'protocol': 'cmp-shared-secret',
+            'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET),
+            'url': f'{self.page_category}:{self.page_name}_no_onboarding_cmp_webui_help',
+        })
+        sections.insert(3, {
+            'heading': gettext_lazy('EST with WebUI'),
+            'group': 'EST',
+            'description': gettext_lazy('Configure EST enrollment in the device WebUI using a username and password.'),
+            'protocol': 'est-username-password',
+            'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD),
+            'url': f'{self.page_category}:{self.page_name}_no_onboarding_est_webui_help',
+        })
         context['sections'] = sections
 
         return context

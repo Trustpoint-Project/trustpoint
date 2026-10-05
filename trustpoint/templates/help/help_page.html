@@ -103,40 +103,48 @@
                     {% trans 'Configuration' %}
                 </h2>
 
+                {% if not manual_webui %}
                 <p class="mb-0 text-muted">
                     {% trans 'Adjust the parameters used to generate the commands shown below.' %}
                 </p>
+                {% endif %}
             </div>
 
             <hr class="mb-4">
 
-            <form method="get" class="row g-3 align-items-end mb-3">
-                <div class="col-auto">
-                    <label
-                        for="{{ form.host_ip.id_for_label }}"
-                        class="form-label"
-                    >
-                        {% trans form.host_ip.label_tag %}
-                    </label>
-
-                    {{ form.host_ip }}
-                </div>
+            <form method="get" class="mb-3">
+                <ul class="tp-kvp-list mb-0">
+                    <li>
+                        <div class="row-key-container">
+                            <label for="{{ form.host_ip.id_for_label }}" class="mb-0">
+                                {% trans 'Host IP' %}
+                            </label>
+                        </div>
+                        <div class="no-copy-container position-relative">
+                            {{ form.host_ip }}
+                        </div>
+                    </li>
+                </ul>
             </form>
 
-            <div class="form-check">
-                <input
-                    class="form-check-input"
-                    type="checkbox"
-                    id="showWindowsCommands"
-                >
-
-                <label
-                    class="form-check-label"
-                    for="showWindowsCommands"
-                >
-                    {% trans 'Show Windows-specific commands' %}
-                </label>
-            </div>
+            {% if not manual_webui %}
+            <ul class="tp-kvp-list mb-0">
+                <li>
+                    <div class="row-key-container">
+                        <label for="showWindowsCommands" class="mb-0">
+                            {% trans 'Show Windows-specific commands' %}
+                        </label>
+                    </div>
+                    <div class="no-copy-container position-relative">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="showWindowsCommands"
+                        >
+                    </div>
+                </li>
+            </ul>
+            {% endif %}
         </section>
 
 

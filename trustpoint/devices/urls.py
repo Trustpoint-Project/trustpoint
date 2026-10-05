@@ -112,6 +112,26 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_cmp_shared_secret_help',
     ),
     path(
+        'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/cmp-webui/',
+        devices_help_views.DeviceNoOnboardingCmpWebUiHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_cmp_webui_help',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/est-webui/',
+        devices_help_views.DeviceNoOnboardingEstWebUiHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_est_webui_help',
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/cmp-webui/',
+        devices_help_views.OpcUaGdsNoOnboardingCmpWebUiHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_cmp_webui_help',
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/est-webui/',
+        devices_help_views.OpcUaGdsNoOnboardingEstWebUiHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_est_webui_help',
+    ),
+    path(
         'certificate-lifecycle-management/<int:pk>/revoke/cmp/',
         devices_help_views.DeviceCmpRevokeHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_revoke_cmp_help',
