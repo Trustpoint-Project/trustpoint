@@ -11,6 +11,7 @@ They can also specify default values for fields and validate the request against
 
 import enum
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
@@ -367,6 +368,21 @@ class InheritedProfileConfig:
         self.reject_mods = reject_mods
         self.mutable = mutable
 
+@dataclass(frozen=True)
+class EditableProfileField:
+    """A request field that a requester is expected or allowed to provide according to a profile.
+
+    Attributes:
+        path: The location of the field within the (sample) request, e.g. ('subject', 'common_name').
+        required: Whether the profile requires the field.
+        default: The value or default from the profile, if any.
+    """
+
+    path: tuple[str, ...]
+    required: bool
+    default: Any = None
+
+
 class JSONProfileVerifier:
     """Class to verify certificate requests against JSON-based profiles."""
 
@@ -647,6 +663,39 @@ class JSONProfileVerifier:
     def get_sample_request(self) -> dict[str, Any]:
         """Generate a sample certificate request that conforms to the profile."""
         return self._apply_profile_rules_sample({}, self.profile_dict)
+
+    def get_editable_fields(self) -> list[EditableProfileField]:
+        """Return all explicitly declared profile fields which are required or mutable.
+
+        Uses the same value / default / required / mutable semantics as get_sample_request().
+        """
+        fields: list[EditableProfileField] = []
+        self._collect_editable_fields(self.profile_dict, (), mutable=False, fields=fields)
+        return fields
+
+    def _collect_editable_fields(
+        self, profile: dict[str, Any], path: tuple[str, ...], *, mutable: bool, fields: list[EditableProfileField]
+    ) -> None:
+        profile_mutable = bool(profile.get('mutable', mutable))
+        for field, profile_value in profile.items():
+            if field in CERT_PROFILE_KEYWORDS:
+                continue
+            field_path = (*path, field)
+            if isinstance(profile_value, dict):
+                required = bool(profile_value.get('required'))
+                if 'value' in profile_value:
+                    if profile_value.get('mutable', profile_mutable):
+                        fields.append(EditableProfileField(field_path, required, profile_value['value']))
+                    continue
+                if 'default' in profile_value:
+                    fields.append(EditableProfileField(field_path, required, profile_value['default']))
+                    continue
+                if required or not any(k not in CERT_PROFILE_KEYWORDS for k in profile_value):
+                    fields.append(EditableProfileField(field_path, required))
+                    continue
+                self._collect_editable_fields(profile_value, field_path, mutable=profile_mutable, fields=fields)
+            elif profile_value is not None and profile_mutable and self._is_simple_type(profile_value):
+                fields.append(EditableProfileField(field_path, required=False, default=profile_value))
 
     def get_profile(self) -> dict[str, Any]:
         """Get the profile as a dictionary."""
