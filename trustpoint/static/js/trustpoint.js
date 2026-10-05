@@ -371,10 +371,10 @@ function removeClassIfPresent(element, className) {
 
 // -------------------------------------------- Help Pages - Hidden Toggle ---------------------------------------------
 
-let certProfileSelect = document.getElementById('cert-profile-select');
+let certProfileSelects = document.querySelectorAll('.cert-profile-select');
 let sections = {};
 
-if (certProfileSelect) {
+for (const certProfileSelect of certProfileSelects) {
     for (const option of certProfileSelect.options) {
         const el = document.getElementById(option.value);
         if (el) {
@@ -393,9 +393,14 @@ function displayOnly(sectionIdToDisplay) {
     }
 }
 
-certProfileSelect?.addEventListener("change", function() {
-    displayOnly(certProfileSelect.value);   
-});
+for (const certProfileSelect of certProfileSelects) {
+    certProfileSelect.addEventListener("change", function() {
+        for (const select of certProfileSelects) {
+            select.value = certProfileSelect.value;
+        }
+        displayOnly(certProfileSelect.value);
+    });
+}
 
 // ---------------------------------------- Device Table — Column Visibility Toggle ----------------------------------------
 

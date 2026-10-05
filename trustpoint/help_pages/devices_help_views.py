@@ -21,7 +21,7 @@ from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join, strip_tags
 from django.utils.safestring import SafeString, mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
@@ -52,7 +52,8 @@ from help_pages.commands import (
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import SecurityConfig
-from onboarding.models import OnboardingConfigModel, OnboardingProtocol
+from onboarding.models import NoOnboardingPkiProtocol, OnboardingConfigModel, OnboardingProtocol
+from pki.forms.cert_profiles import CertificateIssuanceForm, ProfileBasedFormFieldBuilder
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -91,6 +92,7 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
     strategy: HelpPageStrategy
+    manual_webui = False
 
     def uses_onboarding_credential(self) -> bool:
         """Return whether this help page uses an onboarding password or shared secret."""
@@ -223,6 +225,7 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
         )
         context['can_renew_credential'] = self.request.user.has_perm(AppPermissions.MANAGE_DEVICES)
         context['help_page'] = HelpPage(heading=heading, sections=sections)
+        context['manual_webui'] = self.manual_webui
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
         context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
         context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
@@ -676,6 +679,175 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
             )
         )
         return sections, _non_lazy('Help - Issue Application Certificates using EST with username and password')
+
+
+def _build_webui_attribute_rows(profile: dict[str, Any], help_context: HelpContext) -> list[HelpRow]:
+    """Describe Subject and SAN using the manual issuance form's profile rules."""
+    form = CertificateIssuanceForm(profile, device=help_context.device, domain=help_context.domain)
+    rows = []
+    for heading, labels in (
+        (_non_lazy('Subject'), ProfileBasedFormFieldBuilder.SUBJECT_LABELS),
+        (_non_lazy('Subject Alternative Name (SAN)'), ProfileBasedFormFieldBuilder.SAN_LABELS),
+    ):
+        attributes = []
+        for name, field in form.fields.items():
+            if name not in labels:
+                continue
+            requirement = _non_lazy('Required') if field.required else _non_lazy('Optional')
+            value = field.initial
+            if value is None or value == '':
+                value = _non_lazy('Not specified')
+            elif field.disabled:
+                requirement = _non_lazy('Fixed by profile')
+            if isinstance(value, (list, tuple)):
+                value = ', '.join(str(entry) for entry in value)
+            attributes.append((strip_tags(str(field.label)), requirement, str(value)))
+        if not attributes:
+            rows.append(HelpRow(heading, _non_lazy('No attributes specified by this profile.'), ValueRenderType.PLAIN))
+            continue
+        table_rows = format_html_join('', '<tr><td>{}</td><td>{}</td><td>{}</td></tr>', attributes)
+        table = format_html(
+            '<div class="table-responsive"><table class="table table-sm mb-0">'
+            '<thead><tr><th scope="col">{}</th><th scope="col">{}</th><th scope="col">{}</th></tr></thead>'
+            '<tbody>{}</tbody></table></div>',
+            _non_lazy('Attribute'), _non_lazy('Requirement'), _non_lazy('Profile Value / Default'), table_rows,
+        )
+        rows.append(HelpRow(heading, table, ValueRenderType.HTML))
+    return rows
+
+
+def _build_webui_profile_sections(
+    help_context: HelpContext, base: str, operation: str, authentication_rows: list[HelpRow]
+) -> list[HelpSection]:
+    """Build exact enrollment values for each allowed application profile."""
+    sections = []
+    if not help_context.allowed_app_profiles:
+        return [HelpSection(
+            _non_lazy('Device WebUI Configuration'),
+            build_profile_select_section(app_cert_profiles=[]).rows,
+        )]
+    for index, profile in enumerate(help_context.allowed_app_profiles):
+        name = profile.alias or profile.certificate_profile.unique_name
+        try:
+            attribute_rows = _build_webui_attribute_rows(profile.certificate_profile.profile, help_context)
+        except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as error:
+            attribute_rows = [HelpRow(
+                _non_lazy('Certificate Profile Requirements'),
+                _non_lazy('The certificate profile requirements could not be displayed: ') + str(error),
+                ValueRenderType.PLAIN,
+            )]
+        sections.append(HelpSection(
+            _non_lazy('Device WebUI Configuration'),
+            [
+                *build_profile_select_section(
+                    app_cert_profiles=help_context.allowed_app_profiles,
+                    select_id=f'cert-profile-select-{index}',
+                    selected_profile=name,
+                ).rows,
+                HelpRow(_non_lazy('Certificate Request URL'), f'{base}/{name}/{operation}', ValueRenderType.CODE),
+                HelpRow(
+                    _non_lazy('Required Public Key Type'), str(help_context.public_key_info), ValueRenderType.CODE
+                ),
+                *authentication_rows,
+                *attribute_rows,
+            ],
+            css_id=name,
+            hidden=index > 0,
+        ))
+    return sections
+
+
+def _build_webui_ca_trust_store_section(help_context: HelpContext) -> HelpSection:
+    """Download the domain CA trust anchor through the existing certificate export."""
+    domain = help_context.domain
+    if domain is None:
+        raise Http404(_('No domain is configured for this device.'))
+    heading = _non_lazy('Download CA Trust-Store')
+    if not domain.issuing_ca:
+        return HelpSection(heading, [HelpRow(
+            heading, _non_lazy('No issuing CA is configured for this domain.'), ValueRenderType.PLAIN,
+        )])
+    credential = domain.issuing_ca.credential
+    root = credential.get_last_in_chain() if credential else None
+    if root is None:
+        return HelpSection(heading, [HelpRow(
+            heading, _non_lazy('The CA trust-store is unavailable.'), ValueRenderType.PLAIN,
+        )])
+    url = reverse('pki:certificate-file-download-file-name', kwargs={
+        'file_format': 'pem', 'pk': root.pk, 'file_name': 'ca-trust-store.pem',
+    })
+    return HelpSection(heading, [HelpRow(
+        heading,
+        format_html('<a href="{}" class="btn btn-primary w-100">{}</a>', url, heading),
+        ValueRenderType.HTML,
+    )])
+
+
+class NoOnboardingEstWebUiStrategy(HelpPageStrategy):
+    """Manual device WebUI configuration for existing EST enrollment."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        config = device.no_onboarding_config
+        if not config or not config.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
+            raise Http404(_('EST username and password is not enabled for this no-onboarding device.'))
+        sections = [
+            *_build_webui_profile_sections(help_context, help_context.host_est_path, 'simpleenroll', [
+                HelpRow(_non_lazy('EST Username'), device.common_name, ValueRenderType.CODE),
+                HelpRow(_non_lazy('EST Password'), config.est_password, ValueRenderType.CODE),
+            ]),
+            _build_webui_ca_trust_store_section(help_context),
+            build_tls_trust_store_section(),
+        ]
+        return sections, _non_lazy('Help - Issue Application Certificates using EST with WebUI')
+
+
+class NoOnboardingCmpWebUiStrategy(HelpPageStrategy):
+    """Manual device WebUI configuration for existing CMP enrollment."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        config = device.no_onboarding_config
+        if not config or not config.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
+            raise Http404(_('CMP shared secret is not enabled for this no-onboarding device.'))
+        sections = [
+            *_build_webui_profile_sections(help_context, help_context.host_cmp_path, 'certification', [
+                HelpRow(_non_lazy('Key Identifier (KID)'), str(device.pk), ValueRenderType.CODE),
+                HelpRow(_non_lazy('CMP Shared Secret'), config.cmp_shared_secret, ValueRenderType.CODE),
+            ]),
+            _build_webui_ca_trust_store_section(help_context),
+        ]
+        return sections, _non_lazy('Help - Issue Application Certificates using CMP with WebUI')
+
+
+class DeviceNoOnboardingEstWebUiHelpView(BaseHelpView):
+    """EST WebUI guidance for no-onboarding devices."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = NoOnboardingEstWebUiStrategy()
+    manual_webui = True
+
+
+class DeviceNoOnboardingCmpWebUiHelpView(BaseHelpView):
+    """CMP WebUI guidance for no-onboarding devices."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = NoOnboardingCmpWebUiStrategy()
+    manual_webui = True
+
+
+class OpcUaGdsNoOnboardingEstWebUiHelpView(DeviceNoOnboardingEstWebUiHelpView):
+    """EST WebUI guidance for no-onboarding OPC-UA GDS devices."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class OpcUaGdsNoOnboardingCmpWebUiHelpView(DeviceNoOnboardingCmpWebUiHelpView):
+    """CMP WebUI guidance for no-onboarding OPC-UA GDS devices."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
