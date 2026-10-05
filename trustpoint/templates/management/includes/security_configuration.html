@@ -21,13 +21,13 @@
     {# ============================================================ #}
     {# Content                                                     #}
     {# ============================================================ #}
-    <div class="card-body">
+    <div class="card-body text-start">
         <div class="tp-card-centered-content">
 
-            <section>
+            <section aria-labelledby="security-policy-heading">
 
                 <div class="mb-3">
-                    <h2 class="h4 mb-1">
+                    <h2 id="security-policy-heading" class="h4 mb-1">
                         {% trans 'Security Policy' %}
                     </h2>
 
@@ -77,9 +77,9 @@
                 >
                     {% csrf_token %}
 
-                    <fieldset class="form-group tp-form-group">
+                    <div class="tp-form-group">
                         {% crispy form %}
-                    </fieldset>
+                    </div>
 
 
                     {# ================================================= #}

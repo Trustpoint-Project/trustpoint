@@ -102,9 +102,13 @@ class SecurityEnvironmentTest(TestCase):
     def test_protocol_lists_must_be_subsets(self) -> None:
         mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         restricted = effective_security_defaults(mode, parse_security_restrictions({
-            'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'CMP_IDEVID,EST_IDEVID,BRSKI',
+            'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'CMP_IDEVID,EST_IDEVID',
         }))
-        self.assertEqual(restricted['permitted_onboarding_protocols'], [1, 3, 6])
+        self.assertEqual(restricted['permitted_onboarding_protocols'], [1, 3])
+        with self.assertRaisesRegex(SecurityConfigurationError, 'not permitted'):
+            effective_security_defaults(mode, parse_security_restrictions({
+                'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'CMP_IDEVID,BRSKI',
+            }))
         with self.assertRaisesRegex(SecurityConfigurationError, 'not permitted'):
             effective_security_defaults(SecurityConfig.SecurityModeChoices.HARDENED, parse_security_restrictions({
                 'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'MANUAL,CMP_IDEVID',
@@ -146,7 +150,7 @@ class SecurityEnvironmentTest(TestCase):
         }
         with patch.dict('os.environ', {
             'TP_SECURITY_MODE': 'BROWNFIELD',
-            'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'EST_IDEVID,BRSKI',
+            'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'EST_IDEVID,CMP_IDEVID',
         }, clear=True), patch.object(
             SecurityConfig,
             'check_policy_transition',

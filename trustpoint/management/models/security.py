@@ -244,10 +244,15 @@ class SecurityConfig(models.Model):
     # Default configurations keyed by mode
     # ------------------------------------------------------------------
 
-    #: All OnboardingProtocol values
-    _ALL_ONBOARDING_PROTOCOLS: ClassVar[list[int]] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    #: All OnboardingProtocol values except MANUAL (0)
-    _ONBOARDING_PROTOCOLS_NO_MANUAL: ClassVar[list[int]] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    #: All implemented OnboardingProtocol values
+    _ALL_ONBOARDING_PROTOCOLS: ClassVar[list[int]] = [
+        protocol.value for protocol in OnboardingProtocol if protocol is not OnboardingProtocol.BRSKI
+    ]
+    #: All implemented OnboardingProtocol values except MANUAL
+    _ONBOARDING_PROTOCOLS_NO_MANUAL: ClassVar[list[int]] = [
+        protocol.value for protocol in OnboardingProtocol
+        if protocol not in (OnboardingProtocol.MANUAL, OnboardingProtocol.BRSKI)
+    ]
 
     _MODE_DEFAULTS: ClassVar[dict[str, _SecurityModeDefaults]] = {
         # ----------------------------------------------------------------
