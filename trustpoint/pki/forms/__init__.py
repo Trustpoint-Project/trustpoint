@@ -30,13 +30,13 @@ from .owner_credential import (
 from .truststores import TruststoreAddForm, TruststoreDownloadForm
 
 __all__ = [
-    'IssuingCaAddAutoGenForm',
     'CertProfileConfigForm',
     'CertificateDownloadForm',
     'CertificateIssuanceForm',
     'CsrIssuanceForm',
     'DevIdAddMethodSelectForm',
     'DevIdRegistrationForm',
+    'IssuingCaAddAutoGenForm',
     'IssuingCaAddFileImportPkcs12Form',
     'IssuingCaAddFileImportSeparateFilesForm',
     'IssuingCaAddMethodSelectForm',

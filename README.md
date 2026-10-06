@@ -1,4 +1,4 @@
-![Trustpoint](.github-assets/trustpoint_banner.png)
+![Trustpoint](.github-assets/trustpoint_github_banner.svg)
 
 <div align="center">
 

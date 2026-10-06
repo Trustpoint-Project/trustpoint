@@ -39,9 +39,10 @@ from rest_framework.response import Response
 
 from management.models.audit_log import AuditLog
 from management.models.security import SecurityConfig
+from pki.auto_gen_pki import AutoGenPki
 from pki.forms import (
-    IssuingCaAddAutoGenForm,
     CertificateIssuanceForm,
+    IssuingCaAddAutoGenForm,
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
@@ -54,7 +55,6 @@ from pki.forms import (
     TruststoreAddForm,
 )
 from pki.forms.issuing_cas import IssuingCaImportMixin
-from pki.auto_gen_pki import AutoGenPki
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverState
 from pki.models.cert_profile import CertificateProfileModel
@@ -160,10 +160,15 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
         active_auto_gen_pki = AutoGenPki.get_auto_gen_pki()
         can_manage_cas = self.request.user.has_perm(AppPermissions.MANAGE_CAS)
         auto_gen_allowed = bool(security_config and security_config.auto_gen_pki)
-        has_supported_key_types = any(value for value, _label in auto_gen_form.fields['key_type'].choices)
-        can_generate = auto_gen_allowed and active_auto_gen_pki is None and can_manage_cas and has_supported_key_types
+        key_type_field = cast('ChoiceField', auto_gen_form.fields['key_type'])
+        can_generate = (
+            auto_gen_allowed
+            and active_auto_gen_pki is None
+            and can_manage_cas
+            and auto_gen_form.has_supported_key_types
+        )
         if not can_generate:
-            auto_gen_form.fields['key_type'].widget.attrs['disabled'] = 'disabled'
+            key_type_field.widget.attrs['disabled'] = 'disabled'
         context.update({
             'auto_gen_pki_form': auto_gen_form,
             'auto_gen_pki_allowed': auto_gen_allowed,
@@ -200,7 +205,7 @@ class IssuingCaAddAutoGenView(IssuingCaContextMixin, FormView[IssuingCaAddAutoGe
     def form_invalid(self, form: IssuingCaAddAutoGenForm) -> HttpResponseRedirect:
         """Return to method selection with validation feedback."""
         for error in form.errors.values():
-            messages.error(self.request, ' '.join(error))
+            messages.error(self.request, ' '.join(str(message) for message in error))
         return redirect('pki:issuing_cas-add-method_select')
 
     def form_valid(self, form: IssuingCaAddAutoGenForm) -> HttpResponseRedirect:

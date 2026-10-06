@@ -131,7 +131,8 @@ class AutoGenPki(LoggerMixin):
         """Enables the auto-generated PKI."""
         key_type = key_type or key_alg
         if key_type is None:
-            raise ValueError('An AutoGenPKI key type is required.')
+            msg = 'An AutoGenPKI key type is required.'
+            raise ValueError(msg)
         key_type = cls._normalize_key_type(key_type)
         key_identifier = cls._key_type_identifier(key_type)
         with cls._lock:

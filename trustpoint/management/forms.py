@@ -426,11 +426,11 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             self._validate_mode_constraints(cleaned, str(mode))
 
         selected_mode = str(mode)
-        mode_defaults = SecurityConfig._MODE_DEFAULTS.get(selected_mode, {})  # noqa: SLF001
+        mode_defaults = SecurityConfig._MODE_DEFAULTS.get(selected_mode)  # noqa: SLF001
         if self.instance and selected_mode == self.instance.security_mode:
             auto_gen_pki_allowed = self.instance.allow_auto_gen_pki
         else:
-            auto_gen_pki_allowed = mode_defaults.get('allow_auto_gen_pki', False)
+            auto_gen_pki_allowed = mode_defaults['allow_auto_gen_pki'] if mode_defaults else False
 
         if cleaned.get('auto_gen_pki') and not auto_gen_pki_allowed:
             self.add_error('auto_gen_pki', 'Cannot enable auto-generated PKI when it is not permitted.')
