@@ -1,3 +1,7 @@
+
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Management external TLS CSR wizard integration and security tests."""
 
 import json
