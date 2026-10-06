@@ -19,6 +19,7 @@ from cryptography.x509 import (
 )
 
 from pki.util.cert_profile import JSONProfileVerifier
+from pki.util.cert_req_converter import JSONCertRequestConverter
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from request.template_vars import resolve_template_variables
 from trustpoint.logger import LoggerMixin
@@ -59,14 +60,16 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
 
         validated_request_data = context.validated_request_data
         subject = self._build_subject(validated_request_data)
-        extensions = self._build_extensions(validated_request_data)
         private_key = self._get_private_key(context)
 
         csr_builder = CertificateSigningRequestBuilder().subject_name(subject)
-        for ext_value, critical in extensions:
-            csr_builder = csr_builder.add_extension(ext_value, critical=critical)
+        normalized_request = JSONProfileVerifier.validate_request(validated_request_data)
+        extended_builder = JSONCertRequestConverter.add_extensions(normalized_request, csr_builder)
+        if not isinstance(extended_builder, CertificateSigningRequestBuilder):
+            msg = 'Expected a CSR builder.'
+            raise TypeError(msg)
 
-        self._csr = csr_builder.sign(private_key, hashes.SHA256())
+        self._csr = extended_builder.sign(private_key, hashes.SHA256())
 
         self.logger.info('Built CSR with subject: %s', subject.rfc4514_string())
 

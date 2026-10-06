@@ -21,6 +21,7 @@ from trustpoint_core.serializer import (
 )
 
 from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey, managed_private_key_for_ref
+from crypto.application.service import TrustpointCryptoBackend
 from crypto.models import CryptoManagedKeyModel
 from pki.models import CertificateModel
 from pki.models.issued_credential import RemoteIssuedCredentialModel
@@ -480,13 +481,18 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             PrivateKeySerializer: The credential private key serializer.
 
         Raises:
-            RuntimeError: If no private key information is available or if the key is backend-managed.
+            RuntimeError: If no private key information is available or managed TLS export is denied.
         """
         if self.private_key:
             return PrivateKeySerializer.from_pem(self.private_key.encode())
 
         if self.managed_private_key:
             try:
+                if self.credential_type == self.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER:
+                    private_key_pem = TrustpointCryptoBackend().export_private_key_pkcs8(
+                        self.managed_private_key.to_managed_key_ref()
+                    )
+                    return PrivateKeySerializer.from_pem(private_key_pem)
                 managed_key = managed_private_key_for_ref(self.managed_private_key.to_managed_key_ref())
                 return self._private_key_serializer_from_key(managed_key)
             except Exception as e:

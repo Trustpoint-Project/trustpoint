@@ -5,12 +5,11 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, NoReturn, cast
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -24,10 +23,8 @@ from trustpoint_core.serializer import (
 
 from crypto.application.capabilities import get_active_backend_capability_report
 from crypto.application.service import TrustpointCryptoBackend
-from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.errors import CryptoError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
-from crypto.domain.specs import EcKeySpec, KeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
@@ -37,6 +34,13 @@ from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.services.external_csr import certificate_matches_credential
+from pki.services.key_generation import (
+    KEY_TYPE_CHOICES,
+    generate_pending_credential,
+    key_spec_for_key_type,
+    supported_key_type_choices,
+)
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
@@ -44,6 +48,9 @@ from util.validation import ValidationError as UtilValidationError
 from util.validation import validate_remote_ca_connection
 
 MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+
+if TYPE_CHECKING:
+    from crypto.domain.specs import KeySpec
 
 
 def get_ca_type_from_config() -> CaModel.CaTypeChoice:
@@ -614,17 +621,7 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
 class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
 
-    KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        ('RSA-2048', 'RSA 2048'),
-        ('RSA-3072', 'RSA 3072'),
-        ('RSA-4096', 'RSA 4096'),
-        ('ECC-SECP256R1', 'ECC SECP256R1'),
-        ('ECC-SECP384R1', 'ECC SECP384R1'),
-        ('ECC-SECP521R1', 'ECC SECP521R1'),
-        ('MLDSA-44', 'ML-DSA-44'),
-        ('MLDSA-65', 'ML-DSA-65'),
-        ('MLDSA-87', 'ML-DSA-87'),
-    ]
+    KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = KEY_TYPE_CHOICES
 
     class Meta:
         """Meta class for IssuingCaAddRequestMixin."""
@@ -657,23 +654,12 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     @classmethod
     def _key_spec_for_key_type(cls, key_type: str) -> KeySpec:
         """Map the form key type to a backend key spec."""
-        if key_type.startswith('RSA-'):
-            return RsaKeySpec(key_size=int(key_type.split('-')[1]))
-        if key_type.startswith('MLDSA-'):
-            variant_str = 'mldsa' + key_type.split('-')[1]
-            return MlDsaKeySpec(variant=MlDsaVariant(variant_str))
-        curve_name = key_type.split('-')[1]
-        return EcKeySpec(curve=EllipticCurveName(curve_name.lower()))
+        return key_spec_for_key_type(key_type)
 
     @classmethod
     def _supported_key_type_choices(cls) -> list[tuple[str, str]]:
         """Return key type choices supported by the active backend."""
-        report = get_active_backend_capability_report()
-        return [
-            (value, label)
-            for value, label in cls.KEY_TYPE_CHOICES
-            if report.supports_key_spec(cls._key_spec_for_key_type(value))
-        ]
+        return supported_key_type_choices(cls.KEY_TYPE_CHOICES, report=get_active_backend_capability_report())
 
     def clean(self) -> dict[str, Any]:
         """Validate the form data."""
@@ -706,19 +692,14 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
 
     def _create_credential(self) -> CredentialModel:
         """Create and return a temporary credential for the CA."""
-        key_type = self.cleaned_data['key_type']
-        key_spec = self._key_spec_for_key_type(key_type)
-
-        key_ref = TrustpointCryptoBackend().generate_managed_key(
+        return generate_pending_credential(
             alias=self.cleaned_data['unique_name'],
-            key_spec=key_spec,
+            key_type=self.cleaned_data['key_type'],
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            backend=TrustpointCryptoBackend(),
             policy=KeyPolicy.managed_signing_key(
                 signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
             ),
-        )
-        return CredentialModel.save_managed_private_key_credential(
-            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
-            managed_key=CryptoManagedKeyModel.objects.get(pk=key_ref.id),
         )
 
     def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
@@ -863,10 +844,7 @@ class IssuingCaExternalCsrCertificateForm(forms.Form):
         if self.instance.credential is None:
             raise forms.ValidationError(_('The Issuing CA credential is missing.'))
 
-        expected_public_key = self.instance.credential.get_private_key().public_key()
-        expected_public_key_der = expected_public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
-        actual_public_key_der = certificate.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
-        if actual_public_key_der != expected_public_key_der:
+        if not certificate_matches_credential(certificate, self.instance.credential):
             raise forms.ValidationError(_('The uploaded certificate does not match the generated CSR.'))
 
         return certificate_serializer
