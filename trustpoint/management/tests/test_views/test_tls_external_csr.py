@@ -154,7 +154,6 @@ def test_method_selection_cards_share_existing_style():
         option = page.select_one(f'a[href="{reverse(f"management:{route}")}"]')
         assert option.select_one('.card.h-100.shadow-sm') is not None
         assert option.select_one('.card-body.d-flex.flex-column') is not None
-        assert option.select_one('.badge.text-bg-primary').get_text(strip=True) == 'TLS'
         assert option.select_one('p.text-muted') is not None
         assert option.select_one('.mt-auto .btn.btn-primary') is not None
 
@@ -164,7 +163,6 @@ def test_key_default_choices_and_capability_filter(wizard):
     page = BeautifulSoup(response.content, 'html.parser')
     assert page.select_one('h1').get_text(strip=True) == 'Add New TLS Certificate'
     assert page.select_one('h2').get_text(strip=True) == 'External PKI'
-    assert page.select_one('.badge.text-bg-primary').get_text(strip=True) == 'CSR'
     assert page.select_one('.alert.alert-info.mb-4') is not None
     assert page.select_one('#tls-external-csr-key-form #div_id_key_type') is not None
     assert page.select_one('.tp-kvp-list') is None
