@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Session-scoped external PKI wizard for management TLS certificates."""
 
 from __future__ import annotations
