@@ -137,6 +137,11 @@ urlpatterns = [
         name='issuing_cas-add-method_select',
     ),
     path(
+        'issuing-cas/add/autogen/',
+        issuing_cas.IssuingCaAddAutoGenView.as_view(),
+        name='issuing_cas-add-autogen',
+    ),
+    path(
         'issuing-cas/add/file-import/pkcs12',
         issuing_cas.IssuingCaAddFileImportPkcs12View.as_view(),
         name='issuing_cas-add-file_import-pkcs12',

@@ -20,7 +20,7 @@ from django.views.generic import TemplateView
 from appsecrets.models import AppSecretBackendModel
 from crypto.application.capabilities import BackendCapabilityReport, get_active_backend_capability_report
 from crypto.models import BackendKind, CryptoProviderProfileModel
-from pki.util.keys import supported_auto_gen_pki_key_algorithms
+from pki.services.key_generation import supported_key_type_choices
 
 PKCS11_ASSET_DOWNLOADS = {
     'module': ('module_path', 'application/octet-stream'),
@@ -258,7 +258,7 @@ class BackendConfigurationView(TemplateView):
         context['capability_message'] = capability_message
         context['capability_diagnostics'] = capability_report.diagnostics if capability_report is not None else ()
         context['supported_key_capabilities'] = _supported_key_capabilities(capability_report)
-        context['supported_auto_gen_pki_algorithms'] = supported_auto_gen_pki_key_algorithms()
+        context['supported_auto_gen_pki_key_types'] = supported_key_type_choices()
         pkcs11_capability_payload = (
             getattr(pkcs11_probe_detail, 'snapshot_payload', None)
             if pkcs11_probe_detail is not None

@@ -305,6 +305,38 @@ class IssuingCaAddMethodSelectForm(forms.Form):
     )
 
 
+class IssuingCaAddAutoGenForm(forms.Form):
+    """Form for generating the local auto-generated PKI."""
+
+    has_supported_key_types: bool
+
+    key_type = forms.ChoiceField(
+        label=_('Key Type'),
+        choices=KEY_TYPE_CHOICES,
+        initial='RSA-2048',
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Use only key types supported by the active crypto backend."""
+        super().__init__(*args, **kwargs)
+        choices = supported_key_type_choices()
+        self.has_supported_key_types = bool(choices)
+        key_type_field = cast('forms.ChoiceField', self.fields['key_type'])
+        key_type_field.choices = choices or [('', _('No supported backend algorithms available'))]
+        if not choices:
+            key_type_field.widget.attrs['disabled'] = 'disabled'
+
+    def clean_key_type(self) -> str:
+        """Reject key types that the active backend cannot generate."""
+        key_type = cast('str', self.cleaned_data['key_type'])
+        supported_types = {value for value, _label in supported_key_type_choices()}
+        if key_type not in supported_types:
+            raise ValidationError(_('The active crypto backend does not support this key type.'))
+        return key_type
+
+
 class IssuingCaFileTypeSelectForm(forms.Form):
     """Form for selecting the file type when importing an Issuing CA.
 

@@ -342,9 +342,9 @@
                                     {% trans 'AutoGenPKI Choices' %}
                                 </h3>
 
-                                {% if supported_auto_gen_pki_algorithms %}
+                                {% if supported_auto_gen_pki_key_types %}
                                     <span class="badge text-bg-secondary">
-                                        {{ supported_auto_gen_pki_algorithms|length }}
+                                        {{ supported_auto_gen_pki_key_types|length }}
                                     </span>
                                 {% endif %}
 
@@ -353,12 +353,12 @@
 
                             <div class="card-body">
 
-                                {% if supported_auto_gen_pki_algorithms %}
+                                {% if supported_auto_gen_pki_key_types %}
 
                                     <div class="d-flex flex-wrap gap-2">
-                                        {% for algorithm in supported_auto_gen_pki_algorithms %}
+                                        {% for key_type, key_type_label in supported_auto_gen_pki_key_types %}
                                             <span class="badge rounded-pill text-bg-success">
-                                                {{ algorithm.label }}
+                                                {{ key_type_label }}
                                             </span>
                                         {% endfor %}
                                     </div>
@@ -366,7 +366,7 @@
                                 {% else %}
 
                                     <div class="alert alert-warning mb-0">
-                                        {% trans 'Auto-generated PKI cannot be enabled until the active backend supports at least one allowed key algorithm.' %}
+                                        {% trans 'Auto-generated PKI cannot be generated until the active backend supports at least one key type.' %}
                                     </div>
 
                                 {% endif %}

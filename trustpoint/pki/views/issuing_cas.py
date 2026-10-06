@@ -38,8 +38,11 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from management.models.audit_log import AuditLog
+from management.models.security import SecurityConfig
+from pki.auto_gen_pki import AutoGenPki
 from pki.forms import (
     CertificateIssuanceForm,
+    IssuingCaAddAutoGenForm,
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
@@ -149,6 +152,31 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
     template_name = 'pki/issuing_cas/add/method_select.html'
     form_class = IssuingCaAddMethodSelectForm
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the independent AutoGenPKI form and its current availability."""
+        context = super().get_context_data(**kwargs)
+        auto_gen_form = IssuingCaAddAutoGenForm()
+        security_config = SecurityConfig.objects.first()
+        active_auto_gen_pki = AutoGenPki.get_auto_gen_pki()
+        can_manage_cas = self.request.user.has_perm(AppPermissions.MANAGE_CAS)
+        auto_gen_allowed = bool(security_config and security_config.auto_gen_pki)
+        key_type_field = cast('ChoiceField', auto_gen_form.fields['key_type'])
+        can_generate = (
+            auto_gen_allowed
+            and active_auto_gen_pki is None
+            and can_manage_cas
+            and auto_gen_form.has_supported_key_types
+        )
+        if not can_generate:
+            key_type_field.widget.attrs['disabled'] = 'disabled'
+        context.update({
+            'auto_gen_pki_form': auto_gen_form,
+            'auto_gen_pki_allowed': auto_gen_allowed,
+            'active_auto_gen_pki': active_auto_gen_pki,
+            'can_generate_auto_gen_pki': can_generate,
+        })
+        return context
+
     def form_valid(self, form: IssuingCaAddMethodSelectForm) -> HttpResponseRedirect:
         """Redirect to the next step based on the selected method."""
         method_select = form.cleaned_data.get('method_select')
@@ -165,6 +193,54 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
             return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-request-cmp'))
 
         return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
+
+
+class IssuingCaAddAutoGenView(IssuingCaContextMixin, FormView[IssuingCaAddAutoGenForm]):
+    """Generate the local AutoGenPKI from the dedicated Add Issuing CA action."""
+
+    form_class = IssuingCaAddAutoGenForm
+    template_name = 'pki/issuing_cas/add/method_select.html'
+    success_url = reverse_lazy('pki:issuing_cas')
+
+    def form_invalid(self, form: IssuingCaAddAutoGenForm) -> HttpResponseRedirect:
+        """Return to method selection with validation feedback."""
+        for error in form.errors.values():
+            messages.error(self.request, ' '.join(str(message) for message in error))
+        return redirect('pki:issuing_cas-add-method_select')
+
+    def form_valid(self, form: IssuingCaAddAutoGenForm) -> HttpResponseRedirect:
+        """Enforce permissions and current security state before creating any CA."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
+
+        security_config = SecurityConfig.objects.first()
+        if not security_config or not security_config.auto_gen_pki:
+            messages.error(self.request, _('Auto-generated PKI creation is disabled in the Security Settings.'))
+            return redirect('pki:issuing_cas-add-method_select')
+
+        if AutoGenPki.get_auto_gen_pki() is not None:
+            messages.warning(self.request, _('An auto-generated PKI is already active.'))
+            return redirect('pki:issuing_cas-add-method_select')
+
+        try:
+            issuing_ca = AutoGenPki.enable_auto_gen_pki(form.cleaned_data['key_type'])
+        except ValueError as error:
+            messages.error(self.request, str(error))
+            return redirect('pki:issuing_cas-add-method_select')
+
+        if issuing_ca is None:
+            messages.warning(self.request, _('An auto-generated PKI is already active.'))
+            return redirect('pki:issuing_cas-add-method_select')
+
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=issuing_ca,
+            target_display=f'CA: {issuing_ca.unique_name}',
+            actor=actor,
+        )
+        messages.success(self.request, _('Successfully generated auto-generated PKI.'))
+        return redirect(self.success_url)
 
 
 class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView[IssuingCaAddFileImportPkcs12Form]):

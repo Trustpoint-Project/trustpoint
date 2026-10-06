@@ -186,7 +186,6 @@
     {# Footer                                                      #}
     {# ============================================================ #}
     <div class="card-footer d-flex justify-content-end align-items-center">
-
         <button
             class="btn btn-primary"
             type="submit"
@@ -330,7 +329,6 @@
         try {
             [
                 'allow_ca_issuance',
-                'allow_auto_gen_pki',
                 'allow_self_signed_ca'
             ].forEach(field => {
 
@@ -501,7 +499,6 @@
         try {
             [
                 'allow_ca_issuance',
-                'allow_auto_gen_pki',
                 'allow_self_signed_ca'
             ].forEach(field => {
 
@@ -575,76 +572,6 @@
             'input[name="auto_gen_pki"]'
         );
 
-        const allowAutoCheckbox = document.querySelector(
-            'input[name="allow_auto_gen_pki"]'
-        );
-
-        const algoField = document.querySelector(
-            'select[name="auto_gen_pki_key_algorithm"]'
-        );
-
-        const algoGroup = algoField
-            ? algoField.closest(
-                '.mb-3, .form-group, .tp-form-group'
-            )
-            : null;
-
-
-        function updateAutoGenPkiState() {
-            if (!autoCheckbox || !allowAutoCheckbox) {
-                return;
-            }
-
-            if (!allowAutoCheckbox.checked) {
-                autoCheckbox.checked = false;
-                autoCheckbox.disabled = true;
-
-            } else if (!allowAutoCheckbox.disabled) {
-                autoCheckbox.disabled = false;
-            }
-        }
-
-
-        function updateAlgoVisibility() {
-            if (!algoGroup) {
-                return;
-            }
-
-            if (!autoCheckbox) {
-                algoGroup.style.display = '';
-                return;
-            }
-
-            algoGroup.style.display =
-                autoCheckbox.checked
-                    ? ''
-                    : 'none';
-        }
-
-
-        if (allowAutoCheckbox) {
-            allowAutoCheckbox.addEventListener(
-                'change',
-                function () {
-                    updateAutoGenPkiState();
-                    updateAlgoVisibility();
-                }
-            );
-        }
-
-
-        if (autoCheckbox) {
-            autoCheckbox.addEventListener(
-                'change',
-                updateAlgoVisibility
-            );
-        }
-
-
-        updateAutoGenPkiState();
-        updateAlgoVisibility();
-
-
         securityModeRadios.forEach(radio => {
 
             radio.addEventListener(
@@ -694,9 +621,6 @@
                     resetToDefaultsAndApplyConstraints(
                         newMode
                     );
-
-                    updateAutoGenPkiState();
-                    updateAlgoVisibility();
                 }
             );
         });
@@ -712,7 +636,6 @@
 
             applyStrictnessConstraints(currentMode);
             updateAutoGenPkiState();
-            updateAlgoVisibility();
         }
     }
 

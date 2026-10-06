@@ -8,6 +8,7 @@ from .certificates import CertificateDownloadForm
 from .csr import CsrIssuanceForm
 from .devids import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from .issuing_cas import (
+    IssuingCaAddAutoGenForm,
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
@@ -35,6 +36,7 @@ __all__ = [
     'CsrIssuanceForm',
     'DevIdAddMethodSelectForm',
     'DevIdRegistrationForm',
+    'IssuingCaAddAutoGenForm',
     'IssuingCaAddFileImportPkcs12Form',
     'IssuingCaAddFileImportSeparateFilesForm',
     'IssuingCaAddMethodSelectForm',

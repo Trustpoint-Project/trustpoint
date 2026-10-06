@@ -196,35 +196,6 @@
 
 
             {# ======================================================== #}
-            {# DevID Registration Patterns                              #}
-            {# ======================================================== #}
-            <section class="mb-5">
-                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-3">
-                    <div>
-                        <h2 class="h4 mb-1">
-                            {% trans 'DevID Registration Patterns' %}
-                        </h2>
-
-                        <p class="text-muted mb-0">
-                            {% trans 'Manage rules used to identify and register devices for this domain.' %}
-                        </p>
-                    </div>
-
-                    <a
-                        href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
-                        class="btn btn-primary flex-shrink-0"
-                    >
-                        {% trans 'Create DevID Registration Pattern' %}
-                    </a>
-                </div>
-
-                <hr class="mb-4">
-
-                {% include 'pki/devid_registration/table.html' %}
-            </section>
-
-
-            {# ======================================================== #}
             {# Domain Credential Profile                                #}
             {# ======================================================== #}
             <section class="mb-5">
@@ -289,6 +260,37 @@
                 <hr class="mb-4">
 
                 {% include 'pki/cert_profiles/domain_table.html' %}
+            </section>
+
+
+
+
+            {# ======================================================== #}
+            {# DevID Registration Patterns                              #}
+            {# ======================================================== #}
+            <section class="mb-5">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">
+                            {% trans 'DevID Registration Patterns' %}
+                        </h2>
+
+                        <p class="text-muted mb-0">
+                            {% trans 'Manage rules used to identify and register devices for this domain.' %}
+                        </p>
+                    </div>
+
+                    <a
+                        href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
+                        class="btn btn-primary flex-shrink-0"
+                    >
+                        {% trans 'Create DevID Registration Pattern' %}
+                    </a>
+                </div>
+
+                <hr class="mb-4">
+
+                {% include 'pki/devid_registration/table.html' %}
             </section>
 
         </form>
