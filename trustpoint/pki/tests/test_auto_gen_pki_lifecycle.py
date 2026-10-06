@@ -13,17 +13,19 @@ from cryptography import x509
 from pki.auto_gen_pki import DOMAIN_NAME_PREFIX, UNIQUE_NAME_PREFIX, AutoGenPki
 from pki.models import CaModel, DomainModel
 from pki.models.certificate import CertificateModel
-from pki.util.keys import AutoGenPkiKeyAlgorithm, supported_auto_gen_pki_key_algorithms
+from pki.services.key_generation import supported_key_type_choices
+from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 pytestmark = pytest.mark.django_db
 
 KEY_ALGORITHM = AutoGenPkiKeyAlgorithm.RSA2048
+KEY_TYPE = 'RSA-2048'
 
 
 @pytest.fixture(autouse=True)
 def _require_backend_support() -> None:
     """Skip when the active crypto backend cannot generate the test key."""
-    if KEY_ALGORITHM not in supported_auto_gen_pki_key_algorithms():
+    if KEY_TYPE not in {value for value, _label in supported_key_type_choices()}:
         pytest.skip('Active crypto backend does not support RSA-2048 AutoGenPKI keys.')
 
 

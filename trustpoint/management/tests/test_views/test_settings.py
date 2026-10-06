@@ -16,7 +16,7 @@ from django.urls import reverse
 from management.forms import SecurityConfigForm, SmtpEmailConfigForm, SmtpEmailTestForm
 from management.models import LoggingConfig, SecurityConfig, SmtpEmailConfig
 from management.views.settings import ChangeLogLevelView, SecuritySettingsView, SettingsTabView, MetricsSettingsView
-from pki.util.keys import AutoGenPkiKeyAlgorithm
+from pki.models import CaModel, DomainModel
 
 LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 
@@ -154,8 +154,8 @@ class SecuritySettingsViewTest(TestCase):
 
     @patch('management.security.features.AutoGenPkiFeature.enable')
     @patch.object(SecurityConfig, 'apply_security_settings')
-    def test_form_valid_enables_auto_gen_pki(self, mock_apply, mock_enable):
-        """Test form_valid enables AutoGenPkiFeature when auto_gen_pki is enabled."""
+    def test_form_valid_does_not_generate_auto_gen_pki_when_allowed(self, mock_apply, mock_enable):
+        """Allowing AutoGenPKI in settings does not create it."""
         mock_sec = Mock()
         mock_sec.enable_feature = Mock()
         self.view.sec = mock_sec
@@ -166,13 +166,15 @@ class SecuritySettingsViewTest(TestCase):
         form.changed_data = ['auto_gen_pki']
         form.cleaned_data = {
             'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
         }
         form.save = Mock()
         
         self.view.form_valid(form)
         
-        mock_sec.enable_feature.assert_called_once()
+        mock_enable.assert_not_called()
+        mock_sec.enable_feature.assert_not_called()
+        self.assertFalse(CaModel.objects.exists())
+        self.assertFalse(DomainModel.objects.exists())
 
     @patch('management.security.features.AutoGenPkiFeature.disable')
     @patch.object(SecurityConfig, 'apply_security_settings')
@@ -225,24 +227,6 @@ class SecuritySettingsViewTest(TestCase):
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('missing' in str(msg).lower() for msg in messages_list))
 
-    def test_form_valid_handles_missing_key_algorithm(self):
-        """Test form_valid handles missing key algorithm when enabling auto_gen_pki."""
-        form = Mock(spec=SecurityConfigForm)
-        form.instance = self.security_config
-        form.instance.pk = 1
-        form.changed_data = ['auto_gen_pki']
-        form.cleaned_data = {
-            'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': None,
-        }
-        form.save = Mock()
-        
-        with patch.object(SecurityConfig, 'apply_security_settings'):
-            self.view.form_valid(form)
-        
-        messages_list = list(get_messages(self.view.request))
-        self.assertTrue(any('missing' in str(msg).lower() for msg in messages_list))
-
     def test_form_invalid_shows_error_message(self):
         """Test form_invalid displays error message."""
         form = Mock(spec=SecurityConfigForm)
@@ -264,7 +248,6 @@ class SecuritySettingsViewTest(TestCase):
             data={
                 'security_mode': SecurityConfig.SecurityModeChoices.HARDENED,
                 'auto_gen_pki': False,
-                'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
                 'rsa_minimum_key_size': 1024,
                 'max_cert_validity_days': 365,
                 'max_crl_validity_days': 90,

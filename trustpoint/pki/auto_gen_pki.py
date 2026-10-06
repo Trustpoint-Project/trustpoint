@@ -15,11 +15,10 @@ from crypto.application.private_keys import (
     ManagedRSAPrivateKey,
     generate_managed_signing_private_key,
 )
-from crypto.domain.algorithms import EllipticCurveName
-from crypto.domain.specs import EcKeySpec, KeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificateModel
-from pki.util.keys import AutoGenPkiKeyAlgorithm, supported_auto_gen_pki_key_algorithms
+from pki.services.key_generation import key_spec_for_key_type, supported_key_type_choices
+from pki.util.keys import AutoGenPkiKeyAlgorithm
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
 
@@ -37,36 +36,39 @@ class AutoGenPki(LoggerMixin):
     _lock: threading.Lock = threading.Lock()
 
     @staticmethod
-    def _key_spec_for_algorithm(key_alg: AutoGenPkiKeyAlgorithm) -> KeySpec:
-        """Map AutoGenPKI choices to the backend key-generation contract."""
-        if key_alg == AutoGenPkiKeyAlgorithm.RSA2048:
-            return RsaKeySpec(key_size=2048)
-        if key_alg == AutoGenPkiKeyAlgorithm.RSA4096:
-            return RsaKeySpec(key_size=4096)
-        if key_alg == AutoGenPkiKeyAlgorithm.SECP256R1:
-            return EcKeySpec(curve=EllipticCurveName.SECP256R1)
-        if key_alg == AutoGenPkiKeyAlgorithm.MLDSA44:
-            return MlDsaKeySpec(variant=MlDsaVariant.MLDSA44)
-        if key_alg == AutoGenPkiKeyAlgorithm.MLDSA65:
-            return MlDsaKeySpec(variant=MlDsaVariant.MLDSA65)
-        if key_alg == AutoGenPkiKeyAlgorithm.MLDSA87:
-            return MlDsaKeySpec(variant=MlDsaVariant.MLDSA87)
-        msg = f'Unsupported AutoGenPKI key algorithm {key_alg!r}.'
-        raise ValueError(msg)
+    def _normalize_key_type(key_type: str | AutoGenPkiKeyAlgorithm) -> str:
+        """Convert the legacy algorithm enum to the shared key-generation service format."""
+        if isinstance(key_type, AutoGenPkiKeyAlgorithm):
+            name = key_type.name
+            if name.startswith('RSA'):
+                return f'RSA-{name.removeprefix("RSA")}'
+            if name.startswith('SECP'):
+                return f'ECC-{name}'
+            if name.startswith('MLDSA'):
+                return f'MLDSA-{name.removeprefix("MLDSA")}'
+            msg = f'Unsupported AutoGenPKI key algorithm {key_type!r}.'
+            raise ValueError(msg)
+        return key_type
+
+    @classmethod
+    def _key_type_identifier(cls, key_type: str | AutoGenPkiKeyAlgorithm) -> str:
+        """Return a stable name suffix for Root CA, Issuing CA and Domain records."""
+        return cls._normalize_key_type(key_type).replace('-', '')
 
     @staticmethod
     def _generate_private_key(
-        key_alg: AutoGenPkiKeyAlgorithm,
+        key_type: str,
         key_label: str,
     ) -> ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey:
         """Generate an AutoGenPKI key in the active backend."""
-        if key_alg not in supported_auto_gen_pki_key_algorithms():
-            msg = f'The active crypto backend does not support AutoGenPKI algorithm {key_alg.label}.'
+        supported_types = {value for value, _label in supported_key_type_choices()}
+        if key_type not in supported_types:
+            msg = f'Unsupported AutoGenPKI key type for the active crypto backend: {key_type}.'
             raise ValueError(msg)
 
         return generate_managed_signing_private_key(
             alias=key_label,
-            key_spec=AutoGenPki._key_spec_for_algorithm(key_alg),
+            key_spec=key_spec_for_key_type(key_type),
         )
 
     @staticmethod
@@ -105,11 +107,11 @@ class AutoGenPki(LoggerMixin):
         return ca
 
     @classmethod
-    def get_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm | None = None) -> CaModel | None:
+    def get_auto_gen_pki(cls, key_type: str | AutoGenPkiKeyAlgorithm | None = None) -> CaModel | None:
         """Retrieves the auto-generated PKI Issuing CA, if it exists."""
-        if key_alg is not None:
+        if key_type is not None:
             return CaModel.objects.filter(
-                unique_name__startswith=f'{UNIQUE_NAME_PREFIX}_{key_alg.name}',
+                unique_name__startswith=f'{UNIQUE_NAME_PREFIX}_{cls._key_type_identifier(key_type)}',
                 ca_type=CaModel.CaTypeChoice.AUTOGEN,
                 is_active=True,
             ).first()
@@ -120,25 +122,35 @@ class AutoGenPki(LoggerMixin):
         ).first()
 
     @classmethod
-    def enable_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm) -> None:
+    def enable_auto_gen_pki(
+        cls,
+        key_type: str | AutoGenPkiKeyAlgorithm | None = None,
+        *,
+        key_alg: AutoGenPkiKeyAlgorithm | None = None,
+    ) -> CaModel | None:
         """Enables the auto-generated PKI."""
+        key_type = key_type or key_alg
+        if key_type is None:
+            raise ValueError('An AutoGenPKI key type is required.')
+        key_type = cls._normalize_key_type(key_type)
+        key_identifier = cls._key_type_identifier(key_type)
         with cls._lock:
-            cls.logger.warning('! Enabling auto-generated PKI with key algorithm: %s !', key_alg.name)
+            cls.logger.warning('! Enabling auto-generated PKI with key type: %s !', key_type)
 
             unique_suffix = secrets.token_hex(4)
-            issuing_ca_unique_name = f'{UNIQUE_NAME_PREFIX}_{key_alg.name}_{unique_suffix}'
-            domain_unique_name = f'{DOMAIN_NAME_PREFIX}_{key_alg.name}'
+            issuing_ca_unique_name = f'{UNIQUE_NAME_PREFIX}_{key_identifier}_{unique_suffix}'
+            domain_unique_name = f'{DOMAIN_NAME_PREFIX}_{key_identifier}'
 
-            existing_issuing_ca = cls.get_auto_gen_pki(key_alg)
+            existing_issuing_ca = cls.get_auto_gen_pki()
             if existing_issuing_ca:
                 cls.logger.error(
-                    'Issuing CA for auto-generated PKI already exists: %s - '
+                    'An active auto-generated PKI already exists: %s - '
                     'auto-generated PKI was possibly not correctly disabled',
                     existing_issuing_ca.unique_name
                 )
-                return
+                return None
 
-            root_ca_name = f'AutoGenPKI_Root_CA_{key_alg.name}'
+            root_ca_name = f'AutoGenPKI_Root_CA_{key_identifier}'
             # Re-use any existing root CA for the auto-generated PKI and current key type
             try:
                 root_ca = CaModel.objects.get(
@@ -149,7 +161,7 @@ class AutoGenPki(LoggerMixin):
                 cls.logger.info('Reusing existing Root CA: %s', root_ca_name)
             except CaModel.DoesNotExist:
                 cls.logger.info('Creating new Root CA: %s', root_ca_name)
-                root_private_key = cls._generate_private_key(key_alg, f'{root_ca_name}_{unique_suffix}')
+                root_private_key = cls._generate_private_key(key_type, f'{root_ca_name}_{unique_suffix}')
                 root_cert, _ = CertificateGenerator.create_root_ca(
                     root_ca_name,
                     private_key=root_private_key,  # type: ignore[arg-type]
@@ -165,7 +177,7 @@ class AutoGenPki(LoggerMixin):
                 cls.logger.info('Created new Root CA: %s', root_ca_name)
 
             cls.logger.info('Creating new Issuing CA with unique name: %s', issuing_ca_unique_name)
-            issuing_private_key = cls._generate_private_key(key_alg, issuing_ca_unique_name)
+            issuing_private_key = cls._generate_private_key(key_type, issuing_ca_unique_name)
             issuing_1, _ = CertificateGenerator.create_issuing_ca(
                 root_1_key,
                 root_ca_name,
@@ -195,7 +207,8 @@ class AutoGenPki(LoggerMixin):
             domain.save()
             cls.logger.info('Domain %s updated and activated', domain_unique_name)
 
-            cls.logger.warning('Auto-generated PKI enabled with key algorithm: %s', key_alg.name)
+            cls.logger.warning('Auto-generated PKI enabled with key type: %s', key_type)
+            return issuing_ca
 
     @classmethod
     def disable_auto_gen_pki(cls) -> None:
@@ -205,7 +218,7 @@ class AutoGenPki(LoggerMixin):
         Managed backend keys are not destroyed - each Issuing CA has a unique name to avoid conflicts.
         """
         with cls._lock:
-            issuing_ca = cls.get_auto_gen_pki(key_alg=None)
+            issuing_ca = cls.get_auto_gen_pki(key_type=None)
             if not issuing_ca:
                 cls.logger.error(
                     'Issuing CA for auto-generated PKI does not exist - auto-generated PKI possibly not fully disabled'

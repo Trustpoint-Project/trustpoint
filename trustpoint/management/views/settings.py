@@ -46,7 +46,6 @@ from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
-from pki.util.keys import AutoGenPkiKeyAlgorithm
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 from trustpoint.views.base import UserPermissionRequiredMixin
@@ -623,17 +622,7 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
             new_auto = form.cleaned_data.get('auto_gen_pki', None)
             self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
 
-            if old_auto != new_auto and new_auto:
-                key_alg_value = form.cleaned_data.get('auto_gen_pki_key_algorithm')
-                if key_alg_value is None:
-                    messages.error(self.request, 'Auto-generated PKI key algorithm is missing.')
-                    return redirect(self.success_url)
-                key_alg = AutoGenPkiKeyAlgorithm(key_alg_value)
-                self.logger.info('Calling enable_feature for AutoGenPkiFeature with key_alg: %s', key_alg)
-                self.sec.enable_feature(AutoGenPkiFeature, {'key_algorithm': key_alg})
-                self.logger.info('Auto-generated PKI enabled with key algorithm: %s', key_alg.name)
-
-            elif old_auto != new_auto and not new_auto:
+            if old_auto != new_auto and not new_auto:
                 AutoGenPkiFeature.disable()
                 self.logger.info('Auto-generated PKI disabled')
 

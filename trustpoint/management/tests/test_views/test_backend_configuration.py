@@ -73,7 +73,7 @@ class BackendConfigurationViewTest(TestCase):
         assert context['is_software_backend']
         assert context['capability_badge'] == 'success'
         assert context['supported_key_capabilities']
-        assert context['supported_auto_gen_pki_algorithms']
+        assert context['supported_auto_gen_pki_key_types']
         assert 'page_title' in context
 
     def test_get_context_data_with_softhsm_config(self) -> None:
