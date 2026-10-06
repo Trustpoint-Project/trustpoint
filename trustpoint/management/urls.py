@@ -20,6 +20,7 @@ from .views import (
     service_accounts,
     settings,
     tls,
+    tls_external_csr,
     user_authentication,
     user_management,
 )
@@ -59,6 +60,13 @@ urlpatterns = [
     ),
     # TLS views
     path('tls/', tls.TlsView.as_view(), name='tls'),
+        path('tls/add/external-csr/key/', tls_external_csr.TlsExternalCsrKeyView.as_view(),
+            name='tls-external-csr-key'),
+        path('tls/add/external-csr/<int:pk>/truststore/', tls_external_csr.TlsExternalCsrTruststoreView.as_view(),
+            name='tls-external-csr-truststore'),
+        path('tls/add/external-csr/<int:pk>/content/', tls_external_csr.TlsExternalCsrContentView.as_view(),
+            name='tls-external-csr-content'),
+        path('tls/add/external-csr/<int:pk>/', tls_external_csr.TlsExternalCsrView.as_view(), name='tls-external-csr'),
     path('tls/add/method-select/', tls.TlsAddMethodSelectView.as_view(),
         name='tls-add-method_select',
     ),

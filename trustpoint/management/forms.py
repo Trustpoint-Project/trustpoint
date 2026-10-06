@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast, override
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Fieldset, Layout
+from cryptography import x509
 from cryptography.x509 import Certificate
+from cryptography.x509.verification import VerificationError
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, RegexValidator
@@ -42,6 +44,9 @@ from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CredentialModel
+from pki.models.truststore import TruststoreModel
+from pki.services.external_csr import certificate_matches_credential, parse_single_certificate
+from pki.services.key_generation import supported_key_type_choices
 from pki.util.keys import AutoGenPkiKeyAlgorithm, supported_auto_gen_pki_key_algorithms
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
@@ -53,6 +58,92 @@ if TYPE_CHECKING:
 
 MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
 MAX_PASSWORD_LIST_BYTES = 10 * 1024 * 1024
+
+
+class TlsExternalCsrKeyForm(forms.Form):
+    """Select a supported management TLS key type."""
+
+    key_type = forms.ChoiceField(label=_('Key Type'), initial='ECC-SECP256R1')
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Limit offerings to supported RSA and TLS elliptic curves."""
+        super().__init__(*args, **kwargs)
+        choices = supported_key_type_choices([
+            ('RSA-2048', 'RSA 2048'), ('RSA-3072', 'RSA 3072'), ('RSA-4096', 'RSA 4096'),
+            ('ECC-SECP256R1', 'ECC SECP256R1'), ('ECC-SECP384R1', 'ECC SECP384R1'),
+        ])
+        key_type_field = cast('forms.ChoiceField', self.fields['key_type'])
+        key_type_field.choices = choices
+        if choices and 'ECC-SECP256R1' not in dict(choices):
+            key_type_field.initial = choices[0][0]
+
+
+class TlsExternalCsrTruststoreForm(forms.Form):
+    """Select the external PKI chain without adding a credential foreign key."""
+
+    truststore = forms.ModelChoiceField(queryset=TruststoreModel.objects.all(), label=_('Trust Store'))
+
+
+class TlsExternalCsrCertificateForm(forms.Form):
+    """Validate a single externally issued TLS leaf against its request and chain."""
+
+    certificate = forms.FileField(label=_('Issued TLS Certificate (.pem, .der, .cer)'))
+
+    def __init__(
+        self, *args: Any, credential: CredentialModel, csr: x509.CertificateSigningRequest,
+        truststore: TruststoreModel, **kwargs: Any,
+    ) -> None:
+        """Bind validation to the session's pending key and CSR."""
+        super().__init__(*args, **kwargs)
+        self.credential = credential
+        self.csr = csr
+        self.truststore = truststore
+        self.chain: list[x509.Certificate] = []
+
+    def clean_certificate(self) -> x509.Certificate:
+        """Validate identity and perform full TLS path validation."""
+        uploaded = self.cleaned_data['certificate']
+        if uploaded.size > 64 * 1024:
+            raise forms.ValidationError(_('Certificate file is too large, max. 64 KiB.'))
+        certificate = parse_single_certificate(uploaded.read())
+        try:
+            constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except x509.ExtensionNotFound:
+            constraints = None
+        if constraints is not None and constraints.ca:
+            raise forms.ValidationError(_('The issued TLS certificate must not be a CA certificate.'))
+        if not certificate_matches_credential(certificate, self.credential):
+            raise forms.ValidationError(_('The uploaded certificate does not match the generated CSR key.'))
+        if certificate.subject != self.csr.subject:
+            raise forms.ValidationError(_('The certificate subject does not match the generated CSR.'))
+        expected_san = self.san_names(self.csr)
+        actual_san = self.san_names(certificate)
+        if sorted(map(repr, expected_san)) != sorted(map(repr, actual_san)):
+            raise forms.ValidationError(_('The certificate SANs must exactly match the generated CSR.'))
+        identity = next(
+            (str(name.value) for name in expected_san if isinstance(name, (x509.DNSName, x509.IPAddress))), None,
+        )
+        if identity is None:
+            raise forms.ValidationError(_('A DNS name or IP address SAN is required for management TLS.'))
+        certificates = self.truststore.get_certificate_collection_serializer().as_crypto()
+        roots = [cert for cert in certificates if cert.subject == cert.issuer]
+        intermediates = [cert for cert in certificates if cert.subject != cert.issuer]
+        try:
+            self.chain = CertificateVerifier.verify_server_cert(certificate, identity, roots, intermediates)
+        except (VerificationError, ValueError) as exception:
+            raise forms.ValidationError(
+                _('The certificate cannot be verified with the selected trust store: %(error)s'),
+                params={'error': str(exception)},
+            ) from exception
+        return certificate
+
+    @staticmethod
+    def san_names(certificate: x509.Certificate | x509.CertificateSigningRequest) -> list[x509.GeneralName]:
+        """Return the full requested identity, including non-TLS SAN types."""
+        try:
+            return list(certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value)
+        except x509.ExtensionNotFound:
+            return []
 
 
 class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):

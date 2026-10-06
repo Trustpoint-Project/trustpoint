@@ -6,7 +6,7 @@
 import datetime
 import ipaddress
 import logging
-from typing import Any
+from typing import Any, cast
 
 from cryptography import x509
 from trustpoint_core.oid import NameOid
@@ -166,10 +166,10 @@ class JSONCertRequestConverter:
         )
 
     @staticmethod
-    def _ext_from_json(  # noqa: C901
+    def add_extensions(  # noqa: C901
         json: dict[str, Any],
-        builder: x509.CertificateBuilder
-        ) -> x509.CertificateBuilder:
+        builder: x509.CertificateBuilder | x509.CertificateSigningRequestBuilder,
+        ) -> x509.CertificateBuilder | x509.CertificateSigningRequestBuilder:
         """Processes JSON data to add X.509 certificate extensions to a CertificateBuilder.
 
         Args:
@@ -218,6 +218,12 @@ class JSONCertRequestConverter:
             else:
                 logger.debug('JSON Cert Request Adapter: Skipping unsupported extension: %s', ext_name)
         return builder
+
+    @staticmethod
+    def _ext_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:
+        """Preserve the certificate converter's existing extension API."""
+        result = JSONCertRequestConverter.add_extensions(json, builder)
+        return cast('x509.CertificateBuilder', result)
 
     @staticmethod
     def validity_period_from_json(validity: dict[str, Any]) -> datetime.timedelta:

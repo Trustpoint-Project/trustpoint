@@ -17,6 +17,7 @@ from appsecrets.service import get_app_secret_service
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.protected_import.bindings import ProtectedImportManagedKeyBinding
 from crypto.adapters.rest.bindings import RestManagedKeyBinding
+from crypto.adapters.software.backend import SoftwareBackend
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
 from crypto.application.audit import (
     audit_crypto_backend_operation,
@@ -32,7 +33,13 @@ from crypto.application.protected_import import (
     encrypt_imported_private_key,
     imported_key_algorithm,
 )
-from crypto.domain.errors import CryptoError, KeyNotFoundError, ProviderConfigurationError, UnsupportedKeySpecError
+from crypto.domain.errors import (
+    CryptoError,
+    KeyNotFoundError,
+    ProviderConfigurationError,
+    ProviderOperationNotImplementedError,
+    UnsupportedKeySpecError,
+)
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
 from crypto.models import BackendKind, CryptoManagedKeyModel, CryptoProviderProfileModel
 from crypto.repositories import CryptoManagedKeyRepository, CryptoProviderProfileRepository, ManagedKeyBinding
@@ -347,6 +354,28 @@ class TrustpointCryptoBackend(LoggerMixin):
                 managed_key=managed_key,
             )
             return public_key
+
+    def export_private_key_pkcs8(self, key: ManagedKeyRef) -> bytes:
+        """Export an explicitly extractable software key as unencrypted PKCS#8 PEM."""
+        managed_key = self._load_managed_key(key)
+        if managed_key.policy_snapshot.get('extractable') is not True:
+            msg = 'The managed private key is not extractable.'
+            raise ProviderConfigurationError(msg)
+        if managed_key.provider_profile.backend_kind != BackendKind.SOFTWARE:
+            msg = 'Managed private-key export is only supported for software backend keys, not PKCS#11 or remote keys.'
+            raise ProviderOperationNotImplementedError(msg)
+        binding = self._managed_key_repository.build_backend_binding(managed_key)
+        if not isinstance(binding, SoftwareManagedKeyBinding):
+            msg = 'Managed private-key export requires an encrypted software backend binding.'
+            raise ProviderOperationNotImplementedError(msg)
+        adapter = self._build_adapter(managed_key.provider_profile)
+        try:
+            if not isinstance(adapter, SoftwareBackend):
+                msg = 'The configured software adapter does not support managed private-key export.'
+                raise ProviderOperationNotImplementedError(msg)
+            return adapter.export_private_key_pkcs8(binding)
+        finally:
+            adapter.close()
 
     def sign(self, *, key: ManagedKeyRef, data: bytes, request: SignRequest) -> bytes:
         """Sign bytes with a managed key."""

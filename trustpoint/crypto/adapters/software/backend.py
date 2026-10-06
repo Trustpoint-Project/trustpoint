@@ -18,6 +18,7 @@ from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureA
 from crypto.domain.errors import (
     KeyNotFoundError,
     MechanismUnsupportedError,
+    ProviderConfigurationError,
     ProviderUnavailableError,
     UnsupportedKeySpecError,
 )
@@ -108,6 +109,17 @@ class SoftwareBackend:
             public_key_fingerprint_sha256=self._fingerprint_public_key(public_key),
             signing_execution_mode=policy.signing_execution_mode,
             provider_label=alias,
+        )
+
+    def export_private_key_pkcs8(self, key: SoftwareManagedKeyBinding) -> bytes:
+        """Export unencrypted PKCS#8 PEM after the application checks the key policy."""
+        if not self._profile.allow_exportable_private_keys:
+            msg = 'The software provider does not allow private-key export.'
+            raise ProviderConfigurationError(msg)
+        return self._load_private_key(key).private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
         )
 
     def verify_managed_key(self, key: SoftwareManagedKeyBinding) -> SoftwareManagedKeyVerification:

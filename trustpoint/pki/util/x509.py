@@ -10,6 +10,7 @@ import itertools
 import logging
 import urllib.parse
 from datetime import UTC
+from ipaddress import ip_address
 from typing import TYPE_CHECKING, TypeGuard, get_args
 
 from cryptography import x509
@@ -710,11 +711,16 @@ class CertificateVerifier:
         if verification_time is None:
             verification_time = datetime.datetime.now(UTC)
 
+        try:
+            identity: x509.DNSName | x509.IPAddress = x509.IPAddress(ip_address(subject))
+        except ValueError:
+            identity = x509.DNSName(subject)
+
         verifier = (
             PolicyBuilder()
             .store(trust_store)
             .time(verification_time)
-            .build_server_verifier(x509.DNSName(subject))
+            .build_server_verifier(identity)
         )
 
         if untrusted_intermediates is None:
