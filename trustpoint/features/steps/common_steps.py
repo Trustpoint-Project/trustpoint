@@ -1,253 +1,45 @@
-# Copyright (c) 2025 The Trustpoint Project Authors
+# Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""File for steps which are used more often across multiple feature files."""
+"""Common Behave steps shared across capabilities."""
 
-import logging
+from __future__ import annotations
 
-from behave import given, runner, step, then, when
-from django.contrib.auth.models import Permission, User
+from behave import given, runner, then
 from django.test import Client
-from management.models.security import SecurityConfig
-from pki.models.domain import DomainModel
-from users.models import TrustpointUser
 
-HTTP_OK = 200
-logger = logging.getLogger(__name__)
+from features.support.assertions import assert_contains_text, assert_status
+from features.support.auth import create_admin_client
 
 
+@given('the Trustpoint web application is running')
 @given('the TPC_Web application is running')
-def step_tpc_web_running(context: runner.Context) -> None:  # noqa: ARG001
-    """Verifies that the TPC_Web application is running.
-
-    This step checks that the TPC_Web application is running and accessible at the expected URL.
-
-    Args:
-        context: the behave context
-    """
-    response = Client().get('/users/login/')
-    if response.status_code != HTTP_OK:
-        msg = f'{response.status_code} != {HTTP_OK}!'
-        raise AssertionError(msg)
-
-@given('a domain with a name {domain_name} exist')
-def step_domain_exists(context: runner.Context, domain_name: str) -> None:  # noqa: ARG001
-    """.
-
-    Args:
-        context: the behave context
-        domain_name: a domain name
-    """
-    domain, created = DomainModel.objects.get_or_create(unique_name=domain_name)
-    assert created, f" Domain creation failed"
-    assert domain.unique_name == domain_name, f" Domain name mismatch: expected '{domain_name}', got '{domain.name}'"
-
-    context.domain = domain
+def step_web_running(context: runner.Context) -> None:
+    """Verify the login endpoint is reachable."""
+    context.response = Client().get('/users/login/')
+    assert_status(context.response, 200)
 
 
-@step('Commentary')
-def commentary_step(context: runner.Context) -> None:
-    """Provides annotation "@Commentary" inside feature files for additional text explanation.
-
-    Args:
-        context: the behave context
-    """
-    scenario = context.formatter.current_scenario
-    step = scenario.current_step
-    step.commentary_override = True
-
-
+@given('the admin user is logged into Trustpoint')
 @given('the admin user is logged into TPC_Web')
 def step_admin_logged_in(context: runner.Context) -> None:
-    """Logs the admin user into the TPC_Web interface.
-
-    This step sets up the initial state for all scenarios, ensuring the admin is authenticated and on the TPC_Web
-    dashboard.
-
-    Args:
-        context: the behave context
-    """
-    try:
-        admin_user = TrustpointUser.objects.create_superuser(username='admin', password='testing321')  # noqa: S106
-        admin_permissions = Permission.objects.filter(
-            content_type__app_label='users',
-            content_type__model='apppermission',
-        )
-        admin_user.role.permissions.set(admin_permissions)
-        client = Client()
-        login_success = client.login(username='admin', password='testing321')  # noqa: S106
-        if not login_success:
-            msg = 'Login unsuccessful'
-            raise AssertionError(msg)  # noqa: TRY301
-
-        context.authenticated_client = client
-
-        response = client.get('/pki/certificates/')
-        if response.status_code != HTTP_OK:
-            msg = 'Could not get a HTTP_OK from visiting the certificates page.'
-            raise AssertionError(msg)  # noqa: TRY301
-
-    except Exception as error:
-        msg = f'Error: {error}'
-        raise AssertionError(msg) from error
+    """Create and authenticate an administrator."""
+    context.admin_user, context.authenticated_client = create_admin_client()
 
 
-@then('the system should display a confirmation message stating "{confirm_message}"')
-def step_confirmation_message(context: runner.Context, confirm_message: str) -> None:  # noqa: ARG001
-    """Verifies that the system displays a success message after an action.
-
-    Args:
-        context: the behave context
-    """
-    html = context.response.content
-    #print("html", html)
-    assert confirm_message.encode() in html, f"Missing confirmation message, {confirm_message}"
+@then('the response status code is {status_code:d}')
+def step_response_status(context: runner.Context, status_code: int) -> None:
+    """Assert the most recent response status."""
+    assert_status(context.response, status_code)
 
 
-@then('the system should display an error message stating {error_message}')
-def step_error_message(context: runner.Context, error_message: str) -> None:  # noqa: ARG001
-    """Verifies that the system displays a specific error message.
-
-    Args:
-        context: the behave context
-        error_message (str): The expected error message text.
-    """
-    msg = 'Step not implemented: Error message check.'
-    raise AssertionError(msg)
+@then('the response contains "{text}"')
+def step_response_contains(context: runner.Context, text: str) -> None:
+    """Assert rendered response text."""
+    assert_contains_text(context.response, text)
 
 
-@given('an API client is authenticated')
-def step_api_client_authenticated(context: runner.Context) -> None:  # noqa: ARG001
-    """Authenticates the API client to enable authorized interactions with the REST API.
-
-    Args:
-        context: the behave context
-    """
-    msg = 'Step not implemented: API client authentication.'
-    raise AssertionError(msg)
-
-
-@then('the API response should have a status code of {status_code}')
-def step_verify_status_code(context: runner.Context, status_code: str) -> None:  # noqa: ARG001
-    """Verifies the API response status code.
-
-    Args:
-        context: the behave context
-        status_code (str): The expected status code.
-    """
-    msg = 'Step not implemented: Verify API response status code.'
-    raise AssertionError(msg)
-
-
-@then('the response payload should include an error message stating "{error_message}"')
-def step_verify_error_message(context: runner.Context, error_message: str) -> None:  # noqa: ARG001
-    """Verifies the response payload includes the specified error message.
-
-    Args:
-        context: the behave context
-        error_message (str): The expected error message text.
-    """
-    html = context.response.content
-    assert error_message.encode() in html, \
-       f"Missing error message, {error_message}"
-
-@when('the admin clicks on "{button_name}"')
-def step_when_admin_click_button(context: runner.Context, button_name: str) -> None:  # noqa: ARG001
-    """Simulates click on given button.
-
-    Args:
-        context: the behave context
-        error_message (str): The expected error message text.
-    """
-    if button_name == "Add new Issuing CA":
-        context.response = context.authenticated_client.get("/pki/issuing-cas/add/method-select/")
-        # Check that page loaded successfully
-        assert context.response.status_code == 200, f"Failed to load Add new Issuing CA page"
-    elif button_name == "Import From PKCS#12 File":
-        context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/pkcs12")
-        # Check that page loaded successfully
-        assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using pkcs#12 import"
-    elif button_name == "Delete selected Issuing CAs":
-        context.response = context.authenticated_client.post(
-            f"/pki/issuing-cas/delete/{context.issuing_ca.id}/",
-            follow=True
-        )
-    elif button_name == "Import From Separate Key and Certificate Files":
-        context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/separate-files")
-        # Check that page loaded successfully
-        assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using import from separate files"
-    elif button_name == "Add new Domain":
-        context.response = context.authenticated_client.post('/pki/domains/add/', context.domain_add_form_data, follow=True)
-        assert context.response.status_code == 200, f"Failed to add new domain."
-    elif button_name == "Add new Truststore":
-        with open(context.truststore_add_form_data['trust_store_file'], 'rb') as f:
-          context.truststore_add_form_data['trust_store_file'] = f
-          context.response = context.authenticated_client.post('/pki/truststores/add/', context.truststore_add_form_data, follow=True)
-          assert context.response.status_code == 200, f"Failed to add new truststore."
-    elif button_name == "Create Device":
-        context.response = context.authenticated_client.post('/devices/create/onboarding/', context.device_add_form_data, follow=True)
-        assert context.response.status_code == 200, f"Failed to add new device."
-    else:
-        msg = 'Step not implemented: Verify API response status code.'
-        raise AssertionError(msg)
-
-
-@when('the admin navigates to the "{page_name}" page')
-def step_navigate_add_device(context: runner.Context, page_name: str) -> None:  # noqa: ARG001
-    """Navigates to the given page.
-
-    Args:
-        context (runner.Context): Behave context.
-        page_name (str): Page name.
-    """
-    if page_name == "Add Device":
-        context.response = context.authenticated_client.get("/devices/create/")
-    elif page_name == "create onboarding device":
-        context.response = context.authenticated_client.get("/devices/create/onboarding/")
-    elif page_name == "device list":
-        context.response = context.authenticated_client.get("/devices/")
-    elif page_name == "truststore list":
-        context.response = context.authenticated_client.get("/pki/truststores/")
-    elif page_name == "Add new Domain":
-        context.response = context.authenticated_client.get("/pki/domains/add/")
-    elif page_name == "domain list":
-        context.response = context.authenticated_client.get("/pki/domains/")
-    elif page_name == "Add new Truststore":
-        context.response = context.authenticated_client.get("/pki/truststores/add/")
-    else:
-        msg = 'Page name is not valid.'
-        raise AssertionError(msg)
-    assert context.response.status_code == 200, f"Failed to load {page_name} page"
-
-@given('the security option "{opt_name}" is "{opt_value}"')
-def step_security_option_configure(context: runner.Context, opt_name: str, opt_value: str) -> None:  # noqa: ARG001
-    """Navigates to the given page.
-
-    Args:
-        context (runner.Context): Behave context.
-        opt_name (str): Option name.
-        opt_value (str): Option value.
-    """
-    if opt_name == 'Allow imported private keys':
-        response = context.authenticated_client.get('/management/settings/?tab=security')
-        assert response.status_code == 200, f'Failed to load settings security tab'
-
-        assert SecurityConfig.objects.filter(id=1).exists(), 'SecurityConfig does not exist'
-        form = response.context['security_form']
-        data = {name: '' if value is None else value for name, value in form.initial.items()}
-
-        data['max_cert_validity_days'] = 1825
-        data['max_crl_validity_days'] = 365
-        data['permitted_no_onboarding_pki_protocols'] = [1,4,16,32]
-        if opt_value == 'enabled':
-            data['allow_imported_private_keys'] = 'on'
-        else:
-            data['allow_imported_private_keys'] = 'off'
-
-        response = context.authenticated_client.post('/management/settings/security/', data, follow=True)
-        html = response.content
-
-        assert b'Your changes were saved successfully' in html, 'Changes are not saved'
-        
-    
-
+@then('the system should display a confirmation message stating "{message}"')
+def step_confirmation_message(context: runner.Context, message: str) -> None:
+    """Retain the legacy confirmation-message wording."""
+    assert_contains_text(context.response, message)

@@ -612,6 +612,21 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
             old_int = int(old_value) if old_value is not None else 0
             new_int = int(new_value)
 
+            mode_defaults = SecurityConfig._MODE_DEFAULTS.get(str(new_value))  # noqa: SLF001
+            if mode_defaults is not None:
+                form.instance.allow_auto_gen_pki = mode_defaults['allow_auto_gen_pki']
+                form.instance.not_permitted_ecc_curve_oids = list(mode_defaults['not_permitted_ecc_curve_oids'])
+                form.instance.not_permitted_mldsa_variant_oids = list(mode_defaults['not_permitted_mldsa_variant_oids'])
+                form.instance.not_permitted_signature_algorithm_oids = list(
+                    mode_defaults['not_permitted_signature_algorithm_oids']
+                )
+                form.instance.save(update_fields=[
+                    'allow_auto_gen_pki',
+                    'not_permitted_ecc_curve_oids',
+                    'not_permitted_mldsa_variant_oids',
+                    'not_permitted_signature_algorithm_oids',
+                ])
+
             if new_int > old_int:
                 self.sec.reset_settings(new_value)
 
