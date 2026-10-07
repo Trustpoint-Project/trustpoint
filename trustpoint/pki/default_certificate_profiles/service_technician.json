@@ -1,0 +1,53 @@
+{
+  "type": "cert_profile",
+  "display_name": "Service Technician",
+
+  "subj": {
+    "common_name": {
+      "required": true,
+      "mutable": true
+    },
+    "organization_name": {
+      "required": true,
+      "mutable": true
+    },
+    "organizational_unit_name": {
+      "default": "Field Service",
+      "mutable": true
+    }
+  },
+
+  "ext": {
+    "basic_constraints": {
+      "ca": false,
+      "critical": true
+    },
+
+    "key_usage": {
+      "digital_signature": true,
+      "key_encipherment": true,
+      "critical": true
+    },
+
+    "extended_key_usage": {
+      "usages": {
+        "value": [
+          "client_auth"
+        ]
+      }
+    },
+
+    "subject_alternative_name": {
+      "uris": {
+        "value": [
+          "urn:device:serial-number:{{ device.serial_number }}",
+          "urn:device:uuid:{{ device.rfc_4122_uuid }}"
+        ]
+      }
+    }
+  },
+
+  "validity": {
+    "hours": 8
+  }
+}

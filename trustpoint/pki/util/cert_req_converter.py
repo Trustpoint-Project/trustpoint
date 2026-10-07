@@ -16,6 +16,21 @@ from pki.util.ext_oids import ExtendedKeyUsageOid
 
 logger = logging.getLogger(__name__)
 
+# Matches 'client_auth', 'CLIENT_AUTH' and RFC 5280 style 'clientAuth' alike.
+_EKU_BY_COMPACT_NAME = {member.name.replace('_', ''): member for member in ExtendedKeyUsageOid}
+
+
+def _eku_oid_from_str(usage_str: str) -> x509.ObjectIdentifier:
+    """Resolve an EKU name or dotted-string OID to an ObjectIdentifier."""
+    member = _EKU_BY_COMPACT_NAME.get(usage_str.replace('_', '').upper())
+    if member is not None:
+        return x509.ObjectIdentifier(member.value)
+    try:
+        return x509.ObjectIdentifier(usage_str)
+    except ValueError as e:
+        exc_msg = f'Unknown extended key usage: {usage_str!r}'
+        raise ValueError(exc_msg) from e
+
 class JSONCertRequestConverter:
     """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
@@ -166,7 +181,7 @@ class JSONCertRequestConverter:
         )
 
     @staticmethod
-    def add_extensions(  # noqa: C901
+    def add_extensions(
         json: dict[str, Any],
         builder: x509.CertificateBuilder | x509.CertificateSigningRequestBuilder,
         ) -> x509.CertificateBuilder | x509.CertificateSigningRequestBuilder:
@@ -192,12 +207,7 @@ class JSONCertRequestConverter:
                     critical=critical,
                 )
             elif ext_name == 'extended_key_usage':
-                eku_oids: list[x509.ObjectIdentifier] = []
-                for usage_str in ext_value.get('usages', []):
-                    try:
-                        eku_oids.append(x509.ObjectIdentifier(ExtendedKeyUsageOid[usage_str.upper()].value))
-                    except KeyError:
-                        eku_oids.append(x509.ObjectIdentifier(usage_str))
+                eku_oids = [_eku_oid_from_str(usage_str) for usage_str in ext_value.get('usages', [])]
                 builder = builder.add_extension(x509.ExtendedKeyUsage(eku_oids), critical=critical)
             elif ext_name == 'basic_constraints':
                 ca = ext_value.get('ca', False)
