@@ -35,10 +35,15 @@ def _make_context(
         device.rfc_4122_uuid = device_uuid or uuid.UUID('550e8400-e29b-41d4-a716-446655440000')
         device.common_name = device_cn
         device.serial_number = device_serial
+        device.pk = 7
+        device.get_device_type_display.return_value = 'Generic Device'
+        device.ip_address = '192.0.2.10'
+        device.opc_server_port = 4840
         ctx.device = device
     if with_domain:
         domain = Mock()
         domain.unique_name = domain_name
+        domain.issuing_ca.unique_name = 'issuing-ca'
         ctx.domain = domain
     return ctx
 
@@ -53,6 +58,23 @@ class TestBuildVariableMap:
         assert variables['device.common_name'] == 'test-device'
         assert variables['device.serial_number'] == 'SN-001'
         assert variables['domain.unique_name'] == 'test-domain'
+        assert variables['device.id'] == '7'
+        assert variables['device.device_type'] == 'Generic Device'
+        assert variables['device.ip_address'] == '192.0.2.10'
+        assert variables['device.opc_server_port'] == '4840'
+        assert variables['domain.issuing_ca'] == 'issuing-ca'
+        assert 'time.date' in variables
+        assert variables['time.timestamp'].isdigit()
+
+    def test_optional_device_fields_omitted_when_unset(self):
+        ctx = _make_context()
+        ctx.device.ip_address = None
+        ctx.device.opc_server_port = 0
+        ctx.domain.issuing_ca = None
+        variables = _build_variable_map(ctx)
+        assert 'device.ip_address' not in variables
+        assert 'device.opc_server_port' not in variables
+        assert 'domain.issuing_ca' not in variables
 
     def test_no_device(self):
         ctx = _make_context(with_device=False)

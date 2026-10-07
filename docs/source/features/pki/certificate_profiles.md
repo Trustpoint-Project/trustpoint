@@ -141,6 +141,42 @@ Examples:
 
 Relative values such as `days`, `hours`, `minutes`, and `seconds` are added together.
 
+## Template Variables
+
+String values in a profile may contain `{{ namespace.field }}` placeholders. They are resolved after the profile has been applied to the request, using the device and domain the certificate is issued for.
+
+| Variable | Value |
+| --- | --- |
+| `{{ device.id }}` | Internal Trustpoint ID of the device. |
+| `{{ device.rfc_4122_uuid }}` | UUID of the device. |
+| `{{ device.common_name }}` | Common name of the device. |
+| `{{ device.serial_number }}` | Serial number of the device. |
+| `{{ device.device_type }}` | Device type, e.g. `Generic Device` or `OPC UA GDS`. |
+| `{{ device.ip_address }}` | IP address of the device. Only available if set. |
+| `{{ device.opc_server_port }}` | OPC UA server port of the device. Only available if set. |
+| `{{ domain.unique_name }}` | Unique name of the device's domain. |
+| `{{ domain.issuing_ca }}` | Unique name of the domain's issuing CA. Only available if set. |
+| `{{ time.now }}` | Current UTC time in ISO 8601 format. |
+| `{{ time.date }}` | Current UTC date (`YYYY-MM-DD`). |
+| `{{ time.timestamp }}` | Current Unix timestamp in seconds. |
+
+Unknown variables are left unchanged and logged as a warning. Variables are also resolved in the initial values of the manual issuance form.
+
+Example: bind a certificate to a device through SAN URI entries:
+
+```json
+"subject_alternative_name": {
+  "uris": {
+    "value": [
+      "urn:device:common-name:{{ device.common_name }}",
+      "urn:device:serial-number:{{ device.serial_number }}",
+      "urn:device:domain:{{ domain.unique_name }}",
+      "urn:device:uuid:{{ device.rfc_4122_uuid }}"
+    ]
+  }
+}
+```
+
 ## Validation Flow
 
 For each certificate request, Trustpoint:
@@ -150,6 +186,7 @@ For each certificate request, Trustpoint:
 3. Validates and normalizes the selected certificate profile.
 4. Validates and normalizes the request.
 5. Applies the profile rules to the request.
-6. Builds the certificate from the validated result.
+6. Resolves template variables.
+7. Builds the certificate from the validated result.
 
 Invalid requests are rejected or normalized according to the selected profile rules.
