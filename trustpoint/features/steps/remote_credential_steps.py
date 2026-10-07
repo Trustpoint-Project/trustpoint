@@ -1,4 +1,4 @@
-# Copyright (c) 2025 The Trustpoint Project Authors
+# Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
 """Remote credential download steps migrated from R_013."""

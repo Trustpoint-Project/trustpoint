@@ -5,19 +5,64 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Any
 
 from behave import given, runner, then, when
-from django.contrib.auth.models import Permission
+from django.contrib.auth.models import Group, Permission
 from django.test import Client
 
 from management.models import SecurityConfig
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
+from pki.models import CertificateProfileModel
 from users.models import TrustpointUser
 
 
 SECURITY_SETTINGS_URL = "/management/settings/security/"
 CAPABILITIES_API_URL = "/api/capabilities/"
+
+
+@then('the service account has REST API permission')
+def step_service_permission(context: runner.Context) -> None:
+    """Verify the service account can use the REST API."""
+    assert context.service_account.has_perm('users.use_rest_api')
+
+
+@given('a non-privileged human user named "{username}" exists')
+def step_non_privileged_user(context: runner.Context, username: str) -> None:
+    """Create a human user with an isolated empty role and a protected profile."""
+    role = Group.objects.create(name=f'{username}-unprivileged-role')
+    context.low_privilege_user = TrustpointUser.objects.create_user(username=username, role=role)
+    context.protected_profile = CertificateProfileModel.objects.create(
+        unique_name=f'{username}-protected-profile',
+        display_name='Behave protected profile',
+        credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION,
+        profile_json={
+            'type': 'cert_profile',
+            'credential_type': 'application',
+            'subj': {},
+            'ext': {},
+        },
+    )
+
+
+@when('that user attempts to manage a certificate profile')
+def step_manage_profile(context: runner.Context) -> None:
+    """Attempt profile deletion through the real protected web endpoint."""
+    client = Client()
+    client.force_login(context.low_privilege_user)
+    context.response = client.post(
+        f'/pki/cert-profiles/delete/{context.protected_profile.pk}/',
+        data={},
+        follow=False,
+    )
+
+
+@then('access to the protected page is denied')
+def step_access_denied(context: runner.Context) -> None:
+    """Verify access was denied and the attempted mutation did not persist."""
+    assert context.response.status_code == HTTPStatus.FORBIDDEN
+    assert CertificateProfileModel.objects.filter(pk=context.protected_profile.pk).exists()
 
 
 def _security_config() -> SecurityConfig:
