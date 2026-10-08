@@ -31,15 +31,27 @@ class TemplateVariableResolver(LoggerMixin):
         """Build a mapping of template variable names to their resolved string values."""
         variables: dict[str, str] = {}
 
-        variables['time.now'] = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
+        variables['time.now'] = now.isoformat()
+        variables['time.date'] = now.date().isoformat()
+        variables['time.timestamp'] = str(int(now.timestamp()))
 
         if device is not None:
+            variables['device.id'] = str(device.pk)
             variables['device.rfc_4122_uuid'] = str(device.rfc_4122_uuid)
             variables['device.common_name'] = device.common_name
             variables['device.serial_number'] = device.serial_number
+            variables['device.device_type'] = str(device.get_device_type_display())
+            # Optional fields are omitted when unset so the placeholder is left unresolved.
+            if device.ip_address:
+                variables['device.ip_address'] = str(device.ip_address)
+            if device.opc_server_port:
+                variables['device.opc_server_port'] = str(device.opc_server_port)
 
         if domain is not None:
             variables['domain.unique_name'] = domain.unique_name
+            if domain.issuing_ca is not None:
+                variables['domain.issuing_ca'] = str(domain.issuing_ca.unique_name)
 
         return variables
 
