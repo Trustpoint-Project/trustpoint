@@ -27,6 +27,7 @@ from rest_framework.response import Response
 from trustpoint_core.oid import AlgorithmIdentifier
 
 from management.models.audit_log import AuditLog
+from management.models.organization import OrganizationModel
 from pki.filters import DomainFilter
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
@@ -126,7 +127,7 @@ class DomainTableView(ExportMixin, DomainContextMixin, SortableTableMixin[Domain
         """Return all domains with the issuing CA relationship prefetched."""
         base_qs = (
             DomainModel.objects
-            .select_related('issuing_ca__credential__certificate')
+            .select_related('organization', 'issuing_ca__credential__certificate')
         )
         qs = self.apply_filters(base_qs)
         return qs.order_by(self.request.GET.get('sort', self.default_sort_param))
@@ -213,6 +214,10 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     detail_context_object_name = 'domain'
     success_url = reverse_lazy('pki:domains')
 
+    def get_queryset_for_object(self) -> QuerySet[DomainModel]:
+        """Return detail queryset with required relations for template rendering."""
+        return DomainModel.objects.select_related('organization', 'issuing_ca__credential__certificate')
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds additional context data."""
         context = super().get_context_data(**kwargs)
@@ -249,6 +254,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         context['domain_options'] = {}
         context['domain_help_texts'] = {}
         context['domain_verbose_name'] = {}
+        context['organizations'] = OrganizationModel.objects.order_by('name', 'organization', 'id')
 
         return context
 
@@ -260,6 +266,16 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         del kwargs
 
         domain: DomainModel = cast('DomainModel', self.get_object())
+
+        organization_id = request.POST.get('organization', '')
+        if organization_id:
+            try:
+                domain.organization = OrganizationModel.objects.get(pk=int(organization_id))
+            except (OrganizationModel.DoesNotExist, TypeError, ValueError):
+                messages.error(request, _('Invalid organization selected.'))
+                return HttpResponseRedirect(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
+        else:
+            domain.organization = None
 
         domain_cred_profile_id = request.POST.get('domain_credential_profile', '')
         if domain_cred_profile_id:
@@ -304,6 +320,10 @@ class DomainDetailView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     detail_model = DomainModel
     template_name = 'pki/domains/details.html'
     detail_context_object_name = 'domain'
+
+    def get_queryset_for_object(self) -> QuerySet[DomainModel]:
+        """Return detail queryset with required relations for template rendering."""
+        return DomainModel.objects.select_related('organization', 'issuing_ca__credential__certificate')
 
 
 class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
@@ -576,7 +596,7 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
     create, update, and delete.
     """
 
-    queryset = DomainModel.objects.all()
+    queryset = DomainModel.objects.select_related('organization')
     serializer_class = DomainSerializer
     permission_classes = (CanManageDomains,)
 

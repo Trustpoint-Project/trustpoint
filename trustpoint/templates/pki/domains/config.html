@@ -59,6 +59,21 @@
                     </div>
                 </div>
 
+                <div class="mb-4">
+                    <label for="id_organization" class="form-label">{% trans 'Organization' %}</label>
+                    <select class="form-select" id="id_organization" name="organization">
+                        <option value="">{% trans 'No organization' %}</option>
+                        {% for organization in organizations %}
+                            <option value="{{ organization.id }}"{% if domain.organization_id == organization.id %} selected{% endif %}>
+                                {{ organization.name|default:organization.organization }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">
+                        {% trans 'Assign this domain to an organization.' %}
+                    </div>
+                </div>
+
 
                 <h3 class="h6 mb-3">
                     {% trans 'Devices in Domain' %}

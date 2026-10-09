@@ -44,6 +44,7 @@ def _make_context(
         domain = Mock()
         domain.unique_name = domain_name
         domain.issuing_ca.unique_name = 'issuing-ca'
+        domain.organization = None
         ctx.domain = domain
     return ctx
 
@@ -75,6 +76,73 @@ class TestBuildVariableMap:
         assert 'device.ip_address' not in variables
         assert 'device.opc_server_port' not in variables
         assert 'domain.issuing_ca' not in variables
+
+    def test_organization_values_added_when_domain_has_organization(self):
+        ctx = _make_context()
+        ctx.domain.organization = Mock(
+            organization='Example Corp',
+            organization_unit='Engineering',
+            country='DE',
+            state='Berlin',
+            locality='Berlin',
+        )
+
+        variables = _build_variable_map(ctx)
+
+        assert variables['domain.organization'] == 'Example Corp'
+        assert variables['domain.organization_unit'] == 'Engineering'
+        assert variables['domain.country'] == 'DE'
+        assert variables['domain.state'] == 'Berlin'
+        assert variables['domain.locality'] == 'Berlin'
+
+    def test_organization_values_empty_without_domain_organization(self) -> None:
+        """Organization variables are present as empty values when no organization is assigned."""
+        ctx = _make_context()
+
+        variables = _build_variable_map(ctx)
+
+        assert variables['domain.organization'] == ''
+        assert variables['domain.organization_unit'] == ''
+        assert variables['domain.country'] == ''
+        assert variables['domain.state'] == ''
+        assert variables['domain.locality'] == ''
+
+    def test_organization_placeholders_are_dropped_without_domain_organization(self) -> None:
+        """Placeholders resolving to empty values are omitted, since empty DN values are invalid X.509."""
+        ctx = _make_context()
+        profile_data = {
+            'subject': {
+                'common_name': 'device',
+                'organization_name': '{{ domain.organization }}',
+                'organizational_unit_name': '{{ domain.organization_unit }}',
+                'country_name': '{{ domain.country }}',
+                'state_or_province_name': '{{ domain.state }}',
+                'locality_name': '{{ domain.locality }}',
+            },
+        }
+
+        resolved = resolve_template_variables(profile_data, ctx)
+
+        assert resolved['subject'] == {'common_name': 'device'}
+
+    def test_resolved_profile_without_organization_builds_certificate_subject(self) -> None:
+        """Regression: empty organization values must not break building the X.509 subject."""
+        from pki.util.cert_req_converter import JSONCertRequestConverter
+
+        ctx = _make_context()
+        request = {
+            'type': 'cert_request',
+            'subject': {
+                'common_name': 'device',
+                'organization_name': '{{ domain.organization }}',
+                'country_name': '{{ domain.country }}',
+            },
+            'validity': {'days': 10},
+        }
+
+        builder = JSONCertRequestConverter.from_json(resolve_template_variables(request, ctx))
+
+        assert builder._subject_name.rfc4514_string() == 'CN=device'
 
     def test_no_device(self):
         ctx = _make_context(with_device=False)

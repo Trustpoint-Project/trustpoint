@@ -52,6 +52,19 @@ class TemplateVariableResolver(LoggerMixin):
             variables['domain.unique_name'] = domain.unique_name
             if domain.issuing_ca is not None:
                 variables['domain.issuing_ca'] = str(domain.issuing_ca.unique_name)
+            variables.update({
+                'domain.organization': '',
+                'domain.organization_unit': '',
+                'domain.country': '',
+                'domain.state': '',
+                'domain.locality': '',
+            })
+            if domain.organization is not None:
+                variables['domain.organization'] = domain.organization.organization
+                variables['domain.organization_unit'] = domain.organization.organization_unit
+                variables['domain.country'] = domain.organization.country
+                variables['domain.state'] = domain.organization.state
+                variables['domain.locality'] = domain.organization.locality
 
         return variables
 
@@ -80,14 +93,34 @@ class TemplateVariableResolver(LoggerMixin):
         return cls._resolve_string(value, variables)
 
     @classmethod
+    def _resolves_to_empty(cls, value: Any, variables: dict[str, str]) -> bool:
+        """Whether *value* is a placeholder-containing string that resolves to nothing."""
+        return (
+            isinstance(value, str)
+            and bool(_TEMPLATE_VAR_RE.search(value))
+            and not cls._resolve_string(value, variables).strip()
+        )
+
+    @classmethod
     def _resolve_recursively(cls, obj: Any, variables: dict[str, str]) -> Any:
-        """Walk *obj* (dict / list / str) and resolve template variables in all string leaves."""
+        """Walk *obj* (dict / list / str) and resolve template variables in all string leaves.
+
+        Entries that resolve to an empty string are dropped, as empty X.509 attribute values are invalid.
+        """
         if isinstance(obj, str):
             return cls._resolve_string(obj, variables)
         if isinstance(obj, list):
-            return [cls._resolve_recursively(item, variables) for item in obj]
+            return [
+                cls._resolve_recursively(item, variables)
+                for item in obj
+                if not cls._resolves_to_empty(item, variables)
+            ]
         if isinstance(obj, dict):
-            return {key: cls._resolve_recursively(val, variables) for key, val in obj.items()}
+            return {
+                key: cls._resolve_recursively(val, variables)
+                for key, val in obj.items()
+                if not cls._resolves_to_empty(val, variables)
+            }
         return obj
 
     @classmethod

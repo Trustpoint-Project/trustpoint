@@ -40,6 +40,19 @@
                             {{ domain.unique_name }}
                         </div>
                     </div>
+
+                    <div>
+                        <div>
+                            {% trans 'Organization' %}
+                        </div>
+                        <div>
+                            {% if domain.organization %}
+                                {{ domain.organization.name|default:domain.organization.organization }}
+                            {% else %}
+                                {% trans 'No organization assigned' %}
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </section>
 

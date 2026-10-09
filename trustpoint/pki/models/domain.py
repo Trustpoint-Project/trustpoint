@@ -40,6 +40,15 @@ class DomainModel(models.Model):
         related_name='domains',
     )
 
+    organization = models.ForeignKey(
+        'management.OrganizationModel',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='domains',
+        verbose_name=_('Organization'),
+    )
+
     domain_credential_profile = models.ForeignKey(
         CertificateProfileModel,
         on_delete=models.SET_NULL,

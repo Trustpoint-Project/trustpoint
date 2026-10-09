@@ -1,12 +1,14 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
+import django.db.models.deletion
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
+        ('management', '0003_tp_v1_0_dev0'),
         ('onboarding', '0003_tp_v1_0_dev0'),
         ('pki', '0002_initial'),
     ]
@@ -15,6 +17,11 @@ class Migration(migrations.Migration):
         migrations.RemoveConstraint(
             model_name='camodel',
             name='ca_mode_constraint',
+        ),
+        migrations.AddField(
+            model_name='domainmodel',
+            name='organization',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='domains', to='management.organizationmodel', verbose_name='Organization'),
         ),
         migrations.AlterField(
             model_name='camodel',

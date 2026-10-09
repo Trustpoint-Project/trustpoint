@@ -123,7 +123,16 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
     def _get_default_org(self) -> OrganizationModel:
         """Create default organization."""
         org_model = apps.get_model('management', 'OrganizationModel')
-        org, _created = org_model.objects.get_or_create(pk=1, name='trustpoint', organization='trustpoint')
+        org, _created = org_model.objects.get_or_create(
+            pk=1,
+            defaults={
+                'name': 'trustpoint',
+                'organization': 'trustpoint',
+                'organization_unit': 'Industrial Security',
+                'state': 'BW',
+                'locality': 'Freudenstadt',
+            },
+        )
         return org
 
     def create_superuser(

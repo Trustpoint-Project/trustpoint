@@ -8,21 +8,22 @@
       "required": true
     },
     "o": {
-      "default": "Test Organization"
+      "default": "{{ domain.organization }}"
     },
     "ou": {
-      "value": "Test Department",
+      "value": "{{ domain.organization_unit }}",
       "mutable": false
     },
     "c": {
-      "required": true
+      "required": true,
+      "default": "{{ domain.country }}"
     },
     "st": {
-      "default": "California",
+      "default": "{{ domain.state }}",
       "mutable": true
     },
     "l": {
-      "value": "San Francisco",
+      "value": "{{ domain.locality }}",
       "mutable": false
     },
     "emailAddress": {

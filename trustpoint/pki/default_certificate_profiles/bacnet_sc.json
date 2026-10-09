@@ -1,7 +1,7 @@
 {
     "type": "cert_profile",
+    "display_name": "BACnet/SC",
     "credential_type": "application",
-    "display_name": "OPC UA",
     "subj": {
         "allow": "*",
         "common_name": {
@@ -32,30 +32,20 @@
         },
         "key_usage": {
             "digital_signature": true,
-            "content_commitment": true,
-            "key_encipherment": true,
-            "data_encipherment": true,
             "critical": true
         },
         "extended_key_usage": {
             "usages": [
                 "server_auth",
                 "client_auth"
-            ],
-            "critical": false
+            ]
         },
         "subject_alternative_name": {
             "uris": {
-                "required": true,
+                "required": false,
                 "default": [
-                    "urn:trustpoint:opcua:{{ device.rfc_4122_uuid }}"
+                    "urn:trustpoint:bacnet-sc:device:{{ device.rfc_4122_uuid }}"
                 ]
-            },
-            "dns_names": {
-                "required": false
-            },
-            "ip_addresses": {
-                "required": false
             },
             "critical": false
         }
