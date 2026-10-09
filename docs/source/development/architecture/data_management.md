@@ -22,6 +22,13 @@ This document describes how Trustpoint stores, manages, and protects operational
 
 ## Backup and Restore
 
+Trustpoint separates application data from cryptographic key material. A complete disaster-recovery strategy must therefore consider all components of the deployment.
+
+### Database backup
+
+The Trustpoint backup contains the persistent application state stored in PostgreSQL, including configuration and PKI-related metadata required by the application.
+The backup artifact includes metadata required to identify and validate the backup, including the Trustpoint version and integrity information.
+
 ### Database Restore
 
 **Setup Wizard:** Integrated restore during initial Trustpoint setup
@@ -48,7 +55,9 @@ Trustpoint includes a dedicated backup module with the following capabilities:
 
 ### HSM Key Backup
 
-**Important:** Issuing CA keys in HSM must be backed up separately.
+**Important:** Private keys managed by an external or physical PKCS#11 HSM are not exported as part of a Trustpoint database backup.
+
+Operators using an HSM are responsible for maintaining an appropriate backup and recovery mechanism for the HSM according to the HSM manufacturer's procedures.
 
 **Backup procedures:**
 - **SoftHSM:** Backup token directory (`/var/lib/trustpoint/hsm/tokens/`)

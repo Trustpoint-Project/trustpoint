@@ -14,8 +14,7 @@ view, and structured controls, but the YAML remains the source of truth.
 
 .. warning::
 
-   The workflow engine is part of the Trustpoint technology preview. Review
-   workflows carefully before using them for security-sensitive automation.
+   The workflow engine is an experimental feature in Trustpoint 1.0. Review and validate workflows carefully before using them for security-sensitive production automation.
 
 
 Mental Model

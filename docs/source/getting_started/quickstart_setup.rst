@@ -42,8 +42,8 @@ The .env file
    Trustpoint **requires** a ``.env`` file to start. If no ``.env`` file is present, startup will fail with an error.
 
 Docker Compose and ``tp_wizard.sh`` read the ``.env`` file in the project root.
-The repository contains development defaults. For production-like deployments,
-copy the example and replace at least the database password:
+The repository contains defaults intended for local evaluation and development. 
+For production deployments, create the .env file from the provided example and replace all default credentials and environment-specific settings before starting Trustpoint:
 
 .. code-block:: bash
 
