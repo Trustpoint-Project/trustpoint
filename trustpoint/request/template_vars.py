@@ -52,6 +52,19 @@ class TemplateVariableResolver(LoggerMixin):
             variables['domain.unique_name'] = domain.unique_name
             if domain.issuing_ca is not None:
                 variables['domain.issuing_ca'] = str(domain.issuing_ca.unique_name)
+            variables.update({
+                'domain.organization': '',
+                'domain.organization_unit': '',
+                'domain.country': '',
+                'domain.state': '',
+                'domain.locality': '',
+            })
+            if domain.organization is not None:
+                variables['domain.organization'] = domain.organization.organization
+                variables['domain.organization_unit'] = domain.organization.organization_unit
+                variables['domain.country'] = domain.organization.country
+                variables['domain.state'] = domain.organization.state
+                variables['domain.locality'] = domain.organization.locality
 
         return variables
 

@@ -748,6 +748,44 @@ class OpcUaGdsPushOnboardingHelpViewTests(TestCase):
 class DeviceStrategyGeneratedContentTests(TestCase):
     """Test generated help content for device strategies without masking the strategy code."""
 
+    def test_no_onboarding_cmp_command_resolves_domain_organization_values(self) -> None:
+        """CMP help commands substitute organization variables using the device domain."""
+        domain = _domain()
+        domain.organization = Mock(
+            organization='Trustpoint Org',
+            organization_unit='Engineering',
+            country='DE',
+            state='BW',
+            locality='Stuttgart',
+        )
+        device = _device(domain, no_onboarding=True)
+        profile = _profile()
+        profile.certificate_profile.profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'allow': '*',
+                'organization_name': {'default': '{{ domain.organization }}'},
+                'organizational_unit_name': {'default': '{{ domain.organization_unit }}'},
+                'country_name': {'default': '{{ domain.country }}'},
+                'state_or_province_name': {'default': '{{ domain.state }}'},
+                'locality_name': {'default': '{{ domain.locality }}'},
+            },
+            'validity': {'days': 30},
+        }
+
+        sections, _heading = NoOnboardingCmpSharedSecretStrategy().build_sections(
+            _help_context(device, domain, [profile])
+        )
+
+        command_section = next(section for section in sections if section.css_id == 'tls_server')
+        command = command_section.rows[0].value
+        assert '/organizationName=Trustpoint Org' in command
+        assert '/organizationalUnitName=Engineering' in command
+        assert '/countryName=DE' in command
+        assert '/stateOrProvinceName=BW' in command
+        assert '/localityName=Stuttgart' in command
+        assert '{{ domain.' not in command
+
     @patch('help_pages.devices_help_views.JSONProfileVerifier')
     def test_no_onboarding_cmp_shared_secret_builds_profile_commands(self, mock_verifier: Mock) -> None:
         """Test CMP shared-secret sections include profile-specific commands and hidden state."""

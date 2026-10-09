@@ -6,6 +6,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.contrib.messages import get_messages
+from django.core.management import call_command
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -13,6 +14,29 @@ from management.models.organization import OrganizationModel
 from users.models import GroupProfile
 
 User = get_user_model()
+
+
+class DefaultOrganizationTest(TestCase):
+    """Tests for the default Trustpoint organization."""
+
+    def test_create_command_updates_default_organization_attributes(self) -> None:
+        """The initializer sets OU, state, and locality on an existing default organization."""
+        OrganizationModel.objects.create(pk=1, name='trustpoint', organization='trustpoint')
+
+        call_command('create_organization')
+
+        organization = OrganizationModel.objects.get(pk=1)
+        assert organization.organization_unit == 'Industrial Security'
+        assert organization.state == 'BW'
+        assert organization.locality == 'Freudenstadt'
+
+    def test_user_creation_creates_default_organization_attributes(self) -> None:
+        """User creation populates the default organization when it creates it."""
+        user = User.objects.create_user(username='default-org-user')
+
+        assert user.organization.organization_unit == 'Industrial Security'
+        assert user.organization.state == 'BW'
+        assert user.organization.locality == 'Freudenstadt'
 
 
 def _create_admin_group() -> Group:

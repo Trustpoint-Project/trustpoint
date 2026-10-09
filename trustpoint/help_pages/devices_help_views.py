@@ -60,6 +60,8 @@ from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
+from request.request_context import BaseRequestContext
+from request.template_vars import resolve_template_variables
 from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
@@ -264,7 +266,11 @@ def _build_cert_profile_sections(
         title = _non_lazy(f'Certificate Request for a {profile.certificate_profile.display_name or name} Certificate')
         hidden = i > 0
         try:
-            verifier = JSONProfileVerifier(profile.certificate_profile.profile)
+            profile_data = resolve_template_variables(
+                profile.certificate_profile.profile,
+                BaseRequestContext(device=help_context.device, domain=help_context.domain),
+            )
+            verifier = JSONProfileVerifier(profile_data)
             template = CertParameterTemplate.build(
                 verifier.get_sample_request(), verifier.get_editable_fields(), partial(build_command, name)
             )

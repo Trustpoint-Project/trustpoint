@@ -5,10 +5,14 @@
 
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
 from django.urls import reverse
 from django.test import RequestFactory
+from rest_framework.test import APIClient
+
+from management.models.organization import OrganizationModel
 
 from pki.models import (
     DomainModel,
@@ -29,11 +33,38 @@ from pki.views.domains import (
 )
 
 
+User = get_user_model()
+
+
 @pytest.fixture(autouse=True)
 def grant_domain_management_permission(admin_user) -> None:
     """Grant the shared domain-test user access to protected domain operations."""
     permission = Permission.objects.get(codename='manage_domains')
     admin_user.role.permissions.add(permission)
+
+
+@pytest.fixture
+def domain_api_client() -> APIClient:
+    """Create an authenticated API client with JWT token and domain permissions."""
+    client = APIClient()
+    user = User.objects.create_user(username='domain-api-user', password='apipass123')
+    use_api_permission = Permission.objects.get(
+        content_type__app_label='users',
+        content_type__model='apppermission',
+        codename='use_rest_api',
+    )
+    manage_domains_permission = Permission.objects.get(codename='manage_domains')
+    user.role.permissions.add(use_api_permission, manage_domains_permission)
+
+    response = client.post(
+        reverse('token_obtain_pair'),
+        {'username': 'domain-api-user', 'password': 'apipass123'},
+        format='json',
+    )
+    token = response.data['access']
+    client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+    return client
 
 
 @pytest.mark.django_db
@@ -138,6 +169,37 @@ class TestDomainCreateView:
         assert len(messages) > 0
         assert 'Successfully created domain test-domain' in str(messages[0])
 
+    def test_create_view_includes_optional_organization_field(self, rf: RequestFactory, admin_user):
+        """Test that organization is available as optional field in create form."""
+        request = rf.get(reverse('pki:domains-add'))
+        request.user = admin_user
+
+        view = DomainCreateView()
+        view.request = request
+        form = view.get_form()
+
+        assert 'organization' in form.fields
+        assert not form.fields['organization'].required
+
+    def test_create_view_assigns_organization(self, client, admin_user, issuing_ca_instance):
+        """Test that creating a domain can assign an organization."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        organization = OrganizationModel.objects.create(name='Create Org', organization='Create Org O')
+        client.force_login(admin_user)
+
+        client.post(
+            reverse('pki:domains-add'),
+            data={
+                'unique_name': 'test-domain-with-org',
+                'issuing_ca': issuing_ca.id,
+                'organization': organization.id,
+            },
+            follow=True,
+        )
+
+        created_domain = DomainModel.objects.get(unique_name='test-domain-with-org')
+        assert created_domain.organization_id == organization.id
+
 
 @pytest.mark.django_db
 class TestDomainConfigView:
@@ -169,6 +231,26 @@ class TestDomainConfigView:
         assert 'certificates' in context
         assert 'domain_options' in context
         assert profile.id in context['profile_data']
+
+    def test_config_view_context_contains_organizations(self, rf: RequestFactory, admin_user, issuing_ca_instance):
+        """Test that organization choices are available in context."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        organization = OrganizationModel.objects.create(name='Config Org', organization='Config Org O')
+        domain = DomainModel.objects.create(unique_name='test-domain-org-context', issuing_ca=issuing_ca)
+
+        request = rf.get(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
+        request.user = admin_user
+
+        view = DomainConfigView()
+        view.request = request
+        view.kwargs = {'pk': domain.pk}
+        view.object = domain
+        view.object_list = view.get_queryset()
+
+        context = view.get_context_data()
+
+        assert 'organizations' in context
+        assert organization in context['organizations']
 
     def test_config_view_post_updates_allowed_profiles(self, client, admin_user, issuing_ca_instance):
         """Test that POST request updates allowed certificate profiles."""
@@ -227,6 +309,61 @@ class TestDomainConfigView:
         # Note: The actual behavior might vary, so we just check the response is successful
         assert response.status_code == 200
 
+    def test_config_view_post_updates_organization(self, client, admin_user, issuing_ca_instance):
+        """Test that organization can be changed on config save."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        old_org = OrganizationModel.objects.create(name='Old Org', organization='Old Org O')
+        new_org = OrganizationModel.objects.create(name='New Org', organization='New Org O')
+        domain = DomainModel.objects.create(unique_name='test-domain-update-org', issuing_ca=issuing_ca, organization=old_org)
+        client.force_login(admin_user)
+
+        client.post(
+            reverse('pki:domains-config', kwargs={'pk': domain.pk}),
+            data={'organization': str(new_org.id)},
+            follow=True,
+        )
+
+        domain.refresh_from_db()
+        assert domain.organization_id == new_org.id
+
+    def test_config_view_post_removes_organization(self, client, admin_user, issuing_ca_instance):
+        """Test that organization can be removed on config save."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        organization = OrganizationModel.objects.create(name='Drop Org', organization='Drop Org O')
+        domain = DomainModel.objects.create(
+            unique_name='test-domain-remove-org', issuing_ca=issuing_ca, organization=organization
+        )
+        client.force_login(admin_user)
+
+        client.post(
+            reverse('pki:domains-config', kwargs={'pk': domain.pk}),
+            data={'organization': ''},
+            follow=True,
+        )
+
+        domain.refresh_from_db()
+        assert domain.organization is None
+
+    def test_config_view_post_invalid_organization_is_handled(self, client, admin_user, issuing_ca_instance):
+        """Test invalid organization values do not crash and preserve current assignment."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        organization = OrganizationModel.objects.create(name='Valid Org', organization='Valid Org O')
+        domain = DomainModel.objects.create(
+            unique_name='test-domain-invalid-org', issuing_ca=issuing_ca, organization=organization
+        )
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse('pki:domains-config', kwargs={'pk': domain.pk}),
+            data={'organization': 'not-a-valid-id'},
+            follow=True,
+        )
+
+        domain.refresh_from_db()
+        assert domain.organization_id == organization.id
+        messages = list(get_messages(response.wsgi_request))
+        assert any('Invalid organization selected.' in str(msg) for msg in messages)
+
 
 @pytest.mark.django_db
 class TestDomainDetailView:
@@ -250,6 +387,83 @@ class TestDomainDetailView:
         
         assert 'domain' in context
         assert context['domain'].unique_name == 'test-domain'
+
+    def test_detail_view_shows_organization(self, client, admin_user, issuing_ca_instance):
+        """Test that detail page renders assigned organization."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        organization = OrganizationModel.objects.create(name='Shown Org', organization='Shown Org O')
+        domain = DomainModel.objects.create(unique_name='test-domain-org-detail', issuing_ca=issuing_ca, organization=organization)
+        client.force_login(admin_user)
+
+        response = client.get(reverse('pki:domains-detail', kwargs={'pk': domain.pk}))
+
+        assert response.status_code == 200
+        assert 'Shown Org' in response.content.decode()
+
+    def test_detail_view_shows_empty_label_without_organization(self, client, admin_user, issuing_ca_instance):
+        """Test that detail page renders fallback label without organization."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        domain = DomainModel.objects.create(unique_name='test-domain-no-org-detail', issuing_ca=issuing_ca)
+        client.force_login(admin_user)
+
+        response = client.get(reverse('pki:domains-detail', kwargs={'pk': domain.pk}))
+
+        assert response.status_code == 200
+        assert 'No organization assigned' in response.content.decode()
+
+
+@pytest.mark.django_db
+class TestDomainApiOrganization:
+    """Test suite for domain API organization behavior."""
+
+    def test_domain_list_includes_organization(self, domain_api_client: APIClient, issuing_ca_instance):
+        """Test list payload includes organization primary key."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        organization = OrganizationModel.objects.create(name='API Org', organization='API Org O')
+        domain = DomainModel.objects.create(unique_name='api-domain-list', issuing_ca=issuing_ca, organization=organization)
+
+        response = domain_api_client.get(reverse('domain-list'))
+
+        assert response.status_code == 200
+        payload = next(item for item in response.data if item['id'] == domain.id)
+        assert payload['organization'] == organization.id
+
+    def test_domain_api_create_with_organization(self, domain_api_client: APIClient, issuing_ca_instance):
+        """Test creating a domain with organization via API."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        organization = OrganizationModel.objects.create(name='API Create Org', organization='API Create Org O')
+
+        response = domain_api_client.post(
+            reverse('domain-list'),
+            {
+                'unique_name': 'api-domain-create-with-org',
+                'issuing_ca': issuing_ca.id,
+                'organization': organization.id,
+                'is_active': True,
+            },
+            format='json',
+        )
+
+        assert response.status_code == 201
+        created_domain = DomainModel.objects.get(unique_name='api-domain-create-with-org')
+        assert created_domain.organization_id == organization.id
+
+    def test_domain_api_update_organization_to_null(self, domain_api_client: APIClient, issuing_ca_instance):
+        """Test clearing organization via API update."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        organization = OrganizationModel.objects.create(name='API Update Org', organization='API Update Org O')
+        domain = DomainModel.objects.create(unique_name='api-domain-update-org', issuing_ca=issuing_ca, organization=organization)
+
+        response = domain_api_client.patch(
+            reverse('domain-detail', kwargs={'pk': domain.pk}),
+            {'organization': None},
+            format='json',
+        )
+
+        assert response.status_code == 200
+        domain.refresh_from_db()
+        assert domain.organization is None
+        assert response.data['organization'] is None
 
 
 @pytest.mark.django_db

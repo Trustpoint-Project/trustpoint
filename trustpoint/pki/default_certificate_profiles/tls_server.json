@@ -6,7 +6,12 @@
         "allow":"*",
         "cn": {
             "default": "tls_server.local"
-        }
+        },
+        "organization_name": {"default": "{{ domain.organization }}"},
+        "organizational_unit_name": {"default": "{{ domain.organization_unit }}"},
+        "country_name": {"default": "{{ domain.country }}"},
+        "state_or_province_name": {"default": "{{ domain.state }}"},
+        "locality_name": {"default": "{{ domain.locality }}"}
     },
     "reject_mods": false,
     "ext": {

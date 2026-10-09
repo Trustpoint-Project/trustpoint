@@ -1,12 +1,10 @@
 {
     "type": "cert_profile",
-    "display_name": "TLS Client",
+    "display_name": "IPsec IKE",
     "credential_type": "application",
     "subj": {
-        "allow":"*",
-        "cn": {
-            "default": "Example TLS Client"
-        },
+        "allow": "*",
+        "common_name": {"required": true},
         "organization_name": {"default": "{{ domain.organization }}"},
         "organizational_unit_name": {"default": "{{ domain.organization_unit }}"},
         "country_name": {"default": "{{ domain.country }}"},
@@ -16,25 +14,24 @@
     "reject_mods": false,
     "ext": {
         "basic_constraints": {
-            "ca": false
-        },
-        "subject_alternative_name": {
-            "allow": "*"
+            "ca": false,
+            "critical": true
         },
         "key_usage": {
             "digital_signature": true,
-            "key_encipherment": true,
-            "key_agreement": true
+            "critical": true
         },
         "extended_key_usage": {
-            "usages": {
-                "value": [
-                    "client_auth"
-                ]
-            }
+            "usages": ["ipsec_ike"]
+        },
+        "subject_alternative_name": {
+            "dns_names": {"required": true},
+            "ip_addresses": {"required": false},
+            "rfc822_names": {"required": false},
+            "critical": false
         }
     },
     "validity": {
-        "days": 10
+        "days": 365
     }
 }

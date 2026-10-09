@@ -33,7 +33,25 @@ Each row represents one certificate profile.
 | Config | Opens the profile configuration. |
 | Issuance | Starts certificate issuance using this profile, if available. |
 
-Default profiles may be provided for common use cases such as TLS client, TLS server, OPC UA, IDevID, domain credentials, and issuing CA certificates.
+Default profiles are provided for common use cases such as TLS client, TLS server, OPC UA, BACnet/SC, MQTT, IPsec IKE, EAP-TLS, IDevID, domain credentials, and issuing CA certificates.
+
+## Protocol Profiles
+
+Trustpoint includes these application profiles for protocol-specific certificate usages:
+
+| Profile | Intended use | EKU | Identity requirements | Default validity |
+| --- | --- | --- | --- | --- |
+| `bacnet_sc` | BACnet/SC mutual TLS node certificates | `server_auth`, `client_auth` | Required common name and URI SAN based on the device UUID | 365 days |
+| `mqtt_server` | MQTT broker/server TLS certificate | `server_auth` | Required DNS SAN; add every broker hostname clients use | 365 days |
+| `mqtt_client` | MQTT client certificate for broker mutual TLS | `client_auth` | Required URI SAN based on the device UUID | 365 days |
+| `ipsec_ike` | IKE certificate authentication | `ipsec_ike` | Required DNS SAN matching the peer's IKE FQDN identity; IP and RFC822 SANs are also allowed | 365 days |
+| `eap_tls` | EAP-TLS peer/client authentication | `client_auth` | Required RFC822 SAN for the EAP identity | 365 days |
+
+All five profiles are loaded from the default profile directory and use the existing database-backed profile selection in domain configuration, issuance UI, and the certificate-profile API. They are marked as default profiles, so newly created domains enable them automatically. Administrators should adjust required SAN values to match their deployment's actual protocol identities.
+
+Profiles currently do not select an end-entity key algorithm. For Trustpoint-generated credentials, the generated key uses the domain issuing CA certificate's public-key algorithm and parameters. When a requester supplies a CSR, the CSR supplies the public key. Consequently, these profiles do not override the key algorithm or key parameters.
+
+SSH certificates are not X.509 certificates and cannot be represented by these profiles. Trustpoint currently has no OpenSSH CA or SSH certificate issuance model, so SSH certificate profiles are not available.
 
 ## Managing Profiles
 
@@ -156,9 +174,16 @@ String values in a profile may contain `{{ namespace.field }}` placeholders. The
 | `{{ device.opc_server_port }}` | OPC UA server port of the device. Only available if set. |
 | `{{ domain.unique_name }}` | Unique name of the device's domain. |
 | `{{ domain.issuing_ca }}` | Unique name of the domain's issuing CA. Only available if set. |
+| `{{ domain.organization }}` | Organization Name (O) of the domain's assigned organization. |
+| `{{ domain.organization_unit }}` | Organizational Unit (OU) of the domain's assigned organization. |
+| `{{ domain.country }}` | Country (C) of the domain's assigned organization. |
+| `{{ domain.state }}` | State or Province (ST) of the domain's assigned organization. |
+| `{{ domain.locality }}` | Locality (L) of the domain's assigned organization. |
 | `{{ time.now }}` | Current UTC time in ISO 8601 format. |
 | `{{ time.date }}` | Current UTC date (`YYYY-MM-DD`). |
 | `{{ time.timestamp }}` | Current Unix timestamp in seconds. |
+
+Organization variables are available only when an organization is assigned to the domain. Values come directly from that organization; unset fields resolve to empty strings.
 
 Unknown variables are left unchanged and logged as a warning. Variables are also resolved in the initial values of the manual issuance form.
 
