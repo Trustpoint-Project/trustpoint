@@ -11,6 +11,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from management.models.organization import OrganizationModel
+from pki.models import DomainModel
 from users.models import GroupProfile
 
 User = get_user_model()
@@ -113,6 +114,22 @@ class OrganizationEditViewTest(TestCase):
     def test_get_returns_200(self) -> None:
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
+
+    def test_get_shows_hint_without_associated_domains(self) -> None:
+        response = self.client.get(self.url)
+        self.assertContains(response, 'Associated Domains')
+        self.assertContains(response, 'No domains are associated with this organization.')
+
+    def test_get_lists_associated_domains(self) -> None:
+        domain = DomainModel.objects.create(unique_name='linked-domain', organization=self.organization)
+        response = self.client.get(self.url)
+        self.assertContains(response, 'linked-domain')
+        self.assertContains(response, reverse('pki:domains-config', kwargs={'pk': domain.pk}))
+        self.assertNotContains(response, 'No domains are associated with this organization.')
+
+    def test_create_form_has_no_associated_domains_section(self) -> None:
+        response = self.client.get(reverse('management:add_organization'))
+        self.assertNotContains(response, 'Associated Domains')
 
     def test_edit_organization_success(self) -> None:
         response = self.client.post(

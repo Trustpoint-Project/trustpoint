@@ -33,6 +33,32 @@
                 {% csrf_token %}
                 {% crispy form %}
             </form>
+
+            {% if object %}
+                <section class="mt-5">
+                    <h2 class="h5 mb-1">{% trans 'Associated Domains' %}</h2>
+                    <p class="text-muted">
+                        {% blocktranslate trimmed %}
+                            To associate a domain with this organization, open the domain under PKI &gt; Domains,
+                            choose Configure and select this organization.
+                        {% endblocktranslate %}
+                    </p>
+
+                    {% with domains=object.domains.all %}
+                        {% if domains %}
+                            <ul class="list-group">
+                                {% for domain in domains %}
+                                    <li class="list-group-item">
+                                        <a href="{% url 'pki:domains-config' pk=domain.pk %}">{{ domain.unique_name }}</a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="mb-0">{% trans 'No domains are associated with this organization.' %}</p>
+                        {% endif %}
+                    {% endwith %}
+                </section>
+            {% endif %}
         </div>
     </div>
 
