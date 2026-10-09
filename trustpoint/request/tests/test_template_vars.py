@@ -107,11 +107,12 @@ class TestBuildVariableMap:
         assert variables['domain.state'] == ''
         assert variables['domain.locality'] == ''
 
-    def test_organization_placeholders_resolve_empty_without_domain_organization(self) -> None:
-        """Profile data does not retain organization placeholders without an assigned organization."""
+    def test_organization_placeholders_are_dropped_without_domain_organization(self) -> None:
+        """Placeholders resolving to empty values are omitted, since empty DN values are invalid X.509."""
         ctx = _make_context()
         profile_data = {
             'subject': {
+                'common_name': 'device',
                 'organization_name': '{{ domain.organization }}',
                 'organizational_unit_name': '{{ domain.organization_unit }}',
                 'country_name': '{{ domain.country }}',
@@ -122,13 +123,26 @@ class TestBuildVariableMap:
 
         resolved = resolve_template_variables(profile_data, ctx)
 
-        assert resolved['subject'] == {
-            'organization_name': '',
-            'organizational_unit_name': '',
-            'country_name': '',
-            'state_or_province_name': '',
-            'locality_name': '',
+        assert resolved['subject'] == {'common_name': 'device'}
+
+    def test_resolved_profile_without_organization_builds_certificate_subject(self) -> None:
+        """Regression: empty organization values must not break building the X.509 subject."""
+        from pki.util.cert_req_converter import JSONCertRequestConverter
+
+        ctx = _make_context()
+        request = {
+            'type': 'cert_request',
+            'subject': {
+                'common_name': 'device',
+                'organization_name': '{{ domain.organization }}',
+                'country_name': '{{ domain.country }}',
+            },
+            'validity': {'days': 10},
         }
+
+        builder = JSONCertRequestConverter.from_json(resolve_template_variables(request, ctx))
+
+        assert builder._subject_name.rfc4514_string() == 'CN=device'
 
     def test_no_device(self):
         ctx = _make_context(with_device=False)

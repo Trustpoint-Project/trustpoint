@@ -93,14 +93,34 @@ class TemplateVariableResolver(LoggerMixin):
         return cls._resolve_string(value, variables)
 
     @classmethod
+    def _resolves_to_empty(cls, value: Any, variables: dict[str, str]) -> bool:
+        """Whether *value* is a placeholder-containing string that resolves to nothing."""
+        return (
+            isinstance(value, str)
+            and bool(_TEMPLATE_VAR_RE.search(value))
+            and not cls._resolve_string(value, variables).strip()
+        )
+
+    @classmethod
     def _resolve_recursively(cls, obj: Any, variables: dict[str, str]) -> Any:
-        """Walk *obj* (dict / list / str) and resolve template variables in all string leaves."""
+        """Walk *obj* (dict / list / str) and resolve template variables in all string leaves.
+
+        Entries that resolve to an empty string are dropped, as empty X.509 attribute values are invalid.
+        """
         if isinstance(obj, str):
             return cls._resolve_string(obj, variables)
         if isinstance(obj, list):
-            return [cls._resolve_recursively(item, variables) for item in obj]
+            return [
+                cls._resolve_recursively(item, variables)
+                for item in obj
+                if not cls._resolves_to_empty(item, variables)
+            ]
         if isinstance(obj, dict):
-            return {key: cls._resolve_recursively(val, variables) for key, val in obj.items()}
+            return {
+                key: cls._resolve_recursively(val, variables)
+                for key, val in obj.items()
+                if not cls._resolves_to_empty(val, variables)
+            }
         return obj
 
     @classmethod
