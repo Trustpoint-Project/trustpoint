@@ -863,9 +863,10 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'CMP with a Domain Credential' in heading
         assert mock_cmp.called
-        assert sections[4].heading == 'Certificate Request for a TLS Server Certificate'
-        assert '-cert domain-credential-certificate.pem' in sections[4].rows[0].value
-        assert '-newkey key-5.pem' in sections[4].rows[0].value
+        assert sections[4].heading == 'Certificate Parameters'
+        assert sections[5].heading == 'Certificate Request for a TLS Server Certificate'
+        assert '-cert domain-credential-certificate.pem' in sections[5].rows[0].value
+        assert '-newkey key-5.pem' in sections[5].rows[0].value
 
     @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
     @patch('help_pages.devices_help_views.JSONProfileVerifier')
@@ -883,10 +884,11 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'EST with a Domain Credential' in heading
         assert mock_tls.called
-        assert sections[4].css_id == 'server_alias'
-        assert 'csr-6.der' in sections[4].rows[0].value
-        assert '--cert domain-credential-certificate.pem' in sections[4].rows[1].value
-        assert 'server_alias/simpleenroll' in sections[4].rows[1].value
+        assert sections[4].heading == 'Certificate Parameters'
+        assert sections[5].css_id == 'server_alias'
+        assert 'csr-6.der' in sections[5].rows[0].value
+        assert '--cert domain-credential-certificate.pem' in sections[5].rows[1].value
+        assert 'server_alias/simpleenroll' in sections[5].rows[1].value
         assert 'certificate-6.pem' in sections[-1].rows[0].value
 
     @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
@@ -943,7 +945,8 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'REST with a Domain Credential' in heading
         assert mock_tls.called
-        profile_section = sections[4]
+        assert sections[4].heading == 'Certificate Parameters'
+        profile_section = sections[5]
         assert 'server_alias/enroll/' in profile_section.rows[1].value
         assert 'server_alias/reenroll/' in profile_section.rows[2].value
         assert 'previously issued certificate' in profile_section.rows[3].value
@@ -968,8 +971,9 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         assert no_onboarding_sections[4].heading == 'Certificate Parameters'
         assert no_onboarding_sections[5].rows[0].value_render_type == ValueRenderType.PLAIN
         assert 'Certificate Profile is malformed' in no_onboarding_sections[5].rows[0].value
-        assert app_sections[4].rows[0].value_render_type == ValueRenderType.PLAIN
-        assert 'Certificate Profile is malformed' in app_sections[4].rows[0].value
+        assert app_sections[4].heading == 'Certificate Parameters'
+        assert app_sections[5].rows[0].value_render_type == ValueRenderType.PLAIN
+        assert 'Certificate Profile is malformed' in app_sections[5].rows[0].value
         assert mock_verifier.call_count == 2
         assert mock_tls.call_count == 2
 

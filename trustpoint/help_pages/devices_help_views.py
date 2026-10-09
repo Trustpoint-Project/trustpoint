@@ -1080,14 +1080,14 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
-            return HelpSection(
-                title,
-                [
-                    HelpRow(_non_lazy('OpenSSL Command'), cmd, ValueRenderType.CODE),
-                ],
-                css_id=cert_profile_name,
-                hidden=hidden,
+        def _build_section(title: str, profile_name: str, command_row: HelpRow) -> HelpSection:
+            return HelpSection(title, [command_row], css_id=profile_name)
+
+        def _build_command(profile_name: str, sample_request: dict[str, Any]) -> str:
+            return CmpClientCertificateCommandBuilder.get_dynamic_cert_profile_command(
+                sample_request=sample_request,
+                host=f'{base}/{profile_name}/{operation}',
+                cred_number=cred,
             )
 
         sections = [
@@ -1095,40 +1095,8 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
             build_cmp_signer_trust_store_section(domain=domain),
             build_keygen_section(help_context, file_name=''),
             build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
+            *_build_cert_profile_sections(help_context, _non_lazy('OpenSSL Command'), _build_command, _build_section),
         ]
-        for i, profile in enumerate(help_context.allowed_app_profiles):
-            name = profile.alias or profile.certificate_profile.unique_name
-            title = profile.certificate_profile.display_name or name
-
-            try:
-                cert_profile = profile.certificate_profile.profile
-                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
-
-                cmd = CmpClientCertificateCommandBuilder.get_dynamic_cert_profile_command(
-                    sample_request=sample_request,
-                    host=f'{base}/{name}/{operation}',
-                    cred_number=cred,
-                )
-            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
-                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
-                err_sect = HelpSection(
-                    _non_lazy(f'Certificate Request for a {title} Certificate'),
-                    [
-                        HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
-                    ],
-                    css_id=name,
-                    hidden=(i > 0),
-                )
-                sections.append(err_sect)
-                continue
-
-            sect = _build_section(
-                _non_lazy(f'Certificate Request for a {title} Certificate'),
-                name,
-                cmd,
-                hidden=(i > 0),
-            )
-            sections.append(sect)
         return sections, _non_lazy('Help - Issue Application Certificates using CMP with a Domain Credential')
 
 
@@ -1183,11 +1151,11 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, command_row: HelpRow) -> HelpSection:
             return HelpSection(
                 title,
                 [
-                    HelpRow(_non_lazy('OpenSSL Command'), cmd, ValueRenderType.CODE),
+                    command_row,
                     HelpRow(
                         _non_lazy('Enroll certificate with curl'),
                         value=EstClientCertificateCommandBuilder.get_curl_enroll_application_credential(
@@ -1198,7 +1166,12 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
                     ),
                 ],
                 css_id=cert_profile_name,
-                hidden=hidden,
+            )
+
+        def _build_command(_profile_name: str, sample_request: dict[str, Any]) -> str:
+            return EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
+                sample_request=sample_request,
+                cred_number=cred,
             )
 
         sections = [
@@ -1206,39 +1179,8 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
             build_tls_trust_store_section(),
             build_keygen_section(help_context, file_name=''),
             build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
+            *_build_cert_profile_sections(help_context, _non_lazy('OpenSSL Command'), _build_command, _build_section),
         ]
-        for i, profile in enumerate(help_context.allowed_app_profiles):
-            name = profile.alias or profile.certificate_profile.unique_name
-            title = profile.certificate_profile.display_name or name
-
-            try:
-                cert_profile = profile.certificate_profile.profile
-                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
-
-                cmd = EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
-                    sample_request=sample_request,
-                    cred_number=cred,
-                )
-            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
-                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
-                err_sect = HelpSection(
-                    _non_lazy(f'Certificate Request for a {title} Certificate'),
-                    [
-                        HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
-                    ],
-                    css_id=name,
-                    hidden=(i > 0),
-                )
-                sections.append(err_sect)
-                continue
-
-            sect = _build_section(
-                _non_lazy(f'Certificate Request for a {title} Certificate'),
-                name,
-                cmd,
-                hidden=(i > 0),
-            )
-            sections.append(sect)
         sections.append(
             HelpSection(
                 heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional)'),
@@ -1519,11 +1461,11 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(title: str, cert_profile_name: str, csr_cmd: str, *, hidden: bool = False) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, csr_row: HelpRow) -> HelpSection:
             return HelpSection(
                 title,
                 [
-                    HelpRow(_non_lazy('Generate CSR'), csr_cmd, ValueRenderType.CODE),
+                    csr_row,
                     HelpRow(
                         _non_lazy('Enroll certificate with curl (mTLS domain credential)'),
                         value=RestClientCertificateCommandBuilder.get_curl_enroll_command(
@@ -1560,7 +1502,12 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
                     ),
                 ],
                 css_id=cert_profile_name,
-                hidden=hidden,
+            )
+
+        def _build_command(_profile_name: str, sample_request: dict[str, Any]) -> str:
+            return RestClientCertificateCommandBuilder.get_dynamic_cert_profile_command(
+                cred_number=cred,
+                sample_request=sample_request,
             )
 
         sections = [
@@ -1568,39 +1515,8 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
             build_tls_trust_store_section(),
             build_keygen_section(help_context, file_name=''),
             build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
+            *_build_cert_profile_sections(help_context, _non_lazy('Generate CSR'), _build_command, _build_section),
         ]
-
-        for i, profile in enumerate(help_context.allowed_app_profiles):
-            name = profile.alias or profile.certificate_profile.unique_name
-            title = profile.certificate_profile.display_name or name
-
-            try:
-                cert_profile = profile.certificate_profile.profile
-                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
-                csr_cmd = RestClientCertificateCommandBuilder.get_dynamic_cert_profile_command(
-                    cred_number=cred,
-                    sample_request=sample_request,
-                )
-            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
-                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
-                sections.append(
-                    HelpSection(
-                        _non_lazy(f'Certificate Request for a {title} Certificate'),
-                        [HelpRow(_non_lazy('Generate CSR'), err_msg, ValueRenderType.PLAIN)],
-                        css_id=name,
-                        hidden=(i > 0),
-                    )
-                )
-                continue
-
-            sections.append(
-                _build_section(
-                    _non_lazy(f'Certificate Request for a {title} Certificate'),
-                    name,
-                    csr_cmd,
-                    hidden=(i > 0),
-                )
-            )
 
         return sections, _non_lazy('Help - Issue Application Certificates using REST with a Domain Credential')
 
