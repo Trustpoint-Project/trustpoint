@@ -78,6 +78,13 @@ jobs:
       - name: Create CAs, domains and test devices
         run: uv run trustpoint/manage.py create_protocol_test_env --output "${ENV_FILE}"
 
+      - name: Create EST and CMP RA setup
+        run: |
+          uv run trustpoint/manage.py create_ra_setup \
+            --host "${TRUSTPOINT_HOST%%:*}" \
+            --port "${TRUSTPOINT_HOST##*:}" \
+            --output "${ENV_FILE}"
+
       - name: Start Trustpoint HTTPS development server
         run: |
           mkdir -p reports
@@ -99,7 +106,7 @@ jobs:
           cat reports/server.log >&2
           exit 1
 
-      - name: Test CMP, EST and REST enrollment
+      - name: Test CMP, EST, REST and RA enrollment
         run: |
           bash tests/scripts/test_protocol_endpoints.sh \
             --host "${TRUSTPOINT_HOST}" \

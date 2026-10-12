@@ -897,7 +897,7 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
         """Meta class for IssuingCaAddRequestCmpForm."""
         model = CaModel
         fields: ClassVar[list[str]] = [
-            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type'
+            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type', 'cmp_sender_kid'
         ]
 
     cmp_shared_secret = forms.CharField(

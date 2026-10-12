@@ -244,21 +244,6 @@ def test_remote_est_translates_client_errors_and_does_not_save(
     saver_class.assert_not_called()
 
 
-def test_remote_cmp_is_explicitly_unimplemented(
-    device_instance: dict[str, object],
-    issuing_ca_instance: dict[str, object],
-) -> None:
-    """Report that remote CMP certificate issuance is not implemented."""
-    _, _, csr = certificate_and_csr()
-    ca = issuing_ca_instance['issuing_ca']
-    ca.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
-    context = CmpCertificateRequestContext(
-        device=device_instance['device'], domain=device_instance['domain'], cert_requested=csr
-    )
-    with pytest.raises(NotImplementedError, match='CMP remote certificate issuance'):
-        RemoteCaCertificateIssueProcessor(ca_type='cmp').process_operation(context)
-
-
 def test_local_certificate_issue_rejects_unsupported_request_key(device_instance: dict[str, object]) -> None:
     context = CmpCertificateRequestContext(
         device=device_instance['device'], domain=device_instance['domain'], cert_requested=Mock()

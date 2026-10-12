@@ -6,6 +6,7 @@
 #
 # Expects a running Trustpoint HTTPS server and a test environment created with
 #   uv run trustpoint/manage.py create_protocol_test_env --output <env-file>
+#   uv run trustpoint/manage.py create_ra_setup --host <host> --port <port> --output <env-file>
 #
 # Each protocol uses its own issuing CA, domain and signature algorithm, because Trustpoint
 # requires the end entity key to match the signature suite of the issuing CA:
@@ -13,6 +14,7 @@
 #   EST  -> EC P-256
 #   CMP  -> ML-DSA-65   (requires OpenSSL >= 3.5)
 #   REST -> RSA-2048
+#   EST RA, CMP RA -> RSA-2048 (the upstream CAs of create_ra_setup)
 #
 # For every protocol two devices are exercised:
 #   * a device without onboarding, authenticating directly with its shared secret
@@ -20,6 +22,9 @@
 #     uses that credential to request the application certificate
 #
 # In each case a TLS server certificate (profile "tls_server") is requested.
+#
+# Additionally the EST RA and CMP RA domains are tested: Trustpoint acts as registration
+# authority and forwards the request to the upstream CA domain of the same instance.
 
 set -euo pipefail
 
@@ -396,6 +401,56 @@ test_cmp_onboarding() {
 }
 
 # --------------------------------------------------------------------------------------
+# EST RA / CMP RA (Trustpoint as registration authority in front of a CA of this instance)
+# --------------------------------------------------------------------------------------
+
+test_est_ra() {
+    local device='EST-RA-Device' p='est-ra'
+    local domain ca algorithm
+    domain="$(proto_field est_ra domain)"
+    ca="$(proto_field est_ra ca)"
+    algorithm="$(proto_field est_ra key_algorithm)"
+
+    log "EST RA (${device}, ${algorithm})"
+
+    gen_key "${p}-key.pem" "${algorithm}" || return 1
+    gen_app_csr_der "${p}-key.pem" "${p}-csr.der" || return 1
+
+    curl_est "${p}.p7c" "${BASE_URL}/.well-known/est/${domain}/${APP_PROFILE}/simpleenroll" \
+        --user "${device}:$(device_field est_ra "${device}" est_password)" \
+        --data-binary "@${p}-csr.der" || { fail "EST RA enrollment for ${device}: $(head -c 200 "${p}.p7c")"; return 1; }
+
+    decode_pkcs7_response "${p}.p7c" "${p}-bundle.pem" 'EST RA' || return 1
+    extract_cert_by_cn "${p}-bundle.pem" 'tls_server.local' "${p}-cert.pem" || { fail "${device}"; return 1; }
+    assert_tls_server_cert "${p}-cert.pem" 'EST RA' "${ca}" "${algorithm}"
+}
+
+test_cmp_ra() {
+    local device='CMP-RA-Device' p='cmp-ra'
+    local domain ca algorithm
+    domain="$(proto_field cmp_ra domain)"
+    ca="$(proto_field cmp_ra ca)"
+    algorithm="$(proto_field cmp_ra key_algorithm)"
+
+    log "CMP RA (${device}, ${algorithm})"
+
+    gen_key "${p}-key.pem" "${algorithm}" || return 1
+
+    if ! openssl cmp -cmd cr \
+        -tls_used -tls_trusted "${TLS_CERT}" \
+        -server "${BASE_URL}/.well-known/cmp/p/${domain}/${APP_PROFILE}/certification" \
+        -ref "$(device_field cmp_ra "${device}" pk)" \
+        -secret "pass:$(device_field cmp_ra "${device}" cmp_shared_secret)" \
+        -subject "${APP_SUBJECT}" -days 10 -sans "${APP_SAN_CMP}" \
+        -newkey "${p}-key.pem" \
+        -certout "${p}-cert.pem" -chainout "${p}-chain.pem" -extracertsout "${p}-full-chain.pem"; then
+        fail "CMP RA enrollment for ${device}"
+        return 1
+    fi
+    assert_tls_server_cert "${p}-cert.pem" 'CMP RA' "${ca}" "${algorithm}"
+}
+
+# --------------------------------------------------------------------------------------
 # REST
 # --------------------------------------------------------------------------------------
 
@@ -461,6 +516,8 @@ test_est_no_onboarding || true
 test_est_onboarding || true
 test_cmp_no_onboarding || true
 test_cmp_onboarding || true
+test_cmp_ra || true
+test_est_ra || true
 test_rest_no_onboarding || true
 test_rest_onboarding || true
 

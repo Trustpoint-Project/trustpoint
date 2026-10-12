@@ -19,6 +19,11 @@ class Migration(migrations.Migration):
             name='ca_mode_constraint',
         ),
         migrations.AddField(
+            model_name='camodel',
+            name='cmp_sender_kid',
+            field=models.PositiveIntegerField(blank=True, help_text='senderKID for CMP shared-secret authentication (e.g. the device ID on a Trustpoint upstream)', null=True, verbose_name='CMP Sender KID'),
+        ),
+        migrations.AddField(
             model_name='domainmodel',
             name='organization',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='domains', to='management.organizationmodel', verbose_name='Organization'),

@@ -231,17 +231,9 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
         self._add_credential_pages_to_context(context)
 
-        is_cmp_ra = (
-            self.object.domain
-            and self.object.domain.issuing_ca
-            and self.object.domain.issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA
-        )
-        context['is_cmp_ra_domain'] = bool(is_cmp_ra)
-
         context['issue_app_cred_no_onboarding_url'] = ''
         if (
-            not is_cmp_ra
-            and self.object.domain
+            self.object.domain
             and self.object.no_onboarding_config
             and self.object.no_onboarding_config.get_pki_protocols()
             and self.object.device_type != DeviceModel.DeviceType.AGENT_ONE_TO_ONE

@@ -175,6 +175,13 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         help_text=_('Username for EST authentication')
     )
 
+    cmp_sender_kid = models.PositiveIntegerField(
+        verbose_name=_('CMP Sender KID'),
+        blank=True,
+        null=True,
+        help_text=_('senderKID for CMP shared-secret authentication (e.g. the device ID on a Trustpoint upstream)')
+    )
+
     onboarding_config = models.ForeignKey(
         'onboarding.OnboardingConfigModel',
         related_name='remote_cas',
@@ -489,7 +496,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
             raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
         # Remote-only fields should not be set for local/keyless CAs
-        if (self.remote_host or self.remote_port is not None or self.remote_path or self.est_username):
+        if (self.remote_host or self.remote_port is not None or self.remote_path or self.est_username
+                or self.cmp_sender_kid is not None):
             raise ValidationError(_('Remote fields can only be set for remote CAs.'))
 
     def save(self, *args: Any, **kwargs: Any) -> None:

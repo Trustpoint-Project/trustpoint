@@ -11,7 +11,9 @@ This command creates a complete RA testing environment with:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -30,11 +32,32 @@ from trustpoint.settings import DOCKER_CONTAINER
 
 from .base_commands import CertificateCreationCommandMixin
 
+if TYPE_CHECKING:
+    from django.core.management.base import CommandParser
+
 
 class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
     """Creates a complete RA (Registration Authority) testing setup."""
 
     help = 'Creates issuing CAs, domains, devices, and RA configurations for testing RA functionality.'
+
+    ra_host = 'localhost'
+    ra_port = 443
+
+    def add_arguments(self, parser: CommandParser) -> None:
+        """Adds command arguments."""
+        parser.add_argument(
+            '--host', default='localhost', help='Host of this Trustpoint instance as seen by the RAs (upstream CAs).'
+        )
+        parser.add_argument(
+            '--port', type=int, default=443, help='Port of this Trustpoint instance as seen by the RAs.'
+        )
+        parser.add_argument(
+            '--output',
+            type=Path,
+            default=None,
+            help='JSON file the EST/CMP RA test environment is merged into (key "protocols").',
+        )
 
     def _create_temp_credential(self) -> CredentialModel:
         """Create and return a temporary credential for RAs.
@@ -270,8 +293,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         ra = CaModel(
             unique_name=ra_name,
             ca_type=CaModel.CaTypeChoice.REMOTE_EST_RA,
-            remote_host='localhost',
-            remote_port=443,
+            remote_host=self.ra_host,
+            remote_port=self.ra_port,
             remote_path=remote_est_path,
             est_username=issuing_ca_device.common_name,
             certificate=issuing_ca_cert,
@@ -305,6 +328,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         domain: DomainModel,
         device: DeviceModel,
         ca: CaModel,
+        ca_domain: DomainModel,
+        ca_device: DeviceModel,
         tls_truststore: TruststoreModel
     ) -> CaModel:
         """Create a remote CMP RA configuration.
@@ -378,20 +403,25 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             cmp_onboarding_truststore.certificates.add(ca_cert, through_defaults={'order': max_order + 1})
             self.log_and_stdout(f'Updated CMP onboarding truststore for "{ra_name}".')
 
-        device.no_onboarding_config.trust_store = cmp_onboarding_truststore
-        device.no_onboarding_config.save()
+        # The RA authenticates upstream as the CA domain's device, not as the downstream RA device.
+        ra_config = NoOnboardingConfigModel()
+        ra_config.set_pki_protocols([NoOnboardingPkiProtocol.CMP_SHARED_SECRET])
+        ra_config.cmp_shared_secret = ca_device.no_onboarding_config.cmp_shared_secret
+        ra_config.trust_store = cmp_onboarding_truststore
+        ra_config.full_clean()
+        ra_config.save()
 
         ra = CaModel(
             unique_name=ra_name,
             ca_type=CaModel.CaTypeChoice.REMOTE_CMP_RA,
-            remote_host='localhost',
-            remote_port=443,
-            remote_path='/.well-known/cmp/p/ra/certification',
+            remote_host=self.ra_host,
+            remote_port=self.ra_port,
+            remote_path=f'/.well-known/cmp/p/{ca_domain.unique_name}/certification',
+            cmp_sender_kid=ca_device.pk,
             certificate=ca_cert,
             chain_truststore=cmp_chain_truststore,
+            no_onboarding_config=ra_config,
         )
-        if not ra.onboarding_config and not ra.no_onboarding_config:
-            ra.no_onboarding_config = device.no_onboarding_config
 
         ra.full_clean()
         ra.save()
@@ -403,8 +433,11 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         self.log_and_stdout(f'Created CMP RA "{ra_name}" in domain "{domain.unique_name}".')
         return ra
 
-    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
+    def handle(self, *_args: tuple[str], **options: Any) -> None:
         """Creates the complete RA setup."""
+        self.ra_host = options['host']
+        self.ra_port = options['port']
+
         # Load certificate profiles
         call_command('create_default_cert_profiles')
 
@@ -473,7 +506,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         cmp_ca_domain = self._create_domain_with_ca('cmp_issuing_ca', cmp_ca)
 
         # Create CMP issuing CA device
-        self._create_device(
+        cmp_ca_device = self._create_device(
             device_name='CMP-Issuing-CA-Device',
             domain=cmp_ca_domain,
             pki_protocols=[NoOnboardingPkiProtocol.CMP_SHARED_SECRET],
@@ -496,15 +529,56 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             ra_name='CMP-RA',
             domain=cmp_ra_domain,
             device=cmp_ra_device,
+            ca_domain=cmp_ca_domain,
+            ca_device=cmp_ca_device,
             ca=cmp_ca,
             tls_truststore=tls_truststore
         )
 
         self.log_and_stdout('\n=== RA Setup Complete ===')
+        if options['output']:
+            self._write_environment(
+                options['output'],
+                est_ra_device=est_ra_device,
+                cmp_ra_device=cmp_ra_device,
+            )
         self.log_and_stdout('EST Issuing CA: est_issuing_ca domain with EST-Issuing-CA-Device')
         self.log_and_stdout('EST RA: est_ra domain with EST-RA-Device, configured at: /.well-known/est/simpleenroll')
         self.log_and_stdout('CMP Issuing CA: cmp_issuing_ca domain with CMP-Issuing-CA-Device')
-        self.log_and_stdout('CMP RA: cmp_ra domain with CMP-RA-Device, configured at: /.well-known/cmp/p/ra/certification')
+        self.log_and_stdout(
+            f'CMP RA: cmp_ra domain with CMP-RA-Device, forwarding to /.well-known/cmp/p/cmp_issuing_ca/certification'
+        )
+
+    def _write_environment(self, output: Path, *, est_ra_device: DeviceModel, cmp_ra_device: DeviceModel) -> None:
+        """Merges the EST/CMP RA test environment into a JSON file used by the enrollment test script."""
+        environment: dict[str, Any] = json.loads(output.read_text()) if output.exists() else {}
+        environment.setdefault('protocols', {})
+        # The upstream issuing CAs are created with RSA keys.
+        environment['protocols']['est_ra'] = {
+            'ca': 'EST-Issuing-CA',
+            'domain': 'est_ra',
+            'key_algorithm': 'rsa',
+            'devices': {
+                est_ra_device.common_name: {
+                    'pk': est_ra_device.pk,
+                    'est_password': est_ra_device.no_onboarding_config.est_password,
+                },
+            },
+        }
+        environment['protocols']['cmp_ra'] = {
+            'ca': 'CMP-Issuing-CA',
+            'domain': 'cmp_ra',
+            'key_algorithm': 'rsa',
+            'devices': {
+                cmp_ra_device.common_name: {
+                    'pk': cmp_ra_device.pk,
+                    'cmp_shared_secret': cmp_ra_device.no_onboarding_config.cmp_shared_secret,
+                },
+            },
+        }
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(environment, indent=2))
+        self.log_and_stdout(f'Wrote RA test environment to {output}.')
 
     def log_and_stdout(self, message: str, level: str = 'info') -> None:
         """Log a message and write it to stdout.

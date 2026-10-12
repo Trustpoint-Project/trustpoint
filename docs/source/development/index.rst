@@ -118,6 +118,9 @@ server (self-signed certificate).
    uv run manage.py runserver_plus 0.0.0.0:443 --cert-file ../tests/data/x509/https_server.crt --key-file ../tests/data/x509/https_server.pem
 
 A self-signed TLS server certificate is already provided in the test data directory.
+The command also stores this certificate as the active TLS credential in the database
+(needed e.g. for the TLS trust-store download on the device help pages) and starts the
+Django-Q2 qcluster (see below).
 If you need to regenerate it (e.g., with different IP addresses or hostnames),
 use the following command:
 
@@ -133,15 +136,23 @@ Running development server with background task worker
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For testing features that require background task processing (e.g., cyclic CRL generation),
-use the following command to start both the development server and Django-Q2 qcluster together:
+``runserver_plus`` starts the Django-Q2 qcluster together with the HTTPS development server
+and stops it again when the server exits:
+
+.. code:: bash
+
+   uv run manage.py runserver_plus 0.0.0.0:443 --cert-file ../tests/data/x509/https_server.crt --key-file ../tests/data/x509/https_server.pem
+
+For plain HTTP, ``runserver_with_qcluster`` does the same with the standard development server:
 
 .. code:: bash
 
    uv run manage.py runserver_with_qcluster
 
-This starts both processes in parallel and handles shutdown gracefully with Ctrl+C.
+Both commands accept ``--no-qcluster`` to skip the worker, for example if you run it separately.
+Note that the worker is not restarted when the code reloads.
 
-Alternatively, you can start them separately in different terminals:
+Alternatively, you can start the standard server and the worker separately in different terminals:
 
 .. code:: bash
 
