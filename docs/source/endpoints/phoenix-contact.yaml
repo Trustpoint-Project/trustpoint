@@ -1,0 +1,91 @@
+vendor: Phoenix Contact
+vendor_id: phoenix-contact
+
+notes:
+  - "This file currently covers PLCnext Control devices."
+  - "The supplied PLC inventory contains PHOENIX CONTACT AXL F BK S3, which is an Axioline fieldbus coupler rather than a PLCnext Control; it is therefore not represented by the PLCnext certificate-management capabilities below."
+  - "Native certificate-management support is separated from mechanisms that can be implemented in userspace on the Yocto/Linux platform."
+
+devices:
+  - product_family: PLCnext Control
+    models:
+      - AXC F 1152
+      - AXC F 2152
+      - AXC F 3152
+      - RFC 4072S
+      - AXC F 4072R
+      - BPC 9102S
+    device_type: PLC / industrial controller
+    operating_system: Yocto/Linux
+
+    firmware:
+      - versions:
+          - "2024.x"
+          - "2025.x"
+          - "2026.x"
+
+        certificate_protocols:
+          est:
+            native: false
+            implementable: true
+          cmp:
+            native: false
+            implementable: true
+          scep:
+            native: false
+            implementable: true
+          acme:
+            native: false
+            implementable: true
+
+        industrial_certificate_management:
+          opcua_gds_push: true
+          opcua_gds_pull: false
+
+        management:
+          web_ui: true
+          ssh: true
+          sftp: true
+          scp: true
+          rest_api: false
+          vendor_api: false
+          vendor_tool:
+            supported: true
+            name: PLCnext Engineer
+            certificate_management: limited
+            notes:
+              - "PLCnext Engineer configures OPC UA certificate handling and GDS usage."
+              - "Certificate files for the OPC UA IdentityStore are transferred through WBM or SCP, not through PLCnext Engineer itself."
+          agent_possible: true
+
+        trustpoint:
+          recommended_integration: opcua_gds_push
+          alternative_integrations:
+            - trustpoint_agent
+            - web_ui
+            - ssh_scp_automation
+            - userspace_est_client
+            - userspace_cmp_client
+            - userspace_scep_client
+            - userspace_acme_client
+          supported: candidate
+          tested: false
+          profile: null
+          limitations:
+            - "OPC UA GDS Push applies to the embedded OPC UA server certificate and associated TrustStore/IdentityStore."
+            - "EST, CMP, SCEP and ACME are not documented as native PLCnext enrollment protocols; they require additional software/userspace implementation."
+
+        evidence:
+          verification_status: vendor_documented
+          sources:
+            - url: "https://engineer.plcnext.help/latest/Main_Security_OPCUA.htm"
+              description: "Phoenix Contact PLCnext Engineer documentation: OPC UA server certificate management, WBM/SCP transfer and OPC UA GDS Certificate Push Management."
+            - url: "https://engineer.plcnext.help/2025.0_en/Security_ControllerSettingsWBM.htm"
+              description: "Phoenix Contact documentation: controller certificate and Trust/Identity Store management through WBM."
+            - url: "https://www.phoenixcontact.com/en-ie/products/plcnext-technology"
+              description: "Phoenix Contact PLCnext Technology portfolio and Linux-based controller platform."
+          last_verified: "2026-10-12"
+          notes:
+            - "Phoenix Contact explicitly documents OPC UA GDS Certificate Push Management."
+            - "Phoenix Contact explicitly documents certificate/key transfer to the controller IdentityStore through WBM or SCP."
+            - "TrustStore and IdentityStore content can be modified through WBM during operation."
