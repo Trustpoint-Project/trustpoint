@@ -3,7 +3,7 @@
 
 """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
-import datetime
+import datetime as dt
 import ipaddress
 import logging
 from typing import Any, cast
@@ -236,19 +236,19 @@ class JSONCertRequestConverter:
         return cast('x509.CertificateBuilder', result)
 
     @staticmethod
-    def validity_period_from_json(validity: dict[str, Any]) -> datetime.timedelta:
+    def validity_period_from_json(validity: dict[str, Any]) -> dt.timedelta:
         """Parses validity period from JSON."""
-        validity_period: datetime.timedelta
+        validity_period: dt.timedelta
         if validity.get('duration'):
-            validity_period = datetime.timedelta(seconds=validity['duration'])
+            validity_period = dt.timedelta(seconds=validity['duration'])
         else:
             days = validity.get('days', 0)
             hours = validity.get('hours', 0)
             minutes = validity.get('minutes', 0)
             seconds = validity.get('seconds', 0)
             validity_seconds = days * 86400 + hours * 3600 + minutes * 60 + seconds
-            validity_period = datetime.timedelta(seconds=validity_seconds)
-        if validity_period == datetime.timedelta(seconds=0):
+            validity_period = dt.timedelta(seconds=validity_seconds)
+        if validity_period == dt.timedelta(seconds=0):
             exc_msg = 'Validity period must be specified in the profile.'
             raise ValueError(exc_msg)
         return validity_period
@@ -267,11 +267,11 @@ class JSONCertRequestConverter:
 
         validity_period = JSONCertRequestConverter.validity_period_from_json(validity)
 
-        default_backdate = datetime.timedelta(hours=1)
+        default_backdate = dt.timedelta(hours=1)
 
-        builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC) - default_backdate)
+        builder = builder.not_valid_before(dt.datetime.now(dt.UTC) - default_backdate)
         return builder.not_valid_after(
-            datetime.datetime.now(datetime.UTC) + validity_period
+            dt.datetime.now(dt.UTC) + validity_period
         )
 
     @staticmethod

@@ -3,7 +3,7 @@
 
 """Views for revoking device certificates."""
 
-import datetime
+import datetime as dt
 from typing import Any
 
 from django.contrib import messages
@@ -281,7 +281,7 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
             if redirect_name:
                 return redirect(redirect_name)
 
-            now = datetime.datetime.now(datetime.UTC)
+            now = dt.datetime.now(dt.UTC)
 
             issued_credentials_to_revoke_qs = IssuedCredentialModel.objects.filter(
                 device__in=self.queryset,
