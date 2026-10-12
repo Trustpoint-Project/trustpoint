@@ -89,6 +89,22 @@ class TestEstClient:
         result = EstClient(client_context())._parse_response(base64.b64encode(data), 'application/pkcs7-mime')
         assert result.subject == certificate.subject
 
+    def test_parse_response_returns_leaf_regardless_of_pkcs7_order(self) -> None:
+        ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        ca_name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'est-ca')])
+        now = datetime.datetime.now(datetime.UTC)
+        ca_cert = (
+            x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name)
+            .public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
+            .not_valid_before(now).not_valid_after(now + datetime.timedelta(days=1))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .sign(ca_key, hashes.SHA256())
+        )
+        _, leaf, _ = certificate_and_csr()
+        data = pkcs7.serialize_certificates([ca_cert, leaf], serialization.Encoding.DER)
+        result = EstClient(client_context())._parse_response(base64.b64encode(data), 'application/pkcs7-mime')
+        assert result.subject == leaf.subject
+
     def test_prepare_auth_prefers_mtls_then_basic_then_none(self) -> None:
         mtls = EstClient(client_context(est_client_cert_pem='CERT', est_client_key_pem='KEY'))
         with patch.object(mtls, '_write_temp_pem', side_effect=['cert.pem', 'key.pem']):
