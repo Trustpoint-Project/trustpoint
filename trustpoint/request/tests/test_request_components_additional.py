@@ -764,7 +764,7 @@ def test_cmp_pki_conf_credential_resolution_errors() -> None:
     context = CmpCertConfRequestContext(parsed_message=_cmp_message())
     with pytest.raises(ValueError, match='Cannot determine issuing CA credential'):
         CmpPkiConfResponder.build_response(context)
-    context.domain = Mock(issuing_ca=Mock(get_credential=Mock(return_value=None)))
+    context.domain = Mock(issuing_ca=Mock(get_credential=Mock(return_value=None), get_certificate=Mock(return_value=None)))
     with pytest.raises(ValueError, match='has no credential'):
         CmpPkiConfResponder.build_response(context)
 

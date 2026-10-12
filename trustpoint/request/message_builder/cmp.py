@@ -172,8 +172,14 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
             exc_msg = '_cert_template is missing - run CmpCertTemplateBuilding first.'
             raise ValueError(exc_msg)
 
+        # 'signature' (default, needs private_key) or 'ra_verified' (RA vouches for PoP, no private key)
+        pop_mode: str = request_data.get('proof_of_possession', 'signature')
+        if pop_mode not in ('signature', 'ra_verified'):
+            exc_msg = f'Unsupported proof_of_possession mode: {pop_mode}'
+            raise ValueError(exc_msg)
+
         private_key = request_data.get('private_key')
-        if private_key is None:
+        if pop_mode == 'signature' and private_key is None:
             exc_msg = 'private_key is required in request_data.'
             raise ValueError(exc_msg)
 
@@ -188,7 +194,9 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
             cert_req_msg = rfc4211.CertReqMsg()
             cert_req_msg['certReq'] = cert_request
 
-            if add_pop:
+            if pop_mode == 'ra_verified':
+                cert_req_msg.setComponentByName('popo', self._build_pop_ra_verified(), verifyConstraints=False)
+            elif add_pop:
                 pop = self._build_pop_signature(cert_request, private_key)
                 cert_req_msg.setComponentByName('popo', pop, verifyConstraints=False)
 
@@ -211,6 +219,15 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
         except Exception as e:
             msg = f'Failed to build CMP certification request body: {e!s}'
             raise CmpMessageBuilderError(msg) from e
+
+    @staticmethod
+    def _build_pop_ra_verified() -> rfc4211.ProofOfPossession:
+        """Build an ``raVerified`` Proof-of-Possession (RFC 4211 section 4.1)."""
+        pop = rfc4211.ProofOfPossession()
+        idx = pop.componentType.getPositionByName('raVerified')
+        schema = pop.componentType.getTypeByPosition(idx)
+        pop['raVerified'] = univ.Null('').clone(tagSet=schema.tagSet)
+        return pop
 
     @staticmethod
     def _build_pop_signature(

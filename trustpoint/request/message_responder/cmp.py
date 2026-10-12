@@ -887,19 +887,25 @@ class CmpPkiConfResponder(CmpMessageResponder):
             raise TypeError(exc_msg)
 
         if context.issuer_credential is not None:
-            issuing_ca_credential = context.issuer_credential
+            signer_credential = context.owner_credential or context.issuer_credential
+            issuer_cert: x509.Certificate | None = signer_credential.get_certificate()
         elif context.domain is not None and context.domain.issuing_ca is not None:
             _credential = context.domain.issuing_ca.get_credential()
-            if _credential is None:
+            signer = context.owner_credential or _credential
+            # Keyless RA CAs only have the upstream CA certificate (MAC protection needs no key).
+            issuer_cert = (
+                signer.get_certificate() if signer is not None else context.domain.issuing_ca.get_certificate()
+            )
+            if issuer_cert is None:
                 exc_msg = 'Issuing CA has no credential for pkiConf response.'
                 raise ValueError(exc_msg)
-            issuing_ca_credential = _credential
         else:
             exc_msg = 'Cannot determine issuing CA credential for pkiConf response.'
             raise ValueError(exc_msg)
 
-        signer_credential = context.owner_credential or issuing_ca_credential
-        issuer_cert = signer_credential.get_certificate()
+        if issuer_cert is None:
+            exc_msg = 'Issuing CA has no certificate for pkiConf response.'
+            raise ValueError(exc_msg)
 
         sender_ski = x509.SubjectKeyIdentifier.from_public_key(issuer_cert.public_key())
         sender_kid = rfc2459.KeyIdentifier(sender_ski.digest).subtype(

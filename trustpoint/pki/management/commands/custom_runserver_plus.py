@@ -14,9 +14,11 @@ from trustpoint_core.serializer import CertificateSerializer, CredentialSerializ
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 
+from .runserver_with_qcluster import QClusterMixin
 
-class Command(RunServerPlusCommand):
-    """Custom runserver_plus command that stores the TLS certificate to the database."""
+
+class Command(QClusterMixin, RunServerPlusCommand):
+    """Custom runserver_plus command that stores the TLS certificate to the database and runs the qcluster."""
 
     def store_tls_certificate(
         self, cert_file_path: str | Path, key_file_path: str | Path
@@ -31,13 +33,15 @@ class Command(RunServerPlusCommand):
 
         active_credential = ActiveTrustpointTlsServerCredentialModel.objects.first()
 
-        if active_credential and active_credential.credential:
-            self.stdout.write('Active TLS credential already exists in the database.')
-            return None, None
-
         with cert_path.open('rb') as cert_file:
             cert_pem = cert_file.read()
         certificate_serializer = CertificateSerializer.from_pem(cert_pem)
+
+        if active_credential and active_credential.credential:
+            stored_cert = active_credential.credential.get_certificate_serializer().as_crypto()
+            if stored_cert == certificate_serializer.as_crypto():
+                self.stdout.write('Active TLS credential already matches the given certificate.')
+                return None, None
 
         with key_path.open('rb') as key_file:
             key_pem = key_file.read()
