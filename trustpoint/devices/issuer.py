@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Generic, NoReturn, TypeVar, get_args
@@ -499,7 +499,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
 
                 allowed_hash_algorithm = hash_algorithm
 
-            one_day = datetime.timedelta(days=1)
+            one_day = dt.timedelta(days=1)
 
             certificate_builder = x509.CertificateBuilder()
             certificate_builder = certificate_builder.subject_name(
@@ -516,9 +516,9 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             certificate_builder = certificate_builder.issuer_name(
                 issuing_credential.get_certificate().subject
             )
-            certificate_builder = certificate_builder.not_valid_before(datetime.datetime.now(datetime.UTC) - one_day)
+            certificate_builder = certificate_builder.not_valid_before(dt.datetime.now(dt.UTC) - one_day)
             certificate_builder = certificate_builder.not_valid_after(
-                datetime.datetime.now(datetime.UTC) + (one_day * validity_days)
+                dt.datetime.now(dt.UTC) + (one_day * validity_days)
             )
             certificate_builder = certificate_builder.serial_number(x509.random_serial_number())
             certificate_builder = certificate_builder.public_key(public_key)

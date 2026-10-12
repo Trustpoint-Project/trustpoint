@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import secrets
 from typing import TYPE_CHECKING, cast
 
@@ -123,7 +123,7 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         header['sender'] = sender
         header['recipient'] = serialized_pyasn1_message['header']['sender']
 
-        current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
+        current_time = dt.datetime.now(dt.UTC).strftime('%Y%m%d%H%M%SZ')
         header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
         )

@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import ipaddress
 from pathlib import Path
 
@@ -26,7 +26,7 @@ class Command(BaseCommand):
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Executes the command."""
-        one_day = datetime.timedelta(1, 0, 0)
+        one_day = dt.timedelta(1, 0, 0)
 
         ipv4_addresses_list = ['127.0.0.1', '192.168.88.10']
 
@@ -68,8 +68,8 @@ class Command(BaseCommand):
         builder = x509.CertificateBuilder()
         builder = builder.subject_name(subject)
         builder = builder.issuer_name(issuer)
-        builder = builder.not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
-        builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * 365))
+        builder = builder.not_valid_before(dt.datetime.now(tz=dt.UTC) - one_day)
+        builder = builder.not_valid_after(dt.datetime.now(tz=dt.UTC) + (one_day * 365))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
         builder = builder.add_extension(basic_constraints_extension, critical=True)

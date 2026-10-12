@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import hashes
@@ -90,7 +90,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         if domain is None or domain.issuing_ca is None:
             return
         ca = domain.issuing_ca
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         cert: CertificateModel
         for cert in self.credential.certificates.select_related('revoked_certificate').all():
 

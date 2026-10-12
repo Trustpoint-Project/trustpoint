@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import secrets
 import uuid
 from datetime import timedelta
@@ -241,7 +241,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
 
     BROWSER_MAX_OTP_ATTEMPTS = 3
-    TOKEN_VALIDITY = datetime.timedelta(minutes=3)
+    TOKEN_VALIDITY = dt.timedelta(minutes=3)
 
     issued_credential_model = models.OneToOneField(IssuedCredentialModel, on_delete=models.CASCADE)
     otp = models.CharField(_('OTP'), max_length=32, default='')
