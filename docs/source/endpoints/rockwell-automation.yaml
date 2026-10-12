@@ -1,0 +1,436 @@
+vendor: Rockwell Automation
+vendor_id: rockwell-automation
+sources:
+- id: rockwell-ftpm-apd
+  type: vendor_documentation
+  title: Automatic Policy Deployment - FactoryTalk Policy Manager 6.60
+  url: https://www.rockwellautomation.com/en-pr/docs/factorytalk-policy-manager/6-60/help-ditamap/policy-model-configuration/policy-management-capabilities/cip-security/automatic-policy-deployment.html
+  notes: Rockwell Automation documents that Automatic Policy Deployment uses the Enrollment
+    over Secure Transport (EST) service. The documented minimum firmware is 34.00
+    for ControlLogix 5580 and CompactLogix 5380 controllers.
+- id: rockwell-ftpm-cip-security
+  type: vendor_documentation
+  title: CIP security policy - FactoryTalk Policy Manager 6.60
+  url: https://www.rockwellautomation.com/en-us/docs/factorytalk-policy-manager/6-60/help-ditamap/policy-model-configuration/policy-management-capabilities/cip-security.html
+  notes: Rockwell Automation documents FactoryTalk Policy Manager CIP Security compatibility
+    for ControlLogix 5580 firmware 32.00 or later and CompactLogix 5380 firmware 34.00
+    or later.
+devices:
+- product_family: ControlLogix 5580
+  model: 1756-L81E
+  hardware_revisions:
+  - unspecified
+  - B
+  device_type: PLC
+  inventory_firmware_versions:
+  - '30.11'
+  - '33.012'
+  - '35.011'
+  firmware:
+  - versions:
+    - '30.11'
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: false
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: These firmware versions are below the documented compatibility thresholds
+        for FactoryTalk Policy Manager CIP Security / EST Automatic Policy Deployment
+        in the cited documentation. Other certificate-management paths in this schema
+        are marked unsupported.
+  - versions:
+    - '33.012'
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: FactoryTalk Policy Manager supports CIP Security for these firmware versions,
+        but they are below the documented 34.00 minimum for Automatic Policy Deployment
+        using EST. No other certificate-management paths in this schema are supported.
+  - versions:
+    - '35.011'
+    certificate_protocols:
+      est: true
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: These firmware versions meet the vendor-documented minimum revision 34.00
+        for Automatic Policy Deployment using EST. FactoryTalk Policy Manager is the
+        documented Rockwell certificate/security management tool; no other certificate-management
+        paths in this schema are supported.
+- product_family: ControlLogix 5580
+  model: 1756-L82E
+  hardware_revisions:
+  - B
+  device_type: PLC
+  inventory_firmware_versions:
+  - '32.11'
+  - '35.011'
+  firmware:
+  - versions:
+    - '32.11'
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: FactoryTalk Policy Manager supports CIP Security for these firmware versions,
+        but they are below the documented 34.00 minimum for Automatic Policy Deployment
+        using EST. No other certificate-management paths in this schema are supported.
+  - versions:
+    - '35.011'
+    certificate_protocols:
+      est: true
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: These firmware versions meet the vendor-documented minimum revision 34.00
+        for Automatic Policy Deployment using EST. FactoryTalk Policy Manager is the
+        documented Rockwell certificate/security management tool; no other certificate-management
+        paths in this schema are supported.
+- product_family: ControlLogix 5580
+  model: 1756-L83E
+  hardware_revisions:
+  - unspecified
+  - B
+  device_type: PLC
+  inventory_firmware_versions:
+  - '32.11'
+  - '35.011'
+  firmware:
+  - versions:
+    - '32.11'
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: FactoryTalk Policy Manager supports CIP Security for these firmware versions,
+        but they are below the documented 34.00 minimum for Automatic Policy Deployment
+        using EST. No other certificate-management paths in this schema are supported.
+  - versions:
+    - '35.011'
+    certificate_protocols:
+      est: true
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: These firmware versions meet the vendor-documented minimum revision 34.00
+        for Automatic Policy Deployment using EST. FactoryTalk Policy Manager is the
+        documented Rockwell certificate/security management tool; no other certificate-management
+        paths in this schema are supported.
+- product_family: CompactLogix 5380
+  model: 5069-L306ER
+  hardware_revisions:
+  - unspecified
+  - A
+  device_type: PLC
+  inventory_firmware_versions:
+  - '34.15'
+  - '36.011'
+  firmware:
+  - versions:
+    - '34.15'
+    - '36.011'
+    certificate_protocols:
+      est: true
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: These firmware versions meet the vendor-documented minimum revision 34.00
+        for Automatic Policy Deployment using EST. FactoryTalk Policy Manager is the
+        documented Rockwell certificate/security management tool; no other certificate-management
+        paths in this schema are supported.
+- product_family: CompactLogix 5380
+  model: 5069-L310ER
+  hardware_revisions:
+  - A
+  device_type: PLC
+  inventory_firmware_versions:
+  - '29.011'
+  - '34.011'
+  firmware:
+  - versions:
+    - '29.011'
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: false
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: These firmware versions are below the documented compatibility thresholds
+        for FactoryTalk Policy Manager CIP Security / EST Automatic Policy Deployment
+        in the cited documentation. Other certificate-management paths in this schema
+        are marked unsupported.
+  - versions:
+    - '34.011'
+    certificate_protocols:
+      est: true
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: These firmware versions meet the vendor-documented minimum revision 34.00
+        for Automatic Policy Deployment using EST. FactoryTalk Policy Manager is the
+        documented Rockwell certificate/security management tool; no other certificate-management
+        paths in this schema are supported.
+- product_family: CompactLogix 5380
+  model: 5069-L320ER
+  hardware_revisions:
+  - A
+  device_type: PLC
+  inventory_firmware_versions:
+  - '30.011'
+  - '33.017'
+  - '35.011'
+  firmware:
+  - versions:
+    - '30.011'
+    - '33.017'
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: false
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: These firmware versions are below the documented compatibility thresholds
+        for FactoryTalk Policy Manager CIP Security / EST Automatic Policy Deployment
+        in the cited documentation. Other certificate-management paths in this schema
+        are marked unsupported.
+  - versions:
+    - '35.011'
+    certificate_protocols:
+      est: true
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: FactoryTalk Policy Manager
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - rockwell-ftpm-apd
+      - rockwell-ftpm-cip-security
+      notes: These firmware versions meet the vendor-documented minimum revision 34.00
+        for Automatic Policy Deployment using EST. FactoryTalk Policy Manager is the
+        documented Rockwell certificate/security management tool; no other certificate-management
+        paths in this schema are supported.
