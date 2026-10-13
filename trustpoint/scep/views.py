@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -39,8 +38,6 @@ class ScepView(LoggerMixin, View):
     http_method_names = ('get', 'post')
 
     def _resolve(self, request: HttpRequest, domain_name: str) -> tuple[DomainModel, CredentialModel] | HttpResponse:
-        if not (request.is_secure() or settings.DEBUG):
-            return _text('SCEP requires HTTPS.', 403)
         domain = DomainModel.objects.filter(unique_name=domain_name).first()
         credential = get_serving_credential(domain) if domain else None
         if domain is None or credential is None:

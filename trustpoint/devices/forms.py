@@ -477,6 +477,9 @@ class NoOnboardingCreateForm(forms.Form):
         if rest_selected and not no_onboarding_config_model.est_password:
             no_onboarding_config_model.est_password = _get_secret()
 
+        if NoOnboardingPkiProtocol.SCEP in no_onboarding_pki_protocols:
+            no_onboarding_config_model.set_scep_challenge()
+
         no_onboarding_config_model.full_clean()
 
         device_model = DeviceModel(
@@ -1174,6 +1177,8 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
         rest_enabled = self.cleaned_data['pki_protocol_rest'] is True
         if self.cleaned_data['pki_protocol_scep'] is True:
             self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.SCEP)
+            if not self.instance.no_onboarding_config.scep_challenge:
+                self.instance.no_onboarding_config.set_scep_challenge()
         if not est_enabled and not rest_enabled:
             self.instance.no_onboarding_config.est_password = ''
 

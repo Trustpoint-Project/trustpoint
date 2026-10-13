@@ -130,8 +130,8 @@ class ScepEnrollmentModelMixin(models.Model):
         """Return the lookup digest for a challenge."""
         return hashlib.sha256(challenge.encode('utf-8')).hexdigest()
 
-    def provision_scep_challenge(self, ttl: timedelta | None = None) -> str:
-        """Create a fresh per-device challenge; returns the plaintext (never logged).
+    def set_scep_challenge(self, ttl: timedelta | None = None) -> str:
+        """Set a fresh per-device challenge without saving; returns the plaintext (never log it).
 
         The lifetime defaults to ``SecurityConfig.credential_ttl_seconds`` like the other onboarding credentials.
         """
@@ -144,6 +144,11 @@ class ScepEnrollmentModelMixin(models.Model):
         self.scep_challenge_digest = self.scep_digest_for(challenge)
         self.scep_challenge_expires_at = timezone.now() + ttl
         self.scep_challenge_consumed_at = None
+        return challenge
+
+    def provision_scep_challenge(self, ttl: timedelta | None = None) -> str:
+        """Create and save a fresh per-device challenge (reset)."""
+        challenge = self.set_scep_challenge(ttl)
         self.save()
         return challenge
 

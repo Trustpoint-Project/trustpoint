@@ -54,7 +54,13 @@ from help_pages.commands import (
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import SecurityConfig
-from onboarding.models import NoOnboardingPkiProtocol, OnboardingConfigModel, OnboardingProtocol
+from management.models.audit_log import AuditLog
+from onboarding.models import (
+    NoOnboardingConfigModel,
+    NoOnboardingPkiProtocol,
+    OnboardingConfigModel,
+    OnboardingProtocol,
+)
 from pki.forms.cert_profiles import CertificateIssuanceForm, ProfileBasedFormFieldBuilder
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
@@ -114,6 +120,8 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
         if not request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
         self.object = self.get_object()
+        if isinstance(self.strategy, NoOnboardingScepStrategy):
+            return self._reset_scep_challenge(request)
         if not self.uses_onboarding_credential() or not self.object.onboarding_config_id:
             raise Http404(_('No renewable onboarding credential is configured for this device.'))
         with transaction.atomic():
@@ -139,6 +147,22 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
                 messages.success(request, _('The onboarding credential was renewed.'))
             else:
                 messages.warning(request, _('The onboarding credential is not expired or is no longer available.'))
+        return HttpResponseRedirect(request.get_full_path())
+
+    def _reset_scep_challenge(self, request: HttpRequest) -> HttpResponseRedirect:
+        """Create a fresh per-device SCEP challengePassword."""
+        config = NoOnboardingConfigModel.objects.filter(pk=self.object.no_onboarding_config_id).first()
+        if config is None or not config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP):
+            raise Http404(_('SCEP is not enabled for this device.'))
+        config.provision_scep_challenge()
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.SCEP_SECRET_PROVISIONED,
+            target=self.object,
+            target_display=f'Device: {self.object.common_name}',
+            actor=request.user,  # type: ignore[arg-type]
+            details={'expires_at': config.scep_challenge_expires_at.isoformat() if config.scep_challenge_expires_at else ''},
+        )
+        messages.success(request, _('The SCEP challengePassword was reset.'))
         return HttpResponseRedirect(request.get_full_path())
 
     def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
@@ -863,48 +887,76 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
         if not config or not config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP):
             raise Http404(_('SCEP is not enabled for this no-onboarding device.'))
 
-        scep_url = f'{help_context.host_base}/.well-known/scep/{domain.unique_name}/'
-        provision_url = reverse('scep_ui:device', kwargs={'pk': device.pk})
+        # SCEP is secured at the message level and served over plain HTTP (RFC 8894 section 7.10).
+        http_port = str(getattr(settings, 'TP_HTTP_PORT', '80'))
+        host_ip = help_context.host_base.split('://', 1)[-1].rsplit(':', 1)[0]
+        http_base = f'http://{host_ip}' if http_port == '80' else f'http://{host_ip}:{http_port}'
+        scep_base = f'{http_base}/.well-known/scep/{domain.unique_name}'
+        scep_url = f'{scep_base}/<certificate_profile>/'
         key_type = str(domain.public_key_info)
+        state = config.scep_challenge_state()
+        state_labels = {
+            'active': _non_lazy('Active - authorizes one initial enrollment'),
+            'consumed': _non_lazy('Consumed - only used for response encryption (ECC clients)'),
+            'expired': _non_lazy('Expired - reset it to enroll again'),
+            'none': _non_lazy('Not set - reset it to create one'),
+        }
+        reset_html = (
+            '<form method="post" action="">CSRF_TOKEN_PLACEHOLDER'
+            f'<button type="submit" class="btn btn-primary w-100">{_non_lazy("Reset challengePassword")}</button>'
+            '</form>'
+        )
 
         summary = HelpSection(
             _non_lazy('Summary'),
             [
                 HelpRow(_non_lazy('SCEP URL'), scep_url, ValueRenderType.CODE),
                 HelpRow(_non_lazy('Required Public Key Type'), key_type, ValueRenderType.CODE),
+                HelpRow(_non_lazy('challengePassword'), config.scep_challenge, ValueRenderType.CODE),
+                HelpRow(_non_lazy('challengePassword State'), state_labels[state], ValueRenderType.PLAIN),
                 HelpRow(
-                    _non_lazy('Enrollment Secret (challengePassword)'),
-                    format_html(
-                        '<a href="{}" class="btn btn-primary w-100">{}</a>',
-                        provision_url,
-                        _non_lazy('Provision / reset enrollment secret'),
-                    ),
-                    ValueRenderType.HTML,
+                    _non_lazy('challengePassword Expires'),
+                    str(config.scep_challenge_expires_at or '-'),
+                    ValueRenderType.PLAIN,
                 ),
+                HelpRow(_non_lazy('Reset'), mark_safe(reset_html), ValueRenderType.HTML),  # noqa: S308
                 HelpRow(
                     _non_lazy('Notes'),
                     _non_lazy(
-                        'The secret is shown only once and expires. It authorizes exactly one initial enrollment. '
-                        'ECC clients must retain it: it encrypts the responses (CMS PasswordRecipientInfo) '
-                        'but never authorizes another enrollment. Renewal (RenewalReq) is signed with the issued '
-                        'certificate. Supported: RSA >= 2048, ECDSA P-256 / P-384, SHA-256, AES-128-CBC.'
+                        'The challengePassword is per device and authorizes exactly one initial enrollment; the '
+                        'certificate profile is the one in the URL. ECC clients must retain it: it encrypts the '
+                        'responses (CMS PasswordRecipientInfo) but never authorizes another enrollment. Renewal '
+                        '(RenewalReq) is signed with the issued certificate and keeps its profile. Supported: '
+                        'RSA >= 2048, ECDSA P-256 / P-384, SHA-256, AES-128-CBC.'
                     ),
                     ValueRenderType.PLAIN,
                 ),
             ],
         )
 
+        profile_sections = []
+        for index, profile in enumerate(help_context.allowed_app_profiles):
+            name = profile.alias or profile.certificate_profile.unique_name
+            profile_url = f'{scep_base}/{name}/'
+            profile_sections.append(
+                self._build_profile_section(device.common_name, config.scep_challenge, profile_url, name, index)
+            )
+        sections_tail = [
+            build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
+            *profile_sections,
+        ]
+        scep_url_for_discovery = scep_base + '/'
         discovery = HelpSection(
             _non_lazy('Discovery'),
             [
                 HelpRow(
                     _non_lazy('GetCACaps'),
-                    f'curl -s "{scep_url}?operation=GetCACaps"',
+                    f'curl -s "{scep_url_for_discovery}?operation=GetCACaps"',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
                     _non_lazy('GetCACert (SCEP server and CA certificates)'),
-                    f'curl -s "{scep_url}?operation=GetCACert" -o ca-certs.p7b',
+                    f'curl -s "{scep_url_for_discovery}?operation=GetCACert" -o ca-certs.p7b',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -915,40 +967,43 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
             ],
         )
 
-        enrollment = HelpSection(
-            _non_lazy('Enrollment with sscep (RSA)'),
+        return [summary, discovery, *sections_tail], _non_lazy(
+            'Help - Issue Application Certificates using SCEP with a challengePassword'
+        )
+
+    @staticmethod
+    def _build_profile_section(common_name: str, challenge: str, profile_url: str, name: str, index: int) -> HelpSection:
+        """Enrollment and renewal commands for one certificate profile (the profile is part of the URL)."""
+        return HelpSection(
+            _non_lazy(f'Certificate Request for the {name} profile'),
             [
                 HelpRow(
                     _non_lazy('Generate key and CSR with challengePassword'),
                     (
                         'openssl req -new -newkey rsa:2048 -nodes -keyout key.pem -out req.pem '
-                        f'-subj "/CN={device.common_name}" '
+                        f'-subj "/CN={common_name}" '
                         '-config <(printf "[req]\\ndistinguished_name=dn\\nattributes=attrs\\nprompt=no\\n'
                         '[dn]\\nCN=%s\\n[attrs]\\nchallengePassword=%s\\n" '
-                        f'"{device.common_name}" "<enrollment-secret>")'
+                        f'"{common_name}" "{challenge}")'
                     ),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
-                    _non_lazy('Enroll'),
-                    (
-                        f'sscep enroll -u {scep_url} -c ca.crt -e ca.crt -k key.pem -r req.pem '
-                        '-l cert.pem -S sha256 -E aes'
-                    ),
+                    _non_lazy('Enroll (sscep)'),
+                    f'sscep enroll -u {profile_url} -c ca.crt -e ca.crt -k key.pem -r req.pem -l cert.pem -S sha256 -E aes',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
-                    _non_lazy('Renew'),
+                    _non_lazy('Renew (sscep)'),
                     (
-                        f'sscep enroll -u {scep_url} -c ca.crt -e ca.crt -k newkey.pem -r newreq.pem '
+                        f'sscep enroll -u {profile_url} -c ca-certs.pem -e ca-certs.pem -k newkey.pem -r newreq.pem '
                         '-K key.pem -O cert.pem -l cert-renewed.pem -S sha256 -E aes'
                     ),
                     ValueRenderType.CODE,
                 ),
             ],
-        )
-        return [summary, build_tls_trust_store_section(), discovery, enrollment], _non_lazy(
-            'Help - Issue Application Certificates using SCEP with an enrollment secret'
+            css_id=name,
+            hidden=index > 0,
         )
 
 

@@ -38,7 +38,7 @@ class ScepEnv:
     @property
     def url(self) -> str:
         """Endpoint path."""
-        return f'/.well-known/scep/{self.domain.unique_name}/'
+        return f'/.well-known/scep/{self.domain.unique_name}/{self.profile.unique_name}/'
 
     @property
     def config(self) -> NoOnboardingConfigModel:
@@ -47,7 +47,7 @@ class ScepEnv:
 
     def new_authorization(self) -> str:
         """Provision (reset) the enrollment secret."""
-        self.secret = self.config.provision_scep_challenge(self.profile)
+        self.secret = self.config.provision_scep_challenge()
         return self.secret
 
 
@@ -81,7 +81,7 @@ def _create_env(settings: Any, key_spec: Any, key_kind: str) -> ScepEnv:
         common_name=f'scep-device-{uuid.uuid4().hex[:6]}', domain=domain, no_onboarding_config=config
     )
     credential = ensure_server_credential(domain)
-    secret = config.provision_scep_challenge(profile)
+    secret = config.provision_scep_challenge()
     return ScepEnv(domain, device, profile, credential.get_certificate(), secret, key_kind)
 
 

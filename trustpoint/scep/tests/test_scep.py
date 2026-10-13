@@ -120,8 +120,9 @@ def test_get_ca_cert_returns_server_and_ca_chain(client: Client, rsa_env: ScepEn
     assert server.issuer == ca.subject
 
 
-def test_discovery_requires_https(client: Client, rsa_env: ScepEnv) -> None:
-    assert client.get(rsa_env.url, {'operation': 'GetCACaps'}).status_code == 403
+def test_discovery_works_over_plain_http(client: Client, rsa_env: ScepEnv) -> None:
+    response = client.get(rsa_env.url, {'operation': 'GetCACaps'})
+    assert response.status_code == 200
 
 
 def test_unsupported_and_unknown_operations(client: Client, rsa_env: ScepEnv) -> None:
@@ -257,8 +258,22 @@ def test_reset_invalidates_previous_secret(client: Client, rsa_env: ScepEnv) -> 
     assert rsa_env.config.scep_challenge_digest != type(rsa_env.config).scep_digest_for(old_secret)
 
 
-def test_secret_of_other_device_is_bound_to_its_device_profile(client: Client, rsa_env: ScepEnv) -> None:
-    assert rsa_env.config.scep_certificate_profile == rsa_env.profile
+def test_initial_enrollment_requires_an_allowed_profile_in_the_url(client: Client, rsa_env: ScepEnv) -> None:
+    key = support.make_key('rsa')
+    base = f'/.well-known/scep/{rsa_env.domain.unique_name}/'
+    for url in (base, f'{base}not-allowed/'):
+        body, nonce = support.build_request(
+            signer_key=key,
+            signer_cert=support.make_self_signed(key, CN),
+            server_cert=rsa_env.server_cert,
+            csr=support.make_csr(key, CN, rsa_env.secret),
+            transaction_id='tx-profile',
+        )
+        response = client.post(
+            url + '?operation=PKIOperation', body, content_type='application/x-pki-message', secure=True
+        )
+        _assert_failure(support.parse_cert_rep(response.content), nonce, FailInfo.BAD_REQUEST)
+    assert rsa_env.config.can_authorize_scep_enrollment()
     assert rsa_env.secret not in str(rsa_env.config)
     assert rsa_env.config.scep_challenge_digest != rsa_env.secret
 
