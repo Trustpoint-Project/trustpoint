@@ -28,6 +28,11 @@ class Migration(migrations.Migration):
             name='organization',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='domains', to='management.organizationmodel', verbose_name='Organization'),
         ),
+        migrations.AddField(
+            model_name='domainmodel',
+            name='scep_server_credential',
+            field=models.ForeignKey(blank=True, editable=False, help_text='Dedicated RSA credential for SCEP; created on demand and issued by the domain CA.', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='pki.credentialmodel', verbose_name='SCEP Server Credential'),
+        ),
         migrations.AlterField(
             model_name='camodel',
             name='ca_type',
@@ -42,6 +47,11 @@ class Migration(migrations.Migration):
             model_name='certificatemodel',
             name='spki_algorithm_oid',
             field=models.CharField(choices=[('1.2.840.10045.2.1', 'Ecc'), ('1.2.840.113549.1.1.1', 'Rsa'), ('2.16.840.1.101.3.4.3.17', 'Mldsa44'), ('2.16.840.1.101.3.4.3.18', 'Mldsa65'), ('2.16.840.1.101.3.4.3.19', 'Mldsa87')], editable=False, max_length=256, verbose_name='Public Key Algorithm OID'),
+        ),
+        migrations.AlterField(
+            model_name='credentialmodel',
+            name='credential_type',
+            field=models.IntegerField(choices=[(0, 'Trustpoint TLS Server'), (1, 'Root CA'), (2, 'Issuing CA'), (3, 'Issued Credential'), (4, 'DevOwnerID'), (5, 'Signer'), (6, 'SCEP Server')], verbose_name='Credential Type'),
         ),
         migrations.AddConstraint(
             model_name='camodel',

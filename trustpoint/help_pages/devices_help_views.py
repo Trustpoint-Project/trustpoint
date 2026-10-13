@@ -849,6 +849,123 @@ class OpcUaGdsNoOnboardingCmpWebUiHelpView(DeviceNoOnboardingCmpWebUiHelpView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
+class NoOnboardingScepStrategy(HelpPageStrategy):
+    """Strategy for building the no-onboarding SCEP (RFC 8894) help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
+        config = device.no_onboarding_config
+        if not config or not config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP):
+            raise Http404(_('SCEP is not enabled for this no-onboarding device.'))
+
+        scep_url = f'{help_context.host_base}/.well-known/scep/{domain.unique_name}/'
+        provision_url = reverse('scep_ui:device', kwargs={'pk': device.pk})
+        key_type = str(domain.public_key_info)
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(_non_lazy('SCEP URL'), scep_url, ValueRenderType.CODE),
+                HelpRow(_non_lazy('Required Public Key Type'), key_type, ValueRenderType.CODE),
+                HelpRow(
+                    _non_lazy('Enrollment Secret (challengePassword)'),
+                    format_html(
+                        '<a href="{}" class="btn btn-primary w-100">{}</a>',
+                        provision_url,
+                        _non_lazy('Provision / reset enrollment secret'),
+                    ),
+                    ValueRenderType.HTML,
+                ),
+                HelpRow(
+                    _non_lazy('Notes'),
+                    _non_lazy(
+                        'The secret is shown only once and expires. It authorizes exactly one initial enrollment. '
+                        'ECC clients must retain it: it encrypts the responses (CMS PasswordRecipientInfo) '
+                        'but never authorizes another enrollment. Renewal (RenewalReq) is signed with the issued '
+                        'certificate. Supported: RSA >= 2048, ECDSA P-256 / P-384, SHA-256, AES-128-CBC.'
+                    ),
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+        discovery = HelpSection(
+            _non_lazy('Discovery'),
+            [
+                HelpRow(
+                    _non_lazy('GetCACaps'),
+                    f'curl -s "{scep_url}?operation=GetCACaps"',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('GetCACert (SCEP server and CA certificates)'),
+                    f'curl -s "{scep_url}?operation=GetCACert" -o ca-certs.p7b',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Extract the certificates'),
+                    'openssl pkcs7 -inform DER -in ca-certs.p7b -print_certs -out ca-certs.pem',
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        enrollment = HelpSection(
+            _non_lazy('Enrollment with sscep (RSA)'),
+            [
+                HelpRow(
+                    _non_lazy('Generate key and CSR with challengePassword'),
+                    (
+                        'openssl req -new -newkey rsa:2048 -nodes -keyout key.pem -out req.pem '
+                        f'-subj "/CN={device.common_name}" '
+                        '-config <(printf "[req]\\ndistinguished_name=dn\\nattributes=attrs\\nprompt=no\\n'
+                        '[dn]\\nCN=%s\\n[attrs]\\nchallengePassword=%s\\n" '
+                        f'"{device.common_name}" "<enrollment-secret>")'
+                    ),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Enroll'),
+                    (
+                        f'sscep enroll -u {scep_url} -c ca.crt -e ca.crt -k key.pem -r req.pem '
+                        '-l cert.pem -S sha256 -E aes'
+                    ),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Renew'),
+                    (
+                        f'sscep enroll -u {scep_url} -c ca.crt -e ca.crt -k newkey.pem -r newreq.pem '
+                        '-K key.pem -O cert.pem -l cert-renewed.pem -S sha256 -E aes'
+                    ),
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+        return [summary, build_tls_trust_store_section(), discovery, enrollment], _non_lazy(
+            'Help - Issue Application Certificates using SCEP with an enrollment secret'
+        )
+
+
+class DeviceNoOnboardingScepHelpView(BaseHelpView):
+    """Help view for no-onboarding SCEP for generic device abstractions."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = NoOnboardingScepStrategy()
+
+
+class OpcUaGdsNoOnboardingScepHelpView(BaseHelpView):
+    """Help view for no-onboarding SCEP for OPC-UA GDS abstractions."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+    strategy = NoOnboardingScepStrategy()
+
+
 class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
     """Help view for the case of no onboarding using EST username and password generic device abstractions."""
 

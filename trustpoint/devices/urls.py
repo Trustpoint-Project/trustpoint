@@ -158,6 +158,16 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_est_username_password_help',
     ),
     path(
+        'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/scep/',
+        devices_help_views.DeviceNoOnboardingScepHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_scep_help',
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/scep/',
+        devices_help_views.OpcUaGdsNoOnboardingScepHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_scep_help',
+    ),
+    path(
         'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/rest-username-password/',
         devices_help_views.DeviceNoOnboardingRestUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_rest_username_password_help',
