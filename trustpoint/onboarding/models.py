@@ -104,7 +104,12 @@ class ScepEnrollmentModelMixin(models.Model):
     after consumption.
     """
 
-    scep_challenge = EncryptedCharField(verbose_name=_('SCEP Challenge Password'), max_length=256, blank=True, default='')
+    scep_challenge = EncryptedCharField(
+        verbose_name=_('SCEP Challenge Password'),
+        max_length=256,
+        blank=True,
+        default=''
+        )
     scep_challenge_digest = models.CharField(
         verbose_name=_('SCEP Challenge Lookup Digest'), max_length=64, blank=True, default='', db_index=True,
         help_text=_('SHA-256 of the high-entropy challenge; used only to locate the device.'),

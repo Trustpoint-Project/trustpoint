@@ -110,30 +110,65 @@ def build_password_recipient_info(password: str, cek: bytes) -> rfc5652.Recipien
     return recipient
 
 
-def unwrap_password_recipient_info(pwri: rfc5652.PasswordRecipientInfo, password: str) -> bytes:
+def _validate_pwri_algorithms(
+    pwri: rfc5652.PasswordRecipientInfo,
+    kek_cipher: rfc5280.AlgorithmIdentifier,
+    params: rfc8018.PBKDF2_params,
+) -> None:
+    if pwri['keyEncryptionAlgorithm']['algorithm'] != OID_PWRI_KEK:
+        msg = 'Unsupported key encryption algorithm.'
+        raise PasswordRecipientError(msg)
+
+    if (
+        not pwri['keyDerivationAlgorithm'].isValue
+        or pwri['keyDerivationAlgorithm']['algorithm'] != OID_PBKDF2
+    ):
+        msg = 'Unsupported key derivation algorithm.'
+        raise PasswordRecipientError(msg)
+
+    if kek_cipher['algorithm'] != OID_AES128_CBC:
+        msg = 'Unsupported key wrap cipher.'
+        raise PasswordRecipientError(msg)
+
+    if params['prf'].isValue and params['prf']['algorithm'] != OID_HMAC_SHA256:
+        msg = 'Unsupported PBKDF2 PRF.'
+        raise PasswordRecipientError(msg)
+
+
+def unwrap_password_recipient_info(
+    pwri: rfc5652.PasswordRecipientInfo,
+    password: str,
+) -> bytes:
     """Recover the content-encryption key from a PasswordRecipientInfo using ``password``."""
     try:
-        if pwri['keyEncryptionAlgorithm']['algorithm'] != OID_PWRI_KEK:
-            msg = 'Unsupported key encryption algorithm.'
-            raise PasswordRecipientError(msg)
-        if not pwri['keyDerivationAlgorithm'].isValue or pwri['keyDerivationAlgorithm']['algorithm'] != OID_PBKDF2:
-            msg = 'Unsupported key derivation algorithm.'
-            raise PasswordRecipientError(msg)
+        kek_cipher, _ = decoder.decode(
+            bytes(pwri['keyEncryptionAlgorithm']['parameters']),
+            asn1Spec=rfc5280.AlgorithmIdentifier(),
+        )
 
-        kek_cipher, _ = decoder.decode(bytes(pwri['keyEncryptionAlgorithm']['parameters']),
-                                       asn1Spec=rfc5280.AlgorithmIdentifier())
-        if kek_cipher['algorithm'] != OID_AES128_CBC:
-            msg = 'Unsupported key wrap cipher.'
-            raise PasswordRecipientError(msg)
-        iv_obj, _ = decoder.decode(bytes(kek_cipher['parameters']), asn1Spec=univ.OctetString())
-        params, _ = decoder.decode(bytes(pwri['keyDerivationAlgorithm']['parameters']), asn1Spec=rfc8018.PBKDF2_params())
-        if params['prf'].isValue and params['prf']['algorithm'] != OID_HMAC_SHA256:
-            msg = 'Unsupported PBKDF2 PRF.'
-            raise PasswordRecipientError(msg)
-        kek = derive_kek(password, bytes(params['salt']['specified']), int(params['iterationCount']))
-        return unwrap_cek(bytes(pwri['encryptedKey']), kek, bytes(iv_obj))
-    except PasswordRecipientError:
-        raise
+        iv_obj, _ = decoder.decode(
+            bytes(kek_cipher['parameters']),
+            asn1Spec=univ.OctetString(),
+        )
+
+        params, _ = decoder.decode(
+            bytes(pwri['keyDerivationAlgorithm']['parameters']),
+            asn1Spec=rfc8018.PBKDF2_params(),
+        )
     except Exception as exc:
         msg = 'Malformed PasswordRecipientInfo.'
         raise PasswordRecipientError(msg) from exc
+
+    _validate_pwri_algorithms(pwri, kek_cipher, params)
+
+    kek = derive_kek(
+        password,
+        bytes(params['salt']['specified']),
+        int(params['iterationCount']),
+    )
+
+    return unwrap_cek(
+        bytes(pwri['encryptedKey']),
+        kek,
+        bytes(iv_obj),
+    )

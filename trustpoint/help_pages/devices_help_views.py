@@ -160,7 +160,8 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
             target=self.object,
             target_display=f'Device: {self.object.common_name}',
             actor=request.user,  # type: ignore[arg-type]
-            details={'expires_at': config.scep_challenge_expires_at.isoformat() if config.scep_challenge_expires_at else ''},
+            details={'expires_at':
+                     config.scep_challenge_expires_at.isoformat() if config.scep_challenge_expires_at else ''},
         )
         messages.success(request, _('The SCEP challengePassword was reset.'))
         return HttpResponseRedirect(request.get_full_path())
@@ -972,7 +973,9 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
         )
 
     @staticmethod
-    def _build_profile_section(common_name: str, challenge: str, profile_url: str, name: str, index: int) -> HelpSection:
+    def _build_profile_section(
+        common_name: str, challenge: str, profile_url: str, name: str, index: int
+        ) -> HelpSection:
         """Enrollment and renewal commands for one certificate profile (the profile is part of the URL)."""
         return HelpSection(
             _non_lazy(f'Certificate Request for the {name} profile'),
@@ -990,7 +993,8 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
                 ),
                 HelpRow(
                     _non_lazy('Enroll (sscep)'),
-                    f'sscep enroll -u {profile_url} -c ca.crt -e ca.crt -k key.pem -r req.pem -l cert.pem -S sha256 -E aes',
+                    f'sscep enroll -u {profile_url} -c ca.crt -e ca.crt -k key.pem '
+                    '-r req.pem -l cert.pem -S sha256 -E aes',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(

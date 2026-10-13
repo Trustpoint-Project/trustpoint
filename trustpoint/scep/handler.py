@@ -15,7 +15,6 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509.oid import AttributeOID
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -25,7 +24,6 @@ from onboarding.enums import NoOnboardingPkiProtocol, OnboardingPkiProtocol
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import CertificateModel
 from request.authorization import ScepAuthorization
-from request.operation_processor.general import OperationProcessor
 from request.request_context import ScepCertificateRequestContext
 from scep.protocol.cms import (
     KeyTransRecipient,
@@ -162,7 +160,7 @@ class ScepPkiOperationHandler(LoggerMixin):
         entry = (config.scep_transactions or {}).get(transaction_id)
         return entry if isinstance(entry, dict) else None
 
-    def _authorize_and_issue(  # noqa: C901
+    def _authorize_and_issue(
         self,
         message: ParsedPkiMessage,
         signer: x509.Certificate,
@@ -173,17 +171,42 @@ class ScepPkiOperationHandler(LoggerMixin):
         config = authenticated.config
         device = authenticated.device
         profile = authenticated.profile
+
         if profile is None:
-            raise ScepProtocolError(FailInfo.BAD_REQUEST, _INVALID_AUTHORIZATION)
+            raise ScepProtocolError(
+                FailInfo.BAD_REQUEST,
+                _INVALID_AUTHORIZATION,
+            )
+
         message_type = MessageType(message.message_type)
-        request_digest = self._request_digest(message_type, signer, csr_der)
+        request_digest = self._request_digest(
+            message_type,
+            signer,
+            csr_der,
+        )
 
-        existing = self._lookup_transaction(config, message.transaction_id)
+        existing = self._lookup_transaction(
+            config,
+            message.transaction_id,
+        )
+
         if existing is not None:
-            return self._answer_retry(existing, message, signer, authenticated, request_digest)
+            return self._answer_retry(
+                existing,
+                message,
+                signer,
+                authenticated,
+                request_digest,
+            )
 
-        if message_type == MessageType.PKCS_REQ and not config.can_authorize_scep_enrollment():
-            raise ScepProtocolError(FailInfo.BAD_REQUEST, _INVALID_AUTHORIZATION)
+        if (
+            message_type == MessageType.PKCS_REQ
+            and not config.can_authorize_scep_enrollment()
+        ):
+            raise ScepProtocolError(
+                FailInfo.BAD_REQUEST,
+                _INVALID_AUTHORIZATION,
+            )
 
         ctx = ScepCertificateRequestContext(
             raw_message=self.request,
@@ -198,41 +221,60 @@ class ScepPkiOperationHandler(LoggerMixin):
             scep_message_type=int(message_type),
             scep_signer_certificate=signer,
         )
+
         try:
             ScepAuthorization().authorize(ctx)
         except ValueError as exc:
-            raise ScepProtocolError(FailInfo.BAD_REQUEST, 'The request was rejected by the enrollment policy.') from exc
+            raise ScepProtocolError(
+                FailInfo.BAD_REQUEST,
+                'The request was rejected by the enrollment policy.',
+            ) from exc
 
         try:
-            with transaction.atomic():
-                locked = type(config).objects.select_for_update().get(pk=config.pk)
-                if self._lookup_transaction(locked, message.transaction_id) is not None:
-                    raise _ReplayError
-                if message_type == MessageType.PKCS_REQ and not locked.consume_scep_challenge():
-                    raise ScepProtocolError(FailInfo.BAD_REQUEST, _INVALID_AUTHORIZATION)
-                OperationProcessor().process_operation(ctx)
-                if ctx.issued_certificate is None:
-                    raise ScepProtocolError(FailInfo.BAD_REQUEST, _GENERIC_FAILURE_TEXT)
-                transactions = dict(locked.scep_transactions or {})
-                transactions[message.transaction_id] = {
-                    'digest': request_digest,
-                    'message_type': int(message_type),
-                    'cert_sha256': ctx.issued_certificate.fingerprint(hashes.SHA256()).hex().upper(),
-                    'at': timezone.now().isoformat(),
-                }
-                type(config).objects.filter(pk=config.pk).update(scep_transactions=transactions)
+            self._issue_certificate_transaction(
+                config,
+                message,
+                message_type,
+                ctx,
+                request_digest,
+            )
         except _ReplayError:
             fresh = type(config).objects.get(pk=config.pk)
-            entry = self._lookup_transaction(fresh, message.transaction_id)
+            entry = self._lookup_transaction(
+                fresh,
+                message.transaction_id,
+            )
+
             if entry is None:
-                raise ScepProtocolError(FailInfo.BAD_REQUEST, _GENERIC_FAILURE_TEXT) from None
-            replay_auth = _Authenticated(device, fresh, authenticated.operation, profile)
-            return self._answer_retry(entry, message, signer, replay_auth, request_digest)
+                raise ScepProtocolError(
+                    FailInfo.BAD_REQUEST,
+                    _GENERIC_FAILURE_TEXT,
+                ) from None
+
+            replay_auth = _Authenticated(
+                device,
+                fresh,
+                authenticated.operation,
+                profile,
+            )
+
+            return self._answer_retry(
+                entry,
+                message,
+                signer,
+                replay_auth,
+                request_digest,
+            )
+
         except ScepProtocolError:
             raise
+
         except Exception as exc:
             self.logger.exception('SCEP: issuance failed')
-            raise ScepProtocolError(FailInfo.BAD_REQUEST, _GENERIC_FAILURE_TEXT) from exc
+            raise ScepProtocolError(
+                FailInfo.BAD_REQUEST,
+                _GENERIC_FAILURE_TEXT,
+            ) from exc
 
         AuditLog.create_entry(
             operation_type=(
@@ -241,16 +283,32 @@ class ScepPkiOperationHandler(LoggerMixin):
                 else AuditLog.OperationType.SCEP_RENEWAL
             ),
             target=device,
-            target_display=f'Device: {device.common_name} | Domain: {self.domain.unique_name} | Protocol: scep',
+            target_display=(
+                f'Device: {device.common_name} | '
+                f'Domain: {self.domain.unique_name} | '
+                'Protocol: scep'
+            ),
             details={
                 'transaction_id': message.transaction_id,
                 'operation': authenticated.operation,
                 'certificate_profile': profile.unique_name,
-                'serial_number': format(ctx.issued_certificate.serial_number, 'x'),
+                'serial_number': format(
+                    ctx.issued_certificate.serial_number,
+                    'x',
+                ),
             },
         )
-        chain = [ctx.issued_certificate, *(ctx.issued_certificate_chain or [])]
-        return self._success_response(message, chain, self._recipient(signer, config))
+
+        chain = [
+            ctx.issued_certificate,
+            *(ctx.issued_certificate_chain or []),
+        ]
+
+        return self._success_response(
+            message,
+            chain,
+            self._recipient(signer, config),
+        )
 
     # ------------------------------------------------------------------ authentication
 
@@ -275,7 +333,10 @@ class ScepPkiOperationHandler(LoggerMixin):
             raise ScepProtocolError(FailInfo.BAD_REQUEST, 'A challengePassword is required.')
         device = self._device_for_challenge(challenge)
         config = get_scep_config(device) if device is not None else None
-        if device is None or config is None or not hmac.compare_digest(config.scep_challenge.encode(), challenge.encode()):
+        if device is None or config is None or not hmac.compare_digest(
+            config.scep_challenge.encode(),
+            challenge.encode()
+            ):
             raise ScepProtocolError(FailInfo.BAD_REQUEST, _INVALID_AUTHORIZATION)
         entry = self._lookup_transaction(config, message.transaction_id)
         is_retry = entry is not None and entry.get('message_type') == int(MessageType.PKCS_REQ)
@@ -284,16 +345,22 @@ class ScepPkiOperationHandler(LoggerMixin):
         return _Authenticated(device, config, 'pkcsreq', self._requested_profile(device))
 
     def _requested_profile(self, device: DeviceModel) -> CertificateProfileModel:
-        """The profile named in the URL; it must be allowed in the domain (policy is enforced again on issuance)."""
+        """The profile named in the URL; it must be allowed in the domain."""
+        error = _DeviceKnownError(
+            device,
+            ScepProtocolError(
+                FailInfo.BAD_REQUEST,
+                'A certificate profile allowed in the domain is required in the URL.',
+            ),
+        )
+
+        if not self.cert_profile:
+            raise error
+
         try:
-            if not self.cert_profile:
-                raise ValueError
             return self.domain.get_allowed_cert_profile(self.cert_profile)
         except ValueError:
-            raise _DeviceKnownError(
-                device,
-                ScepProtocolError(FailInfo.BAD_REQUEST, 'A certificate profile allowed in the domain is required in the URL.'),
-            ) from None
+            raise error from None
 
     def _check_self_signed_signer(self, signer: x509.Certificate, csr: x509.CertificateSigningRequest) -> None:
         """RFC 8894 section 2.3: the initial signer is a self-signed certificate matching the CSR key and subject."""
@@ -320,12 +387,15 @@ class ScepPkiOperationHandler(LoggerMixin):
             raise ScepProtocolError(FailInfo.BAD_REQUEST, 'The signer certificate subject must match the CSR subject.')
 
     def _authenticate_renewal(self, signer: x509.Certificate, csr: x509.CertificateSigningRequest) -> _Authenticated:
-        """Authenticate with an existing valid certificate bound to device, domain and profile by its IssuedCredentialModel."""
+        """Authenticate with an existing valid certificate by its IssuedCredentialModel."""
         try:
             issued = IssuedCredentialModel.get_credential_for_certificate(signer)
         except IssuedCredentialModel.DoesNotExist:
             raise ScepProtocolError(FailInfo.BAD_CERT_ID, 'The signer certificate is not known.') from None
-        device = DeviceModel.objects.select_related('onboarding_config', 'no_onboarding_config').get(pk=issued.device_id)
+        device = DeviceModel.objects.select_related(
+            'onboarding_config',
+            'no_onboarding_config'
+            ).get(pk=issued.device_id)
         fingerprint = signer.fingerprint(hashes.SHA256()).hex().upper()
         config = get_scep_config(device)
         if config is None:

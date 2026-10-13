@@ -37,7 +37,7 @@ class ScepView(LoggerMixin, View):
 
     http_method_names = ('get', 'post')
 
-    def _resolve(self, request: HttpRequest, domain_name: str) -> tuple[DomainModel, CredentialModel] | HttpResponse:
+    def _resolve(self, _request: HttpRequest, domain_name: str) -> tuple[DomainModel, CredentialModel] | HttpResponse:
         domain = DomainModel.objects.filter(unique_name=domain_name).first()
         credential = get_serving_credential(domain) if domain else None
         if domain is None or credential is None:

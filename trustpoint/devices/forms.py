@@ -1141,7 +1141,7 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             raise forms.ValidationError(err_msg)
         return common_name
 
-    def save(self) -> None:
+    def save(self) -> None: # noqa: C901
         """Saves the changes to DB."""
         if not self.instance.no_onboarding_config:
             err_msg = _('Expected DeviceModel that is configured to use onboarding.')
