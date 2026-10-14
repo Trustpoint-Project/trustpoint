@@ -157,7 +157,7 @@ _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
 }
 
 
-def _json_safe(value: Any) -> object:
+def _json_safe(value: Any) -> object: # noqa: PLR0911
     """Convert persisted model values into deterministic JSON-safe audit values."""
     if value is None or isinstance(value, (bool, int, float, str)):
         return value

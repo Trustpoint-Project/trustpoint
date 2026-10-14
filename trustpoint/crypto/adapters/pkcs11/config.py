@@ -150,9 +150,7 @@ class Pkcs11TokenSelector:
         if self.token_serial is not None:
             if self.token_serial != normalized_serial:
                 return False
-            if self.token_label is not None and self.token_label != normalized_label:
-                return False
-            return True
+            return not (self.token_label is not None and self.token_label != normalized_label)
 
         if self.slot_id is not None and self.slot_id == slot_id:
             return self.token_label is None or self.token_label == normalized_label
