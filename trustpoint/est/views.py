@@ -10,27 +10,29 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-
-from request.operation_processor.general import OperationProcessor
-
-if TYPE_CHECKING:
-    from pki.models.credential import CredentialModel
-
 from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from pki.models.ca_rollover import CaRolloverState
 from pki.models.domain import DomainModel
 from pki.services.ca_rollover import CaRolloverService
-from request.authentication import EstAuthentication
 from request.authorization import EstAuthorization
 from request.message_parser import EstMessageParser
 from request.message_responder import EstErrorMessageResponder, EstMessageResponder
+from request.operation_processor.general import OperationProcessor
 from request.request_context import EstCertificateRequestContext
 from request.request_validator.http_req import EstHttpRequestValidator
+from request.security_hardening import (
+    authenticate_est_request,
+    process_certificate_operation_atomically,
+    require_single_security_config,
+)
 from request.workflow2_issuance import release_delivered_workflow2_request
 from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 from workflows2.events.request_events import Events
+
+if TYPE_CHECKING:
+    from pki.models.credential import CredentialModel
 
 
 class UsernamePasswordAuthenticationError(Exception):
@@ -44,14 +46,7 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
     """Custom HttpResponse that logs and prints error messages automatically."""
 
     def __init__(self, content: str | bytes = b'', status: int | None = None, *args: Any, **kwargs: Any) -> None:
-        """Initialize the LoggedHttpResponse instance.
-
-        Args:
-            content (Any): The content of the response.
-            status (Optional[int], optional): The HTTP status code of the response. Defaults to None.
-            *args (Any): Additional positional arguments passed to HttpResponse.
-            **kwargs (Any): Additional keyword arguments passed to HttpResponse.
-        """
+        """Initialize the LoggedHttpResponse instance."""
         if status and status >= THRESHOLD_LOGGER:
             if isinstance(content, bytes):
                 content = content.decode('utf-8')
@@ -63,21 +58,12 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
 
 
 class EstRequestedDomainExtractorMixin:
-    """Mixin to extract the requested domain.
-
-    This mixin sets:
-      - self.requested_domain: The DomainModel instance based on the 'domain' parameter.
-      - self.issuing_ca_certificate: The CA certificate for the requested domain.
-      - self.signature_suite: The signature suite derived from the CA certificate.
-    """
+    """Mixin to extract the requested domain."""
 
     requested_domain: DomainModel | None
 
     def extract_requested_domain(self, domain_name: str) -> tuple[DomainModel | None, LoggedHttpResponse | None]:
-        """Extracts the requested domain and sets the relevant certificate and signature suite.
-
-        :return: The response from the parent class's dispatch method.
-        """
+        """Extract the requested domain."""
         try:
             requested_domain = DomainModel.objects.get(unique_name=domain_name)
         except DomainModel.DoesNotExist:
@@ -97,16 +83,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
         domain_name: str | None,
         cert_profile: str | None,
     ) -> HttpResponse:
-        """Process an EST simple enrollment request.
-
-        Args:
-            request: The HTTP request object.
-            domain_name: The domain name (can be None for default).
-            cert_profile: The certificate profile name (can be None for default).
-
-        Returns:
-            LoggedHttpResponse with the enrollment result.
-        """
+        """Process an EST simple enrollment request."""
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
 
         try:
@@ -116,36 +93,26 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
                 operation='simpleenroll',
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
-                event=self.EVENT
+                event=self.EVENT,
             )
-
         except Exception:
             err_msg = 'Failed to set up EST request context.'
             self.logger.exception(err_msg)
             return HttpResponse(err_msg, status=500)
 
         try:
-            validator = EstHttpRequestValidator()
-            validator.validate(ctx)
-
-            parser = EstMessageParser()
-            ctx = cast('EstCertificateRequestContext', parser.parse(ctx))
-
-            est_authenticator = EstAuthentication()
-            est_authenticator.authenticate(ctx)
-
-            est_authorizer = EstAuthorization(
-                allowed_operations=['simpleenroll']
-            )
-            est_authorizer.authorize(ctx)
+            EstHttpRequestValidator().validate(ctx)
+            ctx = cast('EstCertificateRequestContext', EstMessageParser().parse(ctx))
+            require_single_security_config(ctx)
+            authenticate_est_request(ctx)
+            EstAuthorization(allowed_operations=['simpleenroll']).authorize(ctx)
 
             workflow2_result = Workflow2Handler().handle(ctx)
             if not workflow2_result.should_stop:
-                OperationProcessor().process_operation(ctx)
+                process_certificate_operation_atomically(ctx, OperationProcessor())
 
             EstMessageResponder.build_response(ctx)
             release_delivered_workflow2_request(ctx)
-
         except Exception:
             self.logger.exception('Error processing EST simpleenroll request')
             EstErrorMessageResponder.build_response(ctx)
@@ -155,26 +122,19 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
-    """Handles simple EST (Enrollment over Secure Transport) enrollment requests."""
+    """Handles simple EST enrollment requests."""
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle POST requests for simple enrollment with domain and cert profile in URL."""
+        """Handle POST requests for simple enrollment."""
         del args
-
         domain_name = cast('str', kwargs.get('domain'))
         cert_profile = cast('str | None', kwargs.get('cert_profile'))
-
         return self.process_enrollment(request, domain_name, cert_profile)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
 class EstSimpleReEnrollmentView(LoggerMixin, View):
-    """Handles simple EST (Enrollment over Secure Transport) reenrollment requests.
-
-    This view processes certificate signing requests (CSRs), authenticates the client using
-    either Mutual TLS or username/password, validates the device, and issues the requested certificate
-    based on the certificate template specified in the request.
-    """
+    """Handles EST simplereenroll requests."""
 
     EVENT = Events.est_simplereenroll
 
@@ -183,48 +143,35 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del args
 
-        # TODO: This should really be done by the message parser,  # noqa: FIX002, TD002
-        # it also needs to handle the case where one or both are omitted
         try:
             domain_name = cast('str', kwargs.get('domain'))
             cert_profile = cast('str', kwargs.get('cert_profile'))
-
             ctx = EstCertificateRequestContext(
                 raw_message=request,
                 protocol='est',
                 operation='simplereenroll',
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
-                event=self.EVENT
+                event=self.EVENT,
             )
-
         except Exception:
             err_msg = 'Failed to set up request context.'
             self.logger.exception(err_msg)
             return LoggedHttpResponse(err_msg, status=500)
 
         try:
-            validator = EstHttpRequestValidator()
-            validator.validate(ctx)
-
-            parser = EstMessageParser()
-            ctx = cast('EstCertificateRequestContext', parser.parse(ctx))
-
-            est_authenticator = EstAuthentication()
-            est_authenticator.authenticate(ctx)
-
-            est_authorizer = EstAuthorization(
-                allowed_operations=['simplereenroll']
-            )
-            est_authorizer.authorize(ctx)
+            EstHttpRequestValidator().validate(ctx)
+            ctx = cast('EstCertificateRequestContext', EstMessageParser().parse(ctx))
+            require_single_security_config(ctx)
+            authenticate_est_request(ctx)
+            EstAuthorization(allowed_operations=['simplereenroll']).authorize(ctx)
 
             workflow2_result = Workflow2Handler().handle(ctx)
             if not workflow2_result.should_stop:
-                OperationProcessor().process_operation(ctx)
+                process_certificate_operation_atomically(ctx, OperationProcessor())
 
             EstMessageResponder.build_response(ctx)
             release_delivered_workflow2_request(ctx)
-
         except Exception:
             self.logger.exception('Error processing EST simplereenroll request')
             EstErrorMessageResponder.build_response(ctx)
@@ -232,21 +179,12 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
         return ctx.to_http_response()
 
 
-
 @method_decorator(csrf_exempt, name='dispatch')
 class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
-    """View to handle the EST /cacerts endpoint.
-
-    Returns the CA certificate chain in a (simplified) PKCS#7 MIME format.
-
-    URL pattern should supply the 'domain' parameter (e.g., /cacerts/<domain>/)
-    """
+    """View to handle the EST /cacerts endpoint."""
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
-        """Handle GET requests for the /cacerts endpoint.
-
-        This method retrieves the CA certificate chain and returns it in PKCS#7 MIME format.
-        """
+        """Handle GET requests for the /cacerts endpoint."""
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del request, args
         requested_domain: DomainModel | None
@@ -256,7 +194,6 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
             if not http_response and requested_domain:
-
                 if not requested_domain.issuing_ca:
                     return LoggedHttpResponse('The requested domain has no issuing CA configured', status=500)
 
@@ -267,14 +204,15 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
 
                 active_rollover = CaRolloverService.get_active_rollover(requested_domain.issuing_ca)
 
-                if (active_rollover
+                if (
+                    active_rollover
                     and active_rollover.state == CaRolloverState.PREPARATION
                     and active_rollover.new_issuing_ca
-                    and active_rollover.new_issuing_ca.credential):
+                    and active_rollover.new_issuing_ca.credential
+                ):
                     old_chain = ca_credential_serializer.get_full_chain_as_serializer()
                     new_ca_credential = active_rollover.new_issuing_ca.credential.get_credential_serializer()
                     new_chain = new_ca_credential.get_full_chain_as_serializer()
-
                     combined_certs = old_chain.as_crypto() + new_chain.as_crypto()
                     combined_chain = CertificateCollectionSerializer(combined_certs)
                     pkcs7_certs = combined_chain.as_pkcs7_der()
@@ -282,8 +220,9 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
                     pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()
 
                 b64_pkcs7 = base64.b64encode(pkcs7_certs).decode()
-
-                formatted_b64_pkcs7 = '\n'.join([b64_pkcs7[i : i + 64] for i in range(0, len(b64_pkcs7), 64)])
+                formatted_b64_pkcs7 = '\n'.join(
+                    b64_pkcs7[i : i + 64] for i in range(0, len(b64_pkcs7), 64)
+                )
 
                 http_response = LoggedHttpResponse(
                     formatted_b64_pkcs7.encode(),
@@ -309,14 +248,10 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class EstCsrAttrsView(View, LoggerMixin):
-    """View to handle the EST /csrattrs endpoint.
-
-    This endpoint is not supported and returns 404 Not Found.
-    """
+    """View to handle the EST /csrattrs endpoint."""
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Handle GET requests for the /csrattrs endpoint."""
+        """Return 404 because csrattrs is not supported."""
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del request, args, kwargs
-
         return LoggedHttpResponse('csrattrs/ is not supported', status=404)
