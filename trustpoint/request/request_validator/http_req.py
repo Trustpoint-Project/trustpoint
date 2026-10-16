@@ -35,11 +35,15 @@ class TrustedProxyHeadersValidation(ValidationComponent, LoggerMixin):
     until their proxy subnet/address is configured explicitly.
     """
 
-    _SENSITIVE_EXACT = {
-        'HTTP_SSL_CLIENT_CERT',
-        'HTTP_X_FORWARDED_FOR',
-        'HTTP_X_REAL_IP',
-    }
+    def __init__(self) -> None:
+        """Initialize the trusted proxy headers validation component."""
+        super().__init__()
+
+        self._SENSITIVE_EXACT = {
+            'HTTP_SSL_CLIENT_CERT',
+            'HTTP_X_FORWARDED_FOR',
+            'HTTP_X_REAL_IP',
+        }
 
     @staticmethod
     def _trusted_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
@@ -48,9 +52,8 @@ class TrustedProxyHeadersValidation(ValidationComponent, LoggerMixin):
             configured = [item.strip() for item in configured.split(',') if item.strip()]
         return [ipaddress.ip_network(str(value), strict=False) for value in configured]
 
-    @classmethod
-    def _has_sensitive_headers(cls, meta: dict[str, object]) -> bool:
-        if any(meta.get(name) not in (None, '') for name in cls._SENSITIVE_EXACT):
+    def _has_sensitive_headers(self, meta: dict[str, object]) -> bool:
+        if any(meta.get(name) not in (None, '') for name in self._SENSITIVE_EXACT):
             return True
         return any(
             key.startswith(('HTTP_SSL_CLIENT_CERT_CHAIN_', 'SSL_CLIENT_CERT_CHAIN_'))
