@@ -151,9 +151,14 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
 
     def _reset_scep_challenge(self, request: HttpRequest) -> HttpResponseRedirect:
         """Create a fresh per-device SCEP challengePassword."""
-        config = NoOnboardingConfigModel.objects.filter(pk=self.object.no_onboarding_config_id).first()
+        config_id = self.object.no_onboarding_config_id
+        if config_id is None:
+            raise Http404(_('SCEP is not enabled for this device.'))
+
+        config = NoOnboardingConfigModel.objects.filter(pk=config_id).first()
         if config is None or not config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP):
             raise Http404(_('SCEP is not enabled for this device.'))
+
         config.provision_scep_challenge()
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.SCEP_SECRET_PROVISIONED,

@@ -20,6 +20,8 @@ class Command(StaticFilesRunServerCommand):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Use the TP_HTTP_PORT environment variable as default port if present."""
         super().__init__(*args, **kwargs)
+        self.port: str
+
         http_port = os.environ.get('TP_HTTP_PORT', '').strip()
         if http_port.isdigit():
             self.default_port = http_port

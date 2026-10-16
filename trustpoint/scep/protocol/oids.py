@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from enum import IntEnum
 
-from pyasn1.type import univ
+from pyasn1.type import univ  # type: ignore[import-untyped]
 
 # RFC 8894 section 3.2.1: id-VeriSign 2.16.840.1.113733, id-pki .1, id-attributes .9
 _ATTRIBUTES_ARC = '2.16.840.1.113733.1.9'

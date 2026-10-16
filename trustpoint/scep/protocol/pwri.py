@@ -10,9 +10,9 @@ import os
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from pyasn1.codec.der import decoder, encoder
-from pyasn1.type import univ
-from pyasn1_modules import rfc5280, rfc5652, rfc8018
+from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
+from pyasn1.type import univ  # type: ignore[import-untyped]
+from pyasn1_modules import rfc5280, rfc5652, rfc8018  # type: ignore[import-untyped]
 
 from scep.protocol.oids import (
     AES128_KEY_BYTES,

@@ -64,17 +64,6 @@ class DomainModel(models.Model):
         default=True,
     )
 
-    scep_server_credential = models.ForeignKey(
-        'pki.CredentialModel',
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        editable=False,
-        related_name='+',
-        verbose_name=_('SCEP Server Credential'),
-        help_text=_('Dedicated RSA credential for SCEP; created on demand and issued by the domain CA.'),
-    )
-
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 

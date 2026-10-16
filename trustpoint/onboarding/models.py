@@ -104,6 +104,8 @@ class ScepEnrollmentModelMixin(models.Model):
     after consumption.
     """
 
+    objects = models.Manager()
+
     scep_challenge = EncryptedCharField(
         verbose_name=_('SCEP Challenge Password'),
         max_length=256,
@@ -176,7 +178,9 @@ class ScepEnrollmentModelMixin(models.Model):
         now = now or timezone.now()
         updated = (
             type(self).objects.filter(
-                pk=self.pk, scep_challenge_consumed_at__isnull=True, scep_challenge_expires_at__gt=now
+                pk=self.pk,
+                scep_challenge_consumed_at__isnull=True,
+                scep_challenge_expires_at__gt=now,
             )
             .exclude(scep_challenge_digest='')
             .update(scep_challenge_consumed_at=now)

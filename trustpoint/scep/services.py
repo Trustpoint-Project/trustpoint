@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -18,6 +18,7 @@ from onboarding.enums import NoOnboardingPkiProtocol
 from pki.models import CaModel
 from pki.models.credential import CredentialModel
 from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
+from scep.models import ScepServerConfigModel
 
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives import hashes
@@ -127,16 +128,24 @@ def provision_server_credential(domain: DomainModel) -> CredentialModel:
     return CredentialModel.save_credential_serializer(serializer, CredentialModel.CredentialTypeChoice.SCEP_SERVER)
 
 
-def server_credential_is_usable(domain: DomainModel) -> bool:
-    """Return whether the stored server credential exists, is not about to expire and was issued by the current CA."""
-    credential = domain.scep_server_credential
+def server_credential_is_usable(config: ScepServerConfigModel) -> bool:
+    """Check whether the SCEP server credential is still usable."""
+    credential = config.server_credential
+
     if credential is None or credential.certificate is None:
         return False
+
     cert = credential.get_certificate()
+
     if cert.not_valid_after_utc - datetime.datetime.now(datetime.UTC) < SERVER_CERT_RENEW_BEFORE:
         return False
-    issuing_credential = get_local_issuing_ca(domain).get_credential()
-    return issuing_credential is not None and cert.issuer == issuing_credential.get_certificate().subject
+
+    issuing_credential = get_local_issuing_ca(config.domain).get_credential()
+
+    return (
+        issuing_credential is not None
+        and cert.issuer == issuing_credential.get_certificate().subject
+    )
 
 
 def scep_permitted_by_security_config() -> bool:
@@ -149,19 +158,36 @@ def scep_permitted_by_security_config() -> bool:
     return NoOnboardingPkiProtocol.SCEP.value in (cfg.permitted_no_onboarding_pki_protocols or [])
 
 
+
+
 def ensure_server_credential(domain: DomainModel) -> CredentialModel:
-    """Return the domain's SCEP server credential, provisioning it when missing or expiring."""
+    """Return the SCEP server credential, provisioning it when missing or expiring."""
     from pki.models import DomainModel as DomainModelCls  # noqa: PLC0415
 
     get_local_issuing_ca(domain)
+
     with transaction.atomic():
-        locked = DomainModelCls.objects.select_for_update().select_related('scep_server_credential').get(pk=domain.pk)
-        if not server_credential_is_usable(locked):
-            credential = provision_server_credential(locked)
-            DomainModelCls.objects.filter(pk=locked.pk).update(scep_server_credential=credential)
-            locked.scep_server_credential = credential
-    domain.scep_server_credential = locked.scep_server_credential
-    return cast('CredentialModel', locked.scep_server_credential)
+        locked_domain = (
+            DomainModelCls.objects
+            .select_for_update()
+            .get(pk=domain.pk)
+        )
+
+        config, _ = ScepServerConfigModel.objects.get_or_create(
+            domain=locked_domain,
+        )
+
+        if not server_credential_is_usable(config):
+            config.server_credential = provision_server_credential(locked_domain)
+            config.save(update_fields=['server_credential'])
+
+        credential = config.server_credential
+
+    if credential is None:
+        msg = 'Failed to provision SCEP server credential.'
+        raise ScepConfigurationError(msg)
+
+    return credential
 
 
 def get_serving_credential(domain: DomainModel) -> CredentialModel | None:

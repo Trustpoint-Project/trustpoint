@@ -19,12 +19,12 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives import padding as sym_padding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from pyasn1.codec.ber import decoder as ber_decoder
-from pyasn1.codec.der import decoder as der_decoder
+from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyped]
+from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import encoder as der_encoder
-from pyasn1.error import PyAsn1Error
-from pyasn1.type import char, univ, useful
-from pyasn1_modules import rfc5280, rfc5652
+from pyasn1.error import PyAsn1Error  # type: ignore[import-untyped]
+from pyasn1.type import char, univ, useful  # type: ignore[import-untyped]
+from pyasn1_modules import rfc5280, rfc5652  # type: ignore[import-untyped]
 
 from scep.protocol.errors import ScepMalformedMessageError, ScepProtocolError
 from scep.protocol.oids import (
@@ -414,7 +414,9 @@ def _wrap_content_info(content_type: univ.ObjectIdentifier, content: Any) -> byt
     content_info = rfc5652.ContentInfo()
     content_info['contentType'] = content_type
     content_info['content'] = _any(content)
-    return der_encoder.encode(content_info)
+
+    encoded: bytes = der_encoder.encode(content_info)
+    return encoded
 
 
 def build_degenerate_certificates_only(certificates: Sequence[x509.Certificate]) -> bytes:

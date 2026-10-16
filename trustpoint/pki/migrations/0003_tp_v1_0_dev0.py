@@ -28,11 +28,6 @@ class Migration(migrations.Migration):
             name='organization',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='domains', to='management.organizationmodel', verbose_name='Organization'),
         ),
-        migrations.AddField(
-            model_name='domainmodel',
-            name='scep_server_credential',
-            field=models.ForeignKey(blank=True, editable=False, help_text='Dedicated RSA credential for SCEP; created on demand and issued by the domain CA.', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='pki.credentialmodel', verbose_name='SCEP Server Credential'),
-        ),
         migrations.AlterField(
             model_name='camodel',
             name='ca_type',
