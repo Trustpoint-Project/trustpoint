@@ -71,6 +71,18 @@ class CmpTransactionModel(models.Model):
         verbose_name=_('Implicit Confirm Requested'),
         default=False,
     )
+    last_client_nonce = models.BinaryField(
+        verbose_name=_('Last Client Nonce'),
+        null=True,
+        blank=True,
+        help_text=_('Most recently authenticated CMP senderNonce for this transaction.'),
+    )
+    last_server_nonce = models.BinaryField(
+        verbose_name=_('Last Server Nonce'),
+        null=True,
+        blank=True,
+        help_text=_('Most recently emitted CMP senderNonce for this transaction.'),
+    )
 
     device = models.ForeignKey(
         'devices.DeviceModel',

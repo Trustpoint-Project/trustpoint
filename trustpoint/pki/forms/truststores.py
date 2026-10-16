@@ -5,9 +5,11 @@
 
 from __future__ import annotations
 
+import itertools
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
@@ -17,8 +19,10 @@ from trustpoint_core.serializer import (
     CertificateSerializer,
 )
 
+from management.models import SecurityConfig
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from pki.util.x509 import CertificateVerifier
 from util.field import UniqueNameValidator, get_certificate_name
 
 if TYPE_CHECKING:
@@ -56,7 +60,7 @@ class TruststoreAddForm(forms.Form):
     trust_store_file = forms.FileField(label=_('PEM, DER, or PKCS#7 File'), required=True)
 
     def clean_unique_name(self) -> str:
-        """Validates the uniqueness of the truststore name.
+        """Validate the uniqueness of the truststore name.
 
         Raises:
             ValidationError: If the name is already used by an existing truststore.
@@ -68,31 +72,14 @@ class TruststoreAddForm(forms.Form):
         return cast('str', unique_name)
 
     def _raise_validation_error(self, message: str) -> NoReturn:
-        """Helper method to raise a ValidationError with a given message.
-
-        Args:
-            message (str): The error message to be included in the ValidationError.
-
-        Raises:
-            ValidationError: Always raised with the provided message.
-        """
+        """Raise a form validation error."""
         raise ValidationError(message)
 
     def clean(self) -> None:
-        """Cleans and validates the form data.
-
-        Ensures the uploaded file can be read and validates the unique name
-        and intended usage fields. If validation passes, initializes and saves
-        the truststore.
-
-        Raises:
-            ValidationError: If the truststore file cannot be read, the unique name
-            is not unique, or an unexpected error occurs during initialization.
-        """
+        """Clean and validate the uploaded truststore."""
         cleaned_data = cast('dict[str, Any]', super().clean())
         unique_name = cleaned_data.get('unique_name')
         intended_usage = str(cleaned_data.get('intended_usage'))
-
 
         trust_store_file = cleaned_data.get('trust_store_file')
         if trust_store_file is None:
@@ -109,7 +96,6 @@ class TruststoreAddForm(forms.Form):
         try:
             certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(trust_store_file)
         except Exception:  # noqa: BLE001
-            # Try parsing as a single certificate (DER or PEM)
             try:
                 certificate_serializer = CertificateSerializer.from_bytes(trust_store_file)
                 der_bytes = certificate_serializer.as_der()
@@ -120,6 +106,8 @@ class TruststoreAddForm(forms.Form):
 
         try:
             certs = certificate_collection_serializer.as_crypto()
+            if not certs:
+                self._raise_validation_error('Truststore cannot be empty.')
             if not unique_name:
                 unique_name = get_certificate_name(certs[0])
 
@@ -136,14 +124,16 @@ class TruststoreAddForm(forms.Form):
             )
         except ValidationError:
             raise
-        except Exception:  # noqa: BLE001
-            self._raise_validation_error('Failed to save the Truststore.')
+        except Exception as exc:
+            raise ValidationError(_('Failed to save the Truststore.')) from exc
 
         self.cleaned_data['truststore'] = trust_store_model
 
     @staticmethod
     def save_trust_store(
-        unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
+        unique_name: str,
+        intended_usage: TruststoreModel.IntendedUsage,
+        certificates: list[x509.Certificate],
     ) -> TruststoreModel:
         """Save all certificates of a truststore."""
         saved_certs: list[CertificateModel] = []
@@ -171,17 +161,12 @@ class TruststoreAddForm(forms.Form):
 def validate_and_create_ca_chain(
     certificates: list[x509.Certificate], intended_usage: TruststoreModel.IntendedUsage
 ) -> CaModel | None:
-    """Validate certificate chain and create keyless CA models for intermediates.
+    """Validate an issuing-CA chain and create keyless CA models for its issuers.
 
-    Args:
-        certificates: List of certificates in the truststore (order: leaf to root or root to leaf)
-        intended_usage: The intended usage of the truststore
-
-    Returns:
-        The issuing CA (parent of the leaf certificate), or None if not ISSUING_CA_CHAIN
-
-    Raises:
-        ValidationError: If the chain is invalid or incomplete for ISSUING_CA_CHAIN usage
+    Validation is deliberately fail-closed. The chain must include exactly one
+    complete leaf-to-root path, every certificate must be a valid CA certificate,
+    every signature must verify, path-length constraints must be respected, and
+    the active security policy must be unambiguous.
     """
     if intended_usage != TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN:
         return None
@@ -190,26 +175,33 @@ def validate_and_create_ca_chain(
         raise ValidationError(_('Truststore for Issuing CA Chain cannot be empty.'))
 
     sorted_certs = _sort_certificate_chain(certificates)
-
     if not sorted_certs:
         raise ValidationError(
-            _('Unable to validate certificate chain. The certificates do not form a valid chain.')
+            _('Unable to validate certificate chain. The certificates do not form a single complete chain.')
         )
 
     if not _validate_chain_integrity(sorted_certs):
         raise ValidationError(
-            _('Invalid certificate chain. Each certificate must be signed by the next certificate in the chain.')
+            _('Invalid certificate chain. Each certificate must be cryptographically signed by the next certificate.')
         )
 
-    last_cert = sorted_certs[-1]
-    if last_cert.issuer != last_cert.subject:
+    root = sorted_certs[-1]
+    if root.issuer != root.subject:
         raise ValidationError(
             _('Incomplete certificate chain. The chain must end with a self-signed root CA certificate.')
         )
 
+    try:
+        root.verify_directly_issued_by(root)
+    except (InvalidSignature, ValueError) as exc:
+        raise ValidationError(_('The root CA certificate is not validly self-signed.')) from exc
+
+    _validate_security_policy_is_unambiguous()
+    _validate_ca_semantics_and_policy(sorted_certs)
+    _validate_path_length_constraints(sorted_certs)
+
     parent_ca = None
     issuer_ca = None
-
     for cert in reversed(sorted_certs[1:]):
         ca_model = _create_or_get_keyless_ca(cert, parent_ca)
         parent_ca = ca_model
@@ -219,82 +211,108 @@ def validate_and_create_ca_chain(
     return issuer_ca
 
 
+def _validate_security_policy_is_unambiguous() -> None:
+    """Require exactly one SecurityConfig before trust-establishing imports."""
+    try:
+        SecurityConfig.objects.get()
+    except SecurityConfig.DoesNotExist as exc:
+        raise ValidationError(
+            _('No SecurityConfig is configured. Trust-establishing CA-chain imports are blocked.')
+        ) from exc
+    except SecurityConfig.MultipleObjectsReturned as exc:
+        raise ValidationError(
+            _('Multiple SecurityConfig rows are configured. Trust-establishing CA-chain imports are blocked.')
+        ) from exc
+
+
+def _validate_ca_semantics_and_policy(sorted_certs: list[x509.Certificate]) -> None:
+    """Validate CA semantics, validity, algorithms, and the complete path for every certificate."""
+    root = sorted_certs[-1]
+    intermediates = sorted_certs[1:-1]
+
+    for cert in sorted_certs:
+        try:
+            CertificateVerifier.verify_ca_cert(
+                cert,
+                trusted_roots=[root],
+                untrusted_intermediates=intermediates,
+            )
+        except (TypeError, ValueError) as exc:
+            subject = cert.subject.rfc4514_string()
+            raise ValidationError(
+                _('CA certificate %(subject)s violates certificate or security policy: %(reason)s'),
+                params={'subject': subject, 'reason': str(exc)},
+            ) from exc
+
+
+def _validate_path_length_constraints(sorted_certs: list[x509.Certificate]) -> None:
+    """Enforce BasicConstraints.path_length for all CA certificates in the path."""
+    for index, cert in enumerate(sorted_certs):
+        try:
+            constraints = cert.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except x509.ExtensionNotFound as exc:
+            raise ValidationError(_('CA certificate is missing required BasicConstraints.')) from exc
+
+        if not constraints.ca:
+            raise ValidationError(_('Certificate in issuing CA chain has BasicConstraints.ca=False.'))
+
+        if constraints.path_length is not None and index > constraints.path_length:
+            subject = cert.subject.rfc4514_string()
+            raise ValidationError(
+                _('CA certificate %(subject)s violates its BasicConstraints.path_length constraint.'),
+                params={'subject': subject},
+            )
+
+
 def _sort_certificate_chain(certificates: list[x509.Certificate]) -> list[x509.Certificate]:
-    """Sort certificates from leaf to root based on issuer/subject relationships.
-
-    Args:
-        certificates: Unsorted list of certificates
-
-    Returns:
-        Sorted list from leaf to root, or empty list if chain cannot be constructed
-    """
+    """Sort certificates from leaf to root and reject ambiguous or extra certificates."""
     if len(certificates) == 1:
         return certificates
 
     cert_by_subject: dict[bytes, x509.Certificate] = {}
     for cert in certificates:
-        cert_by_subject[cert.subject.public_bytes()] = cert
+        subject = cert.subject.public_bytes()
+        if subject in cert_by_subject:
+            return []
+        cert_by_subject[subject] = cert
 
     issuer_subjects = {cert.issuer.public_bytes() for cert in certificates}
-    leaf_candidates = [
-        cert for cert in certificates if cert.subject.public_bytes() not in issuer_subjects
-    ]
+    leaf_candidates = [cert for cert in certificates if cert.subject.public_bytes() not in issuer_subjects]
+    if len(leaf_candidates) != 1:
+        return []
 
-    if not leaf_candidates:
-        leaf_candidates = [certificates[0]]
+    chain = [leaf_candidates[0]]
+    current = leaf_candidates[0]
 
-    for leaf in leaf_candidates:
-        chain = [leaf]
-        current = leaf
+    while True:
+        issuer_subject = current.issuer.public_bytes()
+        if issuer_subject == current.subject.public_bytes():
+            return chain if len(chain) == len(certificates) else []
 
-        while True:
-            issuer_subject = current.issuer.public_bytes()
-            if issuer_subject == current.subject.public_bytes():
-                return chain
-            if issuer_subject not in cert_by_subject:
-                break
-            next_cert = cert_by_subject[issuer_subject]
-            if next_cert in chain:
-                break
-            chain.append(next_cert)
-            current = next_cert
+        next_cert = cert_by_subject.get(issuer_subject)
+        if next_cert is None or next_cert in chain:
+            return []
 
-            if len(chain) > len(certificates):
-                # Safety check
-                break
-
-    return []
+        chain.append(next_cert)
+        current = next_cert
+        if len(chain) > len(certificates):
+            return []
 
 
 def _validate_chain_integrity(sorted_certs: list[x509.Certificate]) -> bool:
-    """Validate that each certificate is properly signed by the next certificate.
-
-    Args:
-        sorted_certs: Certificates sorted from leaf to root
-
-    Returns:
-        True if chain is valid, False otherwise
-    """
-    for i in range(len(sorted_certs) - 1):
-        cert = sorted_certs[i]
-        issuer_cert = sorted_certs[i + 1]
-
-        if cert.issuer.public_bytes() != issuer_cert.subject.public_bytes():
+    """Cryptographically verify every adjacent certificate signature in a sorted chain."""
+    for cert, issuer_cert in itertools.pairwise(sorted_certs):
+        if cert.issuer != issuer_cert.subject:
             return False
-
+        try:
+            cert.verify_directly_issued_by(issuer_cert)
+        except (InvalidSignature, ValueError):
+            return False
     return True
 
 
 def _create_or_get_keyless_ca(cert: x509.Certificate, parent_ca: CaModel | None = None) -> CaModel:
-    """Create or get a keyless CA model for the given certificate.
-
-    Args:
-        cert: The certificate to create a CA for
-        parent_ca: The parent CA in the hierarchy (the CA that issued this certificate)
-
-    Returns:
-        The created or existing CA model
-    """
+    """Create or get a keyless CA model for the given certificate."""
     from pki.models.ca import CaModel  # noqa: PLC0415
 
     sha256_fingerprint = cert.fingerprint(algorithm=hashes.SHA256()).hex().upper()
@@ -311,12 +329,10 @@ def _create_or_get_keyless_ca(cert: x509.Certificate, parent_ca: CaModel | None 
     except CertificateModel.DoesNotExist:
         cert_model = CertificateModel.save_certificate(cert)
 
-
     try:
         cn_attrs = cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
         if cn_attrs:
             cn_value = cn_attrs[0].value
-            # Decode bytes to string if necessary
             common_name = cn_value.decode('utf-8') if isinstance(cn_value, bytes) else cn_value
         else:
             msg = 'Common Name (CN) is mandatory for CA certificates.'
@@ -336,7 +352,7 @@ def _create_or_get_keyless_ca(cert: x509.Certificate, parent_ca: CaModel | None 
         ca_type=CaModel.CaTypeChoice.KEYLESS,
         certificate=cert_model,
         parent_ca=parent_ca,
-        is_active=True
+        is_active=True,
     )
     ca.save()
 
@@ -344,27 +360,7 @@ def _create_or_get_keyless_ca(cert: x509.Certificate, parent_ca: CaModel | None 
 
 
 class TruststoreDownloadForm(forms.Form):
-    """Form for downloading truststores in various formats.
-
-    This form provides options to customize the download of truststores, allowing
-    users to specify the container type, inclusion of certificate chains, and
-    the file format. It ensures flexibility in exporting truststores for
-    various use cases and environments.
-
-    Attributes:
-        cert_file_container (ChoiceField): Specifies the container type for the truststore.
-            - `single_file`: The entire truststore in a single file.
-            - `zip`: Certificates as separate files in a `.zip` archive.
-            - `tar_gz`: Certificates as separate files in a `.tar.gz` archive.
-        cert_chain_incl (ChoiceField): Specifies whether to include certificate chains.
-            - `cert_only`: Only the selected certificates.
-            - `chain_incl`: Include certificate chains.
-        cert_file_format (ChoiceField): Specifies the file format for the truststore.
-            - `pem`: PEM format (.pem, .crt, .ca-bundle).
-            - `der`: DER format (.der, .cer).
-            - `pkcs7_pem`: PKCS#7 format in PEM encoding (.p7b, .p7c, .keystore).
-            - `pkcs7_der`: PKCS#7 format in DER encoding (.p7b, .p7c, .keystore).
-    """
+    """Form for downloading truststores in various formats."""
 
     cert_file_container = forms.ChoiceField(
         label=_('Select Truststore Container Type'),

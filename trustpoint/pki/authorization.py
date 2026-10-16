@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from pki.models.ca import CaModel
     from pki.models.certificate import CertificateModel
 
+
 class HasCaModel(Protocol):
     """Structural type satisfied by :class:`~pki.models.ca.CaModel`.
 
@@ -30,6 +31,7 @@ class HasCaModel(Protocol):
     @property
     def crl_validity_hours(self) -> float:
         """Return the configured CRL validity in hours."""
+
 
 class PkiCheckStrategy(ABC):
     """Abstract base for a single PKI security-policy check."""
@@ -46,6 +48,7 @@ class PkiCheckStrategy(ABC):
             ValueError: If the CA violates the policy.
         """
 
+
 class _AllowSelfSignedCaStrategy(PkiCheckStrategy, LoggerMixin):
     """Rejects self-signed CAs when :attr:`SecurityConfig.allow_self_signed_ca` is ``False``."""
 
@@ -56,7 +59,6 @@ class _AllowSelfSignedCaStrategy(PkiCheckStrategy, LoggerMixin):
 
         cert_model: CertificateModel | None = ca.ca_certificate_model
         if cert_model is None:
-            # No certificate yet (e.g. pending remote CA); nothing to check.
             self.logger.debug(
                 '_AllowSelfSignedCaStrategy: CA "%s" has no certificate yet; skipping.',
                 ca.unique_name,
@@ -86,7 +88,6 @@ class _MaxCrlValidityStrategy(PkiCheckStrategy, LoggerMixin):
         """Compare the CA's ``crl_validity_hours`` against the policy maximum (converted to hours)."""
         max_days: int | None = cfg.max_crl_validity_days
         if max_days is None:
-            # No limit configured.
             self.logger.debug(
                 '_MaxCrlValidityStrategy: no max_crl_validity_days set; skipping.',
             )
@@ -126,7 +127,6 @@ class _RsaMinimumKeySizeStrategy(PkiCheckStrategy, LoggerMixin):
             return
 
         if cert_model.spki_algorithm_oid != PublicKeyAlgorithmOid.RSA.dotted_string:
-            # Not an RSA certificate — strategy not applicable.
             self.logger.debug(
                 '_RsaMinimumKeySizeStrategy: CA "%s" uses %s (not RSA); skipping.',
                 ca.unique_name,
@@ -188,21 +188,16 @@ class _NotPermittedEccCurvesStrategy(PkiCheckStrategy, LoggerMixin):
             )
             return
 
-        not_permitted: list[str] = cfg.not_permitted_ecc_curve_oids or []
-        if not not_permitted:
-            self.logger.debug(
-                '_NotPermittedEccCurvesStrategy: no ECC curves blocked; skipping.',
-            )
-            return
-
         curve_oid: str = cert_model.spki_ec_curve_oid
         if not curve_oid:
-            self.logger.debug(
-                '_NotPermittedEccCurvesStrategy: CA "%s" has no curve OID recorded; skipping.',
-                ca.unique_name,
+            msg = (
+                f'CA "{ca.unique_name}" uses ECC, but no curve OID is recorded. '
+                'The active security policy cannot be evaluated safely.'
             )
-            return
+            self.logger.warning('_NotPermittedEccCurvesStrategy: %s', msg)
+            raise ValueError(msg)
 
+        not_permitted: list[str] = cfg.not_permitted_ecc_curve_oids or []
         if curve_oid in not_permitted:
             msg = (
                 f'CA "{ca.unique_name}" uses ECC curve OID {curve_oid!r}, which is not permitted '
@@ -219,10 +214,10 @@ class _NotPermittedEccCurvesStrategy(PkiCheckStrategy, LoggerMixin):
 
 
 class _NotPermittedSignatureAlgorithmsStrategy(PkiCheckStrategy, LoggerMixin):
-    """Rejects CA certificates whose signature hash algorithm appears in the policy block-list."""
+    """Rejects unknown or explicitly forbidden CA certificate signature algorithms."""
 
     def check(self, ca: CaModel, cfg: SecurityConfig) -> None:
-        """Check the CA certificate's signature hash algorithm against the policy block-list."""
+        """Check the CA certificate's signature algorithm against the active policy."""
         cert_model: CertificateModel | None = ca.ca_certificate_model
         if cert_model is None:
             self.logger.debug(
@@ -231,48 +226,41 @@ class _NotPermittedSignatureAlgorithmsStrategy(PkiCheckStrategy, LoggerMixin):
             )
             return
 
-        not_permitted: list[str] = cfg.not_permitted_signature_algorithm_oids or []
-        if not not_permitted:
-            self.logger.debug(
-                '_NotPermittedSignatureAlgorithmsStrategy: no signature algorithms blocked; skipping.',
-            )
-            return
-
         sig_oid: str = cert_model.signature_algorithm_oid
         try:
             algo_id = AlgorithmIdentifier.from_dotted_string(sig_oid)
-        except ValueError:
-            # Unknown algorithm identifier — cannot check; log and skip.
-            self.logger.debug(
-                '_NotPermittedSignatureAlgorithmsStrategy: CA "%s" has unknown signature algorithm OID %r; skipping.',
-                ca.unique_name,
-                sig_oid,
+        except ValueError as exc:
+            msg = (
+                f'CA "{ca.unique_name}" uses unknown signature algorithm OID {sig_oid!r}. '
+                'The active security policy cannot be evaluated safely.'
             )
-            return
+            self.logger.warning('_NotPermittedSignatureAlgorithmsStrategy: %s', msg)
+            raise ValueError(msg) from exc
 
-        hash_algo = algo_id.hash_algorithm
-        if hash_algo is None:
-            self.logger.debug(
-                '_NotPermittedSignatureAlgorithmsStrategy: CA "%s" algorithm %r has no associated hash; skipping.',
-                ca.unique_name,
-                algo_id.name,
-            )
-            return
-
-        hash_oid: str = hash_algo.dotted_string
-        if hash_oid in not_permitted:
+        not_permitted: list[str] = cfg.not_permitted_signature_algorithm_oids or []
+        if sig_oid in not_permitted:
             msg = (
                 f'CA "{ca.unique_name}" is signed with {algo_id.name} '
-                f'(hash OID {hash_oid!r}), which is not permitted by the active security policy.'
+                f'(signature OID {sig_oid!r}), which is not permitted by the active security policy.'
+            )
+            self.logger.warning('_NotPermittedSignatureAlgorithmsStrategy: %s', msg)
+            raise ValueError(msg)
+
+        hash_algo = algo_id.hash_algorithm
+        if hash_algo is not None and hash_algo.dotted_string in not_permitted:
+            msg = (
+                f'CA "{ca.unique_name}" is signed with {algo_id.name} '
+                f'(hash OID {hash_algo.dotted_string!r}), which is not permitted by the active security policy.'
             )
             self.logger.warning('_NotPermittedSignatureAlgorithmsStrategy: %s', msg)
             raise ValueError(msg)
 
         self.logger.debug(
-            '_NotPermittedSignatureAlgorithmsStrategy: CA "%s" signature hash %r is permitted; check passed.',
+            '_NotPermittedSignatureAlgorithmsStrategy: CA "%s" signature algorithm %r is permitted; check passed.',
             ca.unique_name,
-            hash_algo.name,
+            algo_id.name,
         )
+
 
 class PkiSecurityAuthorization(LoggerMixin):
     """Runs all PKI security-policy checks against the active :class:`~management.models.SecurityConfig`."""
@@ -288,21 +276,22 @@ class PkiSecurityAuthorization(LoggerMixin):
         ]
 
     def check(self, ca: CaModel) -> None:
-        """Run all PKI policy checks against *ca*."""
+        """Run all PKI policy checks against *ca* and fail closed on ambiguous policy state."""
         try:
-            cfg: SecurityConfig = SecurityConfig.objects.get()
-        except SecurityConfig.DoesNotExist:
-            self.logger.warning(
-                'PkiSecurityAuthorization: no SecurityConfig found; skipping all checks for CA "%s".',
-                ca.unique_name,
+            cfg = SecurityConfig.objects.get()
+        except SecurityConfig.DoesNotExist as exc:
+            msg = (
+                f'No SecurityConfig is configured; refusing security-policy authorization for CA "{ca.unique_name}".'
             )
-            return
-        except SecurityConfig.MultipleObjectsReturned:
-            cfg = SecurityConfig.objects.first()  # type: ignore[assignment]
-            self.logger.warning(
-                'PkiSecurityAuthorization: multiple SecurityConfig rows found; using first for CA "%s".',
-                ca.unique_name,
+            self.logger.exception('PkiSecurityAuthorization: %s', msg)
+            raise ValueError(msg) from exc
+        except SecurityConfig.MultipleObjectsReturned as exc:
+            msg = (
+                f'Multiple SecurityConfig rows are configured; refusing security-policy authorization '
+                f'for CA "{ca.unique_name}".'
             )
+            self.logger.exception('PkiSecurityAuthorization: %s', msg)
+            raise ValueError(msg) from exc
 
         for strategy in self._strategies:
             strategy.check(ca, cfg)
