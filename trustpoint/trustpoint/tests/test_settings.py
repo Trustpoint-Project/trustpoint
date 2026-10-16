@@ -318,6 +318,7 @@ def test_public_paths():
     expected_paths = [
         '/.well-known/cmp',
         '/.well-known/est',
+        '/.well-known/scep',
         '/rest',
         '/api',
         '/aoki',

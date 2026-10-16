@@ -320,6 +320,7 @@ class TestNoOnboardingIssueApplicationCredentialView:
             NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
             NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
             NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD,
+            NoOnboardingPkiProtocol.SCEP,
             NoOnboardingPkiProtocol.MANUAL
         ])
         no_onboarding_config.cmp_shared_secret = 'test_secret'
@@ -345,7 +346,7 @@ class TestNoOnboardingIssueApplicationCredentialView:
         assert response.status_code == 200
         assert 'sections' in response.context
         sections = response.context['sections']
-        assert len(sections) == 6
+        assert len(sections) == 7
         headings = {str(section['heading']) for section in sections}
         assert {'EST with WebUI', 'CMP with WebUI'} <= headings
         

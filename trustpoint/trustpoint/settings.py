@@ -79,6 +79,7 @@ BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
 PUBLIC_PATHS = [
     '/.well-known/cmp',
     '/.well-known/est',
+    '/.well-known/scep',
     '/rest',
     '/api',
     '/aoki',
@@ -422,6 +423,7 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
+    'scep.apps.ScepConfig',
     'rest_pki.apps.RestPkiConfig',
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',

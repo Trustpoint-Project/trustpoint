@@ -163,6 +163,19 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
                 'url': f'{self.page_category}:{self.page_name}_no_onboarding_rest_username_password_help',
             }
         )
+        sections.append(
+            {
+                'heading': gettext_lazy('SCEP with sscep (enrollment secret)'),
+                'group': 'SCEP',
+                'description': gettext_lazy(
+                    'This option will guide you through all steps and commands that are '
+                    'required to issue a new application certificate using SCEP (RFC 8894).'
+                ),
+                'protocol': 'scep',
+                'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP),
+                'url': f'{self.page_category}:{self.page_name}_no_onboarding_scep_help',
+            }
+        )
         sections.insert(1, {
             'heading': gettext_lazy('CMP with WebUI'),
             'group': 'CMP',

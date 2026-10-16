@@ -43,6 +43,11 @@ class Migration(migrations.Migration):
             name='spki_algorithm_oid',
             field=models.CharField(choices=[('1.2.840.10045.2.1', 'Ecc'), ('1.2.840.113549.1.1.1', 'Rsa'), ('2.16.840.1.101.3.4.3.17', 'Mldsa44'), ('2.16.840.1.101.3.4.3.18', 'Mldsa65'), ('2.16.840.1.101.3.4.3.19', 'Mldsa87')], editable=False, max_length=256, verbose_name='Public Key Algorithm OID'),
         ),
+        migrations.AlterField(
+            model_name='credentialmodel',
+            name='credential_type',
+            field=models.IntegerField(choices=[(0, 'Trustpoint TLS Server'), (1, 'Root CA'), (2, 'Issuing CA'), (3, 'Issued Credential'), (4, 'DevOwnerID'), (5, 'Signer'), (6, 'SCEP Server')], verbose_name='Credential Type'),
+        ),
         migrations.AddConstraint(
             model_name='camodel',
             constraint=models.CheckConstraint(condition=models.Q(models.Q(('ca_type', -1), ('certificate__isnull', False), ('credential__isnull', True)), models.Q(('ca_type__in', [4, 5]), ('credential__isnull', True)), models.Q(('ca_type__in', [0, 1, 2, 3, 6, 7, 8]), ('certificate__isnull', True), ('credential__isnull', False)), _connector='OR'), name='ca_mode_constraint', violation_error_message='Invalid CA configuration'),
