@@ -388,6 +388,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             'pki_protocol_rest': self.object.no_onboarding_config.has_pki_protocol(
                 NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD
             ),
+            'pki_protocol_scep': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP),
         }
 
     def get_onboarding_form(self) -> forms.Form:

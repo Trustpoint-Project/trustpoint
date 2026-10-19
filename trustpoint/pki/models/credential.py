@@ -74,6 +74,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         ISSUED_CREDENTIAL = 3, _('Issued Credential')
         DEV_OWNER_ID = 4, _('DevOwnerID')
         SIGNER = 5, _('Signer')
+        SCEP_SERVER = 6, _('SCEP Server')
 
     BACKEND_MANAGED_SIGNING_TYPES: ClassVar[frozenset[CredentialTypeChoice]] = frozenset(
         {

@@ -77,9 +77,19 @@ class Migration(migrations.Migration):
             field=models.JSONField(blank=True, default=list, help_text='JSON list of ML-DSA variant OIDs (from trustpoint_core.oid.PublicKeyAlgorithmOid) not permitted at the current security level.'),
         ),
         migrations.AlterField(
+            model_name='auditlog',
+            name='operation_type',
+            field=models.CharField(choices=[('CREDENTIAL_ISSUED', 'Credential Issued'), ('CREDENTIAL_RENEWED', 'Credential Renewed'), ('CREDENTIAL_REVOKED', 'Credential Revoked'), ('CREDENTIAL_DELETED', 'Credential Deleted'), ('MODEL_CREATED', 'Model Created'), ('MODEL_UPDATED', 'Model Updated'), ('MODEL_DELETED', 'Model Deleted'), ('SECURITY_CONFIG_CHANGED', 'Security Config Changed'), ('DEVICE_ADDED', 'Device Added'), ('DEVICE_DELETED', 'Device Deleted'), ('CA_CREATED', 'CA Created'), ('CA_DELETED', 'CA Deleted'), ('CA_ROLLOVER_PLANNED', 'CA Rollover Planned'), ('CA_ROLLOVER_STARTED', 'CA Rollover Started'), ('CA_ROLLOVER_TRANSITIONED', 'CA Rollover Transitioned'), ('CA_ROLLOVER_COMPLETED', 'CA Rollover Completed'), ('CA_ROLLOVER_CANCELLED', 'CA Rollover Cancelled'), ('DOMAIN_CREATED', 'Domain Created'), ('DOMAIN_DELETED', 'Domain Deleted'), ('TLS_CERTIFICATE_CHANGED', 'TLS Certificate Changed'), ('TLS_CERTIFICATE_DELETED', 'TLS Certificate Deleted'), ('USER_CREATED', 'User Created'), ('SIGNER_DELETED', 'Signer Deleted'), ('SIGNER_ADDED', 'Signer Added'), ('HASH_SIGNED', 'Hash Signed'), ('ORGANIZATION_UPDATED', 'Organization Changed'), ('CRYPTO_VERIFY_PROVIDER', 'Crypto: Verify Provider'), ('CRYPTO_GENERATE_MANAGED_KEY', 'Crypto: Generate Managed Key'), ('CRYPTO_IMPORT_MANAGED_KEY', 'Crypto: Import Managed Key'), ('CRYPTO_VERIFY_MANAGED_KEY', 'Crypto: Verify Managed Key'), ('CRYPTO_GET_PUBLIC_KEY', 'Crypto: Get Public Key'), ('CRYPTO_SIGN', 'Crypto: Sign'), ('CRYPTO_DESTROY_MANAGED_KEY', 'Crypto: Destroy Managed Key'), ('SCEP_ENROLLMENT', 'SCEP: Enrollment'), ('SCEP_RENEWAL', 'SCEP: Renewal'), ('SCEP_RETRY', 'SCEP: Verified Retry'), ('SCEP_REJECTED', 'SCEP: Request Rejected'), ('SCEP_SECRET_PROVISIONED', 'SCEP: Enrollment Secret Provisioned')], db_index=True, max_length=32, verbose_name='Operation Type'),
+        ),
+        migrations.AlterField(
             model_name='securityconfig',
             name='auto_gen_pki_key_algorithm',
             field=models.CharField(choices=[('RSA2048SHA256', 'RSA2048'), ('RSA4096SHA256', 'RSA4096'), ('SECP256R1SHA256', 'SECP256R1'), ('MLDSA44', 'ML-DSA-44'), ('MLDSA65', 'ML-DSA-65'), ('MLDSA87', 'ML-DSA-87')], default='RSA2048SHA256', max_length=24),
+        ),
+        migrations.AlterField(
+            model_name='securityconfig',
+            name='permitted_no_onboarding_pki_protocols',
+            field=models.JSONField(blank=True, default=list, help_text='JSON list of allowed NoOnboardingPkiProtocol integer values (bitmask flags: CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32, SCEP=64).'),
         ),
         migrations.AlterField(
             model_name='securityconfig',

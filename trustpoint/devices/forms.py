@@ -386,6 +386,7 @@ class NoOnboardingCreateForm(forms.Form):
             (NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD, NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD.label),
             (NoOnboardingPkiProtocol.MANUAL, NoOnboardingPkiProtocol.MANUAL.label),
             (NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD, NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD.label),
+            (NoOnboardingPkiProtocol.SCEP, NoOnboardingPkiProtocol.SCEP.label),
         ],
         initial=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
         widget=SwitchCheckboxSelectMultiple(),
@@ -475,6 +476,9 @@ class NoOnboardingCreateForm(forms.Form):
         rest_selected = NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD in no_onboarding_pki_protocols
         if rest_selected and not no_onboarding_config_model.est_password:
             no_onboarding_config_model.est_password = _get_secret()
+
+        if NoOnboardingPkiProtocol.SCEP in no_onboarding_pki_protocols:
+            no_onboarding_config_model.set_scep_challenge()
 
         no_onboarding_config_model.full_clean()
 
@@ -1090,6 +1094,7 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
     pki_protocol_est = forms.BooleanField(label='EST - Username & Password', required=False)
     pki_protocol_manual = forms.BooleanField(label='Manual', required=False)
     pki_protocol_rest = forms.BooleanField(label='REST - Username & Password', required=False)
+    pki_protocol_scep = forms.BooleanField(label='SCEP', required=False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the form."""
@@ -1114,6 +1119,9 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_rest'),
             HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
+            Field('pki_protocol_scep'),
+            HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
         )
@@ -1133,7 +1141,7 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             raise forms.ValidationError(err_msg)
         return common_name
 
-    def save(self) -> None:
+    def save(self) -> None: # noqa: C901
         """Saves the changes to DB."""
         if not self.instance.no_onboarding_config:
             err_msg = _('Expected DeviceModel that is configured to use onboarding.')
@@ -1167,6 +1175,10 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
 
         est_enabled = self.cleaned_data['pki_protocol_est'] is True
         rest_enabled = self.cleaned_data['pki_protocol_rest'] is True
+        if self.cleaned_data['pki_protocol_scep'] is True:
+            self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.SCEP)
+            if not self.instance.no_onboarding_config.scep_challenge:
+                self.instance.no_onboarding_config.set_scep_challenge()
         if not est_enabled and not rest_enabled:
             self.instance.no_onboarding_config.est_password = ''
 

@@ -12,6 +12,7 @@ Certificate enrollment and lifecycle management using industry-standard PKI prot
 |----------|----------|---------|----------|
 | **CMP** | `/.well-known/cmp/` | Full-featured PKI protocol | RFC 4210, RFC 9480 |
 | **EST** | `/.well-known/est/` | Simple enrollment over TLS | RFC 7030 |
+| **SCEP** | `/.well-known/scep/` | Certificate enrollment and renewal for devices and legacy systems | RFC 8894 |
 | **REST PKI** | `/rest/` | JSON-based enrollment (Trustpoint-specific) | Custom |
 
 ---
@@ -66,6 +67,7 @@ The complete API specification is available in **OpenAPI (Swagger)** format:
 est
 rest
 cmp
+scep
 rest_api
 service_accounts
 ```
