@@ -1084,11 +1084,12 @@ class DownloadScepConfigView(
 
     def get(
         self,
-        _request: HttpRequest,
-        *_args: Any,
-        **_kwargs: Any,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
     ) -> HttpResponse:
         """Generate and download scep.cnf for the selected device."""
+        del request, args, kwargs
         device = self.get_object()
 
         config = device.no_onboarding_config
