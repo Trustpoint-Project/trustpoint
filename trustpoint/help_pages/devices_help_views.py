@@ -54,7 +54,13 @@ from help_pages.commands import (
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import SecurityConfig
-from onboarding.models import NoOnboardingPkiProtocol, OnboardingConfigModel, OnboardingProtocol
+from management.models.audit_log import AuditLog
+from onboarding.models import (
+    NoOnboardingConfigModel,
+    NoOnboardingPkiProtocol,
+    OnboardingConfigModel,
+    OnboardingProtocol,
+)
 from pki.forms.cert_profiles import CertificateIssuanceForm, ProfileBasedFormFieldBuilder
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
@@ -114,6 +120,8 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
         if not request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
         self.object = self.get_object()
+        if isinstance(self.strategy, NoOnboardingScepStrategy):
+            return self._reset_scep_challenge(request)
         if not self.uses_onboarding_credential() or not self.object.onboarding_config_id:
             raise Http404(_('No renewable onboarding credential is configured for this device.'))
         with transaction.atomic():
@@ -139,6 +147,28 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
                 messages.success(request, _('The onboarding credential was renewed.'))
             else:
                 messages.warning(request, _('The onboarding credential is not expired or is no longer available.'))
+        return HttpResponseRedirect(request.get_full_path())
+
+    def _reset_scep_challenge(self, request: HttpRequest) -> HttpResponseRedirect:
+        """Create a fresh per-device SCEP challengePassword."""
+        config_id = self.object.no_onboarding_config_id
+        if config_id is None:
+            raise Http404(_('SCEP is not enabled for this device.'))
+
+        config = NoOnboardingConfigModel.objects.filter(pk=config_id).first()
+        if config is None or not config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP):
+            raise Http404(_('SCEP is not enabled for this device.'))
+
+        config.provision_scep_challenge()
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.SCEP_SECRET_PROVISIONED,
+            target=self.object,
+            target_display=f'Device: {self.object.common_name}',
+            actor=request.user,  # type: ignore[arg-type]
+            details={'expires_at':
+                     config.scep_challenge_expires_at.isoformat() if config.scep_challenge_expires_at else ''},
+        )
+        messages.success(request, _('The SCEP challengePassword was reset.'))
         return HttpResponseRedirect(request.get_full_path())
 
     def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
@@ -847,6 +877,257 @@ class OpcUaGdsNoOnboardingCmpWebUiHelpView(DeviceNoOnboardingCmpWebUiHelpView):
     """CMP WebUI guidance for no-onboarding OPC-UA GDS devices."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class NoOnboardingScepStrategy(HelpPageStrategy):
+    """Strategy for building the no-onboarding SCEP (RFC 8894) help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        domain = help_context.domain
+        if domain is None:
+            err_msg = 'Domain is required'
+            raise Http404(err_msg)
+        config = device.no_onboarding_config
+        if not config or not config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP):
+            raise Http404(_('SCEP is not enabled for this no-onboarding device.'))
+
+        # SCEP is secured at the message level and served over plain HTTP (RFC 8894 section 7.10).
+        http_port = str(getattr(settings, 'TP_HTTP_PORT', '80'))
+        host_ip = help_context.host_base.split('://', 1)[-1].rsplit(':', 1)[0]
+        http_base = f'http://{host_ip}' if http_port == '80' else f'http://{host_ip}:{http_port}'
+        scep_base = f'{http_base}/.well-known/scep/{domain.unique_name}'
+        scep_url = f'{scep_base}/<certificate_profile>/'
+        key_type = str(domain.public_key_info)
+        state = config.scep_challenge_state()
+        state_labels = {
+            'active': _non_lazy('Active - authorizes one initial enrollment'),
+            'consumed': _non_lazy('Consumed - only used for response encryption (ECC clients)'),
+            'expired': _non_lazy('Expired - reset it to enroll again'),
+            'none': _non_lazy('Not set - reset it to create one'),
+        }
+        reset_html = (
+            '<form method="post" action="">CSRF_TOKEN_PLACEHOLDER'
+            f'<button type="submit" class="btn btn-primary w-100">{_non_lazy("Reset challengePassword")}</button>'
+            '</form>'
+        )
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(_non_lazy('SCEP URL'), scep_url, ValueRenderType.CODE),
+                HelpRow(_non_lazy('Required Public Key Type'), key_type, ValueRenderType.CODE),
+                HelpRow(_non_lazy('challengePassword'), config.scep_challenge, ValueRenderType.CODE),
+                HelpRow(_non_lazy('challengePassword State'), state_labels[state], ValueRenderType.PLAIN),
+                HelpRow(
+                    _non_lazy('challengePassword Expires'),
+                    str(config.scep_challenge_expires_at or '-'),
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(_non_lazy('Reset'), mark_safe(reset_html), ValueRenderType.HTML),  # noqa: S308
+                HelpRow(
+                    _non_lazy('Notes'),
+                    _non_lazy(
+                        'The challengePassword is per device and authorizes exactly one initial enrollment; the '
+                        'certificate profile is the one in the URL. ECC clients must retain it: it encrypts the '
+                        'responses (CMS PasswordRecipientInfo) but never authorizes another enrollment. Renewal '
+                        '(RenewalReq) is signed with the issued certificate and keeps its profile. Supported: '
+                        'RSA >= 2048, ECDSA P-256 / P-384, SHA-256, AES-128-CBC.'
+                    ),
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+        profile_sections = []
+        for index, profile in enumerate(help_context.allowed_app_profiles):
+            name = profile.alias or profile.certificate_profile.unique_name
+            profile_url = f'{scep_base}/{name}/'
+            profile_sections.append(
+                self._build_profile_section(
+                    common_name=device.common_name,
+                    profile_url=profile_url,
+                    name=name,
+                    index=index,
+                    device_id=device.pk,
+                )
+            )
+        sections_tail = [
+            build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
+            *profile_sections,
+        ]
+        scep_url_for_discovery = scep_base + '/'
+        discovery = HelpSection(
+            _non_lazy('Discovery'),
+            [
+                HelpRow(
+                    _non_lazy('GetCACaps'),
+                    f'curl -s "{scep_url_for_discovery}?operation=GetCACaps"',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('GetCACert (SCEP server and CA certificates)'),
+                    f'curl -s "{scep_url_for_discovery}?operation=GetCACert" -o ca-certs.p7b',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Extract the certificates'),
+                    'openssl pkcs7 -inform DER -in ca-certs.p7b -print_certs -out ca-certs.pem',
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        return [summary, discovery, *sections_tail], _non_lazy(
+            'Help - Issue Application Certificates using SCEP with a challengePassword'
+        )
+
+    @staticmethod
+    def _build_profile_section(
+        common_name: str,
+        profile_url: str,
+        name: str,
+        index: int,
+        device_id: int,
+    ) -> HelpSection:
+        """Enrollment and renewal commands for one certificate profile."""
+        return HelpSection(
+            _non_lazy(f'Certificate Request for the {name} profile'),
+            [
+                HelpRow(
+                    _non_lazy('OpenSSL Configuration'),
+                    format_html(
+                        '<a href="{}" class="btn btn-primary">{}</a>',
+                        reverse(
+                            'devices:scep_config_download',
+                            kwargs={'pk': device_id},
+                        ),
+                        _non_lazy('Download scep.cnf'),
+                    ),
+                    ValueRenderType.HTML,
+                ),
+                HelpRow(
+                    _non_lazy('Generate key and CSR'),
+                    (
+                        'openssl req -new -newkey rsa:2048 -noenc '
+                        '-keyout key.pem -out req.pem '
+                        '-config scep.cnf -sha256'
+                    ),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Enroll (sscep)'),
+                    (
+                        f'sscep enroll -u {profile_url} '
+                        '-c ca-certs.pem -e ca-certs.pem '
+                        '-k key.pem -r req.pem -l cert.pem '
+                        '-S sha256 -E aes'
+                    ),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Generate renewal key and CSR'),
+                    (
+                        'openssl req -new -newkey rsa:2048 -noenc '
+                        '-keyout newkey.pem -out newreq.pem '
+                        f'-subj "/CN={common_name}" -sha256'
+                    ),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Renew (sscep)'),
+                    (
+                        f'sscep enroll -u {profile_url} '
+                        '-c ca-certs.pem -e ca-certs.pem '
+                        '-k newkey.pem -r newreq.pem '
+                        '-K key.pem -O cert.pem '
+                        '-l cert-renewed.pem -S sha256 -E aes'
+                    ),
+                    ValueRenderType.CODE,
+                ),
+            ],
+            css_id=name,
+            hidden=index > 0,
+        )
+
+class DeviceNoOnboardingScepHelpView(BaseHelpView):
+    """Help view for no-onboarding SCEP for generic device abstractions."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = NoOnboardingScepStrategy()
+
+
+class OpcUaGdsNoOnboardingScepHelpView(BaseHelpView):
+    """Help view for no-onboarding SCEP for OPC-UA GDS abstractions."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+    strategy = NoOnboardingScepStrategy()
+
+
+class DownloadScepConfigView(
+    UserPermissionRequiredMixin,
+    DetailView[DeviceModel],
+):
+    """Download an OpenSSL configuration for SCEP enrollment."""
+
+    model = DeviceModel
+    http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_DEVICES
+
+    @staticmethod
+    def _validate_config_value(value: str) -> str:
+        """Reject values that could inject OpenSSL configuration directives."""
+        if not value or any(char in value for char in '\r\n\x00'):
+            raise Http404(_('Invalid SCEP configuration value.'))
+        return value
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        """Generate and download scep.cnf for the selected device."""
+        del request, args, kwargs
+        device = self.get_object()
+
+        config = device.no_onboarding_config
+
+        if config is None or not config.has_pki_protocol(
+            NoOnboardingPkiProtocol.SCEP
+        ):
+            raise Http404(_('SCEP is not enabled for this device.'))
+
+        if not config.can_authorize_scep_enrollment():
+            raise Http404(_('No active SCEP challengePassword available.'))
+
+        common_name = self._validate_config_value(device.common_name)
+        challenge = self._validate_config_value(config.scep_challenge)
+
+        content = (
+            '[req]\n'
+            'distinguished_name = dn\n'
+            'attributes = attrs\n'
+            'prompt = no\n'
+            '\n'
+            '[dn]\n'
+            f'CN = {common_name}\n'
+            '\n'
+            '[attrs]\n'
+            f'challengePassword = {challenge}\n'
+        )
+
+        response = HttpResponse(
+            content,
+            content_type='application/octet-stream',
+        )
+        response['Content-Disposition'] = 'attachment; filename="scep.cnf"'
+        response['Cache-Control'] = 'no-store, no-cache, private, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['X-Content-Type-Options'] = 'nosniff'
+
+        return response
 
 
 class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):

@@ -212,6 +212,21 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
 
 
 @dataclass(kw_only=True)
+class ScepBaseRequestContext(HttpBaseRequestContext):
+    """Shared context for SCEP requests (RFC 8894)."""
+
+    protocol: str | None = 'scep'
+    scep_transaction_id: str | None = None
+    scep_message_type: int | None = None
+    scep_signer_certificate: x509.Certificate | None = None
+
+
+@dataclass(kw_only=True)
+class ScepCertificateRequestContext(ScepBaseRequestContext, BaseCertificateRequestContext):
+    """SCEP context for PKCSReq / RenewalReq certificate requests."""
+
+
+@dataclass(kw_only=True)
 class RestBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all REST API requests."""
 

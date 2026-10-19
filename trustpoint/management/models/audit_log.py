@@ -56,6 +56,11 @@ class AuditLog(models.Model):
         CRYPTO_GET_PUBLIC_KEY = 'CRYPTO_GET_PUBLIC_KEY', _('Crypto: Get Public Key')
         CRYPTO_SIGN = 'CRYPTO_SIGN', _('Crypto: Sign')
         CRYPTO_DESTROY_MANAGED_KEY = 'CRYPTO_DESTROY_MANAGED_KEY', _('Crypto: Destroy Managed Key')
+        SCEP_ENROLLMENT = 'SCEP_ENROLLMENT', _('SCEP: Enrollment')
+        SCEP_RENEWAL = 'SCEP_RENEWAL', _('SCEP: Renewal')
+        SCEP_RETRY = 'SCEP_RETRY', _('SCEP: Verified Retry')
+        SCEP_REJECTED = 'SCEP_REJECTED', _('SCEP: Request Rejected')
+        SCEP_SECRET_PROVISIONED = 'SCEP_SECRET_PROVISIONED', _('SCEP: Enrollment Secret Provisioned')
 
     timestamp = models.DateTimeField(
         verbose_name=_('Timestamp'),
