@@ -945,7 +945,13 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
             name = profile.alias or profile.certificate_profile.unique_name
             profile_url = f'{scep_base}/{name}/'
             profile_sections.append(
-                self._build_profile_section(device.common_name, config.scep_challenge, profile_url, name, index)
+                self._build_profile_section(
+                    common_name=device.common_name,
+                    profile_url=profile_url,
+                    name=name,
+                    index=index,
+                    device_id=device.pk,
+                )
             )
         sections_tail = [
             build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
@@ -979,34 +985,64 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
 
     @staticmethod
     def _build_profile_section(
-        common_name: str, challenge: str, profile_url: str, name: str, index: int
-        ) -> HelpSection:
-        """Enrollment and renewal commands for one certificate profile (the profile is part of the URL)."""
+        common_name: str,
+        profile_url: str,
+        name: str,
+        index: int,
+        device_id: int,
+    ) -> HelpSection:
+        """Enrollment and renewal commands for one certificate profile."""
         return HelpSection(
             _non_lazy(f'Certificate Request for the {name} profile'),
             [
                 HelpRow(
-                    _non_lazy('Generate key and CSR with challengePassword'),
+                    _non_lazy('OpenSSL Configuration'),
+                    format_html(
+                        '<a href="{}" class="btn btn-primary">{}</a>',
+                        reverse(
+                            'devices:scep_config_download',
+                            kwargs={'pk': device_id},
+                        ),
+                        _non_lazy('Download scep.cnf'),
+                    ),
+                    ValueRenderType.HTML,
+                ),
+                HelpRow(
+                    _non_lazy('Generate key and CSR'),
                     (
-                        'openssl req -new -newkey rsa:2048 -nodes -keyout key.pem -out req.pem '
-                        f'-subj "/CN={common_name}" '
-                        '-config <(printf "[req]\\ndistinguished_name=dn\\nattributes=attrs\\nprompt=no\\n'
-                        '[dn]\\nCN=%s\\n[attrs]\\nchallengePassword=%s\\n" '
-                        f'"{common_name}" "{challenge}")'
+                        'openssl req -new -newkey rsa:2048 -noenc '
+                        '-keyout key.pem -out req.pem '
+                        '-config scep.cnf -sha256'
                     ),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
                     _non_lazy('Enroll (sscep)'),
-                    f'sscep enroll -u {profile_url} -c ca.crt -e ca.crt -k key.pem '
-                    '-r req.pem -l cert.pem -S sha256 -E aes',
+                    (
+                        f'sscep enroll -u {profile_url} '
+                        '-c ca-certs.pem -e ca-certs.pem '
+                        '-k key.pem -r req.pem -l cert.pem '
+                        '-S sha256 -E aes'
+                    ),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Generate renewal key and CSR'),
+                    (
+                        'openssl req -new -newkey rsa:2048 -noenc '
+                        '-keyout newkey.pem -out newreq.pem '
+                        f'-subj "/CN={common_name}" -sha256'
+                    ),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
                     _non_lazy('Renew (sscep)'),
                     (
-                        f'sscep enroll -u {profile_url} -c ca-certs.pem -e ca-certs.pem -k newkey.pem -r newreq.pem '
-                        '-K key.pem -O cert.pem -l cert-renewed.pem -S sha256 -E aes'
+                        f'sscep enroll -u {profile_url} '
+                        '-c ca-certs.pem -e ca-certs.pem '
+                        '-k newkey.pem -r newreq.pem '
+                        '-K key.pem -O cert.pem '
+                        '-l cert-renewed.pem -S sha256 -E aes'
                     ),
                     ValueRenderType.CODE,
                 ),
@@ -1014,7 +1050,6 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
             css_id=name,
             hidden=index > 0,
         )
-
 
 class DeviceNoOnboardingScepHelpView(BaseHelpView):
     """Help view for no-onboarding SCEP for generic device abstractions."""
@@ -1028,6 +1063,70 @@ class OpcUaGdsNoOnboardingScepHelpView(BaseHelpView):
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = NoOnboardingScepStrategy()
+
+
+class DownloadScepConfigView(
+    UserPermissionRequiredMixin,
+    DetailView[DeviceModel],
+):
+    """Download an OpenSSL configuration for SCEP enrollment."""
+
+    model = DeviceModel
+    http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_DEVICES
+
+    @staticmethod
+    def _validate_config_value(value: str) -> str:
+        """Reject values that could inject OpenSSL configuration directives."""
+        if not value or any(char in value for char in '\r\n\x00'):
+            raise Http404(_('Invalid SCEP configuration value.'))
+        return value
+
+    def get(
+        self,
+        _request: HttpRequest,
+        *_args: Any,
+        **_kwargs: Any,
+    ) -> HttpResponse:
+        """Generate and download scep.cnf for the selected device."""
+        device = self.get_object()
+
+        config = device.no_onboarding_config
+
+        if config is None or not config.has_pki_protocol(
+            NoOnboardingPkiProtocol.SCEP
+        ):
+            raise Http404(_('SCEP is not enabled for this device.'))
+
+        if not config.can_authorize_scep_enrollment():
+            raise Http404(_('No active SCEP challengePassword available.'))
+
+        common_name = self._validate_config_value(device.common_name)
+        challenge = self._validate_config_value(config.scep_challenge)
+
+        content = (
+            '[req]\n'
+            'distinguished_name = dn\n'
+            'attributes = attrs\n'
+            'prompt = no\n'
+            '\n'
+            '[dn]\n'
+            f'CN = {common_name}\n'
+            '\n'
+            '[attrs]\n'
+            f'challengePassword = {challenge}\n'
+        )
+
+        response = HttpResponse(
+            content,
+            content_type='application/octet-stream',
+        )
+        response['Content-Disposition'] = 'attachment; filename="scep.cnf"'
+        response['Cache-Control'] = 'no-store, no-cache, private, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['X-Content-Type-Options'] = 'nosniff'
+
+        return response
 
 
 class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):

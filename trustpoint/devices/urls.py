@@ -649,4 +649,10 @@ urlpatterns = [
         devices_help_views.AokiDemoDownloadView.as_view(),
         name='zero_touch_credentials-aoki_demo_download',
     ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/no-onboarding/'
+        'issue-application-credential/scep/download-config/',
+        devices_help_views.DownloadScepConfigView.as_view(),
+        name='scep_config_download',
+    ),
 ]
