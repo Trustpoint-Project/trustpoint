@@ -287,7 +287,8 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
     )
 
     RSA_KEY_CHOICES: ClassVar[list[tuple[object, object]]] = [
-        ('', _('None / Not Permitted')),
+        (0, _('Any keysize allowed')),
+        (None, _('Not permitted')),
         (1024, '1024'),
         (2048, '2048'),
         (3072, '3072'),
