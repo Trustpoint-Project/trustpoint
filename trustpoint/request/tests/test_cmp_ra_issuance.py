@@ -46,19 +46,25 @@ def _issue(
     public_key: object,
     *,
     is_ca: bool = False,
+    subject: str = 'validated-device',
+    dns_names: tuple[str, ...] | None = ('validated.example.test',),
 ) -> x509.Certificate:
     now = datetime.now(UTC)
-    return (
+    builder = (
         x509.CertificateBuilder()
-        .subject_name(_name('device'))
+        .subject_name(_name(subject))
         .issuer_name(ca_cert.subject)
         .public_key(public_key)  # type: ignore[arg-type]
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(days=1))
         .not_valid_after(now + timedelta(days=10))
         .add_extension(x509.BasicConstraints(ca=is_ca, path_length=None), critical=True)
-        .sign(ca_key, hashes.SHA256())
     )
+    if dns_names is not None:
+        builder = builder.add_extension(
+            x509.SubjectAlternativeName([x509.DNSName(name) for name in dns_names]), critical=False,
+        )
+    return builder.sign(ca_key, hashes.SHA256())
 
 
 def _truststore(*certs: x509.Certificate) -> Mock:
@@ -204,6 +210,24 @@ def test_mismatching_public_key_is_rejected() -> None:
     other = ec.generate_private_key(ec.SECP256R1()).public_key()
     with pytest.raises(ValueError, match='public key does not match'):
         env.run((_issue(env.ca_key, env.ca_cert, other), []))
+    env.saver.return_value.save_remote_keyless_credential.assert_not_called()
+
+
+def test_changed_subject_is_rejected() -> None:
+    env = _Env()
+    with pytest.raises(TypeError, match='changed the certificate subject'):
+        env.run((_issue(env.ca_key, env.ca_cert, env.device_pub, subject='other-device'), []))
+    env.saver.return_value.save_remote_keyless_credential.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ('dns_names', 'message'),
+    [(None, 'removed required extension'), (('other.example.test',), 'changed security-critical extension')],
+)
+def test_changed_or_missing_san_is_rejected(dns_names: tuple[str, ...] | None, message: str) -> None:
+    env = _Env()
+    with pytest.raises(ValueError, match=message):
+        env.run((_issue(env.ca_key, env.ca_cert, env.device_pub, dns_names=dns_names), []))
     env.saver.return_value.save_remote_keyless_credential.assert_not_called()
 
 

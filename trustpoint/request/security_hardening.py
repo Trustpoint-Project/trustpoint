@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, mldsa, padding, rsa
 from django.conf import settings
 from django.db import transaction
+from django.urls import Resolver404, resolve
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
@@ -355,6 +356,40 @@ def authenticate_cmp_request(  # noqa: C901, PLR0912
     raise ValueError(msg)
 
 
+def _is_configured_cmp_ra_sender(context: CmpCertificateRequestContext) -> bool:
+    """Recognize an authenticated upstream sender from an existing local RA configuration.
+
+    senderKID alone is not a local device relationship: its value belongs to
+    the remote server. Require the verified credential and target domain to
+    match as well, so an unrelated RA with the same numeric ID grants no trust.
+    """
+    device = context.device
+    domain = context.domain
+    if device is None or device.pk is None or domain is None or device.domain_id != domain.pk:
+        return False
+    secret = context.cmp_shared_secret
+    if not secret:
+        return False
+    configured_ras = CaModel.objects.filter(
+        ca_type=CaModel.CaTypeChoice.REMOTE_CMP_RA,
+        is_active=True,
+        cmp_sender_kid=device.pk,
+    ).select_related('no_onboarding_config')
+    for ra in configured_ras:
+        config = ra.no_onboarding_config
+        if config is None or not config.cmp_shared_secret:
+            continue
+        if not stdlib_hmac.compare_digest(secret.encode(), config.cmp_shared_secret.encode()):
+            continue
+        try:
+            endpoint = resolve(ra.remote_path)
+        except Resolver404:
+            continue
+        if endpoint.app_name == 'cmp' and endpoint.kwargs.get('domain') == domain.unique_name:
+            return True
+    return False
+
+
 def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # noqa: C901
     """Verify CRMF signature PoP for IR/CR requests.
 
@@ -382,7 +417,9 @@ def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # 
 
     popo_name = popo.getName()
     if popo_name == 'raVerified':
-        if context.device is not None and context.device.can_assert_cmp_ra_verified:
+        if (
+            context.device is not None and context.device.can_assert_cmp_ra_verified
+        ) or _is_configured_cmp_ra_sender(context):
             return
         msg = 'Downstream raVerified ProofOfPossession is not permitted.'
         raise ValueError(msg)
