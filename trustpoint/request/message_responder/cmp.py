@@ -15,9 +15,10 @@ from cryptography.hazmat.primitives.serialization import Encoding
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc4210  # type: ignore[import-untyped]
-from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
+from trustpoint_core.oid import HashAlgorithm
 
 from cmp.models import CmpTransactionModel
+from cmp.util import cmp_hmac_algorithm
 from onboarding.models import OnboardingStatus
 from pki.models.ca_rollover import CaRolloverState
 from pki.services.ca_rollover import CaRolloverService
@@ -188,7 +189,7 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
 
         hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
         try:
-            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
+            hmac_algorithm = cmp_hmac_algorithm(hmac_algorithm_oid)
         except Exception as exception:
             err_msg = 'hmac algorithm not supported.'
             raise ValueError(err_msg) from exception
@@ -200,8 +201,7 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         hmac_gen.update(encoded_protected_part)
         hmac_digest = hmac_gen.finalize()
 
-        binary_stuff = f"{int.from_bytes(hmac_digest, byteorder='big'):b}".zfill(160)
-        pki_message['protection'] = rfc4210.PKIProtection(univ.BitString(binary_stuff)).subtype(
+        pki_message['protection'] = rfc4210.PKIProtection(univ.BitString.fromOctetString(hmac_digest)).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
         )
 

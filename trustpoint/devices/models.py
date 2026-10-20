@@ -27,6 +27,7 @@ from onboarding.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+from pki.models.ca import CaModel
 from pki.models.domain import DomainModel
 from pki.models.issued_credential import IssuedCredentialModel
 from util.db import CustomDeleteActionModel
@@ -129,6 +130,14 @@ class DeviceModel(CustomDeleteActionModel):
             'Timestamp of the most recent scheduled periodic server certificate and trustlist update.'
         ),
     )
+
+    @property
+    def can_assert_cmp_ra_verified(self) -> bool:
+        """Allow explicit RA identities and devices linked to a remote CMP RA."""
+        if self.allow_cmp_ra_verified:
+            return True
+        issuing_ca = self.domain.issuing_ca if self.domain is not None else None
+        return issuing_ca is not None and issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA
 
     def __str__(self) -> str:
         """Returns a human-readable string representation."""

@@ -11,20 +11,21 @@ visible at the protocol orchestration boundary.
 
 from __future__ import annotations
 
+import datetime
 import hmac as stdlib_hmac
 from typing import TYPE_CHECKING, Protocol, cast
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, mldsa, padding, rsa
 from django.conf import settings
 from django.db import transaction
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
-from cmp.util import PKI_STATUS_REJECTION
+from cmp.util import PKI_STATUS_REJECTION, cmp_hmac_algorithm
 from management.models import SecurityConfig
 from onboarding.enums import OnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from onboarding.models import OnboardingConfigModel
@@ -64,7 +65,6 @@ CMP_PBM_MAX_ITERATIONS = int(getattr(settings, 'TRUSTPOINT_CMP_PBM_MAX_ITERATION
 CMP_PBM_MIN_SALT_BYTES = int(getattr(settings, 'TRUSTPOINT_CMP_PBM_MIN_SALT_BYTES', 8))
 CMP_PBM_MAX_SALT_BYTES = int(getattr(settings, 'TRUSTPOINT_CMP_PBM_MAX_SALT_BYTES', 64))
 ALLOW_PBM_REVOCATION = bool(getattr(settings, 'TRUSTPOINT_CMP_ALLOW_PBM_REVOCATION', False))
-ALLOW_DOWNSTREAM_RA_VERIFIED = bool(getattr(settings, 'TRUSTPOINT_CMP_ALLOW_DOWNSTREAM_RA_VERIFIED', False))
 
 _ALLOWED_PBM_OWF = {
     value
@@ -152,7 +152,7 @@ def validate_cmp_pbm_parameters(context: CmpBaseRequestContext) -> None:
         msg = f'CMP PBM OWF {owf} is not permitted.'
         raise ValueError(msg)
 
-    mac = HmacAlgorithm.from_dotted_string(decoded_pbm['mac']['algorithm'].prettyPrint())
+    mac = cmp_hmac_algorithm(decoded_pbm['mac']['algorithm'].prettyPrint())
     if mac not in _ALLOWED_PBM_MAC:
         msg = f'CMP PBM MAC {mac} is not permitted.'
         raise ValueError(msg)
@@ -229,6 +229,19 @@ def _verify_declared_signature_algorithm(
         msg = 'Expected signature-based CMP protection, got PBM.'
         raise ValueError(msg)
 
+    public_key = signer_cert.public_key()
+    mldsa_algorithms = (
+        (mldsa.MLDSA44PublicKey, AlgorithmIdentifier.ML_DSA_44),
+        (mldsa.MLDSA65PublicKey, AlgorithmIdentifier.ML_DSA_65),
+        (mldsa.MLDSA87PublicKey, AlgorithmIdentifier.ML_DSA_87),
+    )
+    for key_type, algorithm in mldsa_algorithms:
+        if isinstance(public_key, key_type):
+            if declared != algorithm:
+                msg = 'CMP protectionAlg is incompatible with the ML-DSA signer key.'
+                raise ValueError(msg)
+            return
+
     current_suite = SignatureSuite.from_certificate(signer_cert)
     expected_hash = current_suite.algorithm_identifier.hash_algorithm
     declared_hash = declared.hash_algorithm
@@ -236,7 +249,6 @@ def _verify_declared_signature_algorithm(
         msg = 'CMP protectionAlg does not match the signature verifier hash algorithm.'
         raise ValueError(msg)
 
-    public_key = signer_cert.public_key()
     name = declared.name.upper()
     if isinstance(public_key, rsa.RSAPublicKey) and 'RSA' not in name:
         msg = 'CMP protectionAlg is incompatible with the RSA signer key.'
@@ -343,7 +355,7 @@ def authenticate_cmp_request(  # noqa: C901, PLR0912
     raise ValueError(msg)
 
 
-def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # noqa: C901, PLR0912
+def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # noqa: C901
     """Verify CRMF signature PoP for IR/CR requests.
 
     TP-TA-06: device authentication is not proof of possession of the newly
@@ -363,14 +375,14 @@ def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # 
         raise ValueError(msg)
 
     cert_req_msg = cert_req_messages[0]
-    popo = cert_req_msg['popo']
+    popo = cert_req_msg['pop']
     if not popo.hasValue():
         msg = 'CMP certificate request is missing ProofOfPossession.'
         raise ValueError(msg)
 
     popo_name = popo.getName()
     if popo_name == 'raVerified':
-        if ALLOW_DOWNSTREAM_RA_VERIFIED:
+        if context.device is not None and context.device.can_assert_cmp_ra_verified:
             return
         msg = 'Downstream raVerified ProofOfPossession is not permitted.'
         raise ValueError(msg)
@@ -395,6 +407,16 @@ def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # 
         msg = 'CMP requested public key is unavailable for ProofOfPossession verification.'
         raise ValueError(msg)
 
+    _verify_cmp_pop_signature(public_key, algorithm, signature, signed_bytes)
+
+
+def _verify_cmp_pop_signature(
+    public_key: CertificatePublicKeyTypes,
+    algorithm: AlgorithmIdentifier,
+    signature: bytes,
+    signed_bytes: bytes,
+) -> None:
+    """Verify CRMF PoP with the declared algorithm and the requested public key."""
     hash_algorithm = algorithm.hash_algorithm
     if isinstance(public_key, rsa.RSAPublicKey):
         if 'RSA' not in algorithm.name.upper() or hash_algorithm is None:
@@ -406,6 +428,16 @@ def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # 
             msg = 'CMP PoP algorithm is incompatible with the requested EC key.'
             raise ValueError(msg)
         public_key.verify(signature, signed_bytes, ec.ECDSA(hash_algorithm.hash_algorithm()))
+    elif isinstance(public_key, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)):
+        expected = {
+            mldsa.MLDSA44PublicKey: AlgorithmIdentifier.ML_DSA_44,
+            mldsa.MLDSA65PublicKey: AlgorithmIdentifier.ML_DSA_65,
+            mldsa.MLDSA87PublicKey: AlgorithmIdentifier.ML_DSA_87,
+        }
+        if not any(isinstance(public_key, key_type) and algorithm == oid for key_type, oid in expected.items()):
+            msg = 'CMP PoP algorithm is incompatible with the requested ML-DSA key.'
+            raise ValueError(msg)
+        public_key.verify(signature, signed_bytes)
     else:
         msg = f'Unsupported CMP PoP public key type: {type(public_key)}.'
         raise TypeError(msg)
@@ -556,10 +588,10 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
     # the same IDevID used for onboarding.
     try:
         issued = IssuedCredentialModel.get_credential_for_certificate(signer)
-    except IssuedCredentialModel.DoesNotExist:
+    except IssuedCredentialModel.DoesNotExist as lookup_exc:
         if tx.device is None:
             msg = 'certConf transaction has no device.'
-            raise TypeError(msg)
+            raise TypeError(msg) from lookup_exc
         try:
             idevid_device = IDevIDAuthenticator.authenticate_idevid_from_x509(
                 idevid_cert=signer,
@@ -573,7 +605,7 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
             raise ValueError(msg) from exc
         if idevid_device.pk != tx.device_id:
             msg = 'certConf IDevID belongs to a different device.'
-            raise TypeError(msg)
+            raise TypeError(msg) from lookup_exc
     else:
         valid, reason = issued.credential.is_valid_issued_credential()
         if not valid:
@@ -649,9 +681,13 @@ def _load_trust_anchors(truststore: TruststoreModel) -> list[x509.Certificate]:
     ]
 
 
-def _verify_chain_to_truststore(leaf: x509.Certificate, trust_anchors: list[x509.Certificate]) -> None:
+def _verify_chain_to_truststore(
+    leaf: x509.Certificate,
+    trust_anchors: list[x509.Certificate],
+    intermediates: list[x509.Certificate],
+) -> None:
     trusted = {cert.fingerprint(hashes.SHA256()) for cert in trust_anchors}
-    pool = list(trust_anchors)
+    pool = [*trust_anchors, *intermediates]
     current = leaf
     seen: set[bytes] = set()
     for _ in range(len(pool) + 1):
@@ -713,9 +749,21 @@ def _validate_profile_preservation(context: BaseCertificateRequestContext, issue
         msg = 'Upstream CA returned a CA certificate for a device credential request.'
         raise ValueError(msg)
 
+    _validate_upstream_validity(builder, issued)
+
+
+def _validate_upstream_validity(builder: x509.CertificateBuilder, issued: x509.Certificate) -> None:
+    """Enforce the authorized lifetime and reject certificates invalid at delivery."""
+    expected_not_before = builder._not_valid_before  # noqa: SLF001
     expected_not_after = builder._not_valid_after  # noqa: SLF001
-    if expected_not_after is not None and issued.not_valid_after_utc > expected_not_after:
-        msg = 'Upstream CA exceeded the validity period authorized by Trustpoint.'
+    if expected_not_before is not None and expected_not_after is not None:
+        maximum_lifetime = expected_not_after - expected_not_before
+        if issued.not_valid_after_utc - issued.not_valid_before_utc > maximum_lifetime:
+            msg = 'Upstream CA exceeded the validity period authorized by Trustpoint.'
+            raise ValueError(msg)
+    now = datetime.datetime.now(datetime.UTC)
+    if not issued.not_valid_before_utc <= now <= issued.not_valid_after_utc:
+        msg = 'Upstream-issued certificate is not currently valid.'
         raise ValueError(msg)
 
 
@@ -751,15 +799,17 @@ def validate_upstream_issuance_result(context: BaseCertificateRequestContext) ->
         msg = 'Upstream-issued certificate public key does not match the downstream request.'
         raise ValueError(msg)
 
-    truststore = (
-        issuing_ca.no_onboarding_config.trust_store
-        if issuing_ca.no_onboarding_config and issuing_ca.no_onboarding_config.trust_store
-        else issuing_ca.chain_truststore
-    )
+    truststore = issuing_ca.chain_truststore
+    # CMP stores issuer trust in the protocol configuration; EST stores it in
+    # chain_truststore and uses the protocol truststore for the HTTPS endpoint.
+    if issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA and issuing_ca.no_onboarding_config:
+        truststore = issuing_ca.no_onboarding_config.trust_store or truststore
     if truststore is None:
         msg = 'Upstream issuing truststore is not configured.'
         raise ValueError(msg)
-    _verify_chain_to_truststore(issued_certificate, _load_trust_anchors(truststore))
+    _verify_chain_to_truststore(
+        issued_certificate, _load_trust_anchors(truststore), context.issued_certificate_chain or [],
+    )
     _validate_profile_preservation(context, issued_certificate)
 
 
@@ -775,7 +825,14 @@ def process_certificate_operation_atomically(
     processor: CertificateOperationProcessor,
 ) -> None:
     """Run issuance and post-issuance validation in one database transaction."""
+    issuing_ca = context.domain.issuing_ca if context.domain is not None else None
+    if issuing_ca is not None and issuing_ca.ca_type in {
+        CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA,
+    }:
+        # The remote processor validates the response before atomically saving it.
+        # Holding a transaction across HTTP can deadlock a CA on this database.
+        processor.process_operation(context)
+        return
     with transaction.atomic():
         processor.process_operation(context)
-        validate_upstream_issuance_result(context)
         retire_bootstrap_credential_after_domain_identity(context)

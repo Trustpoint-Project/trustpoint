@@ -118,11 +118,11 @@ class CmpRequestView(LoggerMixin, View):
             # Security checks that must happen before expensive or state-changing
             # authentication/authorization work.
             validate_cmp_transaction_freshness(ctx)
-            validate_cmp_proof_of_possession(ctx)
             if isinstance(ctx, BaseCertificateRequestContext):
                 require_single_security_config(ctx)
 
             authenticate_cmp_request(ctx)
+            validate_cmp_proof_of_possession(ctx)
 
             CmpAuthorization(
                 ['initialization', 'certification', 'revocation', 'certconf']

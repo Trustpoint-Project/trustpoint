@@ -192,6 +192,9 @@ def _get_spec(instance: models.Model) -> SecurityAuditSpec:
 def _field_value(instance: models.Model, field_name: str) -> object:
     """Read a concrete field value without dereferencing related objects."""
     field = instance._meta.get_field(field_name)  # noqa: SLF001 - Django model metadata is a supported public API.
+    if not isinstance(field, models.Field):
+        msg = f'Security audit field {field_name!r} must be a concrete model field.'
+        raise TypeError(msg)
     if isinstance(field, models.ForeignKey):
         return _json_safe(getattr(instance, field.attname))
     return _json_safe(field.value_from_object(instance))
