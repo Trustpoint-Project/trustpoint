@@ -23,9 +23,24 @@ from pyasn1.type.char import (  # type: ignore[import-untyped]
 )
 from pyasn1.type.univ import BitString, OctetString  # type: ignore[import-untyped]
 from pyasn1.type.useful import GeneralizedTime, UTCTime  # type: ignore[import-untyped]
+from trustpoint_core.oid import HmacAlgorithm
 
 if TYPE_CHECKING:
     from pyasn1_modules import rfc2459  # type: ignore[import-untyped]
+
+
+def cmp_hmac_algorithm(oid: str) -> HmacAlgorithm:
+    """Resolve PKCS HMAC OIDs as well as the legacy OIDs used by trustpoint-core."""
+    pkcs_algorithms = {
+        '1.2.840.113549.2.7': HmacAlgorithm.HMAC_SHA1,
+        '1.2.840.113549.2.8': HmacAlgorithm.HMAC_SHA224,
+        '1.2.840.113549.2.9': HmacAlgorithm.HMAC_SHA256,
+        '1.2.840.113549.2.10': HmacAlgorithm.HMAC_SHA384,
+        '1.2.840.113549.2.11': HmacAlgorithm.HMAC_SHA512,
+    }
+    if oid in pkcs_algorithms:
+        return pkcs_algorithms[oid]
+    return HmacAlgorithm.from_dotted_string(oid)
 
 
 class PkiMessageType(enum.Enum):

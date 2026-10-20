@@ -363,6 +363,7 @@ def test_managed_key_reconciliation_accepts_matching_backend_key() -> None:
     config_model = SetupWizardConfigModel(
         crypto_storage=SetupWizardConfigModel.CryptoStorageType.HsmStorage,
         fresh_install_pkcs11_token_label='Trustpoint-SoftHSM',
+        fresh_install_pkcs11_token_serial='serial',
     )
 
     with patch(
@@ -389,6 +390,7 @@ def test_managed_key_reconciliation_blocks_missing_backend_key() -> None:
     config_model = SetupWizardConfigModel(
         crypto_storage=SetupWizardConfigModel.CryptoStorageType.HsmStorage,
         fresh_install_pkcs11_token_label='Trustpoint-SoftHSM',
+        fresh_install_pkcs11_token_serial='serial',
     )
 
     with patch(
@@ -427,3 +429,28 @@ def test_managed_key_reconciliation_blocks_when_binding_material_is_missing() ->
 
     assert checks[0].code == 'managed_keys.backend_reconciliation_failed'
     assert checks[0].severity == CompatibilitySeverity.ERROR
+
+
+def test_managed_key_reconciliation_blocks_when_token_serial_is_missing() -> None:
+    config_model = SetupWizardConfigModel(
+        crypto_storage=SetupWizardConfigModel.CryptoStorageType.HsmStorage,
+        fresh_install_pkcs11_token_label='Trustpoint-SoftHSM',
+    )
+
+    with patch(
+        'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
+        return_value=(_pkcs11_key_material(),),
+    ), patch(
+        'setup_wizard.views.apply_pkcs11_probe_fallbacks',
+        return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
+    ), patch('setup_wizard.views.Pkcs11Backend') as backend_class:
+        checks = managed_key_backend_reconciliation_checks(
+            config_model=config_model,
+            target=_target(crypto_backend_kind='pkcs11', app_secret_backend_kind='pkcs11'),
+            snapshot=_pkcs11_snapshot(),
+        )
+
+    assert checks[0].code == 'managed_keys.backend_reconciliation_failed'
+    assert checks[0].severity == CompatibilitySeverity.ERROR
+    assert 'token_serial' in checks[0].message
+    backend_class.assert_not_called()

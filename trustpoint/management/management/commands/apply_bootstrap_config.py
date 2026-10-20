@@ -40,6 +40,7 @@ from crypto.models import (
     SoftwareKeyEncryptionSource,
 )
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
+from management.security_change_audit import provider_configuration_changes
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.models import SetupWizardConfigModel
@@ -487,9 +488,10 @@ class OperationalBootstrapApplier:
 
     def apply(self) -> None:
         """Apply the full bootstrap payload to the operational runtime."""
-        self._configure_instance_crypto_backend()
-        self._probe_and_record_crypto_capabilities()
-        self._configure_app_secret_backend()
+        with provider_configuration_changes(actor=None):
+            self._configure_instance_crypto_backend()
+            self._probe_and_record_crypto_capabilities()
+            self._configure_app_secret_backend()
         call_command('create_default_cert_profiles')
         call_command('create_default_agent_profile_definitions')
         call_command('seed_discovery_ports')

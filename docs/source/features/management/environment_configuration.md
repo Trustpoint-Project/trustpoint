@@ -66,6 +66,8 @@ If `EMAIL_HOST` is not configured, Trustpoint uses Django's console email backen
 | `TP_SECURITY_ALLOW_AUTO_GEN_PKI` | Boolean | Allow use of the automatically generated PKI. |
 | `TP_SECURITY_ALLOW_SELF_SIGNED_CA` | Boolean | Allow importing self-signed CAs. |
 | `TP_SECURITY_ALLOW_IMPORTED_PRIVATE_KEYS` | Boolean | Allow importing existing private-key credentials. |
+| `TP_SECURITY_PERMITTED_CMP_HMAC_ALGORITHMS` | Comma-separated HMAC names | Restrict accepted CMP MACs, e.g. `HMAC_SHA256,HMAC_SHA384,HMAC_SHA512`. Empty disables shared-secret authentication. Lab / Custom permits any supported HMAC. |
+| `TP_SECURITY_ALLOW_CMP_HMAC_SHA1` | Boolean | Accept CMP HMAC-SHA1 protection (including the OpenSSL default). Allowed by Lab and Brownfield presets; may be further restricted to false. |
 | `TP_SECURITY_AUTO_GEN_PKI` | Boolean | Enable the local automatically generated PKI. |
 | `TP_SECURITY_PERMITTED_NO_ONBOARDING_PKI_PROTOCOLS` | Comma-separated list | Allowed PKI protocols without onboarding. |
 | `TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS` | Comma-separated list | Allowed onboarding protocols. |

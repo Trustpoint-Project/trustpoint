@@ -271,7 +271,7 @@ def _build_backend(session: FakeSession) -> Pkcs11Backend:
     profile = Pkcs11ProviderProfile(
         name='demo',
         module_path='/usr/lib/libpkcs11-proxy.so',
-        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM'),  # noqa: S106
+        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', token_serial='soft-serial'),  # noqa: S106
         user_pin='1234',
     )
     token = FakeToken(session)
@@ -279,16 +279,16 @@ def _build_backend(session: FakeSession) -> Pkcs11Backend:
     return Pkcs11Backend(profile=profile, library_loader=lambda _path: FakeLibrary(slot))
 
 
-def test_token_resolution_falls_back_to_label_when_slot_id_mismatches_label() -> None:
-    """A stale slot id should not prevent selection by a still-valid token label."""
+def test_token_resolution_follows_pinned_serial_when_slot_id_changes() -> None:
+    """A stale slot id must not prevent selection of the pinned token at a new slot."""
     session = FakeSession()
-    wrong_slot = FakeSlot(FakeToken(session, label='Wrong-Token'), slot_id=5)
+    wrong_slot = FakeSlot(FakeToken(session, label='Wrong-Token', serial='wrong-serial'), slot_id=5)
     expected_token = FakeToken(session, label='Trustpoint-SoftHSM')
     expected_slot = FakeSlot(expected_token, slot_id=9)
     profile = Pkcs11ProviderProfile(
         name='demo',
         module_path='/usr/lib/libpkcs11-proxy.so',
-        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', slot_id=5),  # noqa: S106
+        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', token_serial='soft-serial', slot_id=5),  # noqa: S106
         user_pin='1234',
     )
     backend = Pkcs11Backend(
@@ -309,7 +309,7 @@ def test_token_resolution_retries_full_scan_when_token_present_scan_fails() -> N
     profile = Pkcs11ProviderProfile(
         name='demo',
         module_path='/usr/lib/libpkcs11-proxy.so',
-        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', slot_id=5),  # noqa: S106
+        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', token_serial='soft-serial', slot_id=5),  # noqa: S106
         user_pin='1234',
     )
     backend = Pkcs11Backend(

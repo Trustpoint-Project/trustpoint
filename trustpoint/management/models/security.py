@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, ClassVar, TypedDict, cast
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, NamedCurve, PublicKeyAlgorithmOid
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, NamedCurve, PublicKeyAlgorithmOid
 
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
 from pki.util.keys import AutoGenPkiKeyAlgorithm
@@ -35,8 +35,16 @@ class _SecurityModeDefaults(TypedDict):
     allow_auto_gen_pki: bool
     allow_self_signed_ca: bool
     allow_imported_private_keys: bool
+    permitted_cmp_hmac_algorithms: list[str]
     permitted_no_onboarding_pki_protocols: list[int]
     permitted_onboarding_protocols: list[int]
+
+
+def default_cmp_hmac_algorithms() -> list[str]:
+    """Return the default CMP MAC allowlist without shared mutable state."""
+    return [algorithm.dotted_string for algorithm in (
+        HmacAlgorithm.HMAC_SHA256, HmacAlgorithm.HMAC_SHA384, HmacAlgorithm.HMAC_SHA512,
+    )]
 
 
 class SecurityConfig(models.Model):
@@ -98,6 +106,20 @@ class SecurityConfig(models.Model):
         SHA256 = HashAlgorithm.SHA256.dotted_string, _('SHA-256')
         SHA384 = HashAlgorithm.SHA384.dotted_string, _('SHA-384')
         SHA512 = HashAlgorithm.SHA512.dotted_string, _('SHA-512')
+
+    class CmpHmacAlgorithmChoices(models.TextChoices):
+        """HMAC algorithms supported by CMP authentication and response protection."""
+
+        MD5 = HmacAlgorithm.HMAC_MD5.dotted_string, _('HMAC-MD5')
+        SHA1 = HmacAlgorithm.HMAC_SHA1.dotted_string, _('HMAC-SHA1')
+        SHA224 = HmacAlgorithm.HMAC_SHA224.dotted_string, _('HMAC-SHA224')
+        SHA256 = HmacAlgorithm.HMAC_SHA256.dotted_string, _('HMAC-SHA256')
+        SHA384 = HmacAlgorithm.HMAC_SHA384.dotted_string, _('HMAC-SHA384')
+        SHA512 = HmacAlgorithm.HMAC_SHA512.dotted_string, _('HMAC-SHA512')
+        SHA3_224 = HmacAlgorithm.HMAC_SHA3_224.dotted_string, _('HMAC-SHA3-224')
+        SHA3_256 = HmacAlgorithm.HMAC_SHA3_256.dotted_string, _('HMAC-SHA3-256')
+        SHA3_384 = HmacAlgorithm.HMAC_SHA3_384.dotted_string, _('HMAC-SHA3-384')
+        SHA3_512 = HmacAlgorithm.HMAC_SHA3_512.dotted_string, _('HMAC-SHA3-512')
 
     class MlDsaVariantChoices(models.TextChoices):
         """Selectable ML-DSA variants from :class:`trustpoint_core.oid.PublicKeyAlgorithmOid`."""
@@ -218,6 +240,17 @@ class SecurityConfig(models.Model):
         ),
     )
 
+    permitted_cmp_hmac_algorithms = models.JSONField(
+        default=default_cmp_hmac_algorithms,
+        blank=True,
+        verbose_name=_('Permitted CMP HMAC algorithms'),
+        help_text=_(
+            'Select the HMAC algorithms accepted for CMP shared-secret protection. '
+            'An empty selection disables CMP shared-secret authentication. '
+            'OpenSSL uses HMAC-SHA1 by default.',
+        ),
+    )
+
     # -- Protocol allow-lists (stored as JSON lists of integer values) -----
 
     permitted_no_onboarding_pki_protocols = models.JSONField(
@@ -271,6 +304,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
             'allow_imported_private_keys': True,
+            'permitted_cmp_hmac_algorithms': [CmpHmacAlgorithmChoices.SHA1, *default_cmp_hmac_algorithms()],
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32, SCEP=64
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32, 64],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -290,6 +324,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
             'allow_imported_private_keys': True,
+            'permitted_cmp_hmac_algorithms': [CmpHmacAlgorithmChoices.SHA1, *default_cmp_hmac_algorithms()],
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32, SCEP=64
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32, 64],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -315,6 +350,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
             'allow_imported_private_keys': True,
+            'permitted_cmp_hmac_algorithms': default_cmp_hmac_algorithms(),
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32, SCEP=64
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32, 64],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -342,6 +378,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
             'allow_imported_private_keys': False,
+            'permitted_cmp_hmac_algorithms': default_cmp_hmac_algorithms(),
             'permitted_no_onboarding_pki_protocols': [1, 4],  # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
@@ -371,6 +408,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
             'allow_imported_private_keys': False,
+            'permitted_cmp_hmac_algorithms': default_cmp_hmac_algorithms(),
             'permitted_no_onboarding_pki_protocols': [1, 4],  # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
@@ -401,6 +439,7 @@ class SecurityConfig(models.Model):
         self.allow_auto_gen_pki = defaults['allow_auto_gen_pki']
         self.allow_self_signed_ca = defaults['allow_self_signed_ca']
         self.allow_imported_private_keys = defaults['allow_imported_private_keys']
+        self.permitted_cmp_hmac_algorithms = list(defaults['permitted_cmp_hmac_algorithms'])
         self.permitted_no_onboarding_pki_protocols = list(defaults['permitted_no_onboarding_pki_protocols'])
         self.permitted_onboarding_protocols = list(defaults['permitted_onboarding_protocols'])
         if save:
@@ -417,6 +456,7 @@ class SecurityConfig(models.Model):
                     'allow_auto_gen_pki',
                     'allow_self_signed_ca',
                     'allow_imported_private_keys',
+                    'permitted_cmp_hmac_algorithms',
                     'permitted_no_onboarding_pki_protocols',
                     'permitted_onboarding_protocols',
                 ]
@@ -451,6 +491,7 @@ class SecurityConfig(models.Model):
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
                 'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
+                'permitted_cmp_hmac_algorithms': defaults['permitted_cmp_hmac_algorithms'],
                 'permitted_no_onboarding_pki_protocols': [
                     no_onboarding_labels.get(v, v) for v in defaults['permitted_no_onboarding_pki_protocols']
                 ],

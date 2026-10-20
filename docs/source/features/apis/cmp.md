@@ -146,6 +146,21 @@ Devices can authenticate using their Initial Device Identifier (IDevID) certific
 
 ## Examples
 
+Select **Permitted CMP HMAC algorithms** in Management → Settings → Advanced security settings
+(`SecurityConfig.permitted_cmp_hmac_algorithms`). The selected algorithm OIDs determine which
+shared-secret requests are accepted; an empty selection disables CMP shared-secret authentication.
+The Lab and Brownfield presets select HMAC-SHA1, HMAC-SHA256, HMAC-SHA384, and HMAC-SHA512.
+Industrial, Hardened, and Critical select SHA256/384/512 and prevent enabling other algorithms.
+Lab / Custom allows selecting all implemented HMACs, including SHA224, SHA3 variants, and MD5.
+
+OpenSSL defaults to HMAC-SHA1. Select it to accept that default, or explicitly set
+`-mac hmacWithSHA256` when HMAC-SHA256 is permitted by your policy.
+The environment restriction `TP_SECURITY_PERMITTED_CMP_HMAC_ALGORITHMS` accepts comma-separated
+names such as `HMAC_SHA384,HMAC_SHA512`; an empty value disables all shared-secret MACs.
+Environment synchronization may only restrict the selected preset, except in Lab / Custom.
+The previous `TP_SECURITY_ALLOW_CMP_HMAC_SHA1` restriction remains supported for compatibility.
+The CMP MAC policy is separate from certificate signature hashes and the PBM one-way function.
+
 ### Example 1: Initial Certificate Request with Shared Secret
 
 ```bash
@@ -154,6 +169,7 @@ openssl cmp \
   -server https://trustpoint.example.com/.well-known/cmp/p/production \
   -ref device-12345 \
   -secret pass:MySharedSecret \
+  -mac hmacWithSHA256 \
   -subject "/CN=Device 12345" \
   -newkey device_key.pem \
   -certout device_cert.pem \
@@ -168,6 +184,7 @@ openssl cmp \
   -server https://trustpoint.example.com/.well-known/cmp/p/~iot_device \
   -ref device-12345 \
   -secret pass:MySharedSecret \
+  -mac hmacWithSHA256 \
   -subject "/CN=IoT Device 12345" \
   -newkey device_key.pem \
   -certout device_cert.pem

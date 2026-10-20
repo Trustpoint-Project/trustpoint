@@ -386,7 +386,7 @@
                     `input[name="${fieldName}"]`
                 ).forEach(cb => {
 
-                    const val = parseInt(cb.value);
+                    const val = fieldName === 'permitted_cmp_hmac_algorithms' ? cb.value : parseInt(cb.value);
                     const allowedByDefault = rawAllowed.includes(val);
 
                     const wrapper =
@@ -418,6 +418,11 @@
                 });
             };
 
+
+            applyProtocolConstraints(
+                'permitted_cmp_hmac_algorithms',
+                'permitted_cmp_hmac_algorithms'
+            );
 
             applyProtocolConstraints(
                 'permitted_no_onboarding_pki_protocols',
@@ -533,11 +538,16 @@
                     `input[name="${fieldName}"]`
                 ).forEach(cb => {
 
-                    const val = parseInt(cb.value);
+                    const val = fieldName === 'permitted_cmp_hmac_algorithms' ? cb.value : parseInt(cb.value);
                     cb.checked = rawAllowed.includes(val);
                 });
             };
 
+
+            resetProtocols(
+                'permitted_cmp_hmac_algorithms',
+                'permitted_cmp_hmac_algorithms'
+            );
 
             resetProtocols(
                 'permitted_no_onboarding_pki_protocols',

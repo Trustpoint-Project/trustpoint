@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
@@ -37,8 +38,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
-from management.models.audit_log import AuditLog
 from management.models.security import SecurityConfig
+from management.security_change_audit import audit_security_change, security_change, snapshot_security_state
 from pki.auto_gen_pki import AutoGenPki
 from pki.forms import (
     CertificateIssuanceForm,
@@ -208,6 +209,11 @@ class IssuingCaAddAutoGenView(IssuingCaContextMixin, FormView[IssuingCaAddAutoGe
             messages.error(self.request, ' '.join(str(message) for message in error))
         return redirect('pki:issuing_cas-add-method_select')
 
+    @transaction.atomic
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Keep form persistence and the creation audit in one transaction."""
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
     def form_valid(self, form: IssuingCaAddAutoGenForm) -> HttpResponseRedirect:
         """Enforce permissions and current security state before creating any CA."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
@@ -233,12 +239,7 @@ class IssuingCaAddAutoGenView(IssuingCaContextMixin, FormView[IssuingCaAddAutoGe
             return redirect('pki:issuing_cas-add-method_select')
 
         actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.CA_CREATED,
-            target=issuing_ca,
-            target_display=f'CA: {issuing_ca.unique_name}',
-            actor=actor,
-        )
+        audit_security_change(target=issuing_ca, actor=actor, before=None, action='created')
         messages.success(self.request, _('Successfully generated auto-generated PKI.'))
         return redirect(self.success_url)
 
@@ -249,6 +250,11 @@ class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView[IssuingCa
     template_name = 'pki/issuing_cas/add/file_import.html'
     form_class = IssuingCaAddFileImportPkcs12Form
     success_url = reverse_lazy('pki:issuing_cas')
+
+    @transaction.atomic
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Keep form persistence and the creation audit in one transaction."""
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def form_valid(self, form: IssuingCaAddFileImportPkcs12Form) -> HttpResponse:
         """Handle the case where the form is valid."""
@@ -261,12 +267,7 @@ class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView[IssuingCa
         ca = CaModel.objects.filter(unique_name=form.cleaned_data['unique_name']).first()
         if ca is not None:
             actor = self.request.user if self.request.user.is_authenticated else None
-            AuditLog.create_entry(
-                operation_type=AuditLog.OperationType.CA_CREATED,
-                target=ca,
-                target_display=f'CA: {ca.unique_name}',
-                actor=actor,
-            )
+            audit_security_change(target=ca, actor=actor, before=None, action='created')
         return super().form_valid(form)
 
 
@@ -276,6 +277,11 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[Is
     template_name = 'pki/issuing_cas/add/file_import.html'
     form_class = IssuingCaAddFileImportSeparateFilesForm
     success_url = reverse_lazy('pki:issuing_cas')
+
+    @transaction.atomic
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Keep form persistence and the creation audit in one transaction."""
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def form_valid(self, form: IssuingCaAddFileImportSeparateFilesForm) -> HttpResponse:
         """Handle the case where the form is valid."""
@@ -288,12 +294,7 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[Is
         ca = CaModel.objects.filter(unique_name=form.cleaned_data['unique_name']).first()
         if ca is not None:
             actor = self.request.user if self.request.user.is_authenticated else None
-            AuditLog.create_entry(
-                operation_type=AuditLog.OperationType.CA_CREATED,
-                target=ca,
-                target_display=f'CA: {ca.unique_name}',
-                actor=actor,
-            )
+            audit_security_change(target=ca, actor=actor, before=None, action='created')
         return super().form_valid(form)
 
 
@@ -302,6 +303,11 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
 
     form_class = IssuingCaAddRequestEstForm
     template_name = 'pki/issuing_cas/add/request_est.html'
+
+    @transaction.atomic
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Keep form persistence and the creation audit in one transaction."""
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
         """Handle successful form submission."""
@@ -315,12 +321,7 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
             ),
         )
         actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.CA_CREATED,
-            target=ca,
-            target_display=f'CA: {ca.unique_name}',
-            actor=actor,
-        )
+        audit_security_change(target=ca, actor=actor, before=None, action='created')
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
 
@@ -509,32 +510,33 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
         """Handle successful form submission."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
             raise PermissionDenied
-        form.save()
         ca = self.get_ca()
+        with security_change(target=ca, actor=self.request.user):
+            form.save()
 
-        if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
-            is_ca_chain = self._handle_ra_certificate_extraction(ca)
+            if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+                is_ca_chain = self._handle_ra_certificate_extraction(ca)
 
-            if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA and is_ca_chain:
-                messages.success(
-                    self.request,
-                    _('Successfully associated CA chain. Now please associate the TLS server certificate.')
-                )
-                return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+                if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA and is_ca_chain:
+                    messages.success(
+                        self.request,
+                        _('Successfully associated CA chain. Now please associate the TLS server certificate.')
+                    )
+                    return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
-        messages.success(
-            self.request,
-            _('Successfully associated truststore with Issuing CA {name}.').format(name=ca.unique_name)
-        )
-        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
-            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
-        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_CSR:
-            return redirect('pki:issuing_cas-define-cert-content-csr', pk=ca.pk)
-        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
-            return redirect('pki:issuing_cas-config', pk=ca.pk)
-        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
-            return redirect('pki:issuing_cas-config', pk=ca.pk)
-        return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
+            messages.success(
+                self.request,
+                _('Successfully associated truststore with Issuing CA {name}.').format(name=ca.unique_name)
+            )
+            if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
+                return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+            if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_CSR:
+                return redirect('pki:issuing_cas-define-cert-content-csr', pk=ca.pk)
+            if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+                return redirect('pki:issuing_cas-config', pk=ca.pk)
+            if ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
+                return redirect('pki:issuing_cas-config', pk=ca.pk)
+            return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
 
 
 class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
@@ -824,6 +826,7 @@ class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
 
     request: HttpRequest
 
+    @transaction.atomic
     def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
         """Handle successful CMP RA configuration submission."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_RAS):
@@ -834,12 +837,7 @@ class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
             _('Successfully configured CMP RA {name}. Please associate a trust store.').format(name=ca.unique_name)
         )
         actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.CA_CREATED,
-            target=ca,
-            target_display=f'CA: {ca.unique_name}',
-            actor=actor,
-        )
+        audit_security_change(target=ca, actor=actor, before=None, action='created')
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
 
@@ -848,6 +846,11 @@ class IssuingCaAddRequestExternalCsrView(IssuingCaContextMixin, FormView[Issuing
 
     form_class = IssuingCaAddRequestExternalCsrForm
     template_name = 'pki/issuing_cas/add/request_external_csr.html'
+
+    @transaction.atomic
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Keep form persistence and the creation audit in one transaction."""
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def form_valid(self, form: IssuingCaAddRequestExternalCsrForm) -> HttpResponse:
         """Handle successful form submission."""
@@ -861,12 +864,7 @@ class IssuingCaAddRequestExternalCsrView(IssuingCaContextMixin, FormView[Issuing
             ),
         )
         actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.CA_CREATED,
-            target=ca,
-            target_display=f'CA: {ca.unique_name}',
-            actor=actor,
-        )
+        audit_security_change(target=ca, actor=actor, before=None, action='created')
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
 
@@ -875,6 +873,11 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
 
     form_class = IssuingCaAddRequestCmpForm
     template_name = 'pki/issuing_cas/add/request_cmp.html'
+
+    @transaction.atomic
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Keep form persistence and the creation audit in one transaction."""
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
         """Handle successful form submission."""
@@ -888,12 +891,7 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
             ),
         )
         actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.CA_CREATED,
-            target=ca,
-            target_display=f'CA: {ca.unique_name}',
-            actor=actor,
-        )
+        audit_security_change(target=ca, actor=actor, before=None, action='created')
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
 
@@ -909,6 +907,7 @@ class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
 
     request: HttpRequest
 
+    @transaction.atomic
     def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
         """Handle successful EST RA configuration submission."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_RAS):
@@ -921,12 +920,7 @@ class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
             )
         )
         actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.CA_CREATED,
-            target=ca,
-            target_display=f'CA: {ca.unique_name}',
-            actor=actor,
-        )
+        audit_security_change(target=ca, actor=actor, before=None, action='created')
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
 
@@ -1045,7 +1039,8 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         form = IssuingCaCrlCycleForm(request.POST, instance=issuing_ca)
 
         if form.is_valid():
-            form.save()
+            with security_change(target=issuing_ca, actor=request.user):
+                form.save()
             messages.success(request, _('CRL cycle settings updated successfully.'))
             return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
@@ -1894,7 +1889,14 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
         deleted_count = queryset.count() if queryset else 0
 
         try:
-            response = super().form_valid(form)
+            with transaction.atomic():
+                targets = list(queryset.select_for_update())
+                snapshots = [(target, snapshot_security_state(target)) for target in targets]
+                response = super().form_valid(form)
+                for target, before in snapshots:
+                    audit_security_change(
+                        target=target, actor=self.request.user, before=before, action='deleted'
+                    )
         except ProtectedError:
             messages.error(
                 self.request,
@@ -2085,6 +2087,7 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
             ),
         ],
     )
+    @transaction.atomic
     def create(self, request: Request, **_kwargs: Any) -> Response:
         """Import a new Issuing CA from PEM-encoded key, certificate, and optional chain."""
         serializer = IssuingCaImportSerializer(data=request.data)
@@ -2106,6 +2109,7 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
         except ValidationError as exc:
             return Response({'detail': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
 
+        audit_security_change(target=issuing_ca, actor=request.user, before=None, action='created')
         response_serializer = IssuingCaSerializer(issuing_ca)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 

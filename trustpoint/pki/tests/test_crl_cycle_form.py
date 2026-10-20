@@ -9,9 +9,19 @@ from typing import Any
 
 import pytest
 
+from management.models import SecurityConfig
 from pki.forms.issuing_cas import IssuingCaCrlCycleForm
 from pki.models import CaModel
 from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
+
+
+@pytest.fixture
+def security_config() -> SecurityConfig:
+    """Provide an explicit policy for tests that save CA configuration."""
+    config = SecurityConfig(security_mode=SecurityConfig.SecurityModeChoices.LAB)
+    config.apply_security_settings(save=False)
+    config.save()
+    return config
 
 
 @pytest.mark.django_db
@@ -94,6 +104,7 @@ def test_crl_cycle_form_various_validity_values(issuing_ca_instance: dict[str, A
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures('security_config')
 def test_crl_cycle_form_save_schedules_generation(issuing_ca_instance: dict[str, Any]) -> None:
     """Test that saving the form with cycle enabled schedules CRL generation."""
     issuing_ca: CaModel = issuing_ca_instance.get('issuing_ca')  # type: ignore[assignment]
@@ -115,6 +126,7 @@ def test_crl_cycle_form_save_schedules_generation(issuing_ca_instance: dict[str,
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures('security_config')
 def test_crl_cycle_form_save_disabled_no_scheduling(issuing_ca_instance: dict[str, Any]) -> None:
     """Test that saving with cycle disabled doesn't schedule."""
     issuing_ca: CaModel = issuing_ca_instance.get('issuing_ca')  # type: ignore[assignment]

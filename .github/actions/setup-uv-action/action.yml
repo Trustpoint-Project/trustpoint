@@ -1,6 +1,10 @@
 name: Setup Environment
 description: Checks out code and installs the current uv version and it's dependencies defined inside the pyproject.toml file.
 inputs:
+  python-version:
+    description: "Python version used by CI, matching the Docker runtime."
+    required: false
+    default: '3.14'
   run_migrations:
     description: "Boolean to run the database migrations or not."
     required: false
@@ -15,9 +19,16 @@ runs:
         cache-dependency-glob: "uv.lock" # Invalidate cache when the lockfile changes.
 
     - name: Set up Python
+      id: python
       uses: actions/setup-python@v7  # Sets up Python environment.
       with:
-        python-version-file: "pyproject.toml"  # Ensures the correct Python version is used.
+        python-version: ${{ inputs.python-version }}
+
+    - name: Pin uv to the selected interpreter
+      shell: bash
+      env:
+        PYTHON_PATH: ${{ steps.python.outputs.python-path }}
+      run: echo "UV_PYTHON=${PYTHON_PATH}" >> "$GITHUB_ENV"
 
     - name: Run database migrations # Resets the database before running tests.
       if: ${{ inputs.run_migrations == 'true' }} # Only run migrations if input is true.

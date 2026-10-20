@@ -12,6 +12,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeGuard, cast
 
+from trustpoint_core.oid import HmacAlgorithm
+
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
 
 if TYPE_CHECKING:
@@ -54,6 +56,8 @@ class SecurityRestrictions:
     allow_auto_gen_pki: bool | _Unset = UNSET
     allow_self_signed_ca: bool | _Unset = UNSET
     allow_imported_private_keys: bool | _Unset = UNSET
+    allow_cmp_hmac_sha1: bool | _Unset = UNSET
+    permitted_cmp_hmac_algorithms: list[str] | _Unset = UNSET
     auto_gen_pki: bool | _Unset = UNSET
     permitted_no_onboarding_pki_protocols: list[int] | _Unset = UNSET
     permitted_onboarding_protocols: list[int] | _Unset = UNSET
@@ -117,6 +121,24 @@ def _parse_protocols(
     return result
 
 
+def _parse_cmp_hmac_algorithms(value: str | _Unset) -> list[str] | _Unset:
+    """Parse supported HMAC enum names into the stored algorithm OIDs."""
+    if isinstance(value, _Unset):
+        return UNSET
+    if not value:
+        return []
+    result: list[str] = []
+    for name in value.split(','):
+        algorithm = HmacAlgorithm.__members__.get(name.strip().upper())
+        if algorithm is None:
+            _fail(f'TP_SECURITY_PERMITTED_CMP_HMAC_ALGORITHMS contains unknown algorithm {name!r}.')
+        elif algorithm.dotted_string in result:
+            _fail(f'TP_SECURITY_PERMITTED_CMP_HMAC_ALGORITHMS contains duplicate algorithm {name!r}.')
+        else:
+            result.append(algorithm.dotted_string)
+    return result
+
+
 def parse_security_restrictions(environment: Mapping[str, str] | None = None) -> SecurityRestrictions:
     """Parse all optional ``TP_SECURITY_*`` restrictions."""
     credential_ttl_seconds = _parse_nullable_integer(
@@ -155,6 +177,13 @@ def parse_security_restrictions(environment: Mapping[str, str] | None = None) ->
             'TP_SECURITY_ALLOW_IMPORTED_PRIVATE_KEYS',
             _raw_environment(environment, 'TP_SECURITY_ALLOW_IMPORTED_PRIVATE_KEYS'),
         ),
+        permitted_cmp_hmac_algorithms=_parse_cmp_hmac_algorithms(
+            _raw_environment(environment, 'TP_SECURITY_PERMITTED_CMP_HMAC_ALGORITHMS'),
+        ),
+        allow_cmp_hmac_sha1=_parse_bool(
+            'TP_SECURITY_ALLOW_CMP_HMAC_SHA1',
+            _raw_environment(environment, 'TP_SECURITY_ALLOW_CMP_HMAC_SHA1'),
+        ),
         auto_gen_pki=_parse_bool(
             'TP_SECURITY_AUTO_GEN_PKI',
             _raw_environment(environment, 'TP_SECURITY_AUTO_GEN_PKI'),
@@ -184,6 +213,34 @@ def security_mode_from_environment(environment: Mapping[str, str] | None = None)
         supported = ', '.join(SecurityConfig.SecurityModeChoices.names)
         message = f'Invalid TP_SECURITY_MODE={raw_mode!r}. Supported values: {supported}.'
         raise SecurityConfigurationError(message) from exc
+
+
+def _apply_cmp_hmac_restrictions(
+    defaults: dict[str, object], restrictions: SecurityRestrictions, mode: str,
+) -> None:
+    """Apply the algorithm allowlist and the legacy SHA-1 restriction."""
+    from management.models.security import SecurityConfig
+
+    requested_hmacs = restrictions.permitted_cmp_hmac_algorithms
+    if not isinstance(requested_hmacs, _Unset):
+        preset_hmacs = cast('list[str]', defaults['permitted_cmp_hmac_algorithms'])
+        if mode != SecurityConfig.SecurityModeChoices.LAB and set(requested_hmacs) - set(preset_hmacs):
+            _fail('permitted_cmp_hmac_algorithms would weaken the selected security mode.')
+        defaults['permitted_cmp_hmac_algorithms'] = list(requested_hmacs)
+    else:
+        defaults['permitted_cmp_hmac_algorithms'] = list(
+            cast('list[str]', defaults['permitted_cmp_hmac_algorithms']),
+        )
+
+    # Retain the previous SHA-1 environment restriction for existing deployments.
+    legacy_sha1 = restrictions.allow_cmp_hmac_sha1
+    if not _is_unset(legacy_sha1):
+        hmacs = cast('list[str]', defaults['permitted_cmp_hmac_algorithms'])
+        sha1 = HmacAlgorithm.HMAC_SHA1.dotted_string
+        if legacy_sha1 and sha1 not in hmacs:
+            _fail('allow_cmp_hmac_sha1=true is not permitted by the selected CMP HMAC policy.')
+        if not legacy_sha1:
+            defaults['permitted_cmp_hmac_algorithms'] = [oid for oid in hmacs if oid != sha1]
 
 
 def effective_security_defaults(
@@ -238,6 +295,8 @@ def effective_security_defaults(
                     'environment restrictions may only be stricter.',
                 )
             defaults[field] = value
+
+    _apply_cmp_hmac_restrictions(defaults, restrictions, mode)
 
     for field in ('permitted_no_onboarding_pki_protocols', 'permitted_onboarding_protocols'):
         value = getattr(restrictions, field)
@@ -310,6 +369,7 @@ def synchronize_security_config() -> bool:
                     'not_permitted_signature_algorithm_oids',
                     'permitted_no_onboarding_pki_protocols',
                     'permitted_onboarding_protocols',
+                    'permitted_cmp_hmac_algorithms',
                 }
                 or field.startswith('allow_')
                 or field

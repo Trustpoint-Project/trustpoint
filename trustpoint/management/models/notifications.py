@@ -165,6 +165,9 @@ class NotificationModel(models.Model):
         WELCOME_MESSAGE = 'WELCOME'
         # Periodic task notifications
         SYSTEM_NOT_HEALTHY = 'SYS_NOT_HEALTHY'
+        LOG_SIZE_EXCEEDED = 'LOG_SIZE_EXCEEDED'
+        BACKUP_OVERDUE = 'BACKUP_OVERDUE'
+        REQUEST_FAILED = 'REQUEST_FAILED'
         VULNERABILITY = 'VULNERABILITY'
         CERT_EXPIRING = 'CERT_EXPIRING'
         CERT_EXPIRED = 'CERT_EXPIRED'
@@ -233,6 +236,28 @@ class NotificationModel(models.Model):
                     ),
                 ),
                 # Periodic task notifications
+                self.REQUEST_FAILED: NotificationMessage(
+                    _('PKI request failed ({protocol})'),
+                    _(
+                        'A {protocol} request for operation {operation} failed. '
+                        'Review the application logs for details.'
+                    ),
+                ),
+                self.BACKUP_OVERDUE: NotificationMessage(
+                    _('No recent local backup'),
+                    _(
+                        'No completed local backup was found within the last {max_age_days} days. '
+                        'Create a new backup under Management > Backups.'
+                    ),
+                ),
+                self.LOG_SIZE_EXCEEDED: NotificationMessage(
+                    _('Application log data exceeds the size threshold'),
+                    _(
+                        'Application logs and rotated backups use {size_mib} MiB, exceeding '
+                        'the configured threshold of {threshold_mib} MiB. '
+                        'Review log rotation and archive or remove old logs as appropriate.'
+                    ),
+                ),
                 self.SYSTEM_NOT_HEALTHY: NotificationMessage(
                     _('System health check failed'),
                     _(
