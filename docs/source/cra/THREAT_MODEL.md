@@ -5,22 +5,20 @@
 # Threat Model
 
 <p>
-  <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Version"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Effective-2026--07--01-success?style=for-the-badge" alt="Effective Date"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Review-Quarterly-orange?style=for-the-badge" alt="Review Cycle"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Maintained_by-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Maintained by Trustpoint Project"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Document Version"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Last_Updated-2026--09--22-success?style=for-the-badge" alt="Last Updated"/></a>
 </p>
-
-**📋 Document Owner:** Trustpoint Project Maintainers | **📄 Version:** 1.0 | **📅 Last Updated:** 2026-07-01
-**🔄 Review Cycle:** Quarterly | **⏰ Next Review:** 2026-09-26
 
 ---
 
+> **Note:** This document is provided as part of Trustpoint's open-source security documentation. It may support CRA-related assessments but does not constitute a formal conformity assessment, certification, or declaration of conformity.
+
 ## **Purpose**
 
-Threat model documenting identified threats to Trustpoint’s assets and affected product components, supporting CRA readiness and BSI TR-03183-1 RH_RA.1.1.2 Threat Modelling.
+Threat model documenting identified threats to Trustpoint’s assets and affected product components. It provides security evidence that may support CRA-related assessments and BSI TR-03183-1 RH_RA.1.1.2 Threat Modelling.
 
-This document focuses on threat identification only. Likelihood, impact, residual risk, and treatment are handled in the related Risk Register.
+This document focuses on threat identification only. Likelihood, impact, residual risk, and risk treatment are documented separately in the related Risk Register.
 
 ---
 
