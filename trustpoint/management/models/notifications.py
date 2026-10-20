@@ -165,6 +165,7 @@ class NotificationModel(models.Model):
         WELCOME_MESSAGE = 'WELCOME'
         # Periodic task notifications
         SYSTEM_NOT_HEALTHY = 'SYS_NOT_HEALTHY'
+        LOG_SIZE_EXCEEDED = 'LOG_SIZE_EXCEEDED'
         VULNERABILITY = 'VULNERABILITY'
         CERT_EXPIRING = 'CERT_EXPIRING'
         CERT_EXPIRED = 'CERT_EXPIRED'
@@ -233,6 +234,14 @@ class NotificationModel(models.Model):
                     ),
                 ),
                 # Periodic task notifications
+                self.LOG_SIZE_EXCEEDED: NotificationMessage(
+                    _('Application log data exceeds the size threshold'),
+                    _(
+                        'Application logs and rotated backups use {size_mib} MiB, exceeding '
+                        'the configured threshold of {threshold_mib} MiB. '
+                        'Review log rotation and archive or remove old logs as appropriate.'
+                    ),
+                ),
                 self.SYSTEM_NOT_HEALTHY: NotificationMessage(
                     _('System health check failed'),
                     _(

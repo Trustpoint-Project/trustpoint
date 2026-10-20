@@ -7,15 +7,25 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import copy
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
-from django.db import models
+from django.contrib.auth.models import AnonymousUser
+from django.db import models, transaction
 
 from management.models.audit_log import AuditLog
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from pki.models import CaModel, DomainModel, TruststoreModel
+
 _REDACTED: Final[str] = '<redacted>'
+_PROVIDER_AUDIT_ACTIVE: ContextVar[bool] = ContextVar('provider_audit_active', default=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +34,7 @@ class SecurityAuditSpec:
 
     fields: tuple[str, ...]
     category: str
+    operation_prefix: str
     redacted_fields: frozenset[str] = frozenset()
 
 
@@ -32,10 +43,17 @@ _SECURITY_CATEGORY = 'security_object'
 
 _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
     'appsecrets.AppSecretBackendModel': SecurityAuditSpec(
+        operation_prefix='APPSECRET_BACKEND',
         fields=('backend_kind',),
         category=_PROVIDER_CATEGORY,
     ),
+    'appsecrets.AppSecretSoftwareConfigModel': SecurityAuditSpec(
+        fields=('backend',),
+        category=_PROVIDER_CATEGORY,
+        operation_prefix='APPSECRET_SOFTWARE',
+    ),
     'appsecrets.AppSecretPkcs11ConfigModel': SecurityAuditSpec(
+        operation_prefix='APPSECRET_PKCS11',
         fields=(
             'backend',
             'module_path',
@@ -50,10 +68,12 @@ _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
         redacted_fields=frozenset({'auth_source_ref'}),
     ),
     'crypto.CryptoProviderProfileModel': SecurityAuditSpec(
+        operation_prefix='CRYPTO_PROVIDER',
         fields=('name', 'backend_kind', 'active'),
         category=_PROVIDER_CATEGORY,
     ),
     'crypto.CryptoProviderPkcs11ConfigModel': SecurityAuditSpec(
+        operation_prefix='CRYPTO_PKCS11_CONFIG',
         fields=(
             'profile',
             'module_path',
@@ -72,6 +92,7 @@ _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
         redacted_fields=frozenset({'auth_source_ref'}),
     ),
     'crypto.CryptoProviderSoftwareConfigModel': SecurityAuditSpec(
+        operation_prefix='CRYPTO_SOFTWARE_CONFIG',
         fields=(
             'profile',
             'encryption_source',
@@ -82,11 +103,13 @@ _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
         redacted_fields=frozenset({'encryption_source_ref'}),
     ),
     'crypto.CryptoProviderRestConfigModel': SecurityAuditSpec(
+        operation_prefix='CRYPTO_REST_CONFIG',
         fields=('profile', 'base_url', 'auth_type', 'auth_ref', 'timeout_seconds', 'verify_tls'),
         category=_PROVIDER_CATEGORY,
         redacted_fields=frozenset({'auth_ref'}),
     ),
     'management.SecurityConfig': SecurityAuditSpec(
+        operation_prefix='SECURITY_CONFIG',
         fields=(
             'security_mode',
             'auto_gen_pki',
@@ -108,6 +131,7 @@ _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
         category=_SECURITY_CATEGORY,
     ),
     'pki.CaModel': SecurityAuditSpec(
+        operation_prefix='CA',
         fields=(
             'unique_name',
             'parent_ca',
@@ -131,33 +155,39 @@ _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
         category=_SECURITY_CATEGORY,
     ),
     'pki.TruststoreModel': SecurityAuditSpec(
+        operation_prefix='TRUSTSTORE',
         fields=('unique_name', 'intended_usage'),
         category=_SECURITY_CATEGORY,
     ),
     'pki.TruststoreOrderModel': SecurityAuditSpec(
+        operation_prefix='TRUSTSTORE_ENTRY',
         fields=('order', 'certificate', 'trust_store'),
         category=_SECURITY_CATEGORY,
     ),
     'pki.DomainModel': SecurityAuditSpec(
+        operation_prefix='DOMAIN',
         fields=('unique_name', 'issuing_ca', 'organization', 'domain_credential_profile', 'is_active'),
         category=_SECURITY_CATEGORY,
     ),
     'pki.DomainAllowedCertificateProfileModel': SecurityAuditSpec(
+        operation_prefix='DOMAIN_PROFILE',
         fields=('domain', 'certificate_profile', 'alias'),
         category=_SECURITY_CATEGORY,
     ),
     'pki.CertificateProfileModel': SecurityAuditSpec(
+        operation_prefix='CERT_PROFILE',
         fields=('unique_name', 'display_name', 'credential_type', 'profile_json', 'is_default'),
         category=_SECURITY_CATEGORY,
     ),
     'pki.DevIdRegistration': SecurityAuditSpec(
+        operation_prefix='DEVID_REGISTRATION',
         fields=('unique_name', 'truststore', 'domain', 'serial_number_pattern'),
         category=_SECURITY_CATEGORY,
     ),
 }
 
 
-def _json_safe(value: Any) -> object: # noqa: PLR0911
+def _json_safe(value: Any) -> object:  # noqa: PLR0911
     """Convert persisted model values into deterministic JSON-safe audit values."""
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
@@ -203,7 +233,24 @@ def _field_value(instance: models.Model, field_name: str) -> object:
 def snapshot_security_state(instance: models.Model) -> dict[str, object]:
     """Return the auditable persisted state of a registered security-sensitive object."""
     spec = _get_spec(instance)
-    return {field_name: _field_value(instance, field_name) for field_name in spec.fields}
+    state = {field_name: _field_value(instance, field_name) for field_name in spec.fields}
+    # Membership belongs to the parent event; do not audit each through-model save as well.
+    if spec.operation_prefix == 'DOMAIN':
+        state['certificate_profiles'] = list(
+            cast('DomainModel', instance)
+            .certificate_profiles.order_by('certificate_profile_id')
+            .values('certificate_profile_id', 'alias')
+        )
+    elif spec.operation_prefix == 'CA':
+        config = cast('CaModel', instance).no_onboarding_config
+        state['remote_truststore'] = config.trust_store_id if config else None
+    elif spec.operation_prefix == 'TRUSTSTORE':
+        state['certificates'] = list(
+            cast('TruststoreModel', instance)
+            .truststoreordermodel_set.order_by('order', 'certificate_id')
+            .values('order', 'certificate_id')
+        )
+    return state
 
 
 def _audit_value(field_name: str, value: object | None, spec: SecurityAuditSpec) -> object | None:
@@ -245,7 +292,7 @@ def _target_display(instance: models.Model) -> str:
 def audit_security_change(
     *,
     target: models.Model,
-    actor: models.Model | None,
+    actor: models.Model | AnonymousUser | None,
     before: dict[str, object] | None,
     action: str = 'updated',
 ) -> AuditLog | None:
@@ -272,25 +319,93 @@ def audit_security_change(
     if not changed_fields:
         return None
 
-    operation_by_action = {
-        'created': AuditLog.OperationType.MODEL_CREATED,
-        'updated': AuditLog.OperationType.MODEL_UPDATED,
-        'deleted': AuditLog.OperationType.MODEL_DELETED,
-    }
-    operation_type = (
-        AuditLog.OperationType.SECURITY_CONFIG_CHANGED
-        if _model_label(target) == 'management.SecurityConfig'
-        else operation_by_action[action]
-    )
+    operation_name = f'{spec.operation_prefix}_{action.upper()}'
+    if spec.operation_prefix == 'SECURITY_CONFIG' and action == 'updated':
+        operation_name = 'SECURITY_CONFIG_CHANGED'
+    operation_type = AuditLog.OperationType[operation_name]
 
     return AuditLog.create_entry(
         operation_type=operation_type,
         target=target,
         target_display=_target_display(target),
-        actor=actor,
+        actor=None if isinstance(actor, AnonymousUser) else actor,
         details={
             'action': action,
             'security_change_category': spec.category,
             'changed_fields': changed_fields,
         },
     )
+
+
+@contextmanager
+def security_change(
+    *,
+    target: models.Model,
+    actor: models.Model | AnonymousUser | None,
+    action: str = 'updated',
+) -> Iterator[None]:
+    """Audit one explicit operation atomically, after all its saves have finished.
+
+    This scope owns the event: replace existing audit calls for the same operation.
+    Read the initial state from the database because ModelForm validation mutates
+    its instance. Retain a copy for deletions, which clear the instance primary key.
+    Callers creating objects use ``audit_security_change`` inside their transaction.
+    """
+    if action not in {'updated', 'deleted'}:
+        msg = 'Use audit_security_change with before=None for object creation.'
+        raise ValueError(msg)
+    with transaction.atomic():
+        manager = type(target)._default_manager  # noqa: SLF001 - Django exposes the default manager through metadata.
+        persisted = manager.select_for_update().get(pk=target.pk)
+        before = snapshot_security_state(persisted)
+        audit_target = copy(persisted) if action == 'deleted' else target
+        yield
+        if action == 'updated':
+            audit_target.refresh_from_db()
+        audit_security_change(target=audit_target, actor=actor, before=before, action=action)
+
+
+@contextmanager
+def provider_configuration_changes(*, actor: models.Model | AnonymousUser | None) -> Iterator[None]:
+    """Own auditing for an explicit backend configuration operation.
+
+    Backend setup can create, update and delete several configuration objects.
+    Snapshot these small configuration tables once at the operation boundary so
+    intermediate saves and key initialization do not produce duplicate events.
+    Secret key material is excluded by the field allowlists.
+    """
+    from django.apps import apps  # noqa: PLC0415 - Resolve models after Django initialization.
+
+    if _PROVIDER_AUDIT_ACTIVE.get():
+        yield
+        return
+    token = _PROVIDER_AUDIT_ACTIVE.set(True)
+    try:
+        with transaction.atomic():
+            initial: dict[tuple[str, object], tuple[models.Model, dict[str, object]]] = {}
+            final: dict[tuple[str, object], models.Model] = {}
+            provider_models = [
+                apps.get_model(label)
+                for label, spec in _SECURITY_AUDIT_SPECS.items()
+                if spec.category == _PROVIDER_CATEGORY
+            ]
+            for model in provider_models:
+                for target in model.objects.select_for_update().all():
+                    initial[(_model_label(target), target.pk)] = (target, snapshot_security_state(target))
+            yield
+            for model in provider_models:
+                for target in model.objects.all():
+                    final[(_model_label(target), target.pk)] = target
+            for key, target in final.items():
+                previous = initial.get(key)
+                audit_security_change(
+                    target=target,
+                    actor=actor,
+                    before=previous[1] if previous else None,
+                    action='updated' if previous else 'created',
+                )
+            for key, (target, before) in initial.items():
+                if key not in final:
+                    audit_security_change(target=target, actor=actor, before=before, action='deleted')
+    finally:
+        _PROVIDER_AUDIT_ACTIVE.reset(token)

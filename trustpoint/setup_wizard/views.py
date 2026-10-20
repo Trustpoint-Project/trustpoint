@@ -76,6 +76,7 @@ from management.nginx_paths import (
     NGINX_CERT_PATH,
     NGINX_KEY_PATH,
 )
+from management.security_change_audit import provider_configuration_changes
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.operational_attach import (
@@ -2602,8 +2603,11 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
                     config_model,
                     profile_name='setup-wizard-pkcs11-pre-apply-app-secret',
                 )
-            self._configure_instance_crypto_backend(config_model)
-            self._configure_app_secret_backend(config_model)
+            with provider_configuration_changes(
+                actor=self.request.user if self.request.user.is_authenticated else None
+            ):
+                self._configure_instance_crypto_backend(config_model)
+                self._configure_app_secret_backend(config_model)
             call_command('create_default_cert_profiles')
             call_command('create_default_agent_profile_definitions')
             call_command('seed_discovery_ports')

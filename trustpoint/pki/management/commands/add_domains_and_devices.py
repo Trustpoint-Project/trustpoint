@@ -323,7 +323,7 @@ class Command(BaseCommand, LoggerMixin):
                     f"'{issuing_ca_name}' with truststore '{truststore_name}'"
                 )
                 AuditLog.create_entry(
-                    operation_type=AuditLog.OperationType.MODEL_CREATED,
+                    operation_type=AuditLog.OperationType.DEVID_REGISTRATION_CREATED,
                     target=devid_reg,
                     target_display=f'DevIdRegistration: {devid_reg.unique_name} (demo data)',
                     actor=None,
@@ -343,7 +343,7 @@ class Command(BaseCommand, LoggerMixin):
                         f"with CN '{signer.common_name}' issued by '{issuing_ca_name}'"
                     )
                     AuditLog.create_entry(
-                        operation_type=AuditLog.OperationType.MODEL_CREATED,
+                        operation_type=AuditLog.OperationType.SIGNER_ADDED,
                         target=signer,
                         target_display=f'Signer: {signer.unique_name} (demo data)',
                         actor=None,

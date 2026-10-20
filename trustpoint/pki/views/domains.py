@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import ProtectedError
 from django.forms import BaseModelForm
 from django.http import Http404, HttpResponse, HttpResponseRedirect
@@ -26,8 +27,8 @@ from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from trustpoint_core.oid import AlgorithmIdentifier
 
-from management.models.audit_log import AuditLog
 from management.models.organization import OrganizationModel
+from management.security_change_audit import audit_security_change, security_change, snapshot_security_state
 from pki.filters import DomainFilter
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
@@ -176,19 +177,16 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
         """Handle the case where the form is valid."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
             raise PermissionDenied
-        domain = form.save()
-        messages.success(
-            self.request,
-            _('Successfully created domain {name}.').format(name=domain.unique_name),
-        )
-        actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.DOMAIN_CREATED,
-            target=domain,
-            target_display=f'Domain: {domain.unique_name}',
-            actor=actor,
-        )
-        return super().form_valid(form)
+        with transaction.atomic():
+            domain = form.save()
+            messages.success(
+                self.request,
+                _('Successfully created domain {name}.').format(name=domain.unique_name),
+            )
+            actor = self.request.user if self.request.user.is_authenticated else None
+            audit_security_change(target=domain, actor=actor, before=None, action='created')
+            self.object = domain
+            return HttpResponseRedirect(self.get_success_url())
 
 
 class DomainDevIdRegistrationTableMixin(SortableTableMixin[DevIdRegistration], ListInDetailView):
@@ -267,51 +265,52 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
 
         domain: DomainModel = cast('DomainModel', self.get_object())
 
-        organization_id = request.POST.get('organization', '')
-        if organization_id:
-            try:
-                domain.organization = OrganizationModel.objects.get(pk=int(organization_id))
-            except (OrganizationModel.DoesNotExist, TypeError, ValueError):
-                messages.error(request, _('Invalid organization selected.'))
-                return HttpResponseRedirect(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
-        else:
-            domain.organization = None
+        with security_change(target=domain, actor=request.user):
+            organization_id = request.POST.get('organization', '')
+            if organization_id:
+                try:
+                    domain.organization = OrganizationModel.objects.get(pk=int(organization_id))
+                except (OrganizationModel.DoesNotExist, TypeError, ValueError):
+                    messages.error(request, _('Invalid organization selected.'))
+                    return HttpResponseRedirect(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
+            else:
+                domain.organization = None
 
-        domain_cred_profile_id = request.POST.get('domain_credential_profile', '')
-        if domain_cred_profile_id:
-            try:
-                profile = CertificateProfileModel.objects.get(pk=int(domain_cred_profile_id))
-                domain.domain_credential_profile = profile
-            except (CertificateProfileModel.DoesNotExist, ValueError):
-                messages.error(request, _('Invalid domain credential profile selected.'))
-                return HttpResponseRedirect(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
-        else:
-            domain.domain_credential_profile = None
+            domain_cred_profile_id = request.POST.get('domain_credential_profile', '')
+            if domain_cred_profile_id:
+                try:
+                    profile = CertificateProfileModel.objects.get(pk=int(domain_cred_profile_id))
+                    domain.domain_credential_profile = profile
+                except (CertificateProfileModel.DoesNotExist, ValueError):
+                    messages.error(request, _('Invalid domain credential profile selected.'))
+                    return HttpResponseRedirect(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
+            else:
+                domain.domain_credential_profile = None
 
-        # Handle assignments of  allowed certificate profiles in domain
-        # get fields from request POST
-        allowed_profile_data = {}
-        for key in request.POST:
-            if key.startswith('cert_p_allowed_'):
-                profile_id = key.removeprefix('cert_p_allowed_')
-                alias = request.POST.get(f'cert_p_alias_{profile_id}', '').strip()
-                allowed_profile_data[profile_id] = alias
+            # Handle assignments of  allowed certificate profiles in domain
+            # get fields from request POST
+            allowed_profile_data = {}
+            for key in request.POST:
+                if key.startswith('cert_p_allowed_'):
+                    profile_id = key.removeprefix('cert_p_allowed_')
+                    alias = request.POST.get(f'cert_p_alias_{profile_id}', '').strip()
+                    allowed_profile_data[profile_id] = alias
 
-        rejected_aliases = domain.set_allowed_cert_profiles(allowed_profile_data)
-        for alias_value, profile_name in rejected_aliases:
-            messages.warning(
-                request,
-                _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
-                'Please use an unique domain alias for each Certificate Profile.').format(
-                    alias=alias_value,
-                    profile=profile_name
+            rejected_aliases = domain.set_allowed_cert_profiles(allowed_profile_data)
+            for alias_value, profile_name in rejected_aliases:
+                messages.warning(
+                    request,
+                    _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
+                    'Please use an unique domain alias for each Certificate Profile.').format(
+                        alias=alias_value,
+                        profile=profile_name
+                    )
                 )
-            )
 
-        domain.save()
+            domain.save()
 
-        messages.success(request, _('Settings updated successfully.'))
-        return HttpResponseRedirect(self.success_url)
+            messages.success(request, _('Settings updated successfully.'))
+            return HttpResponseRedirect(self.success_url)
 
 
 class DomainDetailView(DomainContextMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
@@ -349,10 +348,16 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
             raise PermissionDenied
         queryset = self.get_queryset()
         deleted_count = queryset.count()
-        domains_to_delete = list(queryset)
 
         try:
-            response = super().form_valid(form)
+            with transaction.atomic():
+                targets = list(queryset.select_for_update())
+                snapshots = [(target, snapshot_security_state(target)) for target in targets]
+                response = super().form_valid(form)
+                for target, before in snapshots:
+                    audit_security_change(
+                        target=target, actor=self.request.user, before=before, action='deleted'
+                    )
         except ProtectedError:
             messages.error(
                 self.request, _('Cannot delete the selected Domain(s) because they are referenced by other objects.')
@@ -361,15 +366,6 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
         except ValidationError as exc:
             messages.error(self.request, exc.message)
             return HttpResponseRedirect(self.success_url)
-
-        actor = self.request.user if self.request.user.is_authenticated else None
-        for domain in domains_to_delete:
-            AuditLog.create_entry(
-                operation_type=AuditLog.OperationType.DOMAIN_DELETED,
-                target=domain,
-                target_display=f'Domain: {domain.unique_name}',
-                actor=actor,
-            )
 
         messages.success(self.request, _('Successfully deleted {count} Domains.').format(count=deleted_count))
 
@@ -454,13 +450,17 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         """Handle the case where the form is valid."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
             raise PermissionDenied
-        dev_id_registration = form.save()
-        self.object = dev_id_registration
-        messages.success(
-            self.request,
-            _('Successfully created DevID registration pattern {name}.').format(name=dev_id_registration.unique_name),
-        )
-        return super().form_valid(form)
+        with transaction.atomic():
+            dev_id_registration = form.save()
+            audit_security_change(target=dev_id_registration, actor=self.request.user, before=None, action='created')
+            self.object = dev_id_registration
+            messages.success(
+                self.request,
+                _('Successfully created DevID registration pattern {name}.').format(
+                    name=dev_id_registration.unique_name
+                ),
+            )
+            return super().form_valid(form)
 
     def get_success_url(self) -> str:
         """Return the URL to redirect to upon successful form submission."""
@@ -477,12 +477,13 @@ class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView[DevIdRegistrati
     template_name = 'pki/devid_registration/confirm_delete.html'
     success_url = reverse_lazy('pki:domains')
 
-    def delete(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Override delete method to add a success message."""
+    def form_valid(self, form: Form) -> HttpResponse:
+        """Delete and audit a DevID registration on confirmed POST."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
             raise PermissionDenied
-        response = super().delete(request, *args, **kwargs)
-        messages.success(request, _('DevID Registration Pattern deleted successfully.'))
+        with security_change(target=self.object, actor=self.request.user, action='deleted'):
+            response = super().form_valid(form)
+        messages.success(self.request, _('DevID Registration Pattern deleted successfully.'))
         return response
 
 
@@ -606,6 +607,23 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
             return DomainDetailSerializer
         return DomainSerializer
 
+    @transaction.atomic
+    def perform_create(self, serializer: Any) -> None:
+        """Create and audit the object once at the API operation boundary."""
+        target = serializer.save()
+        audit_security_change(target=target, actor=self.request.user, before=None, action='created')
+
+    def perform_update(self, serializer: Any) -> None:
+        """Audit the final persisted state, including serializer-managed relations."""
+        with security_change(target=serializer.instance, actor=self.request.user):
+            serializer.save()
+
+    def perform_destroy(self, instance: Any) -> None:
+        """Preserve the deleted object's identity and state in one audit entry."""
+        with security_change(target=instance, actor=self.request.user, action='deleted'):
+            instance.delete()
+
+
 @extend_schema(tags=['DevID Registration'])
 @extend_schema_view(
     list=extend_schema(description='Retrieve a list of all DevID registrations.'),
@@ -652,7 +670,7 @@ class DevIdRegistrationViewSet(viewsets.ModelViewSet[DevIdRegistration]):
             if truststore is not None:
                 serializer.validated_data['unique_name'] = truststore.unique_name
 
-        serializer.save()
+        self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -662,4 +680,18 @@ class DevIdRegistrationViewSet(viewsets.ModelViewSet[DevIdRegistration]):
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @transaction.atomic
+    def perform_create(self, serializer: Any) -> None:
+        """Create and audit the object once at the API operation boundary."""
+        target = serializer.save()
+        audit_security_change(target=target, actor=self.request.user, before=None, action='created')
 
+    def perform_update(self, serializer: Any) -> None:
+        """Audit the final persisted state, including serializer-managed relations."""
+        with security_change(target=serializer.instance, actor=self.request.user):
+            serializer.save()
+
+    def perform_destroy(self, instance: Any) -> None:
+        """Preserve the deleted object's identity and state in one audit entry."""
+        with security_change(target=instance, actor=self.request.user, action='deleted'):
+            instance.delete()

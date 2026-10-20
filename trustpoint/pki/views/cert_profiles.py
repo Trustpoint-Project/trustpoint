@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import ProtectedError, QuerySet
 from django.forms import ValidationError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -24,6 +25,7 @@ from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_v
 from rest_framework import filters, viewsets
 from rest_framework.permissions import BasePermission
 
+from management.security_change_audit import audit_security_change, security_change, snapshot_security_state
 from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
 from pki.serializer.cert_profile import CertProfileDetailSerializer, CertProfileSerializer
@@ -130,12 +132,20 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
         """Handle the case where the form is valid."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_PROFILES):
             raise PermissionDenied
-        cert_profile = form.save()
+        is_new = form.instance.pk is None
+        with transaction.atomic():
+            if is_new:
+                cert_profile = form.save()
+                audit_security_change(target=cert_profile, actor=self.request.user, before=None, action='created')
+            else:
+                with security_change(target=form.instance, actor=self.request.user):
+                    cert_profile = form.save()
+        self.object = cert_profile
         messages.success(
             self.request,
             _('Successfully updated Certificate Profile {name}.').format(name=cert_profile.unique_name),
         )
-        return super().form_valid(form)
+        return HttpResponseRedirect(self.get_success_url())
 
 
 class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
@@ -213,7 +223,14 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
         deleted_count = queryset.count() if queryset else 0
 
         try:
-            response = super().form_valid(form)
+            with transaction.atomic():
+                targets = list(queryset.select_for_update())
+                snapshots = [(target, snapshot_security_state(target)) for target in targets]
+                response = super().form_valid(form)
+                for target, before in snapshots:
+                    audit_security_change(
+                        target=target, actor=self.request.user, before=before, action='deleted'
+                    )
         except ProtectedError:
             messages.error(
                 self.request,
@@ -316,3 +333,19 @@ class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
         if self.action == 'retrieve':
             return CertProfileDetailSerializer
         return CertProfileSerializer
+
+    @transaction.atomic
+    def perform_create(self, serializer: Any) -> None:
+        """Create and audit the object once at the API operation boundary."""
+        target = serializer.save()
+        audit_security_change(target=target, actor=self.request.user, before=None, action='created')
+
+    def perform_update(self, serializer: Any) -> None:
+        """Audit the final persisted state, including serializer-managed relations."""
+        with security_change(target=serializer.instance, actor=self.request.user):
+            serializer.save()
+
+    def perform_destroy(self, instance: Any) -> None:
+        """Preserve the deleted object's identity and state in one audit entry."""
+        with security_change(target=instance, actor=self.request.user, action='deleted'):
+            instance.delete()
