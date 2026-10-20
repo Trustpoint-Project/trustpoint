@@ -7,6 +7,7 @@ import pytest
 from django.urls import reverse
 from pyasn1_modules import rfc4210
 
+from management.models import SecurityConfig
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import CaModel
 from request.clients.cmp_client import CmpClient
@@ -19,6 +20,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def ra_sender(cmp_device_without_onboarding):
+    SecurityConfig.objects.create()
     device = cmp_device_without_onboarding['device']
     secret = device.no_onboarding_config.cmp_shared_secret
     config = NoOnboardingConfigModel.objects.create(
