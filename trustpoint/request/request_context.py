@@ -312,3 +312,6 @@ class CmpPollRequestContext(CmpBaseRequestContext):
 @dataclass(kw_only=True)
 class ManualCredentialRequestContext(ManualBaseRequestContext, BaseCredentialRequestContext):
     """Manual context for credential requests triggered from the web UI."""
+
+    requested_validity: dict[str, int] | None = None
+    """Relative validity submitted by the manual issuance form, before building X.509 dates."""

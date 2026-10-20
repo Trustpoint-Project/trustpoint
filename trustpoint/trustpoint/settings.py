@@ -646,6 +646,11 @@ LOGGING = {
             'level': 'INFO',
             'handlers': ['console', 'rotatingFile'],
         },
+        'django-q': {
+            'level': 'WARNING',
+            'handlers': [],
+            'propagate': True,
+        },
     },
 }
 
