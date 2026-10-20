@@ -291,25 +291,17 @@ const formatDashboardDate = (() => {
   const labels = {
     expiring_within_selected_horizon: 'Expiring within selected horizon',
     no_onboarding: 'Without onboarding', pending: 'Pending onboarding', onboarded: 'Onboarded',
-    total: 'Total devices', none: 'None', valid: 'Valid', active: 'Active', expiring: 'Expiring',
+    total: 'Total devices', none: 'None', valid: 'Valid',
     expired: 'Expired', expired_or_revoked_only: 'Only expired/revoked certificates',
-    revoked: 'Revoked', not_yet_valid: 'Not yet valid', disabled: 'Disabled',
-    no_certificate: 'No CA certificate',
+    revoked: 'Revoked', not_yet_valid: 'Not yet valid',
     no_domain_credential: 'No domain credential',
     expiring_in_1_day: 'Expiring within 24 hours',
     expiring_in_7_days: 'Expiring in 1–7 days',
     expiring_in_30_days: 'Expiring in 8–30 days',
-    not_yet_valid: 'Not yet valid',
-    expiring_within_selected_horizon: 'Expiring within selected horizon',
-    no_onboarding: 'Without onboarding',
-    pending: 'Onboarding pending',
-    onboarded: 'Onboarded',
     none: 'No application certificate',
-    expired_or_revoked_only: 'Only expired or revoked certificates',
     active: 'Active / valid',
     expiring: 'Expiring soon',
-    expired: 'Expired',
-    disabled: 'Disabled', current: 'Up to date', missing: 'No active CRL', not_yet_valid: 'Not yet valid', no_certificate: 'Missing CA certificate',
+    disabled: 'Disabled', current: 'Up to date', missing: 'No active CRL', no_certificate: 'Missing CA certificate',
   };
   const readable = text => labels[text] || String(text).replaceAll('_', ' ').replace(/\b\w/g, c=>c.toUpperCase());
   const tabs = new Set(['certificates','devices','cas']);

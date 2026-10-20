@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, UTC
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
