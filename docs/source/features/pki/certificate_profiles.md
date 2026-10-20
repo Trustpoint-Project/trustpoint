@@ -188,7 +188,7 @@ String values in a profile may contain `{{ namespace.field }}` placeholders. The
 | `{{ device.rfc_4122_uuid }}` | UUID of the device. |
 | `{{ device.common_name }}` | Common name of the device. |
 | `{{ device.serial_number }}` | Serial number of the device. |
-| `{{ device.device_type }}` | Device type, e.g. `Generic Device` or `OPC UA GDS`. |
+| `{{ device.device_type }}` | Device type, e.g. `Generic Device` or `OPC UA GDS Push`. |
 | `{{ device.ip_address }}` | IP address of the device. Only available if set. |
 | `{{ device.opc_server_port }}` | OPC UA server port of the device. Only available if set. |
 | `{{ domain.unique_name }}` | Unique name of the device's domain. |

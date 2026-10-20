@@ -29,7 +29,6 @@ from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from users.permissions import AppPermissions
@@ -193,11 +192,6 @@ class DeviceBulkDeleteView(AbstractBulkDeleteView):
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
-
-class OpcUaGdsBulkDeleteView(AbstractBulkDeleteView):
-    """abc."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 class OpcUaGdsPushBulkDeleteView(AbstractBulkDeleteView):
     """abc."""

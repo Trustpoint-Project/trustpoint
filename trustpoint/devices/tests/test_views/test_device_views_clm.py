@@ -157,40 +157,6 @@ class TestDeviceViewSetAPI:
 
 
 @pytest.mark.django_db
-class TestOpcUaGdsCLMView:
-    """Test OPC UA GDS CLM view specific functionality."""
-    
-    def test_opcua_gds_clm_view_provides_correct_main_url(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
-    ) -> None:
-        """Test that OPC UA GDS CLM view provides correct main_url."""
-        domain = domain_instance['domain']
-        
-        # Create OPC UA GDS device with no_onboarding_config
-        no_onboarding_config = NoOnboardingConfigModel()
-        no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.MANUAL])
-        no_onboarding_config.full_clean()
-        no_onboarding_config.save()
-        
-        device = DeviceModel.objects.create(
-            common_name='opcua-clm-test',
-            serial_number='SN-OPCUA-CLM',
-            domain=domain,
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS,
-            no_onboarding_config=no_onboarding_config
-        )
-        
-        url = reverse('devices:opc_ua_gds_certificate_lifecycle_management', kwargs={'pk': device.pk})
-        response = admin_client.get(url)
-        
-        assert response.status_code == 200
-        assert 'main_url' in response.context
-        assert response.context['main_url'] == 'devices:opc_ua_gds'
-
-
-@pytest.mark.django_db
 class TestOpcUaGdsPushCLMView:
     """Test OPC UA GDS Push CLM view specific functionality."""
     

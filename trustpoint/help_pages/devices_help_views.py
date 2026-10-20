@@ -72,7 +72,6 @@ from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY,
     PageContextMixin,
 )
@@ -557,13 +556,6 @@ class DeviceCmpRevokeHelpView(BaseHelpView):
     strategy = CmpRevocationStrategy()
 
 
-class OpcUaGdsNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
-    """Help view for the case of no onboarding using CMP shared-secret for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingCmpSharedSecretStrategy()
-
-
 class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding EST username and password help page."""
 
@@ -867,18 +859,6 @@ class DeviceNoOnboardingCmpWebUiHelpView(BaseHelpView):
     manual_webui = True
 
 
-class OpcUaGdsNoOnboardingEstWebUiHelpView(DeviceNoOnboardingEstWebUiHelpView):
-    """EST WebUI guidance for no-onboarding OPC-UA GDS devices."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
-class OpcUaGdsNoOnboardingCmpWebUiHelpView(DeviceNoOnboardingCmpWebUiHelpView):
-    """CMP WebUI guidance for no-onboarding OPC-UA GDS devices."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class NoOnboardingScepStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding SCEP (RFC 8894) help page."""
 
@@ -1058,13 +1038,6 @@ class DeviceNoOnboardingScepHelpView(BaseHelpView):
     strategy = NoOnboardingScepStrategy()
 
 
-class OpcUaGdsNoOnboardingScepHelpView(BaseHelpView):
-    """Help view for no-onboarding SCEP for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingScepStrategy()
-
-
 class DownloadScepConfigView(
     UserPermissionRequiredMixin,
     DetailView[DeviceModel],
@@ -1137,13 +1110,6 @@ class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
     strategy = NoOnboardingEstUsernamePasswordStrategy()
 
 
-class OpcUaGdsNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
-    """Help view for the case of no onboarding using EST username and password for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingEstUsernamePasswordStrategy()
-
-
 # --------------------- Onboarding - Domain Credential - Shared Secrets - Help Page Implementations --------------------
 
 
@@ -1209,13 +1175,6 @@ class DeviceOnboardingDomainCredentialCmpSharedSecretHelpView(BaseHelpView):
     """Help view for the case of onboarding using CMP with a domain credential for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = OnboardingDomainCredentialCmpSharedSecretStrategy()
-
-
-class OpcUaGdsOnboardingDomainCredentialCmpSharedSecretHelpView(BaseHelpView):
-    """Help view for the case of onboarding using CMP with a domain credential for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = OnboardingDomainCredentialCmpSharedSecretStrategy()
 
 
@@ -1317,13 +1276,6 @@ class DeviceOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
     strategy = OnboardingDomainCredentialEstUsernamePasswordStrategy()
 
 
-class OpcUaGdsOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
-    """Help view for the case of onboarding using EST username & password for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = OnboardingDomainCredentialEstUsernamePasswordStrategy()
-
-
 # ------------------------- Onboarding - Application Certificates - Help Page Implementations -------------------------
 
 
@@ -1385,13 +1337,6 @@ class DeviceApplicationCertificateWithCmpDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using CMP with client cert for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = ApplicationCertificateWithCmpDomainCredentialStrategy()
-
-
-class OpcUaGdsApplicationCertificateWithCmpDomainCredentialHelpView(BaseHelpView):
-    """Help view for the case of onboarding using CMP with client cert for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithCmpDomainCredentialStrategy()
 
 
@@ -1481,13 +1426,6 @@ class DeviceApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using EST with client cert for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
-
-
-class OpcUaGdsApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
-    """Help view for the case of onboarding using EST with client cert for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
 
 
@@ -1590,13 +1528,6 @@ class DeviceNoOnboardingRestUsernamePasswordHelpView(BaseHelpView):
     strategy = NoOnboardingRestUsernamePasswordStrategy()
 
 
-class OpcUaGdsNoOnboardingRestUsernamePasswordHelpView(BaseHelpView):
-    """Help view for no-onboarding REST username/password for OPC-UA GDS device abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingRestUsernamePasswordStrategy()
-
-
 # -------------------- Onboarding - Domain Credential - REST Username/Password - Help Page Implementations ----------
 
 
@@ -1674,13 +1605,6 @@ class DeviceOnboardingDomainCredentialRestUsernamePasswordHelpView(BaseHelpView)
     """Help view for onboarding using REST username/password domain credential for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = OnboardingDomainCredentialRestUsernamePasswordStrategy()
-
-
-class OpcUaGdsOnboardingDomainCredentialRestUsernamePasswordHelpView(BaseHelpView):
-    """Help view for onboarding using REST username/password domain credential for OPC-UA GDS device abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = OnboardingDomainCredentialRestUsernamePasswordStrategy()
 
 
@@ -1806,13 +1730,6 @@ class DeviceApplicationCertificateWithRestDomainCredentialHelpView(BaseHelpView)
     """Help view for application certs using REST with client cert for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = ApplicationCertificateWithRestDomainCredentialStrategy()
-
-
-class OpcUaGdsApplicationCertificateWithRestDomainCredentialHelpView(BaseHelpView):
-    """Help view for application certs using REST with client cert for OPC-UA GDS device abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithRestDomainCredentialStrategy()
 
 

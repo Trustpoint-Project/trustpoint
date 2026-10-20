@@ -150,8 +150,8 @@ def test_generic_device_no_onboarding(domain_instance: dict[str, Any]) -> None:
 
 
 @pytest.mark.django_db
-def test_device_opc_ua_gds(domain_instance: dict[str, Any]) -> None:
-    """Test for a device with OPC UA GDS type."""
+def test_external_gds_as_generic_device(domain_instance: dict[str, Any]) -> None:
+    """External GDS instances use generic devices and standard EST onboarding."""
     domain = domain_instance['domain']
 
     onboarding_pki_protocols = [
@@ -167,7 +167,7 @@ def test_device_opc_ua_gds(domain_instance: dict[str, Any]) -> None:
         common_name='OPCUA_Device',
         serial_number='SN_OPCUA',
         domain=domain,
-        device_type=DeviceModel.DeviceType.OPC_UA_GDS,
+        device_type=DeviceModel.DeviceType.GENERIC_DEVICE,
         onboarding_config=onboarding_config_model
     )
 
@@ -175,7 +175,7 @@ def test_device_opc_ua_gds(domain_instance: dict[str, Any]) -> None:
     assert device.id is not None
     assert device.common_name == 'OPCUA_Device'
     assert device.serial_number == 'SN_OPCUA'
-    assert device.device_type == DeviceModel.DeviceType.OPC_UA_GDS
+    assert device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE
     assert device.onboarding_config.onboarding_status == OnboardingStatus.PENDING
     assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_IDEVID
     assert device.onboarding_config.get_pki_protocols() == [OnboardingPkiProtocol.EST]

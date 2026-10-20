@@ -49,21 +49,19 @@
                     </a>
                 </th>
 
-                {% if page_name != 'opc_ua_gds' %}
-                    <th
-                        scope="col"
-                        class="text-nowrap"
-                        data-col="serial_number"
+                <th
+                    scope="col"
+                    class="text-nowrap"
+                    data-col="serial_number"
+                >
+                    <a
+                        href="{% url_sort 'serial_number' %}"
+                        class="text-decoration-none text-body"
                     >
-                        <a
-                            href="{% url_sort 'serial_number' %}"
-                            class="text-decoration-none text-body"
-                        >
-                            {% trans 'Serial Number' %}
-                            {{ request|sort_icon:'serial_number' }}
-                        </a>
-                    </th>
-                {% endif %}
+                        {% trans 'Serial Number' %}
+                        {{ request|sort_icon:'serial_number' }}
+                    </a>
+                </th>
 
                 <th
                     scope="col"
@@ -191,15 +189,13 @@
                         {% endif %}
                     </td>
 
-                    {% if page_name != 'opc_ua_gds' %}
-                        <td data-col="serial_number">
-                            {% if device.serial_number %}
-                                {{ device.serial_number }}
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
-                    {% endif %}
+                    <td data-col="serial_number">
+                        {% if device.serial_number %}
+                            {{ device.serial_number }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
 
                     <td
                         data-col="created_at"
@@ -289,11 +285,7 @@
             {% empty %}
                 <tr>
                     <td
-                        {% if page_name != 'opc_ua_gds' %}
-                            colspan="11"
-                        {% else %}
-                            colspan="10"
-                        {% endif %}
+                        colspan="11"
                         class="text-center text-muted py-5"
                     >
                         {% trans 'No devices have been added yet.' %}

@@ -44,7 +44,6 @@ from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from trustpoint.settings import UIConfig
@@ -555,12 +554,6 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
             return redirect(url)
 
         return super().dispatch(request, *args, **kwargs)
-
-
-class OpcUaGdsCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
-    """Certificate Lifecycle Management Summary View for OPC UA Devcies."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):

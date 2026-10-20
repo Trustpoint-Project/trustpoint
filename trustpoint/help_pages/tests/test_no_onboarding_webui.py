@@ -14,7 +14,6 @@ from django.views.generic.detail import DetailView
 
 from devices.views.credential_issuance import (
     DeviceNoOnboardingIssueNewApplicationCredentialView,
-    OpcUaGdsNoOnboardingIssueNewApplicationCredentialView,
 )
 from help_pages.devices_help_views import (
     DeviceNoOnboardingCmpSharedSecretHelpView,
@@ -23,8 +22,6 @@ from help_pages.devices_help_views import (
     DeviceNoOnboardingEstWebUiHelpView,
     NoOnboardingCmpWebUiStrategy,
     NoOnboardingEstWebUiStrategy,
-    OpcUaGdsNoOnboardingCmpWebUiHelpView,
-    OpcUaGdsNoOnboardingEstWebUiHelpView,
 )
 from help_pages.help_section import HelpPage, ValueRenderType
 from help_pages.tests.test_devices_help_views import _device, _domain as _base_domain, _help_context, _profile
@@ -40,7 +37,6 @@ def _domain() -> Mock:
 
 @pytest.mark.parametrize('view_class', [
     DeviceNoOnboardingIssueNewApplicationCredentialView,
-    OpcUaGdsNoOnboardingIssueNewApplicationCredentialView,
 ])
 @pytest.mark.parametrize('enabled_protocol', [
     NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
@@ -150,8 +146,6 @@ def test_webui_rejects_onboarding_or_disabled_protocol(strategy_class, no_onboar
 @pytest.mark.parametrize(('name', 'view_class'), [
     ('devices_no_onboarding_est_webui_help', DeviceNoOnboardingEstWebUiHelpView),
     ('devices_no_onboarding_cmp_webui_help', DeviceNoOnboardingCmpWebUiHelpView),
-    ('opc_ua_gds_no_onboarding_est_webui_help', OpcUaGdsNoOnboardingEstWebUiHelpView),
-    ('opc_ua_gds_no_onboarding_cmp_webui_help', OpcUaGdsNoOnboardingCmpWebUiHelpView),
 ])
 def test_webui_routes_use_manual_help_views(name, view_class) -> None:
     url = reverse(f'devices:{name}', kwargs={'pk': 123})

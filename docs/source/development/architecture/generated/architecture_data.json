@@ -5667,11 +5667,6 @@
         "name": "devices"
       },
       {
-        "pattern": "devices/opc-ua-gds/",
-        "view": "devices.views.tables.view",
-        "name": "opc_ua_gds"
-      },
-      {
         "pattern": "devices/create/",
         "view": "devices.views.device_create.view",
         "name": "devices_create"
@@ -5680,11 +5675,6 @@
         "pattern": "devices/new-onboarding/",
         "view": "devices.views.device_create.view",
         "name": "devices_new_onboarding"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/create/",
-        "view": "devices.views.device_create.view",
-        "name": "opc_ua_gds_create"
       },
       {
         "pattern": "devices/opc-ua-gds-push/create/",
@@ -5697,11 +5687,6 @@
         "name": "devices_create_no_onboarding"
       },
       {
-        "pattern": "devices/opc-ua-gds/create/no-onboarding",
-        "view": "devices.views.device_create.view",
-        "name": "opc_ua_gds_create_no_onboarding"
-      },
-      {
         "pattern": "devices/create/onboarding/",
         "view": "devices.views.device_create.view",
         "name": "devices_create_onboarding"
@@ -5710,11 +5695,6 @@
         "pattern": "devices/create/opc-ua-gds-push/",
         "view": "devices.views.device_create.view",
         "name": "devices_create_opc_ua_gds_push"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/create/onboarding",
-        "view": "devices.views.device_create.view",
-        "name": "opc_ua_gds_create_onboarding"
       },
       {
         "pattern": "devices/opc-ua-gds-push/create/onboarding",
@@ -5727,11 +5707,6 @@
         "name": "devices_certificate_lifecycle_management"
       },
       {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/",
-        "view": "devices.views.clm.view",
-        "name": "opc_ua_gds_certificate_lifecycle_management"
-      },
-      {
         "pattern": "devices/opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/",
         "view": "devices.views.clm.view",
         "name": "opc_ua_gds_push_certificate_lifecycle_management"
@@ -5742,19 +5717,9 @@
         "name": "devices_no_onboarding_clm_issue_application_credential"
       },
       {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/",
-        "view": "devices.views.credential_issuance.view",
-        "name": "opc_ua_gds_no_onboarding_clm_issue_application_credential"
-      },
-      {
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/cmp-shared-secret/",
         "view": "help_pages.devices_help_views.view",
         "name": "devices_no_onboarding_cmp_shared_secret_help"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/cmp-shared-secret/",
-        "view": "help_pages.devices_help_views.view",
-        "name": "opc_ua_gds_no_onboarding_cmp_shared_secret_help"
       },
       {
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/est-username-password/",
@@ -5762,19 +5727,9 @@
         "name": "devices_no_onboarding_est_username_password_help"
       },
       {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/est-username-password/",
-        "view": "help_pages.devices_help_views.view",
-        "name": "opc_ua_gds_no_onboarding_est_username_password_help"
-      },
-      {
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/rest-username-password/",
         "view": "help_pages.devices_help_views.view",
         "name": "devices_no_onboarding_rest_username_password_help"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/rest-username-password/",
-        "view": "help_pages.devices_help_views.view",
-        "name": "opc_ua_gds_no_onboarding_rest_username_password_help"
       },
       {
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/manual/select-certificate-profile",
@@ -5782,19 +5737,9 @@
         "name": "devices_no_onboarding_select_certificate_profile"
       },
       {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/manual/select-certificate-profile",
-        "view": "devices.views.credential_issuance.view",
-        "name": "opc_ua_gds_no_onboarding_select_certificate_profile"
-      },
-      {
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/",
         "view": "devices.views.credential_issuance.view",
         "name": "devices_certificate_lifecycle_management_issue_profile_credential"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/",
-        "view": "devices.views.credential_issuance.view",
-        "name": "opc_ua_gds_certificate_lifecycle_management_issue_profile_credential"
       },
       {
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/cmp-shared-secret/",
@@ -5802,19 +5747,9 @@
         "name": "devices_certificate_lifecycle_management_issue_domain_credential_cmp_shared_secret"
       },
       {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/cmp-shared-secret/",
-        "view": "help_pages.devices_help_views.view",
-        "name": "opc_ua_gds_certificate_lifecycle_management_issue_domain_credential_cmp_shared_secret"
-      },
-      {
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/est-username-password/",
         "view": "help_pages.devices_help_views.view",
         "name": "devices_certificate_lifecycle_management_issue_domain_credential_est_username_password"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/est-username-password/",
-        "view": "help_pages.devices_help_views.view",
-        "name": "opc_ua_gds_certificate_lifecycle_management_issue_domain_credential_est_username_password"
       },
       {
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/rest-username-password/",
@@ -5822,19 +5757,9 @@
         "name": "devices_certificate_lifecycle_management_issue_domain_credential_rest_username_password"
       },
       {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/rest-username-password/",
-        "view": "help_pages.devices_help_views.view",
-        "name": "opc_ua_gds_certificate_lifecycle_management_issue_domain_credential_rest_username_password"
-      },
-      {
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/",
         "view": "devices.views.credential_issuance.view",
         "name": "devices_onboarding_clm_issue_application_credential"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/",
-        "view": "devices.views.credential_issuance.view",
-        "name": "opc_ua_gds_onboarding_clm_issue_application_credential"
       },
       {
         "pattern": "devices/opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/",
@@ -5872,11 +5797,6 @@
         "name": "devices_onboarding_clm_issue_application_credential_cmp_domain_credential"
       },
       {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/cmp-domain-credential/",
-        "view": "help_pages.devices_help_views.view",
-        "name": "opc_ua_gds_onboarding_clm_issue_application_credential_cmp_domain_credential"
-      },
-      {
         "pattern": "devices/opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/opc-ua-gds-push-domain-credential/",
         "view": "help_pages.devices_help_views.view",
         "name": "devices_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential"
@@ -5885,11 +5805,6 @@
         "pattern": "devices/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/est-domain-credential/",
         "view": "help_pages.devices_help_views.view",
         "name": "devices_onboarding_clm_issue_application_credential_est_domain_credential"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/est-domain-credential/",
-        "view": "help_pages.devices_help_views.view",
-        "name": "opc_ua_gds_onboarding_clm_issue_application_credential_est_domain_credential"
       },
       {
         "pattern": "devices/opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/est-domain-credential/",
@@ -5902,19 +5817,9 @@
         "name": "devices_onboarding_clm_issue_application_credential_rest_domain_credential"
       },
       {
-        "pattern": "devices/opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/rest-domain-credential/",
-        "view": "help_pages.devices_help_views.view",
-        "name": "opc_ua_gds_onboarding_clm_issue_application_credential_rest_domain_credential"
-      },
-      {
         "pattern": "devices/download/<int:pk>/",
         "view": "devices.views.download.view",
         "name": "devices_download"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/download/<int:pk>/",
-        "view": "devices.views.download.view",
-        "name": "opc_ua_gds_download"
       },
       {
         "pattern": "devices/opc-ua-gds-push/download/<int:pk>/",
@@ -5927,11 +5832,6 @@
         "name": "devices_credential-download"
       },
       {
-        "pattern": "devices/opc-ua-gds/credential/download/<int:pk>/",
-        "view": "devices.views.download.view",
-        "name": "opc_ua_gds_credential-download"
-      },
-      {
         "pattern": "devices/opc-ua-gds-push/credential/download/<int:pk>/",
         "view": "devices.views.download.view",
         "name": "devices_credential-download"
@@ -5942,19 +5842,9 @@
         "name": "devices_browser_otp_view"
       },
       {
-        "pattern": "devices/opc-ua-gds/credential-download/browser/<int:pk>/",
-        "view": "devices.views.browser_onboarding.view",
-        "name": "opc_ua_gds_browser_otp_view"
-      },
-      {
         "pattern": "devices/certificate/download/<int:pk>/",
         "view": "devices.views.download.view",
         "name": "devices_certificate-download"
-      },
-      {
-        "pattern": "devices/opc-ua-gds/certificate/download/<int:pk>/",
-        "view": "devices.views.download.view",
-        "name": "opc_ua_gds_certificate-download"
       },
       {
         "pattern": "devices/opc-ua-gds-push/certificate/download/<int:pk>/",
@@ -5982,11 +5872,6 @@
         "name": "devices_browser_cancel"
       },
       {
-        "pattern": "devices/credential-download/browser/<int:pk>/cancel",
-        "view": "devices.views.browser_onboarding.view",
-        "name": "opc_ua_gds_browser_cancel"
-      },
-      {
         "pattern": "devices/browser/",
         "view": "devices.views.browser_onboarding.view",
         "name": "browser_login"
@@ -6002,11 +5887,6 @@
         "name": "devices_credential_revoke"
       },
       {
-        "pattern": "devices/opc-ua-gds/revoke/<int:pk>/",
-        "view": "devices.views.revoke.view",
-        "name": "opc_ua_gds_credential_revoke"
-      },
-      {
         "pattern": "devices/opc-ua-gds-push/revoke/<int:pk>/",
         "view": "devices.views.revoke.view",
         "name": "devices_credential_revoke"
@@ -6017,11 +5897,6 @@
         "name": "devices_device_revoke"
       },
       {
-        "pattern": "devices/^opc-ua-gds/revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$",
-        "view": "devices.views.revoke.view",
-        "name": "opc_ua_gds_device_revoke"
-      },
-      {
         "pattern": "devices/^opc-ua-gds-push/revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$",
         "view": "devices.views.revoke.view",
         "name": "devices_device_revoke"
@@ -6030,11 +5905,6 @@
         "pattern": "devices/^delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$",
         "view": "devices.views.delete.view",
         "name": "devices_device_delete"
-      },
-      {
-        "pattern": "devices/^opc-ua-gds/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$",
-        "view": "devices.views.delete.view",
-        "name": "opc_ua_gds_device_delete"
       },
       {
         "pattern": "devices/^opc-ua-gds-push/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$",

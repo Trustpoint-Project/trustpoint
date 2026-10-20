@@ -31,7 +31,6 @@ from pki.models.credential import CredentialModel
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from users.permissions import AppPermissions
@@ -297,12 +296,6 @@ class DeviceDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
-    """Download dispatcher view for the OPC UA GDS pages."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class OpcUaGdsPushDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     """Download dispatcher view for the OPC UA GDS Push pages."""
 
@@ -342,12 +335,6 @@ class DeviceCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the device pages."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsCertificateDownloadView(AbstractCertificateDownloadView):
-    """Certificate download view for the OPC UA GDS pages."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class OpcUaGdsPushCertificateDownloadView(AbstractCertificateDownloadView):

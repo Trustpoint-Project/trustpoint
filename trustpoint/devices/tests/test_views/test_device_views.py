@@ -79,46 +79,6 @@ class TestDeviceTableView:
 
 
 @pytest.mark.django_db
-class TestOpcUaGdsTableView:
-    """Test OpcUaGdsTableView."""
-
-    def test_opcua_gds_table_view_get(self, admin_client: Client) -> None:
-        """Test GET request to OPC UA GDS table view."""
-        url = reverse('devices:opc_ua_gds')
-        response = admin_client.get(url)
-
-        assert response.status_code == 200
-        assert 'devices/opc_ua_gds.html' in [t.name for t in response.templates]
-
-    def test_opcua_gds_table_view_filters_opcua_devices(
-        self,
-        admin_client: Client,
-        device_instance: dict[str, Any]
-    ) -> None:
-        """Test that OPC UA GDS table view only shows OPC UA GDS devices."""
-        domain = device_instance['domain']
-
-        # Create an OPC UA GDS device
-        opcua_device = DeviceModel.objects.create(
-            common_name='opcua-gds-device',
-            serial_number='SN12345',
-            domain=domain,
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS
-        )
-
-        url = reverse('devices:opc_ua_gds')
-        response = admin_client.get(url)
-
-        assert response.status_code == 200
-        devices = response.context['object_list']
-        assert opcua_device in devices
-
-        # Generic devices should not be in OPC UA GDS table
-        generic_device = device_instance['device']
-        assert generic_device not in devices
-
-
-@pytest.mark.django_db
 class TestOpcUaGdsPushTableView:
     """Test OpcUaGdsPushTableView."""
 
@@ -180,19 +140,6 @@ class TestDeviceCreateChooseOnboardingView:
         assert 'page_name' in response.context
         assert response.context['page_category'] == 'devices'
         assert response.context['page_name'] == 'devices'
-
-
-@pytest.mark.django_db
-class TestOpcUaGdsCreateChooseOnboardingView:
-    """Test OpcUaGdsCreateChooseOnboardingView."""
-
-    def test_opcua_gds_create_choose_onboarding_get(self, admin_client: Client) -> None:
-        """Test GET request to OPC UA GDS create choose onboarding view."""
-        url = reverse('devices:opc_ua_gds_create')
-        response = admin_client.get(url)
-
-        assert response.status_code == 200
-        assert 'devices/create_choose_onboarding.html' in [t.name for t in response.templates]
 
 
 @pytest.mark.django_db
@@ -267,42 +214,6 @@ class TestDeviceCreateNoOnboardingView:
 
 
 @pytest.mark.django_db
-class TestOpcUaGdsCreateNoOnboardingView:
-    """Test OpcUaGdsCreateNoOnboardingView."""
-
-    def test_opcua_gds_create_no_onboarding_get(self, admin_client: Client) -> None:
-        """Test GET request to OPC UA GDS create no onboarding view."""
-        url = reverse('devices:opc_ua_gds_create_no_onboarding')
-        response = admin_client.get(url)
-
-        assert response.status_code == 200
-        assert 'devices/create.html' in [t.name for t in response.templates]
-
-    def test_opcua_gds_create_no_onboarding_creates_opcua_device(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
-    ) -> None:
-        """Test that OPC UA GDS view creates OPC UA GDS device type."""
-        domain = domain_instance['domain']
-
-        post_data = {
-            'common_name': 'new-opcua-device',
-            'serial_number': 'SN88888',
-            'domain': domain.pk,
-            'no_onboarding_pki_protocols': ['16'],  # MANUAL = 16
-        }
-
-        url = reverse('devices:opc_ua_gds_create_no_onboarding')
-        response = admin_client.post(url, data=post_data)
-
-        assert response.status_code == 302
-
-        device = DeviceModel.objects.get(common_name='new-opcua-device')
-        assert device.device_type == DeviceModel.DeviceType.OPC_UA_GDS
-
-
-@pytest.mark.django_db
 class TestDeviceCreateOnboardingView:
     """Test DeviceCreateOnboardingView."""
 
@@ -338,44 +249,6 @@ class TestDeviceCreateOnboardingView:
         device = DeviceModel.objects.get(common_name='onboarding-device')
         assert device.onboarding_config is not None
         assert device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE
-
-
-@pytest.mark.django_db
-class TestOpcUaGdsCreateOnboardingView:
-    """Test OpcUaGdsCreateOnboardingView."""
-
-    def test_opcua_gds_create_onboarding_get(self, admin_client: Client) -> None:
-        """Test GET request to OPC UA GDS create onboarding view."""
-        url = reverse('devices:opc_ua_gds_create_onboarding')
-        response = admin_client.get(url)
-
-        assert response.status_code == 200
-        assert 'devices/create.html' in [t.name for t in response.templates]
-
-    def test_opcua_gds_create_onboarding_creates_opcua_device(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
-    ) -> None:
-        """Test that OPC UA GDS view creates OPC UA GDS device with onboarding."""
-        domain = domain_instance['domain']
-
-        post_data = {
-            'common_name': 'opcua-onboarding-device',
-            'serial_number': 'SN66666',
-            'domain': domain.pk,
-            'onboarding_protocol': str(OnboardingProtocol.EST_USERNAME_PASSWORD.value),
-            'onboarding_pki_protocols': ['2'],  # EST
-        }
-
-        url = reverse('devices:opc_ua_gds_create_onboarding')
-        response = admin_client.post(url, data=post_data)
-
-        assert response.status_code == 302
-
-        device = DeviceModel.objects.get(common_name='opcua-onboarding-device')
-        assert device.device_type == DeviceModel.DeviceType.OPC_UA_GDS
-        assert device.onboarding_config is not None
 
 
 @pytest.mark.django_db
@@ -446,43 +319,6 @@ class TestDeviceCertificateLifecycleManagementSummaryView:
         response = admin_client.get(url)
 
         assert response.status_code == 404
-
-
-@pytest.mark.django_db
-class TestOpcUaGdsCertificateLifecycleManagementSummaryView:
-    """Test OpcUaGdsCertificateLifecycleManagementSummaryView."""
-
-    def test_opcua_gds_clm_summary_view_get(
-        self,
-        admin_client: Client,
-        device_instance: dict[str, Any]
-    ) -> None:
-        """Test GET request to OPC UA GDS CLM summary view."""
-        from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
-
-        domain = device_instance['domain']
-
-        # Create no_onboarding_config
-        no_onboarding_config = NoOnboardingConfigModel()
-        no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.MANUAL])
-        no_onboarding_config.full_clean()
-        no_onboarding_config.save()
-
-        # Create OPC UA GDS device with no_onboarding_config
-        opcua_device = DeviceModel.objects.create(
-            common_name='opcua-clm-device',
-            serial_number='SN55555',
-            domain=domain,
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS,
-            no_onboarding_config=no_onboarding_config
-        )
-
-        url = reverse('devices:opc_ua_gds_certificate_lifecycle_management', kwargs={'pk': opcua_device.pk})
-        response = admin_client.get(url)
-
-        assert response.status_code == 200
-        assert 'devices/credentials/certificate_lifecycle_management.html' in [t.name for t in response.templates]
-        assert response.context['object'] == opcua_device
 
 
 @pytest.mark.django_db
@@ -573,7 +409,6 @@ class TestIssuedCredentialRevocationView:
             mock_get.return_value = mock_issued_cred
 
             response = admin_client.post(url, data={'revocation_reason': 'unspecified'}, follow=True)
-
 
 
         assert response.status_code == HTTPStatus.OK

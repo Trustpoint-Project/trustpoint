@@ -55,7 +55,6 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 
@@ -239,12 +238,6 @@ class DeviceNoOnboardingIssueNewApplicationCredentialView(AbstractNoOnboardingIs
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsNoOnboardingIssueNewApplicationCredentialView(AbstractNoOnboardingIssueNewApplicationCredentialView):
-    """Issue a new application credential for a no-onboarding OPC UA GDS device."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class AbstractSelectCertificateProfileNewApplicationCredentialView(PageContextMixin, DetailView[DeviceModel]):
     """abc."""
 
@@ -321,26 +314,12 @@ class DeviceChooseIssuanceMethodView(AbstractChooseIssuanceMethodView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsChooseIssuanceMethodView(AbstractChooseIssuanceMethodView):
-    """Choose an issuance method within the OPC UA GDS section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class DeviceSelectCertificateProfileNewApplicationCredentialView(
     AbstractSelectCertificateProfileNewApplicationCredentialView
 ):
     """abc."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsSelectCertificateProfileNewApplicationCredentialView(
-    AbstractSelectCertificateProfileNewApplicationCredentialView
-):
-    """abc."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class AbstractOnboardingIssueNewApplicationCredentialView(PageContextMixin, DetailView[DeviceModel]):
@@ -428,12 +407,6 @@ class DeviceOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueN
     """abc."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
-    """abc."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
@@ -617,12 +590,6 @@ class DeviceIssueDomainCredentialView(AbstractIssueDomainCredentialView):
     """View for issuing domain credentials for devices."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsIssueDomainCredentialView(AbstractIssueDomainCredentialView):
-    """View for issuing domain credentials for OPC-UA GDS devices."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
@@ -984,19 +951,7 @@ class DeviceIssueCsrCredentialView(AbstractIssueCsrCredentialView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsIssueCsrCredentialView(AbstractIssueCsrCredentialView):
-    """Issue a CSR-backed credential within the OPC UA GDS section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class DeviceIssueProfileCredentialView(AbstractIssueProfileCredentialView):
     """Issue a new certificate profile credential within the devices section."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsIssueProfileCredentialView(AbstractIssueProfileCredentialView):
-    """Issue a new certificate profile credential within the devices section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY

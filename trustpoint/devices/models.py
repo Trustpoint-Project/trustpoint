@@ -91,7 +91,6 @@ class DeviceModel(CustomDeleteActionModel):
         """Enum for device type."""
 
         GENERIC_DEVICE = 0, _('Generic Device')
-        OPC_UA_GDS = 1, _('OPC UA GDS')
         OPC_UA_GDS_PUSH = 2, _('OPC UA GDS Push')
         AGENT_ONE_TO_ONE = 3, _('Agent (1-to-1)')
 

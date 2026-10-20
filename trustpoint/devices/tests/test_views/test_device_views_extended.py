@@ -447,42 +447,6 @@ class TestNoOnboardingIssueApplicationCredentialView:
 
 
 @pytest.mark.django_db
-class TestOpcUaGdsNoOnboardingIssueApplicationCredentialView:
-    """Test OPC UA GDS version of NoOnboardingIssueNewApplicationCredentialView."""
-    
-    def test_opcua_gds_issue_credential_view(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
-    ) -> None:
-        """Test OPC UA GDS issue credential view."""
-        domain = domain_instance['domain']
-        
-        # Create OPC UA GDS device with no_onboarding_config
-        no_onboarding_config = NoOnboardingConfigModel()
-        no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.MANUAL])
-        no_onboarding_config.full_clean()
-        no_onboarding_config.save()
-        
-        device = DeviceModel.objects.create(
-            common_name='opcua-issue-cred',
-            serial_number='SN66666',
-            domain=domain,
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS,
-            no_onboarding_config=no_onboarding_config
-        )
-        
-        url = reverse(
-            'devices:opc_ua_gds_no_onboarding_clm_issue_application_credential',
-            kwargs={'pk': device.pk}
-        )
-        response = admin_client.get(url)
-        
-        assert response.status_code == 200
-        assert 'sections' in response.context
-
-
-@pytest.mark.django_db
 class TestCLMViewWithOnboarding:
     """Test CLM view with different onboarding protocols."""
     
@@ -603,50 +567,6 @@ class TestDeviceCreateDuplicateName:
         form = response.context['form']
         assert form.errors
         assert 'common_name' in form.errors
-
-
-@pytest.mark.django_db
-class TestOpcUaGdsViews:
-    """Test OPC UA GDS specific view functionality."""
-    
-    def test_opcua_gds_table_excludes_generic_devices(
-        self,
-        admin_client: Client,
-        device_instance: dict[str, Any]
-    ) -> None:
-        """Test that OPC UA GDS table does not show generic devices."""
-        generic_device = device_instance['device']
-        assert generic_device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE
-        
-        url = reverse('devices:opc_ua_gds')
-        response = admin_client.get(url)
-        
-        assert response.status_code == 200
-        devices = response.context['object_list']
-        assert generic_device not in devices
-    
-    def test_device_table_excludes_opcua_devices(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
-    ) -> None:
-        """Test that device table does not show OPC UA GDS devices."""
-        domain = domain_instance['domain']
-        
-        # Create OPC UA GDS device
-        opcua_device = DeviceModel.objects.create(
-            common_name='opcua-test-device',
-            serial_number='SN-OPCUA',
-            domain=domain,
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS
-        )
-        
-        url = reverse('devices:devices')
-        response = admin_client.get(url)
-        
-        assert response.status_code == 200
-        devices = response.context['object_list']
-        assert opcua_device not in devices
 
 
 class TestOpcUaGdsPushViews:

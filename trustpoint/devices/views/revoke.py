@@ -35,7 +35,6 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from users.permissions import AppPermissions
@@ -157,11 +156,6 @@ class DeviceIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationVie
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
-
-class OpcUaGdsIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationView):
-    """abc."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 class OpcUaGdsPushIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationView):
     """abc."""
@@ -329,11 +323,6 @@ class DeviceBulkRevokeView(AbstractBulkRevokeView):
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
-
-class OpcUaGdsBulkRevokeView(AbstractBulkRevokeView):
-    """abc."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 class OpcUaGdsPushBulkRevokeView(AbstractBulkRevokeView):
     """abc."""
