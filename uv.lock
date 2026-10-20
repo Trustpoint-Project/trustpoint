@@ -2766,7 +2766,7 @@ requires-dist = [
     { name = "certifi", specifier = ">=2026.7.22" },
     { name = "crispy-bootstrap5", specifier = "~=2026.3" },
     { name = "cryptography", specifier = ">=50.0.0" },
-    { name = "django", specifier = ">=6.0.2,<7" },
+    { name = "django", specifier = ">=6.1,<7" },
     { name = "django-crispy-forms", specifier = "~=2.7" },
     { name = "django-dbbackup", specifier = ">=5.0.0" },
     { name = "django-filter", specifier = "~=26.1" },

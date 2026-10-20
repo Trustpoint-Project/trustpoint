@@ -39,6 +39,7 @@ Unless stated otherwise, all variables are optional.
 
 ## Outgoing Mail
 
+Trustpoint maps the following environment variables to Django's `MAILERS['default']` configuration.
 If `EMAIL_HOST` is not configured, Trustpoint uses Django's console email backend.
 
 | Variable | Default | Description |

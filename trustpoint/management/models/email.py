@@ -9,10 +9,22 @@ from contextlib import suppress
 from typing import Any, ClassVar
 
 from django.conf import settings
-from django.core.mail import EmailMessage, get_connection
+from django.core.mail import EmailMessage
+from django.core.mail.handler import MailersHandler
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+
+class _TestMailers(MailersHandler):
+    """Create a mailer for unsaved form values without changing global settings."""
+
+    def __init__(self, config: dict[str, Any]) -> None:
+        self._config = config
+
+    @property
+    def settings(self) -> dict[str, Any]:
+        return {'default': self._config}
 
 
 class SmtpEmailConfig(models.Model):
@@ -54,29 +66,21 @@ class SmtpEmailConfig(models.Model):
         super().save(*args, **kwargs)
 
     @classmethod
-    def _settings_bool(cls, name: str, *, default: bool = False) -> bool:
-        return bool(getattr(settings, name, default))
-
-    @classmethod
-    def _settings_int(cls, name: str, default: int) -> int:
-        raw_value = getattr(settings, name, default)
-        try:
-            return int(raw_value)
-        except (TypeError, ValueError):
-            return default
-
-    @classmethod
     def _initial_from_django_settings(cls) -> dict[str, Any]:
-        backend = getattr(settings, 'EMAIL_BACKEND', '')
+        config = settings.MAILERS.get('default', {})
+        options = config.get('OPTIONS', {})
+        use_tls = bool(options.get('use_tls', False))
+        use_ssl = bool(options.get('use_ssl', False))
+        default_port = 465 if use_ssl else (587 if use_tls else 25)
         return {
-            'enabled': backend == cls.SMTP_BACKEND and bool(getattr(settings, 'EMAIL_HOST', '')),
-            'host': getattr(settings, 'EMAIL_HOST', ''),
-            'port': cls._settings_int('EMAIL_PORT', 587),
-            'use_tls': cls._settings_bool('EMAIL_USE_TLS', default=True),
-            'use_ssl': cls._settings_bool('EMAIL_USE_SSL', default=False),
-            'username': getattr(settings, 'EMAIL_HOST_USER', ''),
-            'password': getattr(settings, 'EMAIL_HOST_PASSWORD', ''),
-            'timeout_seconds': cls._settings_int('EMAIL_TIMEOUT', 10),
+            'enabled': config.get('BACKEND', cls.SMTP_BACKEND) == cls.SMTP_BACKEND and bool(options.get('host')),
+            'host': options.get('host', ''),
+            'port': int(options.get('port', default_port)),
+            'use_tls': use_tls,
+            'use_ssl': use_ssl,
+            'username': options.get('username', ''),
+            'password': options.get('password', ''),
+            'timeout_seconds': int(options.get('timeout') or 10),
             'default_from_email': getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost'),
         }
 
@@ -91,41 +95,30 @@ class SmtpEmailConfig(models.Model):
         """Return the saved singleton row without creating one."""
         return cls.objects.filter(pk=cls.SINGLETON_ID).first()
 
+    def _mailer_config(self) -> dict[str, Any]:
+        if not self.enabled:
+            return {'BACKEND': self.CONSOLE_BACKEND}
+        return {
+            'BACKEND': self.SMTP_BACKEND,
+            'OPTIONS': {
+                'host': self.host,
+                'port': self.port,
+                'username': self.username,
+                'password': self.password,
+                'use_tls': self.use_tls,
+                'use_ssl': self.use_ssl,
+                'timeout': self.timeout_seconds,
+            },
+        }
+
     def apply_to_django_settings(self) -> None:
         """Apply this persisted configuration to Django's runtime mail settings."""
         settings.DEFAULT_FROM_EMAIL = self.default_from_email
-        settings.EMAIL_TIMEOUT = self.timeout_seconds
-
-        if self.enabled:
-            settings.EMAIL_BACKEND = self.SMTP_BACKEND
-            settings.EMAIL_HOST = self.host
-            settings.EMAIL_PORT = self.port
-            settings.EMAIL_USE_TLS = self.use_tls
-            settings.EMAIL_USE_SSL = self.use_ssl
-            settings.EMAIL_HOST_USER = self.username
-            settings.EMAIL_HOST_PASSWORD = self.password
-            return
-
-        settings.EMAIL_BACKEND = self.CONSOLE_BACKEND
-        settings.EMAIL_HOST = ''
-        settings.EMAIL_PORT = self.port
-        settings.EMAIL_USE_TLS = False
-        settings.EMAIL_USE_SSL = False
-        settings.EMAIL_HOST_USER = ''
-        settings.EMAIL_HOST_PASSWORD = ''
+        settings.MAILERS = {**settings.MAILERS, 'default': self._mailer_config()}
 
     def send_test_email(self, recipient: str) -> int:
-        """Send a small test email through this SMTP configuration."""
-        connection = get_connection(
-            backend=self.SMTP_BACKEND if self.enabled else self.CONSOLE_BACKEND,
-            host=self.host,
-            port=self.port,
-            username=self.username or None,
-            password=self.password or None,
-            use_tls=self.use_tls,
-            use_ssl=self.use_ssl,
-            timeout=self.timeout_seconds,
-        )
+        """Send a test email without changing the active mail configuration."""
+        connection = _TestMailers(self._mailer_config()).default
         message = EmailMessage(
             subject=_('Trustpoint SMTP test email'),
             body=_(
@@ -135,9 +128,8 @@ class SmtpEmailConfig(models.Model):
             ) % {'timestamp': timezone.now().isoformat()},
             from_email=self.default_from_email,
             to=[recipient],
-            connection=connection,
         )
-        return int(message.send(fail_silently=False))
+        return int(connection.send_messages([message]))
 
 
 def apply_saved_smtp_email_config() -> None:
