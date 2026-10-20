@@ -7,6 +7,7 @@ on:
     paths:
       - "**/migrations/**"
       - .github/workflows/test-migrations-compatibility.yml
+      - .github/actions/setup-uv-action/**
 
 env:
   TRUSTPOINT_OPERATIONAL_DATABASE: "sqlite"

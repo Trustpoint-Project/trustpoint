@@ -133,9 +133,7 @@ class DeviceModel(CustomDeleteActionModel):
 
     @property
     def can_assert_cmp_ra_verified(self) -> bool:
-        """Allow explicit RA identities and devices linked to a remote CMP RA."""
-        if self.allow_cmp_ra_verified:
-            return True
+        """Allow devices linked through their domain to a remote CMP RA."""
         issuing_ca = self.domain.issuing_ca if self.domain is not None else None
         return issuing_ca is not None and issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA
 

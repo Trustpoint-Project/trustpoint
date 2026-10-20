@@ -105,8 +105,9 @@ def test_mldsa_protection_supports_onboarded_device_requests(mldsa_key_and_algor
         CmpSignatureBasedInitializationAuthentication()._verify_protection_signature(message, certificate)
 
 
-def test_ra_verified_requires_an_explicitly_trusted_authenticated_device():
+def test_ra_verified_requires_an_authenticated_device_linked_to_a_cmp_ra():
     from devices.models import DeviceModel
+    from pki.models import CaModel, DomainModel
 
     message = rfc4210.PKIMessage()
     message['body']['cr'][0]['pop']['raVerified'] = ''
@@ -116,7 +117,13 @@ def test_ra_verified_requires_an_explicitly_trusted_authenticated_device():
     context.device = DeviceModel(common_name='ordinary-device')
     with pytest.raises(ValueError, match='not permitted'):
         validate_cmp_proof_of_possession(context)
-    context.device = DeviceModel(common_name='trusted-ra', allow_cmp_ra_verified=True)
+    context.device = DeviceModel(
+        common_name='trusted-ra',
+        domain=DomainModel(
+            unique_name='ra-domain',
+            issuing_ca=CaModel(unique_name='cmp-ra', ca_type=CaModel.CaTypeChoice.REMOTE_CMP_RA),
+        ),
+    )
     validate_cmp_proof_of_possession(context)
 
 

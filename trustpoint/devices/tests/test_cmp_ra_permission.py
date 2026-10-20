@@ -1,13 +1,15 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""Tests for persisted CMP registration-authority permissions."""
+"""Tests for CMP registration-authority permissions derived from CA associations."""
 
 import pytest
 from pyasn1_modules import rfc4210
 
 from devices.forms import ClmDeviceModelNoOnboardingForm, ClmDeviceModelOnboardingForm
 from devices.models import DeviceModel, OnboardingProtocol
+from onboarding.models import NoOnboardingConfigModel
+from pki.models import CaModel
 from request.request_context import CmpCertificateRequestContext
 from request.security_hardening import validate_cmp_proof_of_possession
 
@@ -22,15 +24,26 @@ def test_ra_permission_survives_rename_and_can_be_revoked(device_instance):
     with pytest.raises(ValueError, match='not permitted'):
         validate_cmp_proof_of_possession(context)
 
-    device.allow_cmp_ra_verified = True
-    device.save(update_fields=['allow_cmp_ra_verified'])
+    domain = device.domain
+    original_ca = domain.issuing_ca
+    remote_ca = CaModel.objects.create(
+        unique_name='remote-cmp-ra',
+        ca_type=CaModel.CaTypeChoice.REMOTE_CMP_RA,
+        certificate=original_ca.ca_certificate_model,
+        remote_host='ca.example.test',
+        remote_port=443,
+        remote_path='/.well-known/cmp',
+        no_onboarding_config=NoOnboardingConfigModel.objects.create(),
+    )
+    domain.issuing_ca = remote_ca
+    domain.save(update_fields=['issuing_ca'])
     device.common_name = 'renamed-trusted-ra'
     device.save(update_fields=['common_name'])
     context.device = DeviceModel.objects.get(pk=device.pk)
     validate_cmp_proof_of_possession(context)
 
-    device.allow_cmp_ra_verified = False
-    device.save(update_fields=['allow_cmp_ra_verified'])
+    domain.issuing_ca = original_ca
+    domain.save(update_fields=['issuing_ca'])
     context.device = DeviceModel.objects.get(pk=device.pk)
     with pytest.raises(ValueError, match='not permitted'):
         validate_cmp_proof_of_possession(context)
@@ -42,13 +55,10 @@ def test_ra_permission_survives_rename_and_can_be_revoked(device_instance):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize('initial_permission', [False, True])
 @pytest.mark.parametrize('uses_onboarding', [False, True])
-def test_clm_forms_do_not_expose_or_change_ra_permission(request, initial_permission, uses_onboarding):
+def test_clm_forms_do_not_accept_a_manual_ra_permission(request, uses_onboarding):
     fixture_name = 'device_instance_onboarding' if uses_onboarding else 'device_instance'
     device = request.getfixturevalue(fixture_name)['device']
-    device.allow_cmp_ra_verified = initial_permission
-    device.save(update_fields=['allow_cmp_ra_verified'])
     form_type = ClmDeviceModelOnboardingForm if uses_onboarding else ClmDeviceModelNoOnboardingForm
     form = form_type(
         instance=device,
@@ -58,7 +68,7 @@ def test_clm_forms_do_not_expose_or_change_ra_permission(request, initial_permis
             'domain': device.domain_id,
             'onboarding_status': 'pending',
             'pki_protocol_cmp': True,
-            'allow_cmp_ra_verified': not initial_permission,
+            'allow_cmp_ra_verified': True,
         },
     )
     assert 'allow_cmp_ra_verified' not in form.fields
@@ -68,7 +78,7 @@ def test_clm_forms_do_not_expose_or_change_ra_permission(request, initial_permis
     else:
         form.save()
     device.refresh_from_db()
-    assert device.allow_cmp_ra_verified is initial_permission
+    assert device.can_assert_cmp_ra_verified is False
 
 
 @pytest.mark.parametrize('ca_type', ['remote_cmp_ra', 'remote_est_ra', 'local', None])
@@ -96,7 +106,7 @@ def test_ra_verified_follows_the_devices_linked_ca(ca_type):
         device.domain = None
         with pytest.raises(ValueError, match='not permitted'):
             validate_cmp_proof_of_possession(context)
-        assert device.allow_cmp_ra_verified is False
+        assert device.can_assert_cmp_ra_verified is False
     else:
         with pytest.raises(ValueError, match='not permitted'):
             validate_cmp_proof_of_possession(context)

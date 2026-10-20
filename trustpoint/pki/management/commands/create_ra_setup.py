@@ -513,9 +513,6 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             config_dict={'cmp_shared_secret': 'cmp_ca_secret123'}
         )
 
-        cmp_ca_device.allow_cmp_ra_verified = True
-        cmp_ca_device.save(update_fields=['allow_cmp_ra_verified'])
-
         # Create CMP RA domain (separate from CA domain)
         cmp_ra_domain = self._create_domain_with_ca('cmp_ra', cmp_ca)
 
