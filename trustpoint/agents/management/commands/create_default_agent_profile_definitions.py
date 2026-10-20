@@ -63,7 +63,7 @@ class Command(BaseCommand):
 
                     # Create audit log entry
                     AuditLog.create_entry(
-                        operation_type=AuditLog.OperationType.MODEL_CREATED,
+                        operation_type=AuditLog.OperationType.AGENT_PROFILE_CREATED,
                         target=profile,
                         target_display=f'Agent Profile Definition: {profile_name}',
                         actor=None,  # System action

@@ -8,12 +8,13 @@ from typing import Never
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, mldsa, padding, rsa
 from cryptography.hazmat.primitives.serialization import Encoding
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, SignatureSuite
 
+from cmp.util import cmp_hmac_algorithm
 from devices.models import DeviceModel
 from onboarding.models import (
     NoOnboardingConfigModel,
@@ -69,6 +70,10 @@ class CmpAuthenticationBase(AuthenticationComponent, LoggerMixin):
         encoded_protected_part = encoder.encode(protected_part)
 
         protection_value = parsed_message['protection'].asOctets()
+        public_key = cmp_signer_cert.public_key()
+        if isinstance(public_key, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)):
+            public_key.verify(protection_value, encoded_protected_part)
+            return
         signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
 
         hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
@@ -326,7 +331,7 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
 
         hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
         try:
-            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
+            hmac_algorithm = cmp_hmac_algorithm(hmac_algorithm_oid)
         except Exception as exception:
             err_msg = 'hmac algorithm not supported.'
             raise ValueError(err_msg) from exception

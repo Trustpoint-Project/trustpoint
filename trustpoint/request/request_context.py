@@ -65,6 +65,9 @@ class BaseRequestContext(LoggerMixin):
     event_payload: dict[str, Any] | None = None
     workflow2_outcome: DispatchOutcome | None = None
 
+    failure_notification_sent: bool | None = None
+    request_failed: bool | None = None
+
     def error(self, ext_msg: str | bytes |None,
               http_status: int | None = None,
               cmp_code: PKIFailureInfo | None = None) -> None:
@@ -91,6 +94,10 @@ class BaseRequestContext(LoggerMixin):
         if self.http_response_headers:
             for header_name, header_value in self.http_response_headers.items():
                 response[header_name] = header_value
+        if self.request_failed or response.status_code >= 400:  # noqa: PLR2004 - HTTP error responses.
+            from request.notifications import notify_request_failure  # noqa: PLC0415
+
+            notify_request_failure(self)
         return response
 
     def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:

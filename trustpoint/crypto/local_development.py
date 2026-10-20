@@ -15,7 +15,6 @@ import os
 from typing import Final
 
 from django.conf import settings
-from django.db import transaction
 
 from appsecrets.models import (
     AppSecretBackendKind,
@@ -50,7 +49,9 @@ def ensure_local_software_backends() -> None:
     if _local_software_backends_ready():
         return
 
-    with transaction.atomic():
+    from management.security_change_audit import provider_configuration_changes  # noqa: PLC0415
+
+    with provider_configuration_changes(actor=None):
         if _local_software_backends_ready():
             return
         if _ensure_crypto_software_backend():

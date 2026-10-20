@@ -17,6 +17,7 @@ try:
 except ImportError:
     mldsa = None  # type: ignore[assignment]
 from django.conf import settings
+from django.db import transaction
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
@@ -41,6 +42,10 @@ from request.request_context import (
     EstCertificateRequestContext,
     HttpBaseRequestContext,
     ManualIssuanceMethod,
+)
+from request.security_hardening import (
+    retire_bootstrap_credential_after_domain_identity,
+    validate_upstream_issuance_result,
 )
 from trustpoint.logger import LoggerMixin
 
@@ -412,6 +417,29 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             exc_msg = f'Unknown remote CA type: {self.ca_type}'
             raise ValueError(exc_msg)
 
+    def _save_validated_remote_credential(
+        self,
+        context: BaseCertificateRequestContext,
+        issuer_path: list[x509.Certificate],
+    ) -> None:
+        """Validate remote output before saving it, without holding locks over HTTP."""
+        certificate = context.issued_certificate
+        if certificate is None or context.device is None or context.domain is None:
+            msg = 'Remote issuance requires a certificate, device and domain.'
+            raise ValueError(msg)
+        validate_upstream_issuance_result(context)
+        common_names = certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+        cn = common_names[0].value if common_names else '(no CN set)'
+        common_name = cn.decode() if isinstance(cn, bytes) else cn
+        _, profile_display_name = self._get_credential_type_for_template(context)
+        with transaction.atomic():
+            CredentialSaver(device=context.device, domain=context.domain).save_remote_keyless_credential(
+                certificate, issuer_path, common_name, profile_display_name,
+            )
+            if isinstance(context, CmpCertificateRequestContext):
+                context.issuer_credential = self._get_keyless_issuer_credential(issuer_path)
+            retire_bootstrap_credential_after_domain_identity(context)
+
     def _validate_est_enrollment_config(self, issuing_ca: CaModel) -> None:
         """Validate EST enrollment configuration.
 
@@ -489,7 +517,7 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             ValueError: If EST server configuration is invalid or enrollment fails.
             EstClientError: If communication with the EST server fails.
         """
-        if context.domain is None:
+        if context.domain is None or context.device is None:
             exc_msg = 'Domain must be set in the certificate request context.'
             raise ValueError(exc_msg)
 
@@ -526,25 +554,9 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             for cert in issuing_ca.chain_truststore.truststoreordermodel_set.order_by('order')
         ]
 
-        common_names = issued_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-        cn = common_names[0].value if common_names else '(no CN set)'
-        common_name = cn.decode() if isinstance(cn, bytes) else cn
-
-        _, cert_profile_disp_name = self._get_credential_type_for_template(context)
-        if context.device is None:
-            exc_msg = 'Device is required for saving credentials.'
-            raise ValueError(exc_msg)
-
-        saver = CredentialSaver(device=context.device, domain=context.domain)
-        saver.save_remote_keyless_credential(
-            issued_cert,
-            ca_chain,
-            common_name,
-            cert_profile_disp_name,
-        )
-
         context.issued_certificate = issued_cert
         context.issued_certificate_chain = ca_chain
+        self._save_validated_remote_credential(context, ca_chain)
         self.logger.info(
             'Successfully issued certificate via remote EST CA: %s',
             issuing_ca.unique_name
@@ -771,22 +783,9 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
 
         issuer_path = self._validate_cmp_issued_certificate(issued_cert, extra_certs, ca_chain, device_public_key)
 
-        common_names = issued_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-        cn = common_names[0].value if common_names else '(no CN set)'
-        common_name = cn.decode() if isinstance(cn, bytes) else cn
-
-        _, cert_profile_disp_name = self._get_credential_type_for_template(context)
-        CredentialSaver(device=context.device, domain=context.domain).save_remote_keyless_credential(
-            issued_cert,
-            issuer_path,
-            common_name,
-            cert_profile_disp_name,
-        )
-
         context.issued_certificate = issued_cert
         context.issued_certificate_chain = issuer_path
-        # The CMP responder needs an issuer credential; the RA only has the upstream CA certificates.
-        context.issuer_credential = self._get_keyless_issuer_credential(issuer_path)
+        self._save_validated_remote_credential(context, issuer_path)
         self.logger.info('Successfully issued certificate via remote CMP RA CA: %s', issuing_ca.unique_name)
 
         AuditLog.create_entry(

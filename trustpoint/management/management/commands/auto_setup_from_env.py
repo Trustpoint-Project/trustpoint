@@ -28,6 +28,7 @@ from crypto.models import (
     SoftwareKeyEncryptionSource,
 )
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
+from management.security_change_audit import provider_configuration_changes
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.models import SetupWizardCompletedModel
@@ -89,38 +90,39 @@ class Command(BaseCommand):
         """Configure cryptographic storage backends (crypto + app-secret)."""
         self.stdout.write('Configuring crypto backends...')
         try:
-            profile, created = CryptoProviderProfileModel.objects.get_or_create(
-                backend_kind=BackendKind.SOFTWARE,
-                defaults={
-                    'active': True,
-                    'name': 'trustpoint-software-auto-setup',
-                },
-            )
-            if not created:
-                profile.active = True
-                profile.save()
+            with provider_configuration_changes(actor=None):
+                profile, created = CryptoProviderProfileModel.objects.get_or_create(
+                    backend_kind=BackendKind.SOFTWARE,
+                    defaults={
+                        'active': True,
+                        'name': 'trustpoint-software-auto-setup',
+                    },
+                )
+                if not created:
+                    profile.active = True
+                    profile.save()
 
-            software_config, _ = CryptoProviderSoftwareConfigModel.objects.get_or_create(
-                profile=profile,
-                defaults={
-                    'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
-                    'encryption_source_ref': '',
-                    'allow_exportable_private_keys': False,
-                },
-            )
-            software_config.save()
+                software_config, _ = CryptoProviderSoftwareConfigModel.objects.get_or_create(
+                    profile=profile,
+                    defaults={
+                        'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
+                        'encryption_source_ref': '',
+                        'allow_exportable_private_keys': False,
+                    },
+                )
+                software_config.save()
 
-            backend = AppSecretBackendModel.get_singleton()
-            backend.backend_kind = AppSecretBackendKind.SOFTWARE
-            backend.save()
+                backend = AppSecretBackendModel.get_singleton()
+                backend.backend_kind = AppSecretBackendKind.SOFTWARE
+                backend.save()
 
-            app_secret_config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
-            app_secret_config.save()
+                app_secret_config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
+                app_secret_config.save()
 
-            clear_app_secret_cache()
-            get_app_secret_service().ensure_backend_ready()
+                clear_app_secret_cache()
+                get_app_secret_service().ensure_backend_ready()
 
-            self.stdout.write(self.style.SUCCESS('Crypto backends configured'))
+                self.stdout.write(self.style.SUCCESS('Crypto backends configured'))
         except Exception as e:
             err_msg = f'Failed to configure backends: {e}'
             raise CommandError(err_msg) from e

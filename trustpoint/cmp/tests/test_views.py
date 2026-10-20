@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from unittest.mock import Mock, patch
 
 from django.http import Http404, HttpResponse
@@ -19,7 +20,8 @@ from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPki
 from pki.models import RevokedCertificateModel
 from request.authorization.cmp import CmpOperationAuthorization
 from request.operation_processor.general import OperationProcessor
-from request.request_context import CmpRevocationRequestContext
+from request.request_context import CmpCertificateRequestContext, CmpRevocationRequestContext
+from request.workflows2_handler import Workflow2HandleResult
 from workflows2.events.request_events import Events
 
 
@@ -30,11 +32,27 @@ def request_factory():
 
 
 @pytest.fixture
+def security_helpers():
+    """Isolate security state and issuance in view orchestration tests."""
+    helpers = (
+        'validate_cmp_transaction_freshness',
+        'require_single_security_config',
+        'validate_cmp_proof_of_possession',
+        'mark_cmp_client_nonce',
+        'process_certificate_operation_atomically',
+        'record_cmp_response_nonce',
+        'release_delivered_workflow2_request',
+    )
+    with ExitStack() as stack:
+        yield {name: stack.enter_context(patch(f'cmp.views.{name}')) for name in helpers}
+
+
+@pytest.fixture
 def mock_request_context():
     """Mock CmpCertificateRequestContext."""
     from django.http import HttpResponse
 
-    ctx = Mock()
+    ctx = Mock(spec=CmpCertificateRequestContext)
     ctx.http_response_content = b'test response'
     ctx.http_response_status = 200
     ctx.http_response_content_type = 'application/pkixcmp'
@@ -96,7 +114,7 @@ class TestCmpInitializationRequestView:
     @patch('cmp.views.OperationProcessor')
     @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -105,15 +123,17 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
         mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test POST request to initialization endpoint with domain name only."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         
         # Configure parser mock to return the context
@@ -135,10 +155,17 @@ class TestCmpInitializationRequestView:
         # Verify all processors were called
         mock_validator_cls.return_value.validate.assert_called_once()
         mock_parser_cls.return_value.parse.assert_called_once()
-        mock_auth_cls.return_value.authenticate.assert_called_once()
+        security_helpers['validate_cmp_transaction_freshness'].assert_called_once_with(mock_request_context)
+        security_helpers['require_single_security_config'].assert_called_once_with(mock_request_context)
+        mock_authenticate.assert_called_once_with(mock_request_context)
+        security_helpers['validate_cmp_proof_of_possession'].assert_called_once_with(mock_request_context)
+        security_helpers['mark_cmp_client_nonce'].assert_called_once_with(mock_request_context)
         mock_authz_cls.return_value.authorize.assert_called_once()
         mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
-        mock_processor_cls.return_value.process_operation.assert_called_once()
+        security_helpers['process_certificate_operation_atomically'].assert_called_once_with(
+            mock_request_context, mock_processor_cls.return_value
+        )
+        mock_processor_cls.return_value.process_operation.assert_not_called()
         mock_responder_cls.build_response.assert_called_once()
         
         # Verify response
@@ -150,7 +177,7 @@ class TestCmpInitializationRequestView:
     @patch('cmp.views.OperationProcessor')
     @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -159,17 +186,19 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
         mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """IR requests should visibly dispatch workflows2 before operation processing."""
         mock_request_context.cmp_body_type = 'ir'
         mock_request_context.operation = 'initialization'
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
 
@@ -179,14 +208,17 @@ class TestCmpInitializationRequestView:
         response = view.post(request, domain='test_domain')
 
         mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
-        mock_processor_cls.return_value.process_operation.assert_called_once_with(mock_request_context)
+        security_helpers['process_certificate_operation_atomically'].assert_called_once_with(
+            mock_request_context, mock_processor_cls.return_value
+        )
+        mock_processor_cls.return_value.process_operation.assert_not_called()
         assert response.status_code == 200
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
     @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -195,17 +227,19 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
         mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """CR requests should visibly dispatch workflows2 as cmp.certification."""
         mock_request_context.cmp_body_type = 'cr'
         mock_request_context.operation = 'certification'
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
 
@@ -220,13 +254,17 @@ class TestCmpInitializationRequestView:
         )
 
         mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
-        mock_processor_cls.return_value.process_operation.assert_called_once_with(mock_request_context)
+        security_helpers['process_certificate_operation_atomically'].assert_called_once_with(
+            mock_request_context, mock_processor_cls.return_value
+        )
+        mock_processor_cls.return_value.process_operation.assert_not_called()
         assert response.status_code == 200
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -235,12 +273,14 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test POST request to initialization endpoint with certificate profile."""
         # Mock to_http_response to return actual HttpResponse
@@ -250,6 +290,7 @@ class TestCmpInitializationRequestView:
             content_type=mock_request_context.http_response_content_type
         )
 
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         
         # Configure parser mock to return the context
@@ -271,8 +312,9 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -281,14 +323,17 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test that authorization is called with correct operations for initialization."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         
         # Configure parser mock to return the context
@@ -308,8 +353,9 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -318,14 +364,17 @@ class TestCmpCertificationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test POST request to certification endpoint with domain name only."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         
         # Configure parser mock to return the context
@@ -347,9 +396,16 @@ class TestCmpCertificationRequestView:
         # Verify all processors were called
         mock_validator_cls.return_value.validate.assert_called_once()
         mock_parser_cls.return_value.parse.assert_called_once()
-        mock_auth_cls.return_value.authenticate.assert_called_once()
+        security_helpers['validate_cmp_transaction_freshness'].assert_called_once_with(mock_request_context)
+        security_helpers['require_single_security_config'].assert_called_once_with(mock_request_context)
+        mock_authenticate.assert_called_once_with(mock_request_context)
+        security_helpers['validate_cmp_proof_of_possession'].assert_called_once_with(mock_request_context)
+        security_helpers['mark_cmp_client_nonce'].assert_called_once_with(mock_request_context)
         mock_authz_cls.return_value.authorize.assert_called_once()
-        mock_processor_cls.return_value.process_operation.assert_called_once()
+        security_helpers['process_certificate_operation_atomically'].assert_called_once_with(
+            mock_request_context, mock_processor_cls.return_value
+        )
+        mock_processor_cls.return_value.process_operation.assert_not_called()
         mock_responder_cls.build_response.assert_called_once()
         
         # Verify response
@@ -359,8 +415,9 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -369,14 +426,17 @@ class TestCmpCertificationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test POST request to certification endpoint with certificate profile."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         
         # Configure parser mock to return the context
@@ -396,8 +456,9 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -406,14 +467,17 @@ class TestCmpCertificationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test that authorization is called with correct operations for certification."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         
         # Configure parser mock to return the context
