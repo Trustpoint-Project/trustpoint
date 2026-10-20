@@ -159,6 +159,9 @@ def test_upstream_validity_uses_authorized_duration_and_normalizes_datetimes():
 
 
 def test_pkcs_hmac_protection_preserves_leading_zero_bits_in_the_response():
+    from management.models import SecurityConfig
+
+    SecurityConfig.objects.create()
     from request.authentication.cmp import CmpSharedSecretAuthentication
     from request.clients.cmp_client import CmpClient
     from request.message_builder.cmp import CmpPkiHeaderBuilding

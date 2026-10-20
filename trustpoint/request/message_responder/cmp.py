@@ -710,6 +710,7 @@ class CmpTransactionResponder(CmpMessageResponder):
                 )
             else:
                 status, detail = CmpTransactionResponder._detail_for_transaction_status(transaction_record)
+                context.request_failed = status == 2  # noqa: PLR2004 - CMP rejection status.
                 pki_message = CmpTransactionResponder._build_transaction_result_message(
                     context=context,
                     issued_cert=None,
@@ -736,6 +737,7 @@ class CmpTransactionResponder(CmpMessageResponder):
             return False
 
         status, detail = CmpTransactionResponder._detail_for_transaction_status(transaction_record)
+        context.request_failed = status == 2  # noqa: PLR2004 - CMP rejection status.
         pki_message = CmpTransactionResponder._build_transaction_result_message(
             context=context,
             issued_cert=None,
@@ -1058,6 +1060,7 @@ class CmpErrorMessageResponder(CmpMessageResponder):
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP message with an error."""
+        context.request_failed = True
         try:
             CmpErrorMessageResponder._build_response(context)
         except Exception: # noqa: BLE001

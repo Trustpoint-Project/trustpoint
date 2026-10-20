@@ -125,6 +125,7 @@ _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
             'allow_auto_gen_pki',
             'allow_self_signed_ca',
             'allow_imported_private_keys',
+            'permitted_cmp_hmac_algorithms',
             'permitted_no_onboarding_pki_protocols',
             'permitted_onboarding_protocols',
         ),

@@ -101,6 +101,7 @@ class ScepPkiOperationHandler(LoggerMixin):
             message = parse_pki_message(body)
         except ScepMalformedMessageError:
             self.logger.warning('SCEP: malformed pkiMessage rejected for domain %s', self.domain.unique_name)
+            self._notify_failure()
             return ScepHttpResult(b'Malformed SCEP message.', status=400, content_type='text/plain')
         device: DeviceModel | None = None
         try:
@@ -120,7 +121,15 @@ class ScepPkiOperationHandler(LoggerMixin):
             failure.text,
         )
         self._audit_rejection(message, failure, device)
+        operation = {MessageType.PKCS_REQ: 'pkcsreq', MessageType.RENEWAL_REQ: 'renewalreq'}.get(message.message_type)
+        self._notify_failure(device, operation)
         return self._failure_response(message, failure)
+
+    def _notify_failure(self, device: DeviceModel | None = None, operation: str | None = None) -> None:
+        """Report a final failure, including CertRep failures returned with HTTP 200."""
+        from request.notifications import notify_request_failure  # noqa: PLC0415
+
+        notify_request_failure(ScepCertificateRequestContext(domain=self.domain, device=device, operation=operation))
     # ------------------------------------------------------------------ pipeline
     def _process(self, message: ParsedPkiMessage) -> ScepHttpResult:
         signer = verify_signature(message)

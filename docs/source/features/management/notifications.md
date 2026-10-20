@@ -1,5 +1,17 @@
 # Notifications
 
+When notifications are enabled, failed EST, CMP and REST requests handled by the
+shared request response path create a warning immediately. SCEP malformed messages
+and CertRep failures also create warnings, including protocol failures returned
+with HTTP 200. Successful requests and requests awaiting workflow approval do not
+create failure notifications.
+
+Each failed request creates one warning with its protocol, operation and resolved
+device/domain references where available. Request bodies, credentials and raw
+exception messages are not stored in the notification. Repeated response building
+for the same request context does not create duplicates. Notification storage
+failures are logged without changing the protocol response.
+
 Notifications show relevant system, domain, device, issuing CA, and certificate events in Trustpoint.
 
 Access: **Management****Notifications**

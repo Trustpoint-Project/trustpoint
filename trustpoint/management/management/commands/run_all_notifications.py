@@ -37,6 +37,7 @@ class Command(BaseCommand):
             'trustpoint_setup_notifications',
             'check_system_health',
             'check_log_size',
+            'check_backup_age',
             'check_for_security_vulnerabilities',
             'check_certificate_validity',
             'check_issuing_ca_validity',

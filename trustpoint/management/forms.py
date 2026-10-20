@@ -243,6 +243,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 'credential_ttl_seconds',
                 Field('allow_ca_issuance', wrapper_class='form-check form-switch'),
                 Field('allow_self_signed_ca', wrapper_class='form-check form-switch'),
+                'permitted_cmp_hmac_algorithms',
                 Field('auto_gen_pki', wrapper_class='form-check form-switch'),
                 HTML(
                     "{% load i18n %}"
@@ -298,6 +299,17 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         choices=RSA_KEY_CHOICES, required=False, widget=forms.Select()
     )
 
+    permitted_cmp_hmac_algorithms = forms.MultipleChoiceField(
+        choices=SecurityConfig.CmpHmacAlgorithmChoices.choices,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label=_('Permitted CMP HMAC algorithms'),
+        help_text=_(
+            'Select accepted CMP shared-secret HMACs. An empty selection disables shared-secret authentication. '
+            'OpenSSL defaults to HMAC-SHA1. Use Lab / Custom to select algorithms outside the other presets.',
+        ),
+    )
+
     permitted_no_onboarding_pki_protocols = forms.MultipleChoiceField(
         choices=[(c.value, c.label) for c in NoOnboardingPkiProtocol],
         widget=forms.CheckboxSelectMultiple,
@@ -329,7 +341,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             'rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days',
             'credential_ttl_seconds', 'auto_gen_pki',
             'allow_ca_issuance', 'allow_self_signed_ca',
-            'allow_imported_private_keys',
+            'allow_imported_private_keys', 'permitted_cmp_hmac_algorithms',
             'permitted_no_onboarding_pki_protocols',
             'permitted_onboarding_protocols'
         ]
@@ -405,6 +417,13 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
             if not defaults.get(field) and cleaned.get(field):
                 self.add_error(field, 'This feature cannot be enabled at this security level.')
+
+        permitted_hmacs = set(defaults['permitted_cmp_hmac_algorithms'])
+        if set(cleaned.get('permitted_cmp_hmac_algorithms') or []) - permitted_hmacs:
+            self.add_error(
+                'permitted_cmp_hmac_algorithms',
+                'One or more selected HMAC algorithms are not permitted at this security level.',
+            )
 
         protocol_fields: list[tuple[str, list[int]]] = [
             ('permitted_no_onboarding_pki_protocols', defaults['permitted_no_onboarding_pki_protocols']),

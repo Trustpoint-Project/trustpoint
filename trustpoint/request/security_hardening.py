@@ -24,7 +24,7 @@ from django.db import transaction
 from django.urls import Resolver404, resolve
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, SignatureSuite
 
 from cmp.util import PKI_STATUS_REJECTION, cmp_hmac_algorithm
 from management.models import SecurityConfig
@@ -71,12 +71,6 @@ _ALLOWED_PBM_OWF = {
     value
     for name in ('SHA256', 'SHA384', 'SHA512', 'SHA3_256', 'SHA3_384', 'SHA3_512')
     if (value := getattr(HashAlgorithm, name, None)) is not None
-}
-
-_ALLOWED_PBM_MAC = {
-    value
-    for name in ('HMAC_SHA256', 'HMAC_SHA384', 'HMAC_SHA512')
-    if (value := getattr(HmacAlgorithm, name, None)) is not None
 }
 
 _EXPECTED_SECURITY_CONFIG_COUNT = 1
@@ -154,7 +148,9 @@ def validate_cmp_pbm_parameters(context: CmpBaseRequestContext) -> None:
         raise ValueError(msg)
 
     mac = cmp_hmac_algorithm(decoded_pbm['mac']['algorithm'].prettyPrint())
-    if mac not in _ALLOWED_PBM_MAC:
+    permitted = SecurityConfig.objects.get().permitted_cmp_hmac_algorithms
+    allowed_macs = {cmp_hmac_algorithm(oid) for oid in permitted}
+    if mac not in allowed_macs:
         msg = f'CMP PBM MAC {mac} is not permitted.'
         raise ValueError(msg)
 
