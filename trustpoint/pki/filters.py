@@ -44,6 +44,7 @@ class CertificateFilter(django_filters.FilterSet):
             ('tomorrow', _('Tomorrow')),
             ('7_days', _('Within 7 Days')),
             ('30_days', _('Within 30 Days')),
+            ('90_days', _('Within 90 Days')),
             ('after_30_days', _('After 30 Days')),
         ),
         method='filter_expiry_window',
@@ -120,7 +121,6 @@ class CertificateFilter(django_filters.FilterSet):
         now = timezone.now()
         next_1_day = now + timedelta(days=1)
         next_2_days = now + timedelta(days=2)
-        next_7_days = now + timedelta(days=7)
         next_30_days = now + timedelta(days=30)
 
         base_queryset = queryset.filter(
@@ -136,10 +136,9 @@ class CertificateFilter(django_filters.FilterSet):
                 not_valid_after__gt=next_1_day,
                 not_valid_after__lte=next_2_days,
             )
-        if value == '7_days':
-            return base_queryset.filter(not_valid_after__lte=next_7_days)
-        if value == '30_days':
-            return base_queryset.filter(not_valid_after__lte=next_30_days)
+        horizon_days = {'7_days': 7, '30_days': 30, '90_days': 90}.get(value)
+        if horizon_days is not None:
+            return base_queryset.filter(not_valid_after__lte=now + timedelta(days=horizon_days))
         if value == 'after_30_days':
             return base_queryset.filter(not_valid_after__gt=next_30_days)
         return queryset

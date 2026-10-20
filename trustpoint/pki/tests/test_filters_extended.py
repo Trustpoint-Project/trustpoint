@@ -80,7 +80,7 @@ class TestCertificateFilter:
 
         assert result.count() == CertificateModel.objects.count()
 
-    @pytest.mark.parametrize('window', ['today', 'tomorrow', '7_days', '30_days', 'after_30_days'])
+    @pytest.mark.parametrize('window', ['today', 'tomorrow', '7_days', '30_days', '90_days', 'after_30_days'])
     def test_expiry_windows_only_return_currently_valid_certificates(
         self, certificates: dict[str, CertificateModel], window: str
     ) -> None:
