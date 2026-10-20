@@ -222,7 +222,7 @@ def _apply_cmp_hmac_restrictions(
     from management.models.security import SecurityConfig
 
     requested_hmacs = restrictions.permitted_cmp_hmac_algorithms
-    if not _is_unset(requested_hmacs):
+    if not isinstance(requested_hmacs, _Unset):
         preset_hmacs = cast('list[str]', defaults['permitted_cmp_hmac_algorithms'])
         if mode != SecurityConfig.SecurityModeChoices.LAB and set(requested_hmacs) - set(preset_hmacs):
             _fail('permitted_cmp_hmac_algorithms would weaken the selected security mode.')

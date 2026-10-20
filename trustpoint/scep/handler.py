@@ -121,7 +121,8 @@ class ScepPkiOperationHandler(LoggerMixin):
             failure.text,
         )
         self._audit_rejection(message, failure, device)
-        operation = {MessageType.PKCS_REQ: 'pkcsreq', MessageType.RENEWAL_REQ: 'renewalreq'}.get(message.message_type)
+        operations: dict[int, str] = {MessageType.PKCS_REQ: 'pkcsreq', MessageType.RENEWAL_REQ: 'renewalreq'}
+        operation = operations.get(message.message_type)
         self._notify_failure(device, operation)
         return self._failure_response(message, failure)
 
