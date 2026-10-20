@@ -9,6 +9,9 @@ import hashlib
 import json
 from dataclasses import dataclass
 
+from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.policies import SigningExecutionMode
+
 
 def _string_tuple(payload: dict[str, object], key: str) -> tuple[str, ...]:
     """Return a tuple of strings from a serialized capability-list field."""
@@ -53,3 +56,13 @@ class SoftwareCapabilities:
         """Return a stable snapshot fingerprint."""
         serialized = json.dumps(self.to_json_dict(), sort_keys=True, separators=(',', ':')).encode('utf-8')
         return hashlib.sha256(serialized).hexdigest()
+
+
+SOFTWARE_CAPABILITIES = SoftwareCapabilities(
+    supported_key_algorithms=(KeyAlgorithm.RSA.value, KeyAlgorithm.EC.value, KeyAlgorithm.MLDSA.value),
+    supported_signature_algorithms=('rsa_pkcs1v15', 'ecdsa', 'mldsa'),
+    supported_signing_execution_modes=(
+        SigningExecutionMode.COMPLETE_BACKEND.value,
+        SigningExecutionMode.ALLOW_APPLICATION_HASH.value,
+    ),
+)

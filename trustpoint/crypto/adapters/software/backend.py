@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, mldsa, padding, rsa, utils
 
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding, SoftwareManagedKeyVerification
-from crypto.adapters.software.capabilities import SoftwareCapabilities
+from crypto.adapters.software.capabilities import SOFTWARE_CAPABILITIES, SoftwareCapabilities
 from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
 from crypto.domain.errors import (
     KeyNotFoundError,
@@ -22,7 +22,6 @@ from crypto.domain.errors import (
     ProviderUnavailableError,
     UnsupportedKeySpecError,
 )
-from crypto.domain.policies import SigningExecutionMode
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import (
     EcKeySpec,
@@ -79,14 +78,7 @@ class SoftwareBackend:
         """Resolve secret material and return the software backend capabilities."""
         self._profile.require_encryption_material()
         if self._capabilities is None:
-            self._capabilities = SoftwareCapabilities(
-                supported_key_algorithms=('rsa', 'ec', 'mldsa'),
-                supported_signature_algorithms=('rsa_pkcs1v15', 'ecdsa', 'mldsa'),
-                supported_signing_execution_modes=(
-                    SigningExecutionMode.COMPLETE_BACKEND.value,
-                    SigningExecutionMode.ALLOW_APPLICATION_HASH.value,
-                ),
-            )
+            self._capabilities = SOFTWARE_CAPABILITIES
         return self._capabilities
 
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> SoftwareManagedKeyBinding:
