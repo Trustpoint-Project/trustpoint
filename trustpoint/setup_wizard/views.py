@@ -3349,7 +3349,7 @@ def managed_key_backend_reconciliation_checks(  # noqa: C901, PLR0911, PLR0912
             target=target,
             backend_kind=snapshot.crypto_backend_kind,
         )
-    except DjangoValidationError as exception:
+    except (CryptoError, DjangoValidationError) as exception:
         error_detail = '; '.join(exception.messages) if hasattr(exception, 'messages') else str(exception)
         return (
             CompatibilityCheck(
