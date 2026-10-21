@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from django.core.management import call_command
 
+from pki.forms.cert_profiles import CertificateIssuanceForm
 from pki.models import DomainModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.serializer.cert_profile import CertProfileSerializer
@@ -60,3 +61,27 @@ def test_ipsec_profile_uses_ipsec_ike_extended_key_usage() -> None:
     profile = CertificateProfileModel.objects.get(unique_name='ipsec_ike').profile
 
     assert profile['ext']['extended_key_usage']['usages'] == ['ipsec_ike']
+
+
+def test_opc_ua_domain_profile_loads_with_required_uri(domain_instance: dict[str, object]) -> None:
+    """The dedicated domain profile can be selected and requires a URI through the standard form."""
+    call_command('create_default_cert_profiles')
+    profile = CertificateProfileModel.objects.get(unique_name='opc_ua_domain_credential')
+    assert profile.credential_type == CertificateProfileModel.ProfileCredentialType.DOMAIN
+    CertProfilePydanticModel.model_validate(profile.profile)
+    domain = domain_instance['domain']
+    domain.domain_credential_profile = profile
+    domain.save()
+    assert domain.get_domain_credential_profile() == profile
+    assert domain.get_allowed_cert_profile(profile.unique_name) == profile
+
+    form = CertificateIssuanceForm(profile=profile.profile, domain=domain)
+    assert form['common_name'].value() == 'Trustpoint Domain Credential'
+    assert form.fields['uris'].required
+    assert not form.fields['uris'].disabled
+    assert form['days'].value() == profile.profile['validity']['days']
+    form = CertificateIssuanceForm(profile=profile.profile, domain=domain, data={
+        'common_name': 'Trustpoint Domain Credential',
+    })
+    assert not form.is_valid()
+    assert 'uris' in form.errors

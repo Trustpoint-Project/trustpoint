@@ -586,7 +586,7 @@ class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateL
             'serial_number': self.object.serial_number,
             'domain': self.object.domain,
             'ip_address': self.object.ip_address,
-            'opc_server_port': self.object.opc_server_port,
+            'opc_server_port': self.object.opc_ua_gds_push_config.opc_server_port,
             'onboarding_protocol': OnboardingProtocol.OPC_GDS_PUSH.label,
             'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
             'pki_protocol_opc_gds_push': self.object.onboarding_config.has_pki_protocol(

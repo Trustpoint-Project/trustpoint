@@ -19,6 +19,7 @@ from django.utils.translation import gettext_lazy as _
 
 from devices.models import (
     DeviceModel,
+    OpcUaGdsPushConfig,
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.utils import validate_application_uri, validate_common_name_characters
@@ -293,16 +294,6 @@ class IssueOpcUaClientCredentialForm(ApplicationUriFormMixin, BaseCredentialForm
 
 class IssueOpcUaServerCredentialForm(ApplicationUriFormMixin, BaseServerCredentialForm):
     """Form to issue a new OPC UA server credential."""
-
-
-class IssueOpcUaGdsPushDomainCredentialForm(ApplicationUriFormMixin, BaseCredentialForm):
-    """Form to issue a new OPC UA GDS Push domain credential."""
-
-    def __init__(self, *args: Any, device: DeviceModel, **kwargs: Any) -> None:
-        """Initialize the form with disabled common name field."""
-        super().__init__(*args, device=device, **kwargs)
-        self.fields['common_name'].disabled = True
-        self.fields['common_name'].initial = 'Trustpoint Domain Credential'
 
 
 class BrowserLoginForm(forms.Form):
@@ -749,7 +740,10 @@ class OpcUaGdsPushCreateForm(forms.Form):
         max_length=128,
         required=False,
         label=_('OPC User'),
-        help_text=_('OPC UA Server security administration user (role: SecurityAdmin)')
+        help_text=_(
+            'Optional OPC UA Server security administration user (role: SecurityAdmin). '
+            'Leave username and password blank to use certificate-based authentication.'
+        )
     )
     opc_password = forms.CharField(
         max_length=128,
@@ -791,6 +785,7 @@ class OpcUaGdsPushCreateForm(forms.Form):
             raise forms.ValidationError(err_msg)
         return common_name
 
+    @transaction.atomic
     def save(self, device_type: DeviceModel.DeviceType) -> DeviceModel:
         """Stores the form as device model object in the db.
 
@@ -814,8 +809,6 @@ class OpcUaGdsPushCreateForm(forms.Form):
         onboarding_config_model = OnboardingConfigModel(
             onboarding_status=OnboardingStatus.PENDING,
             onboarding_protocol=onboarding_protocol,
-            opc_user=opc_user,
-            opc_password=opc_password
         )
         onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
@@ -828,16 +821,24 @@ class OpcUaGdsPushCreateForm(forms.Form):
             device_type=device_type,
             onboarding_config=onboarding_config_model,
             ip_address=ip_address,
-            opc_server_port=opc_server_port,
         )
 
+        config = OpcUaGdsPushConfig(
+            device=device_model, opc_server_port=opc_server_port, opc_user=opc_user, opc_password=opc_password,
+        )
+        config.full_clean(exclude=['device'])
         device_model.full_clean()
 
         PermittedProtocolsAuthorization().check(device_model)
 
         onboarding_config_model.save()
         device_model.save()
+        config, _created = OpcUaGdsPushConfig.objects.update_or_create(
+            device=device_model,
+            defaults={'opc_server_port': opc_server_port, 'opc_user': opc_user, 'opc_password': opc_password},
+        )
 
+        device_model.opc_ua_gds_push_config = config
         return device_model
 
 
@@ -965,7 +966,10 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
         max_length=128,
         required=False,
         label=_('OPC User'),
-        help_text=_('OPC UA Server security administration user (role: SecurityAdmin)')
+        help_text=_(
+            'Optional OPC UA Server security administration user (role: SecurityAdmin). '
+            'Leave username and password blank to use certificate-based authentication.'
+        )
     )
     opc_password = forms.CharField(
         max_length=128,
@@ -996,24 +1000,25 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
         """Initializes the form."""
         self.instance: DeviceModel = kwargs.pop('instance')
 
+        config = getattr(self.instance, 'opc_ua_gds_push_config', None)
         initial = kwargs.get('initial', {})
         initial.update({
             'common_name': self.instance.common_name,
             'serial_number': self.instance.serial_number,
             'domain': self.instance.domain,
             'ip_address': self.instance.ip_address,
-            'opc_server_port': self.instance.opc_server_port,
+            'opc_server_port': config.opc_server_port if config else 4840,
             'opc_user': (
-                self.instance.onboarding_config.opc_user
-                if self.instance.onboarding_config else ''
+                config.opc_user
+                if config else ''
             ),
             'opc_password': (
-                self.instance.onboarding_config.opc_password
-                if self.instance.onboarding_config else ''
+                config.opc_password
+                if config else ''
             ),
             'opc_trust_store': (
-                self.instance.onboarding_config.opc_trust_store
-                if self.instance.onboarding_config else None
+                config.opc_trust_store
+                if config else None
             ),
             'onboarding_protocol': (
                 OnboardingProtocol(self.instance.onboarding_config.onboarding_protocol).label
@@ -1066,10 +1071,10 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             self.instance.serial_number = self.cleaned_data['serial_number']
             self.instance.domain = self.cleaned_data['domain']
             self.instance.ip_address = self.cleaned_data['ip_address']
-            self.instance.opc_server_port = self.cleaned_data['opc_server_port']
-            self.instance.onboarding_config.opc_user = self.cleaned_data['opc_user']
-            self.instance.onboarding_config.opc_password = self.cleaned_data['opc_password']
-            self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
+            self.instance.opc_ua_gds_push_config.opc_server_port = self.cleaned_data['opc_server_port']
+            self.instance.opc_ua_gds_push_config.opc_user = self.cleaned_data['opc_user']
+            self.instance.opc_ua_gds_push_config.opc_password = self.cleaned_data['opc_password']
+            self.instance.opc_ua_gds_push_config.opc_trust_store = self.cleaned_data['opc_trust_store']
 
             self.instance.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
             self.instance.onboarding_config.clear_pki_protocols()
@@ -1078,6 +1083,8 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
 
             self.instance.onboarding_config.full_clean()
             self.instance.onboarding_config.save()
+            self.instance.opc_ua_gds_push_config.full_clean()
+            self.instance.opc_ua_gds_push_config.save()
             self.instance.full_clean()
             self.instance.save()
 
@@ -1215,15 +1222,15 @@ class OpcUaGdsPushTruststoreAssociationForm(forms.Form):
         super().__init__(*args, **kwargs)
 
     def save(self) -> None:
-        """Saves the truststore association to the device's onboarding config."""
+        """Save the truststore association to the device's GDS Push configuration."""
         if not self.instance.onboarding_config:
             err_msg = _('Expected DeviceModel that is configured to use onboarding.')
             raise forms.ValidationError(err_msg)
 
         with transaction.atomic():
-            self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
-            self.instance.onboarding_config.full_clean()
-            self.instance.onboarding_config.save()
+            self.instance.opc_ua_gds_push_config.opc_trust_store = self.cleaned_data['opc_trust_store']
+            self.instance.opc_ua_gds_push_config.full_clean()
+            self.instance.opc_ua_gds_push_config.save(update_fields=['opc_trust_store'])
 
 
 class ClmAgentDeviceForm(forms.Form):

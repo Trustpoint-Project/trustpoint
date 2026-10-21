@@ -300,6 +300,11 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_update_server_certificate',
     ),
     path(
+        'opc-ua-gds-push/<int:pk>/domain-credential-renewal-settings/',
+        views.OpcUaGdsPushDomainCredentialRenewalSettingsView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_domain_credential_renewal_settings',
+    ),
+    path(
         'opc-ua-gds-push/<int:pk>/cert-renewal-settings/',
         views.OpcUaGdsPushCertRenewalSettingsView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_cert_renewal_settings',

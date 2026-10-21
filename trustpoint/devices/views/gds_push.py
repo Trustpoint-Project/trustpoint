@@ -12,6 +12,7 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from django.contrib import messages
+from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.http.request import HttpRequest
 from django.urls import reverse_lazy
@@ -23,8 +24,10 @@ from devices.models import (
     DeviceModel,
 )
 from onboarding.models import (
+    OnboardingProtocol,
     OnboardingStatus,
 )
+from pki.models import IssuedCredentialModel
 from pki.models.ca import CaModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
@@ -35,6 +38,8 @@ from trustpoint.page_context import (
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     PageContextMixin,
 )
+from trustpoint.views.base import UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -157,14 +162,14 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
 
             cert = x509.load_der_x509_certificate(certificate_bytes, default_backend())
 
-            truststore = self.object.onboarding_config.opc_trust_store
+            truststore = self.object.opc_ua_gds_push_config.opc_trust_store
             if not truststore:
                 truststore = TruststoreModel.objects.create(
                     unique_name=f'opc_server_{self.object.common_name}',
                     intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
                 )
-                self.object.onboarding_config.opc_trust_store = truststore
-                self.object.onboarding_config.save()
+                self.object.opc_ua_gds_push_config.opc_trust_store = truststore
+                self.object.opc_ua_gds_push_config.save(update_fields=['opc_trust_store'])
 
             existing_certs = list(truststore.certificates.all())
             cert_serial = cert.serial_number
@@ -279,9 +284,9 @@ class OpcUaGdsPushCertRenewalSettingsView(PageContextMixin, DetailView[DeviceMod
             )
             return self._redirect_to_help_page()
 
-        self.object.opc_gds_push_enable_periodic_update = enable
-        self.object.opc_gds_push_renewal_interval = interval
-        self.object.save(
+        self.object.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = enable
+        self.object.opc_ua_gds_push_config.opc_gds_push_renewal_interval = interval
+        self.object.opc_ua_gds_push_config.save(
             update_fields=['opc_gds_push_enable_periodic_update', 'opc_gds_push_renewal_interval']
         )
 
@@ -312,6 +317,65 @@ class OpcUaGdsPushCertRenewalSettingsView(PageContextMixin, DetailView[DeviceMod
                 kwargs={'pk': self.object.pk}
             )
         )
+
+
+class OpcUaGdsPushDomainCredentialRenewalSettingsView(
+    UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel],
+):
+    """Save the independent periodic GDS Push domain credential renewal settings."""
+
+    permission_required = AppPermissions.MANAGE_DEVICES
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    @transaction.atomic
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Validate the interval and schedule or cancel renewal on the onboarding page."""
+        self.object = self.get_object(queryset=self.get_queryset().select_for_update())
+        if (
+            self.object.device_type != DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+            or not self.object.onboarding_config
+            or self.object.onboarding_config.onboarding_protocol != OnboardingProtocol.OPC_GDS_PUSH
+        ):
+            raise Http404(gettext_lazy('Device is not configured for OPC UA GDS Push onboarding.'))
+        redirect = HttpResponseRedirect(reverse_lazy(
+            f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+            kwargs={'pk': self.object.pk},
+        ))
+        enabled = request.POST.get('opc_gds_push_enable_domain_credential_renewal') == 'on'
+        try:
+            interval = int(request.POST.get('opc_gds_push_domain_credential_renewal_interval', ''))
+            if interval < 1:
+                message = 'Interval must be at least 1.'
+                raise ValueError(message)  # noqa: TRY301
+        except (ValueError, TypeError):
+            messages.error(request, gettext_lazy('Invalid renewal interval. Please enter a positive integer (hours).'))
+            return redirect
+        if enabled and (self.object.domain is None or not self.object.issued_credentials.filter(
+            domain=self.object.domain,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+            credential__certificate__isnull=False,
+            credential__certificate__revoked_certificate__isnull=True,
+        ).exists()):
+            messages.error(
+                request, gettext_lazy('Issue an initial domain credential before enabling periodic renewal.')
+            )
+            return redirect
+        self.object.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal = enabled
+        self.object.opc_ua_gds_push_config.opc_gds_push_domain_credential_renewal_interval = interval
+        self.object.opc_ua_gds_push_config.save(update_fields=[
+            'opc_gds_push_enable_domain_credential_renewal', 'opc_gds_push_domain_credential_renewal_interval',
+        ])
+        if enabled:
+            messages.success(request, gettext_lazy(
+                'Periodic domain credential renewal enabled (every %(interval)s hour(s)).'
+            ) % {'interval': interval})
+        else:
+            messages.success(request, gettext_lazy('Periodic domain credential renewal disabled.'))
+        return redirect
 
 
 class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):

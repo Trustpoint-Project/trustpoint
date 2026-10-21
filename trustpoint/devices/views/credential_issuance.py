@@ -5,10 +5,8 @@
 
 import abc
 import asyncio
-import json
 from typing import Any, cast
 
-from cryptography import x509
 from django import forms
 from django.contrib import messages
 from django.db.models import QuerySet
@@ -16,6 +14,7 @@ from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.http.request import HttpRequest
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy, ngettext
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormMixin, FormView
@@ -23,7 +22,6 @@ from django.views.generic.edit import FormMixin, FormView
 from devices.forms import (
     BaseCredentialForm,
     IssueDomainCredentialForm,
-    IssueOpcUaGdsPushDomainCredentialForm,
     OpcUaGdsPushTruststoreAssociationForm,
 )
 
@@ -38,6 +36,7 @@ from devices.models import (
 from onboarding.models import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
+    OnboardingProtocol,
 )
 from pki.forms import TruststoreAddForm
 from pki.forms.cert_profiles import CertificateIssuanceForm
@@ -492,6 +491,12 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
         context['clm_url'] = f'devices:{self.page_name}_certificate_lifecycle_management'
         return context
 
+    def get_success_url(self) -> str:
+        """Return to the device after successful issuance."""
+        return reverse(
+            f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.pk}
+        )
+
     def get_form_kwargs(self) -> dict[str, Any]:
         """This method adds the concerning device model to the form kwargs and returns them.
 
@@ -549,11 +554,10 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
                 )
             except Exception as e:  # noqa: BLE001
                 messages.error(request, f'Failed to issue {self.friendly_name}: {e}')
-            return HttpResponseRedirect(
-                reverse_lazy(
-                    f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.get_object().id}
-                )
-            )
+                return HttpResponseRedirect(reverse(
+                    f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.pk}
+                ))
+            return HttpResponseRedirect(self.get_success_url())
 
         return self.render_to_response(self.get_context_data(form=form))
 
@@ -590,75 +594,6 @@ class DeviceIssueDomainCredentialView(AbstractIssueDomainCredentialView):
     """View for issuing domain credentials for devices."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
-    """View for issuing domain credentials for OPC-UA GDS Push devices."""
-
-    form_class = IssueOpcUaGdsPushDomainCredentialForm
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-    def issue_credential(self, device: DeviceModel, form: forms.Form) -> IssuedCredentialModel:
-        """Issues a domain credential for the device with OPC UA specific extensions.
-
-        Args:
-            device: The device to be associated with the new credential.
-            form: The form instance containing the validated data.
-
-        Returns:
-            The IssuedCredentialModel object that was created and saved.
-        """
-        if not device.domain:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-
-        issuer = self.issuer_class(device=device, domain=device.domain)
-        application_uri = cast('str', form.cleaned_data.get('application_uri'))
-
-        opc_ua_extensions = [
-            (
-                x509.KeyUsage(
-                    digital_signature=True,
-                    content_commitment=True,
-                    key_encipherment=True,  # Required for OPC UA SignAndEncrypt security mode
-                    data_encipherment=True,  # Additional encryption capability
-                    key_agreement=False,
-                    key_cert_sign=False,
-                    crl_sign=False,
-                    encipher_only=False,
-                    decipher_only=False,
-                ),
-                True,
-            ),
-            (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
-        ]
-
-        if application_uri:
-            opc_ua_extensions.append(
-                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
-            )
-
-        return issuer.issue_domain_credential(
-            application_uri=None,
-            extra_extensions=opc_ua_extensions
-        )
-
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Handle the POST request with custom redirect to truststore association."""
-        self.object = self.get_object()
-        form = self.form_class(**self.get_form_kwargs())
-
-        if form.is_valid():
-            self.issue_credential(device=self.object, form=form)
-            messages.success(
-                request, f'Successfully issued {self.friendly_name} for device {self.object.common_name}'
-            )
-            return HttpResponseRedirect(
-                reverse_lazy(
-                    f'devices:{self.page_name}_truststore_association', kwargs={'pk': self.get_object().id}
-                )
-            )
-
-        return self.render_to_response(self.get_context_data(form=form))
 
 
 class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
@@ -807,13 +742,17 @@ class AbstractIssueProfileCredentialView(
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Dispatch the request, ensuring the profile exists."""
-        self.profile = get_object_or_404(CertificateProfileModel, pk=kwargs['profile_id'])
+        self.profile = self.get_certificate_profile()
         return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
+    def get_certificate_profile(self) -> CertificateProfileModel:
+        """Resolve the profile selected in the issuance URL."""
+        return get_object_or_404(CertificateProfileModel, pk=self.kwargs['profile_id'])
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get form kwargs, including the profile and device/domain for template resolution."""
         kwargs = super().get_form_kwargs()
-        raw_profile = json.loads(self.profile.profile_json)
+        raw_profile = self.profile.profile
         kwargs['profile'] = raw_profile
         kwargs['device'] = self.object
         kwargs['domain'] = self.object.domain
@@ -824,6 +763,9 @@ class AbstractIssueProfileCredentialView(
         context = super().get_context_data(**kwargs)
         context['profile'] = self.profile
         context['profile_dict'] = self.get_form_kwargs()['profile']
+        context['back_url'] = reverse(
+            context['clm_url'], kwargs={'pk': self.object.pk}
+        )
         return context
 
     def form_invalid(self, form: forms.Form) -> HttpResponse:
@@ -877,15 +819,51 @@ class AbstractIssueProfileCredentialView(
             manual_issuance_method=ManualIssuanceMethod.TRUSTPOINT_GENERATED,
         )
 
-        cert_builder = form.get_certificate_builder(request_context=ctx)
-        ctx.cert_requested = cert_builder
-
+        ctx.cert_requested = form.get_certificate_builder(request_context=ctx)
         ManualAuthorization().authorize(ctx)
         CredentialIssueProcessor().process_operation(ctx)
         if not ctx.issued_credential:
             err_msg = 'Issued credential not in context.'
             raise ValueError(err_msg)
         return ctx.issued_credential
+
+
+class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueProfileCredentialView):
+    """Issue a profile-based domain credential for OPC UA GDS Push onboarding."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    friendly_name = 'Domain Credential'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Warn when the domain is using a different credential profile."""
+        context = super().get_context_data(**kwargs)
+        if self.profile.unique_name != 'opc_ua_domain_credential':
+            messages.warning(self.request, format_html(
+                gettext_lazy(
+                    'This domain is not using the OPC UA Domain Credential profile. '
+                    'Select it in the <a href="{url}">domain settings</a> before issuing '
+                    'an OPC UA domain credential.'
+                ),
+                url=reverse('pki:domains-config', kwargs={'pk': self.object.domain_id}),
+            ))
+        return context
+
+    def get_certificate_profile(self) -> CertificateProfileModel:
+        """Resolve the device's domain profile without requiring a profile URL parameter."""
+        device = self.get_object()
+        if (
+            device.device_type != DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+            or not device.onboarding_config
+            or device.onboarding_config.onboarding_protocol != OnboardingProtocol.OPC_GDS_PUSH
+        ):
+            raise Http404(gettext_lazy('Device is not configured for OPC UA GDS Push onboarding.'))
+        if device.domain is None:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+        return device.domain.get_domain_credential_profile()
+
+    def get_success_url(self) -> str:
+        """Continue onboarding with truststore association."""
+        return reverse('devices:devices_truststore_association', kwargs={'pk': self.object.pk})
 
 
 class AbstractIssueCsrCredentialView(AbstractIssueCredentialView[CsrIssuanceForm, BaseTlsCredentialIssuer]):

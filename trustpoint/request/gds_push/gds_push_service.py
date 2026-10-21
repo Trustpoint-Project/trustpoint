@@ -84,7 +84,7 @@ class GdsPushService(LoggerMixin):
                    - IP address and port configured
                    - Domain with issuing CA (for secure operations)
                    - Domain credential (for secure operations)
-                   - Onboarding config with opc_trust_store (for secure operations)
+                   - GDS Push config with opc_trust_store (for secure operations)
             insecure: If True, skip authentication setup for discovery operations.
 
         Raises:
@@ -93,7 +93,7 @@ class GdsPushService(LoggerMixin):
         self.device = device
         self._validate_device_config()
 
-        self.server_url = f'opc.tcp://{device.ip_address}:{device.opc_server_port}'
+        self.server_url = f'opc.tcp://{device.ip_address}:{device.opc_ua_gds_push_config.opc_server_port}'
 
         if insecure:
 
@@ -109,7 +109,11 @@ class GdsPushService(LoggerMixin):
         Raises:
             GdsPushError: If device configuration is invalid.
         """
-        if not self.device.ip_address or not self.device.opc_server_port:
+        if (
+            not self.device.ip_address
+            or not hasattr(self.device, 'opc_ua_gds_push_config')
+            or not self.device.opc_ua_gds_push_config.opc_server_port
+        ):
             msg = f'Device "{self.device.common_name}" must have IP address and OPC server port configured'
             self._raise_gds_push_error(msg)
 
@@ -159,23 +163,23 @@ class GdsPushService(LoggerMixin):
         This truststore is used to validate the OPC UA server during connection.
 
         Returns:
-            Truststore from device's onboarding config.
+            Truststore from the device's OPC UA GDS Push configuration.
 
         Raises:
             GdsPushError: If truststore not configured or empty.
         """
-        if not self.device.onboarding_config:
-            msg = f'Device "{self.device.common_name}" has no onboarding config'
+        if not hasattr(self.device, 'opc_ua_gds_push_config'):
+            msg = f'Device "{self.device.common_name}" has no OPC UA GDS Push config'
             raise GdsPushError(msg)
 
-        if not self.device.onboarding_config.opc_trust_store:
+        if not self.device.opc_ua_gds_push_config.opc_trust_store:
             msg = (
-                f'Device "{self.device.common_name}" onboarding config has no OPC UA '
+                f'Device "{self.device.common_name}" GDS Push config has no OPC UA '
                 f'server truststore (opc_trust_store) configured'
             )
             raise GdsPushError(msg)
 
-        truststore = self.device.onboarding_config.opc_trust_store
+        truststore = self.device.opc_ua_gds_push_config.opc_trust_store
 
         cert_count = truststore.truststoreordermodel_set.count()
         if cert_count == 0:
@@ -544,6 +548,9 @@ class GdsPushService(LoggerMixin):
     async def _create_secure_client(self) -> Client:
         """Create OPC UA client with secure connection.
 
+        Certificate credentials are always used for the secure channel. Optional
+        OPC username/password credentials are sent only when a username is configured.
+
         Returns:
             Configured OPC UA client ready to connect.
 
@@ -583,9 +590,9 @@ class GdsPushService(LoggerMixin):
                 mode=ua.MessageSecurityMode.SignAndEncrypt
             )
 
-            if self.device.onboarding_config:
-                opc_user = self.device.onboarding_config.opc_user
-                opc_password = self.device.onboarding_config.opc_password
+            if hasattr(self.device, 'opc_ua_gds_push_config'):
+                opc_user = self.device.opc_ua_gds_push_config.opc_user
+                opc_password = self.device.opc_ua_gds_push_config.opc_password
                 if opc_user:
                     client.set_user(opc_user)
                     if opc_password:
@@ -704,31 +711,30 @@ class GdsPushService(LoggerMixin):
         try:
             client = self._create_insecure_client()
 
-            async with client:
-                server_info = await self._gather_server_info(client)
+            server_info = await self._gather_server_info(client)
 
-                if server_info and 'endpoints' in server_info:
-                    self.logger.info('Server discovery completed successfully')
-                    self.logger.info('Server name: %s', server_info.get('server_name', 'Unknown'))
-                    self.logger.info('Found %d endpoints:', len(server_info['endpoints']))
+            if server_info and 'endpoints' in server_info:
+                self.logger.info('Server discovery completed successfully')
+                self.logger.info('Server name: %s', server_info.get('server_name', 'Unknown'))
+                self.logger.info('Found %d endpoints:', len(server_info['endpoints']))
 
-                    # Analyze endpoints for logging and message building
-                    endpoint_analysis = self._analyze_endpoints(server_info['endpoints'])
+                # Analyze endpoints for logging and message building
+                endpoint_analysis = self._analyze_endpoints(server_info['endpoints'])
 
-                    for i, endpoint in enumerate(server_info['endpoints'], 1):
-                        policy_name = endpoint_analysis['policy_names'][i-1]
-                        self.logger.info(
-                            '  Endpoint %d: %s | Security: %s/%s | Server Cert: %s',
-                            i,
-                            endpoint['url'],
-                            policy_name,
-                            endpoint['security_mode'].replace('MessageSecurityMode.', ''),
-                            'Yes' if endpoint['has_server_cert'] else 'No'
-                        )
+                for i, endpoint in enumerate(server_info['endpoints'], 1):
+                    policy_name = endpoint_analysis['policy_names'][i-1]
+                    self.logger.info(
+                        '  Endpoint %d: %s | Security: %s/%s | Server Cert: %s',
+                        i,
+                        endpoint['url'],
+                        policy_name,
+                        endpoint['security_mode'].replace('MessageSecurityMode.', ''),
+                        'Yes' if endpoint['has_server_cert'] else 'No'
+                    )
 
-                    if endpoint_analysis['security_policies']:
-                        policies_str = ', '.join(sorted(endpoint_analysis['security_policies']))
-                        self.logger.info('Available security policies: %s', policies_str)
+                if endpoint_analysis['security_policies']:
+                    policies_str = ', '.join(sorted(endpoint_analysis['security_policies']))
+                    self.logger.info('Available security policies: %s', policies_str)
 
         except Exception as e:  # noqa: BLE001
             self.logger.warning('Failed to discover server: %s', e)
@@ -797,17 +803,17 @@ class GdsPushService(LoggerMixin):
         }
 
     async def _gather_server_info(self, client: Client) -> dict[str, Any]:
-        """Gather server information from connected client.
+        """Discover endpoints without creating or activating a session.
 
         Args:
-            client: Connected OPC UA client.
+            client: OPC UA discovery client; no session or user credentials required.
 
         Returns:
             Dictionary with server information.
         """
         server_info: dict[str, Any] = {}
 
-        endpoints = await client.get_endpoints()
+        endpoints = await client.connect_and_get_server_endpoints()
         server_info['endpoints'] = []
         for endpoint in endpoints:
             endpoint_info = {
@@ -818,14 +824,7 @@ class GdsPushService(LoggerMixin):
             }
             server_info['endpoints'].append(endpoint_info)
 
-        try:
-            server_name_node = client.get_node('ns=0;i=2254')  # Server.ServerName property
-            server_name = await server_name_node.read_value()
-            if isinstance(server_name, list) and server_name:
-                server_name = server_name[0]
-            server_info['server_name'] = str(server_name)
-        except Exception:  # noqa: BLE001
-            server_info['server_name'] = 'Unknown'
+        server_info['server_name'] = (endpoints[0].Server.ApplicationName.Text or 'Unknown') if endpoints else 'Unknown'
 
         return server_info
 
@@ -968,7 +967,7 @@ class GdsPushService(LoggerMixin):
             serialized_trustlist = struct_to_binary(trustlist_data)
 
             # Step 1: Open
-            mode = ua.TrustListMasks.All
+            mode = ua.Variant(int(ua.OpenFileMode.Write | ua.OpenFileMode.EraseExisting), ua.VariantType.Byte)
             open_method = await trustlist_node.get_child('Open')
             file_handle = await trustlist_node.call_method(open_method, mode)
             self.logger.debug('Opened TrustList, handle: %s', file_handle)

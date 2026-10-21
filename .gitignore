@@ -197,3 +197,5 @@ node_modules/
 workflow2Folder/
 
 .env
+
+trustpoint/request/gds_push/asyncua-gds-push-test/state/*

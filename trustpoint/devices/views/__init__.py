@@ -55,6 +55,7 @@ from .download import (
 )
 from .gds_push import (
     OpcUaGdsPushCertRenewalSettingsView,
+    OpcUaGdsPushDomainCredentialRenewalSettingsView,
     OpcUaGdsPushUpdateServerCertificateView,
     OpcUaGdsPushUpdateTrustlistView,
     TrustBundleDownloadView,
@@ -106,6 +107,7 @@ __all__ = [
     'OpcUaGdsPushCreateChooseOnboardingView',
     'OpcUaGdsPushCreateOnboardingView',
     'OpcUaGdsPushDiscoverServerView',
+    'OpcUaGdsPushDomainCredentialRenewalSettingsView',
     'OpcUaGdsPushDownloadPageDispatcherView',
     'OpcUaGdsPushIssueDomainCredentialView',
     'OpcUaGdsPushIssuedCredentialRevocationView',

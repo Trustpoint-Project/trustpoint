@@ -195,7 +195,7 @@
 
     <div class="card-footer d-flex justify-content-between align-items-center">
         <a
-            href="{% url 'pki:cert_profiles' %}"
+            href="{% if back_url %}{{ back_url }}{% else %}{% url 'pki:cert_profiles' %}{% endif %}"
             class="btn btn-secondary"
         >
             {% trans 'Back' %}

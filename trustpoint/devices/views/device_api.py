@@ -165,13 +165,15 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
                     'serial_number': 'SN-OPC-001',
                     'domain': 1,
                     'ip_address': '192.168.1.50',
-                    'opc_server_port': 4840,
                     'device_type': 2,
                     'onboarding_config': {
                         'onboarding_protocol': 7,
+                        'pki_protocols': ['OPC_GDS_PUSH'],
+                    },
+                    'opc_ua_gds_push_config': {
+                        'opc_server_port': 4840,
                         'opc_user': 'admin',
                         'opc_password': 'opc-secure-pass',
-                        'pki_protocols': ['OPC_GDS_PUSH'],
                         'opc_trust_store': 10,
                     },
                 },
