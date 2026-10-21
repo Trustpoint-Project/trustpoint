@@ -44,7 +44,6 @@ from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from trustpoint.settings import UIConfig
@@ -557,12 +556,6 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
         return super().dispatch(request, *args, **kwargs)
 
 
-class OpcUaGdsCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
-    """Certificate Lifecycle Management Summary View for OPC UA Devcies."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
     """Certificate Lifecycle Management Summary View for OPC UA GDS Push devices."""
 
@@ -593,7 +586,7 @@ class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateL
             'serial_number': self.object.serial_number,
             'domain': self.object.domain,
             'ip_address': self.object.ip_address,
-            'opc_server_port': self.object.opc_server_port,
+            'opc_server_port': self.object.opc_ua_gds_push_config.opc_server_port,
             'onboarding_protocol': OnboardingProtocol.OPC_GDS_PUSH.label,
             'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
             'pki_protocol_opc_gds_push': self.object.onboarding_config.has_pki_protocol(

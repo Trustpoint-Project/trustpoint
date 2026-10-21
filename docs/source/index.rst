@@ -38,8 +38,7 @@ Welcome to Trustpoint's documentation!
    features/aoki/index
    features/aoki/mdns
 
-   features/devices/onboarding
-   features/devices/agents
+   features/devices/index
 
    features/pki/index
 

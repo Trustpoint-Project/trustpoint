@@ -72,7 +72,6 @@ from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY,
     PageContextMixin,
 )
@@ -557,13 +556,6 @@ class DeviceCmpRevokeHelpView(BaseHelpView):
     strategy = CmpRevocationStrategy()
 
 
-class OpcUaGdsNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
-    """Help view for the case of no onboarding using CMP shared-secret for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingCmpSharedSecretStrategy()
-
-
 class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding EST username and password help page."""
 
@@ -867,18 +859,6 @@ class DeviceNoOnboardingCmpWebUiHelpView(BaseHelpView):
     manual_webui = True
 
 
-class OpcUaGdsNoOnboardingEstWebUiHelpView(DeviceNoOnboardingEstWebUiHelpView):
-    """EST WebUI guidance for no-onboarding OPC-UA GDS devices."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
-class OpcUaGdsNoOnboardingCmpWebUiHelpView(DeviceNoOnboardingCmpWebUiHelpView):
-    """CMP WebUI guidance for no-onboarding OPC-UA GDS devices."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class NoOnboardingScepStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding SCEP (RFC 8894) help page."""
 
@@ -1058,13 +1038,6 @@ class DeviceNoOnboardingScepHelpView(BaseHelpView):
     strategy = NoOnboardingScepStrategy()
 
 
-class OpcUaGdsNoOnboardingScepHelpView(BaseHelpView):
-    """Help view for no-onboarding SCEP for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingScepStrategy()
-
-
 class DownloadScepConfigView(
     UserPermissionRequiredMixin,
     DetailView[DeviceModel],
@@ -1137,13 +1110,6 @@ class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
     strategy = NoOnboardingEstUsernamePasswordStrategy()
 
 
-class OpcUaGdsNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
-    """Help view for the case of no onboarding using EST username and password for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingEstUsernamePasswordStrategy()
-
-
 # --------------------- Onboarding - Domain Credential - Shared Secrets - Help Page Implementations --------------------
 
 
@@ -1209,13 +1175,6 @@ class DeviceOnboardingDomainCredentialCmpSharedSecretHelpView(BaseHelpView):
     """Help view for the case of onboarding using CMP with a domain credential for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = OnboardingDomainCredentialCmpSharedSecretStrategy()
-
-
-class OpcUaGdsOnboardingDomainCredentialCmpSharedSecretHelpView(BaseHelpView):
-    """Help view for the case of onboarding using CMP with a domain credential for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = OnboardingDomainCredentialCmpSharedSecretStrategy()
 
 
@@ -1317,13 +1276,6 @@ class DeviceOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
     strategy = OnboardingDomainCredentialEstUsernamePasswordStrategy()
 
 
-class OpcUaGdsOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
-    """Help view for the case of onboarding using EST username & password for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = OnboardingDomainCredentialEstUsernamePasswordStrategy()
-
-
 # ------------------------- Onboarding - Application Certificates - Help Page Implementations -------------------------
 
 
@@ -1385,13 +1337,6 @@ class DeviceApplicationCertificateWithCmpDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using CMP with client cert for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = ApplicationCertificateWithCmpDomainCredentialStrategy()
-
-
-class OpcUaGdsApplicationCertificateWithCmpDomainCredentialHelpView(BaseHelpView):
-    """Help view for the case of onboarding using CMP with client cert for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithCmpDomainCredentialStrategy()
 
 
@@ -1481,13 +1426,6 @@ class DeviceApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using EST with client cert for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
-
-
-class OpcUaGdsApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
-    """Help view for the case of onboarding using EST with client cert for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
 
 
@@ -1590,13 +1528,6 @@ class DeviceNoOnboardingRestUsernamePasswordHelpView(BaseHelpView):
     strategy = NoOnboardingRestUsernamePasswordStrategy()
 
 
-class OpcUaGdsNoOnboardingRestUsernamePasswordHelpView(BaseHelpView):
-    """Help view for no-onboarding REST username/password for OPC-UA GDS device abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingRestUsernamePasswordStrategy()
-
-
 # -------------------- Onboarding - Domain Credential - REST Username/Password - Help Page Implementations ----------
 
 
@@ -1674,13 +1605,6 @@ class DeviceOnboardingDomainCredentialRestUsernamePasswordHelpView(BaseHelpView)
     """Help view for onboarding using REST username/password domain credential for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = OnboardingDomainCredentialRestUsernamePasswordStrategy()
-
-
-class OpcUaGdsOnboardingDomainCredentialRestUsernamePasswordHelpView(BaseHelpView):
-    """Help view for onboarding using REST username/password domain credential for OPC-UA GDS device abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = OnboardingDomainCredentialRestUsernamePasswordStrategy()
 
 
@@ -1809,13 +1733,6 @@ class DeviceApplicationCertificateWithRestDomainCredentialHelpView(BaseHelpView)
     strategy = ApplicationCertificateWithRestDomainCredentialStrategy()
 
 
-class OpcUaGdsApplicationCertificateWithRestDomainCredentialHelpView(BaseHelpView):
-    """Help view for application certs using REST with client cert for OPC-UA GDS device abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = ApplicationCertificateWithRestDomainCredentialStrategy()
-
-
 class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
     """Strategy for building the OPC UA GDS Push onboarding help page."""
 
@@ -1831,6 +1748,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             self._build_ca_hierarchy_section(device),
             self._build_download_section(device),
             self._build_actions_section(device),
+            self._build_renewal_settings_section(device, domain_credential=True),
         ]
 
         return sections, _non_lazy('Help - OPC UA GDS Push Certificate Management')
@@ -2088,24 +2006,41 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
-    def _build_renewal_settings_section(self, device: DeviceModel) -> HelpSection:
-        """Build the periodic server certificate and trustlist renewal settings section.
+    def _build_renewal_settings_section(
+        self, device: DeviceModel, *, domain_credential: bool = False,
+    ) -> HelpSection:
+        """Render the shared periodic renewal form for server updates or domain credentials.
 
-        Renders an inline HTML form that posts to the cert-renewal-settings endpoint,
-        allowing the user to enable/disable periodic renewal and configure the interval.
-        Both the server certificate and the trustlist are updated on each renewal cycle.
-        When periodic updates are enabled, the section also shows when the next update
-        is scheduled to run.
-
-        :param device: The OPC UA GDS Push device instance.
-        :return: A HelpSection containing the renewal configuration form.
+        Both variants show the enabled state, renewal interval, and next scheduled run.
+        Their settings and background tasks remain independent.
         """
-        renewal_url = reverse('devices:devices_cert_renewal_settings', kwargs={'pk': device.pk})
+        if domain_credential:
+            route = 'devices:devices_domain_credential_renewal_settings'
+            enabled = device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal
+            interval = device.opc_ua_gds_push_config.opc_gds_push_domain_credential_renewal_interval
+            next_run = device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at
+            enabled_field = 'opc_gds_push_enable_domain_credential_renewal'
+            interval_field = 'opc_gds_push_domain_credential_renewal_interval'
+            title = 'Periodic Domain Credential Renewal'
+            description = (
+                'How often a new domain credential and private key are issued using the domain profile. '
+                'The previous credential is revoked after successful issuance. Minimum 1 hour. '
+                'Servers authorizing an exact client certificate must be configured to accept its replacement.'
+            )
+            switch_id, interval_id = 'enableDomainCredentialRenewal', 'domainCredentialRenewalInterval'
+        else:
+            route = 'devices:devices_cert_renewal_settings'
+            enabled = device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update
+            interval = device.opc_ua_gds_push_config.opc_gds_push_renewal_interval
+            next_run = device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at
+            enabled_field = 'opc_gds_push_enable_periodic_update'
+            interval_field = 'opc_gds_push_renewal_interval'
+            title = 'Periodic Server Certificate & Trustlist Renewal'
+            description = 'How often the server certificate and trustlist are automatically renewed. Minimum 1 hour.'
+            switch_id, interval_id = 'enablePeriodicRenewal', 'renewalInterval'
+        renewal_url = reverse(route, kwargs={'pk': device.pk})
 
-        enabled = device.opc_gds_push_enable_periodic_update
-        interval = device.opc_gds_push_renewal_interval
-        next_run = device.opc_gds_push_last_update_scheduled_at
-
+        escaped_title = title.replace('&', '&amp;')
         checked_attr = 'checked' if enabled else ''
 
         if enabled and next_run is not None:
@@ -2134,17 +2069,17 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             '<div class="mb-3">'
             '<div class="form-check form-switch mb-2">'
             f'  <input class="form-check-input" type="checkbox" role="switch" '
-            f'         id="enablePeriodicRenewal" name="opc_gds_push_enable_periodic_update" {checked_attr}>'
-            f'  <label class="form-check-label" for="enablePeriodicRenewal">'
-            f'    Enable Periodic Server Certificate &amp; Trustlist Renewal'
+            f'         id="{switch_id}" name="{enabled_field}" {checked_attr}>'
+            f'  <label class="form-check-label" for="{switch_id}">'
+            f'    Enable {escaped_title}'
             f'  </label>'
             '</div>'
-            '<label for="renewalInterval" class="form-label mt-2">Renewal Interval (hours)</label>'
-            f'<input type="number" class="form-control" id="renewalInterval" '
-            f'       name="opc_gds_push_renewal_interval" min="1" value="{interval}" '
+            f'<label for="{interval_id}" class="form-label mt-2">Renewal Interval (hours)</label>'
+            f'<input type="number" class="form-control" id="{interval_id}" '
+            f'       name="{interval_field}" min="1" value="{interval}" '
             '       style="max-width: 200px;">'
             '<div class="form-text text-muted">'
-            '  How often the server certificate and trustlist are automatically renewed. Minimum 1 hour.'
+            f'  {description}'
             '</div>'
             '</div>'
             '<button type="submit" class="btn btn-primary">Save Renewal Settings</button>'
@@ -2152,7 +2087,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         )
 
         return HelpSection(
-            _non_lazy('Periodic Server Certificate & Trustlist Renewal'),
+            _non_lazy(title),
             [
                 HelpRow(
                     _non_lazy('Next Scheduled Update'),

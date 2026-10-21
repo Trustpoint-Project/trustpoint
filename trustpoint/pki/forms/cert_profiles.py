@@ -19,6 +19,7 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from pki.util.cert_req_converter import JSONCertRequestConverter
+from request.request_context import ManualCredentialRequestContext
 from request.template_vars import build_variable_map_from_models, resolve_string, resolve_template_variables
 from trustpoint.logger import LoggerMixin
 
@@ -419,6 +420,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
     def _build_validity_fields_from_sample(self, validity: dict[str, Any]) -> None:
         """Build validity fields based on sample values."""
         profile_validity = self.profile.get('validity', {})
+        profile_mutable = profile_validity.get('mutable', self.profile.get('mutable', False))
 
         for ts_field in ('not_before', 'not_after'):
             ts_value = validity.get(ts_field)
@@ -438,16 +440,13 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 continue
 
             field_spec = profile_validity.get(field_name, {})
+            is_mutable = profile_mutable
             if isinstance(field_spec, dict):
                 is_required = field_spec.get('required', False)
-                is_mutable = field_spec.get('mutable', True)
+                is_mutable = field_spec.get('mutable', is_mutable)
                 field_value = field_spec.get('value', field_spec.get('default', 0))
             else:
                 is_required = field_name in profile_validity.get('required', [])
-                is_mutable = (
-                    field_name in profile_validity.get('mutable', [])
-                    or field_name not in profile_validity.get('value', {})
-                )
                 is_changeme = isinstance(sample_value, str) and sample_value.startswith('CHANGEME_')
                 field_value = 0 if is_changeme else (sample_value if sample_value is not None else 0)
 
@@ -529,6 +528,9 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
             CertificateBuilder ready for signing
         """
         cert_request = self._form_data_to_json_request()
+
+        if isinstance(request_context, ManualCredentialRequestContext):
+            request_context.requested_validity = cert_request.get('validity')
 
         validated_request = self.verifier.apply_profile_to_request(cert_request)
 

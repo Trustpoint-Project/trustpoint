@@ -23,6 +23,8 @@ DEVICE_TRACKED_FIELDS: tuple[str, ...] = (
     'no_onboarding_config_id',
     'opc_gds_push_enable_periodic_update',
     'opc_gds_push_renewal_interval',
+    'opc_gds_push_enable_domain_credential_renewal',
+    'opc_gds_push_domain_credential_renewal_interval',
 )
 
 
@@ -58,7 +60,8 @@ def build_device_snapshot(device: Any) -> dict[str, Any]:
         'ip_address': str(ip) if (ip := getattr(device, 'ip_address', None)) is not None else None,
     }
     for field_name in DEVICE_TRACKED_FIELDS:
-        snapshot[field_name] = _json_scalar(getattr(device, field_name, None))
+        source = getattr(device, 'opc_ua_gds_push_config', None) if field_name.startswith('opc_') else device
+        snapshot[field_name] = _json_scalar(getattr(source, field_name, None))
     return snapshot
 
 

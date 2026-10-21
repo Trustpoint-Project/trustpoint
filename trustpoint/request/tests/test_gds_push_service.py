@@ -108,21 +108,21 @@ def mock_opc_device(mock_domain, mock_truststore, mock_server_certificate):
     # Create onboarding config
     onboarding_config = OnboardingConfigModel(
         onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-        opc_trust_store=mock_truststore
     )
     onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
     onboarding_config.save()
 
     device = DeviceModel(
+        device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
         common_name='test-opc-device',
         serial_number='OPC123456',
         ip_address='192.168.1.100',
-        opc_server_port=4840,
         domain=mock_domain,
         onboarding_config=onboarding_config,
-        device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH
     )
     device.save()
+    device.opc_ua_gds_push_config.opc_trust_store = mock_truststore
+    device.opc_ua_gds_push_config.save()
 
     return device
 
@@ -150,12 +150,13 @@ class TestGdsPushService:
         assert service.domain_credential is None
         assert service.server_truststore is None
 
-    def test_get_server_truststore_rejects_missing_onboarding_config(self, mock_opc_device):
-        mock_opc_device.onboarding_config = None
+    def test_get_server_truststore_rejects_missing_opc_config(self, mock_opc_device):
+        mock_opc_device.opc_ua_gds_push_config.delete()
+        mock_opc_device.refresh_from_db()
         service = GdsPushService.__new__(GdsPushService)
         service.device = mock_opc_device
 
-        with pytest.raises(GdsPushError, match='has no onboarding config'):
+        with pytest.raises(GdsPushError, match='has no OPC UA GDS Push config'):
             service._get_server_truststore()
 
     def test_init_secure_mode(self, mock_opc_device, mock_domain_credential, mock_truststore):
@@ -171,14 +172,13 @@ class TestGdsPushService:
         """Test initialization with device missing IP address."""
         onboarding_config = OnboardingConfigModel(
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-            opc_trust_store=mock_truststore
         )
         onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-ip',
-            opc_server_port=4840,
             domain=mock_domain,
             onboarding_config=onboarding_config
         )
@@ -191,18 +191,19 @@ class TestGdsPushService:
         """Test initialization with device missing OPC server port."""
         onboarding_config = OnboardingConfigModel(
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-            opc_trust_store=mock_truststore
         )
         onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-port',
             ip_address='192.168.1.100',
             domain=mock_domain,
             onboarding_config=onboarding_config
         )
         device.save()
+        device.opc_ua_gds_push_config.opc_server_port = 0
 
         with pytest.raises(GdsPushError, match='must have IP address and OPC server port configured'):
             GdsPushService(device)
@@ -210,9 +211,9 @@ class TestGdsPushService:
     def test_init_device_no_onboarding_config(self, mock_domain):
         """Test initialization with device missing onboarding config."""
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-config',
             ip_address='192.168.1.100',
-            opc_server_port=4840,
             domain=mock_domain
         )
         device.save()
@@ -225,9 +226,9 @@ class TestGdsPushService:
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-truststore',
             ip_address='192.168.1.100',
-            opc_server_port=4840,
             domain=mock_domain,
             onboarding_config=onboarding_config
         )
@@ -243,19 +244,20 @@ class TestGdsPushService:
 
         onboarding_config = OnboardingConfigModel(
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-            opc_trust_store=truststore
         )
         onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-empty-truststore',
             ip_address='192.168.1.100',
-            opc_server_port=4840,
             domain=mock_domain,
             onboarding_config=onboarding_config
         )
         device.save()
+        device.opc_ua_gds_push_config.opc_trust_store = truststore
+        device.opc_ua_gds_push_config.save()
 
         # Create a domain credential for the device
         from devices.issuer import LocalDomainCredentialIssuer
@@ -269,15 +271,14 @@ class TestGdsPushService:
         """Test initialization when no domain credential exists."""
         onboarding_config = OnboardingConfigModel(
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-            opc_trust_store=mock_truststore
         )
         onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-credential',
             ip_address='192.168.1.100',
-            opc_server_port=4840,
             domain=mock_domain,
             onboarding_config=onboarding_config
         )
@@ -355,7 +356,7 @@ class TestGdsPushService:
         mock_client_class.return_value = mock_client
 
         # Mock async context manager to raise exception
-        mock_client.__aenter__ = AsyncMock(side_effect=Exception('Connection failed'))
+        mock_client.connect_and_get_server_endpoints = AsyncMock(side_effect=Exception('Connection failed'))
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -428,7 +429,7 @@ class TestGdsPushService:
         """Test trustlist update with connection failure."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_client.__aenter__ = AsyncMock(side_effect=Exception('Connection failed'))
+        mock_client.connect_and_get_server_endpoints = AsyncMock(side_effect=Exception('Connection failed'))
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -1049,7 +1050,7 @@ class TestGdsPushServiceAdditionalCoverage:
         mock_endpoint.SecurityMode = ua.MessageSecurityMode.None_
         mock_endpoint.SecurityPolicyUri = 'http://opcfoundation.org/UA/SecurityPolicy#None'
 
-        mock_client.get_endpoints = AsyncMock(return_value=[mock_endpoint])
+        mock_client.connect_and_get_server_endpoints = AsyncMock(return_value=[mock_endpoint])
         mock_client.find_servers = AsyncMock(return_value=[])
 
         server_info = await service._gather_server_info(mock_client)
@@ -1135,9 +1136,10 @@ class TestGdsPushServiceAdditionalCoverage:
         service = GdsPushService(mock_opc_device, insecure=True)
 
         # Mock device with no onboarding config
-        service.device.onboarding_config = None
+        service.device.opc_ua_gds_push_config.delete()
+        service.device.refresh_from_db()
 
-        with pytest.raises(GdsPushError, match='has no onboarding config'):
+        with pytest.raises(GdsPushError, match='has no OPC UA GDS Push config'):
             service._get_server_truststore()
 
     @pytest.mark.asyncio
@@ -1209,8 +1211,8 @@ class TestGdsPushServiceAdditionalCoverage:
                 await service._create_secure_client()
 
     @pytest.mark.asyncio
-    async def test_gather_server_info_reads_list_server_name(self, mock_opc_device):
-        """Normalize a list-valued ServerName property."""
+    async def test_gather_server_info_reads_endpoint_application_name(self, mock_opc_device):
+        """Read the server name from discovery without reading session-bound nodes."""
         service = GdsPushService(mock_opc_device, insecure=True)
         endpoint = Mock(
             EndpointUrl='opc.tcp://server:4840',
@@ -1218,11 +1220,9 @@ class TestGdsPushServiceAdditionalCoverage:
             SecurityMode=ua.MessageSecurityMode.None_,
             ServerCertificate=b'',
         )
-        server_name_node = Mock()
-        server_name_node.read_value = AsyncMock(return_value=['Server A', 'ignored'])
+        endpoint.Server = ua.ApplicationDescription(ApplicationName=ua.LocalizedText('Server A'))
         client = Mock()
-        client.get_endpoints = AsyncMock(return_value=[endpoint])
-        client.get_node.return_value = server_name_node
+        client.connect_and_get_server_endpoints = AsyncMock(return_value=[endpoint])
 
         info = await service._gather_server_info(client)
 
@@ -1268,7 +1268,7 @@ class TestGdsPushServiceAdditionalCoverage:
         assert node.call_method.await_args_list[1].args[2] == b'ab'
         assert node.call_method.await_args_list[2].args[2] == b'cd'
         assert node.call_method.await_args_list[3].args[2] == b'ef'
-        config_node.call_method.assert_awaited_once_with(apply_method)
+        config_node.call_method.assert_awaited_once_with(apply_method.nodeid)
 
     @pytest.mark.asyncio
     async def test_update_server_certificate_skips_user_token_and_reports_failures(self, mock_opc_device):
@@ -1385,8 +1385,8 @@ class TestGdsPushServiceAdditionalCoverage:
     async def test_create_secure_client_sets_credentials_and_security_payload(self, mock_opc_device):
         """Configure the client with the certificate chain, key, URI, and user."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        service.device.onboarding_config.opc_user = 'opc-user'
-        service.device.onboarding_config.opc_password = 'opc-password'
+        service.device.opc_ua_gds_push_config.opc_user = 'opc-user'
+        service.device.opc_ua_gds_push_config.opc_password = 'opc-password'
         client = Mock()
         client.set_security = AsyncMock()
         certificate = Mock()
@@ -1488,7 +1488,7 @@ class TestGdsPushServiceAdditionalCoverage:
     async def test_get_server_certificate_reports_missing_order_zero_entry(self, mock_opc_device):
         """Reject a truststore that has no server certificate at order zero."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        service.server_truststore = mock_opc_device.onboarding_config.opc_trust_store
+        service.server_truststore = mock_opc_device.opc_ua_gds_push_config.opc_trust_store
 
         with pytest.raises(GdsPushError, match='has no certificate at order 0'):
             await service._get_server_certificate()
@@ -1525,7 +1525,7 @@ class TestGdsPushServiceAdditionalCoverage:
                                                                                caplog):
         """Log both certificates when the OPC UA client exposes the presented certificate."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        service.server_truststore = mock_opc_device.onboarding_config.opc_trust_store
+        service.server_truststore = mock_opc_device.opc_ua_gds_push_config.opc_trust_store
         client = Mock()
         client.uaclient.security_policy.server_certificate = mock_server_certificate.public_bytes(
             serialization.Encoding.DER

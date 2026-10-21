@@ -45,8 +45,8 @@ class TemplateVariableResolver(LoggerMixin):
             # Optional fields are omitted when unset so the placeholder is left unresolved.
             if device.ip_address:
                 variables['device.ip_address'] = str(device.ip_address)
-            if device.opc_server_port:
-                variables['device.opc_server_port'] = str(device.opc_server_port)
+            if hasattr(device, 'opc_ua_gds_push_config') and device.opc_ua_gds_push_config.opc_server_port:
+                variables['device.opc_server_port'] = str(device.opc_ua_gds_push_config.opc_server_port)
 
         if domain is not None:
             variables['domain.unique_name'] = domain.unique_name

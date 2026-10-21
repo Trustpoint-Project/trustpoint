@@ -12,6 +12,18 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RemoveField(
+            model_name='onboardingconfigmodel',
+            name='opc_password',
+        ),
+        migrations.RemoveField(
+            model_name='onboardingconfigmodel',
+            name='opc_trust_store',
+        ),
+        migrations.RemoveField(
+            model_name='onboardingconfigmodel',
+            name='opc_user',
+        ),
         migrations.AddField(
             model_name='noonboardingconfigmodel',
             name='scep_challenge',

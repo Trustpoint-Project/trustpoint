@@ -539,6 +539,9 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         mock_device = Mock()
         mock_device.pk = 123
+        mock_device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal = False
+        mock_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_renewal_interval = 168
+        mock_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at = None
         mock_device.domain = Mock()
         mock_device.domain.issuing_ca = None  # No CA configured
         mock_onboarding = Mock()
@@ -551,11 +554,12 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         sections, heading = self.strategy.build_sections(help_context)
 
-        assert len(sections) == 4  # summary, ca_hierarchy, download, actions
+        assert len(sections) == 5  # Includes the domain credential renewal settings.
         assert sections[0].heading == 'Summary'
         assert sections[1].heading == 'CA Certificates'  # No CA configured
         assert sections[2].heading == 'Download Trust Bundle'
         assert sections[3].heading == 'Available Actions'
+        assert sections[4].heading == 'Periodic Domain Credential Renewal'
         assert 'OPC UA GDS Push' in sections[0].rows[0].value
         assert heading == 'Help - OPC UA GDS Push Certificate Management'
 
@@ -571,6 +575,9 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         mock_device = Mock()
         mock_device.pk = 123
+        mock_device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal = False
+        mock_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_renewal_interval = 168
+        mock_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at = None
         mock_device.domain = Mock()
         mock_device.domain.issuing_ca = None
         mock_onboarding = Mock()
@@ -583,8 +590,9 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         sections, heading = self.strategy.build_sections(help_context)
 
-        assert len(sections) == 4
+        assert len(sections) == 5
         assert sections[3].heading == 'Available Actions'
+        assert sections[4].heading == 'Periodic Domain Credential Renewal'
         # Should have domain credential required message
         assert 'Domain Credential Required' in sections[3].rows[1].key
 
@@ -1111,15 +1119,15 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         future.strftime.return_value = '2026-09-04 12:00 UTC'
         mock_timezone.now.return_value = now
 
-        device.opc_gds_push_enable_periodic_update = True
-        device.opc_gds_push_last_update_scheduled_at = future
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
+        device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at = future
         enabled_section = strategy._build_renewal_settings_section(device)
 
         future.__gt__.return_value = False
         pending_section = strategy._build_renewal_settings_section(device)
 
-        device.opc_gds_push_enable_periodic_update = False
-        device.opc_gds_push_last_update_scheduled_at = None
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = False
+        device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at = None
         disabled_section = strategy._build_renewal_settings_section(device)
 
         assert 'Enabled' in enabled_section.rows[0].value

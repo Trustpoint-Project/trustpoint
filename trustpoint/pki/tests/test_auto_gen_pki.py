@@ -3,6 +3,7 @@
 
 """Tests for the auto-generated PKI."""
 
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -111,3 +112,28 @@ def test_key_spec_for_unknown_algorithm_rejects_invalid_value() -> None:
     """Unknown AutoGenPKI choices fail before backend interaction."""
     with pytest.raises(ValueError, match='Unsupported'):
         AutoGenPki._generate_private_key('invalid', 'test-key')
+
+
+@pytest.mark.parametrize(
+    'key_alg',
+    [AutoGenPkiKeyAlgorithm.MLDSA44, AutoGenPkiKeyAlgorithm.MLDSA65, AutoGenPkiKeyAlgorithm.MLDSA87],
+)
+def test_auto_gen_mldsa_ca_generation_and_certificate_signing(key_alg: AutoGenPkiKeyAlgorithm, settings: Any) -> None:
+    """Every advertised AutoGen ML-DSA choice generates working managed CA certificates."""
+    settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
+    settings.TRUSTPOINT_IS_OPERATIONAL = True
+    settings.TRUSTPOINT_IS_BOOTSTRAP = False
+    settings.DEVELOPMENT_ENV = True
+    settings.DOCKER_CONTAINER = False
+    settings.TRUSTPOINT_OPERATIONAL_DATABASE = 'sqlite'
+
+    issuing_ca = AutoGenPki.enable_auto_gen_pki(key_alg=key_alg)
+
+    assert issuing_ca is not None
+    certificate = issuing_ca.credential.get_certificate()
+    root_certificate = issuing_ca.parent_ca.credential.get_certificate()
+    certificate.verify_directly_issued_by(root_certificate)
+    root_certificate.verify_directly_issued_by(root_certificate)
+    assert issuing_ca.credential.get_private_key().public_key().public_bytes_raw() == (
+        certificate.public_key().public_bytes_raw()
+    )

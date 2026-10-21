@@ -238,7 +238,29 @@ class ValidityModel(BaseModel):
     model_config = ConfigDict(extra='ignore', populate_by_name=True)
 
 
-class ProfileValidityModel(BaseModel):
+class CertProfileBaseModel(ProfileValuePropertyModel):
+    """Base model for each nesting level of certificate profiles.
+
+    This allows for granular control over allowed fields and constraints at each level.
+    """
+    allow: list[str] | Literal['*'] | None = None
+    reject_mods: bool = Field(default=False)
+
+    @field_validator('allow', mode='before')
+    @classmethod
+    def normalize_allow(cls, value: list[str] | Literal['*'] | None) -> list[str] | Literal['*'] | None:
+        """Normalize the allow list by replacing aliases with their canonical names."""
+        if not isinstance(value, list):
+            return value
+        normalized = []
+        for item in value:
+            try:
+                normalized.append(alias_map[item])
+            except KeyError:
+                normalized.append(item)
+        return normalized
+
+class ProfileValidityModel(CertProfileBaseModel):
     """Validity model for certificate profiles.
 
     Unlike :class:`ValidityModel` (used for certificate requests), this model
@@ -265,28 +287,6 @@ class ProfileValidityModel(BaseModel):
     validity_min: timedelta | None = None
 
     model_config = ConfigDict(extra='ignore', populate_by_name=True)
-
-class CertProfileBaseModel(ProfileValuePropertyModel):
-    """Base model for each nesting level of certificate profiles.
-
-    This allows for granular control over allowed fields and constraints at each level.
-    """
-    allow: list[str] | Literal['*'] | None = None
-    reject_mods: bool = Field(default=False)
-
-    @field_validator('allow', mode='before')
-    @classmethod
-    def normalize_allow(cls, value: list[str] | Literal['*'] | None) -> list[str] | Literal['*'] | None:
-        """Normalize the allow list by replacing aliases with their canonical names."""
-        if not isinstance(value, list):
-            return value
-        normalized = []
-        for item in value:
-            try:
-                normalized.append(alias_map[item])
-            except KeyError:
-                normalized.append(item)
-        return normalized
 
 class ProfileSubjectModel(SubjectModel, CertProfileBaseModel):
     """Model for the subject DN of a certificate profile, with profile constraints."""

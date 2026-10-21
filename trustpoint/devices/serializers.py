@@ -11,12 +11,15 @@ import secrets
 from datetime import timedelta
 from typing import Any, ClassVar
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
 from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
+from pki.models.truststore import TruststoreModel
 
-from .models import DeviceModel
+from .models import DeviceModel, OpcUaGdsPushConfig
 
 
 class PkiProtocolField(serializers.Field[int | str, int | str, int | str, Any]):
@@ -42,6 +45,14 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
     Auto-generates secure credentials if not provided for applicable protocols.
     Accepts both enum names (strings) and integer values for protocols.
     """
+
+    # Accept legacy request locations; DeviceSerializer moves these into the OPC config.
+    opc_user = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    opc_password = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    opc_trust_store = serializers.PrimaryKeyRelatedField(
+        queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH),
+        required=False, allow_null=True, write_only=True,
+    )
 
     pki_protocols = serializers.ListField(
         child=PkiProtocolField(),
@@ -215,6 +226,22 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
         return instance
 
 
+class OpcUaGdsPushConfigSerializer(serializers.ModelSerializer[OpcUaGdsPushConfig]):
+    """Serialize the dedicated GDS Push configuration without exposing its password."""
+
+    class Meta:
+        """Fields editable through the nested device API."""
+
+        model = OpcUaGdsPushConfig
+        exclude = ('id', 'device')
+        read_only_fields = ('opc_gds_push_last_update_scheduled_at', 'opc_gds_push_domain_credential_next_renewal_at')
+        extra_kwargs: ClassVar[dict[str, dict[str, Any]]] = {
+            'opc_password': {'write_only': True},
+            'opc_gds_push_renewal_interval': {'min_value': 1},
+            'opc_gds_push_domain_credential_renewal_interval': {'min_value': 1},
+        }
+
+
 class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
     """Serializer for Device instances.
 
@@ -223,6 +250,35 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
     """
 
     onboarding_config = OnboardingConfigSerializer(required=False, allow_null=True)
+    opc_ua_gds_push_config = OpcUaGdsPushConfigSerializer(required=False)
+    opc_server_port = serializers.IntegerField(required=False, min_value=1, max_value=65535, write_only=True)
+
+    def _extract_gds_push_config(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Accept both the dedicated config and legacy OPC request field locations."""
+        config: dict[str, Any] = data.pop('opc_ua_gds_push_config', {})
+        if 'opc_server_port' in data:
+            config.setdefault('opc_server_port', data.pop('opc_server_port'))
+        onboarding = data.get('onboarding_config') or {}
+        for name in ('opc_user', 'opc_password', 'opc_trust_store'):
+            if name in onboarding:
+                value = onboarding.pop(name)
+                config.setdefault(name, value)
+        return config
+
+    def _save_gds_push_config(self, device: DeviceModel, data: dict[str, Any]) -> None:
+        """Validate and persist OPC settings while triggering renewal scheduling."""
+        if not data:
+            return
+        config, _created = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        for name, value in data.items():
+            setattr(config, name, value)
+        try:
+            config.full_clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'opc_ua_gds_push_config': exc.message_dict}) from exc
+        config.device = device
+        device.opc_ua_gds_push_config = config
+        config.save(update_fields=[name.removesuffix('_id') for name in data])
 
     class Meta:
         """Metadata for DeviceSerializer, defining model and serialized fields."""
@@ -230,18 +286,24 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
         model = DeviceModel
         fields = '__all__'
 
+    @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> DeviceModel:
         """Create DeviceModel instance with nested onboarding_config if provided."""
+        config_data = self._extract_gds_push_config(validated_data)
         onboarding_config_data = validated_data.pop('onboarding_config', None)
 
         if onboarding_config_data:
             onboarding_config = OnboardingConfigSerializer().create(onboarding_config_data)
             validated_data['onboarding_config'] = onboarding_config
 
-        return super().create(validated_data)
+        device = super().create(validated_data)
+        self._save_gds_push_config(device, config_data)
+        return device
 
+    @transaction.atomic
     def update(self, instance: DeviceModel, validated_data: dict[str, Any]) -> DeviceModel:
         """Update DeviceModel instance, handling nested onboarding_config updates."""
+        config_data = self._extract_gds_push_config(validated_data)
         onboarding_config_data = validated_data.pop('onboarding_config', None)
 
         if onboarding_config_data is not None:
@@ -251,4 +313,6 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
                 onboarding_config = OnboardingConfigSerializer().create(onboarding_config_data)
                 validated_data['onboarding_config'] = onboarding_config
 
-        return super().update(instance, validated_data)
+        device = super().update(instance, validated_data)
+        self._save_gds_push_config(device, config_data)
+        return device

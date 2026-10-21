@@ -364,8 +364,7 @@ class Command(BaseCommand, LoggerMixin):
                     self.log_and_stdout(f"Device '{device_name}' already exists, skipping.")
                     continue
 
-                random_device_type = random.choice( # noqa: S311
-                        [DeviceModel.DeviceType.GENERIC_DEVICE, DeviceModel.DeviceType.OPC_UA_GDS])
+                device_type = DeviceModel.DeviceType.GENERIC_DEVICE
                 serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))  # noqa: S311
 
                 if device_uses_onboarding:
@@ -418,7 +417,7 @@ class Command(BaseCommand, LoggerMixin):
                         common_name=device_name,
                         serial_number=serial_number,
                         domain=domain,
-                        device_type=random_device_type,
+                        device_type=device_type,
                         onboarding_config=onboarding_config_model
                     )
 
@@ -462,7 +461,7 @@ class Command(BaseCommand, LoggerMixin):
                         common_name=device_name,
                         serial_number=serial_number,
                         domain=domain,
-                        device_type=random_device_type
+                        device_type=device_type
                     )
 
                     device_model.no_onboarding_config = no_onboarding_config_model

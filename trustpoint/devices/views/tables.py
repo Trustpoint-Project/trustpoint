@@ -40,7 +40,6 @@ from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from trustpoint.settings import UIConfig
@@ -514,39 +513,9 @@ class DeviceTableView(AbstractDeviceTableView):
         1-to-1 agents are shown here because the agent IS the device.
 
         Returns:
-            Returns a queryset of DeviceModels, excluding OPC_UA_GDS
-            types, filtered by UI filters.
+            Returns a queryset of DeviceModels filtered by UI filters.
         """
-        base_qs = self.get_base_queryset().exclude(
-            device_type__in=[
-                DeviceModel.DeviceType.OPC_UA_GDS,
-            ]
-        )
-        queryset = self.apply_filters(base_qs)
-        ordering = self.get_ordering()
-        if ordering:
-            if isinstance(ordering, str):
-                return queryset.order_by(ordering)
-            return queryset.order_by(*ordering)
-        return queryset
-
-
-class OpcUaGdsTableView(DeviceTableView):
-    """Table View for devices where opc_ua_gds is True."""
-
-    template_name = 'devices/opc_ua_gds.html'
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-    def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to only include devices which are of OPC-UA GDS type and filtered by UI filters.
-
-        Returns:
-            Returns a queryset of all DeviceModels which are of OPC-UA GDS type, filtered by UI filters.
-        """
-        base_qs = self.get_base_queryset().filter(
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS
-        )
+        base_qs = self.get_base_queryset()
         queryset = self.apply_filters(base_qs)
         ordering = self.get_ordering()
         if ordering:

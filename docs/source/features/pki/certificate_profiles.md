@@ -159,6 +159,25 @@ Examples:
 
 Relative values such as `days`, `hours`, `minutes`, and `seconds` are added together.
 
+Validity values are fixed by default. For example, `"validity": {"days": 10}`
+issues certificates valid for 10 days and disables the Days field during manual
+issuance. To let the requester change the relative validity, set `mutable` on
+the validity object:
+
+```json
+{
+  "validity": {
+    "days": 10,
+    "mutable": true
+  }
+}
+```
+
+During manual issuance, Days initially shows 10 and can be changed for that
+certificate. The requested validity remains subject to the active security
+policy's maximum certificate validity. Changing the profile affects future
+issuance; it does not change certificates that have already been issued.
+
 ## Template Variables
 
 String values in a profile may contain `{{ namespace.field }}` placeholders. They are resolved after the profile has been applied to the request, using the device and domain the certificate is issued for.
@@ -169,7 +188,7 @@ String values in a profile may contain `{{ namespace.field }}` placeholders. The
 | `{{ device.rfc_4122_uuid }}` | UUID of the device. |
 | `{{ device.common_name }}` | Common name of the device. |
 | `{{ device.serial_number }}` | Serial number of the device. |
-| `{{ device.device_type }}` | Device type, e.g. `Generic Device` or `OPC UA GDS`. |
+| `{{ device.device_type }}` | Device type, e.g. `Generic Device` or `OPC UA GDS Push`. |
 | `{{ device.ip_address }}` | IP address of the device. Only available if set. |
 | `{{ device.opc_server_port }}` | OPC UA server port of the device. Only available if set. |
 | `{{ domain.unique_name }}` | Unique name of the device's domain. |

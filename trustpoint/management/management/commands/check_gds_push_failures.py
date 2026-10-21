@@ -51,15 +51,15 @@ class Command(BaseCommand):
 
         overdue_devices = DeviceModel.objects.filter(
             device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
-            opc_gds_push_enable_periodic_update=True,
-            opc_gds_push_last_update_scheduled_at__isnull=False,
-            opc_gds_push_last_update_scheduled_at__lt=current_time,
+            opc_ua_gds_push_config__opc_gds_push_enable_periodic_update=True,
+            opc_ua_gds_push_config__opc_gds_push_last_update_scheduled_at__isnull=False,
+            opc_ua_gds_push_config__opc_gds_push_last_update_scheduled_at__lt=current_time,
         )
 
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
 
         for device in overdue_devices:
-            scheduled_at = device.opc_gds_push_last_update_scheduled_at
+            scheduled_at = device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at
             if scheduled_at is None:
                 continue
 

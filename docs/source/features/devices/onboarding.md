@@ -129,6 +129,10 @@ Trustpoint provides a user-friendly client application that simplifies the onboa
 - Trustpoint-Client installed on the device (via `pip install trustpoint-client`).
 - A connection to communicate with Trustpoint services.
 
+### External OPC UA Global Discovery Servers
+
+Manage external OPC UA GDS instances as standard devices using supported certificate enrollment mechanisms such as CMP or EST. They use the same domain associations, enrollment configurations, certificate profiles, and certificate lifecycle operations as other generic devices. No dedicated external GDS integration adapter is provided.
+
 ### OPC UA GDS Push Onboarding
 
 OPC UA Global Discovery Server (GDS) Push is a standardized mechanism for distributing and updating certificates, trust anchors, and Certificate Revocation Lists (CRLs) to OPC UA servers.
@@ -148,7 +152,7 @@ This method is particularly suited for industrial automation environments using 
 
 **Trustpoint Integration:**
 
-- Add OPC UA servers as devices in Trustpoint with protocol **OPC UA GDS Push**
+- In **Devices → Devices**, create a device and select **OPC UA GDS Push** to register an OPC UA server. Push devices are managed on this same standard Devices page.
 - Configure the server's connection details (hostname, port)
 - Add the servers initial server certificate as a truststore
 - Finish onboarding by pushing the initial (Trustpoint) issued server certificate to the OPC UA server

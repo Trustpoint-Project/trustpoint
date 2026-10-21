@@ -226,9 +226,6 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], Sce
         help_text=_('Expiry for CMP shared-secret and EST/REST password authentication. Null means no expiry.'),
     )
 
-    opc_user = models.CharField(verbose_name=_('OPC User'), max_length=128, blank=True, default='')
-    opc_password = EncryptedCharField(verbose_name=_('OPC Password'), max_length=128, blank=True, default='')
-
     idevid_trust_store = models.ForeignKey(
         TruststoreModel,
         verbose_name=_('IDevID Manufacturer Truststore'),
@@ -246,15 +243,6 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], Sce
         on_delete=models.SET_NULL,
         related_name='onboarding_configs',
         help_text=_('Trust store containing certificates to verify the remote server'),
-    )
-
-    opc_trust_store = models.ForeignKey(
-        TruststoreModel,
-        verbose_name=_('OPC Server Truststore'),
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='opc_onboarding_configs',
     )
 
     def __str__(self) -> str:

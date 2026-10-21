@@ -38,7 +38,7 @@ def _make_context(
         device.pk = 7
         device.get_device_type_display.return_value = 'Generic Device'
         device.ip_address = '192.0.2.10'
-        device.opc_server_port = 4840
+        device.opc_ua_gds_push_config.opc_server_port = 4840
         ctx.device = device
     if with_domain:
         domain = Mock()
@@ -70,7 +70,7 @@ class TestBuildVariableMap:
     def test_optional_device_fields_omitted_when_unset(self):
         ctx = _make_context()
         ctx.device.ip_address = None
-        ctx.device.opc_server_port = 0
+        ctx.device.opc_ua_gds_push_config.opc_server_port = 0
         ctx.domain.issuing_ca = None
         variables = _build_variable_map(ctx)
         assert 'device.ip_address' not in variables
