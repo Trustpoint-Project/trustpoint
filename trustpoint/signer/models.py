@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import logging
 from typing import TYPE_CHECKING
 
@@ -158,7 +158,7 @@ class SignerModel(CustomDeleteActionModel):
         validity_days: int,
     ) -> x509.Certificate:
         """Create a self-signed certificate suitable for hash signing."""
-        one_day = datetime.timedelta(days=1)
+        one_day = dt.timedelta(days=1)
         subject = issuer = x509.Name(
             [
                 x509.NameAttribute(NameOID.COMMON_NAME, unique_name),
@@ -170,8 +170,8 @@ class SignerModel(CustomDeleteActionModel):
             x509.CertificateBuilder()
             .subject_name(subject)
             .issuer_name(issuer)
-            .not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
-            .not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * validity_days))
+            .not_valid_before(dt.datetime.now(tz=dt.UTC) - one_day)
+            .not_valid_after(dt.datetime.now(tz=dt.UTC) + (one_day * validity_days))
             .serial_number(x509.random_serial_number())
             .public_key(public_key)  # type: ignore[arg-type]
             .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)

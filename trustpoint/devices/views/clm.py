@@ -4,7 +4,7 @@
 """Views for certificate lifecycle management (CLM)."""
 
 import abc
-import datetime
+import datetime as dt
 from typing import Any, cast
 
 from django import forms
@@ -186,12 +186,12 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
         for cred in context['domain_credentials']:
             cred.expires_in = self._get_expires_in(cred)
-            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
+            cred.expiration_date = cast('dt.datetime', cred.credential.certificate_or_error.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred) if not is_ra else ''
 
         for cred in context['application_credentials']:
             cred.expires_in = self._get_expires_in(cred)
-            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
+            cred.expiration_date = cast('dt.datetime', cred.credential.certificate_or_error.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred) if not is_ra else ''
 
         self._add_dev_owner_id_context(context)
@@ -215,7 +215,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         for cred in context['dev_owner_id_credentials']:
             cred.expires_in = self._get_expires_in(cred)
             cred.expiration_date = cast(
-                'datetime.datetime', cred.credential.certificate_or_error.not_valid_after,
+                'dt.datetime', cred.credential.certificate_or_error.not_valid_after,
             )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -449,7 +449,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         cert = record.credential.certificate_or_error
         if cert.certificate_status != CertificateModel.CertificateStatus.OK:
             return str(cert.certificate_status.label)
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         expire_timedelta = cert.not_valid_after - now
         days = expire_timedelta.days
         hours, remainder = divmod(expire_timedelta.seconds, 3600)

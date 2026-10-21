@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from typing import TYPE_CHECKING, Any, cast
 
 from cryptography import x509
@@ -484,7 +484,7 @@ class OwnerCredentialCLMView(ZeroTouchContextMixin, DetailView[OwnerCredentialMo
         cert = record.credential.certificate_or_error
         if cert.certificate_status != CertificateModel.CertificateStatus.OK:
             return str(cert.certificate_status.label)
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         expire_timedelta = cert.not_valid_after - now
         days = expire_timedelta.days
         hours, remainder = divmod(expire_timedelta.seconds, 3600)

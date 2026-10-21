@@ -28,7 +28,7 @@ from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
-    import datetime
+    import datetime as dt
 
     from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
@@ -370,7 +370,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return ca_chain
 
     @property
-    def last_crl_issued_at(self) -> datetime.datetime | None:
+    def last_crl_issued_at(self) -> dt.datetime | None:
         """Returns when the last CRL was issued (from active CRL).
 
         Returns:
@@ -400,7 +400,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return active_crl.crl_pem if active_crl else ''
 
     @property
-    def next_crl_generation_scheduled_at(self) -> datetime.datetime | None:
+    def next_crl_generation_scheduled_at(self) -> dt.datetime | None:
         """Returns when the next CRL generation is scheduled.
 
         Returns:
@@ -1054,7 +1054,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
                 self.credential.delete()
 
     @property
-    def display_not_valid_after(self) -> datetime.datetime | None:
+    def display_not_valid_after(self) -> dt.datetime | None:
         """Returns the not valid after date for display purposes."""
         if self.credential and self.credential.certificate:
             return self.credential.certificate.not_valid_after
