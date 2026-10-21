@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from asyncua.crypto.permission_rules import User, UserRole
+from asyncua.ua.uaerrors import UaStatusCodeError
 
 from devices.forms import ClmDeviceModelOpcUaGdsPushOnboardingForm, OpcUaGdsPushCreateForm
 from request.gds_push.gds_push_service import GdsPushService
@@ -164,7 +165,7 @@ async def test_certificate_update_uses_discovered_group_and_persists_matching_ke
 
     # Reject the type NodeId formerly hardcoded in the server and unrelated groups.
     for invalid_group in (ua.NodeId(ua.ObjectIds.CertificateGroupType), ua.NodeId(999999)):
-        with pytest.raises(ua.UaStatusCodeError) as exc:
+        with pytest.raises(UaStatusCodeError) as exc:
             state.check_group(invalid_group)
         assert exc.value.code == ua.StatusCodes.BadInvalidArgument
 

@@ -1268,7 +1268,7 @@ class TestGdsPushServiceAdditionalCoverage:
         assert node.call_method.await_args_list[1].args[2] == b'ab'
         assert node.call_method.await_args_list[2].args[2] == b'cd'
         assert node.call_method.await_args_list[3].args[2] == b'ef'
-        config_node.call_method.assert_awaited_once_with(apply_method)
+        config_node.call_method.assert_awaited_once_with(apply_method.nodeid)
 
     @pytest.mark.asyncio
     async def test_update_server_certificate_skips_user_token_and_reports_failures(self, mock_opc_device):

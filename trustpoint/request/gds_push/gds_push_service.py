@@ -8,12 +8,13 @@ from __future__ import annotations
 import contextlib
 import datetime
 import tempfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from asgiref.sync import sync_to_async
-from asyncua import Client, ua  # type: ignore[import-untyped]
-from asyncua.crypto import security_policies  # type: ignore[import-untyped]
-from asyncua.ua.ua_binary import struct_to_binary  # type: ignore[import-untyped]
+from asyncua import ua
+from asyncua.client.client import Client
+from asyncua.crypto import security_policies
+from asyncua.ua.ua_binary import struct_to_binary
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509 import KeyUsage
@@ -28,6 +29,8 @@ from request.request_context import BaseCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
+    from asyncua.common.node import Node
+
     from devices.models import DeviceModel
     from pki.models import CaModel
     from pki.models.truststore import TruststoreModel
@@ -949,7 +952,7 @@ class GdsPushService(LoggerMixin):
 
     async def _update_single_trustlist(
         self,
-        trustlist_node: ua.Node,
+        trustlist_node: Node,
         trustlist_data: ua.TrustListDataType,
         max_chunk_size: int = 1024
     ) -> bool:
@@ -969,7 +972,7 @@ class GdsPushService(LoggerMixin):
             # Step 1: Open
             mode = ua.Variant(int(ua.OpenFileMode.Write | ua.OpenFileMode.EraseExisting), ua.VariantType.Byte)
             open_method = await trustlist_node.get_child('Open')
-            file_handle = await trustlist_node.call_method(open_method, mode)
+            file_handle = await trustlist_node.call_method(open_method.nodeid, mode)
             self.logger.debug('Opened TrustList, handle: %s', file_handle)
 
             # Step 2: Write in chunks
@@ -979,7 +982,7 @@ class GdsPushService(LoggerMixin):
 
             while offset < len(serialized_trustlist):
                 chunk = serialized_trustlist[offset:offset + max_chunk_size]
-                await trustlist_node.call_method(write_method, file_handle, chunk)
+                await trustlist_node.call_method(write_method.nodeid, file_handle, chunk)
                 offset += len(chunk)
                 chunk_count += 1
 
@@ -987,17 +990,21 @@ class GdsPushService(LoggerMixin):
 
             # Step 3: CloseAndUpdate
             close_and_update_method = await trustlist_node.get_child('CloseAndUpdate')
-            apply_changes_required = await trustlist_node.call_method(close_and_update_method, file_handle)
+            apply_changes_required = await trustlist_node.call_method(close_and_update_method.nodeid, file_handle)
             self.logger.debug('Closed TrustList, ApplyChanges required: %s', apply_changes_required)
 
             # Step 4: ApplyChanges if required
             if apply_changes_required:
-                group_node = await trustlist_node.get_parent()
-                cert_groups_node = await group_node.get_parent()
-                server_config_node = await cert_groups_node.get_parent()
+                server_config_node = trustlist_node
+                for _ in range(3):
+                    parent = await server_config_node.get_parent()
+                    if parent is None:
+                        msg = 'TrustList node is missing its ServerConfiguration parent.'
+                        self._raise_gds_push_error(msg)
+                    server_config_node = parent
 
                 apply_changes = await server_config_node.get_child('ApplyChanges')
-                await server_config_node.call_method(apply_changes)
+                await server_config_node.call_method(apply_changes.nodeid)
 
         except Exception:
             self.logger.exception('Failed to update trustlist')
@@ -1140,7 +1147,7 @@ class GdsPushService(LoggerMixin):
 
 
             csr = await server_config.call_method(
-                create_signing_request,
+                create_signing_request.nodeid,
                 certificate_group_id,
                 certificate_type_id,
                 None,  # subjectName
@@ -1158,7 +1165,7 @@ class GdsPushService(LoggerMixin):
             update_certificate = await server_config.get_child('UpdateCertificate')
 
             apply_changes_required = await server_config.call_method(
-                update_certificate,
+                update_certificate.nodeid,
                 certificate_group_id,
                 certificate_type_id,
                 signed_cert,
@@ -1171,7 +1178,7 @@ class GdsPushService(LoggerMixin):
             # Step 4: ApplyChanges if required
             if apply_changes_required:
                 apply_changes = await server_config.get_child('ApplyChanges')
-                await server_config.call_method(apply_changes)
+                await server_config.call_method(apply_changes.nodeid)
 
         except Exception:
             self.logger.exception('Failed to update certificate')
@@ -1179,7 +1186,7 @@ class GdsPushService(LoggerMixin):
         else:
             return True, signed_cert, issuer_chain
 
-    def _raise_gds_push_error(self, msg: str) -> None:
+    def _raise_gds_push_error(self, msg: str) -> NoReturn:
         """Raise a GdsPushError with the given message."""
         raise GdsPushError(msg)
 
@@ -1221,11 +1228,11 @@ class GdsPushService(LoggerMixin):
 
             domain = context.domain
 
-            certificate_profile_model = await sync_to_async(domain.get_allowed_cert_profile)('opc_ua')  # type: ignore[union-attr]
+            certificate_profile_model = await sync_to_async(domain.get_allowed_cert_profile)('opc_ua')
             if not certificate_profile_model:
                 msg = (
                     'Certificate profile "opc_ua" not found or not allowed for domain '
-                    f'"{domain.unique_name}"'  # type: ignore[union-attr]
+                    f'"{domain.unique_name}"'
                 )
                 self._raise_gds_push_error(msg)
 
@@ -1242,7 +1249,7 @@ class GdsPushService(LoggerMixin):
 
             issued_cert = context.issued_certificate
 
-            cert_der = issued_cert.public_bytes(serialization.Encoding.DER)  # type: ignore[union-attr]
+            cert_der = issued_cert.public_bytes(serialization.Encoding.DER)
 
             self.logger.info('Certificate issued successfully (%d bytes)', len(cert_der))
 
@@ -1298,7 +1305,7 @@ class GdsPushService(LoggerMixin):
             if domain is None:
                 msg = 'Device has no domain'
                 self._raise_gds_push_error(msg)
-            ca = await sync_to_async(lambda: domain.issuing_ca)()  # type: ignore[union-attr]
+            ca = await sync_to_async(lambda: domain.issuing_ca)()
 
             try:
                 old_server_order = await sync_to_async(

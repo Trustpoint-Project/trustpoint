@@ -839,11 +839,11 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueProfileCredentialView):
         context = super().get_context_data(**kwargs)
         if self.profile.unique_name != 'opc_ua_domain_credential':
             messages.warning(self.request, format_html(
-                gettext_lazy(
+                str(gettext_lazy(
                     'This domain is not using the OPC UA Domain Credential profile. '
                     'Select it in the <a href="{url}">domain settings</a> before issuing '
                     'an OPC UA domain credential.'
-                ),
+                )),
                 url=reverse('pki:domains-config', kwargs={'pk': self.object.domain_id}),
             ))
         return context

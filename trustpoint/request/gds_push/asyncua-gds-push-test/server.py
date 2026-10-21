@@ -18,22 +18,27 @@ import os
 import socket
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
-from asyncua import Server, ua  # type: ignore[import-untyped]
-from asyncua.common.utils import Buffer  # type: ignore[import-untyped]
-from asyncua.crypto.cert_gen import setup_self_signed_certificate  # type: ignore[import-untyped]
-from asyncua.crypto.permission_rules import User, UserRole  # type: ignore[import-untyped]
-from asyncua.crypto.truststore import TrustStore  # type: ignore[import-untyped]
-from asyncua.crypto.validator import CertificateValidator, CertificateValidatorOptions  # type: ignore[import-untyped]
-from asyncua.server.user_managers import CertificateUserManager  # type: ignore[import-untyped]
-from asyncua.ua.ua_binary import struct_from_binary  # type: ignore[import-untyped]
+from asyncua import ua
+from asyncua.common.utils import Buffer
+from asyncua.crypto.cert_gen import setup_self_signed_certificate
+from asyncua.crypto.permission_rules import User, UserRole
+from asyncua.crypto.truststore import TrustStore
+from asyncua.crypto.validator import CertificateValidator, CertificateValidatorOptions
+from asyncua.server.server import Server
+from asyncua.server.user_managers import CertificateUserManager, UserManager
+from asyncua.ua.status_codes import StatusCodes
+from asyncua.ua.ua_binary import struct_from_binary
+from asyncua.ua.uaerrors import UaStatusCodeError
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
 LOG = logging.getLogger('gds_push_test')
@@ -55,7 +60,7 @@ def result(value_: Any, typ: ua.VariantType) -> ua.Variant:
     return ua.Variant(value_, typ)
 
 
-class PushUserManager:
+class PushUserManager(UserManager):
     """Authorize an allowlisted certificate or optional administrator credentials."""
 
     def __init__(self, username: str = '', password: str = '') -> None:
@@ -83,7 +88,7 @@ class PushUserManager:
             if username_matches and password_matches:
                 return User(role=UserRole.Admin, name=self._username)
             return None
-        return cast('User | None', self.certificates.get_user(iserver, certificate=certificate))
+        return self.certificates.get_user(iserver, certificate=certificate)
 
 
 class PushState:
@@ -144,7 +149,7 @@ class PushState:
     def check_group(self, group: ua.NodeId) -> None:
         """Require the DefaultApplicationGroup instance discovered in the address space."""
         if self.application_group is None or group != self.application_group:
-            raise ua.UaStatusCodeError(ua.StatusCodes.BadInvalidArgument)
+            raise UaStatusCodeError(StatusCodes.BadInvalidArgument)  # type: ignore[no-untyped-call]
 
     # OPC UA defines the positional arguments for this method callback.
     async def csr(
@@ -167,7 +172,7 @@ class PushState:
         subject_str = value(subject)
         if subject_str:
             LOG.warning('Subject override not currently implemented: %r', subject_str)
-            raise ua.UaStatusCodeError(ua.StatusCodes.BadNotSupported)
+            raise UaStatusCodeError(StatusCodes.BadNotSupported)  # type: ignore[no-untyped-call]
         builder = x509.CertificateSigningRequestBuilder().subject_name(current.subject)
         builder = builder.add_extension(
             x509.SubjectAlternativeName([x509.UniformResourceIdentifier(APP_URI), x509.DNSName(HOST)]), critical=False
@@ -182,7 +187,7 @@ class PushState:
                 ed448.Ed448PrivateKey,
             ),
         ):
-            raise ua.UaStatusCodeError(ua.StatusCodes.BadNotSupported)
+            raise UaStatusCodeError(StatusCodes.BadNotSupported)  # type: ignore[no-untyped-call]
         csr = builder.sign(key, hashes.SHA256()).public_bytes(serialization.Encoding.DER)
         self.pending_key = key if bool(value(regenerate)) else None
         return [result(csr, ua.VariantType.ByteString)]
@@ -201,7 +206,7 @@ class PushState:
         """Stage a certificate after checking it matches the expected private key."""
         self.check_group(value(group))
         if value(key_format) or value(private_key):
-            raise ua.UaStatusCodeError(ua.StatusCodes.BadNotSupported)
+            raise UaStatusCodeError(StatusCodes.BadNotSupported)  # type: ignore[no-untyped-call]
         incoming = x509.load_der_x509_certificate(bytes(value(cert)))
         expected_key = self.pending_key or serialization.load_pem_private_key(self.key.read_bytes(), password=None)
         if incoming.public_key().public_bytes(
@@ -209,7 +214,7 @@ class PushState:
         ) != expected_key.public_key().public_bytes(
             serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
         ):
-            raise ua.UaStatusCodeError(ua.StatusCodes.BadSecurityChecksFailed)
+            raise UaStatusCodeError(StatusCodes.BadSecurityChecksFailed)  # type: ignore[no-untyped-call]
         self.pending_cert = incoming.public_bytes(serialization.Encoding.DER)
         self.pending_issuers = list(value(issuers) or [])
         LOG.info('Staged new certificate: %s', incoming.subject.rfc4514_string())
@@ -218,7 +223,7 @@ class PushState:
     async def open_trustlist(self, _parent: ua.NodeId, mode: ua.Variant) -> list[ua.Variant]:
         """Allocate a handle for a write-and-replace trust-list upload."""
         if int(value(mode)) != int(ua.OpenFileMode.Write | ua.OpenFileMode.EraseExisting):
-            raise ua.UaStatusCodeError(ua.StatusCodes.BadNotSupported)
+            raise UaStatusCodeError(StatusCodes.BadNotSupported)  # type: ignore[no-untyped-call]
         handle = self.next_handle
         self.next_handle += 1
         self.writes[handle] = bytearray()
@@ -228,7 +233,7 @@ class PushState:
         """Append binary data to an open trust-list upload."""
         h = int(value(handle))
         if h not in self.writes:
-            raise ua.UaStatusCodeError(ua.StatusCodes.BadInvalidArgument)
+            raise UaStatusCodeError(StatusCodes.BadInvalidArgument)  # type: ignore[no-untyped-call]
         self.writes[h].extend(bytes(value(data)))
         return []
 
@@ -236,7 +241,7 @@ class PushState:
         """Close an upload and stage its opaque trust-list bytes."""
         h = int(value(handle))
         if h not in self.writes:
-            raise ua.UaStatusCodeError(ua.StatusCodes.BadInvalidArgument)
+            raise UaStatusCodeError(StatusCodes.BadInvalidArgument)  # type: ignore[no-untyped-call]
         payload = bytes(self.writes.pop(h))
         self.decode_trustlist(payload)
         self.pending_trust = payload
@@ -248,7 +253,7 @@ class PushState:
         data = Buffer(payload)
         trustlist = struct_from_binary(ua.TrustListDataType, data)
         if len(data) or trustlist.SpecifiedLists & ~int(ua.TrustListMasks.All):
-            raise ua.UaStatusCodeError(ua.StatusCodes.BadInvalidArgument)
+            raise UaStatusCodeError(StatusCodes.BadInvalidArgument)  # type: ignore[no-untyped-call]
         updates = []
         for mask, directory, entries in (
             (ua.TrustListMasks.TrustedCertificates, self.trust, trustlist.TrustedCertificates),
@@ -282,7 +287,7 @@ class PushState:
                     swapped.append((directory, backup))
                     replacement.rename(directory)
                 if self.trust_store is not None:
-                    await self.trust_store.load()
+                    await self.trust_store.load()  # type: ignore[no-untyped-call]
             except Exception:
                 for directory, backup in reversed(swapped):
                     if directory.exists():
@@ -291,7 +296,7 @@ class PushState:
                         directory.rmdir()
                     backup.rename(directory)
                 if self.trust_store is not None:
-                    await self.trust_store.load()
+                    await self.trust_store.load()  # type: ignore[no-untyped-call]
                 raise
         LOG.info('Installed TrustList and reloaded certificate validation')
 
@@ -332,7 +337,7 @@ async def configure_push_methods(server: Server, state: PushState) -> None:
         if group.nodeid != default_group.nodeid:
             await server.delete_nodes([group], recursive=True)
     LOG.info('Supported certificate group: %s', default_group.nodeid)
-    callbacks = {
+    callbacks: dict[str, Callable[..., Any]] = {
         'CreateSigningRequest': state.csr,
         'UpdateCertificate': state.update_certificate,
         'ApplyChanges': state.apply_changes,
@@ -341,11 +346,12 @@ async def configure_push_methods(server: Server, state: PushState) -> None:
         method = await cfg.get_child(f'0:{name}')
         server.link_method(method, callback)
     trustlist = await default_group.get_child('0:TrustList')
-    for name, callback in {
+    trustlist_callbacks: dict[str, Callable[..., Any]] = {
         'Open': state.open_trustlist,
         'Write': state.write_trustlist,
         'CloseAndUpdate': state.close_update,
-    }.items():
+    }
+    for name, callback in trustlist_callbacks.items():
         method = await trustlist.get_child(f'0:{name}')
         server.link_method(method, callback)
 
@@ -374,7 +380,7 @@ async def main() -> None:
     await server.load_private_key(str(state.key))
     trust_store = TrustStore([state.trust], [state.trusted_crls, state.issuer_crls])
     state.trust_store = trust_store
-    await trust_store.load()
+    await trust_store.load()  # type: ignore[no-untyped-call]
     # No trust-on-first-use or optional validation: explicitly trusted peer cert required.
     server.set_certificate_validator(
         CertificateValidator(
