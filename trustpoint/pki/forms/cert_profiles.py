@@ -19,8 +19,14 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from pki.util.cert_req_converter import JSONCertRequestConverter
+from pki.util.crl_urls import validate_crl_url
 from request.request_context import ManualCredentialRequestContext
-from request.template_vars import build_variable_map_from_models, resolve_string, resolve_template_variables
+from request.template_vars import (
+    build_variable_map_from_models,
+    resolve_crl_urls,
+    resolve_string,
+    resolve_template_variables,
+)
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -247,6 +253,24 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 self._build_all_san_fields(profile_san)
             elif san:
                 self._build_san_fields_from_sample(san)
+
+            crl = extensions.get('crl_distribution_points')
+            if isinstance(crl, dict) and 'uris' in crl:
+                spec = crl['uris']
+                inherited_mutable = extensions.get('mutable', self.profile.get('mutable', False))
+                if isinstance(spec, dict):
+                    value = spec.get('value', spec.get('default', []))
+                    mutable = spec.get('mutable', crl.get('mutable', inherited_mutable))
+                    required = spec.get('required', False)
+                else:
+                    value = spec or []
+                    mutable = crl.get('mutable', inherited_mutable)
+                    required = False
+                self.fields['crl_distribution_point_uris'] = forms.CharField(
+                    label=_('CRL Distribution Point URLs (comma separated)'),
+                    initial=', '.join(value or []), required=required, disabled=not mutable,
+                    widget=forms.TextInput(attrs={'class': 'form-control'}),
+                )
 
         validity = sample_request.get('validity', {})
         if validity:
@@ -516,6 +540,18 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
                 if isinstance(field.initial, str):
                     field.initial = resolve_string(field.initial, template_vars)
 
+        crl_field = self.fields.get('crl_distribution_point_uris')
+        if crl_field is not None and isinstance(crl_field.initial, str) and crl_field.initial:
+            initial_crl = {'uris': [url.strip() for url in crl_field.initial.split(',') if url.strip()]}
+            initial_request = {'extensions': {'crl_distribution_points': initial_crl}}
+            try:
+                resolve_crl_urls(initial_request, ManualCredentialRequestContext(device=device, domain=domain))
+            except ValueError as exc:
+                # Keep the field usable so a missing TLS IP SAN can be replaced with a fixed URL.
+                crl_field.help_text = f'{crl_field.help_text} {exc}'
+            else:
+                crl_field.initial = ', '.join(initial_crl['uris'])
+
     def get_certificate_builder(
         self, request_context: BaseRequestContext | None = None,
     ) -> CertificateBuilder:
@@ -581,6 +617,12 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         if san:
             extensions['subject_alternative_name'] = san
 
+        crl_urls = cleaned_data.get('crl_distribution_point_uris')
+        if crl_urls and not self.fields['crl_distribution_point_uris'].disabled:
+            extensions['crl_distribution_points'] = {
+                'uris': [url.strip() for url in crl_urls.split(',') if url.strip()]
+            }
+
         return extensions
 
     def _build_san_from_form_data(self, cleaned_data: dict[str, Any]) -> dict[str, list[str]]:
@@ -606,6 +648,12 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
     def clean(self) -> dict[str, Any]:
         """Validate the requested certificate validity against the active security policy."""
         cleaned_data = cast('dict[str, Any]', super().clean())
+        for url in (cleaned_data.get('crl_distribution_point_uris') or '').split(','):
+            if url.strip():
+                try:
+                    validate_crl_url(url.strip())
+                except ValueError as exc:
+                    self.add_error('crl_distribution_point_uris', str(exc))
         total_days = _validity_days_from_components(
             days=cleaned_data.get('days'),
             hours=cleaned_data.get('hours'),

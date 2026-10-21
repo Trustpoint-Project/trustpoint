@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Tests for device views."""
+import ipaddress
 import json
 from datetime import timedelta
 from http import HTTPStatus
@@ -20,15 +21,24 @@ from django.urls import reverse
 from devices.models import DeviceModel
 from management.models import OrganizationModel
 from onboarding.models import OnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
-from pki.models import CertificateModel, IssuedCredentialModel
+from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.forms.cert_profiles import CertificateIssuanceForm
 from pki.models.domain import DomainAllowedCertificateProfileModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from setup_wizard.tls_credential import TlsServerCredentialGenerator
 
 
 @pytest.fixture
 def opc_ua_domain_device(device_instance_onboarding: dict[str, Any]) -> DeviceModel:
     """Use a custom domain profile to verify that issuance resolves the domain's choice."""
+    tls_credential = TlsServerCredentialGenerator(
+        ipv4_addresses=[ipaddress.IPv4Address('192.0.2.10')], ipv6_addresses=[], domain_names=[],
+    ).generate_tls_server_credential()
+    credential = CredentialModel.save_credential_serializer(
+        tls_credential, CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+    )
+    ActiveTrustpointTlsServerCredentialModel.objects.create(credential=credential)
     device = device_instance_onboarding['device']
     device.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
     device.onboarding_config.set_pki_protocols([OnboardingPkiProtocol.OPC_GDS_PUSH])
@@ -656,3 +666,36 @@ class TestIssuedCredentialRevocationView:
 
 
         assert any('already revoked' in m for m in messages_list)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('mutable', [True, False])
+def test_manual_profile_crl_urls_render_and_are_issued(
+    admin_client: Client, device_instance: dict[str, Any], *, mutable: bool,
+) -> None:
+    """Display CRL URLs and retain profile constraints through actual manual issuance."""
+    device = device_instance['device']
+    profile_url = 'http://192.0.2.10/crl/{issuing_ca.id}'
+    submitted_url = 'https://crl.example.test/crl/{issuing_ca.id}'
+    profile = CertificateProfileModel.objects.create(
+        unique_name='manual_crl_test',
+        profile_json={
+            'type': 'cert_profile',
+            'subj': {'common_name': {'value': 'Manual CRL Test'}},
+            'validity': {'days': 7},
+            'ext': {'crl_distribution_points': {'uris': {'value': [profile_url], 'mutable': mutable}}},
+        },
+    )
+    DomainAllowedCertificateProfileModel.objects.create(domain=device.domain, certificate_profile=profile)
+    url = reverse('devices:devices_certificate_lifecycle_management_issue_profile_credential',
+                  kwargs={'pk': device.pk, 'profile_id': profile.pk})
+    response = admin_client.get(url)
+    assert response.status_code == HTTPStatus.OK
+    assert b'name="crl_distribution_point_uris"' in response.content
+    response = admin_client.post(url, data={'crl_distribution_point_uris': submitted_url})
+    assert response.status_code == HTTPStatus.FOUND
+    issued = IssuedCredentialModel.objects.get(device=device)
+    cert = issued.credential.get_certificate()
+    points = cert.extensions.get_extension_for_class(x509.CRLDistributionPoints).value
+    expected = (submitted_url if mutable else profile_url).replace('{issuing_ca.id}', str(device.domain.issuing_ca.pk))
+    assert points[0].full_name == [x509.UniformResourceIdentifier(expected)]

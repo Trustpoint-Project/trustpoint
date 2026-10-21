@@ -92,6 +92,12 @@ class JSONCertRequestConverter:
             elif isinstance(ext.value, x509.ExtendedKeyUsage):
                 eku = [ExtendedKeyUsageOid(oid.dotted_string).name.lower() for oid in ext.value]
                 req_ext['extended_key_usage'] = {'usages': eku, 'critical': ext.critical}
+            elif isinstance(ext.value, x509.CRLDistributionPoints):
+                req_ext['crl_distribution_points'] = {
+                    'critical': ext.critical,
+                    'uris': [name.value for point in ext.value for name in (point.full_name or [])
+                             if isinstance(name, x509.UniformResourceIdentifier)],
+                }
             elif isinstance(ext.value, x509.BasicConstraints):
                 bc: dict[str, Any] = {'ca': ext.value.ca, 'critical': ext.critical}
                 if ext.value.path_length is not None:

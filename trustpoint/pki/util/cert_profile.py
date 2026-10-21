@@ -26,6 +26,7 @@ from pydantic import (
 )
 from trustpoint_core.oid import NameOid
 
+from pki.util.crl_urls import validate_crl_url
 from pki.util.ext_oids import CertificateExtensionOid  # temp
 
 logger = logging.getLogger(__name__)
@@ -167,6 +168,24 @@ class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValueProper
     Note: Only URIs in full_name are supported.
     """
     uris: list[str] | ProfileValuePropertyModel | None = None
+
+    @field_validator('uris')
+    @classmethod
+    def validate_uris(cls, value: list[str] | ProfileValuePropertyModel | None
+                      ) -> list[str] | ProfileValuePropertyModel | None:
+        """Validate both literal URLs and profile value/default lists."""
+        values = [value] if isinstance(value, list) else (
+            [value.value, value.default] if isinstance(value, ProfileValuePropertyModel) else []
+        )
+        for urls in values:
+            if urls is None:
+                continue
+            if not isinstance(urls, list) or not all(isinstance(url, str) for url in urls):
+                msg = 'CRL distribution point URIs must be a list of URLs.'
+                raise ValueError(msg)
+            for url in urls:
+                validate_crl_url(url)
+        return value
 
     model_config = ConfigDict(extra='forbid')
 
