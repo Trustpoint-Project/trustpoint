@@ -1,2 +1,2 @@
-asyncua~=2.0.1
+asyncua~=2.1.0
 cryptography>=45
