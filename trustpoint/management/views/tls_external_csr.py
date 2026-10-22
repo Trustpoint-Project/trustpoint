@@ -31,7 +31,12 @@ from pki.forms import CertificateIssuanceForm, TruststoreAddForm
 from pki.models import CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import TruststoreModel
-from pki.services.external_csr import build_external_csr, csr_download_response, finalize_external_certificate
+from pki.services.external_csr import (
+    build_external_csr,
+    csr_download_response,
+    external_csr_profile,
+    finalize_external_certificate,
+)
 from pki.services.key_generation import generate_pending_credential
 from pki.util.cert_profile import ProfileValidationError
 from users.permissions import AppPermissions
@@ -171,7 +176,7 @@ class TlsExternalCsrContentView(TlsExternalCsrWizardView[CertificateIssuanceForm
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Reuse the profile's standard dynamic certificate-content form."""
-        return super().get_form_kwargs() | {'profile': self.profile.profile}
+        return super().get_form_kwargs() | {'profile': external_csr_profile(self.profile).profile}
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Show only application profiles and the TLS Server default label."""

@@ -3,6 +3,7 @@
 
 """Shared operations for externally issued certificate requests."""
 
+from copy import copy, deepcopy
 from typing import Any
 
 from cryptography import x509
@@ -15,6 +16,7 @@ from pki.models import CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
+from pki.util.cert_profile import alias_map
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.request_context import CmpCertificateRequestContext
 
@@ -71,13 +73,27 @@ def request_data_from_content(content: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def external_csr_profile(profile: CertificateProfileModel) -> CertificateProfileModel:
+    """Use an isolated profile without CRL settings owned by the external issuer."""
+    definition = deepcopy(profile.profile)
+    for field in ('ext', 'extensions'):
+        extensions = definition.get(field)
+        if isinstance(extensions, dict):
+            for name in list(extensions):
+                if alias_map.get(name, name) == 'crl_distribution_points':
+                    del extensions[name]
+    external_profile = copy(profile)
+    external_profile.profile_json = definition
+    return external_profile
+
+
 def build_external_csr(
     credential: CredentialModel, profile: CertificateProfileModel, content: dict[str, Any], *, allow_ca: bool = False,
 ) -> x509.CertificateSigningRequest:
     """Build a profile-aware CSR using the existing credential's managed key."""
     context = CmpCertificateRequestContext(
         operation='certification', protocol='cmp', domain=None,
-        cert_profile_str=profile.unique_name, certificate_profile_model=profile,
+        cert_profile_str=profile.unique_name, certificate_profile_model=external_csr_profile(profile),
         allow_ca_certificate_request=allow_ca,
     )
     context.request_data = request_data_from_content(content)

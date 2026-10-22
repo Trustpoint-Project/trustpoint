@@ -5,7 +5,7 @@ Certificate profiles define what issued certificates should look like. They comb
 Use certificate profiles to control:
 
 - Subject attributes, such as `CN`, `OU`, or other DN fields
-- X.509 extensions, such as Key Usage, Extended Key Usage, SAN, or Basic Constraints
+- X.509 extensions, such as Key Usage, Extended Key Usage, SAN, Basic Constraints, or CRL Distribution Points
 - Certificate validity
 - Whether request values may override profile defaults
 - Which fields are required, allowed, fixed, or rejected
@@ -178,6 +178,87 @@ certificate. The requested validity remains subject to the active security
 policy's maximum certificate validity. Changing the profile affects future
 issuance; it does not change certificates that have already been issued.
 
+## CRL Distribution Points
+
+Configure this extension to control where clients retrieve the issuing CA's
+certificate revocation list (CRL). The URLs are added to the issued certificate's
+X.509 CRL Distribution Points extension. Trustpoint's default CRL URLs use
+HTTP, and its bundled web server serves `/crl/` over HTTP without redirecting
+to HTTPS. Use HTTP URLs for Trustpoint-hosted CRLs.
+
+1. Open the profile under **PKI > Certificate Profiles**.
+2. In the profile builder, select **CRL Dist Points → URIs**.
+3. Enter one or more comma-separated URLs. Use a fixed host or a supported placeholder.
+4. Enable **Mutable** if users should be able to change the URLs during manual issuance.
+5. Save the profile and select it when issuing a certificate for a device.
+
+All shipped profiles except **Issuing CA** include this extension with
+`http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}` and `mutable` enabled.
+The active TLS certificate must have an IP SAN for this default
+template to resolve; you can enter a fixed URL during manual issuance instead.
+If your CRL endpoint uses a nonstandard port, include it explicitly in the URL.
+
+The same configuration can be entered as JSON:
+
+```json
+{
+  "type": "cert_profile",
+  "validity": {"days": 30},
+  "ext": {
+    "crl_distribution_points": {
+      "critical": false,
+      "uris": {
+        "value": ["http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}"],
+        "mutable": false
+      }
+    }
+  }
+}
+```
+
+URL examples:
+
+| URL | Behavior |
+| --- | --- |
+| `http://2.2.2.2/crl/{issuing_ca.id}` | Uses a fixed IPv4 address and the issuing CA's CRL endpoint. |
+| `http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}` | Uses the first IP SAN of the active Trustpoint TLS certificate. |
+| `http://crl.example.com/crl/4` | Uses a fully fixed URL for CA ID 4. |
+
+Use `http://`, including both slashes; `http:2.2.2.2/...` is invalid.
+
+`{tls_certificate.ip_address.1}` selects the first IP address in the active
+Trustpoint TLS certificate's Subject Alternative Name extension; indices start
+at 1. IPv6 addresses are enclosed in brackets automatically. `{issuing_ca.id}` is
+the issuing CA's database ID used by Trustpoint's `/crl/<id>` endpoint, **not**
+the CRL's changing sequence number. Double braces, such as `{{ issuing_ca.id }}`,
+are accepted as well. Unavailable IP addresses and unsupported placeholders
+cause validation to fail rather than being included in an issued certificate.
+
+For example, if the first TLS IP SAN is `192.0.2.10` and the issuing CA's ID is
+`4`, the template in the JSON example produces `http://192.0.2.10/crl/4`.
+
+Trustpoint also accepts `/crl/<CA ID>.crl`, for example `/crl/4.crl`,
+as an alias for `/crl/4/`. Both URLs serve the same active CRL and support the
+same encoding options. The `.crl` suffix requires no additional profile setting.
+
+The manual issuance form displays **CRL Distribution Point URLs** with the
+placeholders already resolved to the active TLS certificate's IP address and
+the issuing CA's ID. The profile retains its template for future issuance.
+If an IP SAN is unavailable, the form shows an explanation; an editable field
+can be replaced with a fixed URL.
+
+With
+`"mutable": false`, the field is disabled and submitted changes cannot override
+the profile value. With `"mutable": true`, users can edit the comma-separated
+URLs for that issuance. Use `default` instead of `value` for an initial suggestion.
+Changing a profile affects future issuance; existing certificates retain their
+original distribution points.
+
+URLs must be
+absolute ASCII URLs with a scheme and host. Profiles without configured CRL
+URLs retain Trustpoint's automatic distribution point based on TLS settings
+and the configured HTTP port.
+
 ## Template Variables
 
 String values in a profile may contain `{{ namespace.field }}` placeholders. They are resolved after the profile has been applied to the request, using the device and domain the certificate is issued for.
@@ -204,7 +285,7 @@ String values in a profile may contain `{{ namespace.field }}` placeholders. The
 
 Organization variables are available only when an organization is assigned to the domain. Values come directly from that organization; unset fields resolve to empty strings.
 
-Unknown variables are left unchanged and logged as a warning. Variables are also resolved in the initial values of the manual issuance form.
+Unknown general template variables are left unchanged and logged as a warning. General template variables are also resolved in the initial values of the manual issuance form. CRL URL placeholders follow the stricter validation rules described in [CRL Distribution Points](#crl-distribution-points) and are resolved in the manual form's initial values and again during issuance.
 
 Example: bind a certificate to a device through SAN URI entries:
 

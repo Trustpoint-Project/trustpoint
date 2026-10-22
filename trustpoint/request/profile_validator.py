@@ -62,15 +62,14 @@ class ProfileValidator(LoggerMixin):
 
         try:
             validated_request = JSONProfileVerifier(cert_profile).apply_profile_to_request(cert_request_json)
-        except (ValidationError, ProfileValidationError) as e:
+            validated_request = resolve_template_variables(validated_request, context)
+        except (ValidationError, ProfileValidationError, ValueError) as e:
             exc_msg = f'Certificate request validation against profile failed: {e}'
             context.error('Request does not match the certificate profile.',
                           http_status=400, cmp_code=CMPErrs.UNACCEPTED_POLICY)
             raise ValueError(exc_msg) from e
 
         cls.logger.info('Validated Cert Request JSON: %s', validated_request)
-
-        validated_request = resolve_template_variables(validated_request, context)
 
         context.cert_requested_profile_validated = JSONCertRequestConverter.from_json(
             validated_request,
