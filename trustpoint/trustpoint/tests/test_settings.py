@@ -346,3 +346,47 @@ def test_language_settings():
     assert settings.USE_TZ is True, 'USE_TZ should be enabled.'
     assert settings.TIME_ZONE == 'UTC', "TIME_ZONE should be set to 'UTC'."
     assert isinstance(settings.LANGUAGES, list), 'LANGUAGES should be a list.'
+
+
+def test_mailers_defaults_to_console(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Email stays local when no SMTP host is configured."""
+    monkeypatch.delenv('EMAIL_HOST', raising=False)
+    importlib.reload(settings)
+
+    assert settings.MAILERS == {'default': {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}}
+
+
+@pytest.mark.parametrize(('port', 'use_tls', 'use_ssl'), [(587, True, False), (465, False, True), (1025, False, False)])
+def test_mailers_smtp_environment(
+    monkeypatch: pytest.MonkeyPatch, port: int, use_tls: bool, use_ssl: bool,
+) -> None:
+    """SMTP environment variables retain their port-based security defaults."""
+    monkeypatch.setenv('EMAIL_HOST', 'smtp.example.com')
+    monkeypatch.setenv('EMAIL_PORT', str(port))
+    monkeypatch.setenv('EMAIL_HOST_USER', 'mailer')
+    monkeypatch.setenv('EMAIL_HOST_PASSWORD', 'secret')
+    monkeypatch.setenv('EMAIL_TIMEOUT', '15')
+    monkeypatch.delenv('EMAIL_USE_TLS', raising=False)
+    monkeypatch.delenv('EMAIL_USE_SSL', raising=False)
+    importlib.reload(settings)
+
+    assert settings.MAILERS['default'] == {
+        'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+        'OPTIONS': {
+            'host': 'smtp.example.com', 'port': port, 'username': 'mailer', 'password': 'secret',
+            'use_tls': use_tls, 'use_ssl': use_ssl, 'timeout': 15,
+        },
+    }
+
+
+def test_mailers_smtp_security_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit environment flags override the SMTP port's TLS defaults."""
+    monkeypatch.setenv('EMAIL_HOST', 'smtp.example.com')
+    monkeypatch.setenv('EMAIL_PORT', '587')
+    monkeypatch.setenv('EMAIL_USE_TLS', '0')
+    monkeypatch.setenv('EMAIL_USE_SSL', 'yes')
+    importlib.reload(settings)
+
+    options = settings.MAILERS['default']['OPTIONS']
+    assert options['use_tls'] is False
+    assert options['use_ssl'] is True
