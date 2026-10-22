@@ -89,7 +89,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.14'  # Match the Docker runtime and supported dependency wheels.
+          python-version: '3.15'  # Match the Docker runtime and supported dependency wheels.
       
       - name: Install dependencies
         run: uv sync --group dev
