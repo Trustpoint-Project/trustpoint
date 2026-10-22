@@ -710,7 +710,8 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         if subject is None or public_key is None:
             exc_msg = 'Certificate request must contain a subject and a public key.'
             raise ValueError(exc_msg)
-        extensions = list(builder._extensions)  # noqa: SLF001
+        extensions = [ext for ext in builder._extensions  # noqa: SLF001
+                      if not isinstance(ext.value, x509.CRLDistributionPoints)]
 
         no_onboarding_config = issuing_ca.no_onboarding_config
         if no_onboarding_config is None or not ca_chain:

@@ -10,9 +10,12 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from pyasn1.codec.der.encoder import encode as der_encode
+
 from pki.models import CaModel
 from request.clients.cmp_client import CmpClientError
 from request.message_builder.cmp import CmpMessageBuilder
+from request.message_parser.cmp import CmpCertificateBodyValidation, CmpPkiMessageParsing
 from request.operation_processor.issue_cert import RemoteCaCertificateIssueProcessor
 from request.request_context import CmpCertificateRequestContext
 
@@ -264,3 +267,32 @@ def test_incomplete_configuration_is_rejected(attribute: str) -> None:
     setattr(env.ca, attribute, None)
     with pytest.raises(ValueError, match='is not configured'):
         env.run()
+
+
+def test_upstream_ca_owns_crl_distribution_points() -> None:
+    """Do not forward the RA profile's CRL URL as an upstream certificate request extension."""
+    env = _Env()
+    ra_crl = x509.CRLDistributionPoints([
+        x509.DistributionPoint(
+            full_name=[x509.UniformResourceIdentifier('http://ra.example.test/crl/42')],
+            relative_name=None, reasons=None, crl_issuer=None,
+        ),
+    ])
+    builder = env.context.cert_requested_profile_validated
+    assert builder is not None
+    builder = builder.add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+    builder = builder.add_extension(x509.ExtendedKeyUsage([x509.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+    env.context.cert_requested_profile_validated = builder.add_extension(ra_crl, critical=False)
+    processor = RemoteCaCertificateIssueProcessor(ca_type='cmp')
+    upstream, _ = processor._build_cmp_request_message(env.context, env.ca, [env.ca_cert])  # noqa: SLF001
+    received = CmpCertificateRequestContext(raw_message=Mock(body=der_encode(upstream.parsed_message)))
+    CmpPkiMessageParsing().parse(received)
+    template = received.parsed_message['body']['cr'][0]['certReq']['certTemplate']
+    parsed = CmpCertificateBodyValidation()._cert_template_to_builder(template)  # noqa: SLF001
+    extensions = parsed._extensions  # noqa: SLF001
+    assert [(extension.value, extension.critical) for extension in extensions] == [
+        (extension.value, extension.critical) for extension in builder._extensions  # noqa: SLF001
+    ]
+    assert parsed._subject_name == _name('validated-device')  # noqa: SLF001
+    # The downstream profile is unchanged; its CRL URL belongs only to the RA's local policy.
+    assert env.context.cert_requested_profile_validated._extensions[-1].value == ra_crl  # noqa: SLF001
