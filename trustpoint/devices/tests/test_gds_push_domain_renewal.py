@@ -5,6 +5,7 @@
 
 import json
 from datetime import timedelta
+from ipaddress import IPv4Address
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,13 +21,24 @@ from django_q.models import Schedule
 from devices.domain_credential_renewal import renew_gds_push_domain_credential
 from devices.models import DeviceModel, OpcUaGdsPushConfig
 from devices.tasks import perform_gds_push_domain_credential_renewal
+from pki.models import CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import RevokedCertificateModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from setup_wizard.tls_credential import TlsServerCredentialGenerator
 
 
 @pytest.fixture
 def renewal_device(device_instance_onboarding, admin_client):
     from onboarding.models import OnboardingPkiProtocol, OnboardingProtocol
+
+    tls_credential = TlsServerCredentialGenerator(
+        ipv4_addresses=[IPv4Address('192.0.2.10')], ipv6_addresses=[], domain_names=[],
+    ).generate_tls_server_credential()
+    credential = CredentialModel.save_credential_serializer(
+        tls_credential, CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+    )
+    ActiveTrustpointTlsServerCredentialModel.objects.create(credential=credential)
 
     user = get_user_model().objects.get(pk=admin_client.session['_auth_user_id'])
     user.role.permissions.add(*Permission.objects.filter(codename__in=['manage_devices', 'view_help_pages']))
@@ -120,6 +132,11 @@ def test_real_renewal_preserves_identity_and_revokes_previous(renewal_device):
     assert new_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName) == (
         old_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
     )
+    crl_points = new_cert.extensions.get_extension_for_class(x509.CRLDistributionPoints)
+    assert crl_points == old_cert.extensions.get_extension_for_class(x509.CRLDistributionPoints)
+    assert crl_points.value[0].full_name == [
+        x509.UniformResourceIdentifier(f'http://192.0.2.10/crl/{device.domain.issuing_ca_id}'),
+    ]
     spki = (serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
     assert new_cert.public_key().public_bytes(*spki) != old_cert.public_key().public_bytes(*spki)
     revoked = RevokedCertificateModel.objects.get(certificate=previous.credential.certificate)

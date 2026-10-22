@@ -237,6 +237,10 @@ cause validation to fail rather than being included in an issued certificate.
 For example, if the first TLS IP SAN is `192.0.2.10` and the issuing CA's ID is
 `4`, the template in the JSON example produces `http://192.0.2.10/crl/4`.
 
+Trustpoint also accepts `/crl/<CA ID>.crl`, for example `/crl/4.crl`,
+as an alias for `/crl/4/`. Both URLs serve the same active CRL and support the
+same encoding options. The `.crl` suffix requires no additional profile setting.
+
 The manual issuance form displays **CRL Distribution Point URLs** with the
 placeholders already resolved to the active TLS certificate's IP address and
 the issuing CA's ID. The profile retains its template for future issuance.

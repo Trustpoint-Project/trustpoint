@@ -30,6 +30,7 @@ def profile(uris: Any) -> dict[str, Any]:
 
 @pytest.mark.parametrize('url', [
     'http://2.2.2.2/crl/{issuing_ca.id}',
+    'http://2.2.2.2/crl/{issuing_ca.id}.crl',
     'http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}',
     'https://{{ tls_certificate.ip_address.2 }}/crl/{{ issuing_ca.id }}',
     'http://[2001:db8::1]/crl/4',

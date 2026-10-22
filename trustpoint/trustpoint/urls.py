@@ -70,6 +70,7 @@ urlpatterns += [
     path('signer/', include('signer.urls')),
     path('pki/', include('pki.urls')),
     path('crl/<int:pk>/', CrlDownloadView.as_view(), name='crl-download'),
+    path('crl/<int:pk>.crl', CrlDownloadView.as_view(), name='crl-download-file'),
     path('.well-known/cmp/', include('cmp.urls')),
     path('.well-known/est/', include('est.urls')),
     path('.well-known/scep/', include('scep.urls')),
