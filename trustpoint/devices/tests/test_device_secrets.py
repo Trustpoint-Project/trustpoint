@@ -30,7 +30,7 @@ from devices.serializers import NoOnboardingConfigSerializer, OnboardingConfigSe
 from management.models import SecurityConfig
 from management.models.audit_log import AuditLog
 from management.security_env import SecurityConfigurationError, synchronize_security_config
-from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
+from onboarding.enums import OnboardingProtocol, OnboardingStatus
 from onboarding.models import DeviceSecretUse, NoOnboardingConfigModel, OnboardingConfigModel
 from request.request_context import BaseRequestContext
 
@@ -156,8 +156,9 @@ def test_superseded_authentication_and_pending_remote_operation(policy):
             assign_secret(config, 'est_password')
     assert not DeviceSecretUse.objects.exists()
     assign_secret(config, 'est_password')
-    with pytest.raises(ValueError, match='changed'), secret_use(context):
-        pytest.fail('Superseded authentication must not reach issuance')
+    with pytest.raises(ValueError, match='changed'):
+        with secret_use(context):
+            pytest.fail('Superseded authentication must not reach issuance')
 
 
 def test_stale_model_cannot_restore_superseded_secret(policy):
@@ -395,8 +396,9 @@ def test_reservation_released_after_failed_remote_operation(policy):
     config = no_onboarding()
     context = BaseRequestContext()
     remember_secret(context, config, 'est_password')
-    with pytest.raises(RuntimeError), secret_use(context):
-        raise RuntimeError('upstream failed')
+    with pytest.raises(RuntimeError, match='upstream failed'):
+        with secret_use(context):
+            raise RuntimeError('upstream failed')
     assert not DeviceSecretUse.objects.exists()
     assign_secret(config, 'est_password')
 
@@ -433,8 +435,9 @@ def test_pending_onboarding_reservation_is_exclusive(policy):
         config_pk=config.pk,
         credential='est_password',
     )
-    with pytest.raises(ValueError, match='in progress'), secret_use(context):
-        pytest.fail('Concurrent bootstrap issuance must not start')
+    with pytest.raises(ValueError, match='in progress'):
+        with secret_use(context):
+            pytest.fail('Concurrent bootstrap issuance must not start')
     reservation.delete()
     with secret_use(context), secret_use(context):
         assert DeviceSecretUse.objects.count() == 1
@@ -510,8 +513,9 @@ def test_manual_completion_reserves_pending_bootstrap_credentials(policy):
             assign_secret(config, 'est_password')
         authenticated = BaseRequestContext()
         remember_secret(authenticated, config, 'est_password')
-        with pytest.raises(ValueError, match='in progress'), secret_use(authenticated):
-            pytest.fail('Bootstrap issuance must wait for manual completion')
+        with pytest.raises(ValueError, match='in progress'):
+            with secret_use(authenticated):
+                pytest.fail('Bootstrap issuance must wait for manual completion')
     assert not DeviceSecretUse.objects.exists()
 
 

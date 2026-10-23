@@ -153,13 +153,15 @@ class DeviceSecretStateMixin(models.Model):
             super().save(*args, **kwargs)
 
 
-class ScepEnrollmentModelMixin(models.Model):
+class ScepEnrollmentModelMixin(DeviceSecretStateMixin):
     """SCEP (RFC 8894) enrollment state of a device, shared by both onboarding config models.
 
     The challenge serves two separate purposes: it authorizes exactly one initial PKCSReq (ends with
     ``scep_challenge_consumed_at``, expiry or reset), and it stays available as shared secret for
     CMS PasswordRecipientInfo response encryption towards ECDSA clients. It never authorizes issuance
     after consumption.
+
+    Inherit the shared secret lifecycle so SCEP saves use the same assignment guards.
     """
 
     objects = models.Manager()
@@ -255,7 +257,7 @@ class ScepEnrollmentModelMixin(models.Model):
 
 
 class OnboardingConfigModel(
-    AbstractPkiProtocolModel[OnboardingPkiProtocol], DeviceSecretStateMixin, ScepEnrollmentModelMixin,
+    AbstractPkiProtocolModel[OnboardingPkiProtocol], ScepEnrollmentModelMixin,
 ):
     """Onboarding Configuration Model."""
 
@@ -310,6 +312,11 @@ class OnboardingConfigModel(
         related_name='onboarding_configs',
         help_text=_('Trust store containing certificates to verify the remote server'),
     )
+
+    class Meta:
+        """Resolve the abstract mixins' model options for this concrete table."""
+
+        abstract = False
 
     def __str__(self) -> str:
         """Gets the model instance as human-readable string."""
@@ -552,7 +559,7 @@ class OnboardingConfigModel(
 
 
 class NoOnboardingConfigModel(
-    AbstractPkiProtocolModel[NoOnboardingPkiProtocol], DeviceSecretStateMixin, ScepEnrollmentModelMixin,
+    AbstractPkiProtocolModel[NoOnboardingPkiProtocol], ScepEnrollmentModelMixin,
 ):
     """No Onboarding Configuration Model."""
 
@@ -573,6 +580,11 @@ class NoOnboardingConfigModel(
         related_name='no_onboarding_configs',
         help_text=_('Trust store containing certificates to verify the remote server'),
     )
+
+    class Meta:
+        """Resolve the abstract mixins' model options for this concrete table."""
+
+        abstract = False
 
     def __str__(self) -> str:
         """Gets the model instance as human-readable string."""

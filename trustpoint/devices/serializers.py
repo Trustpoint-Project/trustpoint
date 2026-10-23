@@ -415,8 +415,9 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
         """Apply the same protocol policy used by device creation forms."""
         try:
             PermittedProtocolsAuthorization().check(device)
-        except ValueError as exc:
-            raise serializers.ValidationError(str(exc)) from exc
+        except ValueError:
+            msg = 'The selected protocols are not permitted by the active security policy.'
+            raise serializers.ValidationError(msg) from None
 
     class Meta:
         """Metadata for DeviceSerializer, defining model and serialized fields."""
