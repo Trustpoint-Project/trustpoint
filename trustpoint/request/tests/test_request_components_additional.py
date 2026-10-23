@@ -776,13 +776,13 @@ def test_cmp_pki_conf_acceptance_onboards_and_builds_null_body() -> None:
     context = CmpCertConfRequestContext(
         parsed_message=_cmp_message(), issuer_credential=credential, device=device, cert_conf_status=0,
     )
-    with patch.object(CmpMessageResponder, '_sign_pki_message', side_effect=lambda pki_message, context: pki_message):
+    with patch.object(CmpMessageResponder, '_sign_pki_message', side_effect=lambda pki_message, context: pki_message), \
+            patch('request.message_responder.cmp.retire_onboarding_secrets') as retire:
         CmpPkiConfResponder.build_response(context)
     from pyasn1.codec.der.decoder import decode
     response, _ = decode(context.http_response_content, asn1Spec=rfc4210.PKIMessage())
     assert response['body'].getName() == 'pkiconf'
-    assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
-    device.onboarding_config.save.assert_called_once()
+    retire.assert_called_once_with(device.onboarding_config)
 
 
 def test_cmp_error_base_contains_rejection_and_fail_info() -> None:

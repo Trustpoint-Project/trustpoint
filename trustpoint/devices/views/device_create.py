@@ -6,7 +6,7 @@
 from typing import Any
 
 from django import forms
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
@@ -160,7 +160,12 @@ class AbstractCreateNoOnboardingView(PageContextMixin, FormView[NoOnboardingCrea
         """
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
-        self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
+        form.actor = self.request.user  # type: ignore[attr-defined]
+        try:
+            self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
 
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
@@ -226,7 +231,12 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
         """
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
-        self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)  # type: ignore[attr-defined]
+        form.actor = self.request.user  # type: ignore[attr-defined]
+        try:
+            self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)  # type: ignore[attr-defined]
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
 
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(

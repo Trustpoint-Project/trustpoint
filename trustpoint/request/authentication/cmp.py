@@ -16,6 +16,7 @@ from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, SignatureSui
 
 from cmp.util import cmp_hmac_algorithm
 from devices.models import DeviceModel
+from devices.secrets import remember_secret
 from onboarding.models import (
     NoOnboardingConfigModel,
     OnboardingConfigModel,
@@ -183,6 +184,8 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
             device = self._get_device(sender_kid)
             device_config = self._validate_device_configuration(device, sender_kid)
             self._verify_hmac_protection(context, device_config.cmp_shared_secret)
+
+            remember_secret(context, device_config, 'cmp_shared_secret')
             self._finalize_authentication(context, device, sender_kid)
 
         except (DeviceModel.DoesNotExist, ValueError, TypeError) as e:

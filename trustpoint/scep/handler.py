@@ -253,7 +253,11 @@ class ScepPkiOperationHandler(LoggerMixin):
             locked = type(config).objects.select_for_update().get(pk=config.pk)
             if self._lookup_transaction(locked, message.transaction_id) is not None:
                 raise _ReplayError
-            if ctx.operation == 'pkcsreq' and not locked.can_authorize_scep_enrollment():
+            if ctx.operation == 'pkcsreq' and (
+                not locked.can_authorize_scep_enrollment()
+                or locked.scep_secret_version != config.scep_secret_version
+                or locked.scep_challenge_digest != config.scep_challenge_digest
+            ):
                 raise ScepProtocolError(FailInfo.BAD_REQUEST, _INVALID_AUTHORIZATION)
             if ctx.cert_profile_str is None:
                 raise ScepProtocolError(FailInfo.BAD_REQUEST, _INVALID_AUTHORIZATION)

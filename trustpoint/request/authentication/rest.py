@@ -6,6 +6,7 @@
 from typing import Never
 
 from devices.models import DeviceModel
+from devices.secrets import remember_secret
 from onboarding.models import OnboardingConfigModel
 from request.request_context import BaseRequestContext, RestBaseRequestContext
 from trustpoint.logger import LoggerMixin
@@ -64,6 +65,8 @@ class RestUsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
 
             self.logger.info('REST: Successfully authenticated device %s', username)
             context.device = device
+
+            remember_secret(context, device_config, 'est_password')
 
         except ValueError:
             raise

@@ -6,13 +6,15 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, ClassVar, TypedDict, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypedDict, cast
 
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, NamedCurve, PublicKeyAlgorithmOid
 
+from management.security_env import effective_security_defaults, parse_security_restrictions
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
@@ -31,6 +33,7 @@ class _SecurityModeDefaults(TypedDict):
     max_cert_validity_days: int | None
     max_crl_validity_days: int | None
     credential_ttl_seconds: int | None
+    allow_user_defined_device_secrets: bool
     allow_ca_issuance: bool
     allow_auto_gen_pki: bool
     allow_self_signed_ca: bool
@@ -211,8 +214,13 @@ class SecurityConfig(models.Model):
         default=None,
         validators=[MinValueValidator(1)],
         help_text=_(
-            'Default lifetime in seconds for CMP, EST, and REST onboarding credentials. Blank means no expiry.'
+            'Default lifetime in seconds for onboarding credentials and SCEP challenges. Blank means no expiry.'
         ),
+    )
+
+    allow_user_defined_device_secrets = models.BooleanField(
+        default=False,
+        help_text=_('Allow custom device enrollment secrets. Requires an unset credential TTL.'),
     )
 
     # -- Certificate policy flags -----------------------------------------
@@ -300,6 +308,7 @@ class SecurityConfig(models.Model):
             'max_cert_validity_days': None,  # no limit
             'max_crl_validity_days': None,  # no limit
             'credential_ttl_seconds': None,
+            'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': True,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
@@ -320,6 +329,7 @@ class SecurityConfig(models.Model):
             'max_cert_validity_days': 1825,  # 5 years
             'max_crl_validity_days': 365,
             'credential_ttl_seconds': None,
+            'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
@@ -346,6 +356,7 @@ class SecurityConfig(models.Model):
             'max_cert_validity_days': 365,
             'max_crl_validity_days': 180,
             'credential_ttl_seconds': None,
+            'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
@@ -374,6 +385,7 @@ class SecurityConfig(models.Model):
             'max_cert_validity_days': 365,
             'max_crl_validity_days': 90,
             'credential_ttl_seconds': 600,
+            'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
@@ -404,6 +416,7 @@ class SecurityConfig(models.Model):
             'max_cert_validity_days': 180,
             'max_crl_validity_days': 90,
             'credential_ttl_seconds': 600,
+            'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
@@ -414,9 +427,38 @@ class SecurityConfig(models.Model):
         },
     }
 
+    class Meta:
+        """Enforce the custom-secret policy for every database writer."""
+
+        constraints: ClassVar[list[models.BaseConstraint]] = [models.CheckConstraint(
+            condition=models.Q(allow_user_defined_device_secrets=False) | models.Q(credential_ttl_seconds__isnull=True),
+            name='custom_device_secrets_require_no_ttl',
+        )]
+
     def __str__(self) -> str:
         """Output as string."""
         return f'{self.security_mode}'
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Validate policy on direct configuration writes as well as forms."""
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def clean(self) -> None:
+        """Reject conflicting effective policy, including mode restrictions."""
+        super().clean()
+        if self.allow_user_defined_device_secrets:
+            effective = effective_security_defaults(self.security_mode)
+
+            if parse_security_restrictions().allow_user_defined_device_secrets is False:
+                raise ValidationError({
+                    'allow_user_defined_device_secrets': _('Custom secrets are disabled by deployment policy.'),
+                })
+            if self.credential_ttl_seconds is not None or effective['credential_ttl_seconds'] is not None:
+                raise ValidationError({
+                    'allow_user_defined_device_secrets':
+                        _('Custom device secrets require an unset credential TTL and a mode permitting no expiry.'),
+                })
 
     def apply_security_settings(self, *, save: bool = True) -> None:
         """Reset all thresholds to the defaults for the current security mode."""
@@ -488,6 +530,7 @@ class SecurityConfig(models.Model):
                 'max_cert_validity_days': defaults['max_cert_validity_days'],
                 'max_crl_validity_days': defaults['max_crl_validity_days'],
                 'credential_ttl_seconds': defaults['credential_ttl_seconds'],
+                'allow_user_defined_device_secrets': defaults['allow_user_defined_device_secrets'],
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
                 'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
@@ -526,8 +569,6 @@ class SecurityConfig(models.Model):
 
     def check_mode_transition(self, target_mode: str) -> list[str]:
         """Check whether existing data satisfies the effective policy for *target_mode*."""
-        from management.security_env import effective_security_defaults  # noqa: PLC0415
-
         defaults = cast('_SecurityModeDefaults', effective_security_defaults(target_mode))
         return self.check_policy_transition(defaults, target_mode)
 

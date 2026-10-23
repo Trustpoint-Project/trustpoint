@@ -45,6 +45,7 @@ from .device_create import (
     OpcUaGdsPushCreateOnboardingView,
     PublicKeyInfoMissingErrorMsg,
 )
+from .device_secrets import DeviceSecretChangeView
 from .download import (
     DeviceBrowserCredentialDownloadView,
     DeviceCertificateDownloadView,
@@ -95,6 +96,7 @@ __all__ = [
     'DeviceNoOnboardingIssueNewApplicationCredentialView',
     'DeviceOnboardingBrowserLoginView',
     'DeviceOnboardingIssueNewApplicationCredentialView',
+    'DeviceSecretChangeView',
     'DeviceSelectCertificateProfileNewApplicationCredentialView',
     'DeviceTableView',
     'DeviceViewSet',

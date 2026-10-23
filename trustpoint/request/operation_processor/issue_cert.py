@@ -12,6 +12,8 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
 
+from devices.secrets import secret_use
+
 try:
     from cryptography.hazmat.primitives.asymmetric import mldsa
 except ImportError:
@@ -98,6 +100,11 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
     """Operation processor for issuing certificates."""
 
     def process_operation(self, context: BaseRequestContext) -> None:
+        """Reserve an authenticated credential even when called directly by workflow processing."""
+        with secret_use(context):
+            self._process_operation(context)
+
+    def _process_operation(self, context: BaseRequestContext) -> None:
         """Process the certificate issuance operation.
 
         Routes to the appropriate certificate issuance processor based on the

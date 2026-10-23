@@ -8,6 +8,7 @@ from typing import Never
 from cryptography import x509
 
 from devices.models import DeviceModel
+from devices.secrets import remember_secret
 from onboarding.models import OnboardingConfigModel
 from pki.models import CredentialModel, IssuedCredentialModel
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
@@ -68,6 +69,8 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
 
             self.logger.info('Successfully authenticated device %s', username)
             context.device = device
+
+            remember_secret(context, device_config, 'est_password')
 
         except Exception as e:
             self.logger.exception('Authentication error for user %s', username)

@@ -21,7 +21,6 @@ from request.operation_processor.general import OperationProcessor
 from request.request_context import (
     BaseCertificateRequestContext,
     CmpBaseRequestContext,
-    CmpCertConfRequestContext,
     CmpCertificateRequestContext,
     HttpBaseRequestContext,
 )
@@ -32,7 +31,6 @@ from request.security_hardening import (
     process_certificate_operation_atomically,
     record_cmp_response_nonce,
     require_single_security_config,
-    retire_bootstrap_credential_after_certconf,
     validate_cmp_proof_of_possession,
     validate_cmp_transaction_freshness,
 )
@@ -139,8 +137,6 @@ class CmpRequestView(LoggerMixin, View):
                     process_certificate_operation_atomically(ctx, processor)
                 else:
                     processor.process_operation(ctx)
-                    if isinstance(ctx, CmpCertConfRequestContext):
-                        retire_bootstrap_credential_after_certconf(ctx)
         except Exception:
             self.logger.exception('Error processing CMP request')
 

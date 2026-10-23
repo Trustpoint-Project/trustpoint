@@ -19,7 +19,7 @@ from trustpoint_core.oid import HashAlgorithm
 
 from cmp.models import CmpTransactionModel
 from cmp.util import cmp_hmac_algorithm
-from onboarding.models import OnboardingStatus
+from devices.secrets import retire_onboarding_secrets
 from pki.models.ca_rollover import CaRolloverState
 from pki.services.ca_rollover import CaRolloverService
 from request.message_responder.base import AbstractMessageResponder
@@ -407,8 +407,8 @@ class CmpInitializationResponder(CmpMessageResponder):
         encoded_message = encoder.encode(pki_message)
 
         if context.implicit_confirm and context.device and context.device.onboarding_config:
-            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            context.device.onboarding_config.save()
+
+            retire_onboarding_secrets(context.device.onboarding_config)
         context.http_response_status = 200
         context.http_response_content = encoded_message
         context.http_response_content_type = 'application/pkixcmp'
@@ -535,8 +535,8 @@ class CmpCertificationResponder(CmpMessageResponder):
         encoded_message = encoder.encode(pki_message)
 
         if context.implicit_confirm and context.device and context.device.onboarding_config:
-            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            context.device.onboarding_config.save()
+
+            retire_onboarding_secrets(context.device.onboarding_config)
         context.http_response_status = 200
         context.http_response_content = encoded_message
         context.http_response_content_type = 'application/pkixcmp'
@@ -933,8 +933,8 @@ class CmpPkiConfResponder(CmpMessageResponder):
 
         cert_accepted = context.cert_conf_status in (0, None)
         if cert_accepted and context.device and context.device.onboarding_config:
-            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            context.device.onboarding_config.save()
+
+            retire_onboarding_secrets(context.device.onboarding_config)
             CmpPkiConfResponder.logger.info(
                 'Device %s marked as ONBOARDED after successful certConf.',
                 context.device,
