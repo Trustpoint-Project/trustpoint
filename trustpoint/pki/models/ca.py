@@ -735,7 +735,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         return issuing_ca
 
-    def _issue_crl(self, crl_validity_hours: int = 24) -> None:
+    def _issue_crl(self, crl_validity_hours: float = 24) -> None:
         """Issues a CRL with revoked certificates issued by this CA.
 
         Only issuing CAs can issue CRLs (keyless CAs don't have private keys).
@@ -756,7 +756,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         self.logger.info('CRL generation for CA %s finished.', self.unique_name)
 
-    def issue_crl(self, crl_validity_hours: int = 24) -> bool:
+    def issue_crl(self, crl_validity_hours: float = 24) -> bool:
         """Issues a CRL with revoked certificates issued by this CA.
 
         Args:
