@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import ipaddress
 import json
-import secrets
-from datetime import timedelta
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, override
@@ -16,7 +14,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, override
 from cryptography import x509
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.management import call_command
 from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
@@ -31,6 +29,7 @@ from django.views.generic.detail import DetailView
 from pydantic import ValidationError as PydanticValidationError
 
 from devices.models import DeviceModel
+from devices.secrets import assign_secret
 from devices.views import PublicKeyInfoMissingErrorMsg
 from help_pages.base import (
     HelpContext,
@@ -53,13 +52,12 @@ from help_pages.commands import (
 )
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
-from management.models import SecurityConfig
-from management.models.audit_log import AuditLog
 from onboarding.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
     OnboardingProtocol,
+    OnboardingStatus,
 )
 from pki.forms.cert_profiles import CertificateIssuanceForm, ProfileBasedFormFieldBuilder
 from pki.models import IssuedCredentialModel
@@ -124,7 +122,7 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
         if not self.uses_onboarding_credential() or not self.object.onboarding_config_id:
             raise Http404(_('No renewable onboarding credential is configured for this device.'))
         with transaction.atomic():
-            config = OnboardingConfigModel.objects.select_for_update().get(pk=self.object.onboarding_config_id)
+            config = OnboardingConfigModel.objects.get(pk=self.object.onboarding_config_id)
             if config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
                 credential_field = 'cmp_shared_secret'
             elif config.onboarding_protocol in (
@@ -135,14 +133,13 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
                 credential_field = 'est_password'
             else:
                 raise Http404(_('No renewable onboarding credential is configured for this device.'))
-            if config.is_credential_expired() and getattr(config, credential_field):
-                security_config = SecurityConfig.objects.filter(pk=1).first()
-                ttl_seconds = security_config.credential_ttl_seconds if security_config is not None else None
-                setattr(config, credential_field, secrets.token_urlsafe(32))
-                config.credential_expires_at = (
-                    timezone.now() + timedelta(seconds=ttl_seconds) if ttl_seconds is not None else None
-                )
-                config.save(update_fields=[credential_field, 'credential_expires_at'])
+            if (config.onboarding_status != OnboardingStatus.ONBOARDED
+                and config.is_credential_expired() and getattr(config, credential_field)):
+                try:
+                    assign_secret(config, credential_field, device=self.object, actor=request.user)
+                except ValidationError:
+                    messages.error(request, _('This onboarding credential cannot currently be renewed.'))
+                    return HttpResponseRedirect(request.get_full_path())
                 messages.success(request, _('The onboarding credential was renewed.'))
             else:
                 messages.warning(request, _('The onboarding credential is not expired or is no longer available.'))
@@ -158,16 +155,12 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
         if config is None or not config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP):
             raise Http404(_('SCEP is not enabled for this device.'))
 
-        config.provision_scep_challenge()
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.SCEP_SECRET_PROVISIONED,
-            target=self.object,
-            target_display=f'Device: {self.object.common_name}',
-            actor=request.user,  # type: ignore[arg-type]
-            details={'expires_at':
-                     config.scep_challenge_expires_at.isoformat() if config.scep_challenge_expires_at else ''},
-        )
-        messages.success(request, _('The SCEP challengePassword was reset.'))
+        try:
+            assign_secret(config, 'scep_challenge', device=self.object, actor=request.user)
+        except ValidationError:
+            messages.error(request, _('This SCEP authorization cannot be replaced.'))
+            return HttpResponseRedirect(request.get_full_path())
+        messages.success(request, _('The SCEP challengePassword was replaced.'))
         return HttpResponseRedirect(request.get_full_path())
 
     def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
@@ -884,14 +877,18 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
         state_labels = {
             'active': _non_lazy('Active - authorizes one initial enrollment'),
             'consumed': _non_lazy('Consumed - only used for response encryption (ECC clients)'),
-            'expired': _non_lazy('Expired - reset it to enroll again'),
-            'none': _non_lazy('Not set - reset it to create one'),
+            'expired': _non_lazy('Expired - replace it to enroll'),
+            'none': _non_lazy('Not set - generate a challenge'),
         }
         reset_html = (
-            '<form method="post" action="">CSRF_TOKEN_PLACEHOLDER'
-            f'<button type="submit" class="btn btn-primary w-100">{_non_lazy("Reset challengePassword")}</button>'
+            '<form method="post" action="" id="replace-scep-challenge-form">CSRF_TOKEN_PLACEHOLDER'
+            '<button type="submit" class="btn btn-outline-secondary w-100">'
+            f'{_non_lazy("Replace challengePassword")}</button>'
             '</form>'
         )
+
+        if state == 'consumed':
+            reset_html = ''
 
         summary = HelpSection(
             _non_lazy('Summary'),
@@ -902,10 +899,10 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
                 HelpRow(_non_lazy('challengePassword State'), state_labels[state], ValueRenderType.PLAIN),
                 HelpRow(
                     _non_lazy('challengePassword Expires'),
-                    str(config.scep_challenge_expires_at or '-'),
+                    str(config.scep_challenge_expires_at or '—'),
                     ValueRenderType.PLAIN,
                 ),
-                HelpRow(_non_lazy('Reset'), mark_safe(reset_html), ValueRenderType.HTML),  # noqa: S308
+                HelpRow(_non_lazy('Replace'), mark_safe(reset_html), ValueRenderType.HTML),  # noqa: S308
                 HelpRow(
                     _non_lazy('Notes'),
                     _non_lazy(

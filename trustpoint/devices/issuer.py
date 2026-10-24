@@ -16,7 +16,8 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
-from onboarding.models import OnboardingProtocol, OnboardingStatus
+from devices.secrets import retire_onboarding_secrets
+from onboarding.models import OnboardingProtocol
 from pki.models.credential import CredentialModel
 from pki.models.issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
 from pki.util.keys import KeyGenerator
@@ -865,8 +866,8 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             and self.device.onboarding_config.onboarding_protocol
             != OnboardingProtocol.OPC_GDS_PUSH
         ):
-            self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            self.device.onboarding_config.save()
+
+            retire_onboarding_secrets(self.device.onboarding_config)
 
         self.device.save()
 
@@ -925,8 +926,8 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             and self.device.onboarding_config.onboarding_protocol
             != OnboardingProtocol.OPC_GDS_PUSH
         ):
-            self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            self.device.onboarding_config.save()
+
+            retire_onboarding_secrets(self.device.onboarding_config)
 
         self.device.save()
 

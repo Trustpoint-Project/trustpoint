@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load crispy_forms_tags %}
 {% load i18n %}
+{% load static %}
 
 {% block content %}
 <div class="card">
@@ -64,4 +65,5 @@
     </div>
 
 </div>
+<script src="{% static 'js/device_secrets.js' %}" defer></script>
 {% endblock content %}

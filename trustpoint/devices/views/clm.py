@@ -8,7 +8,7 @@ import datetime
 from typing import Any, cast
 
 from django import forms
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q, QuerySet
 from django.http import HttpResponse, HttpResponseBase
@@ -20,6 +20,7 @@ from django.utils.translation import gettext_lazy
 from django.views.generic.detail import DetailView
 
 from devices.forms import (
+    ChangeDeviceSecretForm,
     ClmAgentDeviceForm,
     ClmDeviceModelNoOnboardingForm,
     ClmDeviceModelOnboardingForm,
@@ -224,6 +225,10 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         self.domain_credentials_qs = self.get_domain_credentials_qs()
         self.application_credentials_qs = self.get_application_credentials_qs()
         context = super().get_context_data(**kwargs)
+        context['can_change_secret'] = (
+            self.request.user.has_perm(AppPermissions.MANAGE_DEVICES)
+            and ChangeDeviceSecretForm(device=self.object).available
+        )
 
         context['domain_credentials'] = self.domain_credentials_qs
         context['application_credentials'] = self.application_credentials_qs
@@ -506,18 +511,30 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 # Agent device
                 form = ClmAgentDeviceForm(request.POST, instance=self.object)
                 if form.is_valid():
-                    form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                    try:
+                        form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                    except ValidationError as exc:
+                        form.add_error(None, exc)
             else:
                 # Regular onboarding device
                 form = ClmDeviceModelOnboardingForm(request.POST, instance=self.object)
+                form.actor = request.user
                 if form.is_valid():
-                    form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                    try:
+                        form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                    except ValidationError as exc:
+                        form.add_error(None, exc)
         else:
             form = ClmDeviceModelNoOnboardingForm(request.POST, instance=self.object)
+            form.actor = request.user
             if form.is_valid():
-                form.save()
+                try:
+                    form.save()
+                except ValidationError as exc:
+                    form.add_error(None, exc)
 
         context = self.get_context_data(object=self.object, **kwargs)
+        context['device_form'] = form
         return self.render_to_response(context)
 
 

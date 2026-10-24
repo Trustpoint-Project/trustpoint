@@ -6,7 +6,7 @@ import base64
 
 from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 
-from onboarding.models import OnboardingStatus
+from devices.secrets import retire_onboarding_secrets
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from request.workflow2_issuance import (
     Workflow2IssuanceDecision,
@@ -129,8 +129,8 @@ class EstCertificateMessageResponder(EstMessageResponder):
         cert, content_type = EstCertificateMessageResponder._prepare_certificate_data(context)
 
         if context.device and context.device.onboarding_config:
-            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            context.device.onboarding_config.save()
+
+            retire_onboarding_secrets(context.device.onboarding_config)
         context.http_response_status = 200
         context.http_response_content = cert
         context.http_response_content_type = content_type

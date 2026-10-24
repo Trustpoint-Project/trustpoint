@@ -13,6 +13,11 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name='cmptransactionmodel',
+            name='confirmed_at',
+            field=models.DateTimeField(blank=True, null=True),
+        ),
+        migrations.AddField(
+            model_name='cmptransactionmodel',
             name='last_client_nonce',
             field=models.BinaryField(blank=True, help_text='Most recently authenticated CMP senderNonce for this transaction.', null=True, verbose_name='Last Client Nonce'),
         ),

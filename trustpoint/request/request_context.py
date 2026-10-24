@@ -50,6 +50,11 @@ class BaseRequestContext(LoggerMixin):
     domain: DomainModel | None = None
     device: DeviceModel | None = None
 
+    authenticated_secret_field: str | None = None
+    authenticated_secret_version: int | None = None
+    authenticated_secret_config: str | None = None
+    authenticated_secret_pk: int | None = None
+
     owner_credential: CredentialModel | None = None
     issuer_credential: CredentialModel | None = None
 

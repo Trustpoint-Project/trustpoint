@@ -198,3 +198,67 @@ This feature is not yet intended for production use.
 
    AOKI-CMP: Run `uv run -m aoki.tests.cmp_client` from the `trustpoint` directory.
    This can be implemented with a low amount of custom code, as CMP is handled by OpenSSL.
+
+## Optional custom device secrets
+
+Automatic generation remains the default for CMP shared secrets, EST/REST passwords,
+and SCEP challengePassword values. To permit custom input, enable **Allow user defined
+device secrets** in Security settings with the global credential TTL unset. Modes or
+deployment restrictions requiring a TTL cannot enable custom secrets. Configuration
+changes reject conflicts without silently clearing either setting.
+
+The optional `TP_SECURITY_ALLOW_USER_DEFINED_DEVICE_SECRETS` environment setting
+accepts true or false. Leaving it unset preserves the stored choice; a new installation
+defaults to false. Disabling custom input preserves existing values and their stored
+expiry. Generated replacements remain available for eligible devices.
+
+On device creation, select **Generate automatically** or **Enter custom secret** for
+selected credential protocols. Custom values must contain 1–128 printable ASCII
+characters, including spaces. Leading and trailing spaces are preserved. The UI requires
+confirmation and warns that chosen values may be weak or reused. EST and REST share one
+password; replacing it changes authentication for both enabled protocols.
+
+In certificate lifecycle management, select **Change device secret** in the
+**Configuration** section to open a separate page and replace one
+credential. The previous value immediately stops authorizing new requests. Completed
+onboarding cannot restore bootstrap credentials. A consumed SCEP challenge cannot be
+reset, even after its expiry; its retained material supports response encryption and
+verified retries without authorizing another initial enrollment.
+
+| Credential | Expiry |
+|---|---|
+| CMP/EST/REST without onboarding | No expiry, regardless of global TTL |
+| CMP/EST/REST bootstrap credential | Global TTL on assignment, or no expiry when unset |
+| SCEP challengePassword | Global TTL on assignment, or no expiry when unset |
+
+Expired, eligible credentials can be replaced through CLM or the help page's explicit
+POST recovery action. Recovery generates a fresh value; it never extends an old value.
+Unrelated edits preserve credentials and expiry timestamps.
+
+### Management API
+
+Device creation accepts nested `onboarding_config` or `no_onboarding_config` objects.
+The no-onboarding object's `pki_protocols` is a bitmask: CMP=1, EST=4, REST=32, SCEP=64
+(and Manual=16). Omitted creation secrets are generated. Explicit `cmp_shared_secret`,
+`est_password`, or `scep_challenge` values are custom assignments subject to the flag.
+Omitting credentials on PATCH preserves them. Empty/null custom values are errors.
+Custom assignments cannot include per-device TTL or expiry overrides. No-onboarding
+configuration does not accept expiry overrides.
+
+For explicit replacement, POST to `/api/devices/<id>/change-secret/`:
+
+```json
+{"credential": "est_password", "action": "generate"}
+```
+
+Or, when custom input is enabled:
+
+```json
+{"credential": "est_password", "action": "custom", "value": "exact chosen value"}
+```
+
+The response contains the replacement value. Normal configuration responses do not
+return password fields. Replacing a configuration by ID or changing a device's
+configuration type through PATCH is unsupported. Device-management permission is
+required for replacement and recovery. Agent-managed and upstream CA credentials are
+outside custom assignment.

@@ -64,6 +64,11 @@ urlpatterns = [
     ),
     # Certificate Lifecycle Management Views
     path(
+        'certificate-lifecycle-management/<int:pk>/change-secret/',
+        views.DeviceSecretChangeView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_change_secret',
+    ),
+    path(
         'certificate-lifecycle-management/<int:pk>/',
         views.DeviceCertificateLifecycleManagementSummaryView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management',

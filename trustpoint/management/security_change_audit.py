@@ -121,6 +121,7 @@ _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
             'max_cert_validity_days',
             'max_crl_validity_days',
             'credential_ttl_seconds',
+            'allow_user_defined_device_secrets',
             'allow_ca_issuance',
             'allow_auto_gen_pki',
             'allow_self_signed_ca',

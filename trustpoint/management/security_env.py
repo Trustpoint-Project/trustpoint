@@ -52,6 +52,7 @@ class SecurityRestrictions:
     max_cert_validity_days: int | _Unset | None = UNSET
     max_crl_validity_days: int | _Unset | None = UNSET
     credential_ttl_seconds: int | _Unset | None = UNSET
+    allow_user_defined_device_secrets: bool | _Unset = UNSET
     allow_ca_issuance: bool | _Unset = UNSET
     allow_auto_gen_pki: bool | _Unset = UNSET
     allow_self_signed_ca: bool | _Unset = UNSET
@@ -149,6 +150,10 @@ def parse_security_restrictions(environment: Mapping[str, str] | None = None) ->
         _fail('TP_SECURITY_CREDENTIAL_TTL_SECONDS must be a positive integer or null.')
     return SecurityRestrictions(
         credential_ttl_seconds=credential_ttl_seconds,
+        allow_user_defined_device_secrets=_parse_bool(
+            'TP_SECURITY_ALLOW_USER_DEFINED_DEVICE_SECRETS',
+            _raw_environment(environment, 'TP_SECURITY_ALLOW_USER_DEFINED_DEVICE_SECRETS'),
+        ),
         rsa_minimum_key_size=_parse_nullable_integer(
             'TP_SECURITY_RSA_MINIMUM_KEY_SIZE',
             _raw_environment(environment, 'TP_SECURITY_RSA_MINIMUM_KEY_SIZE'),
@@ -324,6 +329,11 @@ def effective_security_defaults(
                 f'TP_SECURITY_AUTO_GEN_PKI=true is not permitted by security mode {mode}.',
             )
         defaults['auto_gen_pki'] = restrictions.auto_gen_pki
+    custom = restrictions.allow_user_defined_device_secrets
+    if not _is_unset(custom):
+        if custom and defaults['credential_ttl_seconds'] is not None:
+            _fail('Custom device secrets require an unset credential TTL.')
+        defaults['allow_user_defined_device_secrets'] = custom
     return defaults
 
 
@@ -338,6 +348,10 @@ def synchronize_security_config() -> bool:
     effective = effective_security_defaults(mode, restrictions)
     with transaction.atomic():
         config = SecurityConfig.objects.select_for_update().filter(pk=1).first()
+        if config is not None and _is_unset(restrictions.allow_user_defined_device_secrets):
+            effective['allow_user_defined_device_secrets'] = config.allow_user_defined_device_secrets
+        if effective['allow_user_defined_device_secrets'] and effective['credential_ttl_seconds'] is not None:
+            _fail('Disable custom device secrets explicitly before applying a credential TTL.')
         validation_config = config or SecurityConfig(security_mode=mode)
         violations = validation_config.check_policy_transition(
             cast('_SecurityModeDefaults', effective), mode,

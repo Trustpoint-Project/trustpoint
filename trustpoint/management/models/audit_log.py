@@ -23,6 +23,7 @@ class AuditLog(models.Model):
     class OperationType(models.TextChoices):
         """Allowed operation types recorded in the audit log."""
 
+        DEVICE_SECRET_CHANGED = 'DEVICE_SECRET_CHANGED', _('Device Secret Changed')
         CREDENTIAL_ISSUED = 'CREDENTIAL_ISSUED', _('Credential Issued')
         CREDENTIAL_RENEWED = 'CREDENTIAL_RENEWED', _('Credential Renewed')
         CREDENTIAL_REVOKED = 'CREDENTIAL_REVOKED', _('Credential Revoked')

@@ -5,6 +5,9 @@
 
 from __future__ import annotations
 
+from devices.secrets import assign_secret
+from django.core.exceptions import ValidationError
+from management.models import SecurityConfig
 import datetime
 import subprocess
 import tempfile
@@ -26,6 +29,8 @@ from scep.protocol import cms
 from scep.protocol.oids import FailInfo, MessageType, PkiStatus
 from scep.tests import support
 from scep.tests.conftest import ScepEnv
+
+pytestmark = pytest.mark.django_db
 
 CN = 'scep-device'
 
@@ -403,14 +408,11 @@ def test_recovery_after_expiry_needs_fresh_authorization(client: Client, rsa_env
     )
     _, rep, nonce = _renew(client, rsa_env, key, cert, support.make_key('rsa'), 'tx-e')
     _assert_failure(rep, nonce, FailInfo.BAD_REQUEST)
-    rsa_env.new_authorization()
-    new_key = support.make_key('rsa')
-    _, rep2, _ = _enroll(client, rsa_env, new_key, tx='tx-fresh')
-    assert rep2 is not None
-    assert rep2.status == PkiStatus.SUCCESS
 
-
-# ---------------------------------------------------------------- retries
+    with pytest.raises(ValidationError, match='Consumed'):
+        rsa_env.new_authorization()
+    rsa_env.config.refresh_from_db()
+    assert rsa_env.config.scep_challenge_state() == 'consumed'
 
 
 def test_verified_retry_returns_same_certificate_without_issuing_again(client: Client, rsa_env: ScepEnv) -> None:
@@ -527,3 +529,37 @@ def test_responses_verify_and_decrypt_with_openssl(client: Client, rsa_env: Scep
             check=False,
         )
         assert decrypt.returncode == 0, decrypt.stderr
+
+
+def test_rotation_between_authentication_and_issuance_fails_safely(client: Client, rsa_env: ScepEnv) -> None:
+    """A newly active challenge must not validate an already authenticated old request."""
+
+    original = ScepPkiOperationHandler._issue_certificate_transaction
+
+    def rotate_before_issuance(self: Any, config: Any, *args: Any, **kwargs: Any) -> None:
+        fresh = type(config).objects.get(pk=config.pk)
+        assign_secret(fresh, 'scep_challenge')
+        return original(self, config, *args, **kwargs)
+
+    with patch.object(ScepPkiOperationHandler, '_issue_certificate_transaction', rotate_before_issuance):
+        _, rep, nonce = _enroll(client, rsa_env, support.make_key('rsa'))
+    _assert_failure(rep, nonce, FailInfo.BAD_REQUEST)
+    assert not IssuedCredentialModel.objects.filter(device=rsa_env.device).exists()
+    assert rsa_env.config.scep_challenge_consumed_at is None
+    rsa_env.secret = rsa_env.config.scep_challenge
+    _, rep, _ = _enroll(client, rsa_env, support.make_key('rsa'), tx='tx-new-generation')
+    assert rep.status == PkiStatus.SUCCESS
+
+
+@pytest.mark.parametrize('chosen', [' ', ' edge spaces ', 'a' * 128])
+def test_custom_scep_challenge_authorizes_enrollment_exactly(client: Client, rsa_env: ScepEnv, chosen: str) -> None:
+    """Printable ASCII, including an all-space value, remains usable as the exact SCEP challenge."""
+
+    policy = SecurityConfig.objects.create(pk=1, allow_user_defined_device_secrets=True)
+    policy.apply_security_settings()
+    config = rsa_env.config
+    assign_secret(config, 'scep_challenge', custom=True, value=chosen)
+    rsa_env.secret = chosen
+    _, rep, _ = _enroll(client, rsa_env, support.make_key('rsa'))
+    assert rep.status == PkiStatus.SUCCESS
+    assert rsa_env.config.scep_challenge_state() == 'consumed'

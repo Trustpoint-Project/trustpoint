@@ -27,6 +27,7 @@ from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, SignatureSuite
 
 from cmp.util import PKI_STATUS_REJECTION, cmp_hmac_algorithm
+from devices.secrets import retire_onboarding_secrets
 from management.models import SecurityConfig
 from onboarding.enums import OnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from onboarding.models import OnboardingConfigModel
@@ -652,11 +653,8 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
 
 
 def _retire_onboarding_secrets(config: OnboardingConfigModel) -> None:
-    config.onboarding_status = OnboardingStatus.ONBOARDED
-    config.est_password = ''
-    config.cmp_shared_secret = ''
-    config.credential_expires_at = None
-    config.save(update_fields=['onboarding_status', 'est_password', 'cmp_shared_secret', 'credential_expires_at'])
+
+    retire_onboarding_secrets(config)
 
 
 def retire_bootstrap_credential_after_domain_identity(context: BaseCertificateRequestContext) -> None:

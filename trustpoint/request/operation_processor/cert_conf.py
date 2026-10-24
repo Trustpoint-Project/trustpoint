@@ -3,8 +3,13 @@
 
 """CMP certConf operation processor classes."""
 
+from django.db import transaction
+from django.utils import timezone
+
+from cmp.models import CmpTransactionModel
 from cmp.util import PKI_STATUS_REJECTION, PKIFailureInfo
 from request.request_context import BaseRequestContext, CmpCertConfRequestContext
+from request.security_hardening import retire_bootstrap_credential_after_certconf
 from trustpoint.logger import LoggerMixin
 
 from .base import AbstractOperationProcessor
@@ -36,6 +41,9 @@ class CertConfProcessor(AbstractOperationProcessor, LoggerMixin):
                 'certConf received for certReqId=%s — status accepted. No CA operation required.',
                 context.cert_req_id,
             )
+            with transaction.atomic():
+                retire_bootstrap_credential_after_certconf(context)
+                self._mark_confirmed(context)
             return
 
         if context.credential_to_revoke is None:
@@ -53,3 +61,11 @@ class CertConfProcessor(AbstractOperationProcessor, LoggerMixin):
             context.credential_to_revoke.common_name,
         )
         CertificateRevocationProcessor().process_operation(context)
+        self._mark_confirmed(context)
+
+    @staticmethod
+    def _mark_confirmed(context: CmpCertConfRequestContext) -> None:
+        """Record confirmation only after acceptance or successful rejection revocation."""
+        if isinstance(context.cmp_transaction, CmpTransactionModel):
+            context.cmp_transaction.confirmed_at = timezone.now()
+            context.cmp_transaction.save(update_fields=['confirmed_at'])
