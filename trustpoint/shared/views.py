@@ -17,8 +17,22 @@ from management.security_change_audit import audit_security_change, snapshot_sec
 from trustpoint.views.base import BulkDeleteView
 
 if TYPE_CHECKING:
-    from django.forms import Form
+    from django.forms import BaseForm, Form
+    from django.http import HttpRequest
     from django_stubs_ext import StrPromise
+
+
+class FormErrorMessageMixin:
+    """Add field validation errors to Django messages before redisplaying a form."""
+
+    request: HttpRequest
+
+    def form_invalid(self, form: BaseForm) -> HttpResponse:
+        """Report each field error and continue the view's normal invalid-form handling."""
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f'{field}: {error}')
+        return super().form_invalid(form)  # type: ignore[misc,no-any-return]
 
 
 class AuditedBulkDeleteView(BulkDeleteView):

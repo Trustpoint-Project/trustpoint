@@ -36,10 +36,12 @@ from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_cert_content_summary, build_request_data, public_key_info_from_key_type
+from pki.views.mixins import CertificateProfileSelectionMixin
 from request.clients import EstClient, EstClientError
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
 from request.request_context import EstCertificateRequestContext
+from shared.views import FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
 from trustpoint.settings import UIConfig
@@ -647,7 +649,7 @@ class IssuedCredentialDeleteView(LoggerMixin, ZeroTouchContextMixin, DetailView[
 # DevOwnerID EST certificate issuance (define content → request)
 # ---------------------------------------------------------------------------
 
-class OwnerCredentialDefineCertContentEstView(
+class OwnerCredentialDefineCertContentEstView(FormErrorMessageMixin, CertificateProfileSelectionMixin,
     LoggerMixin, ZeroTouchContextMixin, FormView[CertificateIssuanceForm]
 ):
     """Step 1 - Define the certificate content for a new Zero-Touch EST enrollment in the Devices section.
@@ -661,6 +663,8 @@ class OwnerCredentialDefineCertContentEstView(
     :class:`~pki.forms.CertificateIssuanceForm`, and stores the validated
     field values in the session under ``dev_owner_id_cert_content_<pk>``.
     """
+
+    default_profile_name = 'dev_owner_id'
 
     form_class = CertificateIssuanceForm
     template_name = 'devices/zero_touch_credentials/define_cert_content_est.html'
@@ -722,32 +726,6 @@ class OwnerCredentialDefineCertContentEstView(
             owner_credential=self.owner_credential,
         )
 
-    def _resolve_cert_profile(self, request: HttpRequest) -> CertificateProfileModel | None:
-        """Resolve the certificate profile from the request query parameter or fall back to the default.
-
-        Returns the resolved profile, or ``None`` if no profiles are available.
-        """
-        all_profiles = list(CertificateProfileModel.objects.all().order_by('display_name', 'unique_name'))
-        if not all_profiles:
-            return None
-        self.available_profiles = all_profiles
-
-        selected_pk_str = request.GET.get('cert_profile_pk') or request.POST.get('cert_profile_pk')
-        if selected_pk_str:
-            try:
-                selected_pk = int(selected_pk_str)
-                for profile in all_profiles:
-                    if profile.pk == selected_pk:
-                        return profile
-            except (ValueError, TypeError):
-                # Ignore invalid cert_profile_pk values and fall back to the default profile selection.
-                pass
-
-        for profile in all_profiles:
-            if profile.unique_name == 'dev_owner_id':
-                return profile
-        return all_profiles[0]
-
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Resolve the OwnerCredentialModel and the selected certificate profile.
 
@@ -804,13 +782,6 @@ class OwnerCredentialDefineCertContentEstView(
         context['cert_profile'] = self.cert_profile
         context['available_profiles'] = self.available_profiles
         return context
-
-    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
-        """Show field errors as Django messages."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error}')
-        return super().form_invalid(form)
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Store certificate content and pending credential pk in session, then proceed to Step 2."""
@@ -1092,7 +1063,7 @@ class OwnerCredentialRequestCertEstView(
 # Domain Credential EST certificate issuance (define content → request)
 # ---------------------------------------------------------------------------
 
-class OwnerCredentialDefineCertContentDomainCredentialEstView(
+class OwnerCredentialDefineCertContentDomainCredentialEstView(FormErrorMessageMixin, CertificateProfileSelectionMixin,
     LoggerMixin, ZeroTouchContextMixin, FormView[CertificateIssuanceForm]
 ):
     """Step 1 - Define the certificate content for a new Domain Credential EST enrollment in the Devices section.
@@ -1101,6 +1072,8 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
     The user can select any available certificate profile via a dropdown.
     Defaults to ``devownerid_domain_credential`` when present.
     """
+
+    default_profile_name = 'devownerid_domain_credential'
 
     form_class = CertificateIssuanceForm
     template_name = 'devices/zero_touch_credentials/define_cert_content_domain_credential_est.html'
@@ -1148,29 +1121,6 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
             credential=credential_model,
             owner_credential=self.owner_credential,
         )
-
-    def _resolve_cert_profile(self, request: HttpRequest) -> CertificateProfileModel | None:
-        """Resolve the certificate profile from the request query parameter or fall back to the default."""
-        all_profiles = list(CertificateProfileModel.objects.all().order_by('display_name', 'unique_name'))
-        if not all_profiles:
-            return None
-        self.available_profiles = all_profiles
-
-        selected_pk_str = request.GET.get('cert_profile_pk') or request.POST.get('cert_profile_pk')
-        if selected_pk_str:
-            try:
-                selected_pk = int(selected_pk_str)
-                for profile in all_profiles:
-                    if profile.pk == selected_pk:
-                        return profile
-            except (ValueError, TypeError):
-                # Ignore invalid cert_profile_pk values and fall back to the default profile selection.
-                pass
-
-        for profile in all_profiles:
-            if profile.unique_name == 'devownerid_domain_credential':
-                return profile
-        return all_profiles[0]
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Resolve the OwnerCredentialModel and the selected certificate profile."""
@@ -1225,13 +1175,6 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
         context['cert_profile'] = self.cert_profile
         context['available_profiles'] = self.available_profiles
         return context
-
-    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
-        """Show field errors as Django messages."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error}')
-        return super().form_invalid(form)
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Store certificate content, selected profile and pending credential pk in session."""

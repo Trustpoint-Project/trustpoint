@@ -210,7 +210,41 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
             errors = exc.message_dict if hasattr(exc, 'message_dict') else exc.messages
             raise serializers.ValidationError(errors) from exc
 
-class OwnerCredentialEstBasicAuthSerializer(serializers.Serializer[Any]):
+class OwnerCredentialEstSerializer(serializers.Serializer[Any]):
+    """Validate common owner-credential names and EST truststore references."""
+
+    def validate_unique_name(self, value: str) -> str:
+        """Validate that the unique name is not already in use."""
+        if value and OwnerCredentialModel.objects.filter(unique_name=value).exists():
+            msg = f'An owner credential with name "{value}" already exists.'
+            raise serializers.ValidationError(msg)
+        return value
+
+    def validate_truststore_id(self, value: int | None) -> int | None:
+        """Validate that the truststore exists if provided."""
+        if value is not None:
+            from pki.models.truststore import TruststoreModel  # noqa: PLC0415
+            if not TruststoreModel.objects.filter(pk=value).exists():
+                msg = f'Truststore with id {value} does not exist.'
+                raise serializers.ValidationError(msg)
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Derive unique_name if not provided."""
+        unique_name = attrs.get('unique_name') or ''
+        if not unique_name:
+            host = attrs['remote_host']
+            candidate = host
+            counter = 1
+            while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
+                candidate = f'{host}-{counter}'
+                counter += 1
+            unique_name = candidate
+        attrs['_unique_name'] = unique_name
+        return attrs
+
+
+class OwnerCredentialEstBasicAuthSerializer(OwnerCredentialEstSerializer):
     """Serializer for creating an OwnerCredential via EST with Basic Auth (username/password)."""
 
     unique_name = serializers.CharField(
@@ -255,36 +289,6 @@ class OwnerCredentialEstBasicAuthSerializer(serializers.Serializer[Any]):
         help_text='Optional ID of a TLS truststore to verify the EST server certificate.',
     )
 
-    def validate_unique_name(self, value: str) -> str:
-        """Validate that the unique name is not already in use."""
-        if value and OwnerCredentialModel.objects.filter(unique_name=value).exists():
-            msg = f'An owner credential with name "{value}" already exists.'
-            raise serializers.ValidationError(msg)
-        return value
-
-    def validate_truststore_id(self, value: int | None) -> int | None:
-        """Validate that the truststore exists if provided."""
-        if value is not None:
-            from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-            if not TruststoreModel.objects.filter(pk=value).exists():
-                msg = f'Truststore with id {value} does not exist.'
-                raise serializers.ValidationError(msg)
-        return value
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """Derive unique_name if not provided."""
-        unique_name = attrs.get('unique_name') or ''
-        if not unique_name:
-            host = attrs['remote_host']
-            candidate = host
-            counter = 1
-            while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
-                candidate = f'{host}-{counter}'
-                counter += 1
-            unique_name = candidate
-        attrs['_unique_name'] = unique_name
-        return attrs
-
     def create(self, validated_data: dict[str, Any]) -> OwnerCredentialModel:
         """Create an OwnerCredentialModel with EST Basic Auth config."""
         from pki.models.truststore import TruststoreModel  # noqa: PLC0415
@@ -309,7 +313,7 @@ class OwnerCredentialEstBasicAuthSerializer(serializers.Serializer[Any]):
             owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST,
         )
 
-class OwnerCredentialEstMtlsSerializer(serializers.Serializer[Any]):
+class OwnerCredentialEstMtlsSerializer(OwnerCredentialEstSerializer):
     """Serializer for creating an OwnerCredential via EST with IDevID-based mTLS onboarding."""
 
     unique_name = serializers.CharField(
@@ -358,36 +362,6 @@ class OwnerCredentialEstMtlsSerializer(serializers.Serializer[Any]):
         allow_null=True,
         help_text='Optional ID of a TLS truststore to verify the EST server certificate.',
     )
-
-    def validate_unique_name(self, value: str) -> str:
-        """Validate that the unique name is not already in use."""
-        if value and OwnerCredentialModel.objects.filter(unique_name=value).exists():
-            msg = f'An owner credential with name "{value}" already exists.'
-            raise serializers.ValidationError(msg)
-        return value
-
-    def validate_truststore_id(self, value: int | None) -> int | None:
-        """Validate that the truststore exists if provided."""
-        if value is not None:
-            from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-            if not TruststoreModel.objects.filter(pk=value).exists():
-                msg = f'Truststore with id {value} does not exist.'
-                raise serializers.ValidationError(msg)
-        return value
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """Derive unique_name if not provided."""
-        unique_name = attrs.get('unique_name') or ''
-        if not unique_name:
-            host = attrs['remote_host']
-            candidate = host
-            counter = 1
-            while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
-                candidate = f'{host}-{counter}'
-                counter += 1
-            unique_name = candidate
-        attrs['_unique_name'] = unique_name
-        return attrs
 
     def create(self, validated_data: dict[str, Any]) -> OwnerCredentialModel:
         """Create an OwnerCredentialModel with EST onboarding config."""

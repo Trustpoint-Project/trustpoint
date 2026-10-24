@@ -28,7 +28,7 @@ from management.security_change_audit import audit_security_change, security_cha
 from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
 from pki.serializer.cert_profile import CertProfileDetailSerializer, CertProfileSerializer
-from shared.views import AuditedBulkDeleteView
+from shared.views import AuditedBulkDeleteView, FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -147,7 +147,7 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
         return HttpResponseRedirect(self.get_success_url())
 
 
-class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
+class CertProfileIssuanceView(FormErrorMessageMixin, LoggerMixin, CertProfileContextMixin,
                               FormView[CertificateIssuanceForm]):
     """View to display the issuance form for a Certificate Profile."""
 
@@ -173,13 +173,6 @@ class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
         context['profile'] = self.profile
         context['profile_dict'] = self.get_form_kwargs()['profile']
         return context
-
-    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
-        """Handle the case where the form is invalid."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error}')
-        return super().form_invalid(form)
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Handle the case where the form is valid."""

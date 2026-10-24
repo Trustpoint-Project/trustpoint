@@ -1,10 +1,4 @@
-export function debounce(fn, wait) {
-  let timer = null;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = window.setTimeout(() => fn(...args), wait);
-  };
-}
+export { debounce } from '../shared/utils.js';
 
 export async function postJson(url, payload) {
   const res = await fetch(url, {

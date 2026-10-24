@@ -7,9 +7,6 @@ from typing import Never
 
 from cryptography import x509
 
-from devices.models import DeviceModel
-from devices.secrets import remember_secret
-from onboarding.models import OnboardingConfigModel
 from pki.models import CredentialModel
 from request.request_context import (
     BaseCertificateRequestContext,
@@ -17,18 +14,17 @@ from request.request_context import (
     EstBaseRequestContext,
     EstCertificateRequestContext,
 )
-from trustpoint.logger import LoggerMixin
 
 from .base import (
-    AuthenticationComponent,
     ClientCertificateAuthentication,
     CompositeAuthentication,
+    DevicePasswordAuthentication,
     IDevIDAuthentication,
 )
 from .base import ReenrollmentAuthentication as BaseReenrollmentAuthentication
 
 
-class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
+class UsernamePasswordAuthentication(DevicePasswordAuthentication):
     """Handles authentication via username/password credentials."""
 
     def authenticate(self, context: BaseRequestContext) -> None:
@@ -44,49 +40,12 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
         password = context.est_password
 
         try:
-            device = DeviceModel.objects.select_related(
-                'onboarding_config', 'no_onboarding_config'
-            ).filter(
-                common_name=username
-            ).first()
-
-            if not device:
-                self.logger.warning('Authentication failed: Unknown username %s', username)
-                self._raise_authentication_error()
-
-            device_config = device.onboarding_config or device.no_onboarding_config
-
-            if not isinstance(device, DeviceModel) or not device_config:
-                self.logger.warning('Authentication failed: Invalid device model for %s', username)
-                self._raise_authentication_error()
-
-            if not device_config.est_password:
-                self.logger.warning('Authentication failed: No EST password set for %s', username)
-                self._raise_authentication_error()
-
-            if isinstance(device_config, OnboardingConfigModel) and device_config.is_credential_expired():
-                self.logger.warning('Authentication failed: Credential has expired for %s', username)
-                self._raise_authentication_error()
-
-            # Use proper password hashing instead of plaintext comparison
-            if password != device_config.est_password:
-                self.logger.warning('Authentication failed: Invalid password for %s', username)
-                self._raise_authentication_error()
-
-            self.logger.info('Successfully authenticated device %s', username)
-            context.device = device
-
-            remember_secret(context, device_config, 'est_password')
+            self._authenticate_credentials(context, username, password)
 
         except Exception as e:
             self.logger.exception('Authentication error for user %s', username)
             error_message = 'Authentication failed: Invalid username or password.'
             raise ValueError(error_message) from e
-
-    def _raise_authentication_error(self) -> Never:
-        """Raise authentication error with standardized message."""
-        error_message = 'Authentication failed: Invalid username or password.'
-        raise ValueError(error_message)
 
 
 class ReenrollmentAuthentication(BaseReenrollmentAuthentication):

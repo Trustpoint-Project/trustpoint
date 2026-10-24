@@ -79,3 +79,25 @@ def build_cert_content_summary(cert_data: dict[str, Any]) -> dict[str, Any]:
     parts = [f'{cert_data[unit]} {unit}' for unit in ('days', 'hours', 'minutes', 'seconds') if cert_data.get(unit)]
     summary['validity'] = ', '.join(parts) if parts else _('Not specified')
     return summary
+
+
+def build_ca_request_data(cert_content_data: dict[str, Any]) -> dict[str, Any]:
+    """Build the profile request data used to generate the external CSR."""
+    request_data: dict[str, Any] = {
+        'subj': {},
+        'ext': {'subject_alternative_name': {}},
+        'validity': {},
+    }
+    for field_name in ('common_name', 'organization_name', 'country_name', 'state_or_province_name'):
+        value = cert_content_data.get(field_name)
+        if value:
+            request_data['subj'][field_name] = value
+    for field_name in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
+        value = cert_content_data.get(field_name)
+        if value is not None:
+            request_data['ext']['subject_alternative_name'][field_name] = value
+    for field_name in ('days', 'hours', 'minutes', 'seconds'):
+        value = cert_content_data.get(field_name)
+        if value is not None:
+            request_data['validity'][field_name] = int(value)
+    return request_data

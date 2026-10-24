@@ -256,6 +256,24 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
 
         return certificate_chain
 
+    @classmethod
+    def _protect_and_respond(cls, pki_message: rfc4210.PKIMessage, context: CmpCertificateRequestContext) -> None:
+        """Apply CMP protection and write the encoded certificate response."""
+        if context.implicit_confirm:
+            pki_message = cls._grant_implicit_confirm(pki_message)
+        if context.cmp_shared_secret:
+            pki_message = cls._add_protection_shared_secret(pki_message=pki_message, context=context)
+        else:
+            pki_message = cls._sign_pki_message(pki_message=pki_message, context=context)
+
+        encoded_message = encoder.encode(pki_message)
+
+        if context.implicit_confirm and context.device and context.device.onboarding_config:
+            retire_onboarding_secrets(context.device.onboarding_config)
+        context.http_response_status = 200
+        context.http_response_content = encoded_message
+        context.http_response_content_type = 'application/pkixcmp'
+
 
 class CmpInitializationResponder(CmpMessageResponder):
     """Respond to a CMP initialization request (IR) with the issued certificate (IP)."""
@@ -378,25 +396,7 @@ class CmpInitializationResponder(CmpMessageResponder):
             signer_credential=signer_credential,
             context=context,
         )
-        if context.implicit_confirm:
-            pki_message = CmpInitializationResponder._grant_implicit_confirm(pki_message)
-        if context.cmp_shared_secret:
-            pki_message = CmpInitializationResponder._add_protection_shared_secret(
-                pki_message=pki_message, context=context
-            )
-        else:
-            pki_message = CmpInitializationResponder._sign_pki_message(
-                pki_message=pki_message, context=context
-            )
-
-        encoded_message = encoder.encode(pki_message)
-
-        if context.implicit_confirm and context.device and context.device.onboarding_config:
-
-            retire_onboarding_secrets(context.device.onboarding_config)
-        context.http_response_status = 200
-        context.http_response_content = encoded_message
-        context.http_response_content_type = 'application/pkixcmp'
+        CmpInitializationResponder._protect_and_respond(pki_message, context)
 
 
 class CmpCertificationResponder(CmpMessageResponder):
@@ -506,25 +506,7 @@ class CmpCertificationResponder(CmpMessageResponder):
             issuer_credential=issuing_ca_credential,
             context=context,
         )
-        if context.implicit_confirm:
-            pki_message = CmpCertificationResponder._grant_implicit_confirm(pki_message)
-        if context.cmp_shared_secret:
-            pki_message = CmpCertificationResponder._add_protection_shared_secret(
-                pki_message=pki_message, context=context
-            )
-        else:
-            pki_message = CmpCertificationResponder._sign_pki_message(
-                pki_message=pki_message, context=context
-            )
-
-        encoded_message = encoder.encode(pki_message)
-
-        if context.implicit_confirm and context.device and context.device.onboarding_config:
-
-            retire_onboarding_secrets(context.device.onboarding_config)
-        context.http_response_status = 200
-        context.http_response_content = encoded_message
-        context.http_response_content_type = 'application/pkixcmp'
+        CmpCertificationResponder._protect_and_respond(pki_message, context)
 
 
 class CmpTransactionResponder(CmpMessageResponder):
