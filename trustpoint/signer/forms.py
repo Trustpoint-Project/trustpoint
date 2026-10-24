@@ -23,6 +23,7 @@ from crypto.application.capabilities import get_active_backend_capability_report
 from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
 from crypto.runtime import configured_private_key_location
+from pki.forms.credentials import parse_private_key_upload
 from pki.models.certificate import CertificateModel
 from signer.models import SignerModel
 from trustpoint.logger import LoggerMixin
@@ -287,35 +288,10 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     )
 
     def clean_private_key_file(self) -> PrivateKeySerializer:
-        """Validates and parses the uploaded private key file."""
-        private_key_file = self.cleaned_data.get('private_key_file')
-        private_key_file_password = self.data.get('private_key_file_password') or None
-
-        if not private_key_file:
-            err_msg = 'No private key file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if private_key_file.size > max_size:
-            err_msg = 'Private key file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        if private_key_file_password:
-            try:
-                private_key_file_password = private_key_file_password.encode('utf-8')
-            except Exception as original_exception:
-                err_msg = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
-                raise ValidationError(err_msg) from original_exception
-        else:
-            private_key_file_password = None
-
-        try:
-            private_key_file = PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
-        except Exception:  # noqa: BLE001
-            err_msg = 'Failed to parse the private key file. Either wrong password or file corrupted.'
-            self._raise_validation_error(err_msg)
-        return private_key_file
+        """Validate and parse the uploaded private key file."""
+        return parse_private_key_upload(
+            self.cleaned_data.get('private_key_file'), self.data.get('private_key_file_password') or None
+        )
 
     def clean_signer_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded signer certificate file."""

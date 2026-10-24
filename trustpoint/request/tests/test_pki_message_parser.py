@@ -235,7 +235,7 @@ class TestEstCsrSignatureVerification:
 
         verifier = EstCsrSignatureVerification()
 
-        with patch('request.message_parser.est.padding.PKCS1v15'):
+        with patch('request.message_parser.csr.padding.PKCS1v15'):
             try:
                 verifier.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'

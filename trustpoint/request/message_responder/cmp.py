@@ -17,6 +17,7 @@ from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import HashAlgorithm
 
+from cmp.der import der_tlv as _der_tlv
 from cmp.models import CmpTransactionModel
 from cmp.util import cmp_hmac_algorithm
 from devices.secrets import retire_onboarding_secrets
@@ -41,21 +42,6 @@ if TYPE_CHECKING:
 CMP_MESSAGE_VERSION = 2
 SENDER_NONCE_LENGTH = 16
 HTTP_ERROR_STATUS_THRESHOLD = 400
-
-# Threshold below which DER length fits in a single byte (short form).
-_DER_LENGTH_SHORT_FORM_MAX = 0x7F
-
-
-def _der_tlv(tag_byte: int, value: bytes) -> bytes:
-    """Construct a DER Tag-Length-Value triplet.
-
-    Handles both short-form (length < 128) and long-form DER lengths.
-    """
-    length = len(value)
-    if length <= _DER_LENGTH_SHORT_FORM_MAX:
-        return bytes([tag_byte, length]) + value
-    length_payload = length.to_bytes((length.bit_length() + 7) // 8, 'big')
-    return bytes([tag_byte, 0x80 | len(length_payload)]) + length_payload + value
 
 
 class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
@@ -359,7 +345,6 @@ class CmpInitializationResponder(CmpMessageResponder):
             ip_message['extraCerts'].append(extra_cert)
 
         return ip_message
-
 
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:
@@ -1055,7 +1040,6 @@ class CmpErrorMessageResponder(CmpMessageResponder):
         context.http_response_status = 200
         context.http_response_content = encoded_message
         context.http_response_content_type = 'application/pkixcmp'
-
 
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:

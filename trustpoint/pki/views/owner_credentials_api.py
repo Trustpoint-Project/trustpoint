@@ -23,7 +23,7 @@ from rest_framework import serializers as drf_serializers
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+from trustpoint_core.oid import KeyPairGenerator
 from trustpoint_core.serializer import PrivateKeySerializer
 
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
@@ -38,6 +38,8 @@ from pki.serializer.owner_credential import (
     OwnerCredentialSerializer,
 )
 from pki.util.cert_profile import ProfileValidationError
+from pki.util.certificate_request import build_request_data as _build_request_data
+from pki.util.certificate_request import public_key_info_from_key_type as _public_key_info_from_key_type
 from request.clients import EstClient, EstClientError
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
@@ -51,46 +53,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-
-def _build_request_data(cert_content_data: dict[str, Any]) -> dict[str, Any]:
-    """Convert flat serializer data into the nested structure expected by the profile verifier."""
-    request_data: dict[str, Any] = {
-        'subj': {},
-        'ext': {'subject_alternative_name': {}},
-        'validity': {},
-    }
-    for field in (
-        'common_name', 'organization_name', 'organizational_unit_name',
-        'country_name', 'state_or_province_name', 'locality_name', 'email_address',
-    ):
-        value = cert_content_data.get(field)
-        if value:
-            request_data['subj'][field] = value
-    for field in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
-        value = cert_content_data.get(field)
-        if value:
-            if isinstance(value, list):
-                items = [v.strip() for v in value if str(v).strip()]
-            else:
-                items = [v.strip() for v in str(value).split(',') if v.strip()]
-            if items:
-                request_data['ext']['subject_alternative_name'][field] = items
-    for field in ('days', 'hours', 'minutes', 'seconds'):
-        value = cert_content_data.get(field)
-        if value is not None:
-            request_data['validity'][field] = int(value)
-    return request_data
-
-
-def _public_key_info_from_key_type(key_type: str) -> PublicKeyInfo:
-    """Convert a key_type string (e.g. 'RSA-2048', 'ECC-SECP256R1') to a PublicKeyInfo."""
-    if key_type.startswith('RSA-'):
-        key_size = int(key_type.split('-')[1])
-        return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=key_size)
-    curve_name = key_type.split('-', 1)[1]
-    named_curve = NamedCurve[curve_name.upper()]
-    return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=named_curve)
 
 
 def _resolve_cert_profile(

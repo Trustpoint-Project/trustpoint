@@ -19,7 +19,7 @@ from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+from trustpoint_core.oid import KeyPairGenerator
 from trustpoint_core.serializer import PrivateKeySerializer
 
 from pki.forms import (
@@ -35,6 +35,7 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
 from pki.util.cert_profile import ProfileValidationError
+from pki.util.certificate_request import build_cert_content_summary, build_request_data, public_key_info_from_key_type
 from request.clients import EstClient, EstClientError
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
@@ -668,14 +669,7 @@ class OwnerCredentialDefineCertContentEstView(
     def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
         return f'dev_owner_id_cert_content_{owner_credential.pk}'
 
-    def _public_key_info_from_key_type(self, key_type: str) -> PublicKeyInfo:
-        """Convert a key_type string (e.g. 'RSA-2048', 'ECC-SECP256R1') to a PublicKeyInfo."""
-        if key_type.startswith('RSA-'):
-            key_size = int(key_type.split('-')[1])
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=key_size)
-        curve_name = key_type.split('-', 1)[1]
-        named_curve = NamedCurve[curve_name.upper()]
-        return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=named_curve)
+    _public_key_info_from_key_type = staticmethod(public_key_info_from_key_type)
 
     def _delete_orphan_pending_credentials(self, exclude_pk: int | None) -> None:
         """Delete all key-only (certificate-less) DEV_OWNER_ID credentials for this owner.
@@ -876,60 +870,9 @@ class OwnerCredentialRequestCertEstView(
         msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
         raise ValueError(msg)
 
-    def _build_request_data(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Convert the flat form data into the nested structure expected by the profile verifier."""
-        request_data: dict[str, Any] = {
-            'subj': {},
-            'ext': {'subject_alternative_name': {}},
-            'validity': {},
-        }
-        for field in ('common_name', 'organization_name', 'organizational_unit_name',
-                      'country_name', 'state_or_province_name', 'locality_name', 'email_address'):
-            value = cert_content_data.get(field)
-            if value:
-                request_data['subj'][field] = value
-        for field in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
-            value = cert_content_data.get(field)
-            if value:
-                # The value may be a comma-separated string (directly from the form) or already
-                # a list (after a JSON session round-trip). Normalise to list in both cases.
-                if isinstance(value, list):
-                    items = [v.strip() for v in value if str(v).strip()]
-                else:
-                    items = [v.strip() for v in str(value).split(',') if v.strip()]
-                if items:
-                    request_data['ext']['subject_alternative_name'][field] = items
-        for field in ('days', 'hours', 'minutes', 'seconds'):
-            value = cert_content_data.get(field)
-            if value is not None:
-                request_data['validity'][field] = int(value)
-        return request_data
+    _build_request_data = staticmethod(build_request_data)
 
-    def _build_cert_content_summary(self, cert_data: dict[str, Any]) -> dict[str, Any]:
-        """Return a human-readable summary dict suitable for template rendering."""
-        summary: dict[str, Any] = {'subject': {}, 'san': {}, 'validity': ''}
-        for key, label in (
-            ('common_name', 'Common Name (CN)'),
-            ('organization_name', 'Organization (O)'),
-            ('organizational_unit_name', 'Organizational Unit (OU)'),
-            ('country_name', 'Country (C)'),
-            ('state_or_province_name', 'State/Province (ST)'),
-            ('locality_name', 'Locality (L)'),
-            ('email_address', 'Email Address'),
-        ):
-            if cert_data.get(key):
-                summary['subject'][label] = cert_data[key]
-        for key, label in (
-            ('dns_names', 'DNS Names'),
-            ('ip_addresses', 'IP Addresses'),
-            ('rfc822_names', 'Email Addresses (RFC 822)'),
-            ('uris', 'URIs'),
-        ):
-            if cert_data.get(key):
-                summary['san'][label] = cert_data[key]
-        parts = [f'{cert_data[unit]} {unit}' for unit in ('days', 'hours', 'minutes', 'seconds') if cert_data.get(unit)]
-        summary['validity'] = ', '.join(parts) if parts else _('Not specified')
-        return summary
+    _build_cert_content_summary = staticmethod(build_cert_content_summary)
 
     # ------------------------------------------------------------------
     # GET
@@ -1166,14 +1109,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
     def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
         return f'domain_credential_cert_content_{owner_credential.pk}'
 
-    def _public_key_info_from_key_type(self, key_type: str) -> PublicKeyInfo:
-        """Convert a key_type string (e.g. 'RSA-2048', 'ECC-SECP256R1') to a PublicKeyInfo."""
-        if key_type.startswith('RSA-'):
-            key_size = int(key_type.split('-')[1])
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=key_size)
-        curve_name = key_type.split('-', 1)[1]
-        named_curve = NamedCurve[curve_name.upper()]
-        return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=named_curve)
+    _public_key_info_from_key_type = staticmethod(public_key_info_from_key_type)
 
     def _delete_orphan_pending_credentials(self, exclude_pk: int | None) -> None:
         """Delete all key-only (certificate-less) DOMAIN_CREDENTIAL credentials for this owner."""
@@ -1347,58 +1283,9 @@ class OwnerCredentialRequestDomainCredentialEstView(
         msg = _('No pending Domain Credential found. Please re-define the certificate content.')
         raise ValueError(msg)
 
-    def _build_request_data(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Convert the flat form data into the nested structure expected by the profile verifier."""
-        request_data: dict[str, Any] = {
-            'subj': {},
-            'ext': {'subject_alternative_name': {}},
-            'validity': {},
-        }
-        for field in ('common_name', 'organization_name', 'organizational_unit_name',
-                      'country_name', 'state_or_province_name', 'locality_name', 'email_address'):
-            value = cert_content_data.get(field)
-            if value:
-                request_data['subj'][field] = value
-        for field in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
-            value = cert_content_data.get(field)
-            if value:
-                if isinstance(value, list):
-                    items = [v.strip() for v in value if str(v).strip()]
-                else:
-                    items = [v.strip() for v in str(value).split(',') if v.strip()]
-                if items:
-                    request_data['ext']['subject_alternative_name'][field] = items
-        for field in ('days', 'hours', 'minutes', 'seconds'):
-            value = cert_content_data.get(field)
-            if value is not None:
-                request_data['validity'][field] = int(value)
-        return request_data
+    _build_request_data = staticmethod(build_request_data)
 
-    def _build_cert_content_summary(self, cert_data: dict[str, Any]) -> dict[str, Any]:
-        """Return a human-readable summary dict suitable for template rendering."""
-        summary: dict[str, Any] = {'subject': {}, 'san': {}, 'validity': ''}
-        for key, label in (
-            ('common_name', 'Common Name (CN)'),
-            ('organization_name', 'Organization (O)'),
-            ('organizational_unit_name', 'Organizational Unit (OU)'),
-            ('country_name', 'Country (C)'),
-            ('state_or_province_name', 'State/Province (ST)'),
-            ('locality_name', 'Locality (L)'),
-            ('email_address', 'Email Address'),
-        ):
-            if cert_data.get(key):
-                summary['subject'][label] = cert_data[key]
-        for key, label in (
-            ('dns_names', 'DNS Names'),
-            ('ip_addresses', 'IP Addresses'),
-            ('rfc822_names', 'Email Addresses (RFC 822)'),
-            ('uris', 'URIs'),
-        ):
-            if cert_data.get(key):
-                summary['san'][label] = cert_data[key]
-        parts = [f'{cert_data[unit]} {unit}' for unit in ('days', 'hours', 'minutes', 'seconds') if cert_data.get(unit)]
-        summary['validity'] = ', '.join(parts) if parts else _('Not specified')
-        return summary
+    _build_cert_content_summary = staticmethod(build_cert_content_summary)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add cert-content summary and profile to the template context."""

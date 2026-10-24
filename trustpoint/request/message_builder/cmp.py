@@ -12,6 +12,8 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
+from cmp.der import der_tlv as _der_tlv
+
 try:
     from cryptography.hazmat.primitives.asymmetric import mldsa
 except ImportError:
@@ -34,35 +36,12 @@ class CmpMessageBuilderError(Exception):
     """Base exception for CMP message builder errors."""
 
 
-
 CMP_MESSAGE_VERSION = 2
 TRANSACTION_ID_LENGTH = 16
 SENDER_NONCE_LENGTH = 16
 IMPLICIT_CONFIRM_OID = '1.3.6.1.5.5.7.4.13'
 PBM_OID = '1.2.840.113533.7.66.13'
 SHA256_OID = HashAlgorithm.SHA256.dotted_string
-
-# Threshold below which DER length fits in a single byte (short form).
-_DER_LENGTH_SHORT_FORM_MAX = 0x7F
-
-
-def _der_tlv(tag_byte: int, value: bytes) -> bytes:
-    """Construct a DER Tag-Length-Value triplet.
-
-    Handles both short-form (length < 128) and long-form DER lengths.
-
-    Args:
-        tag_byte: Single-byte ASN.1 tag (e.g. ``0xA4`` for ``[4] CONSTRUCTED``).
-        value: The encoded value octets.
-
-    Returns:
-        The complete TLV as ``bytes``.
-    """
-    length = len(value)
-    if length <= _DER_LENGTH_SHORT_FORM_MAX:
-        return bytes([tag_byte, length]) + value
-    length_payload = length.to_bytes((length.bit_length() + 7) // 8, 'big')
-    return bytes([tag_byte, 0x80 | len(length_payload)]) + length_payload + value
 
 
 class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
@@ -299,7 +278,6 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
         return pop
 
 
-
 class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
     """Build the PKI header for the CMP message."""
 
@@ -462,7 +440,6 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
         header['protectionAlg'] = prot_alg
 
         return header
-
 
 
 class CmpPkiMessageAssembly(BuildingComponent, LoggerMixin):

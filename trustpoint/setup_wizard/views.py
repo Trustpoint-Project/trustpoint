@@ -77,6 +77,7 @@ from management.nginx_paths import (
     NGINX_KEY_PATH,
 )
 from management.security_change_audit import provider_configuration_changes
+from management.tls_files import write_tls_pem_files
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.operational_attach import (
@@ -1963,25 +1964,13 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
     @staticmethod
     def _write_pem_files(credential_model: CredentialModel) -> None:
-        """Writes the private key, certificate, and trust store PEM files to disk.
-
-        Args:
-            credential_model (CredentialModel): The credential model instance containing
-            the keys and certificates.
-        """
-        private_key_pem = credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
-        certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
-        trust_store_pem = credential_model.get_certificate_chain_serializer().as_pem().decode()
-
-        NGINX_KEY_PATH.write_text(private_key_pem)
-        NGINX_CERT_PATH.write_text(certificate_pem)
-
-        # Only write chain file if there's actually a chain (not empty)
-        if trust_store_pem.strip():
-            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
-        elif NGINX_CERT_CHAIN_PATH.exists():
-            # Remove chain file if it exists but chain is empty
-            NGINX_CERT_CHAIN_PATH.unlink()
+        """Write the TLS credential to the configured Nginx paths."""
+        write_tls_pem_files(
+            credential_model,
+            key_path=NGINX_KEY_PATH,
+            cert_path=NGINX_CERT_PATH,
+            chain_path=NGINX_CERT_CHAIN_PATH,
+        )
 
     def _apply_staged_tls_credential(self) -> None:
         """Promote the staged TLS credential to active and apply it for nginx."""

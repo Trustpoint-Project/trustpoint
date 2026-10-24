@@ -52,8 +52,8 @@ def test_est_and_cmp_request_data_convert_form_values() -> None:
     }
     est_view = IssuingCaRequestCertEstView()
     cmp_view = IssuingCaRequestCertCmpView()
-    est = IssuingCaRequestCertEstView.__dict__['_build_request_data_from_form'](est_view, content)
-    cmp = IssuingCaRequestCertCmpView.__dict__['_build_request_data_from_form'](cmp_view, content)
+    est = est_view._build_request_data_from_form(content)
+    cmp = cmp_view._build_request_data_from_form(content)
 
     assert est == cmp
     assert est['subj'] == {'common_name': 'ca.example', 'country_name': 'DE'}

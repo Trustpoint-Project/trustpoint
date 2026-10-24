@@ -16,12 +16,12 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
@@ -31,6 +31,7 @@ from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiParameter,
     extend_schema,
+    extend_schema_view,
     inline_serializer,
 )
 from rest_framework import filters, status, viewsets
@@ -39,7 +40,7 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from management.models.security import SecurityConfig
-from management.security_change_audit import audit_security_change, security_change, snapshot_security_state
+from management.security_change_audit import audit_security_change, security_change
 from pki.auto_gen_pki import AutoGenPki
 from pki.forms import (
     CertificateIssuanceForm,
@@ -72,10 +73,10 @@ from request.message_builder.cmp import CmpMessageBuilder
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
 from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
+from shared.views import AuditedBulkDeleteView
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
-    BulkDeleteView,
     ContextDataMixin,
     SortableTableMixin,
 )
@@ -83,7 +84,7 @@ from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
-    from django.forms import ChoiceField, Form
+    from django.forms import ChoiceField
     from django.http import HttpRequest
     from rest_framework.request import Request
 
@@ -1158,6 +1159,28 @@ class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
         msg = 'Subclasses must implement get_not_implemented_message()'
         raise NotImplementedError(msg)
 
+    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
+        """Convert CA form fields into the nested certificate request structure."""
+        self.logger.info('Building request data from: %s', cert_content_data)
+        request_data: dict[str, Any] = {
+            'subj': {},
+            'ext': {'subject_alternative_name': {}},
+            'validity': {},
+        }
+        for field in ('common_name', 'organization_name', 'country_name', 'state_or_province_name'):
+            value = cert_content_data.get(field)
+            if value:
+                request_data['subj'][field] = value
+        for field in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
+            value = cert_content_data.get(field)
+            if value is not None:
+                request_data['ext']['subject_alternative_name'][field] = value
+        for field in ('days', 'hours', 'minutes', 'seconds'):
+            value = cert_content_data.get(field)
+            if value is not None:
+                request_data['validity'][field] = int(value)
+        return request_data
+
 
 class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]):  # type: ignore[misc]
     """View to display the EST certificate request page."""
@@ -1262,53 +1285,6 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
         del request.session[f'cert_content_data_{ca.pk}']
         del request.session[f'cert_profile_pk_{ca.pk}']
-
-    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Build request data structure from form data.
-
-        Args:
-            cert_content_data: Form data containing certificate fields.
-
-        Returns:
-            Request data in the format expected by the profile verifier.
-        """
-        self.logger.info('Building request data from: %s', cert_content_data)
-        request_data: dict[str, Any] = {
-            'subj': {},
-            'ext': {
-                'subject_alternative_name': {}
-            },
-            'validity': {}
-        }
-
-        # Subject fields
-        required_subject_fields = ['common_name', 'organization_name', 'country_name', 'state_or_province_name']
-        for field_name in required_subject_fields:
-            value = cert_content_data.get(field_name)
-            if value:
-                request_data['subj'][field_name] = value
-
-        # SAN fields
-        san_fields = {
-            'dns_names': 'dns_names',
-            'ip_addresses': 'ip_addresses',
-            'rfc822_names': 'rfc822_names',
-            'uris': 'uris'
-        }
-
-        for profile_key, form_key in san_fields.items():
-            value = cert_content_data.get(form_key)
-            if value is not None:
-                request_data['ext']['subject_alternative_name'][profile_key] = value
-
-        # Validity fields
-        validity_fields = ['days', 'hours', 'minutes', 'seconds']
-        for field in validity_fields:
-            value = cert_content_data.get(field)
-            if value is not None:
-                request_data['validity'][field] = int(value)
-
-        return request_data
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle POST request to request certificate via EST."""
@@ -1459,53 +1435,6 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
         del request.session[f'cert_content_data_{ca.pk}']
         del request.session[f'cert_profile_pk_{ca.pk}']
-
-    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Build request data structure from form data.
-
-        Args:
-            cert_content_data: Form data containing certificate fields.
-
-        Returns:
-            Request data in the format expected by the profile verifier.
-        """
-        self.logger.info('Building request data from: %s', cert_content_data)
-        request_data: dict[str, Any] = {
-            'subj': {},
-            'ext': {
-                'subject_alternative_name': {}
-            },
-            'validity': {}
-        }
-
-        # Subject fields
-        required_subject_fields = ['common_name', 'organization_name', 'country_name', 'state_or_province_name']
-        for field_name in required_subject_fields:
-            value = cert_content_data.get(field_name)
-            if value:
-                request_data['subj'][field_name] = value
-
-        # SAN fields
-        san_fields = {
-            'dns_names': 'dns_names',
-            'ip_addresses': 'ip_addresses',
-            'rfc822_names': 'rfc822_names',
-            'uris': 'uris'
-        }
-
-        for profile_key, form_key in san_fields.items():
-            value = cert_content_data.get(form_key)
-            if value is not None:
-                request_data['ext']['subject_alternative_name'][profile_key] = value
-
-        # Validity fields
-        validity_fields = ['days', 'hours', 'minutes', 'seconds']
-        for field in validity_fields:
-            value = cert_content_data.get(field)
-            if value is not None:
-                request_data['validity'][field] = int(value)
-
-        return request_data
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle POST request to request certificate via CMP."""
@@ -1858,7 +1787,7 @@ class IssuingCaDetailView(IssuingCaContextMixin, DetailView[CaModel]):
         )
 
 
-class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
+class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, AuditedBulkDeleteView):
     """View to confirm the deletion of multiple Issuing CAs."""
 
     model = CaModel
@@ -1866,6 +1795,12 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
     ignore_url = reverse_lazy('pki:issuing_cas')
     template_name = 'pki/issuing_cas/confirm_delete.html'
     context_object_name = 'issuing_cas'
+
+    delete_permission = AppPermissions.MANAGE_CAS
+    protected_error_message = gettext_lazy(
+        'Cannot delete the selected Issuing CA(s) because they are referenced by other objects.'
+    )
+    delete_success_message = gettext_lazy('Successfully deleted {count} Issuing CA(s).')
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests."""
@@ -1881,35 +1816,6 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
             ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
         )
 
-    def form_valid(self, form: Form) -> HttpResponse:
-        """Delete the selected Issuing CAs on valid form."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
-            raise PermissionDenied
-        queryset = self.get_queryset()
-        deleted_count = queryset.count() if queryset else 0
-
-        try:
-            with transaction.atomic():
-                targets = list(queryset.select_for_update())
-                snapshots = [(target, snapshot_security_state(target)) for target in targets]
-                response = super().form_valid(form)
-                for target, before in snapshots:
-                    audit_security_change(
-                        target=target, actor=self.request.user, before=before, action='deleted'
-                    )
-        except ProtectedError:
-            messages.error(
-                self.request,
-                _('Cannot delete the selected Issuing CA(s) because they are referenced by other objects.'),
-            )
-            return HttpResponseRedirect(self.success_url)
-        except ValidationError as exc:
-            messages.error(self.request, exc.message)
-            return HttpResponseRedirect(self.success_url)
-
-        messages.success(self.request, _('Successfully deleted {count} Issuing CA(s).').format(count=deleted_count))
-
-        return response
 
 
 class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
@@ -2013,6 +1919,9 @@ class CanManageIssuingCas(BasePermission):
         )
 
 @extend_schema(tags=['Issuing-CA'])
+@extend_schema_view(
+    list=extend_schema(summary='List Issuing CAs', description='Retrieve all Issuing CAs from the database.'),
+)
 class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
     """ViewSet for managing Issuing CA instances via REST API."""
 
@@ -2031,26 +1940,6 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
     ordering_fields: ClassVar = ['unique_name', 'created_at', 'updated_at']
 
     http_method_names = ['get', 'post', 'head', 'options']  # noqa: RUF012
-
-    @extend_schema(
-        summary='List Issuing CAs',
-        description='Retrieve all Issuing CAs from the database.',
-    )
-    def list(self, _request: Request) -> Response:
-        """API endpoint to get all Issuing CAs."""
-        queryset = self.get_queryset()
-
-        for backend in list(self.filter_backends):
-            if hasattr(backend, 'filter_queryset'):
-                queryset = backend().filter_queryset(self.request, queryset, self)  # type: ignore[attr-defined]
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary='Retrieve Issuing CA',
