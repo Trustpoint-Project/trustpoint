@@ -36,7 +36,7 @@ def generate_empty_crl(
     ca_cert: x509.Certificate,
     private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
     hash_algorithm: hashes.HashAlgorithm | None = None,
-    crl_validity_hours: int = 2400,
+    crl_validity_hours: float = 2400,
     crl_number: int = 1,
 ) -> str:
     """Generate an empty CRL for a CA.
@@ -89,7 +89,7 @@ def generate_empty_crl(
 
 def generate_crl_with_revoked_certs(
     issuing_ca: CaModel,
-    crl_validity_hours: int = 24,
+    crl_validity_hours: float = 24,
 ) -> CertificateRevocationList:
     """Generate a CRL with revoked certificates for an issuing CA.
 
