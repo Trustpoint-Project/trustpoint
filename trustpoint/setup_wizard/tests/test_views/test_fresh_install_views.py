@@ -97,7 +97,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.SoftwareStorage
         config_model.save()
 
-        with patch('setup_wizard.views.get_app_secret_service') as mock_get_service:
+        with patch('setup_wizard.backend_configuration.get_app_secret_service') as mock_get_service:
             mock_get_service.return_value.ensure_backend_ready.return_value = None
             FreshInstallSummaryView._configure_app_secret_backend(config_model)
 
@@ -186,7 +186,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
             config_model.fresh_install_pkcs11_enforce_app_secret_protection = False
             config_model.save()
 
-            with patch('setup_wizard.views.get_app_secret_service') as mock_get_service:
+            with patch('setup_wizard.backend_configuration.get_app_secret_service') as mock_get_service:
                 mock_get_service.return_value.ensure_backend_ready.return_value = None
                 FreshInstallSummaryView._configure_app_secret_backend(config_model)
 
@@ -221,7 +221,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
             config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
             config_model.save()
 
-            with patch('setup_wizard.views.get_app_secret_service') as mock_get_service:
+            with patch('setup_wizard.backend_configuration.get_app_secret_service') as mock_get_service:
                 mock_get_service.return_value.ensure_backend_ready.return_value = None
                 FreshInstallSummaryView._configure_app_secret_backend(config_model)
 

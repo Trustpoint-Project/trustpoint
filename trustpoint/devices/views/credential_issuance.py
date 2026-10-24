@@ -50,6 +50,7 @@ from request.authorization import ManualAuthorization
 from request.gds_push import GdsPushService
 from request.operation_processor.issue_cred import CredentialIssueProcessor
 from request.request_context import ManualCredentialRequestContext, ManualIssuanceMethod
+from shared.views import FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -727,7 +728,7 @@ class OpcUaGdsPushTruststoreAssociationView(
         )
 
 
-class AbstractIssueProfileCredentialView(
+class AbstractIssueProfileCredentialView(FormErrorMessageMixin,
     AbstractIssueCredentialView[CertificateIssuanceForm, BaseTlsCredentialIssuer]
 ):
     """View to issue a new certificate profile credential."""
@@ -767,13 +768,6 @@ class AbstractIssueProfileCredentialView(
             context['clm_url'], kwargs={'pk': self.object.pk}
         )
         return context
-
-    def form_invalid(self, form: forms.Form) -> HttpResponse:
-        """Handle the case where the form is invalid."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error}')
-        return super().form_invalid(form)
 
     def form_valid(self, form: forms.Form) -> HttpResponse:
         """Handle the case where the form is valid."""

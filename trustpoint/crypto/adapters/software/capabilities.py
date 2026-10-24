@@ -5,26 +5,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 
 from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.capabilities import capability_fingerprint
+from crypto.domain.capabilities import string_tuple as _string_tuple
 from crypto.domain.policies import SigningExecutionMode
-
-
-def _string_tuple(payload: dict[str, object], key: str) -> tuple[str, ...]:
-    """Return a tuple of strings from a serialized capability-list field."""
-    value = payload.get(key, [])
-    if not isinstance(value, list):
-        msg = f'Capability field {key!r} must be a list of strings.'
-        raise TypeError(msg)
-
-    if not all(isinstance(item, str) for item in value):
-        msg = f'Capability field {key!r} must only contain strings.'
-        raise ValueError(msg)
-
-    return tuple(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,8 +40,7 @@ class SoftwareCapabilities:
 
     def fingerprint(self) -> str:
         """Return a stable snapshot fingerprint."""
-        serialized = json.dumps(self.to_json_dict(), sort_keys=True, separators=(',', ':')).encode('utf-8')
-        return hashlib.sha256(serialized).hexdigest()
+        return capability_fingerprint(self.to_json_dict())
 
 
 SOFTWARE_CAPABILITIES = SoftwareCapabilities(

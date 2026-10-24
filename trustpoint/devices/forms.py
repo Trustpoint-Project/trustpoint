@@ -469,6 +469,42 @@ class DeviceSecretCreationMixin(forms.Form):
             value=self.cleaned_data.get(f'{field}_value'),
         )
 
+    def _render_pki_protocols_switches(self, field_name: str) -> str:
+        """Renders PKI protocol switches as HTML."""
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
+        html_parts = ['<div class="mt-2">']
+
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
+            checked = str(value) in (self.initial.get(field_name, []) or [])
+            html_parts.append(
+                f'<div class="form-check form-switch mb-2">'
+                f'<input type="checkbox" class="form-check-input" role="switch" '
+                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
+                f'{"checked" if checked else ""}>'
+                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
+                f'</div>'
+            )
+
+        html_parts.append('</div>')
+        return ''.join(html_parts)
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Args:
+            common_name: The desired name of the new device.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
+        if DeviceModel.objects.filter(common_name=common_name).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
+
 
 class ChangeDeviceSecretForm(forms.Form):
     """Explicit confirmation and single-credential replacement in CLM."""
@@ -588,42 +624,6 @@ class NoOnboardingCreateForm(DeviceSecretCreationMixin):
             HTML('</fieldset></section>'),
         )
         self.setup_secret_inputs()
-
-    def _render_pki_protocols_switches(self, field_name: str) -> str:
-        """Renders PKI protocol switches as HTML."""
-        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
-        html_parts = ['<div class="mt-2">']
-
-        for choice in field.widget.choices:
-            value, label = choice[0], choice[1]
-            checked = str(value) in (self.initial.get(field_name, []) or [])
-            html_parts.append(
-                f'<div class="form-check form-switch mb-2">'
-                f'<input type="checkbox" class="form-check-input" role="switch" '
-                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
-                f'{"checked" if checked else ""}>'
-                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
-                f'</div>'
-            )
-
-        html_parts.append('</div>')
-        return ''.join(html_parts)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Args:
-            common_name: The desired name of the new device.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     @transaction.atomic
     def save(self, device_type: DeviceModel.DeviceType) -> DeviceModel:
@@ -763,42 +763,6 @@ class OnboardingCreateForm(DeviceSecretCreationMixin):
             HTML('</fieldset></section>'),
         )
         self.setup_secret_inputs()
-
-    def _render_pki_protocols_switches(self, field_name: str) -> str:
-        """Renders PKI protocol switches as HTML."""
-        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
-        html_parts = ['<div class="mt-2">']
-
-        for choice in field.widget.choices:
-            value, label = choice[0], choice[1]
-            checked = str(value) in (self.initial.get(field_name, []) or [])
-            html_parts.append(
-                f'<div class="form-check form-switch mb-2">'
-                f'<input type="checkbox" class="form-check-input" role="switch" '
-                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
-                f'{"checked" if checked else ""}>'
-                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
-                f'</div>'
-            )
-
-        html_parts.append('</div>')
-        return ''.join(html_parts)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Args:
-            common_name: The desired name of the new device.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     @transaction.atomic
     def save(self, device_type: DeviceModel.DeviceType) -> DeviceModel:

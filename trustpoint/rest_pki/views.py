@@ -24,15 +24,16 @@ from workflows2.events.request_events import Events
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class RestEnrollView(LoggerMixin, View):
-    """Handles REST certificate enrollment requests (initial enrollment)."""
+class RestCertificateEnrollmentView(LoggerMixin, View):
+    """Run the shared REST certificate enrollment pipeline."""
 
+    operation = 'enroll'
     EVENT = Events.rest_enroll
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle POST requests for REST certificate enrollment."""
         del args
-        self.logger.info('REST enroll request received: method=%s path=%s', request.method, request.path)
+        self.logger.info('REST %s request received: method=%s path=%s', self.operation, request.method, request.path)
 
         domain_name = cast('str', kwargs.get('domain'))
         cert_profile = cast('str | None', kwargs.get('cert_profile'))
@@ -41,7 +42,7 @@ class RestEnrollView(LoggerMixin, View):
             ctx = RestCertificateRequestContext(
                 raw_message=request,
                 protocol='rest',
-                operation='enroll',
+                operation=self.operation,
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
                 event=self.EVENT,
@@ -61,7 +62,7 @@ class RestEnrollView(LoggerMixin, View):
             authenticator = RestAuthentication()
             authenticator.authenticate(ctx)
 
-            authorizer = RestAuthorization(allowed_operations=['enroll'])
+            authorizer = RestAuthorization(allowed_operations=[self.operation])
             authorizer.authorize(ctx)
 
             workflow2_result = Workflow2Handler().handle(ctx)
@@ -72,14 +73,17 @@ class RestEnrollView(LoggerMixin, View):
             release_delivered_workflow2_request(ctx)
 
         except Exception:
-            self.logger.exception('Error processing REST enroll request')
+            self.logger.exception('Error processing REST %s request', self.operation)
             RestErrorMessageResponder.build_response(ctx)
 
         return ctx.to_http_response()
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class RestReEnrollView(LoggerMixin, View):
+class RestEnrollView(RestCertificateEnrollmentView):
+    """Handle initial REST certificate enrollment."""
+
+
+class RestReEnrollView(RestCertificateEnrollmentView):
     """Handles REST certificate re-enrollment requests.
 
     Request body (JSON)::
@@ -96,52 +100,5 @@ class RestReEnrollView(LoggerMixin, View):
         }
     """
 
+    operation = 'reenroll'
     EVENT = Events.rest_reenroll
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle POST requests for REST certificate re-enrollment."""
-        del args
-        self.logger.info('REST reenroll request received: method=%s path=%s', request.method, request.path)
-
-        domain_name = cast('str', kwargs.get('domain'))
-        cert_profile = cast('str', kwargs.get('cert_profile'))
-
-        try:
-            ctx = RestCertificateRequestContext(
-                raw_message=request,
-                protocol='rest',
-                operation='reenroll',
-                domain_str=domain_name,
-                cert_profile_str=cert_profile,
-                event=self.EVENT,
-            )
-        except Exception:
-            err_msg = 'Failed to set up REST request context.'
-            self.logger.exception(err_msg)
-            return HttpResponse(err_msg, status=500, content_type='application/json')
-
-        try:
-            validator = RestHttpRequestValidator()
-            validator.validate(ctx)
-
-            parser = RestMessageParser()
-            ctx = cast('RestCertificateRequestContext', parser.parse(ctx))
-
-            authenticator = RestAuthentication()
-            authenticator.authenticate(ctx)
-
-            authorizer = RestAuthorization(allowed_operations=['reenroll'])
-            authorizer.authorize(ctx)
-
-            workflow2_result = Workflow2Handler().handle(ctx)
-            if not workflow2_result.should_stop:
-                OperationProcessor().process_operation(ctx)
-
-            RestMessageResponder.build_response(ctx)
-            release_delivered_workflow2_request(ctx)
-
-        except Exception:
-            self.logger.exception('Error processing REST reenroll request')
-            RestErrorMessageResponder.build_response(ctx)
-
-        return ctx.to_http_response()

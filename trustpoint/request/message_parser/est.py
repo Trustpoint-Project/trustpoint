@@ -5,20 +5,14 @@
 import base64
 import contextlib
 import re
-from typing import Never
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-
-try:
-    from cryptography.hazmat.primitives.asymmetric import mldsa
-except ImportError:
-    mldsa = None  # type: ignore[assignment]
 
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
+from .csr import CsrSignatureVerification
 
 
 class EstAuthorizationHeaderParsing(ParsingComponent, LoggerMixin):
@@ -153,92 +147,18 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
             raise ValueError(error_message) from e
 
 
-class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
-    """Parses the context to fetch the CSR and verifies its signature using the public key contained in the CSR."""
+class EstCsrSignatureVerification(CsrSignatureVerification):
+    """Verify CSR signatures for EST certificate requests."""
 
-    def parse(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0912
-        """Validates the signature of the CSR stored in the context."""
-        if not isinstance(context, EstCertificateRequestContext):
-            exc_msg = 'EstCsrSignatureVerification requires an EstCertificateRequestContext.'
-            raise TypeError(exc_msg)
-
-        csr = context.cert_requested
-        if csr is None:
-            err_msg = 'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
-            self.logger.warning('EST CSR signature verification failed: CSR not found in context')
-            self._raise_validation_error(err_msg)
-
-        if not isinstance(csr, x509.CertificateSigningRequest):
-            err_msg = 'CSR signature verification only supports EST requests with CertificateSigningRequest objects.'
-            self.logger.warning('EST CSR signature verification failed: Expected CertificateSigningRequest, got %s',
-                              type(csr).__name__)
-            self._raise_validation_error(err_msg)
-
-        public_key = csr.public_key()
-        signature_hash_algorithm = csr.signature_hash_algorithm
-
-        is_mldsa = mldsa and isinstance(public_key, (
-            mldsa.MLDSA44PublicKey,
-            mldsa.MLDSA65PublicKey,
-            mldsa.MLDSA87PublicKey,
-        ))
-
-        if signature_hash_algorithm is None and not is_mldsa:
-            error_message = 'CSR does not contain a signature hash algorithm.'
-            self.logger.warning('EST CSR signature verification failed: No signature hash algorithm')
-            raise ValueError(error_message)
-
-        if not isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)) and not is_mldsa:
-            error_message = 'Unsupported public key type for CSR signature verification.'
-            self.logger.warning(
-                'EST CSR signature verification failed: Unsupported public key type',
-                extra={'public_key_type': str(type(public_key))})
-            raise TypeError(error_message)
-
-        try:
-            if isinstance(public_key, rsa.RSAPublicKey):
-                key_type = 'RSA'
-                public_key.verify(
-                    signature=csr.signature,
-                    data=csr.tbs_certrequest_bytes,
-                    padding=padding.PKCS1v15(),
-                    algorithm=signature_hash_algorithm,  # type: ignore[arg-type]
-                )
-                hash_info = f' with {signature_hash_algorithm.name}' if signature_hash_algorithm else ''
-            elif isinstance(public_key, ec.EllipticCurvePublicKey):
-                key_type = 'EC'
-                public_key.verify(
-                    signature=csr.signature,
-                    data=csr.tbs_certrequest_bytes,
-                    signature_algorithm=ec.ECDSA(signature_hash_algorithm),  # type: ignore[arg-type]
-                )
-                hash_info = f' with {signature_hash_algorithm.name}' if signature_hash_algorithm else ''
-            elif is_mldsa:
-                if isinstance(public_key, mldsa.MLDSA44PublicKey):
-                    key_type = 'ML-DSA-44'
-                elif isinstance(public_key, mldsa.MLDSA65PublicKey):
-                    key_type = 'ML-DSA-65'
-                else:  # MLDSA87PublicKey
-                    key_type = 'ML-DSA-87'
-                public_key.verify(  # type: ignore[union-attr,call-arg]
-                    signature=csr.signature,
-                    data=csr.tbs_certrequest_bytes,
-                )
-                hash_info = ''  # ML-DSA is a pure signature scheme
-            else:
-                error_message = 'Unsupported key type for signature verification.'
-                raise TypeError(error_message)  # noqa: TRY301
-
-            self.logger.info('EST CSR signature verification successful: %s key%s',
-                             key_type, hash_info)
-        except Exception as e:
-            error_message = 'Failed to verify the CSR signature.'
-            self.logger.exception('EST CSR signature verification failed', extra={'exception': str(e)})
-            raise ValueError(error_message) from e
-
-    def _raise_validation_error(self, message: str) -> Never:
-        """Raise a ValueError with the given message."""
-        raise ValueError(message)
+    context_type = EstCertificateRequestContext
+    protocol = 'EST'
+    missing_csr_message = (
+        'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
+    )
+    invalid_csr_message = (
+        'CSR signature verification only supports EST requests with CertificateSigningRequest objects.'
+    )
+    invalid_csr_exception = ValueError
 
 
 class EstMessageParser(CompositeParsing):

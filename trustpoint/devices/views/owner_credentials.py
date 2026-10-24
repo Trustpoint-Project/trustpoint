@@ -19,7 +19,7 @@ from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+from trustpoint_core.oid import KeyPairGenerator
 from trustpoint_core.serializer import PrivateKeySerializer
 
 from pki.forms import (
@@ -35,10 +35,13 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
 from pki.util.cert_profile import ProfileValidationError
+from pki.util.certificate_request import build_cert_content_summary, build_request_data, public_key_info_from_key_type
+from pki.views.mixins import CertificateProfileSelectionMixin
 from request.clients import EstClient, EstClientError
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
 from request.request_context import EstCertificateRequestContext
+from shared.views import FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
 from trustpoint.settings import UIConfig
@@ -646,7 +649,7 @@ class IssuedCredentialDeleteView(LoggerMixin, ZeroTouchContextMixin, DetailView[
 # DevOwnerID EST certificate issuance (define content → request)
 # ---------------------------------------------------------------------------
 
-class OwnerCredentialDefineCertContentEstView(
+class OwnerCredentialDefineCertContentEstView(FormErrorMessageMixin, CertificateProfileSelectionMixin,
     LoggerMixin, ZeroTouchContextMixin, FormView[CertificateIssuanceForm]
 ):
     """Step 1 - Define the certificate content for a new Zero-Touch EST enrollment in the Devices section.
@@ -661,6 +664,8 @@ class OwnerCredentialDefineCertContentEstView(
     field values in the session under ``dev_owner_id_cert_content_<pk>``.
     """
 
+    default_profile_name = 'dev_owner_id'
+
     form_class = CertificateIssuanceForm
     template_name = 'devices/zero_touch_credentials/define_cert_content_est.html'
     available_profiles: list[CertificateProfileModel]
@@ -668,14 +673,7 @@ class OwnerCredentialDefineCertContentEstView(
     def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
         return f'dev_owner_id_cert_content_{owner_credential.pk}'
 
-    def _public_key_info_from_key_type(self, key_type: str) -> PublicKeyInfo:
-        """Convert a key_type string (e.g. 'RSA-2048', 'ECC-SECP256R1') to a PublicKeyInfo."""
-        if key_type.startswith('RSA-'):
-            key_size = int(key_type.split('-')[1])
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=key_size)
-        curve_name = key_type.split('-', 1)[1]
-        named_curve = NamedCurve[curve_name.upper()]
-        return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=named_curve)
+    _public_key_info_from_key_type = staticmethod(public_key_info_from_key_type)
 
     def _delete_orphan_pending_credentials(self, exclude_pk: int | None) -> None:
         """Delete all key-only (certificate-less) DEV_OWNER_ID credentials for this owner.
@@ -727,32 +725,6 @@ class OwnerCredentialDefineCertContentEstView(
             credential=credential_model,
             owner_credential=self.owner_credential,
         )
-
-    def _resolve_cert_profile(self, request: HttpRequest) -> CertificateProfileModel | None:
-        """Resolve the certificate profile from the request query parameter or fall back to the default.
-
-        Returns the resolved profile, or ``None`` if no profiles are available.
-        """
-        all_profiles = list(CertificateProfileModel.objects.all().order_by('display_name', 'unique_name'))
-        if not all_profiles:
-            return None
-        self.available_profiles = all_profiles
-
-        selected_pk_str = request.GET.get('cert_profile_pk') or request.POST.get('cert_profile_pk')
-        if selected_pk_str:
-            try:
-                selected_pk = int(selected_pk_str)
-                for profile in all_profiles:
-                    if profile.pk == selected_pk:
-                        return profile
-            except (ValueError, TypeError):
-                # Ignore invalid cert_profile_pk values and fall back to the default profile selection.
-                pass
-
-        for profile in all_profiles:
-            if profile.unique_name == 'dev_owner_id':
-                return profile
-        return all_profiles[0]
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Resolve the OwnerCredentialModel and the selected certificate profile.
@@ -810,13 +782,6 @@ class OwnerCredentialDefineCertContentEstView(
         context['cert_profile'] = self.cert_profile
         context['available_profiles'] = self.available_profiles
         return context
-
-    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
-        """Show field errors as Django messages."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error}')
-        return super().form_invalid(form)
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Store certificate content and pending credential pk in session, then proceed to Step 2."""
@@ -876,60 +841,9 @@ class OwnerCredentialRequestCertEstView(
         msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
         raise ValueError(msg)
 
-    def _build_request_data(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Convert the flat form data into the nested structure expected by the profile verifier."""
-        request_data: dict[str, Any] = {
-            'subj': {},
-            'ext': {'subject_alternative_name': {}},
-            'validity': {},
-        }
-        for field in ('common_name', 'organization_name', 'organizational_unit_name',
-                      'country_name', 'state_or_province_name', 'locality_name', 'email_address'):
-            value = cert_content_data.get(field)
-            if value:
-                request_data['subj'][field] = value
-        for field in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
-            value = cert_content_data.get(field)
-            if value:
-                # The value may be a comma-separated string (directly from the form) or already
-                # a list (after a JSON session round-trip). Normalise to list in both cases.
-                if isinstance(value, list):
-                    items = [v.strip() for v in value if str(v).strip()]
-                else:
-                    items = [v.strip() for v in str(value).split(',') if v.strip()]
-                if items:
-                    request_data['ext']['subject_alternative_name'][field] = items
-        for field in ('days', 'hours', 'minutes', 'seconds'):
-            value = cert_content_data.get(field)
-            if value is not None:
-                request_data['validity'][field] = int(value)
-        return request_data
+    _build_request_data = staticmethod(build_request_data)
 
-    def _build_cert_content_summary(self, cert_data: dict[str, Any]) -> dict[str, Any]:
-        """Return a human-readable summary dict suitable for template rendering."""
-        summary: dict[str, Any] = {'subject': {}, 'san': {}, 'validity': ''}
-        for key, label in (
-            ('common_name', 'Common Name (CN)'),
-            ('organization_name', 'Organization (O)'),
-            ('organizational_unit_name', 'Organizational Unit (OU)'),
-            ('country_name', 'Country (C)'),
-            ('state_or_province_name', 'State/Province (ST)'),
-            ('locality_name', 'Locality (L)'),
-            ('email_address', 'Email Address'),
-        ):
-            if cert_data.get(key):
-                summary['subject'][label] = cert_data[key]
-        for key, label in (
-            ('dns_names', 'DNS Names'),
-            ('ip_addresses', 'IP Addresses'),
-            ('rfc822_names', 'Email Addresses (RFC 822)'),
-            ('uris', 'URIs'),
-        ):
-            if cert_data.get(key):
-                summary['san'][label] = cert_data[key]
-        parts = [f'{cert_data[unit]} {unit}' for unit in ('days', 'hours', 'minutes', 'seconds') if cert_data.get(unit)]
-        summary['validity'] = ', '.join(parts) if parts else _('Not specified')
-        return summary
+    _build_cert_content_summary = staticmethod(build_cert_content_summary)
 
     # ------------------------------------------------------------------
     # GET
@@ -1149,7 +1063,7 @@ class OwnerCredentialRequestCertEstView(
 # Domain Credential EST certificate issuance (define content → request)
 # ---------------------------------------------------------------------------
 
-class OwnerCredentialDefineCertContentDomainCredentialEstView(
+class OwnerCredentialDefineCertContentDomainCredentialEstView(FormErrorMessageMixin, CertificateProfileSelectionMixin,
     LoggerMixin, ZeroTouchContextMixin, FormView[CertificateIssuanceForm]
 ):
     """Step 1 - Define the certificate content for a new Domain Credential EST enrollment in the Devices section.
@@ -1159,6 +1073,8 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
     Defaults to ``devownerid_domain_credential`` when present.
     """
 
+    default_profile_name = 'devownerid_domain_credential'
+
     form_class = CertificateIssuanceForm
     template_name = 'devices/zero_touch_credentials/define_cert_content_domain_credential_est.html'
     available_profiles: list[CertificateProfileModel]
@@ -1166,14 +1082,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
     def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
         return f'domain_credential_cert_content_{owner_credential.pk}'
 
-    def _public_key_info_from_key_type(self, key_type: str) -> PublicKeyInfo:
-        """Convert a key_type string (e.g. 'RSA-2048', 'ECC-SECP256R1') to a PublicKeyInfo."""
-        if key_type.startswith('RSA-'):
-            key_size = int(key_type.split('-')[1])
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=key_size)
-        curve_name = key_type.split('-', 1)[1]
-        named_curve = NamedCurve[curve_name.upper()]
-        return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=named_curve)
+    _public_key_info_from_key_type = staticmethod(public_key_info_from_key_type)
 
     def _delete_orphan_pending_credentials(self, exclude_pk: int | None) -> None:
         """Delete all key-only (certificate-less) DOMAIN_CREDENTIAL credentials for this owner."""
@@ -1212,29 +1121,6 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
             credential=credential_model,
             owner_credential=self.owner_credential,
         )
-
-    def _resolve_cert_profile(self, request: HttpRequest) -> CertificateProfileModel | None:
-        """Resolve the certificate profile from the request query parameter or fall back to the default."""
-        all_profiles = list(CertificateProfileModel.objects.all().order_by('display_name', 'unique_name'))
-        if not all_profiles:
-            return None
-        self.available_profiles = all_profiles
-
-        selected_pk_str = request.GET.get('cert_profile_pk') or request.POST.get('cert_profile_pk')
-        if selected_pk_str:
-            try:
-                selected_pk = int(selected_pk_str)
-                for profile in all_profiles:
-                    if profile.pk == selected_pk:
-                        return profile
-            except (ValueError, TypeError):
-                # Ignore invalid cert_profile_pk values and fall back to the default profile selection.
-                pass
-
-        for profile in all_profiles:
-            if profile.unique_name == 'devownerid_domain_credential':
-                return profile
-        return all_profiles[0]
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Resolve the OwnerCredentialModel and the selected certificate profile."""
@@ -1290,13 +1176,6 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
         context['available_profiles'] = self.available_profiles
         return context
 
-    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
-        """Show field errors as Django messages."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error}')
-        return super().form_invalid(form)
-
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Store certificate content, selected profile and pending credential pk in session."""
         session_key = self._pending_session_key(self.owner_credential)
@@ -1347,58 +1226,9 @@ class OwnerCredentialRequestDomainCredentialEstView(
         msg = _('No pending Domain Credential found. Please re-define the certificate content.')
         raise ValueError(msg)
 
-    def _build_request_data(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Convert the flat form data into the nested structure expected by the profile verifier."""
-        request_data: dict[str, Any] = {
-            'subj': {},
-            'ext': {'subject_alternative_name': {}},
-            'validity': {},
-        }
-        for field in ('common_name', 'organization_name', 'organizational_unit_name',
-                      'country_name', 'state_or_province_name', 'locality_name', 'email_address'):
-            value = cert_content_data.get(field)
-            if value:
-                request_data['subj'][field] = value
-        for field in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
-            value = cert_content_data.get(field)
-            if value:
-                if isinstance(value, list):
-                    items = [v.strip() for v in value if str(v).strip()]
-                else:
-                    items = [v.strip() for v in str(value).split(',') if v.strip()]
-                if items:
-                    request_data['ext']['subject_alternative_name'][field] = items
-        for field in ('days', 'hours', 'minutes', 'seconds'):
-            value = cert_content_data.get(field)
-            if value is not None:
-                request_data['validity'][field] = int(value)
-        return request_data
+    _build_request_data = staticmethod(build_request_data)
 
-    def _build_cert_content_summary(self, cert_data: dict[str, Any]) -> dict[str, Any]:
-        """Return a human-readable summary dict suitable for template rendering."""
-        summary: dict[str, Any] = {'subject': {}, 'san': {}, 'validity': ''}
-        for key, label in (
-            ('common_name', 'Common Name (CN)'),
-            ('organization_name', 'Organization (O)'),
-            ('organizational_unit_name', 'Organizational Unit (OU)'),
-            ('country_name', 'Country (C)'),
-            ('state_or_province_name', 'State/Province (ST)'),
-            ('locality_name', 'Locality (L)'),
-            ('email_address', 'Email Address'),
-        ):
-            if cert_data.get(key):
-                summary['subject'][label] = cert_data[key]
-        for key, label in (
-            ('dns_names', 'DNS Names'),
-            ('ip_addresses', 'IP Addresses'),
-            ('rfc822_names', 'Email Addresses (RFC 822)'),
-            ('uris', 'URIs'),
-        ):
-            if cert_data.get(key):
-                summary['san'][label] = cert_data[key]
-        parts = [f'{cert_data[unit]} {unit}' for unit in ('days', 'hours', 'minutes', 'seconds') if cert_data.get(unit)]
-        summary['validity'] = ', '.join(parts) if parts else _('Not specified')
-        return summary
+    _build_cert_content_summary = staticmethod(build_cert_content_summary)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add cert-content summary and profile to the template context."""
