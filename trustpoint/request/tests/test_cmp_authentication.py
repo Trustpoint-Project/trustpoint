@@ -59,7 +59,7 @@ class TestCmpCertConfAuthentication:
         queryset.select_related.return_value.first.return_value = issued_cred
 
         with patch.object(IssuedCredentialModel.objects, 'filter', return_value=queryset):
-            with patch('request.authentication.cmp.SignatureSuite.from_certificate') as suite_mock:
+            with patch('request.cert_conf.SignatureSuite.from_certificate') as suite_mock:
                 suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=None))
                 with pytest.raises(ValueError, match='hashAlg is required'):
                     CmpCertConfAuthentication().authenticate(context)

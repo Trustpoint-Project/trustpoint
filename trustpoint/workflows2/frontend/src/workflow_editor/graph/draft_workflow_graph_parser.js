@@ -1,3 +1,5 @@
+import { uniqStrings } from '../shared/utils.js';
+import { extractStepOutcomes } from '../document/catalog_lookup.js';
 import { deepClone } from '../shared/utils.js';
 import { parseDocument } from 'yaml';
 import { analyzeWorkflowVariableAvailability } from '../document/variable_availability.js';
@@ -5,26 +7,6 @@ import { analyzeWorkflowVariableAvailability } from '../document/variable_availa
 export const TRIGGER_NODE_ID = '__trigger__';
 export const APPLY_NODE_ID = '__apply__';
 
-
-
-function uniqStrings(values) {
-  const out = [];
-  const seen = new Set();
-
-  for (const value of values || []) {
-    if (typeof value !== 'string') {
-      continue;
-    }
-    const s = value.trim();
-    if (!s || seen.has(s)) {
-      continue;
-    }
-    seen.add(s);
-    out.push(s);
-  }
-
-  return out;
-}
 
 function yamlErrorOffset(error) {
   if (Array.isArray(error?.pos) && typeof error.pos[0] === 'number') {
@@ -82,31 +64,6 @@ function buildApplyStartEdge(start) {
   };
 }
 
-function extractStepOutcomes(stepObj) {
-  if (!stepObj || typeof stepObj !== 'object') {
-    return [];
-  }
-
-  if (stepObj.type === 'logic') {
-    const cases = Array.isArray(stepObj.cases) ? stepObj.cases : [];
-    const caseOutcomes = cases
-      .map((item) => (item && typeof item === 'object' ? item.outcome : null))
-      .filter((value) => typeof value === 'string');
-
-    const defaultOutcome = typeof stepObj.default === 'string' ? [stepObj.default] : [];
-    return uniqStrings([...caseOutcomes, ...defaultOutcome]);
-  }
-
-  if (stepObj.type === 'approval') {
-    return uniqStrings([
-      stepObj.approved_outcome,
-      stepObj.rejected_outcome,
-      stepObj.timeout_outcome,
-    ]);
-  }
-
-  return [];
-}
 
 function buildNodes(stepsObj, edges) {
   const hasOutgoing = new Set(edges.map((edge) => edge.from));

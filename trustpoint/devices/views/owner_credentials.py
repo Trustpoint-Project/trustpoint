@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from cryptography import x509
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -18,8 +17,6 @@ from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from trustpoint_core.oid import KeyPairGenerator
-from trustpoint_core.serializer import PrivateKeySerializer
 
 from devices.presentation import credential_expiry_display
 from pki.forms import (
@@ -32,15 +29,17 @@ from pki.forms import (
 )
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
-from pki.models.certificate import CertificateModel
-from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
-from pki.services.owner_credential import build_owner_credential_est_context_kwargs
+from pki.models.credential import CredentialModel
+from pki.services.owner_credential import (
+    build_domain_credential_est_context_kwargs,
+    build_owner_credential_est_context_kwargs,
+    create_pending_owner_credential,
+    enroll_owner_credential_est,
+)
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_cert_content_summary, build_request_data, public_key_info_from_key_type
 from pki.views.mixins import CertificateProfileSelectionMixin
-from request.clients import EstClient, EstClientError
-from request.operation_processor.csr_build import ProfileAwareCsrBuilder
-from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
+from request.clients import EstClientError
 from request.request_context import EstCertificateRequestContext
 from shared.views import FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
@@ -693,27 +692,12 @@ class OwnerCredentialDefineCertContentEstView(FormErrorMessageMixin, Certificate
                 self.logger.warning('Could not delete orphan pending credential pk=%s', orphan.pk)
 
     def _create_pending_issued_credential(self) -> RemoteIssuedCredentialModel:
-        """Generate a fresh key pair and create a key-only RemoteIssuedCredentialModel.
-
-        The key algorithm is taken from ``owner_credential.key_type`` so that every
-        credential for a given DevOwnerID always uses the same algorithm.
-        """
-        key_type = self.owner_credential.key_type or 'ECC-SECP256R1'
-        private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(
-            self._public_key_info_from_key_type(key_type)
-        )
-        private_key_pem = PrivateKeySerializer(private_key).as_pkcs8_pem().decode()
-        credential_model = CredentialModel.objects.create(
-            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
-            private_key=private_key_pem,
-            certificate=None,
-        )
-        return RemoteIssuedCredentialModel.objects.create(
-            common_name=self.owner_credential.unique_name,
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            issued_using_cert_profile=self.cert_profile.unique_name,
-            credential=credential_model,
-            owner_credential=self.owner_credential,
+        """Create the pending key and issued record for the selected profile."""
+        return create_pending_owner_credential(
+            self.owner_credential,
+            self.cert_profile,
+            RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+            CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -872,86 +856,18 @@ class OwnerCredentialRequestCertEstView(
     def _perform_est_enrollment(
         self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
     ) -> None:
-        """Build a CSR, sign it with the DevOwnerID key and enroll via EST.
-
-        On success the issued certificate is stored in the existing
-        ``IssuedCredentialModel(DEV_OWNER_ID)`` that holds the private key.
-        """
-        from cryptography.hazmat.primitives import serialization  # noqa: PLC0415
-
+        """Enroll the session's pending credential and persist the issued certificate."""
         profile_name = cert_content_data.get('cert_profile_unique_name', 'dev_owner_id')
         cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
-
-        # Fetch the specific pending IssuedCredentialModel created in Step 1.
-        # We use the pk stored in the session to avoid ambiguity when multiple
-        # DevOwnerID credentials exist for the same OwnerCredentialModel.
         pending_issued = self._get_pending_issued(owner_credential, cert_content_data)
         if pending_issued.credential is None:
             msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
             raise ValueError(msg)
-
-        signing_credential = pending_issued.credential  # CredentialModel (key-only so far)
-
-        # Build EST context with authentication based on the owner credential type
-        est_kwargs = self._build_est_context_kwargs(owner_credential, cert_profile)
-        context = EstCertificateRequestContext(**est_kwargs)
+        context = EstCertificateRequestContext(**self._build_est_context_kwargs(owner_credential, cert_profile))
         context.request_data = self._build_request_data(cert_content_data)
-        context.owner_credential = signing_credential  # used by EstDeviceCsrSignProcessor
-
-        # Build CSR from profile + request data
-        csr_builder = ProfileAwareCsrBuilder()
-        csr_builder.process_operation(context)
-        csr = csr_builder.get_csr()
-        context.cert_requested = csr
-
-        # Re-sign the CSR with the DevOwnerID private key
-        csr_signer = EstDeviceCsrSignProcessor()
-        csr_signer.process_operation(context)
-        signed_csr = csr_signer.get_signed_csr()
-
-        # Send to remote EST server
-        est_client = EstClient(context)
-        issued_cert = est_client.simple_enroll(signed_csr)
-
-        # Persist the issued certificate back into the existing CredentialModel
-        from cryptography.x509 import load_pem_x509_certificate  # noqa: PLC0415
-        cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode()
-        cert_obj = load_pem_x509_certificate(cert_pem.encode())
-        cert_model = CertificateModel.save_certificate(cert_obj)
-
-        signing_credential.certificate = cert_model
-        signing_credential.save()
-        PrimaryCredentialCertificate.objects.get_or_create(
-            credential=signing_credential,
-            certificate=cert_model,
-            defaults={'is_primary': True},
+        enroll_owner_credential_est(
+            context, owner_credential, pending_issued, logger=self.logger, domain_credential=False,
         )
-
-        # Update the IssuedCredentialModel common_name from the certificate CN
-        cn = cert_model.common_name or owner_credential.unique_name
-        pending_issued.common_name = cn
-        pending_issued.save(update_fields=['common_name'])
-
-        # Extract IDevID references from the SAN of the issued DevOwnerID certificate
-        # and persist them so the list view can display the correct count.
-        # Each URI with the "dev-owner:" scheme encodes the IDevID identity.
-        # cert_model is the DevOwnerID CertificateModel just saved above, so we link it
-        # directly on the IDevIDReferenceModel to avoid fingerprint-based lookups later.
-        try:
-            san_ext = cert_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-            for san in san_ext.value:
-                if isinstance(san, x509.UniformResourceIdentifier) and san.value.startswith('dev-owner:'):
-                    IDevIDReferenceModel.objects.get_or_create(
-                        dev_owner_id=owner_credential,
-                        idevid_ref=san.value,
-                        defaults={'dev_owner_id_certificate': cert_model},
-                    )
-        except x509.ExtensionNotFound:
-            self.logger.warning(
-                'Issued DevOwnerID certificate for "%s" has no SAN extension; '
-                'no IDevID references stored.',
-                owner_credential.unique_name,
-            )
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Perform the EST enrollment and redirect to the CLM view."""
@@ -1042,23 +958,12 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(FormErrorMessageMi
                 self.logger.warning('Could not delete orphan pending domain credential pk=%s', orphan.pk)
 
     def _create_pending_issued_credential(self) -> RemoteIssuedCredentialModel:
-        """Generate a fresh key pair and create a key-only RemoteIssuedCredentialModel for DOMAIN_CREDENTIAL."""
-        key_type = self.owner_credential.key_type or 'ECC-SECP256R1'
-        private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(
-            self._public_key_info_from_key_type(key_type)
-        )
-        private_key_pem = PrivateKeySerializer(private_key).as_pkcs8_pem().decode()
-        credential_model = CredentialModel.objects.create(
-            credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
-            private_key=private_key_pem,
-            certificate=None,
-        )
-        return RemoteIssuedCredentialModel.objects.create(
-            common_name=self.owner_credential.unique_name,
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-            issued_using_cert_profile=self.cert_profile.unique_name,
-            credential=credential_model,
-            owner_credential=self.owner_credential,
+        """Create the pending key and issued record for the selected profile."""
+        return create_pending_owner_credential(
+            self.owner_credential,
+            self.cert_profile,
+            RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
+            CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
         )
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -1195,74 +1100,20 @@ class OwnerCredentialRequestDomainCredentialEstView(
     def _perform_est_enrollment(
         self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
     ) -> None:
-        """Build a CSR, sign it with the Domain Credential key and enroll via EST.
-
-        Uses remote_path_domain_credential, trust_store from OnboardingConfigModel,
-        est_username from OwnerCredentialModel, est_password from OnboardingConfigModel.
-        """
-        from cryptography.hazmat.primitives import serialization  # noqa: PLC0415
-
+        """Enroll the session's pending credential and persist the issued certificate."""
         profile_name = cert_content_data.get('cert_profile_unique_name', 'devownerid_domain_credential')
         cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
-
         pending_issued = self._get_pending_issued(owner_credential, cert_content_data)
         if pending_issued.credential is None:
             msg = _('No pending Domain Credential found. Please re-define the certificate content.')
             raise ValueError(msg)
-
-        signing_credential = pending_issued.credential
-
-        onboarding_config = owner_credential.onboarding_config
         context = EstCertificateRequestContext(
-            operation='simpleenroll',
-            protocol='est',
-            domain=None,
-            cert_profile_str=profile_name,
-            certificate_profile_model=cert_profile,
-            allow_ca_certificate_request=False,
-            est_server_host=owner_credential.remote_host,
-            est_server_port=owner_credential.remote_port,
-            est_server_path=owner_credential.remote_path_domain_credential,
-            est_username=owner_credential.est_username,
-            est_password=onboarding_config.est_password if onboarding_config else None,
-            est_server_truststore=onboarding_config.trust_store if onboarding_config else None,
+            **build_domain_credential_est_context_kwargs(owner_credential, cert_profile)
         )
         context.request_data = self._build_request_data(cert_content_data)
-        context.owner_credential = signing_credential
-
-        # Build CSR from profile + request data
-        csr_builder = ProfileAwareCsrBuilder()
-        csr_builder.process_operation(context)
-        csr = csr_builder.get_csr()
-        context.cert_requested = csr
-
-        # Re-sign the CSR with the Domain Credential private key
-        csr_signer = EstDeviceCsrSignProcessor()
-        csr_signer.process_operation(context)
-        signed_csr = csr_signer.get_signed_csr()
-
-        # Send to remote EST server
-        est_client = EstClient(context)
-        issued_cert = est_client.simple_enroll(signed_csr)
-
-        # Persist the issued certificate
-        from cryptography.x509 import load_pem_x509_certificate  # noqa: PLC0415
-        cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode()
-        cert_obj = load_pem_x509_certificate(cert_pem.encode())
-        cert_model = CertificateModel.save_certificate(cert_obj)
-
-        signing_credential.certificate = cert_model
-        signing_credential.save()
-        PrimaryCredentialCertificate.objects.get_or_create(
-            credential=signing_credential,
-            certificate=cert_model,
-            defaults={'is_primary': True},
+        enroll_owner_credential_est(
+            context, owner_credential, pending_issued, logger=self.logger, domain_credential=True,
         )
-
-        cn = cert_model.common_name or owner_credential.unique_name
-        pending_issued.common_name = cn
-        pending_issued.issued_using_cert_profile = profile_name
-        pending_issued.save(update_fields=['common_name', 'issued_using_cert_profile'])
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Perform the EST enrollment and redirect to the CLM view."""

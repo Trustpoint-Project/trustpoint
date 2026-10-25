@@ -9,7 +9,12 @@ from django.utils.translation import gettext as _
 from trustpoint_core.oid import NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
 
 
-def build_request_data(cert_content_data: dict[str, Any]) -> dict[str, Any]:
+def build_request_data(
+    cert_content_data: dict[str, Any],
+    *,
+    stringify_san_items: bool = False,
+    keep_empty_sans: bool = False,
+) -> dict[str, Any]:
     """Convert flat serializer data into the nested structure expected by the profile verifier."""
     request_data: dict[str, Any] = {
         'subj': {},
@@ -32,10 +37,13 @@ def build_request_data(cert_content_data: dict[str, Any]) -> dict[str, Any]:
         value = cert_content_data.get(field)
         if value:
             if isinstance(value, list):
-                items = [v.strip() for v in value if str(v).strip()]
+                items = [
+                    str(v).strip() if stringify_san_items else v.strip()
+                    for v in value if str(v).strip()
+                ]
             else:
                 items = [v.strip() for v in str(value).split(',') if v.strip()]
-            if items:
+            if items or keep_empty_sans:
                 request_data['ext']['subject_alternative_name'][field] = items
     for field in ('days', 'hours', 'minutes', 'seconds'):
         value = cert_content_data.get(field)

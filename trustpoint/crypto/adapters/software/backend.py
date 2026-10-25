@@ -9,7 +9,7 @@ import secrets
 from typing import TYPE_CHECKING, Any
 
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, mldsa, padding, rsa, utils
+from cryptography.hazmat.primitives.asymmetric import ec, mldsa, rsa
 
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding, SoftwareManagedKeyVerification
 from crypto.adapters.software.capabilities import SOFTWARE_CAPABILITIES, SoftwareCapabilities
@@ -23,6 +23,7 @@ from crypto.domain.errors import (
 )
 from crypto.domain.public_keys import public_key_fingerprint_sha256
 from crypto.domain.refs import ManagedKeyVerificationStatus
+from crypto.domain.signing import sign_with_rsa_or_ec_key
 from crypto.domain.specs import (
     EcKeySpec,
     KeySpec,
@@ -162,25 +163,11 @@ class SoftwareBackend:
         private_key = self._load_private_key(key)
         hash_algorithm = self._hash_algorithm(request.hash_algorithm)
 
-        if key.algorithm is KeyAlgorithm.RSA and isinstance(private_key, rsa.RSAPrivateKey):
-            algorithm = utils.Prehashed(hash_algorithm) if request.prehashed else hash_algorithm
-            if request.signature_algorithm is not SignatureAlgorithm.RSA_PKCS1V15:
-                msg = f'Unsupported RSA signature algorithm {request.signature_algorithm.value!r}.'
-                raise MechanismUnsupportedError(msg)
-            return bytes(
-                private_key.sign(
-                    data,
-                    padding.PKCS1v15(),
-                    algorithm,
-                ),
-            )
-
-        if key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey):
-            if request.signature_algorithm is not SignatureAlgorithm.ECDSA:
-                msg = f'Unsupported EC signature algorithm {request.signature_algorithm.value!r}.'
-                raise MechanismUnsupportedError(msg)
-            algorithm = utils.Prehashed(hash_algorithm) if request.prehashed else hash_algorithm
-            return bytes(private_key.sign(data, ec.ECDSA(algorithm)))
+        if (
+            (key.algorithm is KeyAlgorithm.RSA and isinstance(private_key, rsa.RSAPrivateKey))
+            or (key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey))
+        ):
+            return sign_with_rsa_or_ec_key(private_key, data, request, hash_algorithm)
 
         if key.algorithm is KeyAlgorithm.MLDSA and isinstance(
             private_key,

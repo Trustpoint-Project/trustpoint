@@ -9,7 +9,7 @@ import base64
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
 from appsecrets.service import decrypt_app_secret, encrypt_app_secret
 from crypto.adapters.protected_import.bindings import (
@@ -17,9 +17,10 @@ from crypto.adapters.protected_import.bindings import (
     ProtectedImportManagedKeyVerification,
 )
 from crypto.domain import public_keys
-from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
+from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm
 from crypto.domain.errors import KeyNotFoundError, MechanismUnsupportedError, ProviderUnavailableError
 from crypto.domain.refs import ManagedKeyVerificationStatus
+from crypto.domain.signing import sign_with_rsa_or_ec_key
 
 if TYPE_CHECKING:
     from crypto.domain.algorithms import SupportedPublicKey
@@ -87,19 +88,11 @@ class ProtectedImportKeyOperations:
         private_key = self._load_private_key(key)
         hash_algorithm = self._hash_algorithm(request.hash_algorithm)
 
-        if key.algorithm is KeyAlgorithm.RSA and isinstance(private_key, rsa.RSAPrivateKey):
-            if request.signature_algorithm is not SignatureAlgorithm.RSA_PKCS1V15:
-                msg = f'Unsupported RSA signature algorithm {request.signature_algorithm.value!r}.'
-                raise MechanismUnsupportedError(msg)
-            algorithm = utils.Prehashed(hash_algorithm) if request.prehashed else hash_algorithm
-            return bytes(private_key.sign(data, padding.PKCS1v15(), algorithm))
-
-        if key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey):
-            if request.signature_algorithm is not SignatureAlgorithm.ECDSA:
-                msg = f'Unsupported EC signature algorithm {request.signature_algorithm.value!r}.'
-                raise MechanismUnsupportedError(msg)
-            algorithm = utils.Prehashed(hash_algorithm) if request.prehashed else hash_algorithm
-            return bytes(private_key.sign(data, ec.ECDSA(algorithm)))
+        if (
+            (key.algorithm is KeyAlgorithm.RSA and isinstance(private_key, rsa.RSAPrivateKey))
+            or (key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey))
+        ):
+            return sign_with_rsa_or_ec_key(private_key, data, request, hash_algorithm)
 
         msg = 'Protected imported-key algorithm and private-key type are inconsistent.'
         raise ProviderUnavailableError(msg)
