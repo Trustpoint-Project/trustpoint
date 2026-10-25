@@ -8,46 +8,7 @@
     </div>
 
     <div class="card-body">
-        <div class="tp-kvp-list">
-            <div>
-                <div>{% trans 'Zero-Touch Credential Name' %}</div>
-                <div>{{ owner_credential.unique_name }}</div>
-            </div>
-            <div>
-                <div>{% trans 'Remote Host' %}</div>
-                <div>{{ owner_credential.remote_host|default:"—" }}</div>
-            </div>
-            <div>
-                <div>{% trans 'Remote Port' %}</div>
-                <div>{{ owner_credential.remote_port|default:"—" }}</div>
-            </div>
-            <div>
-                <div>{% trans 'Remote Path' %}</div>
-                <div>{{ owner_credential.remote_path|default:"—" }}</div>
-            </div>
-            {% if owner_credential.est_username %}
-            <div>
-                <div>{% trans 'EST Username' %}</div>
-                <div>{{ owner_credential.est_username }}</div>
-            </div>
-            {% endif %}
-            <div>
-                <div>{% trans 'Trust Store' %}</div>
-                <div>
-                    {% if owner_credential.no_onboarding_config.trust_store %}
-                        <a href="{% url 'pki:truststore-detail' pk=owner_credential.no_onboarding_config.trust_store.pk %}">
-                            {{ owner_credential.no_onboarding_config.trust_store.unique_name }}
-                        </a>
-                    {% elif owner_credential.onboarding_config.trust_store %}
-                        <a href="{% url 'pki:truststore-detail' pk=owner_credential.onboarding_config.trust_store.pk %}">
-                            {{ owner_credential.onboarding_config.trust_store.unique_name }}
-                        </a>
-                    {% else %}
-                        <span class="text-muted">{% trans 'Not configured' %}</span>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+        {% include 'devices/zero_touch_credentials/includes/request_details.html' with owner_credential=owner_credential domain_credential=False trust_store=trust_store est_password_set=est_password_set only %}
 
         {% if has_cert_content %}
         {% include 'shared/partials/certificate_content_summary.html' with summary=cert_content_summary only %}

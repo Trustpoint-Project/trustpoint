@@ -90,45 +90,7 @@
 
                 <hr class="mb-4">
 
-                <div class="row g-3">
-
-                    <div class="col-md-6">
-                        <a
-                            href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='pem' %}"
-                            class="btn btn-outline-secondary w-100 text-start py-3"
-                        >
-                            {% trans 'PEM' %}
-                        </a>
-                    </div>
-
-                    <div class="col-md-6">
-                        <a
-                            href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='der' %}"
-                            class="btn btn-outline-secondary w-100 text-start py-3"
-                        >
-                            {% trans 'DER' %}
-                        </a>
-                    </div>
-
-                    <div class="col-md-6">
-                        <a
-                            href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='pkcs7_pem' %}"
-                            class="btn btn-outline-secondary w-100 text-start py-3"
-                        >
-                            {% trans 'PKCS#7 (PEM)' %}
-                        </a>
-                    </div>
-
-                    <div class="col-md-6">
-                        <a
-                            href="{% url 'pki:certificate-file-download' pk=certificate.id file_format='pkcs7_der' %}"
-                            class="btn btn-outline-secondary w-100 text-start py-3"
-                        >
-                            {% trans 'PKCS#7 (DER)' %}
-                        </a>
-                    </div>
-
-                </div>
+                {% include 'shared/partials/download_format_buttons.html' with download_url_name='pki:certificate-file-download' object_pk=certificate.id only %}
             </section>
 
         </div>

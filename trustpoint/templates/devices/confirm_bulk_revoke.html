@@ -30,59 +30,7 @@
                 </div>
 
                 {% for device in devices %}
-                    <section class="{% if not forloop.last %}mb-5{% endif %}">
-                        <div class="mb-3">
-                            <h2 class="h4 mb-1">
-                                {% blocktranslate with number=forloop.counter name=device.common_name %}
-                                    Device {{ number }}: {{ name }}
-                                {% endblocktranslate %}
-                            </h2>
-                        </div>
-
-                        <hr class="mb-4">
-
-                        <div class="tp-kvp-list">
-                            <div>
-                                <div>
-                                    {% trans 'Name' %}
-                                </div>
-
-                                <div>
-                                    {% if device.common_name %}
-                                        {{ device.common_name }}
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-
-                            <div>
-                                <div>
-                                    {% trans 'Domain' %}
-                                </div>
-
-                                <div>
-                                    {% if device.domain %}
-                                        <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
-                                            {{ device.domain.unique_name }}
-                                        </a>
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-
-                            <div>
-                                <div>
-                                    {% trans 'Issued Credentials' %}
-                                </div>
-
-                                <div>
-                                    {{ device.issued_credentials.count }}
-                                </div>
-                            </div>
-                        </div>
-                    </section>
+                    {% include 'devices/includes/selection_summary.html' with device=device forloop=forloop only %}
 
                 {% empty %}
                     <div class="text-center text-muted py-5">

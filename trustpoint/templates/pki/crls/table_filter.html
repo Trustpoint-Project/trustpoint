@@ -1,102 +1,61 @@
-{% load i18n %}
+{% extends 'shared/partials/filter_dropdown_base.html' %}
 
 {% block table_filter %}
-<div class="d-flex flex-wrap gap-2 align-items-center">
+    {% with filter_dropdown_suffix='-crls' %}
+        {{ block.super }}
+    {% endwith %}
+{% endblock %}
 
-    <div class="dropdown">
-        <button
-            class="btn btn-sm {% if filters_active %}btn-primary{% else %}btn-outline-secondary{% endif %} dropdown-toggle"
-            type="button"
-            id="tp-filter-dropdown-btn-crls"
-            data-bs-toggle="dropdown"
-            data-bs-auto-close="outside"
-            aria-expanded="false"
+{% block filter_fields %}
+<div class="mb-3">
+    <label
+        for="{{ filter.form.ca.id_for_label }}"
+        class="form-label"
+    >
+        {{ filter.form.ca.label }}
+    </label>
+
+    {{ filter.form.ca }}
+</div>
+
+<div class="mb-3">
+    <label
+        for="{{ filter.form.is_active.id_for_label }}"
+        class="form-label"
+    >
+        {{ filter.form.is_active.label }}
+    </label>
+
+    {{ filter.form.is_active }}
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-6">
+        <label
+            for="{{ filter.form.this_update_from.id_for_label }}"
+            class="form-label"
         >
-            {% trans 'Filters' %}
-            {% if filters_active %}
-                <span class="ms-1">
-                    · {% trans 'Active' %}
-                </span>
-            {% endif %}
-        </button>
+            {{ filter.form.this_update_from.label }}
+        </label>
 
-        <div
-            class="dropdown-menu p-3"
-            id="tp-filter-dropdown-menu-crls"
-            aria-labelledby="tp-filter-dropdown-btn-crls"
-            style="min-width: 22rem;"
-        >
-            <form method="get">
-
-                <div class="mb-3">
-                    <label
-                        for="{{ filter.form.ca.id_for_label }}"
-                        class="form-label"
-                    >
-                        {{ filter.form.ca.label }}
-                    </label>
-
-                    {{ filter.form.ca }}
-                </div>
-
-                <div class="mb-3">
-                    <label
-                        for="{{ filter.form.is_active.id_for_label }}"
-                        class="form-label"
-                    >
-                        {{ filter.form.is_active.label }}
-                    </label>
-
-                    {{ filter.form.is_active }}
-                </div>
-
-                <div class="row g-2 mb-3">
-                    <div class="col-6">
-                        <label
-                            for="{{ filter.form.this_update_from.id_for_label }}"
-                            class="form-label"
-                        >
-                            {{ filter.form.this_update_from.label }}
-                        </label>
-
-                        {{ filter.form.this_update_from }}
-                    </div>
-
-                    <div class="col-6">
-                        <label
-                            for="{{ filter.form.this_update_to.id_for_label }}"
-                            class="form-label"
-                        >
-                            {{ filter.form.this_update_to.label }}
-                        </label>
-
-                        {{ filter.form.this_update_to }}
-                    </div>
-                </div>
-
-                <div class="d-flex justify-content-between gap-2">
-                    <a
-                        href="{% url table_url %}"
-                        class="btn btn-sm btn-outline-secondary"
-                    >
-                        {% trans 'Reset' %}
-                    </a>
-
-                    <button
-                        type="submit"
-                        class="btn btn-sm btn-primary"
-                    >
-                        {% trans 'Apply Filters' %}
-                    </button>
-                </div>
-
-            </form>
-        </div>
+        {{ filter.form.this_update_from }}
     </div>
 
+    <div class="col-6">
+        <label
+            for="{{ filter.form.this_update_to.id_for_label }}"
+            class="form-label"
+        >
+            {{ filter.form.this_update_to.label }}
+        </label>
+
+        {{ filter.form.this_update_to }}
+    </div>
+</div>
+{% endblock %}
+
+{% block filter_export %}
     <div class="d-flex align-items-center">
         {% include "shared/partials/export_button.html" %}
     </div>
-
-</div>
-{% endblock table_filter %}
+{% endblock %}
