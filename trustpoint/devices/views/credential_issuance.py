@@ -20,15 +20,12 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormMixin, FormView
 
 from devices.forms import (
-    BaseCredentialForm,
-    IssueDomainCredentialForm,
     OpcUaGdsPushTruststoreAssociationForm,
 )
 
 # noinspection PyUnresolvedReferences
 from devices.issuer import (
     BaseTlsCredentialIssuer,
-    LocalDomainCredentialIssuer,
 )
 from devices.models import (
     DeviceModel,
@@ -561,40 +558,6 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
             return HttpResponseRedirect(self.get_success_url())
 
         return self.render_to_response(self.get_context_data(form=form))
-
-
-class AbstractIssueDomainCredentialView(
-    AbstractIssueCredentialView[IssueDomainCredentialForm, LocalDomainCredentialIssuer]
-):
-    """Base view for issuing domain credentials."""
-
-    form_class: type[BaseCredentialForm] = IssueDomainCredentialForm
-    template_name = 'devices/credentials/issue_domain_credential.html'
-    issuer_class = LocalDomainCredentialIssuer
-    friendly_name = 'Domain Credential'
-
-    def issue_credential(self, device: DeviceModel, _form: forms.Form) -> IssuedCredentialModel:
-        """Issue a domain credential for the device.
-
-        Args:
-            device: The device to issue the credential for.
-            _form: The form instance containing the validated data.
-
-        Returns:
-            The issued credential model.
-        """
-        if device.domain is None:
-            err_msg = gettext_lazy('Device has no domain configured.')
-            raise Http404(err_msg)
-
-        issuer = self.issuer_class(device=device, domain=device.domain)
-        return issuer.issue_domain_credential()
-
-
-class DeviceIssueDomainCredentialView(AbstractIssueDomainCredentialView):
-    """View for issuing domain credentials for devices."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
 class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
