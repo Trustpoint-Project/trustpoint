@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import psycopg
-from cryptography.hazmat.primitives import hashes
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
@@ -73,8 +72,6 @@ from management.nginx_paths import (
 )
 from management.security_change_audit import provider_configuration_changes
 from management.tls_files import write_tls_pem_files
-from pki.models import CredentialModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.backend_configuration import BackendConfigurationMixin
 from setup_wizard.operational_attach import (
     CompatibilityCheck,
@@ -106,6 +103,7 @@ from setup_wizard.pkcs11_staging import (
     existing_wizard_pkcs11_staged_file,
     wizard_pkcs11_staging_root,
 )
+from setup_wizard.tls_activation import activate_staged_tls_credential
 from setup_wizard.tls_credential import (
     TlsServerCredentialFileParser,
     TlsServerCredentialGenerator,
@@ -136,6 +134,7 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import CertificateSerializer
 
     from crypto.application.provider_backend import ManagedKeyBackendAdapter
+    from pki.models import CredentialModel
 
 logger = logging.getLogger(__name__)
 
@@ -1969,27 +1968,17 @@ class FreshInstallSummaryView(BackendConfigurationMixin, FreshInstallModelFormBa
         )
 
     def _apply_staged_tls_credential(self) -> None:
-        """Promote the staged TLS credential to active and apply it for nginx."""
+        """Promote the staged TLS credential and apply it using this caller's I/O hooks."""
         staged_tls_serializer = load_staged_tls_credential()
         if staged_tls_serializer is None:
-            err_msg = 'No staged TLS Server Credential found.'
-            raise ValueError(err_msg)
-
-        staged_tls_credential = CredentialModel.save_credential_serializer(
-            credential_serializer=staged_tls_serializer,
-            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            msg = 'No staged TLS Server Credential found.'
+            raise ValueError(msg)
+        activate_staged_tls_credential(
+            staged_tls_serializer,
+            write_pem_files=self._write_pem_files,
+            apply_to_nginx=lambda: execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm'),
+            logger=self.logger,
         )
-
-        active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-        active_tls.credential = staged_tls_credential
-        active_tls.save()
-
-        self._write_pem_files(staged_tls_credential)
-        execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm')
-        sha256_fingerprint = staged_tls_credential.get_certificate().fingerprint(hashes.SHA256())
-        formatted_fingerprint = ':'.join(f'{byte:02X}' for byte in sha256_fingerprint)
-        self.logger.info('TLS SHA256 fingerprint: %s', formatted_fingerprint)
-        clear_staged_tls_credential()
 
     @staticmethod
     def _ensure_local_dev_pkcs11_module(config_model: SetupWizardConfigModel) -> Path:

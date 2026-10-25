@@ -19,22 +19,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
+from aoki.management.setup_helpers import EstTestEnvironmentMixin
 from devices.models import DeviceModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
-from pki.management.commands.base_commands import CertificateCreationCommandMixin
-from pki.models import CaModel, CertificateModel, DomainModel
 from pki.models.credential import OwnerCredentialModel
-from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from pki.util.x509 import CertificateGenerator
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any
+
+    from pki.models import DomainModel
+    from pki.models.truststore import TruststoreModel
 
 CA_UNIQUE_NAME = 'DevOwnerIDCA'
 DOMAIN_UNIQUE_NAME = 'DevOwnerIDDomain'
@@ -53,10 +50,8 @@ REMOTE_PORT = 443
 REMOTE_PATH = f'/.well-known/est/{DOMAIN_UNIQUE_NAME}/dev_owner_id/simpleenroll'
 KEY_TYPE = 'RSA-2048'
 
-# ruff: noqa: T201  # use of print is fine in management commands
 
-
-class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
+class Command(EstTestEnvironmentMixin, BaseCommand):
     """Creates a Trustpoint test environment for AOKI DevOwnerID EST enrollment testing."""
 
     help = (
@@ -64,19 +59,10 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         'and device ("DevOwnerIDDevice") for AOKI DevOwnerID EST enrollment testing.'
     )
 
-    def log_and_stdout(self, message: str, level: str = 'info') -> None:
-        """Log a message and print it to stdout.
-
-        :param message: The message to log and print.
-        :param level: The log level (``'info'``, ``'warning'``, or ``'error'``).
-        """
-        print(message)
-        if level == 'warning':
-            self.logger.warning(message)
-        elif level == 'error':
-            self.logger.error(message)
-        else:
-            self.logger.info(message)
+    ca_unique_name = CA_UNIQUE_NAME
+    domain_unique_name = DOMAIN_UNIQUE_NAME
+    truststore_unique_name = TRUSTSTORE_UNIQUE_NAME
+    https_server_cert_path = HTTPS_SERVER_CERT_PATH
 
     def handle(self, *args: Any, **kwargs: Any) -> None:
         """Execute the command.
@@ -111,56 +97,6 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _get_or_create_issuing_ca(self) -> CaModel:
-        """Return an existing CA or create a fresh RSA-2048 root + intermediate CA.
-
-        :returns: The :class:`~pki.models.CaModel` for ``DevOwnerIDCA``.
-        """
-        if CaModel.objects.filter(unique_name=CA_UNIQUE_NAME).exists():
-            self.log_and_stdout(f'Issuing CA "{CA_UNIQUE_NAME}" already exists, skipping creation.')
-            return CaModel.objects.get(unique_name=CA_UNIQUE_NAME)
-
-        root_key = self.create_backend_rsa_private_key(alias=f'{CA_UNIQUE_NAME}-root', key_size=2048)
-        issuing_key = self.create_backend_rsa_private_key(alias=CA_UNIQUE_NAME, key_size=2048)
-
-        root_cert, _ = self.create_root_ca(
-            f'{CA_UNIQUE_NAME} - Root',
-            private_key=root_key,
-            hash_algorithm=hashes.SHA256(),
-        )
-        issuing_cert, _ = self.create_issuing_ca(
-            issuer_private_key=root_key,
-            private_key=issuing_key,
-            issuer_cn=f'{CA_UNIQUE_NAME} - Root',
-            subject_cn=CA_UNIQUE_NAME,
-            hash_algorithm=hashes.SHA256(),
-        )
-        issuing_ca = CertificateGenerator.save_issuing_ca(
-            issuing_ca_cert=issuing_cert,
-            chain=[root_cert],
-            private_key=issuing_key,
-            unique_name=CA_UNIQUE_NAME,
-        )
-        self.log_and_stdout(f'Created issuing CA "{CA_UNIQUE_NAME}".')
-        return issuing_ca
-
-    def _get_or_create_domain(self, issuing_ca: CaModel) -> DomainModel:
-        """Return an existing domain or create ``DevOwnerIDDomain`` linked to *issuing_ca*.
-
-        :param issuing_ca: The issuing CA to associate with the domain.
-        :returns: The :class:`~pki.models.DomainModel` for ``DevOwnerIDDomain``.
-        """
-        domain, created = DomainModel.objects.get_or_create(
-            unique_name=DOMAIN_UNIQUE_NAME,
-            defaults={'issuing_ca': issuing_ca},
-        )
-        if created:
-            self.log_and_stdout(f'Created domain "{DOMAIN_UNIQUE_NAME}".')
-        else:
-            domain.issuing_ca = issuing_ca
-            domain.save()
-            self.log_and_stdout(f'Domain "{DOMAIN_UNIQUE_NAME}" already exists, updated issuing CA.')
-        return domain
 
     def _get_or_create_device(self, domain: DomainModel) -> DeviceModel:
         """Return an existing device or create ``DevOwnerIDDevice`` in *domain*.
@@ -193,41 +129,6 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         self.log_and_stdout(f'Created device "{DEVICE_COMMON_NAME}".')
         return device
 
-    def _get_or_create_tls_truststore(self) -> TruststoreModel:
-        """Return an existing TLS truststore or create one from the Trustpoint HTTPS server cert.
-
-        The certificate at ``HTTPS_SERVER_CERT_PATH`` is imported into the database and
-        added to a :class:`~pki.models.truststore.TruststoreModel` with intended usage
-        ``TLS``.
-
-        :returns: The :class:`~pki.models.truststore.TruststoreModel` for
-            ``DevOwnerIDTLSTruststore``.
-        :raises FileNotFoundError: If the HTTPS server certificate file does not exist.
-        """
-        if TruststoreModel.objects.filter(unique_name=TRUSTSTORE_UNIQUE_NAME).exists():
-            self.log_and_stdout(f'Truststore "{TRUSTSTORE_UNIQUE_NAME}" already exists, skipping creation.')
-            return TruststoreModel.objects.get(unique_name=TRUSTSTORE_UNIQUE_NAME)
-
-        if not HTTPS_SERVER_CERT_PATH.exists():
-            msg = f'HTTPS server certificate not found at {HTTPS_SERVER_CERT_PATH}'
-            raise FileNotFoundError(msg)
-
-        pem_data = HTTPS_SERVER_CERT_PATH.read_bytes()
-        crypto_cert = x509.load_pem_x509_certificate(pem_data)
-        cert_model = CertificateModel.save_certificate(crypto_cert)
-
-        truststore = TruststoreModel(
-            unique_name=TRUSTSTORE_UNIQUE_NAME,
-            intended_usage=TruststoreModel.IntendedUsage.TLS,
-        )
-        truststore.save()
-        TruststoreOrderModel.objects.create(
-            trust_store=truststore,
-            certificate=cert_model,
-            order=0,
-        )
-        self.log_and_stdout(f'Created TLS truststore "{TRUSTSTORE_UNIQUE_NAME}".')
-        return truststore
 
     def _get_or_create_owner_credential(self, truststore: TruststoreModel) -> OwnerCredentialModel:
         """Return an existing OwnerCredential or create one configured for remote EST enrollment.

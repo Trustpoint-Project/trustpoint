@@ -37,6 +37,7 @@ from pki.serializer.owner_credential import (
     OwnerCredentialFileImportSerializer,
     OwnerCredentialSerializer,
 )
+from pki.services.owner_credential import build_owner_credential_est_context_kwargs
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_request_data as _build_request_data
 from pki.util.certificate_request import public_key_info_from_key_type as _public_key_info_from_key_type
@@ -519,47 +520,8 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         owner_credential: OwnerCredentialModel,
         cert_profile: CertificateProfileModel,
     ) -> dict[str, Any]:
-        """Build keyword arguments for EstCertificateRequestContext."""
-        kwargs: dict[str, Any] = {
-            'operation': 'simpleenroll',
-            'protocol': 'est',
-            'domain': None,
-            'cert_profile_str': cert_profile.unique_name,
-            'certificate_profile_model': cert_profile,
-            'allow_ca_certificate_request': True,
-            'est_server_host': owner_credential.remote_host,
-            'est_server_port': owner_credential.remote_port,
-            'est_server_path': owner_credential.remote_path,
-        }
-
-        is_onboarding = (
-            owner_credential.owner_credential_type
-            == OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
-        )
-
-        if is_onboarding:
-            onboarding_config = owner_credential.onboarding_config
-            kwargs['est_server_truststore'] = onboarding_config.trust_store if onboarding_config else None
-            domain_cred_issued = owner_credential.domain_credential
-            if domain_cred_issued is None or domain_cred_issued.credential is None:
-                msg = (
-                    'No domain credential found for this owner credential. '
-                    'Please issue a domain credential first.'
-                )
-                raise ValueError(msg)
-            dc = domain_cred_issued.credential
-            if dc.certificate is None:
-                msg = 'The domain credential has no certificate. Please issue a domain credential first.'
-                raise ValueError(msg)
-            kwargs['est_client_cert_pem'] = dc.certificate.cert_pem
-            kwargs['est_client_key_pem'] = dc.private_key
-        else:
-            no_onboarding = owner_credential.no_onboarding_config
-            kwargs['est_username'] = owner_credential.est_username
-            kwargs['est_password'] = no_onboarding.est_password if no_onboarding else None
-            kwargs['est_server_truststore'] = no_onboarding.trust_store if no_onboarding else None
-
-        return kwargs
+        """Build EST authentication and truststore arguments for this credential."""
+        return build_owner_credential_est_context_kwargs(owner_credential, cert_profile)
 
     def _enroll_devownerid(
         self,

@@ -22,7 +22,7 @@ from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, status
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from trustpoint_core.oid import AlgorithmIdentifier
@@ -41,6 +41,7 @@ from pki.models import (
 from pki.models.truststore import TruststoreModel
 from pki.serializer.devid_registration import DevIdRegistrationDetailSerializer, DevIdRegistrationSerializer
 from pki.serializer.domain import DomainDetailSerializer, DomainSerializer
+from shared.api import AuditedModelViewSet
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from shared.views import AuditedBulkDeleteView
 from trustpoint.settings import UIConfig
@@ -566,7 +567,7 @@ class CanManageDomains(BasePermission):
     partial_update=extend_schema(description='Partially update an existing domain.'),
     destroy=extend_schema(description='Delete a domain.')
 )
-class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
+class DomainViewSet(AuditedModelViewSet[DomainModel]):
     """ViewSet for managing Domain instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -583,22 +584,6 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
             return DomainDetailSerializer
         return DomainSerializer
 
-    @transaction.atomic
-    def perform_create(self, serializer: Any) -> None:
-        """Create and audit the object once at the API operation boundary."""
-        target = serializer.save()
-        audit_security_change(target=target, actor=self.request.user, before=None, action='created')
-
-    def perform_update(self, serializer: Any) -> None:
-        """Audit the final persisted state, including serializer-managed relations."""
-        with security_change(target=serializer.instance, actor=self.request.user):
-            serializer.save()
-
-    def perform_destroy(self, instance: Any) -> None:
-        """Preserve the deleted object's identity and state in one audit entry."""
-        with security_change(target=instance, actor=self.request.user, action='deleted'):
-            instance.delete()
-
 
 @extend_schema(tags=['DevID Registration'])
 @extend_schema_view(
@@ -609,7 +594,7 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
     partial_update=extend_schema(description='Partially update an existing DevID registration.'),
     destroy=extend_schema(description='Delete a DevID registration.'),
 )
-class DevIdRegistrationViewSet(viewsets.ModelViewSet[DevIdRegistration]):
+class DevIdRegistrationViewSet(AuditedModelViewSet[DevIdRegistration]):
     """ViewSet for managing DevIdRegistration instances via REST API.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -655,19 +640,3 @@ class DevIdRegistrationViewSet(viewsets.ModelViewSet[DevIdRegistration]):
         instance = self.get_object()
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @transaction.atomic
-    def perform_create(self, serializer: Any) -> None:
-        """Create and audit the object once at the API operation boundary."""
-        target = serializer.save()
-        audit_security_change(target=target, actor=self.request.user, before=None, action='created')
-
-    def perform_update(self, serializer: Any) -> None:
-        """Audit the final persisted state, including serializer-managed relations."""
-        with security_change(target=serializer.instance, actor=self.request.user):
-            serializer.save()
-
-    def perform_destroy(self, instance: Any) -> None:
-        """Preserve the deleted object's identity and state in one audit entry."""
-        with security_change(target=instance, actor=self.request.user, action='deleted'):
-            instance.delete()

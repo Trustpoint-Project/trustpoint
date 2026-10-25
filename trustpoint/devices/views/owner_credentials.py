@@ -34,6 +34,7 @@ from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
+from pki.services.owner_credential import build_owner_credential_est_context_kwargs
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_cert_content_summary, build_request_data, public_key_info_from_key_type
 from pki.views.mixins import CertificateProfileSelectionMixin
@@ -865,59 +866,8 @@ class OwnerCredentialRequestCertEstView(
         owner_credential: OwnerCredentialModel,
         cert_profile: CertificateProfileModel,
     ) -> dict[str, Any]:
-        """Build keyword arguments for ``EstCertificateRequestContext``.
-
-        For ``REMOTE_EST`` (Basic Auth) → username/password auth,
-        truststore from ``no_onboarding_config``.
-
-        For ``REMOTE_EST_ONBOARDING`` (mTLS Client Auth) → mTLS with the domain credential,
-        truststore from ``onboarding_config``.
-        """
-        kwargs: dict[str, Any] = {
-            'operation': 'simpleenroll',
-            'protocol': 'est',
-            'domain': None,
-            'cert_profile_str': cert_profile.unique_name,
-            'certificate_profile_model': cert_profile,
-            'allow_ca_certificate_request': True,
-            'est_server_host': owner_credential.remote_host,
-            'est_server_port': owner_credential.remote_port,
-            'est_server_path': owner_credential.remote_path,
-        }
-
-        is_onboarding = (
-            owner_credential.owner_credential_type
-            == OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
-        )
-
-        if is_onboarding:
-            onboarding_config = owner_credential.onboarding_config
-            kwargs['est_server_truststore'] = onboarding_config.trust_store if onboarding_config else None
-
-            # Use the most recent valid domain credential for mTLS
-            domain_cred_issued = owner_credential.domain_credential
-            if domain_cred_issued is None or domain_cred_issued.credential is None:
-                msg = _(
-                    'No domain credential found for this owner credential. '
-                    'Please issue a domain credential first.'
-                )
-                raise ValueError(msg)
-            dc = domain_cred_issued.credential
-            if dc.certificate is None:
-                msg = _(
-                    'The domain credential has no certificate. '
-                    'Please issue a domain credential first.'
-                )
-                raise ValueError(msg)
-            kwargs['est_client_cert_pem'] = dc.certificate.cert_pem
-            kwargs['est_client_key_pem'] = dc.private_key
-        else:
-            no_onboarding = owner_credential.no_onboarding_config
-            kwargs['est_username'] = owner_credential.est_username
-            kwargs['est_password'] = no_onboarding.est_password if no_onboarding else None
-            kwargs['est_server_truststore'] = no_onboarding.trust_store if no_onboarding else None
-
-        return kwargs
+        """Build EST authentication and truststore arguments for this credential."""
+        return build_owner_credential_est_context_kwargs(owner_credential, cert_profile, translate=_)
 
     def _perform_est_enrollment(
         self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]

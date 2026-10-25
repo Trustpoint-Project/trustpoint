@@ -934,6 +934,28 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
         return issued_domain_credential
 
 
+def _opc_ua_key_usage(public_key: PublicKey, *, certificate_role: str) -> x509.KeyUsage:
+    """Build the shared OPC UA key usage for RSA, ECC, and ML-DSA keys."""
+    is_rsa = isinstance(public_key, rsa.RSAPublicKey)
+    if not is_rsa and not isinstance(
+        public_key,
+        (ec.EllipticCurvePublicKey, mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey),
+    ):
+        err_msg = f'Unsupported key type for OPC UA {certificate_role} Certificate'
+        raise ValueError(err_msg)
+    return x509.KeyUsage(
+        digital_signature=True,
+        content_commitment=True,
+        key_encipherment=is_rsa,
+        data_encipherment=is_rsa,
+        key_agreement=False,
+        key_cert_sign=False,
+        crl_sign=False,
+        encipher_only=False,
+        decipher_only=False,
+    )
+
+
 class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
     """Issues OPC UA server credentials."""
 
@@ -957,45 +979,8 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         )
 
     def _get_key_usage(self, public_key: PublicKey) -> x509.KeyUsage:
-        """Determines Key Usage based on RSA vs ECC vs ML-DSA."""
-        if isinstance(public_key, rsa.RSAPublicKey):
-            return x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=True,
-                key_encipherment=True,
-                data_encipherment=True,
-                key_agreement=False,
-                key_cert_sign=False,
-                crl_sign=False,
-                encipher_only=False,
-                decipher_only=False,
-            )
-        if isinstance(public_key, ec.EllipticCurvePublicKey):
-            return x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=True,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=False,
-                key_cert_sign=False,
-                crl_sign=False,
-                encipher_only=False,
-                decipher_only=False,
-            )
-        if isinstance(public_key, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)):
-            return x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=True,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=False,
-                key_cert_sign=False,
-                crl_sign=False,
-                encipher_only=False,
-                decipher_only=False,
-            )
-        err_msg = 'Unsupported key type for OPC UA Server Certificate'
-        raise ValueError(err_msg)
+        """Determine key usage for an OPC UA server certificate."""
+        return _opc_ua_key_usage(public_key, certificate_role='Server')
 
     def _validate_application_uri(self, application_uri: str | list[str]) -> None:
         """Validates the Uniform resource identifier according to OPC UA specification."""
@@ -1123,45 +1108,8 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         return x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)])
 
     def _get_key_usage(self, public_key: PublicKey) -> x509.KeyUsage:
-        """Determines Key Usage based on RSA vs ECC vs ML-DSA."""
-        if isinstance(public_key, rsa.RSAPublicKey):
-            return x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=True,
-                key_encipherment=True,
-                data_encipherment=True,
-                key_agreement=False,
-                key_cert_sign=False,
-                crl_sign=False,
-                encipher_only=False,
-                decipher_only=False,
-            )
-        if isinstance(public_key, ec.EllipticCurvePublicKey):
-            return x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=True,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=False,
-                key_cert_sign=False,
-                crl_sign=False,
-                encipher_only=False,
-                decipher_only=False,
-            )
-        if isinstance(public_key, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)):
-            return x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=True,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=False,
-                key_cert_sign=False,
-                crl_sign=False,
-                encipher_only=False,
-                decipher_only=False,
-            )
-        err_msg = 'Unsupported key type for OPC UA Client Certificate'
-        raise ValueError(err_msg)
+        """Determine key usage for an OPC UA client certificate."""
+        return _opc_ua_key_usage(public_key, certificate_role='Client')
 
     def _validate_application_uri(self, application_uri: str | list[str]) -> None:
         """Validates the Uniform resource identifier according to OPC UA specification."""

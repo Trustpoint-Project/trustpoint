@@ -21,13 +21,14 @@ from django.views.generic.edit import FormView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
-from rest_framework import filters, viewsets
+from rest_framework import filters
 from rest_framework.permissions import BasePermission
 
 from management.security_change_audit import audit_security_change, security_change
 from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
 from pki.serializer.cert_profile import CertProfileDetailSerializer, CertProfileSerializer
+from shared.api import AuditedModelViewSet
 from shared.views import AuditedBulkDeleteView, FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
@@ -278,7 +279,7 @@ class CanManageCertificateProfiles(BasePermission):
     partial_update=extend_schema(description='Partially update an existing certificate profile.'),
     destroy=extend_schema(description='Delete a certificate profile.')
 )
-class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
+class CertProfileViewSet(AuditedModelViewSet[CertificateProfileModel]):
     """ViewSet for managing Certificate Profile instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -301,19 +302,3 @@ class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
         if self.action == 'retrieve':
             return CertProfileDetailSerializer
         return CertProfileSerializer
-
-    @transaction.atomic
-    def perform_create(self, serializer: Any) -> None:
-        """Create and audit the object once at the API operation boundary."""
-        target = serializer.save()
-        audit_security_change(target=target, actor=self.request.user, before=None, action='created')
-
-    def perform_update(self, serializer: Any) -> None:
-        """Audit the final persisted state, including serializer-managed relations."""
-        with security_change(target=serializer.instance, actor=self.request.user):
-            serializer.save()
-
-    def perform_destroy(self, instance: Any) -> None:
-        """Preserve the deleted object's identity and state in one audit entry."""
-        with security_change(target=instance, actor=self.request.user, action='deleted'):
-            instance.delete()

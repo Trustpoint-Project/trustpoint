@@ -10,9 +10,8 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from cryptography.hazmat.primitives import hashes
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -30,14 +29,16 @@ from crypto.models import (
 )
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from management.security_change_audit import provider_configuration_changes
-from pki.models import CredentialModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.backend_configuration import BackendConfigurationMixin
 from setup_wizard.models import SetupWizardConfigModel
 from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
 from setup_wizard.pkcs11_staging import cleanup_wizard_pkcs11_staged_path, existing_wizard_pkcs11_staged_file
-from setup_wizard.tls_credential import clear_staged_tls_credential, load_staged_tls_credential
+from setup_wizard.tls_activation import activate_staged_tls_credential
+from setup_wizard.tls_credential import load_staged_tls_credential
 from users.models import BuiltinRole
+
+if TYPE_CHECKING:
+    from pki.models import CredentialModel
 
 logger = logging.getLogger(__name__)
 
@@ -293,26 +294,17 @@ class OperationalBootstrapApplier(BackendConfigurationMixin):
             NGINX_CERT_CHAIN_PATH.unlink()
 
     def _apply_staged_tls_credential(self) -> None:
-        """Promote the staged TLS credential to active operational state."""
+        """Promote the staged TLS credential and apply it using this caller's I/O hooks."""
         staged_tls_serializer = load_staged_tls_credential()
         if staged_tls_serializer is None:
             msg = 'No staged TLS Server Credential found.'
             raise DjangoValidationError(msg)
-
-        staged_tls_credential = CredentialModel.save_credential_serializer(
-            credential_serializer=staged_tls_serializer,
-            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+        activate_staged_tls_credential(
+            staged_tls_serializer,
+            write_pem_files=self._write_pem_files,
+            apply_to_nginx=lambda: self.execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm'),
+            logger=logger,
         )
-        active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-        active_tls.credential = staged_tls_credential
-        active_tls.save()
-
-        self._write_pem_files(staged_tls_credential)
-        self.execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm')
-        sha256_fingerprint = staged_tls_credential.get_certificate().fingerprint(hashes.SHA256())
-        formatted_fingerprint = ':'.join(f'{byte:02X}' for byte in sha256_fingerprint)
-        logger.info('TLS SHA256 fingerprint: %s', formatted_fingerprint)
-        clear_staged_tls_credential()
 
     def _create_operational_admin(self) -> None:
         """Create or update the first operational administrator."""

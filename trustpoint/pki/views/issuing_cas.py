@@ -141,15 +141,6 @@ class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[CaModel], Lis
             return queryset.order_by('-is_active', sort_param)
         return queryset.order_by(sort_param)
 
-    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        """Add sorting information to the context."""
-        context = super().get_context_data(*args, **kwargs)
-
-        sort_param = self.request.GET.get('sort', self.default_sort_param)
-        context['current_sort'] = sort_param
-
-        return context
-
 
 class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddMethodSelectForm]):
     """View to select the method to add an Issuing CA."""
