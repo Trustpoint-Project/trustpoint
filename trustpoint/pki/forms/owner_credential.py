@@ -337,8 +337,9 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
         except Exception:  # noqa: BLE001
             try:
                 certificate_serializer = CertificateSerializer.from_bytes(file_bytes)
-                der_bytes = certificate_serializer.as_der()
-                certificate_collection_serializer = CertificateCollectionSerializer.from_list_of_der([der_bytes])
+                certificate_collection_serializer = CertificateCollectionSerializer(
+                    [certificate_serializer.as_crypto()]
+                )
             except Exception as exception:
                 raise ValidationError(
                     _('Unable to process the truststore file. It may be malformed or corrupted.')
