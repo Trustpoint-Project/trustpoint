@@ -22,11 +22,6 @@ from django.views.generic.edit import FormMixin, FormView
 from devices.forms import (
     OpcUaGdsPushTruststoreAssociationForm,
 )
-
-# noinspection PyUnresolvedReferences
-from devices.issuer import (
-    BaseTlsCredentialIssuer,
-)
 from devices.models import (
     DeviceModel,
 )
@@ -455,8 +450,8 @@ class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboarding
         )
 
 
-class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCredentialIssuer](
-    PageContextMixin, FormMixin[forms.Form], DetailView[DeviceModel]
+class AbstractIssueCredentialView[FormClass: forms.Form](
+    PageContextMixin, FormMixin[FormClass], DetailView[DeviceModel]
 ):
     """Base view for all credential issuance views."""
 
@@ -466,8 +461,7 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
     context_object_name = 'device'
     template_name = 'devices/credentials/issue_application_credential.html'
 
-    form_class: type[forms.Form]
-    issuer_class: type[IssuerClass]
+    form_class: type[FormClass]
     friendly_name: str
 
     page_category = DEVICES_PAGE_CATEGORY
@@ -504,13 +498,7 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
         if self.object.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
-        form_kwargs = {}
-        if not issubclass(self.form_class, CertificateIssuanceForm):
-            form_kwargs = {
-                'initial': self.issuer_class.get_fixed_values(device=self.object, domain=self.object.domain),
-                'prefix': None,
-                'device': self.object,
-            }
+        form_kwargs: dict[str, Any] = {}
 
         if self.request.method == 'POST':
             form_kwargs.update({'data': self.request.POST})
@@ -692,11 +680,10 @@ class OpcUaGdsPushTruststoreAssociationView(
 
 
 class AbstractIssueProfileCredentialView(FormErrorMessageMixin,
-    AbstractIssueCredentialView[CertificateIssuanceForm, BaseTlsCredentialIssuer]
+    AbstractIssueCredentialView[CertificateIssuanceForm]
 ):
     """View to issue a new certificate profile credential."""
 
-    issuer_class = BaseTlsCredentialIssuer
     friendly_name = 'Certificate Profile Credential'
 
     page_name: str
@@ -823,10 +810,9 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueProfileCredentialView):
         return reverse('devices:devices_truststore_association', kwargs={'pk': self.object.pk})
 
 
-class AbstractIssueCsrCredentialView(AbstractIssueCredentialView[CsrIssuanceForm, BaseTlsCredentialIssuer]):
+class AbstractIssueCsrCredentialView(AbstractIssueCredentialView[CsrIssuanceForm]):
     """Issue an application credential from an externally generated CSR."""
 
-    issuer_class = BaseTlsCredentialIssuer
     form_class = CsrIssuanceForm
     template_name = 'devices/credentials/csr_issuance.html'
     friendly_name = 'Certificate Profile Credential'

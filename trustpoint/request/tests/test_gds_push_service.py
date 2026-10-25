@@ -10,8 +10,7 @@ from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 import pytest
 from asyncua import ua
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ObjectIdentifier
 
@@ -19,6 +18,7 @@ from devices.models import DeviceModel
 from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CaModel, TruststoreModel
 from pki.models.truststore import TruststoreOrderModel
+from pki.tests.credential_helpers import issue_test_credential
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 from request.gds_push.gds_push_service import GdsPushError, GdsPushService
@@ -128,12 +128,9 @@ def mock_opc_device(mock_domain, mock_truststore, mock_server_certificate):
 
 
 @pytest.fixture
-def mock_domain_credential(mock_opc_device, mock_domain):
+def mock_domain_credential(mock_opc_device):
     """Create a mock domain credential for the device."""
-    from devices.issuer import LocalDomainCredentialIssuer
-
-    issuer = LocalDomainCredentialIssuer(device=mock_opc_device, domain=mock_domain)
-    credential = issuer.issue_domain_credential()
+    credential = issue_test_credential(mock_opc_device, 'domain_credential', common_name='Trustpoint Domain Credential')
 
     return credential
 
@@ -260,9 +257,7 @@ class TestGdsPushService:
         device.opc_ua_gds_push_config.save()
 
         # Create a domain credential for the device
-        from devices.issuer import LocalDomainCredentialIssuer
-        issuer = LocalDomainCredentialIssuer(device=device, domain=mock_domain)
-        issuer.issue_domain_credential()
+        issue_test_credential(device, 'domain_credential', common_name='Trustpoint Domain Credential')
 
         with pytest.raises(GdsPushError, match='Server truststore.*is empty'):
             GdsPushService(device)
