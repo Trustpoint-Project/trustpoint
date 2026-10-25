@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import hashes, serialization
@@ -17,6 +16,7 @@ from crypto.adapters.protected_import.bindings import (
     ProtectedImportManagedKeyBinding,
     ProtectedImportManagedKeyVerification,
 )
+from crypto.domain import public_keys
 from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
 from crypto.domain.errors import KeyNotFoundError, MechanismUnsupportedError, ProviderUnavailableError
 from crypto.domain.refs import ManagedKeyVerificationStatus
@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from crypto.domain.specs import SignRequest
 
 type SupportedImportedPrivateKey = rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
+
+public_key_fingerprint_sha256 = public_keys.public_key_fingerprint_sha256
 
 
 def encrypt_imported_private_key(private_key: SupportedImportedPrivateKey) -> str:
@@ -46,15 +48,6 @@ def imported_key_algorithm(private_key: SupportedImportedPrivateKey) -> KeyAlgor
         return KeyAlgorithm.EC
     msg = f'Unsupported imported private-key type {type(private_key).__name__}.'
     raise ProviderUnavailableError(msg)
-
-
-def public_key_fingerprint_sha256(public_key: SupportedPublicKey) -> str:
-    """Return the SHA-256 fingerprint of a public key SPKI DER encoding."""
-    der = public_key.public_bytes(
-        encoding=serialization.Encoding.DER,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    return hashlib.sha256(der).hexdigest()
 
 
 class ProtectedImportKeyOperations:

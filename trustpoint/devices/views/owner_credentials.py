@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from cryptography import x509
@@ -22,6 +21,7 @@ from django.views.generic.list import ListView
 from trustpoint_core.oid import KeyPairGenerator
 from trustpoint_core.serializer import PrivateKeySerializer
 
+from devices.presentation import credential_expiry_display
 from pki.forms import (
     CertificateIssuanceForm,
     OwnerCredentialAddRequestEstNoOnboardingForm,
@@ -481,18 +481,7 @@ class OwnerCredentialCLMView(ZeroTouchContextMixin, DetailView[OwnerCredentialMo
     template_name = 'devices/zero_touch_credentials/clm.html'
     context_object_name = 'owner_credential'
 
-    @staticmethod
-    def _get_expires_in(record: RemoteIssuedCredentialModel) -> str:
-        """Returns a human-readable string of the time remaining until the credential expires."""
-        cert = record.credential.certificate_or_error
-        if cert.certificate_status != CertificateModel.CertificateStatus.OK:
-            return str(cert.certificate_status.label)
-        now = datetime.datetime.now(datetime.UTC)
-        expire_timedelta = cert.not_valid_after - now
-        days = expire_timedelta.days
-        hours, remainder = divmod(expire_timedelta.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f'{days} days, {hours}:{minutes:02d}:{seconds:02d}'
+    _get_expires_in = staticmethod(credential_expiry_display)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds issued credentials with computed display fields to the context."""

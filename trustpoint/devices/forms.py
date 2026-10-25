@@ -1011,7 +1011,26 @@ class OpcUaGdsPushCreateForm(forms.Form):
         return device_model
 
 
-class ClmDeviceModelOnboardingForm(forms.Form):
+class ClmDeviceNameValidationMixin(forms.Form):
+    """Validate a device name while allowing the device to retain its current name."""
+
+    instance: DeviceModel
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
+        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
+
+
+class ClmDeviceModelOnboardingForm(ClmDeviceNameValidationMixin):
     """CLM Device Model form for devices that use onboarding."""
 
     actor: Any = None
@@ -1064,19 +1083,6 @@ class ClmDeviceModelOnboardingForm(forms.Form):
         )
 
         super().__init__(*args, **kwargs)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     def save(self, onboarding_protocol: OnboardingProtocol) -> None:
         """Saves the changes to DB."""
@@ -1261,7 +1267,7 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             self.instance.save()
 
 
-class ClmDeviceModelNoOnboardingForm(forms.Form):
+class ClmDeviceModelNoOnboardingForm(ClmDeviceNameValidationMixin):
     """CLM Device Model form for devices that do not use onboarding."""
 
     actor: Any = None
@@ -1307,19 +1313,6 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
         )
 
         super().__init__(*args, **kwargs)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     @transaction.atomic
     def save(self) -> None: # noqa: C901
@@ -1408,7 +1401,7 @@ class OpcUaGdsPushTruststoreAssociationForm(forms.Form):
             self.instance.opc_ua_gds_push_config.save(update_fields=['opc_trust_store'])
 
 
-class ClmAgentDeviceForm(forms.Form):
+class ClmAgentDeviceForm(ClmDeviceNameValidationMixin):
     """CLM form for agent devices."""
 
     common_name = forms.CharField(max_length=100, validators=[UniqueNameValidator()])
@@ -1466,19 +1459,6 @@ class ClmAgentDeviceForm(forms.Form):
         )
 
         super().__init__(*args, **kwargs)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     def save(self, onboarding_protocol: OnboardingProtocol) -> None:
         """Saves the changes to DB including agent-specific fields."""

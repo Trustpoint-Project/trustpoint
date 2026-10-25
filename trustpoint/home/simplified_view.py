@@ -20,8 +20,8 @@ from django.views.generic import ListView
 
 from devices.filters import DeviceFilter
 from devices.models import DeviceModel
+from devices.presentation import onboarding_progress
 from management.models import NotificationModel
-from onboarding.enums import OnboardingStatus
 from pki.models import CaModel, CertificateModel, DomainModel, IssuedCredentialModel
 from trustpoint.views.base import ContextDataMixin
 from users.models import TrustpointUser
@@ -144,50 +144,13 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
         device.clm_button = self._get_clm_button_html(device)
 
     def _get_onboarding_progress(self, record: DeviceModel) -> dict[str, Any]:
-        """Builds structured progress data for the enrollment column."""
-        if record.onboarding_config:
-            cfg = record.onboarding_config
-            is_onboarded = cfg.onboarding_status == OnboardingStatus.ONBOARDED
-            status_key = 'onboarded' if is_onboarded else 'pending'
-            status_label = str(gettext_lazy('Onboarded') if is_onboarded else gettext_lazy('Pending'))
-            onboarding_protocol = str(cfg.get_onboarding_protocol_display())
-            pki_labels = [str(p.label) for p in cfg.get_pki_protocols()]
-            none_str = str(gettext_lazy('None'))
-            pki_list = ''.join(f'<li>{p}</li>' for p in pki_labels) if pki_labels else f'<li>{none_str}</li>'
-            pki_protocols = ', '.join(pki_labels) if pki_labels else none_str
-            tooltip = (
-                f'<strong>{gettext_lazy("Onboarding Protocol")}:</strong> {onboarding_protocol}<br>'
-                f'<strong>{gettext_lazy("Status")}:</strong> {status_label}<br>'
-                f'<strong>{gettext_lazy("PKI Protocols")}:</strong>'
-                f'<ul class="mb-0 ps-3 mt-1">{pki_list}</ul>'
-            )
-        elif record.no_onboarding_config:
-            pki_labels = [str(p.label) for p in record.no_onboarding_config.get_pki_protocols()]
-            none_str = str(gettext_lazy('None'))
-            pki_list = ''.join(f'<li>{p}</li>' for p in pki_labels) if pki_labels else f'<li>{none_str}</li>'
-            status_key = 'no-onboarding'
-            status_label = str(gettext_lazy('No onboarding'))
-            onboarding_protocol = '—'
-            pki_protocols = ', '.join(pki_labels) if pki_labels else none_str
-            tooltip = (
-                f'<strong>{gettext_lazy("Enrollment")}:</strong> {gettext_lazy("No onboarding")}<br>'
-                f'<strong>{gettext_lazy("PKI Protocols")}:</strong>'
-                f'<ul class="mb-0 ps-3 mt-1">{pki_list}</ul>'
-            )
-        else:
-            status_key = 'none'
-            status_label = str(gettext_lazy('None'))
-            onboarding_protocol = '—'
-            pki_protocols = '—'
-            tooltip = str(gettext_lazy('No onboarding configuration'))
-
-        return {
-            'status_key': status_key,
-            'status_label': status_label,
-            'onboarding_protocol': onboarding_protocol,
-            'pki_protocols': pki_protocols,
-            'tooltip': tooltip,
-        }
+        """Build enrollment display data with this page's empty-state text."""
+        return onboarding_progress(
+            record,
+            empty_protocols_label=str(gettext_lazy('None')),
+            unconfigured_label=str(gettext_lazy('None')),
+            unconfigured_tooltip=str(gettext_lazy('No onboarding configuration')),
+        )
 
     def _get_domain_credential_status(self, record: DeviceModel) -> dict[str, Any]:
         """Build the domain-credential state for the device table."""

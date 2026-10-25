@@ -34,6 +34,7 @@ from devices.filters import DeviceFilter
 from devices.models import (
     DeviceModel,
 )
+from devices.presentation import onboarding_progress, pki_protocols_display
 from onboarding.enums import OnboardingStatus
 from pki.models import IssuedCredentialModel
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
@@ -326,59 +327,17 @@ class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceMode
         )
 
     def _get_pki_protocols(self, record: DeviceModel) -> str:
-        if record.onboarding_config:
-            return ', '.join([str(p.label) for p in record.onboarding_config.get_pki_protocols()])
-
-        if record.no_onboarding_config:
-            return ', '.join([str(p.label) for p in record.no_onboarding_config.get_pki_protocols()])
-
-        return ''
+        """Return the device's enabled PKI protocol labels."""
+        return pki_protocols_display(record)
 
     def _get_onboarding_progress(self, record: DeviceModel) -> dict[str, Any]:
-        """Builds structured progress data for the enrollment column."""
-        if record.onboarding_config:
-            cfg = record.onboarding_config
-            is_onboarded = cfg.onboarding_status == OnboardingStatus.ONBOARDED
-            status_key = 'onboarded' if is_onboarded else 'pending'
-            status_label = str(gettext_lazy('Onboarded') if is_onboarded else gettext_lazy('Pending'))
-            onboarding_protocol = str(cfg.get_onboarding_protocol_display())
-            pki_labels = [str(p.label) for p in cfg.get_pki_protocols()]
-            none_str = str(gettext_lazy('None'))
-            pki_list = ''.join(f'<li>{p}</li>' for p in pki_labels) if pki_labels else f'<li>{none_str}</li>'
-            tooltip = (
-                f'<strong>{gettext_lazy("Onboarding Protocol")}:</strong> {onboarding_protocol}<br>'
-                f'<strong>{gettext_lazy("Status")}:</strong> {status_label}<br>'
-                f'<strong>{gettext_lazy("PKI Protocols")}:</strong>'
-                f'<ul class="mb-0 ps-3 mt-1">{pki_list}</ul>'
-            )
-        elif record.no_onboarding_config:
-            pki_labels = [str(p.label) for p in record.no_onboarding_config.get_pki_protocols()]
-            none_str = str(gettext_lazy('None'))
-            pki_list = ''.join(f'<li>{p}</li>' for p in pki_labels) if pki_labels else f'<li>{none_str}</li>'
-            status_key = 'no-onboarding'
-            status_label = str(gettext_lazy('No onboarding'))
-            onboarding_protocol = '—'
-            tooltip = (
-                f'<strong>{gettext_lazy("Enrollment")}:</strong> {gettext_lazy("No onboarding")}<br>'
-                f'<strong>{gettext_lazy("PKI Protocols")}:</strong>'
-                f'<ul class="mb-0 ps-3 mt-1">{pki_list}</ul>'
-            )
-        else:
-            status_key = 'none'
-            status_label = str(gettext_lazy('Unknown'))
-            onboarding_protocol = '—'
-            pki_labels = []
-            tooltip = str(gettext_lazy('No enrollment or PKI configuration found.'))
-
-        pki_protocols = ', '.join(pki_labels) if pki_labels else '—'
-
-        return {
-            'status_key': status_key,
-            'status_label': status_label,
-            'tooltip': tooltip,
-            'onboarding_protocol': onboarding_protocol,
-            'pki_protocols': pki_protocols,
-        }
+        """Build enrollment display data with this page's empty-state text."""
+        return onboarding_progress(
+            record,
+            empty_protocols_label='—',
+            unconfigured_label=str(gettext_lazy('Unknown')),
+            unconfigured_tooltip=str(gettext_lazy('No enrollment or PKI configuration found.')),
+        )
 
     @staticmethod
     def _format_datetime_for_tooltip(value: Any) -> str:

@@ -2427,14 +2427,17 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
         )
 
 
-class AokiCmpHelpView(PageContextMixin, TemplateView):
-    """Help view for AOKI with CMP (IDevID authentication)."""
+class AokiHelpView(PageContextMixin, TemplateView):
+    """Shared page construction for AOKI IDevID enrollment help."""
 
     template_name = 'help/help_page.html'
     http_method_names = ('get',)
 
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
+
+    strategy_class: ClassVar[type[HelpPageStrategy]]
+    default_heading: ClassVar[str]
 
     def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
         """Build generic context for AOKI help."""
@@ -2482,11 +2485,11 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
         host_ip = self.request.GET.get('host_ip', '127.0.0.1')
 
         sections: list[HelpSection] = []
-        heading = _non_lazy('AOKI with CMP - IDevID Authentication')
+        heading = _non_lazy(self.default_heading)
 
         try:
             help_context = self._make_context(host_ip=host_ip)
-            strategy = AokiCmpIDevIDStrategy()
+            strategy = self.strategy_class()
             sections, heading = strategy.build_sections(help_context)
         except Http404:
             sections.append(
@@ -2515,92 +2518,18 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
         return context
 
 
-class AokiEstHelpView(PageContextMixin, TemplateView):
-    """Help view for AOKI with EST (IDevID authentication)."""
+class AokiCmpHelpView(AokiHelpView):
+    """Help for CMP enrollment using IDevID authentication."""
 
-    template_name = 'help/help_page.html'
-    http_method_names = ('get',)
+    strategy_class = AokiCmpIDevIDStrategy
+    default_heading = 'AOKI with CMP - IDevID Authentication'
 
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name = DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
 
-    def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
-        """Build generic context for AOKI help."""
-        from pki.models import DomainModel  # noqa: PLC0415
+class AokiEstHelpView(AokiHelpView):
+    """Help for EST enrollment using IDevID-based mTLS."""
 
-        # HelpContext needs a domain per default. For demonstration purpose we take the first one
-
-        try:
-            domain = DomainModel.objects.first()
-            if not domain:
-                raise Http404(_('No domains configured in the system.'))
-        except DomainModel.DoesNotExist as exc:
-            raise Http404(_('No domains configured in the system.')) from exc
-
-        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))
-        host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
-
-        public_key_info = domain.public_key_info
-        if not public_key_info:
-            raise Http404(PublicKeyInfoMissingErrorMsg)
-
-        allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(
-                certificate_profile__unique_name=domain.get_domain_credential_profile_name()
-            )
-        )
-
-        return HelpContext(
-            device=None,
-            domain=domain,
-            domain_unique_name=domain.unique_name,
-            allowed_app_profiles=allowed_app_profiles,
-            public_key_info=public_key_info,
-            host_base=host_base,
-            host_cmp_path=f'{host_base}/.well-known/cmp/p/.aoki/initialization',
-            host_est_path=f'{host_base}/.aoki/init',
-            cred_count=0,
-        )
-
-    @override
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Build context with AOKI EST help page."""
-        context = super().get_context_data(**kwargs)
-
-        host_ip = self.request.GET.get('host_ip', '127.0.0.1')
-
-        sections: list[HelpSection] = []
-        heading = _non_lazy('AOKI with EST - IDevID Authentication (mTLS)')
-
-        try:
-            help_context = self._make_context(host_ip=host_ip)
-            strategy = AokiEstIDevIDStrategy()
-            sections, heading = strategy.build_sections(help_context)
-        except Http404:
-            sections.append(
-                HelpSection(
-                    _non_lazy('Prerequisites'),
-                    [
-                        HelpRow(
-                            _non_lazy('No Domain Configured'),
-                            'No domain is configured in Trustpoint yet. '
-                            'Use the Demo Environment Setup section below to automatically '
-                            'set up a test environment, or configure a domain manually first.',
-                            ValueRenderType.PLAIN,
-                        ),
-                    ],
-                )
-            )
-
-        sections.append(_build_aoki_demo_section(self.request))
-
-        context['help_page'] = HelpPage(heading=heading, sections=sections)
-        context['form'] = IpAddressForm(ip_choices=['127.0.0.1'], initial={'host_ip': host_ip})
-        context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
-        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
-        context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
-
-        return context
+    strategy_class = AokiEstIDevIDStrategy
+    default_heading = 'AOKI with EST - IDevID Authentication (mTLS)'
 
 
 _AOKI_DEMO_CERT_FILES: list[tuple[str, str]] = [

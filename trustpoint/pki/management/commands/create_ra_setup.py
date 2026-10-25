@@ -27,8 +27,8 @@ from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import CaModel, CertificateModel, CredentialModel, DomainModel, TruststoreModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
+from util.commands import CommandLoggingMixin
 
 from .base_commands import CertificateCreationCommandMixin
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from django.core.management.base import CommandParser
 
 
-class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
+class Command(CertificateCreationCommandMixin, CommandLoggingMixin, BaseCommand):
     """Creates a complete RA (Registration Authority) testing setup."""
 
     help = 'Creates issuing CAs, domains, devices, and RA configurations for testing RA functionality.'
@@ -579,22 +579,3 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(environment, indent=2))
         self.log_and_stdout(f'Wrote RA test environment to {output}.')
-
-    def log_and_stdout(self, message: str, level: str = 'info') -> None:
-        """Log a message and write it to stdout.
-
-        Args:
-            message: The message to log.
-            level: The logging level ('info', 'warning', 'error').
-        """
-        log_method = getattr(self.logger, level, self.logger.info)
-        log_method(message)
-
-        if level == 'error':
-            self.stdout.write(self.style.ERROR(message))
-        elif level == 'warning':
-            self.stdout.write(self.style.WARNING(message))
-        elif level == 'info':
-            self.stdout.write(self.style.SUCCESS(message))
-        else:
-            self.stdout.write(message)

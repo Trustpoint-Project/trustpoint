@@ -1,12 +1,11 @@
+import { deepClone } from '../shared/utils.js';
 import { parseDocument } from 'yaml';
 import { analyzeWorkflowVariableAvailability } from '../document/variable_availability.js';
 
 export const TRIGGER_NODE_ID = '__trigger__';
 export const APPLY_NODE_ID = '__apply__';
 
-function deepClone(value) {
-  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-}
+
 
 function uniqStrings(values) {
   const out = [];

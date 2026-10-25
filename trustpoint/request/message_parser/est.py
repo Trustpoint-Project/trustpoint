@@ -13,51 +13,15 @@ from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
 from .csr import CsrSignatureVerification
+from .http import BasicAuthHeaderParsing
 
 
-class EstAuthorizationHeaderParsing(ParsingComponent, LoggerMixin):
-    """Validate Authorization header for HTTP Basic Auth."""
+class EstAuthorizationHeaderParsing(BasicAuthHeaderParsing):
+    """Parse Basic Auth credentials for EST requests."""
 
-    def parse(self, context: BaseRequestContext) -> None:
-        """Validate and parse the 'Authorization' header and extract credentials."""
-        if not isinstance(context, EstBaseRequestContext):
-            exc_msg = 'EstAuthorizationHeaderParsing requires a subclass of EstBaseRequestContext.'
-            raise TypeError(exc_msg)
-
-        if context.raw_message is None:
-            error_message = 'Raw message is missing from the context.'
-            self.logger.warning('Authorization header validation failed: Raw message is missing')
-            raise ValueError(error_message)
-
-        if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
-            error_message = 'Raw message is missing headers.'
-            self.logger.warning('Authorization header validation failed: Raw message headers are missing')
-            raise ValueError(error_message)
-
-        auth_header = context.raw_message.headers.get('Authorization')
-        if not auth_header:
-            self.logger.debug('Authorization header validation skipped: No Authorization header present')
-            return
-
-        if not auth_header.lower().startswith('basic '):
-            error_message = "Authorization header must start with 'Basic'."
-            self.logger.warning("Authorization header validation failed: "
-                                "Header does not start with 'Basic': %s...", auth_header[:20])
-            raise ValueError(error_message)
-
-        try:
-            credentials = base64.b64decode(auth_header.split(' ', 1)[1].strip()).decode('utf-8')
-            est_username, est_password = credentials.split(':', 1)
-
-            context.est_username = est_username
-            context.est_password = est_password
-            self.logger.debug("Authorization header validation successful: "
-                              "Extracted credentials for user '%s'", est_username)
-        except Exception as e:
-            error_message = "Malformed 'Authorization' header credentials."
-            self.logger.warning('Authorization header validation failed: Malformed credentials - %s', e)
-            context.error(error_message, http_status=401)
-            raise ValueError(error_message) from e
+    context_type = EstBaseRequestContext
+    context_error_message = 'EstAuthorizationHeaderParsing requires a subclass of EstBaseRequestContext.'
+    protocol = 'est'
 
 
 class EstPkiMessageParsing(ParsingComponent, LoggerMixin):

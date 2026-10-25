@@ -16,48 +16,15 @@ from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
 from .csr import CsrSignatureVerification
+from .http import BasicAuthHeaderParsing
 
 
-class RestAuthorizationHeaderParsing(ParsingComponent, LoggerMixin):
-    """Parse the HTTP Basic Auth Authorization header for REST requests."""
+class RestAuthorizationHeaderParsing(BasicAuthHeaderParsing):
+    """Parse Basic Auth credentials for REST requests."""
 
-    def parse(self, context: BaseRequestContext) -> None:
-        """Extract username and password from the Basic Auth Authorization header."""
-        if not isinstance(context, RestBaseRequestContext):
-            exc_msg = 'RestAuthorizationHeaderParsing requires a RestBaseRequestContext.'
-            raise TypeError(exc_msg)
-
-        if context.raw_message is None:
-            error_message = 'Raw message is missing from the context.'
-            self.logger.warning('REST auth header parsing failed: Raw message is missing')
-            raise ValueError(error_message)
-
-        if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
-            error_message = 'Raw message is missing headers.'
-            self.logger.warning('REST auth header parsing failed: Headers are missing')
-            raise ValueError(error_message)
-
-        auth_header = context.raw_message.headers.get('Authorization')
-        if not auth_header:
-            self.logger.debug('REST auth header parsing skipped: No Authorization header present')
-            return
-
-        if not auth_header.lower().startswith('basic '):
-            error_message = "Authorization header must start with 'Basic'."
-            self.logger.warning("REST auth header parsing failed: Header does not start with 'Basic'")
-            raise ValueError(error_message)
-
-        try:
-            credentials = base64.b64decode(auth_header.split(' ', 1)[1].strip()).decode('utf-8')
-            rest_username, rest_password = credentials.split(':', 1)
-            context.rest_username = rest_username
-            context.rest_password = rest_password
-            self.logger.debug("REST auth header parsing successful: Extracted credentials for user '%s'", rest_username)
-        except Exception as e:
-            error_message = "Malformed 'Authorization' header credentials."
-            self.logger.warning('REST auth header parsing failed: Malformed credentials - %s', e)
-            context.error(error_message, http_status=401)
-            raise ValueError(error_message) from e
+    context_type = RestBaseRequestContext
+    context_error_message = 'RestAuthorizationHeaderParsing requires a RestBaseRequestContext.'
+    protocol = 'rest'
 
 
 class RestPkiMessageParsing(ParsingComponent, LoggerMixin):

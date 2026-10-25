@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +21,7 @@ from crypto.domain.errors import (
     ProviderUnavailableError,
     UnsupportedKeySpecError,
 )
+from crypto.domain.public_keys import public_key_fingerprint_sha256
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import (
     EcKeySpec,
@@ -272,11 +272,4 @@ class SoftwareBackend:
             msg = f'Unsupported hash algorithm {value!r} for the software backend.'
             raise MechanismUnsupportedError(msg) from exc
 
-    @staticmethod
-    def _fingerprint_public_key(public_key: SupportedPublicKey) -> str:
-        """Return the SHA-256 fingerprint of a public key SPKI DER encoding."""
-        der = public_key.public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return hashlib.sha256(der).hexdigest()
+    _fingerprint_public_key = staticmethod(public_key_fingerprint_sha256)
