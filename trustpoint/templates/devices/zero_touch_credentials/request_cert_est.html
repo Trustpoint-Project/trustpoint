@@ -50,30 +50,7 @@
         </div>
 
         {% if has_cert_content %}
-        <div class="alert alert-info mt-3" role="alert">
-            <h5>{% trans 'Certificate Content Summary' %}</h5>
-
-            {% if cert_content_summary.subject %}
-            <h6 class="mt-2">{% trans 'Subject:' %}</h6>
-            <ul>
-                {% for label, value in cert_content_summary.subject.items %}
-                    <li><strong>{{ label }}:</strong> {{ value }}</li>
-                {% endfor %}
-            </ul>
-            {% endif %}
-
-            {% if cert_content_summary.san %}
-            <h6 class="mt-2">{% trans 'Subject Alternative Names:' %}</h6>
-            <ul>
-                {% for label, value in cert_content_summary.san.items %}
-                    <li><strong>{{ label }}:</strong> {{ value }}</li>
-                {% endfor %}
-            </ul>
-            {% endif %}
-
-            <h6 class="mt-2">{% trans 'Validity Period:' %}</h6>
-            <p>{{ cert_content_summary.validity }}</p>
-        </div>
+        {% include 'shared/partials/certificate_content_summary.html' with summary=cert_content_summary only %}
         {% else %}
         <div class="alert alert-warning mt-3" role="alert">
             <strong>{% trans 'Note:' %}</strong>
