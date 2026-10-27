@@ -27,12 +27,12 @@ from cryptography.x509 import load_pem_x509_certificate
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos, PrivateKey
-from trustpoint_core.oid import NamedCurve
 
 from crypto.application.private_keys import ManagedECPrivateKey, ManagedMLDSAPrivateKey, ManagedRSAPrivateKey
 from crypto.models import CryptoManagedKeyModel, CryptoProviderSoftwareConfigModel
 from management.models import SecurityConfig
 from pki.models import CaModel, CredentialModel
+from pki.security_policy import CryptographicPolicy, enforce_cryptographic_policy, public_key_facts, signature_facts
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
@@ -499,70 +499,35 @@ class CertificateVerifier:
     """Methods for verifying client, server, and CA certificates."""
 
     @staticmethod
-    def _check_rsa_key_size(certificate: x509.Certificate) -> None:
-        """Check if an RSA certificate meets the minimum key size requirement.
-
-        Non-RSA certificates (ECC, etc.) automatically pass this check.
-
-        Args:
-            certificate (x509.Certificate): The certificate to validate.
-
-        Raises:
-            ValueError: If the certificate is RSA but the key size is below the minimum,
-                       or if SecurityConfig is not configured.
-        """
-        security_config = SecurityConfig.objects.first()
-        if not security_config or not security_config.security_mode:
+    def _active_cryptographic_policy() -> CryptographicPolicy:
+        """Read one configuration snapshot for the whole verification operation."""
+        config = SecurityConfig.objects.first()
+        if config is None or not config.security_mode:
             msg = 'SecurityConfig or security_mode is not configured.'
             raise ValueError(msg)
+        return CryptographicPolicy.from_config(config)
 
-        public_key = certificate.public_key()
+    @staticmethod
+    def _check_security_policy(certificate: x509.Certificate) -> None:
+        """Apply every cryptographic policy rule, including ML-DSA variants."""
+        enforce_cryptographic_policy(
+            CertificateVerifier._active_cryptographic_policy(),
+            key=public_key_facts(certificate.public_key()), signature=signature_facts(certificate),
+        )
 
-        if isinstance(public_key, rsa.RSAPublicKey):
-            minimum_key_size = security_config.rsa_minimum_key_size
-            if minimum_key_size is None:
-                msg = 'RSA keys are not permitted by the active security policy.'
-                raise ValueError(msg)
-            if minimum_key_size > 0 and public_key.key_size < minimum_key_size:
-                err_msg = (
-                    f'RSA certificate key size ({public_key.key_size} bits) is below the minimum '
-                    f'required by security policy ({minimum_key_size} bits).'
-                )
-                raise ValueError(err_msg)
+    @staticmethod
+    def _check_rsa_key_size(certificate: x509.Certificate) -> None:
+        """Compatibility adapter for checking RSA keys against the shared policy."""
+        policy = CertificateVerifier._active_cryptographic_policy()
+        if isinstance(certificate.public_key(), rsa.RSAPublicKey):
+            enforce_cryptographic_policy(policy, key=public_key_facts(certificate.public_key()))
 
     @staticmethod
     def _check_ecc_curve(certificate: x509.Certificate) -> None:
-        """Check if an ECC certificate uses a weak curve according to security policy.
-
-        RSA and other key types automatically pass this check.
-
-        Args:
-            certificate (x509.Certificate): The certificate to validate.
-
-        Raises:
-            ValueError: If the certificate uses an ECC curve listed as weak in security policy,
-                       or if SecurityConfig is not configured.
-        """
-        security_config = SecurityConfig.objects.first()
-        if not security_config or not security_config.security_mode:
-            msg = 'SecurityConfig or security_mode is not configured.'
-            raise ValueError(msg)
-
-        public_key = certificate.public_key()
-
-        if isinstance(public_key, ec.EllipticCurvePublicKey):
-            curve_name = public_key.curve.name
-            for not_permitted_curve_oid in security_config.not_permitted_ecc_curve_oids:
-                try:
-                    named_curve = NamedCurve.from_dotted_string(not_permitted_curve_oid)
-                except (KeyError, StopIteration):
-                    continue
-                if named_curve.ossl_curve_name == curve_name:
-                    err_msg = (
-                        f'ECC certificate uses a weak curve ({curve_name}) according to '
-                        f'security policy ({security_config.get_security_mode_display()}).'
-                    )
-                    raise ValueError(err_msg)
+        """Compatibility adapter for checking ECC keys against the shared policy."""
+        policy = CertificateVerifier._active_cryptographic_policy()
+        if isinstance(certificate.public_key(), ec.EllipticCurvePublicKey):
+            enforce_cryptographic_policy(policy, key=public_key_facts(certificate.public_key()))
 
     @staticmethod
     def _check_ca_key_usage(
@@ -627,34 +592,10 @@ class CertificateVerifier:
 
     @staticmethod
     def _check_signature_algorithm(certificate: x509.Certificate) -> None:
-        """Check if a certificate uses a weak signature algorithm according to security policy.
-
-        Args:
-            certificate (x509.Certificate): The certificate to validate.
-
-        Raises:
-            ValueError: If the certificate uses a signature algorithm listed as weak in security policy,
-                       or if SecurityConfig is not properly configured.
-        """
-        security_config = SecurityConfig.objects.first()
-        if not security_config or not security_config.security_mode:
-            msg = 'SecurityConfig or security_mode is not configured.'
-            raise ValueError(msg)
-
-        signature_algorithm_oid = certificate.signature_algorithm_oid
-
-        for weak_algo_oid in security_config.not_permitted_signature_algorithm_oids:
-            # Compare the certificate's signature algorithm OID against the stored weak OIDs
-            if weak_algo_oid == str(signature_algorithm_oid):
-                hash_algo = certificate.signature_hash_algorithm
-                algo_name = (
-                    hash_algo.__class__.__name__ if hash_algo else 'unknown'
-                )
-                err_msg = (
-                    f'Certificate uses a weak signature algorithm ({algo_name}) according to '
-                    f'security policy ({security_config.get_security_mode_display()}).'
-                )
-                raise ValueError(err_msg)
+        """Compatibility adapter for checking the signature's algorithm and digest."""
+        enforce_cryptographic_policy(
+            CertificateVerifier._active_cryptographic_policy(), signature=signature_facts(certificate),
+        )
 
     @staticmethod
     def verify_server_cert(
@@ -699,9 +640,7 @@ class CertificateVerifier:
             ValueError: If the certificate is RSA but the key size is below the minimum required by security policy,
                 if the ECC curve is weak according to security policy, or if the signature algorithm is weak.
         """
-        CertificateVerifier._check_rsa_key_size(cert)
-        CertificateVerifier._check_ecc_curve(cert)
-        CertificateVerifier._check_signature_algorithm(cert)
+        CertificateVerifier._check_security_policy(cert)
 
         if trusted_roots is None:
             trusted_roots = []
@@ -926,9 +865,7 @@ class CertificateVerifier:
         CertificateVerifier._check_ca_key_usage(cert, required_key_usage)
 
         # Validate certificate security properties
-        CertificateVerifier._check_rsa_key_size(cert)
-        CertificateVerifier._check_ecc_curve(cert)
-        CertificateVerifier._check_signature_algorithm(cert)
+        CertificateVerifier._check_security_policy(cert)
 
         if verification_time is None:
             verification_time = datetime.datetime.now(UTC)

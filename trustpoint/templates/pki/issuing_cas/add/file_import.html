@@ -1,63 +1,20 @@
-{% extends 'trustpoint/base.html' %}
+{% extends 'pki/issuing_cas/add/form_base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h1 class="mb-1">
-            {% trans 'Import Issuing CA' %}
-        </h1>
+    {% with ca_form_id='import-issuing-ca-form' %}
+        {{ block.super }}
+    {% endwith %}
+{% endblock %}
 
-        <p class="mb-0 text-muted">
-            {% trans 'Import an existing Issuing CA, including its private key and certificate material, into Trustpoint.' %}
-        </p>
-    </div>
+{% block form_title %}{% trans 'Import Issuing CA' %}{% endblock %}
 
-    <div class="card-body text-start">
-        <div class="tp-card-centered-content">
-            <form
-                id="import-issuing-ca-form"
-                method="post"
-                enctype="multipart/form-data"
-                autocomplete="off"
-            >
-                {% csrf_token %}
+{% block form_description %}{% trans 'Import an existing Issuing CA, including its private key and certificate material, into Trustpoint.' %}{% endblock %}
 
-                <section>
-                    <div class="mb-3">
-                        <h2 class="h4 mb-1">
-                            {% trans 'File Import' %}
-                        </h2>
+{% block section_title %}{% trans 'File Import' %}{% endblock %}
 
-                        <p class="mb-0 text-muted">
-                            {% trans 'Select the required files and provide the information needed to import the Issuing CA.' %}
-                        </p>
-                    </div>
+{% block section_description %}{% trans 'Select the required files and provide the information needed to import the Issuing CA.' %}{% endblock %}
 
-                    <hr class="mb-4">
+{% block submit_label %}{% trans 'Import Issuing CA' %}{% endblock %}
 
-                    {{ form|crispy }}
-                </section>
-            </form>
-        </div>
-    </div>
-
-    <div class="card-footer d-flex justify-content-between align-items-center">
-        <a
-            href="{% url 'pki:issuing_cas-add-method_select' %}"
-            class="btn btn-secondary"
-        >
-            {% trans 'Back' %}
-        </a>
-
-        <button
-            type="submit"
-            form="import-issuing-ca-form"
-            class="btn btn-primary"
-        >
-            {% trans 'Import Issuing CA' %}
-        </button>
-    </div>
-</div>
-{% endblock content %}
+{% block form_encoding %}enctype="multipart/form-data"{% endblock %}

@@ -36,7 +36,7 @@ from onboarding.models import (
 from pki.models import CaModel, CredentialModel, DevIdRegistration, DomainModel, TruststoreModel
 from pki.util.x509 import CertificateGenerator
 from signer.models import SignerModel
-from trustpoint.logger import LoggerMixin
+from util.commands import CommandLoggingMixin
 
 ALLOWED_CHARS = allowed_chars = string.ascii_letters + string.digits
 
@@ -171,32 +171,10 @@ def create_signer_for_domain(
     )
     return SignerModel.objects.create(unique_name=f'signer-{domain_name}', credential=credential_model)
 
-class Command(BaseCommand, LoggerMixin):
+class Command(BaseCommand, CommandLoggingMixin):
     """Add domains and associated device names with random onboarding protocol and serial number."""
 
     help = 'Add domains and associated device names with random onboarding protocol and serial number'
-
-    def log_and_stdout(self, message: str, level: str = 'info') -> None:
-        """Log a message and write it to stdout.
-
-        Parameters
-        ----------
-        message : str
-            The message to log and print.
-        level : str
-            The logging level ('info', 'warning', 'error', etc.).
-        """
-        log_method = getattr(self.logger, level, self.logger.info)
-        log_method(message)
-
-        if level == 'error':
-            self.stdout.write(self.style.ERROR(message))
-        elif level == 'warning':
-            self.stdout.write(self.style.WARNING(message))
-        elif level == 'info':
-            self.stdout.write(self.style.SUCCESS(message))
-        else:
-            self.stdout.write(message)
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Execute the command."""

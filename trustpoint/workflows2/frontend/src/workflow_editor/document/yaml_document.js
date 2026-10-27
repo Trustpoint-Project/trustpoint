@@ -1,8 +1,6 @@
 import { parseDocument, stringify } from 'yaml';
 
-export function deepClone(value) {
-  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-}
+export { deepClone } from '../shared/utils.js';
 
 export function ensureObject(value, fallback = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {

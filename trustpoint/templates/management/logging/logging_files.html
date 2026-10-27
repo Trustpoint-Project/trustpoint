@@ -1,4 +1,3 @@
-```django id="x7g2qa"
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load static %}
@@ -211,6 +210,8 @@
                 type="button"
                 class="btn btn-outline-primary tp-table-select-btn"
                 data-tp-url="download/tar.gz"
+                data-tp-value-type="log-filename"
+                disabled
             >
                 {% trans 'Download Selected (.tar.gz)' %}
             </button>
@@ -219,6 +220,8 @@
                 type="button"
                 class="btn btn-primary tp-table-select-btn"
                 data-tp-url="download/zip"
+                data-tp-value-type="log-filename"
+                disabled
             >
                 {% trans 'Download Selected (.zip)' %}
             </button>
@@ -229,4 +232,3 @@
 
 </div>
 {% endblock %}
-```

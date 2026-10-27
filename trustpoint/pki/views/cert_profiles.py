@@ -12,34 +12,34 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import ProtectedError, QuerySet
-from django.forms import ValidationError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 from django.views.generic.edit import FormView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
-from rest_framework import filters, viewsets
+from rest_framework import filters
 from rest_framework.permissions import BasePermission
 
-from management.security_change_audit import audit_security_change, security_change, snapshot_security_state
+from management.security_change_audit import audit_security_change, security_change
 from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
 from pki.serializer.cert_profile import CertProfileDetailSerializer, CertProfileSerializer
+from shared.api import AuditedModelViewSet
+from shared.views import AuditedBulkDeleteView, FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
-    BulkDeleteView,
     ContextDataMixin,
     SortableTableMixin,
 )
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
-    from django.forms import Form
+    from django.db.models import QuerySet
     from rest_framework.request import Request
 
 
@@ -148,7 +148,7 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
         return HttpResponseRedirect(self.get_success_url())
 
 
-class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
+class CertProfileIssuanceView(FormErrorMessageMixin, LoggerMixin, CertProfileContextMixin,
                               FormView[CertificateIssuanceForm]):
     """View to display the issuance form for a Certificate Profile."""
 
@@ -175,13 +175,6 @@ class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
         context['profile_dict'] = self.get_form_kwargs()['profile']
         return context
 
-    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
-        """Handle the case where the form is invalid."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error}')
-        return super().form_invalid(form)
-
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Handle the case where the form is valid."""
         try:
@@ -197,7 +190,7 @@ class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
         return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))
 
 
-class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
+class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, AuditedBulkDeleteView):
     """View to confirm the deletion of multiple certificate profiles."""
 
     model = CertificateProfileModel
@@ -207,6 +200,12 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
     context_object_name = 'cert_profiles'
     queryset: QuerySet[CertificateProfileModel]
 
+    delete_permission = AppPermissions.MANAGE_CERTIFICATE_PROFILES
+    protected_error_message = gettext_lazy(
+        'Cannot delete the selected Certificate Profile(s) because they are referenced by other objects.'
+    )
+    delete_success_message = gettext_lazy('Successfully deleted {count} certificate profile(s).')
+
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests."""
         queryset = self.get_queryset()
@@ -215,36 +214,6 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
             return HttpResponseRedirect(self.success_url)
         return super().get(request, *args, **kwargs)
 
-    def form_valid(self, form: Form) -> HttpResponse:
-        """Delete the selected credentials on valid form."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_PROFILES):
-            raise PermissionDenied
-        queryset = self.get_queryset()
-        deleted_count = queryset.count() if queryset else 0
-
-        try:
-            with transaction.atomic():
-                targets = list(queryset.select_for_update())
-                snapshots = [(target, snapshot_security_state(target)) for target in targets]
-                response = super().form_valid(form)
-                for target, before in snapshots:
-                    audit_security_change(
-                        target=target, actor=self.request.user, before=before, action='deleted'
-                    )
-        except ProtectedError:
-            messages.error(
-                self.request,
-                _('Cannot delete the selected Certificate Profile(s) because they are referenced by other objects.'),
-            )
-            return HttpResponseRedirect(self.success_url)
-        except ValidationError as exc:
-            messages.error(self.request, exc.message)
-            return HttpResponseRedirect(self.success_url)
-
-        messages.success(self.request, _('Successfully deleted {count} certificate profile(s).')
-                .format(count=deleted_count))
-
-        return response
 
 class CanManageCertificateProfiles(BasePermission):
     """Allow only users permitted to manage certificate profiles."""
@@ -310,7 +279,7 @@ class CanManageCertificateProfiles(BasePermission):
     partial_update=extend_schema(description='Partially update an existing certificate profile.'),
     destroy=extend_schema(description='Delete a certificate profile.')
 )
-class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
+class CertProfileViewSet(AuditedModelViewSet[CertificateProfileModel]):
     """ViewSet for managing Certificate Profile instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -333,19 +302,3 @@ class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
         if self.action == 'retrieve':
             return CertProfileDetailSerializer
         return CertProfileSerializer
-
-    @transaction.atomic
-    def perform_create(self, serializer: Any) -> None:
-        """Create and audit the object once at the API operation boundary."""
-        target = serializer.save()
-        audit_security_change(target=target, actor=self.request.user, before=None, action='created')
-
-    def perform_update(self, serializer: Any) -> None:
-        """Audit the final persisted state, including serializer-managed relations."""
-        with security_change(target=serializer.instance, actor=self.request.user):
-            serializer.save()
-
-    def perform_destroy(self, instance: Any) -> None:
-        """Preserve the deleted object's identity and state in one audit entry."""
-        with security_change(target=instance, actor=self.request.user, action='deleted'):
-            instance.delete()

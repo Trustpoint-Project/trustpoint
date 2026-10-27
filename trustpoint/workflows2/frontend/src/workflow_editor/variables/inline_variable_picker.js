@@ -1,9 +1,7 @@
+import { findTriggerSpec } from '../document/catalog_lookup.js';
 import { escapeHtml } from '../shared/dom.js';
 import { buildExpressionFunctionInsertion } from '../document/expression_insertions.js';
 
-function findTriggerSpec(catalog, triggerKey) {
-  return (catalog?.events || []).find((eventSpec) => eventSpec.key === triggerKey) || null;
-}
 
 function toTitleCase(value) {
   return String(value || '')

@@ -12,10 +12,16 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, NamedCurve, PublicKeyAlgorithmOid
+from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm, NamedCurve, PublicKeyAlgorithmOid
 
 from management.security_env import effective_security_defaults, parse_security_restrictions
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
+from pki.security_policy import (
+    CryptographicPolicy,
+    evaluate_cryptographic_policy,
+    stored_public_key_facts,
+    stored_signature_facts,
+)
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 if TYPE_CHECKING:
@@ -558,10 +564,7 @@ class SecurityConfig(models.Model):
 
         violations.extend(self._check_auto_gen_pki(requested_policy, mode_label))
         violations.extend(self._check_self_signed_cas(requested_policy, mode_label, CaModel))
-        violations.extend(self._check_rsa_key_size(requested_policy, mode_label, CaModel))
-        violations.extend(self._check_ecc_curves(requested_policy, mode_label, CaModel))
-        violations.extend(self._check_mldsa_variants(requested_policy, mode_label, CaModel))
-        violations.extend(self._check_signature_algorithms(requested_policy, mode_label, CaModel))
+        violations.extend(self._check_cryptographic_policy(requested_policy, mode_label, CaModel))
         violations.extend(self._check_crl_validity(requested_policy, mode_label, CaModel))
         violations.extend(self._check_no_onboarding_protocols(requested_policy, mode_label, CaModel, DeviceModel))
         violations.extend(self._check_onboarding_protocols(requested_policy, mode_label, DeviceModel))
@@ -612,132 +615,25 @@ class SecurityConfig(models.Model):
         ]
 
     @staticmethod
-    def _check_rsa_key_size(
-        defaults: _SecurityModeDefaults,
-        mode_label: str,
-        ca_model: type[CaModel],
+    def _check_cryptographic_policy(
+        defaults: _SecurityModeDefaults, mode_label: str, ca_model: type[CaModel],
     ) -> list[str]:
-        """Return violations for CA RSA keys below the minimum (or any RSA if banned)."""
-        rsa_oid = PublicKeyAlgorithmOid.RSA.dotted_string
-        min_rsa: int | None = defaults['rsa_minimum_key_size']
-        if min_rsa is None:
-            names = ca_model.objects.filter(
-                credential__certificate__spki_algorithm_oid=rsa_oid,
-            ).values_list('unique_name', flat=True)
-            return [
-                str(
-                    _(
-                        'Issuing CA "%(ca)s" uses an RSA key, which is not permitted in %(mode)s.',
-                    )
-                    % {'ca': n, 'mode': mode_label}
-                )
-                for n in names
-            ]
-        if min_rsa == 0:
-            # Any RSA key size is acceptable — nothing to check.
-            return []
-        rows = ca_model.objects.filter(
-            credential__certificate__spki_algorithm_oid=rsa_oid,
-            credential__certificate__spki_key_size__lt=min_rsa,
-        ).values_list('unique_name', 'credential__certificate__spki_key_size')
-        return [
-            str(
-                _(
-                    'Issuing CA "%(ca)s" has an RSA key of %(size)d bits, below the minimum of %(min)d bits '
-                    'required by %(mode)s.',
-                )
-                % {'ca': n, 'size': sz, 'min': min_rsa, 'mode': mode_label}
-            )
-            for n, sz in rows
-        ]
-
-    @staticmethod
-    def _check_ecc_curves(
-        defaults: _SecurityModeDefaults,
-        mode_label: str,
-        ca_model: type[CaModel],
-    ) -> list[str]:
-        """Return violations for CA certificates using a blocked ECC curve."""
-        blocked: list[str] = defaults['not_permitted_ecc_curve_oids']
-        if not blocked:
-            return []
-        ecc_oid = PublicKeyAlgorithmOid.ECC.dotted_string
-        rows = ca_model.objects.filter(
-            credential__certificate__spki_algorithm_oid=ecc_oid,
-            credential__certificate__spki_ec_curve_oid__in=blocked,
-        ).values_list('unique_name', 'credential__certificate__spki_ec_curve_oid')
-        curve_labels = dict(SecurityConfig.NamedCurveChoices.choices)
-        return [
-            str(
-                _(
-                    'Issuing CA "%(ca)s" uses ECC curve %(curve)s, which is not permitted in %(mode)s.',
-                )
-                % {'ca': n, 'curve': curve_labels.get(oid, oid), 'mode': mode_label}
-            )
-            for n, oid in rows
-        ]
-
-    @staticmethod
-    def _check_mldsa_variants(
-        defaults: _SecurityModeDefaults,
-        mode_label: str,
-        ca_model: type[CaModel],
-    ) -> list[str]:
-        """Return violations for CA certificates using a blocked ML-DSA variant."""
-        blocked: list[str] = defaults['not_permitted_mldsa_variant_oids']
-        if not blocked:
-            return []
-        rows = ca_model.objects.filter(
-            credential__certificate__spki_algorithm_oid__in=blocked,
-        ).values_list('unique_name', 'credential__certificate__spki_algorithm_oid')
-        mldsa_labels = dict(SecurityConfig.MlDsaVariantChoices.choices)
-        return [
-            str(
-                _(
-                    'Issuing CA "%(ca)s" uses ML-DSA variant %(variant)s, which is not permitted in %(mode)s.',
-                )
-                % {'ca': n, 'variant': mldsa_labels.get(oid, oid), 'mode': mode_label}
-            )
-            for n, oid in rows
-        ]
-
-    @staticmethod
-    def _check_signature_algorithms(
-        defaults: _SecurityModeDefaults,
-        mode_label: str,
-        ca_model: type[CaModel],
-    ) -> list[str]:
-        """Return violations for CA certificates signed with a blocked hash algorithm."""
-        blocked_hash_oids: list[str] = defaults['not_permitted_signature_algorithm_oids']
-        if not blocked_hash_oids:
-            return []
-        # Map AlgorithmIdentifier OIDs (stored in CertificateModel) to the hash OIDs
-        blocked_sig_oids = [
-            alg_id.value.dotted_string
-            for alg_id in AlgorithmIdentifier
-            if alg_id.hash_algorithm is not None and alg_id.hash_algorithm.dotted_string in blocked_hash_oids
-        ]
-        if not blocked_sig_oids:
-            return []
-        rows = ca_model.objects.filter(
-            credential__certificate__signature_algorithm_oid__in=blocked_sig_oids,
-        ).values_list('unique_name', 'credential__certificate__signature_algorithm_oid')
-        hash_labels = dict(SecurityConfig.HashAlgorithmChoices.choices)
+        """Evaluate existing CA material against the requested immutable policy."""
+        policy = CryptographicPolicy.from_mapping(defaults)
         violations: list[str] = []
-        for ca_name, sig_oid in rows:
-            try:
-                hash_algo = AlgorithmIdentifier.from_dotted_string(sig_oid).hash_algorithm
-                label = hash_labels.get(hash_algo.dotted_string if hash_algo else '', sig_oid)
-            except ValueError:
-                label = sig_oid
-            violations.append(
-                str(
-                    _(
-                        'Issuing CA "%(ca)s" uses signature algorithm with hash %(hash)s, '
-                        'which is not permitted in %(mode)s.',
-                    )
-                    % {'ca': ca_name, 'hash': label, 'mode': mode_label}
-                )
+        cas = ca_model.objects.filter(credential__certificate__isnull=False).select_related('credential__certificate')
+        for ca in cas:
+            certificate = ca.ca_certificate_model
+            if certificate is None:
+                continue
+            failures = evaluate_cryptographic_policy(
+                policy, key=stored_public_key_facts(certificate), signature=stored_signature_facts(certificate),
+            )
+            violations.extend(
+                str(_('Issuing CA "%(ca)s": %(violation)s Requested mode: %(mode)s.') % {
+                    'ca': ca.unique_name, 'violation': failure.message, 'mode': mode_label,
+                })
+                for failure in failures
             )
         return violations
 

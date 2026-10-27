@@ -1,0 +1,56 @@
+{% load i18n %}
+
+{% block table_filter %}
+<div class="d-flex flex-wrap gap-2 align-items-center">
+
+    <div class="dropdown">
+        <button
+            class="btn btn-sm {% if filters_active %}btn-primary{% else %}btn-outline-secondary{% endif %} dropdown-toggle"
+            type="button"
+            id="tp-filter-dropdown-btn{{ filter_dropdown_suffix }}"
+            data-bs-toggle="dropdown"
+            data-bs-auto-close="outside"
+            aria-expanded="false"
+        >
+            {% trans 'Filters' %}
+            {% if filters_active %}
+                <span class="ms-1">
+                    · {% trans 'Active' %}
+                </span>
+            {% endif %}
+        </button>
+
+        <div
+            class="dropdown-menu p-3"
+            id="tp-filter-dropdown-menu{{ filter_dropdown_suffix }}"
+            aria-labelledby="tp-filter-dropdown-btn{{ filter_dropdown_suffix }}"
+            style="min-width: 22rem;"
+        >
+            <form method="get">
+
+                {% block filter_fields %}{% endblock %}
+
+                <div class="d-flex justify-content-between gap-2">
+                    <a
+                        href="{% url table_url %}"
+                        class="btn btn-sm btn-outline-secondary"
+                    >
+                        {% trans 'Reset' %}
+                    </a>
+
+                    <button
+                        type="submit"
+                        class="btn btn-sm btn-primary"
+                    >
+                        {% trans 'Apply Filters' %}
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    {% block filter_export %}{% include "shared/partials/export_button.html" %}{% endblock %}
+
+</div>
+{% endblock table_filter %}

@@ -17,16 +17,18 @@ from home.analytics import (
 
 
 class DashboardAnalyticsSemanticsTests(SimpleTestCase):
+    @patch('home.analytics.filter_credential_health')
     @patch('home.analytics.filter_devices_with_expired_or_revoked_application_certificates')
     @patch('home.analytics.filter_devices_with_active_application_certificates')
     @patch('home.analytics.DeviceModel.objects')
-    def test_application_certificate_buckets_cover_all_devices_without_double_counting(self, objects, active, bad):
-        objects.all.return_value.count.return_value = 4
+    def test_application_certificate_buckets_cover_all_devices_without_double_counting(self, objects, active, bad, future):
+        objects.all.return_value.count.return_value = 5
         active.return_value.values_list.return_value = [1, 2]
         bad.return_value.values_list.return_value = [2, 3]
+        future.return_value.values_list.return_value = [4]
         actual = application_certificate_device_counts(datetime(2026, 10, 19, tzinfo=UTC))
-        self.assertEqual(actual, {'active': 2, 'expired_or_revoked_only': 1, 'none': 1})
-        self.assertEqual(sum(actual.values()), 4)
+        self.assertEqual(actual, {'active': 2, 'expired_or_revoked_only': 1, 'not_yet_valid': 1, 'none': 1})
+        self.assertEqual(sum(actual.values()), 5)
         objects.all.assert_called_once_with()
 
     @patch('home.analytics.DeviceModel.objects')

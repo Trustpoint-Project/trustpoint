@@ -1,12 +1,7 @@
+import { findStepSpec, findTriggerSpec } from '../document/catalog_lookup.js';
 import { escapeHtml, renderChips } from '../shared/dom.js';
 
-export function findStepSpec(catalog, stepType) {
-  return (catalog?.steps || []).find((step) => step.type === stepType) || null;
-}
-
-export function findTriggerSpec(catalog, triggerKey) {
-  return (catalog?.events || []).find((evt) => evt.key === triggerKey) || null;
-}
+export { findStepSpec, findTriggerSpec };
 
 export function renderActionButton(action, label, extraAttrs = '') {
   return (

@@ -7,9 +7,9 @@ from cryptography import x509
 from django.db import transaction
 
 from devices.models import DeviceModel
-from devices.revocation import DeviceCredentialRevocation
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
+from pki.services.revocation import revoke_primary_certificate
 from request.authorization.manual import ManualAuthorization
 from request.operation_processor import CredentialIssueProcessor
 from request.request_context import ManualCredentialRequestContext, ManualIssuanceMethod
@@ -58,7 +58,7 @@ def renew_gds_push_domain_credential(device: DeviceModel) -> IssuedCredentialMod
     if replacement is None or not replacement.is_valid_domain_credential()[0]:
         message = 'Domain credential renewal did not produce a valid replacement.'
         raise ValueError(message)
-    revoked, reason = DeviceCredentialRevocation.revoke_certificate(
+    revoked, reason = revoke_primary_certificate(
         previous.pk,
         RevokedCertificateModel.ReasonCode.SUPERSEDED,
     )

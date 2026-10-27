@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 from io import BytesIO
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from django.http import HttpRequest
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -19,18 +19,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from devices.models import DeviceModel
-from devices.revocation import DeviceCredentialRevocation
 from management.models.audit_log import AuditLog
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import CertificateModel
-from request.authorization import RestAuthorization
-from request.message_parser import RestMessageParser
-from request.message_responder import RestErrorMessageResponder, RestMessageResponder
-from request.operation_processor.general import OperationProcessor
+from pki.services.revocation import revoke_primary_certificate
+from request.enrollment import authenticated_rest_enrollment
+from request.message_responder import RestErrorMessageResponder
 from request.request_context import RestCertificateRequestContext
-from request.request_validator import RestHttpRequestValidator
-from request.workflow2_issuance import release_delivered_workflow2_request
-from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 from users.permissions import AppPermissions
 from workflows2.events.request_events import Events
@@ -236,21 +231,14 @@ class ApplicationCertificateEnrollView(LoggerMixin, APIView):
         device_id: int,
     ) -> Response:
         """Run the REST PKI enrollment pipeline and return a DRF Response."""
+        orchestrator = authenticated_rest_enrollment(ctx, device=device)
         try:
-            RestHttpRequestValidator().validate(ctx)
-            ctx = cast('RestCertificateRequestContext', RestMessageParser().parse(ctx))
-            ctx.device = device
-            RestAuthorization(allowed_operations=['enroll']).authorize(ctx)
-            workflow2_result = Workflow2Handler().handle(ctx)
-            if not workflow2_result.should_stop:
-                OperationProcessor().process_operation(ctx)
-            RestMessageResponder.build_response(ctx)
-            release_delivered_workflow2_request(ctx)
+            orchestrator.run()
         except Exception:
             self.logger.exception('Error during API certificate enrollment for device %s', device_id)
-            RestErrorMessageResponder.build_response(ctx)
+            RestErrorMessageResponder.build_response(orchestrator.context)
 
-        http_response = ctx.to_http_response()
+        http_response = orchestrator.context.to_http_response()
 
         try:
             body = json.loads(http_response.content)
@@ -304,12 +292,8 @@ class CertificateRevokeView(LoggerMixin, APIView):
         if guard_response is not None:
             return guard_response
 
-        # CertificateRevocationProcessor requires an EST/CMP BaseRevocationRequestContext.
-        # Use the web view's shared service directly to keep REST revocation self-contained.
         try:
-            revoked_successfully, message = DeviceCredentialRevocation.revoke_certificate(
-                issued_credential_id, revocation_reason
-            )
+            revoked_successfully, message = revoke_primary_certificate(issued_credential_id, revocation_reason)
         except Exception:
             self.logger.exception('Failed to revoke issued credential %s', issued_credential_id)
             revoked_successfully = False
@@ -358,7 +342,7 @@ class CertificateRevokeView(LoggerMixin, APIView):
         missing-certificate and already-revoked conditions before the revocation
         logic runs. These branches therefore act as defense-in-depth for the
         narrow time-of-check/time-of-use window in which state changes between
-        the guard and :meth:`DeviceCredentialRevocation.revoke_certificate`
+        the guard and :func:`pki.services.revocation.revoke_primary_certificate`
         performing its own lookup. The compared strings mirror the messages
         returned by that method. The status codes are kept consistent with the
         pre-check responses (already-revoked/missing-certificate -> 422,

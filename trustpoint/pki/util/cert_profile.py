@@ -24,10 +24,10 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from trustpoint_core.oid import NameOid
+from trustpoint_core.oid import CertificateExtensionOid, NameOid
 
 from pki.util.crl_urls import validate_crl_url
-from pki.util.ext_oids import CertificateExtensionOid  # temp
+from pki.util.ext_oids import CERTIFICATE_EXTENSION_ALIASES
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +40,21 @@ ALIASES: dict[str, AliasChoices] = {
 
 CERT_PROFILE_KEYWORDS = {'type','allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
 
-def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enum]) -> dict[str, str]:
+def build_alias_map_name_oids(
+    alias_map: dict[str, str],
+    enum_cls: type[enum.Enum],
+    *,
+    extra_aliases: dict[str, tuple[str | None, str]] | None = None,
+) -> dict[str, str]:
     """Build a mapping of all known OID strings from trustpoint_core to their canonical field names."""
     for entry in enum_cls:
         canonical = entry.name.lower() # e.g. 'common_name'
         dotted_string = entry.value.dotted_string # e.g. '2.5.4.3'
-        abbreviation = entry.value.abbreviation # e.g. 'CN'
-        camel_case = entry.value.full_name # e.g. 'commonName'
+        if extra_aliases is None:
+            abbreviation = entry.value.abbreviation  # e.g. 'CN'
+            camel_case = entry.value.full_name  # e.g. 'commonName'
+        else:
+            abbreviation, camel_case = extra_aliases[entry.name]
         alias_map[dotted_string] = canonical
         choices = [dotted_string]
         if camel_case != canonical:
@@ -62,7 +70,9 @@ def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enu
     return alias_map
 
 alias_map = build_alias_map_name_oids({}, NameOid)
-alias_map = build_alias_map_name_oids(alias_map, CertificateExtensionOid)
+alias_map = build_alias_map_name_oids(
+    alias_map, CertificateExtensionOid, extra_aliases=CERTIFICATE_EXTENSION_ALIASES
+)
 
 # Important: Pydantic V2 model_config does not follow MRO!
 # Non-default Model config settings are taken from the last base class set to a non-default value.

@@ -125,83 +125,11 @@ class DeviceCreateAddOnboardingTypeView(AbstractCreateAddOnboardingTypeView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class AbstractCreateNoOnboardingView(PageContextMixin, FormView[NoOnboardingCreateForm]):
-    """asdfds."""
+class DeviceCreateView(PageContextMixin, FormView[forms.Form]):
+    """Create and audit a device using the selected onboarding form."""
 
     http_method_names = ('get', 'post')
 
-    form_class = NoOnboardingCreateForm
-    template_name = 'devices/create.html'
-
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name: str
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the cancel url href according to the subcategory.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to use for rendering the devices page.
-        """
-        context = super().get_context_data(**kwargs)
-        context['cancel_create_url'] = f'{self.page_category}:{self.page_name}'
-        return context
-
-    def form_valid(self, form: NoOnboardingCreateForm) -> HttpResponse:
-        """Saves the form / creates the device model object.
-
-        Args:
-            form: The valid form.
-
-        Returns:
-            The HTTP Response to be returned.
-        """
-        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
-            raise PermissionDenied
-        form.actor = self.request.user  # type: ignore[attr-defined]
-        try:
-            self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
-        except ValidationError as exc:
-            form.add_error(None, exc)
-            return self.form_invalid(form)
-
-        actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.DEVICE_ADDED,
-            target=self.object,
-            target_display=f'Device: {self.object.common_name}',
-            actor=actor,
-        )
-
-        return super().form_valid(form)
-
-    def get_success_url(self) -> str:
-        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
-
-        Returns:
-            The success url to redirect to after successful processing of the POST data following a form submit.
-        """
-        return str(
-            reverse_lazy(
-                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.id}
-            )
-        )
-
-
-class DeviceCreateNoOnboardingView(AbstractCreateNoOnboardingView):
-    """Create form view for the devices section."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
-    """asdfds."""
-
-    http_method_names = ('get', 'post')
-
-    form_class: type[forms.Form] = OnboardingCreateForm
     template_name = 'devices/create.html'
 
     page_category = DEVICES_PAGE_CATEGORY
@@ -259,6 +187,24 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
                 f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.id}
             )
         )
+
+
+class AbstractCreateNoOnboardingView(DeviceCreateView):
+    """Create a device without onboarding."""
+
+    form_class = NoOnboardingCreateForm
+
+
+class DeviceCreateNoOnboardingView(AbstractCreateNoOnboardingView):
+    """Create form view for the devices section."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class AbstractCreateOnboardingView(DeviceCreateView):
+    """Create a device with onboarding configured."""
+
+    form_class: type[forms.Form] = OnboardingCreateForm
 
 
 class DeviceCreateOnboardingView(AbstractCreateOnboardingView):

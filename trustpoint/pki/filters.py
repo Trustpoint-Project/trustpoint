@@ -13,6 +13,7 @@ from django.utils.translation import gettext_lazy as _
 from pki.models import CaModel, CertificateModel, CrlModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
+from pki.services.certificate_health import certificate_health_conditions
 
 
 class CertificateFilter(django_filters.FilterSet):
@@ -88,25 +89,13 @@ class CertificateFilter(django_filters.FilterSet):
         del name
 
         now = timezone.now()
-
-        if value == 'ok':
-            return queryset.filter(
-                revoked_certificate__isnull=True,
-                not_valid_before__lte=now,
-                not_valid_after__gt=now,
-            )
-        if value == 'expired':
-            return queryset.filter(
-                revoked_certificate__isnull=True,
-                not_valid_after__lte=now,
-            )
-        if value == 'revoked':
-            return queryset.filter(revoked_certificate__isnull=False)
-        if value == 'not_yet_valid':
-            return queryset.filter(
-                revoked_certificate__isnull=True,
-                not_valid_before__gt=now,
-            )
+        conditions = certificate_health_conditions(as_of=now, expiry_days=0)
+        condition = {
+            'ok': conditions['valid'], 'expired': conditions['expired'],
+            'revoked': conditions['revoked'], 'not_yet_valid': conditions['not_yet_valid'],
+        }.get(value)
+        if condition is not None:
+            return queryset.filter(condition)
         return queryset
 
     def filter_expiry_window(
@@ -123,11 +112,7 @@ class CertificateFilter(django_filters.FilterSet):
         next_2_days = now + timedelta(days=2)
         next_30_days = now + timedelta(days=30)
 
-        base_queryset = queryset.filter(
-            revoked_certificate__isnull=True,
-            not_valid_before__lte=now,
-            not_valid_after__gt=now,
-        )
+        base_queryset = queryset.filter(certificate_health_conditions(as_of=now, expiry_days=0)['valid'])
 
         if value == 'today':
             return base_queryset.filter(not_valid_after__lte=next_1_day)

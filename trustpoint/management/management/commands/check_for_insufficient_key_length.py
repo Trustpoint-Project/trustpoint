@@ -9,9 +9,11 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+from trustpoint_core.oid import PublicKeyAlgorithmOid
 
 from management.models import NotificationModel, NotificationStatus, SecurityConfig
 from pki.models import CertificateModel
+from pki.security_policy import CryptographicPolicy, evaluate_public_key, stored_public_key_facts
 
 
 class Command(BaseCommand):
@@ -35,16 +37,17 @@ class Command(BaseCommand):
         if config is None:
             return
 
-        rsa_minimum_key_size = config.rsa_minimum_key_size
-        if not rsa_minimum_key_size:
+        policy = CryptographicPolicy.from_config(config)
+        if policy.rsa_minimum_key_size == 0:
             return
         insufficient_key_certificates = CertificateModel.objects.filter(
-            spki_algorithm_oid='1.2.840.113549.1.1.1',
-            spki_key_size__lt=rsa_minimum_key_size,
+            spki_algorithm_oid=PublicKeyAlgorithmOid.RSA.dotted_string,
         )
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
 
-        for cert in insufficient_key_certificates:
+        for cert in insufficient_key_certificates.iterator():
+            if not evaluate_public_key(policy, stored_public_key_facts(cert)):
+                continue
             if not NotificationModel.objects.filter(event='INSUFFICIENT_KEY_LENGTH', certificate=cert).exists():
                 message_data = {'common_name': cert.common_name, 'spki_key_size': cert.spki_key_size}
 

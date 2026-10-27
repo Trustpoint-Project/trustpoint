@@ -8,21 +8,20 @@ from __future__ import annotations
 from contextlib import ExitStack
 from unittest.mock import Mock, patch
 
-from django.http import Http404, HttpResponse
 import pytest
+from django.http import Http404, HttpResponse
 from django.test import RequestFactory
 from django.urls import resolve
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 
 from cmp.views import CmpRequestView
-from devices.issuer import LocalTlsClientCredentialIssuer
 from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import RevokedCertificateModel
+from pki.tests.credential_helpers import issue_test_credential
 from request.authorization.cmp import CmpOperationAuthorization
 from request.operation_processor.general import OperationProcessor
 from request.request_context import CmpCertificateRequestContext, CmpRevocationRequestContext
 from request.workflows2_handler import Workflow2HandleResult
-from workflows2.events.request_events import Events
 
 
 @pytest.fixture
@@ -112,7 +111,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -175,7 +174,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -216,7 +215,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -262,7 +261,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -312,7 +311,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -353,7 +352,7 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -415,7 +414,7 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -456,7 +455,7 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -639,8 +638,7 @@ class TestCmpRevocationRequestView:
         device = domain_credential_cmp_onboarding['device']
         domain_credential = domain_credential_cmp_onboarding['domain_credential']
 
-        issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
-        app_credential = issuer.issue_tls_client_credential(common_name='App Credential', validity_days=30)
+        app_credential = issue_test_credential(device, 'tls_client', common_name='App Credential')
 
         context = _build_revocation_context(
             device=device,
@@ -661,8 +659,7 @@ class TestCmpRevocationRequestView:
         """Test that an application credential can self-revoke via CMP RR."""
         device = domain_credential_cmp_onboarding['device']
 
-        issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
-        app_credential = issuer.issue_tls_client_credential(common_name='Self Revoke Credential', validity_days=30)
+        app_credential = issue_test_credential(device, 'tls_client', common_name='Self Revoke Credential')
 
         context = _build_revocation_context(
             device=device,
@@ -683,9 +680,8 @@ class TestCmpRevocationRequestView:
         """Test revocation fails if CMP signer cert is not authorized for the target credential."""
         device = domain_credential_cmp_onboarding['device']
 
-        issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
-        signer_credential = issuer.issue_tls_client_credential(common_name='Signer Credential', validity_days=30)
-        target_credential = issuer.issue_tls_client_credential(common_name='Target Credential', validity_days=30)
+        signer_credential = issue_test_credential(device, 'tls_client', common_name='Signer Credential')
+        target_credential = issue_test_credential(device, 'tls_client', common_name='Target Credential')
 
         context = _build_revocation_context(
             device=device,
@@ -718,10 +714,7 @@ class TestCmpRevocationRequestView:
             no_onboarding_config=other_no_onboarding,
         )
 
-        other_issuer = LocalTlsClientCredentialIssuer(device=other_device, domain=other_device.domain)
-        other_credential = other_issuer.issue_tls_client_credential(
-            common_name='Other Device Credential', validity_days=30
-        )
+        other_credential = issue_test_credential(other_device, 'tls_client', common_name='Other Device Credential')
 
         context = _build_revocation_context(
             device=device,
@@ -743,8 +736,7 @@ class TestCmpRevocationRequestView:
         device = domain_credential_cmp_onboarding['device']
         domain_credential = domain_credential_cmp_onboarding['domain_credential']
 
-        issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
-        app_credential = issuer.issue_tls_client_credential(common_name='Already Revoked', validity_days=30)
+        app_credential = issue_test_credential(device, 'tls_client', common_name='Already Revoked')
 
         app_credential.revoke()
         revoked_before = RevokedCertificateModel.objects.filter(

@@ -1,7 +1,7 @@
 /* Dashboard only; scoped to #dashboard */
 #dashboard .dashboard-security-card:hover { border-color:var(--bs-primary) !important; background:var(--bs-tertiary-bg); }
   #dashboard .dashboard-security-card:focus-visible { outline:3px solid var(--bs-primary); outline-offset:2px; }
-  #dashboard #dashboard .dashboard-tabs { display:flex; flex-wrap:wrap; gap:.5rem; border-bottom:1px solid var(--bs-border-color); padding-bottom:.65rem; }
+  #dashboard .dashboard-tabs { display:flex; flex-wrap:wrap; gap:.5rem; border-bottom:1px solid var(--bs-border-color); padding-bottom:.65rem; }
   #dashboard .dashboard-tab { appearance:none; color:var(--bs-body-color); background:var(--bs-body-bg); border:1px solid var(--bs-border-color); border-radius:.5rem; padding:.65rem 1rem; font-weight:600; cursor:pointer; min-height:44px; }
   #dashboard .dashboard-tab:hover { background:var(--bs-tertiary-bg); border-color:var(--bs-secondary-color); }
   #dashboard .dashboard-tab.is-active { background:var(--bs-primary); color:#fff; border-color:var(--bs-primary); }
@@ -10,9 +10,8 @@
   #dashboard #dashboard-detail-controls { flex-wrap:wrap; }
   #dashboard #dashboard-detail-controls[hidden] { display:none !important; }
   #dashboard .dashboard-health-tile .dashboard-health-value { font-size:clamp(1.35rem,2.5vw,2rem); line-height:1.2; font-weight:700; }
-  #dashboard .dashboard-health-tile { min-height:94px; }
+  #dashboard .dashboard-health-tile { min-height:94px; border:1px solid var(--bs-border-color); border-radius:.65rem; padding:.8rem; background:var(--bs-tertiary-bg); }
   #dashboard .dashboard-health-tile .dashboard-health-title {font-weight:600; font-size:.9rem;}
-  #dashboard .dashboard-health-tile { border:1px solid var(--bs-border-color); border-radius:.65rem; padding:.8rem; background:var(--bs-tertiary-bg); }
 
 #dashboard .dashboard-summary-link {
   color: var(--bs-body-color);

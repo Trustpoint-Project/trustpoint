@@ -7,9 +7,16 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Protocol
 
-from trustpoint_core.oid import AlgorithmIdentifier, PublicKeyAlgorithmOid
+from trustpoint_core.oid import PublicKeyAlgorithmOid
 
 from management.models import SecurityConfig
+from pki.security_policy import (
+    CryptographicPolicy,
+    CryptographicPolicyError,
+    enforce_cryptographic_policy,
+    stored_public_key_facts,
+    stored_signature_facts,
+)
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -117,149 +124,58 @@ class _RsaMinimumKeySizeStrategy(PkiCheckStrategy, LoggerMixin):
     """Rejects CA certificates that use an RSA key below :attr:`SecurityConfig.rsa_minimum_key_size`."""
 
     def check(self, ca: CaModel, cfg: SecurityConfig) -> None:
-        """Check the CA certificate's RSA key size against the policy minimum."""
-        cert_model: CertificateModel | None = ca.ca_certificate_model
-        if cert_model is None:
-            self.logger.debug(
-                '_RsaMinimumKeySizeStrategy: CA "%s" has no certificate yet; skipping.',
-                ca.unique_name,
+        """Delegate RSA validation to the shared evaluator."""
+        certificate = ca.ca_certificate_model
+        if certificate is not None and certificate.spki_algorithm_oid == PublicKeyAlgorithmOid.RSA.dotted_string:
+            enforce_cryptographic_policy(
+                CryptographicPolicy(rsa_minimum_key_size=cfg.rsa_minimum_key_size),
+                key=stored_public_key_facts(certificate),
             )
-            return
-
-        if cert_model.spki_algorithm_oid != PublicKeyAlgorithmOid.RSA.dotted_string:
-            self.logger.debug(
-                '_RsaMinimumKeySizeStrategy: CA "%s" uses %s (not RSA); skipping.',
-                ca.unique_name,
-                cert_model.spki_algorithm_oid,
-            )
-            return
-
-        min_size: int | None = cfg.rsa_minimum_key_size
-        if min_size is None:
-            msg = (
-                f'CA "{ca.unique_name}" uses an RSA key, but RSA is not permitted '
-                f'by the active security policy.'
-            )
-            self.logger.warning('_RsaMinimumKeySizeStrategy: %s', msg)
-            raise ValueError(msg)
-
-        if min_size == 0:
-            self.logger.debug(
-                '_RsaMinimumKeySizeStrategy: CA "%s" — no minimum key size enforced; check passed.',
-                ca.unique_name,
-            )
-            return
-
-        key_size: int = cert_model.spki_key_size
-        if key_size < min_size:
-            msg = (
-                f'CA "{ca.unique_name}" has an RSA key of {key_size} bits, which is below the '
-                f'policy minimum of {min_size} bits.'
-            )
-            self.logger.warning('_RsaMinimumKeySizeStrategy: %s', msg)
-            raise ValueError(msg)
-
-        self.logger.debug(
-            '_RsaMinimumKeySizeStrategy: CA "%s" RSA key %d bits >= min %d bits; check passed.',
-            ca.unique_name,
-            key_size,
-            min_size,
-        )
 
 
 class _NotPermittedEccCurvesStrategy(PkiCheckStrategy, LoggerMixin):
     """Rejects CA certificates whose ECC curve OID appears in :attr:`SecurityConfig.not_permitted_ecc_curve_oids`."""
 
     def check(self, ca: CaModel, cfg: SecurityConfig) -> None:
-        """Check the CA certificate's ECC curve against the policy block-list."""
-        cert_model: CertificateModel | None = ca.ca_certificate_model
-        if cert_model is None:
-            self.logger.debug(
-                '_NotPermittedEccCurvesStrategy: CA "%s" has no certificate yet; skipping.',
-                ca.unique_name,
+        """Delegate ECC validation to the shared evaluator."""
+        certificate = ca.ca_certificate_model
+        if certificate is not None and certificate.spki_algorithm_oid == PublicKeyAlgorithmOid.ECC.dotted_string:
+            enforce_cryptographic_policy(
+                CryptographicPolicy(blocked_curve_oids=frozenset(cfg.not_permitted_ecc_curve_oids or [])),
+                key=stored_public_key_facts(certificate),
             )
-            return
-
-        if cert_model.spki_algorithm_oid != PublicKeyAlgorithmOid.ECC.dotted_string:
-            self.logger.debug(
-                '_NotPermittedEccCurvesStrategy: CA "%s" uses %s (not ECC); skipping.',
-                ca.unique_name,
-                cert_model.spki_algorithm_oid,
-            )
-            return
-
-        curve_oid: str = cert_model.spki_ec_curve_oid
-        if not curve_oid:
-            msg = (
-                f'CA "{ca.unique_name}" uses ECC, but no curve OID is recorded. '
-                'The active security policy cannot be evaluated safely.'
-            )
-            self.logger.warning('_NotPermittedEccCurvesStrategy: %s', msg)
-            raise ValueError(msg)
-
-        not_permitted: list[str] = cfg.not_permitted_ecc_curve_oids or []
-        if curve_oid in not_permitted:
-            msg = (
-                f'CA "{ca.unique_name}" uses ECC curve OID {curve_oid!r}, which is not permitted '
-                f'by the active security policy.'
-            )
-            self.logger.warning('_NotPermittedEccCurvesStrategy: %s', msg)
-            raise ValueError(msg)
-
-        self.logger.debug(
-            '_NotPermittedEccCurvesStrategy: CA "%s" curve OID %r is permitted; check passed.',
-            ca.unique_name,
-            curve_oid,
-        )
 
 
 class _NotPermittedSignatureAlgorithmsStrategy(PkiCheckStrategy, LoggerMixin):
     """Rejects unknown or explicitly forbidden CA certificate signature algorithms."""
 
     def check(self, ca: CaModel, cfg: SecurityConfig) -> None:
-        """Check the CA certificate's signature algorithm against the active policy."""
-        cert_model: CertificateModel | None = ca.ca_certificate_model
-        if cert_model is None:
-            self.logger.debug(
-                '_NotPermittedSignatureAlgorithmsStrategy: CA "%s" has no certificate yet; skipping.',
-                ca.unique_name,
+        """Delegate signature and digest validation to the shared evaluator."""
+        certificate = ca.ca_certificate_model
+        if certificate is not None:
+            enforce_cryptographic_policy(
+                CryptographicPolicy(blocked_signature_oids=frozenset(cfg.not_permitted_signature_algorithm_oids or [])),
+                signature=stored_signature_facts(certificate),
             )
+
+
+class _CryptographicPolicyStrategy(PkiCheckStrategy, LoggerMixin):
+    """Evaluate the complete CA key/signature policy from one immutable snapshot."""
+
+    def check(self, ca: CaModel, cfg: SecurityConfig) -> None:
+        """Validate existing certificates; pending CAs have no material to evaluate."""
+        certificate = ca.ca_certificate_model
+        if certificate is None:
             return
-
-        sig_oid: str = cert_model.signature_algorithm_oid
         try:
-            algo_id = AlgorithmIdentifier.from_dotted_string(sig_oid)
-        except ValueError as exc:
-            msg = (
-                f'CA "{ca.unique_name}" uses unknown signature algorithm OID {sig_oid!r}. '
-                'The active security policy cannot be evaluated safely.'
+            enforce_cryptographic_policy(
+                CryptographicPolicy.from_config(cfg),
+                key=stored_public_key_facts(certificate), signature=stored_signature_facts(certificate),
             )
-            self.logger.warning('_NotPermittedSignatureAlgorithmsStrategy: %s', msg)
-            raise ValueError(msg) from exc
-
-        not_permitted: list[str] = cfg.not_permitted_signature_algorithm_oids or []
-        if sig_oid in not_permitted:
-            msg = (
-                f'CA "{ca.unique_name}" is signed with {algo_id.name} '
-                f'(signature OID {sig_oid!r}), which is not permitted by the active security policy.'
-            )
-            self.logger.warning('_NotPermittedSignatureAlgorithmsStrategy: %s', msg)
-            raise ValueError(msg)
-
-        hash_algo = algo_id.hash_algorithm
-        if hash_algo is not None and hash_algo.dotted_string in not_permitted:
-            msg = (
-                f'CA "{ca.unique_name}" is signed with {algo_id.name} '
-                f'(hash OID {hash_algo.dotted_string!r}), which is not permitted by the active security policy.'
-            )
-            self.logger.warning('_NotPermittedSignatureAlgorithmsStrategy: %s', msg)
-            raise ValueError(msg)
-
-        self.logger.debug(
-            '_NotPermittedSignatureAlgorithmsStrategy: CA "%s" signature algorithm %r is permitted; check passed.',
-            ca.unique_name,
-            algo_id.name,
-        )
+        except CryptographicPolicyError as exc:
+            message = f'CA "{ca.unique_name}": {exc}'
+            self.logger.warning('PkiSecurityAuthorization: %s', message)
+            raise ValueError(message) from exc
 
 
 class PkiSecurityAuthorization(LoggerMixin):
@@ -270,9 +186,7 @@ class PkiSecurityAuthorization(LoggerMixin):
         self._strategies: list[PkiCheckStrategy] = strategies or [
             _AllowSelfSignedCaStrategy(),
             _MaxCrlValidityStrategy(),
-            _RsaMinimumKeySizeStrategy(),
-            _NotPermittedEccCurvesStrategy(),
-            _NotPermittedSignatureAlgorithmsStrategy(),
+            _CryptographicPolicyStrategy(),
         ]
 
     def check(self, ca: CaModel) -> None:

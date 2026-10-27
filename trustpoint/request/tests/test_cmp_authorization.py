@@ -205,7 +205,7 @@ class TestCmpCertConfAuthorization:
         mock_qs = Mock()
         mock_qs.select_related.return_value.first.return_value = mock_cred
         with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs):
-            with patch('request.authorization.cmp.SignatureSuite.from_certificate') as suite_mock:
+            with patch('request.cert_conf.SignatureSuite.from_certificate') as suite_mock:
                 suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=HashAlgorithm.SHA256))
                 CmpCertConfAuthorization().authorize(ctx)
 
@@ -247,7 +247,7 @@ class TestCmpCertConfAuthorization:
         mock_qs = Mock()
         mock_qs.select_related.return_value.first.return_value = mock_cred
         with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs):
-            with patch('request.authorization.cmp.SignatureSuite.from_certificate') as suite_mock:
+            with patch('request.cert_conf.SignatureSuite.from_certificate') as suite_mock:
                 suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=None))
                 with pytest.raises(ValueError, match='hashAlg is required'):
                     CmpCertConfAuthorization().authorize(ctx)

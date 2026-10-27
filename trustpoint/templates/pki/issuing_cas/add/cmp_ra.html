@@ -1,62 +1,18 @@
-{% extends 'trustpoint/base.html' %}
+{% extends 'pki/issuing_cas/add/form_base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h1 class="mb-1">
-            {% trans 'Configure CMP Registration Authority' %}
-        </h1>
+    {% with ca_form_id='create-cmp-ra-form' %}
+        {{ block.super }}
+    {% endwith %}
+{% endblock %}
 
-        <p class="mb-0 text-muted">
-            {% trans 'Connect Trustpoint to a remote Issuing CA using the Certificate Management Protocol (CMP).' %}
-        </p>
-    </div>
+{% block form_title %}{% trans 'Configure CMP Registration Authority' %}{% endblock %}
 
-    <div class="card-body text-start">
-        <div class="tp-card-centered-content">
-            <form
-                id="create-cmp-ra-form"
-                method="post"
-                autocomplete="off"
-            >
-                {% csrf_token %}
+{% block form_description %}{% trans 'Connect Trustpoint to a remote Issuing CA using the Certificate Management Protocol (CMP).' %}{% endblock %}
 
-                <section>
-                    <div class="mb-3">
-                        <h2 class="h4 mb-1">
-                            {% trans 'CMP RA Configuration' %}
-                        </h2>
+{% block section_title %}{% trans 'CMP RA Configuration' %}{% endblock %}
 
-                        <p class="mb-0 text-muted">
-                            {% trans 'Configure the remote CMP service and the parameters Trustpoint should use as a Registration Authority.' %}
-                        </p>
-                    </div>
+{% block section_description %}{% trans 'Configure the remote CMP service and the parameters Trustpoint should use as a Registration Authority.' %}{% endblock %}
 
-                    <hr class="mb-4">
-
-                    {{ form|crispy }}
-                </section>
-            </form>
-        </div>
-    </div>
-
-    <div class="card-footer d-flex justify-content-between align-items-center">
-        <a
-            href="{% url 'pki:issuing_cas-add-method_select' %}"
-            class="btn btn-secondary"
-        >
-            {% trans 'Back' %}
-        </a>
-
-        <button
-            type="submit"
-            form="create-cmp-ra-form"
-            class="btn btn-primary"
-        >
-            {% trans 'Create CMP RA' %}
-        </button>
-    </div>
-</div>
-{% endblock content %}
+{% block submit_label %}{% trans 'Create CMP RA' %}{% endblock %}

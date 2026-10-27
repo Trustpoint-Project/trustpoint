@@ -15,11 +15,13 @@ from django.views.generic.base import View
 from cmp.util import PkiOperation
 from est.views import LoggedHttpResponse  # TEMP
 from request.authorization import CmpAuthorization
+from request.enrollment import process_workflow_operation
 from request.message_parser import CmpMessageParser
 from request.message_responder.cmp import CmpMessageResponder
 from request.operation_processor.general import OperationProcessor
 from request.request_context import (
     BaseCertificateRequestContext,
+    BaseRequestContext,
     CmpBaseRequestContext,
     CmpCertificateRequestContext,
     HttpBaseRequestContext,
@@ -35,7 +37,6 @@ from request.security_hardening import (
     validate_cmp_transaction_freshness,
 )
 from request.workflow2_issuance import release_delivered_workflow2_request
-from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -130,13 +131,7 @@ class CmpRequestView(LoggerMixin, View):
             # authorization succeeded, otherwise an attacker could burn a nonce.
             mark_cmp_client_nonce(ctx)
 
-            workflow2_result = Workflow2Handler().handle(ctx)
-            if not workflow2_result.should_stop:
-                processor = OperationProcessor()
-                if isinstance(ctx, BaseCertificateRequestContext):
-                    process_certificate_operation_atomically(ctx, processor)
-                else:
-                    processor.process_operation(ctx)
+            process_workflow_operation(ctx, self._process_authorized_operation)
         except Exception:
             self.logger.exception('Error processing CMP request')
 
@@ -153,3 +148,12 @@ class CmpRequestView(LoggerMixin, View):
                 ctx.http_response_content_type = 'text/plain'
 
         return ctx.to_http_response()
+
+    @staticmethod
+    def _process_authorized_operation(context: BaseRequestContext) -> None:
+        """Keep CMP certificate issuance atomic while supporting its other operations."""
+        processor = OperationProcessor()
+        if isinstance(context, BaseCertificateRequestContext):
+            process_certificate_operation_atomically(context, processor)
+        else:
+            processor.process_operation(context)

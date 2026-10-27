@@ -17,9 +17,11 @@ from devices.dashboard_filters import (
     filter_devices_with_active_application_certificates,
     filter_devices_with_expired_or_revoked_application_certificates,
 )
+from devices.health import filter_credential_health
 from devices.models import DeviceModel
 from home.views import DashboardChartsAndCountsView
 from pki.models import CaModel, IssuedCredentialModel
+from pki.services.certificate_health import certificate_health_conditions, classify_certificate
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -39,24 +41,33 @@ def application_certificate_device_counts(now: datetime) -> dict[str, int]:
         set(filter_devices_with_expired_or_revoked_application_certificates(devices, now).values_list('pk', flat=True))
         - active
     )
+    future = set(filter_credential_health(
+        devices, IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+        ['not_yet_valid'], as_of=now,
+    ).values_list('pk', flat=True)) - active - bad
     return {
         'active': len(active),
         'expired_or_revoked_only': len(bad),
-        'none': devices.count() - len(active) - len(bad),
+        'not_yet_valid': len(future),
+        'none': devices.count() - len(active) - len(bad) - len(future),
     }
 
 
 def onboarding_domain_credentials_expiring(now: datetime, days: int) -> int:
     """Distinct onboarded-mode devices with a currently valid credential expiring in the selected horizon."""
     horizon = now + timedelta(days=days)
+    current = certificate_health_conditions(
+        as_of=now, expiry_days=0, prefix='credential__certificate__',
+    )['valid']
+    expiring_devices = IssuedCredentialModel.objects.filter(
+        current,
+        issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+        credential__certificate__not_valid_after__lte=horizon,
+    ).values('device_id')
     return (
         DeviceModel.objects.filter(
             onboarding_config__isnull=False,
-            issued_credentials__issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-            issued_credentials__credential__certificate__revoked_certificate__isnull=True,
-            issued_credentials__credential__certificate__not_valid_before__lte=now,
-            issued_credentials__credential__certificate__not_valid_after__gt=now,
-            issued_credentials__credential__certificate__not_valid_after__lte=horizon,
+            pk__in=expiring_devices,
         )
         .distinct()
         .count()
@@ -91,24 +102,25 @@ def issuing_ca_status_and_suites(now: datetime, expiry_days: int) -> tuple[dict[
         CaModel.CaTypeChoice.REMOTE_EST_RA,
         CaModel.CaTypeChoice.REMOTE_CMP_RA,
     )
-    cas = CaModel.objects.exclude(ca_type__in=excluded_types).select_related('credential__certificate')
-    status = {'active': 0, 'expiring': 0, 'expired': 0, 'not_yet_valid': 0, 'disabled': 0, 'no_certificate': 0}
+    cas = CaModel.objects.exclude(ca_type__in=excluded_types).select_related(
+        'credential__certificate__revoked_certificate',
+    )
+    status = dict.fromkeys(
+        ('active', 'expiring', 'expired', 'revoked', 'not_yet_valid', 'disabled', 'no_certificate'), 0,
+    )
     suites: dict[str, int] = {}
-    horizon = now + timedelta(days=expiry_days)
     for ca in cas:
         cert = ca.credential.certificate if ca.credential_id and ca.credential else None
         if not ca.is_active:
             key = 'disabled'
         elif cert is None:
             key = 'no_certificate'
-        elif cert.not_valid_after <= now:
-            key = 'expired'
-        elif cert.not_valid_before > now:
-            key = 'not_yet_valid'
-        elif cert.not_valid_after <= horizon:
-            key = 'expiring'
         else:
-            key = 'active'
+            health = classify_certificate(
+                not_valid_before=cert.not_valid_before, not_valid_after=cert.not_valid_after,
+                revoked=hasattr(cert, 'revoked_certificate'), as_of=now, expiry_days=expiry_days,
+            )
+            key = 'active' if health == 'valid' else health
         status[key] += 1
         try:
             display = str(ca.signature_suite_display) if cert is not None else 'Unavailable'

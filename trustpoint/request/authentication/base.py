@@ -10,6 +10,8 @@ from typing import Never
 from cryptography import x509
 
 from devices.models import DeviceModel
+from devices.secrets import remember_secret
+from onboarding.models import OnboardingConfigModel
 from pki.models import CredentialModel, IssuedCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext, HttpBaseRequestContext
@@ -22,6 +24,50 @@ class AuthenticationComponent(ABC):
     @abstractmethod
     def authenticate(self, context: BaseRequestContext) -> DeviceModel | None:
         """Authenticate a request using specific logic."""
+
+
+class DevicePasswordAuthentication(AuthenticationComponent, LoggerMixin):
+    """Validate device passwords and track the enrollment secret used by a request."""
+
+    def _authenticate_credentials(self, context: BaseRequestContext, username: str, password: str) -> None:
+        """Authenticate an existing device with its current enrollment password."""
+        device = DeviceModel.objects.select_related(
+            'onboarding_config', 'no_onboarding_config'
+        ).filter(
+            common_name=username
+        ).first()
+
+        if not device:
+            self.logger.warning('Authentication failed: Unknown username %s', username)
+            self._raise_authentication_error()
+
+        device_config = device.onboarding_config or device.no_onboarding_config
+
+        if not isinstance(device, DeviceModel) or not device_config:
+            self.logger.warning('Authentication failed: Invalid device model for %s', username)
+            self._raise_authentication_error()
+
+        if not device_config.est_password:
+            self.logger.warning('Authentication failed: No EST password set for %s', username)
+            self._raise_authentication_error()
+
+        if isinstance(device_config, OnboardingConfigModel) and device_config.is_credential_expired():
+            self.logger.warning('Authentication failed: Credential has expired for %s', username)
+            self._raise_authentication_error()
+
+        if password != device_config.est_password:
+            self.logger.warning('Authentication failed: Invalid password for %s', username)
+            self._raise_authentication_error()
+
+        self.logger.info('Successfully authenticated device %s', username)
+        context.device = device
+
+        remember_secret(context, device_config, 'est_password')
+
+    def _raise_authentication_error(self) -> Never:
+        """Raise authentication error with standardized message."""
+        error_message = 'Authentication failed: Invalid username or password.'
+        raise ValueError(error_message)
 
 
 class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
