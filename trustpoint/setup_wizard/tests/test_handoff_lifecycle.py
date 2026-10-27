@@ -5,7 +5,6 @@
 
 import json
 import os
-import shlex
 import stat
 import subprocess
 import sys
@@ -71,22 +70,21 @@ def test_environment_preserves_allowed_values_and_rewrites_uploaded_config(monke
     assert 'UNRELATED_SECRET' not in values
 
 
-def test_env_file_quotes_shell_metacharacters_and_is_private(tmp_path):
+def test_env_file_preserves_shell_metacharacters_as_json_data_and_is_private(tmp_path):
     path = tmp_path / 'nested' / 'operational.env'
     values = {'PASSWORD': "a b'c;$HOME\nsecond line", 'HOST': 'postgres'}
     handoff.write_operational_env_file(values, path)
-    assignments = shlex.split(path.read_text(), comments=True)
-    assert assignments == ['export', 'HOST=postgres', 'export', f'PASSWORD={values["PASSWORD"]}']
+    assert json.loads(path.read_text()) == values
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 @pytest.mark.parametrize('same_path', [False, True])
 def test_promote_env_preserves_contents_and_private_permissions(tmp_path, same_path):
     source = tmp_path / 'pending.env'
-    source.write_text('export HOST=postgres\n')
+    source.write_text('{"DATABASE_HOST": "postgres"}\n')
     final = source if same_path else tmp_path / 'final' / 'operational.env'
     handoff.promote_operational_env_file(source, final)
-    assert final.read_text() == 'export HOST=postgres\n'
+    assert final.read_text() == '{"DATABASE_HOST": "postgres"}\n'
     assert stat.S_IMODE(final.stat().st_mode) == 0o600
     if not same_path:
         assert not source.exists()
@@ -195,15 +193,15 @@ def test_missing_runtime_script_fails_before_running_commands(monkeypatch, setti
 @pytest.mark.parametrize('explicit', [False, True])
 def test_successful_switch_promotes_pending_env_then_marks_ready(monkeypatch, switch_script, explicit):
     pending = handoff.pending_operational_env_file_path()
-    pending.write_text('export HOST=postgres\n')
+    pending.write_text('{"DATABASE_HOST": "postgres"}\n')
     runner = Mock(return_value=subprocess.CompletedProcess([], 0, ' started \n', ''))
     monkeypatch.setattr(handoff.subprocess, 'run', runner)
     result = handoff.run_operational_runtime_switch(pending if explicit else None)
     assert result.switched is True
     assert result.detail == 'started'
-    assert runner.call_args.args[0] == [handoff.SUDO_EXECUTABLE, str(switch_script), str(pending)]
+    assert runner.call_args.args[0] == [handoff.SUDO_EXECUTABLE, str(switch_script), '--pending']
     assert not pending.exists()
-    assert handoff.operational_env_file_path().read_text() == 'export HOST=postgres\n'
+    assert handoff.operational_env_file_path().read_text() == '{"DATABASE_HOST": "postgres"}\n'
     ready = handoff.operational_ready_file_path()
     assert ready.read_text() == 'ready\n'
     assert stat.S_IMODE(ready.stat().st_mode) == 0o600
@@ -307,7 +305,7 @@ def test_private_permissions_apply_before_atomic_publication(tmp_path, monkeypat
     handoff.write_operational_env_file({'DATABASE_HOST': 'postgres'}, path)
     assert len(replaced) == 1
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    assert path.read_text().endswith('export DATABASE_HOST=postgres\n')
+    assert json.loads(path.read_text()) == {'DATABASE_HOST': 'postgres'}
 
 
 def test_failed_publication_keeps_previous_file_and_cleans_temporary_file(tmp_path, monkeypatch):
@@ -321,7 +319,7 @@ def test_failed_publication_keeps_previous_file_and_cleans_temporary_file(tmp_pa
 
 
 @pytest.mark.parametrize('mounted_secret', [False, True])
-def test_sourced_handoff_loads_database_credential_in_a_fresh_process(monkeypatch, config, tmp_path, mounted_secret):
+def test_parsed_handoff_loads_database_credential_in_a_fresh_process(monkeypatch, config, tmp_path, mounted_secret):
     """Restarted settings resolve the external credential without a password in the handoff file."""
     if mounted_secret:
         secret = tmp_path / 'mounted-secret'
@@ -332,16 +330,59 @@ def test_sourced_handoff_loads_database_credential_in_a_fresh_process(monkeypatc
     handoff.write_operational_env_file(handoff.build_operational_environment(config), env_file)
     assert 'test password' not in env_file.read_text()
     source = """
+import os
+import runpy
+import sys
+runtime = runpy.run_path(sys.argv[1])
+os.environ.update(runtime['parse_handoff'](open(sys.argv[2]).read()))
 from trustpoint import settings
 assert settings.DATABASE_PASSWORD == 'test password'
 assert settings.DATABASES['default']['PASSWORD'] == 'test password'
 assert settings.DATABASES['default']['HOST'] == 'postgres'
 """
     subprocess.run(
-        ['/bin/sh', '-c', '. "$1"; exec "$2" -c "$3"', 'handoff-test', str(env_file), sys.executable, source],
+        [
+            sys.executable,
+            '-c',
+            source,
+            str(handoff.settings.REPO_ROOT / 'docker/trustpoint/runtime_config.py'),
+            str(env_file),
+        ],
         env={**os.environ, 'PYTHONPATH': str(handoff.settings.BASE_DIR)},
         text=True,
         capture_output=True,
         check=True,
         timeout=10,
     )
+
+
+def test_runtime_switch_rejects_arbitrary_handoff_paths(monkeypatch, switch_script, tmp_path):
+    runner = Mock()
+    monkeypatch.setattr(handoff.subprocess, 'run', runner)
+    with pytest.raises(ValidationError, match='only the configured pending or final'):
+        handoff.run_operational_runtime_switch(tmp_path / 'arbitrary.env')
+    runner.assert_not_called()
+
+
+def test_auto_setup_uses_the_same_non_executable_handoff_writer(monkeypatch, settings, config, tmp_path):
+    from management.management.commands import bootstrap_manager
+
+    config.save()
+    settings.TRUSTPOINT_IS_OPERATIONAL = False
+    monkeypatch.setenv('TP_AUTO_SETUP', 'true')
+    monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_ENV_FILE', str(tmp_path / 'operational.env'))
+    monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_READY_FILE', str(tmp_path / 'operational.ready'))
+    monkeypatch.setattr(bootstrap_manager.SetupWizardCompletedModel, 'setup_wizard_completed', lambda: False)
+    original_path = Path
+    monkeypatch.setattr(
+        bootstrap_manager,
+        'Path',
+        lambda value: (
+            tmp_path / 'auto-setup.marker' if str(value).endswith('/auto-setup.marker') else original_path(value)
+        ),
+    )
+    bootstrap_manager.Command._trigger_auto_setup_if_requested(Mock())
+    values = json.loads((tmp_path / 'operational.env').read_text())
+    assert values['DATABASE_HOST'] == 'postgres'
+    assert 'DATABASE_PASSWORD' not in values
+    assert (tmp_path / 'auto-setup.marker').is_file()

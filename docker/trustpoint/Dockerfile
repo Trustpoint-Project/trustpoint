@@ -91,7 +91,9 @@ USER root
 # Prepare Trustpoint runtime directories.
 # For the local/dev setup, Trustpoint uses the SoftHSM PKCS#11 module directly
 # against the mounted token directory.
-RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
+RUN chown root:root /var/www/html/trustpoint /var/www/html/trustpoint/docker && \
+    chown -R root:root /var/www/html/trustpoint/docker/trustpoint && \
+    mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
              /var/www/html/trustpoint/trustpoint/collected_static \
              /var/www/html/trustpoint/docker/trustpoint/nginx/tls \
              /var/lib/trustpoint/bootstrap \
@@ -119,6 +121,7 @@ RUN mkdir -p /etc/trustpoint/ && \
 RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
     chown root:root /etc/sudoers && \
     chmod 440 /etc/sudoers && \
+    visudo -cf /etc/sudoers && \
     service sudo restart
 
 # TODO: We may want to use proper Docker secrets handling in the future.
@@ -141,4 +144,5 @@ RUN chmod +x /etc/trustpoint/wizard/transition/*.sh \
              ./docker/trustpoint/entrypoint.sh \
              ./docker/trustpoint/scripts/upsert_local_dev_pkcs11_profile.sh
 
-ENTRYPOINT ["docker/trustpoint/entrypoint.sh"]
+# The root entrypoint and its parser must never be loaded from web-writable code.
+ENTRYPOINT ["/bin/bash", "/etc/trustpoint/entrypoint.sh"]

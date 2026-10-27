@@ -24,6 +24,7 @@ from packaging.version import InvalidVersion, Version
 from management.util.output_wrapper import CommandOutputWrapper
 from management.util.startup_strategies import BootstrapTlsMaterialStrategy, StartupContext, WizardState
 from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
+from setup_wizard.operational_handoff import build_operational_environment, write_operational_env_file
 from setup_wizard.tls_credential import load_staged_tls_credential
 from users.models import BuiltinRole
 
@@ -155,7 +156,7 @@ class Command(BaseCommand):
             'operational_db_port': os.getenv('DATABASE_PORT'),
             'operational_db_name': os.getenv('POSTGRES_DB'),
             'operational_db_user': os.getenv('DATABASE_USER'),
-            'operational_db_password': os.getenv('DATABASE_PASSWORD'),
+            'operational_db_password': settings.DATABASE_PASSWORD,
         }
         update_fields = []
         for field_name, env_value in env_defaults.items():
@@ -211,18 +212,9 @@ class Command(BaseCommand):
             '/var/lib/trustpoint/bootstrap/operational.ready',
         )
 
-        env_content = f"""# Auto-generated operational environment from TP_AUTO_SETUP
-DATABASE_HOST={config.operational_db_host or os.getenv('DATABASE_HOST', 'postgres')}
-DATABASE_PORT={config.operational_db_port or os.getenv('DATABASE_PORT', '5432')}
-POSTGRES_DB={config.operational_db_name or os.getenv('POSTGRES_DB', 'trustpoint_db')}
-DATABASE_USER={config.operational_db_user or os.getenv('DATABASE_USER', 'admin')}
-DATABASE_PASSWORD={config.operational_db_password or os.getenv('DATABASE_PASSWORD', '')}
-"""
-
         try:
             env_file = Path(operational_env_path)
-            env_file.parent.mkdir(parents=True, exist_ok=True)
-            env_file.write_text(env_content)
+            write_operational_env_file(build_operational_environment(config), env_file)
             output.write(f'Created operational environment file: {operational_env_path}')
 
             # Create operational.ready marker

@@ -16,6 +16,33 @@ Unless stated otherwise, all variables are optional.
 |---|---|---|
 | `TRUSTPOINT_PHASE` | `auto`, `bootstrap`, `operational` | Controls whether Trustpoint determines the startup phase automatically, starts the setup wizard, or starts directly in operational mode. |
 
+The container entrypoint records privileged deployment paths and ports in a
+root-owned file at `/run/trustpoint/deployment.json` before starting the web
+application. Configure these through the deployment environment. The web
+application cannot override these settings through sudo or wizard state.
+
+Wizard handoff files retain their `operational.env` / `operational.pending.env`
+names but must contain JSON data. Do not shell-source them. Shell assignments,
+malformed JSON, and unsupported settings are rejected.
+
+Runtime switching exposes only the `--pending` and `--final` sudo actions. Both
+select the corresponding deployment-configured file; arbitrary file arguments
+are rejected. Wizard values and application environment variables are applied
+only after dropping privileges to `www-data`.
+
+The default application home and uv cache are `/run/trustpoint/home` and
+`/run/trustpoint/uv-cache`. Overrides require an existing root-controlled parent
+directory; these directories cannot be symlinks.
+
+The privileged boundary has an isolated Linux regression test using real sudo
+rules and process identities. It replaces service operations with observations,
+so it does not start Trustpoint or require a database:
+
+```bash
+docker build -f tests/docker_security/Dockerfile -t trustpoint-runtime-boundary-test .
+docker run --rm --network=none trustpoint-runtime-boundary-test
+```
+
 ## Database
 
 | Variable | Default | Description |
@@ -34,11 +61,6 @@ The operational handoff file stores connection settings and the secret-file path
 but never the password itself. Keep the external credential available to the web
 container and workers across restarts. Supply or mount a replacement credential
 before applying a password change in the wizard.
-
-Existing handoff files from older releases may still contain a password. After
-configuring the matching external credential, regenerate the pending handoff via
-the wizard and complete the runtime switch to replace the final file. Protect any
-backups of the older files as credentials.
 
 ## TLS and Network Configuration
 
