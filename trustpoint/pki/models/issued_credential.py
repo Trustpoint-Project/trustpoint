@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import datetime
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import hashes
@@ -14,7 +13,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 
-from pki.models.certificate import CertificateModel, RevokedCertificateModel
+from pki.models.certificate import RevokedCertificateModel
 from util.db import CustomDeleteActionModel
 
 if TYPE_CHECKING:
@@ -86,19 +85,17 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     def revoke(self) -> None:
         """Revokes all active certificates associated with this credential."""
+        from pki.services.revocation import revoke_certificates  # noqa: PLC0415
+
         domain = self.domain
         if domain is None or domain.issuing_ca is None:
             return
-        ca = domain.issuing_ca
-        now = datetime.datetime.now(datetime.UTC)
-        cert: CertificateModel
-        for cert in self.credential.certificates.select_related('revoked_certificate').all():
-
-            if hasattr(cert, 'revoked_certificate') or cert.not_valid_after <= now:
-                continue
-            RevokedCertificateModel.objects.create(
-                certificate=cert, revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION, ca=ca
-            )
+        revoke_certificates(
+            self.credential.certificates.all(),
+            reason=RevokedCertificateModel.ReasonCode.CESSATION,
+            ca=domain.issuing_ca,
+            only_unexpired=True,
+        )
 
     def pre_delete(self) -> None:
         """Revoke all active certificates and delete the credential."""

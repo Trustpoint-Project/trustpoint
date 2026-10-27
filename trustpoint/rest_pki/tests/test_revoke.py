@@ -64,10 +64,10 @@ def test_revoke_happy_path() -> None:
 
     with (
         patch('rest_pki.api_views._resolve_issued_credential', return_value=issued_credential),
-        patch('rest_pki.api_views.DeviceCredentialRevocation') as mock_revocation,
+        patch('rest_pki.api_views.revoke_primary_certificate') as mock_revocation,
         patch('rest_pki.api_views.AuditLog') as mock_audit,
     ):
-        mock_revocation.revoke_certificate.return_value = (True, 'Certificate successfully revoked.')
+        mock_revocation.return_value = (True, 'Certificate successfully revoked.')
 
         response = _post(
             user,
@@ -79,7 +79,7 @@ def test_revoke_happy_path() -> None:
 
     assert response.status_code == HTTP_OK
     assert response.data['issued_credential_id'] == 42
-    mock_revocation.revoke_certificate.assert_called_once_with(42, RevokedCertificateModel.ReasonCode.KEY_COMPROMISE)
+    mock_revocation.assert_called_once_with(42, RevokedCertificateModel.ReasonCode.KEY_COMPROMISE)
     mock_audit.create_entry.assert_called_once()
     assert mock_audit.create_entry.call_args.kwargs['actor'] is user
 
@@ -94,12 +94,12 @@ def test_revoke_unknown_credential_returns_404() -> None:
 
     with (
         patch('rest_pki.api_views._resolve_issued_credential', return_value=not_found),
-        patch('rest_pki.api_views.DeviceCredentialRevocation') as mock_revocation,
+        patch('rest_pki.api_views.revoke_primary_certificate') as mock_revocation,
     ):
         response = _post(user, {'issued_credential_id': 999})
 
     assert response.status_code == HTTP_NOT_FOUND
-    mock_revocation.revoke_certificate.assert_not_called()
+    mock_revocation.assert_not_called()
 
 
 def test_revoke_already_revoked_returns_422() -> None:
@@ -109,12 +109,12 @@ def test_revoke_already_revoked_returns_422() -> None:
 
     with (
         patch('rest_pki.api_views._resolve_issued_credential', return_value=issued_credential),
-        patch('rest_pki.api_views.DeviceCredentialRevocation') as mock_revocation,
+        patch('rest_pki.api_views.revoke_primary_certificate') as mock_revocation,
     ):
         response = _post(user, {'issued_credential_id': 42})
 
     assert response.status_code == HTTP_UNPROCESSABLE
-    mock_revocation.revoke_certificate.assert_not_called()
+    mock_revocation.assert_not_called()
 
 
 def test_revoke_expired_returns_422() -> None:
@@ -124,12 +124,12 @@ def test_revoke_expired_returns_422() -> None:
 
     with (
         patch('rest_pki.api_views._resolve_issued_credential', return_value=issued_credential),
-        patch('rest_pki.api_views.DeviceCredentialRevocation') as mock_revocation,
+        patch('rest_pki.api_views.revoke_primary_certificate') as mock_revocation,
     ):
         response = _post(user, {'issued_credential_id': 42})
 
     assert response.status_code == HTTP_UNPROCESSABLE
-    mock_revocation.revoke_certificate.assert_not_called()
+    mock_revocation.assert_not_called()
 
 
 def test_revoke_default_reason_is_unspecified() -> None:
@@ -139,15 +139,15 @@ def test_revoke_default_reason_is_unspecified() -> None:
 
     with (
         patch('rest_pki.api_views._resolve_issued_credential', return_value=issued_credential),
-        patch('rest_pki.api_views.DeviceCredentialRevocation') as mock_revocation,
+        patch('rest_pki.api_views.revoke_primary_certificate') as mock_revocation,
         patch('rest_pki.api_views.AuditLog'),
     ):
-        mock_revocation.revoke_certificate.return_value = (True, 'Certificate successfully revoked.')
+        mock_revocation.return_value = (True, 'Certificate successfully revoked.')
 
         response = _post(user, {'issued_credential_id': 42})
 
     assert response.status_code == HTTP_OK
-    mock_revocation.revoke_certificate.assert_called_once_with(42, RevokedCertificateModel.ReasonCode.UNSPECIFIED)
+    mock_revocation.assert_called_once_with(42, RevokedCertificateModel.ReasonCode.UNSPECIFIED)
 
 
 def test_revoke_invalid_reason_returns_400() -> None:
@@ -166,11 +166,11 @@ def test_revoke_without_permission_returns_403() -> None:
     """An authenticated user lacking REVOKE_CERTIFICATES is forbidden."""
     user = _make_user(has_perm=False)
 
-    with patch('rest_pki.api_views.DeviceCredentialRevocation') as mock_revocation:
+    with patch('rest_pki.api_views.revoke_primary_certificate') as mock_revocation:
         response = _post(user, {'issued_credential_id': 42})
 
     assert response.status_code == HTTP_FORBIDDEN
-    mock_revocation.revoke_certificate.assert_not_called()
+    mock_revocation.assert_not_called()
 
 
 def test_revoke_unexpected_failure_returns_500() -> None:
@@ -180,10 +180,10 @@ def test_revoke_unexpected_failure_returns_500() -> None:
 
     with (
         patch('rest_pki.api_views._resolve_issued_credential', return_value=issued_credential),
-        patch('rest_pki.api_views.DeviceCredentialRevocation') as mock_revocation,
+        patch('rest_pki.api_views.revoke_primary_certificate') as mock_revocation,
         patch('rest_pki.api_views.AuditLog') as mock_audit,
     ):
-        mock_revocation.revoke_certificate.return_value = (False, 'Unexpected database error.')
+        mock_revocation.return_value = (False, 'Unexpected database error.')
 
         response = _post(user, {'issued_credential_id': 42})
 
@@ -193,12 +193,12 @@ def test_revoke_unexpected_failure_returns_500() -> None:
 
 def test_revoke_unauthenticated_is_rejected() -> None:
     """An unauthenticated request is rejected before reaching the revocation logic."""
-    with patch('rest_pki.api_views.DeviceCredentialRevocation') as mock_revocation:
+    with patch('rest_pki.api_views.revoke_primary_certificate') as mock_revocation:
         request = APIRequestFactory().post('/api/rest-pki/revoke/', data={'issued_credential_id': 42}, format='json')
         response = CertificateRevokeView.as_view()(request)
 
     assert response.status_code in (HTTP_UNAUTHORIZED, HTTP_FORBIDDEN)
-    mock_revocation.revoke_certificate.assert_not_called()
+    mock_revocation.assert_not_called()
 
 
 def _make_user_with_revoke_permission() -> AbstractUser:
@@ -216,7 +216,7 @@ def test_revoke_creates_revoked_certificate_row(tls_client_credential_instance: 
     """End-to-end revoke: a real user revokes a real credential and a RevokedCertificateModel row appears.
 
     This exercises the real ORM path, the real Django permission lookup and the
-    real :class:`DeviceCredentialRevocation` logic (nothing is mocked), and
+    real shared revocation service (nothing is mocked), and
     asserts that a persisted :class:`RevokedCertificateModel` row is created and
     the certificate status flips to REVOKED.
     """
@@ -256,7 +256,7 @@ def revoke_context():
     issued.credential.certificate_or_error.certificate_status = CertificateModel.CertificateStatus.OK
     with (
         patch('rest_pki.api_views.IssuedCredentialModel.objects') as objects,
-        patch('rest_pki.api_views.DeviceCredentialRevocation.revoke_certificate') as service,
+        patch('rest_pki.api_views.revoke_primary_certificate') as service,
         patch('rest_pki.api_views.AuditLog.create_entry') as audit,
     ):
         objects.select_related.return_value.get.return_value = issued

@@ -725,7 +725,7 @@ class TestCmpTypedBodyValidation:
         request['crlEntryDetails'].append(crl_extension)
         context = Mock()
         CmpRevocationBodyValidation().parse_rr_body(context, body)
-        assert context.revocation_reason == x509.ReasonFlags.unspecified
+        assert context.revocation_reason == x509.ReasonFlags.key_compromise
 
         request['certDetails']['serialNumber'] = univ.noValue
         with pytest.raises(ValueError, match='serialNumber must be present'):

@@ -991,13 +991,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
     def revoke_all_issued_certificates(self, reason: str = RevokedCertificateModel.ReasonCode.UNSPECIFIED) -> None:
         """Revokes all certificates issued by this CA."""
-        qs = self.get_issued_certificates()
+        from pki.services.revocation import revoke_certificates  # noqa: PLC0415
 
-        for cert in qs:
-            if (cert.certificate_status
-                not in [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
-                continue
-            RevokedCertificateModel.objects.create(certificate=cert, revocation_reason=reason, ca=self)
+        qs = self.get_issued_certificates()
+        revoke_certificates(qs, reason=reason, ca=self, only_unexpired=True)
 
         self.logger.info('All %i certificates issued by CA %s have been revoked.', qs.count(), self.unique_name)
         self.issue_crl(crl_validity_hours=int(self.crl_validity_hours))

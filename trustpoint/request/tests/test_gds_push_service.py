@@ -17,6 +17,7 @@ from cryptography.x509.oid import ObjectIdentifier
 from devices.models import DeviceModel
 from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CaModel, TruststoreModel
+from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import TruststoreOrderModel
 from pki.tests.credential_helpers import issue_test_credential
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
@@ -1469,13 +1470,17 @@ class TestGdsPushServiceAdditionalCoverage:
         )
         ca_der = ca_cert.public_bytes(serialization.Encoding.DER)
 
-        with patch('request.gds_push.gds_push_service.RevokedCertificateModel.objects.create') as revoke, \
+        with patch('request.gds_push.gds_push_service.revoke_certificate', return_value=True) as revoke, \
              patch('request.gds_push.gds_push_service.CertificateModel.get_cert_by_sha256_fingerprint',
                    side_effect=[Mock(), Mock()]), \
              patch('request.gds_push.gds_push_service.TruststoreOrderModel.objects.create') as create_order:
             await service._update_truststore_with_new_certificate(cert_der, [ca_der])
 
-        revoke.assert_called_once()
+        revoke.assert_called_once_with(
+            old_order.certificate,
+            reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
+            ca=mock_opc_device.domain.issuing_ca,
+        )
         truststore.truststoreordermodel_set.all.return_value.delete.assert_called_once_with()
         assert [call.kwargs['order'] for call in create_order.call_args_list] == [0, 1]
 

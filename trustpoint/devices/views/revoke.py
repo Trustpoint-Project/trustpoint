@@ -26,12 +26,12 @@ from devices.forms import (
 from devices.models import (
     DeviceModel,
 )
-from devices.revocation import DeviceCredentialRevocation
 from devices.views.mixins import DeviceBulkSelectionMixin
 from management.models.audit_log import AuditLog
 from onboarding.models import NoOnboardingPkiProtocol
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import CertificateModel
+from pki.services.revocation import revoke_primary_certificate
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
@@ -126,7 +126,7 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
                 msg = gettext_lazy('Certificate is already revoked. Cannot revoke a revoked certificate again.')
                 messages.error(self.request, msg)
                 return redirect(reverse_path)
-            revoked_successfully, _ = DeviceCredentialRevocation.revoke_certificate(self.object.id, revocation_reason)
+            revoked_successfully, _ = revoke_primary_certificate(self.object.id, revocation_reason)
             if revoked_successfully:
                 msg = gettext_lazy('Successfully revoked one active credential.')
                 messages.success(self.request, msg)
@@ -243,7 +243,7 @@ class AbstractBulkRevokeView(DeviceBulkSelectionMixin, PageContextMixin, ListVie
 
             n_revoked = 0
             for credential in issued_credentials_to_revoke_qs:
-                revoked_successfully, _ = DeviceCredentialRevocation.revoke_certificate(
+                revoked_successfully, _ = revoke_primary_certificate(
                     credential.id, revocation_reason
                 )
                 if revoked_successfully:

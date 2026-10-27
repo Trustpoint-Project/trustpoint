@@ -327,9 +327,9 @@ class TestCmpTypedMalformedBodies:
         request['crlEntryDetails'].append(reason_extension)
         context = Mock()
         CmpRevocationBodyValidation().parse_rr_body(context, body)
-        assert context.revocation_reason is x509.ReasonFlags.unspecified
+        assert context.revocation_reason is x509.ReasonFlags.key_compromise
 
-        reason_extension['extnID'] = '1.2.3.4'
+        request['crlEntryDetails'][0]['extnID'] = '1.2.3.4'
         CmpRevocationBodyValidation().parse_rr_body(context, body)
         assert context.revocation_reason is x509.ReasonFlags.unspecified
 

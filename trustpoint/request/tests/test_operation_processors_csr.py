@@ -416,12 +416,18 @@ class TestCertificateRevocationProcessor:
         ca = ctx.domain.get_issuing_ca_or_value_error.return_value
         ca.get_credential.return_value = Mock()
 
-        with patch('request.operation_processor.revoke_cert.CaRolloverService.get_active_rollover', return_value=None), \
+        with patch('request.operation_processor.revoke_cert.resolve_revocation_ca', return_value=ca), \
+            patch('request.operation_processor.revoke_cert.revoke_certificates') as revoke, \
             patch('request.operation_processor.revoke_cert.AuditLog.create_entry') as audit:
             CertificateRevocationProcessor().process_operation(ctx)
 
         assert ctx.issuer_credential is ca.get_credential.return_value
-        credential.revoke.assert_called_once_with()
+        revoke.assert_called_once_with(
+            credential.credential.certificates.all.return_value,
+            reason=ctx.revocation_reason,
+            ca=ca,
+            only_unexpired=True,
+        )
         audit.assert_called_once()
 
     def test_local_ca_revocation_rejects_already_revoked_certificate(self) -> None:
@@ -434,7 +440,7 @@ class TestCertificateRevocationProcessor:
             certificate_status=CertificateModel.CertificateStatus.REVOKED,
         )
 
-        with patch('request.operation_processor.revoke_cert.CaRolloverService.get_active_rollover', return_value=None):
+        with patch('request.operation_processor.revoke_cert.resolve_revocation_ca'):
             with pytest.raises(ValueError, match='already revoked'):
                 CertificateRevocationProcessor().process_operation(ctx)
 

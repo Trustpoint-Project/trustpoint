@@ -157,7 +157,7 @@ def test_issuance_failure_retains_previous_identity(renewal_device):
 def test_revocation_failure_rolls_back_replacement(renewal_device):
     previous = renewal_device.issued_credentials.get()
     with patch(
-        'devices.domain_credential_renewal.DeviceCredentialRevocation.revoke_certificate',
+        'devices.domain_credential_renewal.revoke_primary_certificate',
         return_value=(False, 'failed'),
     ):
         with pytest.raises(ValueError, match='failed'):

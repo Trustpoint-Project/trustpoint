@@ -19,10 +19,10 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509 import KeyUsage
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID
-from django.db import IntegrityError
 
 from pki.models import CertificateModel, IssuedCredentialModel, TruststoreOrderModel
 from pki.models.certificate import RevokedCertificateModel
+from pki.services.revocation import revoke_certificate
 from request.operation_processor import CertificateIssueProcessor
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext
@@ -1313,16 +1313,14 @@ class GdsPushService(LoggerMixin):
                 )()
                 old_server_cert = await sync_to_async(lambda: old_server_order.certificate)()
 
-                try:
-                    await sync_to_async(
-                        lambda: RevokedCertificateModel.objects.create(
-                            certificate=old_server_cert,
-                            revocation_reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
-                            ca=ca
-                        )
-                    )()
+                revoked = await sync_to_async(revoke_certificate)(
+                    old_server_cert,
+                    reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
+                    ca=ca,
+                )
+                if revoked:
                     self.logger.info('Revoked old server certificate: %s', old_server_cert.common_name)
-                except IntegrityError:
+                else:
                     self.logger.info('Old server certificate already revoked: %s', old_server_cert.common_name)
             except TruststoreOrderModel.DoesNotExist:
                 self.logger.debug('No old server certificate found in truststore to revoke')
