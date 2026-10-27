@@ -7,17 +7,20 @@ Defines routes that map API requests to their corresponding viewsets and views.
 """
 from rest_framework.routers import DefaultRouter
 
+from pki.views.ca_api import CaRolloverViewSet, CaViewSet, CrlViewSet, IssuingCaManagementViewSet
 from pki.views.cert_profiles import CertProfileViewSet
 from pki.views.certificates import CertificateViewSet
 from pki.views.domains import DevIdRegistrationViewSet, DomainViewSet
-from pki.views.issuing_cas import IssuingCaViewSet
 from pki.views.owner_credentials_api import DevOwnerIdViewSet
 from pki.views.truststores import TruststoreViewSet
 
 router = DefaultRouter()
 router.register(r'certificates', CertificateViewSet, basename='certificate')
 router.register(r'cert-profiles', CertProfileViewSet, basename='cert-profiles')
-router.register(r'issuing-cas', IssuingCaViewSet, basename='issuing-ca')
+router.register(r'issuing-cas', IssuingCaManagementViewSet, basename='issuing-ca')
+router.register(r'cas', CaViewSet, basename='ca')
+router.register(r'crls', CrlViewSet, basename='crl-api')
+router.register(r'ca-rollovers', CaRolloverViewSet, basename='ca-rollover')
 router.register(r'truststores', TruststoreViewSet, basename='truststore')
 router.register(r'domains', DomainViewSet, basename='domain')
 router.register(r'devid-registrations', DevIdRegistrationViewSet, basename='devid-registration')
