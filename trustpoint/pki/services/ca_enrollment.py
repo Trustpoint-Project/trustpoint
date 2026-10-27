@@ -1,4 +1,4 @@
-# Copyright (c) 2024 The Trustpoint Project Authors
+# Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
 """Shared upstream CA enrollment for browser and REST clients."""
@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.issued_credential import RemoteIssuedCredentialModel
+from pki.util.certificate_request import build_ca_request_data
 from request.clients import EstClient
 from request.clients.cmp_client import CmpClient
 from request.message_builder.cmp import CmpMessageBuilder
@@ -115,45 +116,9 @@ class EstCaEnrollmentService(LoggerMixin):
         remote_issued_credential.save()
 
     def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Build request data structure from form data.
-
-        Args:
-            cert_content_data: Form data containing certificate fields.
-
-        Returns:
-            Request data in the format expected by the profile verifier.
-        """
+        """Use the shared CA request conversion, including SAN list normalization."""
         self.logger.info('Building request data from: %s', cert_content_data)
-        request_data: dict[str, Any] = {'subj': {}, 'ext': {'subject_alternative_name': {}}, 'validity': {}}
-
-        # Subject fields
-        required_subject_fields = ['common_name', 'organization_name', 'country_name', 'state_or_province_name']
-        for field_name in required_subject_fields:
-            value = cert_content_data.get(field_name)
-            if value:
-                request_data['subj'][field_name] = value
-
-        # SAN fields
-        san_fields = {
-            'dns_names': 'dns_names',
-            'ip_addresses': 'ip_addresses',
-            'rfc822_names': 'rfc822_names',
-            'uris': 'uris',
-        }
-
-        for profile_key, form_key in san_fields.items():
-            value = cert_content_data.get(form_key)
-            if value is not None:
-                request_data['ext']['subject_alternative_name'][profile_key] = value
-
-        # Validity fields
-        validity_fields = ['days', 'hours', 'minutes', 'seconds']
-        for field in validity_fields:
-            value = cert_content_data.get(field)
-            if value is not None:
-                request_data['validity'][field] = int(value)
-
-        return request_data
+        return build_ca_request_data(cert_content_data)
 
 
 class CmpCaEnrollmentService(LoggerMixin):
@@ -233,45 +198,9 @@ class CmpCaEnrollmentService(LoggerMixin):
         self._save_cmp_certificates(ca, issued_cert, chain_certs, cert_profile)
 
     def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Build request data structure from form data.
-
-        Args:
-            cert_content_data: Form data containing certificate fields.
-
-        Returns:
-            Request data in the format expected by the profile verifier.
-        """
+        """Use the shared CA request conversion, including SAN list normalization."""
         self.logger.info('Building request data from: %s', cert_content_data)
-        request_data: dict[str, Any] = {'subj': {}, 'ext': {'subject_alternative_name': {}}, 'validity': {}}
-
-        # Subject fields
-        required_subject_fields = ['common_name', 'organization_name', 'country_name', 'state_or_province_name']
-        for field_name in required_subject_fields:
-            value = cert_content_data.get(field_name)
-            if value:
-                request_data['subj'][field_name] = value
-
-        # SAN fields
-        san_fields = {
-            'dns_names': 'dns_names',
-            'ip_addresses': 'ip_addresses',
-            'rfc822_names': 'rfc822_names',
-            'uris': 'uris',
-        }
-
-        for profile_key, form_key in san_fields.items():
-            value = cert_content_data.get(form_key)
-            if value is not None:
-                request_data['ext']['subject_alternative_name'][profile_key] = value
-
-        # Validity fields
-        validity_fields = ['days', 'hours', 'minutes', 'seconds']
-        for field in validity_fields:
-            value = cert_content_data.get(field)
-            if value is not None:
-                request_data['validity'][field] = int(value)
-
-        return request_data
+        return build_ca_request_data(cert_content_data)
 
     def _get_recipient_name_from_truststore(self, ca: CaModel) -> str:
         """Extract recipient name from the CA's truststore."""

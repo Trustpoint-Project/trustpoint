@@ -31,8 +31,6 @@ from trustpoint_core.serializer import CertificateCollectionSerializer, Certific
 from pki.filters import CertificateFilter
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from pki.serializer.certificate import CertificateSerializer
-from pki.services.certificate_health import certificate_health_conditions
 from pki.serializer.certificate import (
     CertificateArchiveSerializer,
     CertificateDetailSerializer,
@@ -41,6 +39,7 @@ from pki.serializer.certificate import (
     CertificateSummarySerializer,
 )
 from pki.services.certificate_download import certificate_chain, certificate_filename
+from pki.services.certificate_health import certificate_health_conditions
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.page_context import (
     PKI_PAGE_CATEGORY,

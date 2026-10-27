@@ -73,10 +73,8 @@ from pki.views.mixins import CertificateProfileSelectionMixin
 from request.clients import EstClientError
 from request.clients.cmp_client import CmpClientError
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
-from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
-from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
-from shared.views import AuditedBulkDeleteView, FormErrorMessageMixin
 from request.request_context import CmpCertificateRequestContext
+from shared.views import AuditedBulkDeleteView, FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
