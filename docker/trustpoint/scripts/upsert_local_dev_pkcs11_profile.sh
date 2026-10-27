@@ -18,7 +18,7 @@ fi
 : "${TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE:?missing user PIN file in metadata}"
 
 cd /var/www/html/trustpoint
-uv run trustpoint/manage.py shell -c '
+.venv/bin/python trustpoint/manage.py shell -c '
 import os
 import sys
 

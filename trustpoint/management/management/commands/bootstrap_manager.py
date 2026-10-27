@@ -264,6 +264,9 @@ class Command(BaseCommand):
     @staticmethod
     def _compile_messages(output: CommandOutputWrapper) -> None:
         """Compile translation messages."""
+        if settings.DOCKER_CONTAINER:
+            output.write('Using translation messages compiled into the image.')
+            return
         output.write('Compiling translation messages...')
         with io.StringIO() as fake_out:
             call_command('compilemessages', '-l', 'de', '-l', 'en', '--ignore', '.venv', stdout=fake_out)

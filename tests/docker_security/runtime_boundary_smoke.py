@@ -203,4 +203,54 @@ result = subprocess.run(
 assert result.returncode == 0, result.stderr
 assert json.loads(result.stdout) == {'uid': account.pw_uid, 'host': 'postgres', 'setting': '192.0.2.1'}
 assert not marker.exists()
-print('PASS: auto-setup switch, migration failure, sudo restrictions, parsing, root isolation, and UID/GID drop.')
+# Apply exactly the production image ownership policy to a representative tree.
+protected = [
+    app / 'trustpoint/manage.py',
+    app / 'trustpoint/trustpoint/settings.py',
+    app / '.venv/lib/python3.14/site-packages/example.py',
+    app / 'docs/source/conf.py',
+    app / 'pyproject.toml',
+    app / 'uv.lock',
+]
+for path in protected:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('# image artifact\n')
+    os.chown(path, account.pw_uid, account.pw_gid)
+subprocess.run(['/bin/bash', '/etc/trustpoint/lock_application.sh'], check=True)
+permission_probe = """
+from pathlib import Path
+app = Path('/var/www/html/trustpoint')
+for name in ('trustpoint/manage.py', 'trustpoint/trustpoint/settings.py',
+             '.venv/lib/python3.14/site-packages/example.py', 'docs/source/conf.py',
+             'pyproject.toml', 'uv.lock', '.venv/bin/python'):
+    path = app / name
+    assert path.stat().st_uid == 0
+    try:
+        with path.open('a') as stream:
+            stream.write('# modified')
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError(f'Application can modify {name}')
+    try:
+        path.rename(path.with_name(path.name + '.replaced'))
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError(f'Application can replace {name}')
+for name in ('sitecustomize.py', '.venv/lib/python3.14/site-packages/persistence.pth',
+             'trustpoint/trustpoint/persistence.py', 'docs/source/persistence.py'):
+    try:
+        (app / name).touch()
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError(f'Application can create executable code: {name}')
+for name in ('trustpoint/media', 'trustpoint/collected_static',
+             'docker/trustpoint/nginx/tls', 'docs/build'):
+    path = app / name / 'runtime-write-probe'
+    path.write_text('data')
+    path.unlink()
+"""
+subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', permission_probe], check=True)
+print('PASS: auto-setup, sudo restrictions, UID/GID drop, protected application code/dependencies, and writable data.')

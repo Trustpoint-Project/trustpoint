@@ -199,3 +199,9 @@ workflow2Folder/
 .env
 
 trustpoint/request/gds_push/asyncua-gds-push-test/state/*
+
+# Local Docker Compose credentials
+/db_user.txt
+/db_password.txt
+/hsm_pin.txt
+/hsm_so_pin.txt

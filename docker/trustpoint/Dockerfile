@@ -98,7 +98,6 @@ RUN chown root:root /var/www/html/trustpoint /var/www/html/trustpoint/docker && 
              /var/www/html/trustpoint/docker/trustpoint/nginx/tls \
              /var/lib/trustpoint/bootstrap \
              /var/lib/trustpoint/hsm/config && \
-    chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/ && \
     chown -R www-data:www-data /var/lib/trustpoint/bootstrap && \
     chown -R www-data:www-data /var/lib/trustpoint/hsm && \
     chown -R www-data:www-data /var/www/html/trustpoint/docker/trustpoint/nginx/tls && \
@@ -143,6 +142,12 @@ RUN chmod +x /etc/trustpoint/wizard/transition/*.sh \
              /etc/trustpoint/wizard/wizard_restore.sh \
              ./docker/trustpoint/entrypoint.sh \
              ./docker/trustpoint/scripts/upsert_local_dev_pkcs11_profile.sh
+
+# Translation catalogs are image artifacts; runtime startup must not write code.
+RUN .venv/bin/python -m django compilemessages -l de -l en --ignore .venv
+
+# Apply ownership last, after all installations and generated image artifacts.
+RUN /bin/bash /etc/trustpoint/lock_application.sh
 
 # The root entrypoint and its parser must never be loaded from web-writable code.
 ENTRYPOINT ["/bin/bash", "/etc/trustpoint/entrypoint.sh"]

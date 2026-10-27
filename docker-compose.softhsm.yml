@@ -13,7 +13,7 @@ services:
       softhsm:
         condition: service_healthy
     volumes:
-      - ./trustpoint/settings:/var/www/html/trustpoint/trustpoint/settings
+      - ./trustpoint/settings:/var/www/html/trustpoint/trustpoint/settings:ro
       - softhsm_config:/var/lib/trustpoint/hsm/config
       - softhsm_tokens:/var/lib/trustpoint/hsm/tokens
     environment:

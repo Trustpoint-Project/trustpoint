@@ -50,6 +50,21 @@ class BootstrapManagerCommandTest(TestCase):
         assert '.venv' in call_args
         output.write.assert_called_once_with('Compiling translation messages...')
 
+    @patch('management.util.startup_strategies.call_command')
+    @patch('management.management.commands.bootstrap_manager.call_command')
+    def test_container_uses_precompiled_translations(self, mock_call_command: MagicMock, runtime_call: MagicMock) -> None:
+        """Both startup phases leave image-provided translation catalogs untouched."""
+        from django.test import override_settings
+        from management.management.commands.bootstrap_manager import Command
+        from management.util.startup_strategies import RuntimeInitialization
+
+        with override_settings(DOCKER_CONTAINER=True):
+            Command._compile_messages(Mock())
+            RuntimeInitialization._compile_messages(Mock())
+
+        mock_call_command.assert_not_called()
+        runtime_call.assert_not_called()
+
 
 class MakeMsgCommandTest(TestCase):
     """Test suite for makemsg command."""

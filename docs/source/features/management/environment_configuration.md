@@ -34,6 +34,14 @@ The default application home and uv cache are `/run/trustpoint/home` and
 `/run/trustpoint/uv-cache`. Overrides require an existing root-controlled parent
 directory; these directories cannot be symlinks.
 
+The application code, virtual environment, dependency metadata, and documentation
+sources are root-owned and not writable by `www-data`. Translation catalogs are
+compiled during the image build. Writable application paths are limited to
+`trustpoint/media`, `trustpoint/collected_static`, `docker/trustpoint/nginx/tls`,
+and `docs/build`, plus separately configured runtime state outside the source tree.
+Documentation build locks are stored under `MEDIA_ROOT`. Mount additional code
+or configuration read-only to preserve this boundary.
+
 The privileged boundary has an isolated Linux regression test using real sudo
 rules and process identities. It replaces service operations with observations,
 so it does not start Trustpoint or require a database:
