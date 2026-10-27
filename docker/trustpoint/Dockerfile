@@ -61,27 +61,30 @@ ENV LANG=en_US.UTF-8 \
 
 WORKDIR /var/www/html/trustpoint/
 
-ARG BRANCH=""
 COPY --chown=www-data:www-data pyproject.toml uv.lock ./
 
-# This allows you to use an argument if you want to build a specific branch, e.g.:
-# docker build --build-arg BRANCH=main ...
-# This also works for tags and specific commits by providing the tag or commit to BRANCH.
-RUN if [ "${BRANCH}" != "" ]; then \
-        apt-get update -y && apt-get install -y --no-install-recommends git; \
-        rm -rf /var/www/html/trustpoint/; \
-        git clone -b "${BRANCH}" https://github.com/Trustpoint-Project/trustpoint.git /var/www/html/trustpoint/; \
-        apt-get remove -y git; \
-        rm -rf /var/lib/apt/lists/*; \
-    fi && \
-    chmod 755 /var/www/html/trustpoint/ && \
+# Build the checked-out revision; do not fetch another source tree inside the image.
+RUN chmod 755 /var/www/html/trustpoint/ && \
     chown www-data:www-data /var/www/html/trustpoint/
 
 USER www-data
-# Install dependencies before copying the entire codebase to leverage Docker caching and speed up subsequent builds
+# Install dependencies before copying application sources to leverage Docker caching.
 RUN uv sync --no-install-project --no-dev --group docs --group docker --python-preference only-system
 
-COPY --chown=www-data:www-data ./ ./
+COPY --chown=www-data:www-data README.md LICENSE ./
+COPY --chown=www-data:www-data trustpoint/ ./trustpoint/
+COPY --chown=www-data:www-data docker/trustpoint/ ./docker/trustpoint/
+# Keep the in-app documentation builder available without copying local builds.
+COPY --chown=www-data:www-data docs/source/ ./docs/source/
+COPY --chown=www-data:www-data docs/Makefile ./docs/
+# Demo-data setup imports these public chains; do not copy fixture private-key bundles.
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/ecc1/ecc1_chain.pem ./tests/data/idevid_hierarchies/ecc1/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/ecc2/ecc2_chain.pem ./tests/data/idevid_hierarchies/ecc2/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/ecc3/ecc3_chain.pem ./tests/data/idevid_hierarchies/ecc3/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/rsa2/rsa2_chain.pem ./tests/data/idevid_hierarchies/rsa2/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/rsa3/rsa3_chain.pem ./tests/data/idevid_hierarchies/rsa3/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/rsa4/rsa4_chain.pem ./tests/data/idevid_hierarchies/rsa4/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/mldsa65/mldsa65_chain.pem ./tests/data/idevid_hierarchies/mldsa65/
 RUN uv sync --no-dev --group docs --group docker --python-preference only-system
 USER root
 
