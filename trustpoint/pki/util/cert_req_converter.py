@@ -4,7 +4,6 @@
 """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
 import datetime
-import ipaddress
 import logging
 from typing import Any, cast
 
@@ -13,6 +12,7 @@ from trustpoint_core.oid import NameOid
 
 from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.ext_oids import ExtendedKeyUsageOid
+from pki.util.san import parse_ip_addresses
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +92,12 @@ class JSONCertRequestConverter:
             elif isinstance(ext.value, x509.ExtendedKeyUsage):
                 eku = [ExtendedKeyUsageOid(oid.dotted_string).name.lower() for oid in ext.value]
                 req_ext['extended_key_usage'] = {'usages': eku, 'critical': ext.critical}
+            elif isinstance(ext.value, x509.CRLDistributionPoints):
+                req_ext['crl_distribution_points'] = {
+                    'critical': ext.critical,
+                    'uris': [name.value for point in ext.value for name in (point.full_name or [])
+                             if isinstance(name, x509.UniformResourceIdentifier)],
+                }
             elif isinstance(ext.value, x509.BasicConstraints):
                 bc: dict[str, Any] = {'ca': ext.value.ca, 'critical': ext.critical}
                 if ext.value.path_length is not None:
@@ -160,7 +166,7 @@ class JSONCertRequestConverter:
             elif san_type == 'uris':
                 general_names.extend([x509.UniformResourceIdentifier(v) for v in san_values])
             elif san_type == 'ip_addresses':
-                general_names.extend([x509.IPAddress(ipaddress.ip_address(v)) for v in san_values])
+                general_names.extend(x509.IPAddress(address) for address in parse_ip_addresses(san_values))
             else:
                 logger.debug('JSON Cert Request Converter: Skipping unsupported SAN type: %s', san_type)
         return general_names

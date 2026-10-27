@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import ipaddress
 import json
-import secrets
-from datetime import timedelta
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, override
@@ -16,7 +14,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, override
 from cryptography import x509
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.management import call_command
 from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
@@ -31,6 +29,7 @@ from django.views.generic.detail import DetailView
 from pydantic import ValidationError as PydanticValidationError
 
 from devices.models import DeviceModel
+from devices.secrets import assign_secret
 from devices.views import PublicKeyInfoMissingErrorMsg
 from help_pages.base import (
     HelpContext,
@@ -53,13 +52,12 @@ from help_pages.commands import (
 )
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
-from management.models import SecurityConfig
-from management.models.audit_log import AuditLog
 from onboarding.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
     OnboardingProtocol,
+    OnboardingStatus,
 )
 from pki.forms.cert_profiles import CertificateIssuanceForm, ProfileBasedFormFieldBuilder
 from pki.models import IssuedCredentialModel
@@ -72,7 +70,6 @@ from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY,
     PageContextMixin,
 )
@@ -125,7 +122,7 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
         if not self.uses_onboarding_credential() or not self.object.onboarding_config_id:
             raise Http404(_('No renewable onboarding credential is configured for this device.'))
         with transaction.atomic():
-            config = OnboardingConfigModel.objects.select_for_update().get(pk=self.object.onboarding_config_id)
+            config = OnboardingConfigModel.objects.get(pk=self.object.onboarding_config_id)
             if config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
                 credential_field = 'cmp_shared_secret'
             elif config.onboarding_protocol in (
@@ -136,14 +133,13 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
                 credential_field = 'est_password'
             else:
                 raise Http404(_('No renewable onboarding credential is configured for this device.'))
-            if config.is_credential_expired() and getattr(config, credential_field):
-                security_config = SecurityConfig.objects.filter(pk=1).first()
-                ttl_seconds = security_config.credential_ttl_seconds if security_config is not None else None
-                setattr(config, credential_field, secrets.token_urlsafe(32))
-                config.credential_expires_at = (
-                    timezone.now() + timedelta(seconds=ttl_seconds) if ttl_seconds is not None else None
-                )
-                config.save(update_fields=[credential_field, 'credential_expires_at'])
+            if (config.onboarding_status != OnboardingStatus.ONBOARDED
+                and config.is_credential_expired() and getattr(config, credential_field)):
+                try:
+                    assign_secret(config, credential_field, device=self.object, actor=request.user)
+                except ValidationError:
+                    messages.error(request, _('This onboarding credential cannot currently be renewed.'))
+                    return HttpResponseRedirect(request.get_full_path())
                 messages.success(request, _('The onboarding credential was renewed.'))
             else:
                 messages.warning(request, _('The onboarding credential is not expired or is no longer available.'))
@@ -159,16 +155,12 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
         if config is None or not config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP):
             raise Http404(_('SCEP is not enabled for this device.'))
 
-        config.provision_scep_challenge()
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.SCEP_SECRET_PROVISIONED,
-            target=self.object,
-            target_display=f'Device: {self.object.common_name}',
-            actor=request.user,  # type: ignore[arg-type]
-            details={'expires_at':
-                     config.scep_challenge_expires_at.isoformat() if config.scep_challenge_expires_at else ''},
-        )
-        messages.success(request, _('The SCEP challengePassword was reset.'))
+        try:
+            assign_secret(config, 'scep_challenge', device=self.object, actor=request.user)
+        except ValidationError:
+            messages.error(request, _('This SCEP authorization cannot be replaced.'))
+            return HttpResponseRedirect(request.get_full_path())
+        messages.success(request, _('The SCEP challengePassword was replaced.'))
         return HttpResponseRedirect(request.get_full_path())
 
     def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
@@ -557,13 +549,6 @@ class DeviceCmpRevokeHelpView(BaseHelpView):
     strategy = CmpRevocationStrategy()
 
 
-class OpcUaGdsNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
-    """Help view for the case of no onboarding using CMP shared-secret for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingCmpSharedSecretStrategy()
-
-
 class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding EST username and password help page."""
 
@@ -867,18 +852,6 @@ class DeviceNoOnboardingCmpWebUiHelpView(BaseHelpView):
     manual_webui = True
 
 
-class OpcUaGdsNoOnboardingEstWebUiHelpView(DeviceNoOnboardingEstWebUiHelpView):
-    """EST WebUI guidance for no-onboarding OPC-UA GDS devices."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
-class OpcUaGdsNoOnboardingCmpWebUiHelpView(DeviceNoOnboardingCmpWebUiHelpView):
-    """CMP WebUI guidance for no-onboarding OPC-UA GDS devices."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class NoOnboardingScepStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding SCEP (RFC 8894) help page."""
 
@@ -904,14 +877,18 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
         state_labels = {
             'active': _non_lazy('Active - authorizes one initial enrollment'),
             'consumed': _non_lazy('Consumed - only used for response encryption (ECC clients)'),
-            'expired': _non_lazy('Expired - reset it to enroll again'),
-            'none': _non_lazy('Not set - reset it to create one'),
+            'expired': _non_lazy('Expired - replace it to enroll'),
+            'none': _non_lazy('Not set - generate a challenge'),
         }
         reset_html = (
-            '<form method="post" action="">CSRF_TOKEN_PLACEHOLDER'
-            f'<button type="submit" class="btn btn-primary w-100">{_non_lazy("Reset challengePassword")}</button>'
+            '<form method="post" action="" id="replace-scep-challenge-form">CSRF_TOKEN_PLACEHOLDER'
+            '<button type="submit" class="btn btn-outline-secondary w-100">'
+            f'{_non_lazy("Replace challengePassword")}</button>'
             '</form>'
         )
+
+        if state == 'consumed':
+            reset_html = ''
 
         summary = HelpSection(
             _non_lazy('Summary'),
@@ -922,10 +899,10 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
                 HelpRow(_non_lazy('challengePassword State'), state_labels[state], ValueRenderType.PLAIN),
                 HelpRow(
                     _non_lazy('challengePassword Expires'),
-                    str(config.scep_challenge_expires_at or '-'),
+                    str(config.scep_challenge_expires_at or '—'),
                     ValueRenderType.PLAIN,
                 ),
-                HelpRow(_non_lazy('Reset'), mark_safe(reset_html), ValueRenderType.HTML),  # noqa: S308
+                HelpRow(_non_lazy('Replace'), mark_safe(reset_html), ValueRenderType.HTML),  # noqa: S308
                 HelpRow(
                     _non_lazy('Notes'),
                     _non_lazy(
@@ -1058,13 +1035,6 @@ class DeviceNoOnboardingScepHelpView(BaseHelpView):
     strategy = NoOnboardingScepStrategy()
 
 
-class OpcUaGdsNoOnboardingScepHelpView(BaseHelpView):
-    """Help view for no-onboarding SCEP for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingScepStrategy()
-
-
 class DownloadScepConfigView(
     UserPermissionRequiredMixin,
     DetailView[DeviceModel],
@@ -1137,13 +1107,6 @@ class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
     strategy = NoOnboardingEstUsernamePasswordStrategy()
 
 
-class OpcUaGdsNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
-    """Help view for the case of no onboarding using EST username and password for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingEstUsernamePasswordStrategy()
-
-
 # --------------------- Onboarding - Domain Credential - Shared Secrets - Help Page Implementations --------------------
 
 
@@ -1209,13 +1172,6 @@ class DeviceOnboardingDomainCredentialCmpSharedSecretHelpView(BaseHelpView):
     """Help view for the case of onboarding using CMP with a domain credential for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = OnboardingDomainCredentialCmpSharedSecretStrategy()
-
-
-class OpcUaGdsOnboardingDomainCredentialCmpSharedSecretHelpView(BaseHelpView):
-    """Help view for the case of onboarding using CMP with a domain credential for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = OnboardingDomainCredentialCmpSharedSecretStrategy()
 
 
@@ -1317,13 +1273,6 @@ class DeviceOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
     strategy = OnboardingDomainCredentialEstUsernamePasswordStrategy()
 
 
-class OpcUaGdsOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
-    """Help view for the case of onboarding using EST username & password for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = OnboardingDomainCredentialEstUsernamePasswordStrategy()
-
-
 # ------------------------- Onboarding - Application Certificates - Help Page Implementations -------------------------
 
 
@@ -1385,13 +1334,6 @@ class DeviceApplicationCertificateWithCmpDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using CMP with client cert for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = ApplicationCertificateWithCmpDomainCredentialStrategy()
-
-
-class OpcUaGdsApplicationCertificateWithCmpDomainCredentialHelpView(BaseHelpView):
-    """Help view for the case of onboarding using CMP with client cert for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithCmpDomainCredentialStrategy()
 
 
@@ -1481,13 +1423,6 @@ class DeviceApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using EST with client cert for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
-
-
-class OpcUaGdsApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
-    """Help view for the case of onboarding using EST with client cert for OPC-UA GDS abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
 
 
@@ -1590,13 +1525,6 @@ class DeviceNoOnboardingRestUsernamePasswordHelpView(BaseHelpView):
     strategy = NoOnboardingRestUsernamePasswordStrategy()
 
 
-class OpcUaGdsNoOnboardingRestUsernamePasswordHelpView(BaseHelpView):
-    """Help view for no-onboarding REST username/password for OPC-UA GDS device abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingRestUsernamePasswordStrategy()
-
-
 # -------------------- Onboarding - Domain Credential - REST Username/Password - Help Page Implementations ----------
 
 
@@ -1674,13 +1602,6 @@ class DeviceOnboardingDomainCredentialRestUsernamePasswordHelpView(BaseHelpView)
     """Help view for onboarding using REST username/password domain credential for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = OnboardingDomainCredentialRestUsernamePasswordStrategy()
-
-
-class OpcUaGdsOnboardingDomainCredentialRestUsernamePasswordHelpView(BaseHelpView):
-    """Help view for onboarding using REST username/password domain credential for OPC-UA GDS device abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = OnboardingDomainCredentialRestUsernamePasswordStrategy()
 
 
@@ -1809,13 +1730,6 @@ class DeviceApplicationCertificateWithRestDomainCredentialHelpView(BaseHelpView)
     strategy = ApplicationCertificateWithRestDomainCredentialStrategy()
 
 
-class OpcUaGdsApplicationCertificateWithRestDomainCredentialHelpView(BaseHelpView):
-    """Help view for application certs using REST with client cert for OPC-UA GDS device abstractions."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = ApplicationCertificateWithRestDomainCredentialStrategy()
-
-
 class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
     """Strategy for building the OPC UA GDS Push onboarding help page."""
 
@@ -1831,6 +1745,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             self._build_ca_hierarchy_section(device),
             self._build_download_section(device),
             self._build_actions_section(device),
+            self._build_renewal_settings_section(device, domain_credential=True),
         ]
 
         return sections, _non_lazy('Help - OPC UA GDS Push Certificate Management')
@@ -2088,24 +2003,41 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
-    def _build_renewal_settings_section(self, device: DeviceModel) -> HelpSection:
-        """Build the periodic server certificate and trustlist renewal settings section.
+    def _build_renewal_settings_section(
+        self, device: DeviceModel, *, domain_credential: bool = False,
+    ) -> HelpSection:
+        """Render the shared periodic renewal form for server updates or domain credentials.
 
-        Renders an inline HTML form that posts to the cert-renewal-settings endpoint,
-        allowing the user to enable/disable periodic renewal and configure the interval.
-        Both the server certificate and the trustlist are updated on each renewal cycle.
-        When periodic updates are enabled, the section also shows when the next update
-        is scheduled to run.
-
-        :param device: The OPC UA GDS Push device instance.
-        :return: A HelpSection containing the renewal configuration form.
+        Both variants show the enabled state, renewal interval, and next scheduled run.
+        Their settings and background tasks remain independent.
         """
-        renewal_url = reverse('devices:devices_cert_renewal_settings', kwargs={'pk': device.pk})
+        if domain_credential:
+            route = 'devices:devices_domain_credential_renewal_settings'
+            enabled = device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal
+            interval = device.opc_ua_gds_push_config.opc_gds_push_domain_credential_renewal_interval
+            next_run = device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at
+            enabled_field = 'opc_gds_push_enable_domain_credential_renewal'
+            interval_field = 'opc_gds_push_domain_credential_renewal_interval'
+            title = 'Periodic Domain Credential Renewal'
+            description = (
+                'How often a new domain credential and private key are issued using the domain profile. '
+                'The previous credential is revoked after successful issuance. Minimum 1 hour. '
+                'Servers authorizing an exact client certificate must be configured to accept its replacement.'
+            )
+            switch_id, interval_id = 'enableDomainCredentialRenewal', 'domainCredentialRenewalInterval'
+        else:
+            route = 'devices:devices_cert_renewal_settings'
+            enabled = device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update
+            interval = device.opc_ua_gds_push_config.opc_gds_push_renewal_interval
+            next_run = device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at
+            enabled_field = 'opc_gds_push_enable_periodic_update'
+            interval_field = 'opc_gds_push_renewal_interval'
+            title = 'Periodic Server Certificate & Trustlist Renewal'
+            description = 'How often the server certificate and trustlist are automatically renewed. Minimum 1 hour.'
+            switch_id, interval_id = 'enablePeriodicRenewal', 'renewalInterval'
+        renewal_url = reverse(route, kwargs={'pk': device.pk})
 
-        enabled = device.opc_gds_push_enable_periodic_update
-        interval = device.opc_gds_push_renewal_interval
-        next_run = device.opc_gds_push_last_update_scheduled_at
-
+        escaped_title = title.replace('&', '&amp;')
         checked_attr = 'checked' if enabled else ''
 
         if enabled and next_run is not None:
@@ -2134,17 +2066,17 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             '<div class="mb-3">'
             '<div class="form-check form-switch mb-2">'
             f'  <input class="form-check-input" type="checkbox" role="switch" '
-            f'         id="enablePeriodicRenewal" name="opc_gds_push_enable_periodic_update" {checked_attr}>'
-            f'  <label class="form-check-label" for="enablePeriodicRenewal">'
-            f'    Enable Periodic Server Certificate &amp; Trustlist Renewal'
+            f'         id="{switch_id}" name="{enabled_field}" {checked_attr}>'
+            f'  <label class="form-check-label" for="{switch_id}">'
+            f'    Enable {escaped_title}'
             f'  </label>'
             '</div>'
-            '<label for="renewalInterval" class="form-label mt-2">Renewal Interval (hours)</label>'
-            f'<input type="number" class="form-control" id="renewalInterval" '
-            f'       name="opc_gds_push_renewal_interval" min="1" value="{interval}" '
+            f'<label for="{interval_id}" class="form-label mt-2">Renewal Interval (hours)</label>'
+            f'<input type="number" class="form-control" id="{interval_id}" '
+            f'       name="{interval_field}" min="1" value="{interval}" '
             '       style="max-width: 200px;">'
             '<div class="form-text text-muted">'
-            '  How often the server certificate and trustlist are automatically renewed. Minimum 1 hour.'
+            f'  {description}'
             '</div>'
             '</div>'
             '<button type="submit" class="btn btn-primary">Save Renewal Settings</button>'
@@ -2152,7 +2084,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         )
 
         return HelpSection(
-            _non_lazy('Periodic Server Certificate & Trustlist Renewal'),
+            _non_lazy(title),
             [
                 HelpRow(
                     _non_lazy('Next Scheduled Update'),
@@ -2495,14 +2427,17 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
         )
 
 
-class AokiCmpHelpView(PageContextMixin, TemplateView):
-    """Help view for AOKI with CMP (IDevID authentication)."""
+class AokiHelpView(PageContextMixin, TemplateView):
+    """Shared page construction for AOKI IDevID enrollment help."""
 
     template_name = 'help/help_page.html'
     http_method_names = ('get',)
 
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
+
+    strategy_class: ClassVar[type[HelpPageStrategy]]
+    default_heading: ClassVar[str]
 
     def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
         """Build generic context for AOKI help."""
@@ -2550,11 +2485,11 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
         host_ip = self.request.GET.get('host_ip', '127.0.0.1')
 
         sections: list[HelpSection] = []
-        heading = _non_lazy('AOKI with CMP - IDevID Authentication')
+        heading = _non_lazy(self.default_heading)
 
         try:
             help_context = self._make_context(host_ip=host_ip)
-            strategy = AokiCmpIDevIDStrategy()
+            strategy = self.strategy_class()
             sections, heading = strategy.build_sections(help_context)
         except Http404:
             sections.append(
@@ -2583,92 +2518,18 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
         return context
 
 
-class AokiEstHelpView(PageContextMixin, TemplateView):
-    """Help view for AOKI with EST (IDevID authentication)."""
+class AokiCmpHelpView(AokiHelpView):
+    """Help for CMP enrollment using IDevID authentication."""
 
-    template_name = 'help/help_page.html'
-    http_method_names = ('get',)
+    strategy_class = AokiCmpIDevIDStrategy
+    default_heading = 'AOKI with CMP - IDevID Authentication'
 
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name = DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
 
-    def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
-        """Build generic context for AOKI help."""
-        from pki.models import DomainModel  # noqa: PLC0415
+class AokiEstHelpView(AokiHelpView):
+    """Help for EST enrollment using IDevID-based mTLS."""
 
-        # HelpContext needs a domain per default. For demonstration purpose we take the first one
-
-        try:
-            domain = DomainModel.objects.first()
-            if not domain:
-                raise Http404(_('No domains configured in the system.'))
-        except DomainModel.DoesNotExist as exc:
-            raise Http404(_('No domains configured in the system.')) from exc
-
-        https_port = self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))
-        host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
-
-        public_key_info = domain.public_key_info
-        if not public_key_info:
-            raise Http404(PublicKeyInfoMissingErrorMsg)
-
-        allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(
-                certificate_profile__unique_name=domain.get_domain_credential_profile_name()
-            )
-        )
-
-        return HelpContext(
-            device=None,
-            domain=domain,
-            domain_unique_name=domain.unique_name,
-            allowed_app_profiles=allowed_app_profiles,
-            public_key_info=public_key_info,
-            host_base=host_base,
-            host_cmp_path=f'{host_base}/.well-known/cmp/p/.aoki/initialization',
-            host_est_path=f'{host_base}/.aoki/init',
-            cred_count=0,
-        )
-
-    @override
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Build context with AOKI EST help page."""
-        context = super().get_context_data(**kwargs)
-
-        host_ip = self.request.GET.get('host_ip', '127.0.0.1')
-
-        sections: list[HelpSection] = []
-        heading = _non_lazy('AOKI with EST - IDevID Authentication (mTLS)')
-
-        try:
-            help_context = self._make_context(host_ip=host_ip)
-            strategy = AokiEstIDevIDStrategy()
-            sections, heading = strategy.build_sections(help_context)
-        except Http404:
-            sections.append(
-                HelpSection(
-                    _non_lazy('Prerequisites'),
-                    [
-                        HelpRow(
-                            _non_lazy('No Domain Configured'),
-                            'No domain is configured in Trustpoint yet. '
-                            'Use the Demo Environment Setup section below to automatically '
-                            'set up a test environment, or configure a domain manually first.',
-                            ValueRenderType.PLAIN,
-                        ),
-                    ],
-                )
-            )
-
-        sections.append(_build_aoki_demo_section(self.request))
-
-        context['help_page'] = HelpPage(heading=heading, sections=sections)
-        context['form'] = IpAddressForm(ip_choices=['127.0.0.1'], initial={'host_ip': host_ip})
-        context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
-        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
-        context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
-
-        return context
+    strategy_class = AokiEstIDevIDStrategy
+    default_heading = 'AOKI with EST - IDevID Authentication (mTLS)'
 
 
 _AOKI_DEMO_CERT_FILES: list[tuple[str, str]] = [

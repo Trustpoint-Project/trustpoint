@@ -344,7 +344,7 @@ test_cmp_no_onboarding() {
 
     gen_key "${p}-key.pem" "${algorithm}" || return 1
 
-    if ! openssl cmp -cmd cr \
+    if ! openssl cmp -cmd cr -mac hmacWithSHA256 \
         -tls_used -tls_trusted "${TLS_CERT}" \
         -server "${BASE_URL}/.well-known/cmp/p/${domain}/${APP_PROFILE}/certification" \
         -ref "$(device_field cmp "${device}" pk)" \
@@ -372,7 +372,7 @@ test_cmp_onboarding() {
 
     gen_key "${p}-dc-key.pem" "${algorithm}" || return 1
 
-    if ! openssl cmp -cmd ir \
+    if ! openssl cmp -cmd ir -mac hmacWithSHA256 \
         -tls_used -tls_trusted "${TLS_CERT}" \
         -server "${BASE_URL}/.well-known/cmp/p/${domain}/${dc_profile}/initialization" \
         -ref "${pk}" -secret "pass:${secret}" \
@@ -386,7 +386,7 @@ test_cmp_onboarding() {
 
     gen_key "${p}-key.pem" "${algorithm}" || return 1
 
-    if ! openssl cmp -cmd cr \
+    if ! openssl cmp -cmd cr -mac hmacWithSHA256 \
         -tls_used -tls_trusted "${TLS_CERT}" \
         -trusted "${p}-dc-full-chain.pem" \
         -server "${BASE_URL}/.well-known/cmp/p/${domain}/${APP_PROFILE}/certification" \
@@ -436,7 +436,7 @@ test_cmp_ra() {
 
     gen_key "${p}-key.pem" "${algorithm}" || return 1
 
-    if ! openssl cmp -cmd cr \
+    if ! openssl cmp -cmd cr -mac hmacWithSHA256 \
         -tls_used -tls_trusted "${TLS_CERT}" \
         -server "${BASE_URL}/.well-known/cmp/p/${domain}/${APP_PROFILE}/certification" \
         -ref "$(device_field cmp_ra "${device}" pk)" \

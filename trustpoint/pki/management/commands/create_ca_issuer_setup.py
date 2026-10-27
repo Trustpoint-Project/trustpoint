@@ -19,13 +19,13 @@ from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import CaModel, CertificateModel, CredentialModel, DomainModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TruststoreModel
-from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
+from util.commands import CommandLoggingMixin
 
 from .base_commands import CertificateCreationCommandMixin
 
 
-class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
+class Command(CertificateCreationCommandMixin, CommandLoggingMixin, BaseCommand):
     """Creates an issuing CA, domain, and devices for CA issuer."""
 
     help = 'Creates RSA 2048 issuing CA "ca_issuer", domain, and separate devices for EST and CMP protocols.'
@@ -308,17 +308,3 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             remote_ca_cmp.full_clean()
             remote_ca_cmp.save()
             self.log_and_stdout('Created remote issuing CA "CMP-issued-CA".')
-
-    def log_and_stdout(self, message: str, level: str = 'info') -> None:
-        """Log a message and write it to stdout."""
-        log_method = getattr(self.logger, level, self.logger.info)
-        log_method(message)
-
-        if level == 'error':
-            self.stdout.write(self.style.ERROR(message))
-        elif level == 'warning':
-            self.stdout.write(self.style.WARNING(message))
-        elif level == 'info':
-            self.stdout.write(self.style.SUCCESS(message))
-        else:
-            self.stdout.write(message)

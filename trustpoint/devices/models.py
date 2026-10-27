@@ -12,9 +12,11 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_q.models import Schedule
 from django_q.tasks import schedule
 from django_stubs_ext.db.models import TypedModelMeta
 
@@ -27,9 +29,12 @@ from onboarding.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+from pki.models.ca import CaModel
 from pki.models.domain import DomainModel
 from pki.models.issued_credential import IssuedCredentialModel
+from pki.models.truststore import TruststoreModel
 from util.db import CustomDeleteActionModel
+from util.encrypted_fields import EncryptedCharField
 
 if TYPE_CHECKING:
     from typing import Any
@@ -44,6 +49,7 @@ __all__ = [
     'OnboardingPkiProtocol',
     'OnboardingProtocol',
     'OnboardingStatus',
+    'OpcUaGdsPushConfig',
     'RemoteDeviceCredentialDownloadModel',
 ]
 
@@ -64,7 +70,6 @@ class DeviceModel(CustomDeleteActionModel):
         ),
     )
     ip_address = models.GenericIPAddressField(_('IP Address'), protocol='both', unpack_ipv4=True, null=True, blank=True)
-    opc_server_port = models.PositiveIntegerField(_('OPC Server Port'), default=0, blank=True, null=False)
     domain = models.ForeignKey(
         DomainModel, verbose_name=_('Domain'), related_name='devices', blank=True, null=True, on_delete=models.PROTECT
     )
@@ -90,7 +95,6 @@ class DeviceModel(CustomDeleteActionModel):
         """Enum for device type."""
 
         GENERIC_DEVICE = 0, _('Generic Device')
-        OPC_UA_GDS = 1, _('OPC UA GDS')
         OPC_UA_GDS_PUSH = 2, _('OPC UA GDS Push')
         AGENT_ONE_TO_ONE = 3, _('Agent (1-to-1)')
 
@@ -102,33 +106,11 @@ class DeviceModel(CustomDeleteActionModel):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-    opc_gds_push_enable_periodic_update = models.BooleanField(
-        _('Enable Periodic Certificate and Trustlist Update'),
-        default=False,
-        blank=True,
-        null=False,
-        help_text=_(
-            'When enabled, the server certificate and trustlist will be automatically '
-            'renewed at the specified interval.'
-        ),
-    )
-    opc_gds_push_renewal_interval = models.PositiveIntegerField(
-        _('Renewal Interval (hours)'),
-        default=168,
-        blank=True,
-        null=False,
-        help_text=_(
-            'Number of hours between each automatic server certificate and trustlist renewal. Minimum 1 hour.'
-        ),
-    )
-    opc_gds_push_last_update_scheduled_at = models.DateTimeField(
-        _('Last Periodic Update Scheduled At'),
-        null=True,
-        blank=True,
-        help_text=_(
-            'Timestamp of the most recent scheduled periodic server certificate and trustlist update.'
-        ),
-    )
+    @property
+    def can_assert_cmp_ra_verified(self) -> bool:
+        """Allow devices linked through their domain to a remote CMP RA."""
+        issuing_ca = self.domain.issuing_ca if self.domain is not None else None
+        return issuing_ca is not None and issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA
 
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
@@ -170,11 +152,11 @@ class DeviceModel(CustomDeleteActionModel):
         if not self.ip_address:
             error_messages['ip_address'] = 'OPC UA GDS Push devices must have an IP address.'
 
-        if not self.opc_server_port or self.opc_server_port == 0:
-            error_messages['opc_server_port'] = 'OPC UA GDS Push devices must have a valid OPC server port.'
-
-        if self.opc_gds_push_enable_periodic_update and self.opc_gds_push_renewal_interval < 1:
-            error_messages['opc_gds_push_renewal_interval'] = 'Renewal interval must be at least 1 hour.'
+        if self.pk and hasattr(self, 'opc_ua_gds_push_config'):
+            try:
+                self.opc_ua_gds_push_config.full_clean()
+            except ValidationError as exc:
+                error_messages.update({name: ' '.join(messages) for name, messages in exc.message_dict.items()})
 
     _AGENT_EST_PROTOCOLS = frozenset({
         OnboardingProtocol.REST_USERNAME_PASSWORD,
@@ -216,6 +198,94 @@ class DeviceModel(CustomDeleteActionModel):
         if error_messages:
             raise ValidationError(error_messages)
 
+
+
+class OpcUaGdsPushConfig(models.Model):
+    """Connection, trust, and renewal settings belonging to one GDS Push device."""
+
+    device = models.OneToOneField(
+        DeviceModel,
+        on_delete=models.CASCADE,
+        related_name='opc_ua_gds_push_config',
+    )
+    opc_server_port = models.PositiveIntegerField(
+        _('OPC Server Port'),
+        default=4840,
+        validators=[MinValueValidator(1), MaxValueValidator(65535)],
+    )
+    opc_user = models.CharField(_('OPC User'), max_length=128, blank=True, default='')
+    opc_password = EncryptedCharField(_('OPC Password'), max_length=128, blank=True, default='')
+    opc_trust_store = models.ForeignKey(
+        TruststoreModel,
+        verbose_name=_('OPC Server Truststore'),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='opc_ua_gds_push_configs',
+    )
+
+    opc_gds_push_enable_periodic_update = models.BooleanField(
+        _('Enable Periodic Certificate and Trustlist Update'),
+        default=False,
+        blank=True,
+        null=False,
+        help_text=_(
+            'When enabled, the server certificate and trustlist will be automatically '
+            'renewed at the specified interval.'
+        ),
+    )
+    opc_gds_push_renewal_interval = models.PositiveIntegerField(
+        _('Renewal Interval (hours)'),
+        default=168,
+        blank=True,
+        null=False,
+        help_text=_('Number of hours between each automatic server certificate and trustlist renewal. Minimum 1 hour.'),
+    )
+    opc_gds_push_last_update_scheduled_at = models.DateTimeField(
+        _('Last Periodic Update Scheduled At'),
+        null=True,
+        blank=True,
+        help_text=_('Timestamp of the most recent scheduled periodic server certificate and trustlist update.'),
+    )
+
+    opc_gds_push_enable_domain_credential_renewal = models.BooleanField(
+        _('Enable Periodic Domain Credential Renewal'),
+        default=False,
+        blank=True,
+        help_text=_('Automatically replace the GDS Push domain credential and revoke its predecessor.'),
+    )
+    opc_gds_push_domain_credential_renewal_interval = models.PositiveIntegerField(
+        _('Domain Credential Renewal Interval (hours)'),
+        default=168,
+        help_text=_('Number of hours between automatic domain credential renewals. Minimum 1 hour.'),
+    )
+    opc_gds_push_domain_credential_next_renewal_at = models.DateTimeField(
+        _('Next Domain Credential Renewal'),
+        null=True,
+        blank=True,
+    )
+
+    def __str__(self) -> str:
+        """Identify the device owning this configuration."""
+        return f'OpcUaGdsPushConfig(device={self.device_id})'
+
+    def clean(self) -> None:
+        """Validate the device type, truststore usage, and renewal intervals."""
+        errors: dict[str, str] = {}
+        if self.device.device_type != DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
+            errors['device'] = 'GDS Push configuration requires an OPC UA GDS Push device.'
+        if self.opc_gds_push_renewal_interval < 1:
+            errors['opc_gds_push_renewal_interval'] = 'Renewal interval must be at least 1 hour.'
+        if self.opc_gds_push_domain_credential_renewal_interval < 1:
+            errors['opc_gds_push_domain_credential_renewal_interval'] = 'Renewal interval must be at least 1 hour.'
+        if (
+            self.opc_trust_store
+            and self.opc_trust_store.intended_usage != TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+        ):
+            errors['opc_trust_store'] = 'Truststore must be intended for OPC UA GDS Push.'
+        if errors:
+            raise ValidationError(errors)
+
     def schedule_next_gds_push_update(self) -> None:
         """Schedule the next periodic GDS Push server certificate and trustlist update using Django-Q2.
 
@@ -223,18 +293,40 @@ class DeviceModel(CustomDeleteActionModel):
         based on the configured renewal interval. Does nothing when periodic updates are disabled
         or the device is not of type OPC UA GDS Push.
         """
+        if not self.opc_gds_push_enable_periodic_update:
+            return
         scheduled_time = timezone.now() + timedelta(hours=self.opc_gds_push_renewal_interval)
 
         schedule(
             'devices.tasks.perform_gds_push_update',
-            self.pk,
+            self.device_id,
             schedule_type='O',
             next_run=scheduled_time,
-            name=f'gds_push_update_{self.pk}_{scheduled_time.timestamp()}',
+            name=f'gds_push_update_{self.device_id}_{scheduled_time.timestamp()}',
         )
 
         self.opc_gds_push_last_update_scheduled_at = scheduled_time
-        self.save(update_fields=['opc_gds_push_last_update_scheduled_at'])
+        type(self).objects.filter(pk=self.pk).update(opc_gds_push_last_update_scheduled_at=scheduled_time)
+
+    def schedule_next_gds_push_domain_credential_renewal(self) -> None:
+        """Replace the domain credential's pending one-off task, or cancel it when disabled."""
+        task_name = f'gds_push_domain_credential_renewal_{self.device_id}'
+        Schedule.objects.filter(name=task_name).delete()
+        next_run = None
+        if (
+            self.opc_gds_push_enable_domain_credential_renewal
+            and self.device.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        ):
+            next_run = timezone.now() + timedelta(hours=self.opc_gds_push_domain_credential_renewal_interval)
+            schedule(
+                'devices.tasks.perform_gds_push_domain_credential_renewal',
+                self.device_id,
+                schedule_type='O',
+                next_run=next_run,
+                name=task_name,
+            )
+        self.opc_gds_push_domain_credential_next_renewal_at = next_run
+        type(self).objects.filter(pk=self.pk).update(opc_gds_push_domain_credential_next_renewal_at=next_run)
 
 
 class RemoteDeviceCredentialDownloadModel(models.Model):

@@ -81,7 +81,7 @@ jobs:
       
       # Install Python and dependencies for running behave tests
       - name: Install and setup uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -89,7 +89,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version-file: "pyproject.toml"
+          python-version: '3.14'  # Match the Docker runtime and supported dependency wheels.
       
       - name: Install dependencies
         run: uv sync --group dev

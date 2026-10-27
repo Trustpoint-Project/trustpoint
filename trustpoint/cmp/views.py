@@ -14,20 +14,29 @@ from django.views.generic.base import View
 
 from cmp.util import PkiOperation
 from est.views import LoggedHttpResponse  # TEMP
-from request.authentication import CmpAuthentication
 from request.authorization import CmpAuthorization
+from request.enrollment import process_workflow_operation
 from request.message_parser import CmpMessageParser
 from request.message_responder.cmp import CmpMessageResponder
 from request.operation_processor.general import OperationProcessor
 from request.request_context import (
+    BaseCertificateRequestContext,
     BaseRequestContext,
     CmpBaseRequestContext,
     CmpCertificateRequestContext,
     HttpBaseRequestContext,
 )
 from request.request_validator.http_req import CmpHttpRequestValidator
+from request.security_hardening import (
+    authenticate_cmp_request,
+    mark_cmp_client_nonce,
+    process_certificate_operation_atomically,
+    record_cmp_response_nonce,
+    require_single_security_config,
+    validate_cmp_proof_of_possession,
+    validate_cmp_transaction_freshness,
+)
 from request.workflow2_issuance import release_delivered_workflow2_request
-from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -46,37 +55,32 @@ class CmpRequestView(LoggerMixin, View):
         self,
         kwargs: dict[str, Any],
     ) -> tuple[str | None, str | None, str | None]:
-        """Extracts domain name, certificate profile, and operation from URL path parameters."""
+        """Extract domain name, certificate profile, and operation from URL path parameters."""
         domain_name = cast('str | None', kwargs.get('domain'))
         cert_profile = cast('str | None', kwargs.get('cert_profile'))
         operation = cast('str | None', kwargs.get('operation'))
 
-        if domain_name in ['.','_']: # Handle empty domain segment
+        if domain_name in ('.', '_'):
             domain_name = None
 
-        # Handle combined 'cert_profile_or_operation' parameter
         cert_profile_or_operation = cast('str | None', kwargs.get('cert_profile_or_operation'))
         if cert_profile_or_operation:
             try:
                 operation_enum = PkiOperation(cert_profile_or_operation)
             except ValueError:
                 if cert_profile is not None:
-                    # cert_profile is already set, so this is invalid operation
                     err_msg = f"Invalid CMP operation '{cert_profile_or_operation}' in URL."
                     raise Http404(err_msg) from None
                 cert_profile = cert_profile_or_operation
             else:
                 operation = operation_enum.value
-        # Validate operation if present
         elif operation is not None:
             try:
-                # Validate operation
                 PkiOperation(operation)
             except ValueError:
                 err_msg = f"Invalid CMP operation '{operation}' in URL."
                 raise Http404(err_msg) from None
 
-        # Clean trailing '~' from domain name if present (due to profile syntax, but no profile given)
         if domain_name and domain_name.endswith('~'):
             domain_name = domain_name[:-1]
 
@@ -88,11 +92,11 @@ class CmpRequestView(LoggerMixin, View):
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
-        """Handles the POST requests to the CMP IR endpoint."""
+        """Handle a CMP POST request through the hardened request workflow."""
         del args
         domain_name, cert_profile, operation = self._extract_path_params(kwargs)
 
-        ctx: BaseRequestContext
+        ctx: CmpBaseRequestContext
         try:
             ctx = CmpCertificateRequestContext(
                 raw_message=request,
@@ -100,34 +104,41 @@ class CmpRequestView(LoggerMixin, View):
                 protocol='cmp',
                 operation=operation,
                 cert_profile_str=cert_profile,
-        )
+            )
         except Exception:
             err_msg = 'Failed to set up CMP request context.'
             self.logger.exception(err_msg)
             return LoggedHttpResponse(err_msg, status=500)
 
         try:
-            validator = CmpHttpRequestValidator()
-            validator.validate(ctx)
+            CmpHttpRequestValidator().validate(ctx)
+            ctx = cast('CmpBaseRequestContext', CmpMessageParser().parse(ctx))
 
-            parser = CmpMessageParser()
-            ctx = cast('CmpBaseRequestContext', parser.parse(ctx))
+            # Security checks that must happen before expensive or state-changing
+            # authentication/authorization work.
+            validate_cmp_transaction_freshness(ctx)
+            if isinstance(ctx, BaseCertificateRequestContext):
+                require_single_security_config(ctx)
 
-            authenticator = CmpAuthentication()
-            authenticator.authenticate(ctx)
+            authenticate_cmp_request(ctx)
+            validate_cmp_proof_of_possession(ctx)
 
-            authorizer = CmpAuthorization(
+            CmpAuthorization(
                 ['initialization', 'certification', 'revocation', 'certconf']
-            )
-            authorizer.authorize(ctx)
+            ).authorize(ctx)
 
-            Workflow2Handler().handle(ctx)
-            OperationProcessor().process_operation(ctx)
+            # Only persist a follow-up nonce after both authentication and
+            # authorization succeeded, otherwise an attacker could burn a nonce.
+            mark_cmp_client_nonce(ctx)
+
+            process_workflow_operation(ctx, self._process_authorized_operation)
         except Exception:
             self.logger.exception('Error processing CMP request')
 
         try:
             CmpMessageResponder.build_response(ctx)
+            if isinstance(ctx, CmpBaseRequestContext):
+                record_cmp_response_nonce(ctx)
             release_delivered_workflow2_request(ctx)
         except Exception:
             self.logger.exception('Error building CMP response')
@@ -137,3 +148,12 @@ class CmpRequestView(LoggerMixin, View):
                 ctx.http_response_content_type = 'text/plain'
 
         return ctx.to_http_response()
+
+    @staticmethod
+    def _process_authorized_operation(context: BaseRequestContext) -> None:
+        """Keep CMP certificate issuance atomic while supporting its other operations."""
+        processor = OperationProcessor()
+        if isinstance(context, BaseCertificateRequestContext):
+            process_certificate_operation_atomically(context, processor)
+        else:
+            processor.process_operation(context)

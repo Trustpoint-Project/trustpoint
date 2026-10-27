@@ -196,6 +196,9 @@ def test_pending_key_and_csr_extensions(wizard, pki_chain, key_type):
     assert credential.managed_private_key.policy_snapshot['extractable'] is True
     csr = wizard.content(credential, pki_chain[3])
     assert csr.is_signature_valid
+    assert x509.ExtensionOID.CRL_DISTRIBUTION_POINTS not in [extension.oid for extension in csr.extensions]
+    profile = CertificateProfileModel.objects.get(unique_name='tls_server')
+    assert 'crl_distribution_points' in profile.profile['ext']
     assert csr.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo) == (
         credential.get_private_key().public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
     )
@@ -230,6 +233,7 @@ def test_certificate_content_matches_issuance_layout(wizard):
     assert len(page.select('h1')) == 1
     assert page.select_one('.card-header p.text-muted') is not None
     form = page.select_one('#tls-external-csr-configuration-form')
+    assert 'crl_distribution_point_uris' not in response.context_data['form'].fields
     assert [heading.get_text(strip=True) for heading in form.select('section h2')] == [
         'Certificate Profile', 'Subject', 'Subject Alternative Names', 'Validity Period',
     ]

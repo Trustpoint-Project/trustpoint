@@ -28,6 +28,8 @@ from crypto.models import (
     SoftwareKeyEncryptionSource,
 )
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
+from management.security_change_audit import provider_configuration_changes
+from management.tls_files import write_tls_pem_files
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.models import SetupWizardCompletedModel
@@ -89,38 +91,39 @@ class Command(BaseCommand):
         """Configure cryptographic storage backends (crypto + app-secret)."""
         self.stdout.write('Configuring crypto backends...')
         try:
-            profile, created = CryptoProviderProfileModel.objects.get_or_create(
-                backend_kind=BackendKind.SOFTWARE,
-                defaults={
-                    'active': True,
-                    'name': 'trustpoint-software-auto-setup',
-                },
-            )
-            if not created:
-                profile.active = True
-                profile.save()
+            with provider_configuration_changes(actor=None):
+                profile, created = CryptoProviderProfileModel.objects.get_or_create(
+                    backend_kind=BackendKind.SOFTWARE,
+                    defaults={
+                        'active': True,
+                        'name': 'trustpoint-software-auto-setup',
+                    },
+                )
+                if not created:
+                    profile.active = True
+                    profile.save()
 
-            software_config, _ = CryptoProviderSoftwareConfigModel.objects.get_or_create(
-                profile=profile,
-                defaults={
-                    'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
-                    'encryption_source_ref': '',
-                    'allow_exportable_private_keys': False,
-                },
-            )
-            software_config.save()
+                software_config, _ = CryptoProviderSoftwareConfigModel.objects.get_or_create(
+                    profile=profile,
+                    defaults={
+                        'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
+                        'encryption_source_ref': '',
+                        'allow_exportable_private_keys': False,
+                    },
+                )
+                software_config.save()
 
-            backend = AppSecretBackendModel.get_singleton()
-            backend.backend_kind = AppSecretBackendKind.SOFTWARE
-            backend.save()
+                backend = AppSecretBackendModel.get_singleton()
+                backend.backend_kind = AppSecretBackendKind.SOFTWARE
+                backend.save()
 
-            app_secret_config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
-            app_secret_config.save()
+                app_secret_config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
+                app_secret_config.save()
 
-            clear_app_secret_cache()
-            get_app_secret_service().ensure_backend_ready()
+                clear_app_secret_cache()
+                get_app_secret_service().ensure_backend_ready()
 
-            self.stdout.write(self.style.SUCCESS('Crypto backends configured'))
+                self.stdout.write(self.style.SUCCESS('Crypto backends configured'))
         except Exception as e:
             err_msg = f'Failed to configure backends: {e}'
             raise CommandError(err_msg) from e
@@ -179,19 +182,15 @@ class Command(BaseCommand):
             err_msg = f'Failed to apply TLS credential: {e}'
             raise CommandError(err_msg) from e
 
-    def _write_pem_files(self, credential_model: CredentialModel) -> None:
-        """Write TLS certificate and key files to disk."""
-        private_key_pem = credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
-        certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
-        trust_store_pem = credential_model.get_certificate_chain_serializer().as_pem().decode()
-
-        NGINX_KEY_PATH.write_text(private_key_pem)
-        NGINX_CERT_PATH.write_text(certificate_pem)
-
-        if trust_store_pem.strip():
-            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
-        elif NGINX_CERT_CHAIN_PATH.exists():
-            NGINX_CERT_CHAIN_PATH.unlink()
+    @staticmethod
+    def _write_pem_files(credential_model: CredentialModel) -> None:
+        """Write the TLS credential to the configured Nginx paths."""
+        write_tls_pem_files(
+            credential_model,
+            key_path=NGINX_KEY_PATH,
+            cert_path=NGINX_CERT_PATH,
+            chain_path=NGINX_CERT_CHAIN_PATH,
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:  # noqa: PLR0915
         """Execute the auto-setup command."""

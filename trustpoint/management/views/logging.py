@@ -6,11 +6,8 @@
 from __future__ import annotations
 
 import datetime
-import io
 import os
 import re
-import tarfile
-import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +21,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
+from trustpoint_core.archiver import ArchiveFormat
 
 from management.serializer.logging import LoggingSerializer
 from trustpoint.logger import LoggerMixin
@@ -31,6 +29,7 @@ from trustpoint.page_context import PageContextMixin
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
 from trustpoint.views.base import SortableTableFromListMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
+from util.archives import archive_named_files
 
 if TYPE_CHECKING:
 
@@ -293,28 +292,12 @@ class LoggingFilesDownloadMultipleView(
 
         file_collection = [(filename, resolved_path.read_bytes()) for filename, resolved_path in valid_log_files]
 
-        if archive_format.lower() == 'zip':
-            bytes_io = io.BytesIO()
-            zip_file = zipfile.ZipFile(bytes_io, 'w')
-            for filename, data in file_collection:
-                zip_file.writestr(filename, data)
-            zip_file.close()
-
-            response = HttpResponse(bytes_io.getvalue(), content_type='application/zip')
-            response['Content-Disposition'] = 'attachment; filename=trustpoint-logs.zip'
-            return response
-
-        bytes_io = io.BytesIO()
-        with tarfile.open(fileobj=bytes_io, mode='w:gz') as tar:
-            for filename, data in file_collection:
-                file_io_bytes = io.BytesIO(data)
-                file_io_bytes_info = tarfile.TarInfo(filename)
-                file_io_bytes_info.size = len(data)
-                tar.addfile(file_io_bytes_info, file_io_bytes)
-
-        response = HttpResponse(bytes_io.getvalue(), content_type='application/gzip')
-        response['Content-Disposition'] = 'attachment; filename=trustpoint-logs.tar.gz'
+        selected_format = ArchiveFormat.ZIP if archive_format == 'zip' else ArchiveFormat.TAR_GZ
+        archive_bytes = archive_named_files(file_collection, selected_format)
+        response = HttpResponse(archive_bytes, content_type=selected_format.mime_type)
+        response['Content-Disposition'] = f'attachment; filename=trustpoint-logs{selected_format.file_extension}'
         return response
+
 
 class CanManageLogging(BasePermission):
     """Allow only users permitted to manage logging settings."""

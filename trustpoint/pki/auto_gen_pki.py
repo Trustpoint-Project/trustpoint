@@ -16,6 +16,7 @@ from crypto.application.private_keys import (
     generate_managed_signing_private_key,
 )
 from crypto.models import CryptoManagedKeyModel
+from pki.key_types import normalize_key_type
 from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificateModel
 from pki.services.key_generation import key_spec_for_key_type, supported_key_type_choices
 from pki.util.keys import AutoGenPkiKeyAlgorithm
@@ -37,18 +38,8 @@ class AutoGenPki(LoggerMixin):
 
     @staticmethod
     def _normalize_key_type(key_type: str | AutoGenPkiKeyAlgorithm) -> str:
-        """Convert the legacy algorithm enum to the shared key-generation service format."""
-        if isinstance(key_type, AutoGenPkiKeyAlgorithm):
-            name = key_type.name
-            if name.startswith('RSA'):
-                return f'RSA-{name.removeprefix("RSA")}'
-            if name.startswith('SECP'):
-                return f'ECC-{name}'
-            if name.startswith('MLDSA'):
-                return f'MLDSA-{name.removeprefix("MLDSA")}'
-            msg = f'Unsupported AutoGenPKI key algorithm {key_type!r}.'
-            raise ValueError(msg)
-        return key_type
+        """Convert legacy algorithm enums to the catalog's canonical identifier."""
+        return normalize_key_type(key_type.value) if isinstance(key_type, AutoGenPkiKeyAlgorithm) else key_type
 
     @classmethod
     def _key_type_identifier(cls, key_type: str | AutoGenPkiKeyAlgorithm) -> str:

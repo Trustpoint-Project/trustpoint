@@ -6,14 +6,14 @@
 from typing import Any, ClassVar, cast
 
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import ProtectedError, QuerySet
-from django.forms import Form
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
+from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
+from django.utils.translation import gettext_lazy, ngettext
 from django.utils.translation import gettext_lazy as _
-from django.utils.translation import ngettext
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
@@ -28,6 +28,7 @@ from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
 from trustpoint_core.serializer import CertificateFormat
 
+from management.security_change_audit import audit_security_change, security_change
 from pki.filters import TruststoreFilter
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
@@ -35,10 +36,10 @@ from pki.models.truststore import TruststoreModel
 from pki.serializer.truststore import TruststoreSerializer
 from pki.services.truststore import TruststoreService
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
+from shared.views import AuditedBulkDeleteView
 from trustpoint.page_context import PKI_PAGE_CATEGORY, PKI_PAGE_TRUSTSTORES_SUBCATEGORY, PageContextMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
-    BulkDeleteView,
     PrimaryKeyListFromPrimaryKeyString,
     SortableTableMixin,
 )
@@ -139,6 +140,7 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
     template_name = 'pki/truststores/add/file_import.html'
     ignore_url = reverse_lazy('pki:truststores')
 
+    @transaction.atomic
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Set context flags based on URL."""
         if 'from-device' in request.path:
@@ -152,6 +154,7 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
         if not self.request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES):
             raise PermissionDenied
         truststore = form.cleaned_data['truststore']
+        audit_security_change(target=truststore, actor=self.request.user, before=None, action='created')
         domain_id = self.kwargs.get('pk')
 
         if domain_id:
@@ -404,7 +407,7 @@ class TruststoreMultipleDownloadView(
         return response
 
 
-class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
+class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, AuditedBulkDeleteView):
     """View for confirming the deletion of multiple truststores."""
 
     model = TruststoreModel
@@ -412,6 +415,12 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
     ignore_url = reverse_lazy('pki:truststores')
     template_name = 'pki/truststores/confirm_delete.html'
     context_object_name = 'truststores'
+
+    delete_permission = AppPermissions.MANAGE_TRUSTSTORES
+    protected_error_message = gettext_lazy(
+        'Cannot delete the selected Truststore(s) because they are referenced by other objects.'
+    )
+    delete_success_message = gettext_lazy('Successfully deleted {count} Truststore(s).')
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests."""
@@ -421,29 +430,6 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
             return HttpResponseRedirect(self.success_url)
         return super().get(request, *args, **kwargs)
 
-    def form_valid(self, form: Form) -> HttpResponse:
-        """Attempts to delete the selected truststores on valid form."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES):
-            raise PermissionDenied
-        queryset = self.get_queryset()
-        deleted_count = queryset.count()
-
-        try:
-            response = super().form_valid(form)
-
-        except ProtectedError:
-            messages.error(
-                self.request,
-                _('Cannot delete the selected Truststore(s) because they are referenced by other objects.'),
-            )
-            return HttpResponseRedirect(self.success_url)
-        except ValidationError as exc:
-            messages.error(self.request, exc.message)
-            return HttpResponseRedirect(self.success_url)
-
-        messages.success(self.request, _('Successfully deleted {count} Truststore(s).').format(count=deleted_count))
-
-        return response
 
 class CanManageTruststores(BasePermission):
     """Allow only users permitted to manage truststores."""
@@ -462,6 +448,9 @@ class CanManageTruststores(BasePermission):
     update=extend_schema(description='Update an existing Truststore.'),
     partial_update=extend_schema(description='Partially update an existing Truststore.'),
     destroy=extend_schema(description='Delete a Truststore.')
+)
+@extend_schema_view(
+    list=extend_schema(summary='List Truststores', description='Retrieve truststore from the database.'),
 )
 class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     """ViewSet for managing Truststore instances.
@@ -482,6 +471,7 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
         summary='Create a new truststore',
         description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
     )
+    @transaction.atomic
     def create(self, request: Request) -> Response:
         """API endpoint to create truststore."""
         serializer = self.get_serializer(data=request.data)
@@ -493,24 +483,15 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
             trust_store_file=serializer.validated_data['trust_store_file'],
         )
 
+        audit_security_change(target=truststore, actor=request.user, before=None, action='created')
         return Response(TruststoreSerializer(truststore).data, status=status.HTTP_201_CREATED)
 
-    @extend_schema(
-        summary='List Truststores',
-        description='Retrieve truststore from the database.',
-    )
-    def list(self, _request: Request) -> Response:
-        """API endpoint to get all truststores."""
-        queryset = self.get_queryset()
+    def perform_update(self, serializer: Any) -> None:
+        """Audit the final persisted state, including serializer-managed relations."""
+        with security_change(target=serializer.instance, actor=self.request.user):
+            serializer.save()
 
-        for backend in list(self.filter_backends):
-            if hasattr(backend, 'filter_queryset'):
-                queryset = backend().filter_queryset(self.request, queryset, self)  # type: ignore[attr-defined]
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    def perform_destroy(self, instance: Any) -> None:
+        """Preserve the deleted object's identity and state in one audit entry."""
+        with security_change(target=instance, actor=self.request.user, action='deleted'):
+            instance.delete()

@@ -105,27 +105,43 @@ function isSafeRelativePath(path) {
     return true;
 }
 
+function getSelectedTableValues(button) {
+    const valuePattern = button.getAttribute('data-tp-value-type') === 'log-filename'
+        ? /^trustpoint\.log(?:\.\d{1,5})?$/
+        : /^\d+$/;
+    return Array.from(checkboxes)
+        .filter(checkbox => checkbox.checked && valuePattern.test(checkbox.value))
+        .map(checkbox => checkbox.value);
+}
+
+function updateTableSelectButtons() {
+    tableSelectButtons.forEach(button => {
+        button.disabled = getSelectedTableValues(button).length === 0;
+    });
+}
+
 checkboxColumn?.addEventListener('change', toggleAllCheckboxes);
 if (checkboxColumn) {
+    checkboxes.forEach(checkbox => checkbox.addEventListener('change', updateTableSelectButtons));
+    updateTableSelectButtons();
     tableSelectButtons.forEach(function(el) {
         el.addEventListener('click', function(event) {
-            const rawUrl = event.target.getAttribute('data-tp-url');
+            const button = event.currentTarget;
+            const rawUrl = button.getAttribute('data-tp-url');
             if (!isSafeRelativePath(rawUrl)) {
                 return;
             }
             
-            const checkedIds = [];
-            checkboxes.forEach(function(el) {
-                if (el.checked && /^\d+$/.test(el.value)) {
-                    checkedIds.push(el.value);
-                }
-            });
+            const checkedValues = getSelectedTableValues(button);
+            if (!checkedValues.length) {
+                return;
+            }
             
             try {
                 const url = new URL(rawUrl + '/', window.location.href);
                 
-                checkedIds.forEach(function(id) {
-                    url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(id);
+                checkedValues.forEach(function(value) {
+                    url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(value);
                 });
                 
                 if (!url.pathname.endsWith('/')) {
@@ -151,6 +167,7 @@ function toggleAllCheckboxes() {
             el.checked = false;
         });
     }
+    updateTableSelectButtons();
 }
 
 // ---------------------------------------- Table Query update ----------------------------------------

@@ -7,17 +7,12 @@ from __future__ import annotations
 
 import datetime
 from types import MappingProxyType
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
-
-try:
-    from cryptography.hazmat.primitives.asymmetric import mldsa
-except ImportError:
-    mldsa = None  # type: ignore[assignment]
 from django.contrib import admin
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
@@ -56,6 +51,10 @@ from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 
 __all__ = ['CertificateModel', 'RevokedCertificateModel']
+
+
+if TYPE_CHECKING:
+    from trustpoint_core.crypto_types import PublicKey
 
 
 class CertificateModel(LoggerMixin, CustomDeleteActionModel):
@@ -458,14 +457,23 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
     @property
     def certificate_status(self) -> CertificateStatus:
-        """Status of the certificate."""
-        if hasattr(self, 'revoked_certificate'):
-            return self.CertificateStatus.REVOKED
-        if datetime.datetime.now(datetime.UTC) < self.not_valid_before:
-            return self.CertificateStatus.NOT_YET_VALID
-        if datetime.datetime.now(datetime.UTC) > self.not_valid_after:
-            return self.CertificateStatus.EXPIRED
-        return self.CertificateStatus.OK
+        """Return certificate validity using the shared health rules."""
+        from pki.services.certificate_health import classify_certificate  # noqa: PLC0415
+
+        health = classify_certificate(
+            not_valid_before=self.not_valid_before,
+            not_valid_after=self.not_valid_after,
+            revoked=hasattr(self, 'revoked_certificate'),
+            as_of=datetime.datetime.now(datetime.UTC),
+            expiry_days=0,
+        )
+        return {
+            'valid': self.CertificateStatus.OK,
+            'expiring': self.CertificateStatus.OK,
+            'revoked': self.CertificateStatus.REVOKED,
+            'not_yet_valid': self.CertificateStatus.NOT_YET_VALID,
+            'expired': self.CertificateStatus.EXPIRED,
+        }[health]
 
     @property
     def table_status(self) -> str:
@@ -527,32 +535,21 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     @staticmethod
     def _get_spki_info(cert: x509.Certificate) -> tuple[PublicKeyAlgorithmOid, int, NamedCurve]:
         cert_public_key = cert.public_key()
-        spki_key_size: int
-        if isinstance(cert_public_key, rsa.RSAPublicKey):
-            spki_algorithm_oid = PublicKeyAlgorithmOid.RSA
-            spki_ec_curve_oid = NamedCurve.NONE
-            spki_key_size = cert_public_key.key_size
-        elif isinstance(cert_public_key, ec.EllipticCurvePublicKey):
-            spki_algorithm_oid = PublicKeyAlgorithmOid.ECC
-            spki_ec_curve_oid = NamedCurve[cert_public_key.curve.name.upper()]
-            spki_key_size = cert_public_key.key_size
-        elif mldsa and isinstance(cert_public_key, mldsa.MLDSA44PublicKey):
-            spki_algorithm_oid = PublicKeyAlgorithmOid.ML_DSA_44
-            spki_ec_curve_oid = NamedCurve.NONE
-            spki_key_size = 0  # ML-DSA doesn't have key_size
-        elif mldsa and isinstance(cert_public_key, mldsa.MLDSA65PublicKey):
-            spki_algorithm_oid = PublicKeyAlgorithmOid.ML_DSA_65
-            spki_ec_curve_oid = NamedCurve.NONE
-            spki_key_size = 0  # ML-DSA doesn't have key_size
-        elif mldsa and isinstance(cert_public_key, mldsa.MLDSA87PublicKey):
-            spki_algorithm_oid = PublicKeyAlgorithmOid.ML_DSA_87
-            spki_ec_curve_oid = NamedCurve.NONE
-            spki_key_size = 0  # ML-DSA doesn't have key_size
-        else:
-            exc_msg = 'Subject Public Key Info contains an unsupported key type.'
-            raise TypeError(exc_msg)
-
-        return spki_algorithm_oid, spki_key_size, spki_ec_curve_oid
+        try:
+            algorithm = PublicKeyAlgorithmOid.from_public_key(cast('PublicKey', cert_public_key))
+        except TypeError as exception:
+            msg = 'Subject Public Key Info contains an unsupported key type.'
+            raise TypeError(msg) from exception
+        # Persist legacy RSA sizes and zero for ML-DSA; Core PublicKeyInfo uses different conventions.
+        key_size = (
+            cert_public_key.key_size
+            if isinstance(cert_public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)) else 0
+        )
+        curve = (
+            NamedCurve[cert_public_key.curve.name.upper()]
+            if isinstance(cert_public_key, ec.EllipticCurvePublicKey) else NamedCurve.NONE
+        )
+        return algorithm, key_size, curve
 
     # --------------------------------------------- Data Retrieval Methods ---------------------------------------------
 

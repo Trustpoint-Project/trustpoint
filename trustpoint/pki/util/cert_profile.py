@@ -24,9 +24,10 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from trustpoint_core.oid import NameOid
+from trustpoint_core.oid import CertificateExtensionOid, NameOid
 
-from pki.util.ext_oids import CertificateExtensionOid  # temp
+from pki.util.crl_urls import validate_crl_url
+from pki.util.ext_oids import CERTIFICATE_EXTENSION_ALIASES
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +40,21 @@ ALIASES: dict[str, AliasChoices] = {
 
 CERT_PROFILE_KEYWORDS = {'type','allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
 
-def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enum]) -> dict[str, str]:
+def build_alias_map_name_oids(
+    alias_map: dict[str, str],
+    enum_cls: type[enum.Enum],
+    *,
+    extra_aliases: dict[str, tuple[str | None, str]] | None = None,
+) -> dict[str, str]:
     """Build a mapping of all known OID strings from trustpoint_core to their canonical field names."""
     for entry in enum_cls:
         canonical = entry.name.lower() # e.g. 'common_name'
         dotted_string = entry.value.dotted_string # e.g. '2.5.4.3'
-        abbreviation = entry.value.abbreviation # e.g. 'CN'
-        camel_case = entry.value.full_name # e.g. 'commonName'
+        if extra_aliases is None:
+            abbreviation = entry.value.abbreviation  # e.g. 'CN'
+            camel_case = entry.value.full_name  # e.g. 'commonName'
+        else:
+            abbreviation, camel_case = extra_aliases[entry.name]
         alias_map[dotted_string] = canonical
         choices = [dotted_string]
         if camel_case != canonical:
@@ -61,7 +70,9 @@ def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enu
     return alias_map
 
 alias_map = build_alias_map_name_oids({}, NameOid)
-alias_map = build_alias_map_name_oids(alias_map, CertificateExtensionOid)
+alias_map = build_alias_map_name_oids(
+    alias_map, CertificateExtensionOid, extra_aliases=CERTIFICATE_EXTENSION_ALIASES
+)
 
 # Important: Pydantic V2 model_config does not follow MRO!
 # Non-default Model config settings are taken from the last base class set to a non-default value.
@@ -168,6 +179,24 @@ class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValueProper
     """
     uris: list[str] | ProfileValuePropertyModel | None = None
 
+    @field_validator('uris')
+    @classmethod
+    def validate_uris(cls, value: list[str] | ProfileValuePropertyModel | None
+                      ) -> list[str] | ProfileValuePropertyModel | None:
+        """Validate both literal URLs and profile value/default lists."""
+        values = [value] if isinstance(value, list) else (
+            [value.value, value.default] if isinstance(value, ProfileValuePropertyModel) else []
+        )
+        for urls in values:
+            if urls is None:
+                continue
+            if not isinstance(urls, list) or not all(isinstance(url, str) for url in urls):
+                msg = 'CRL distribution point URIs must be a list of URLs.'
+                raise ValueError(msg)
+            for url in urls:
+                validate_crl_url(url)
+        return value
+
     model_config = ConfigDict(extra='forbid')
 
 class KeyUsageExtensionModel(BaseExtensionModel):
@@ -238,7 +267,29 @@ class ValidityModel(BaseModel):
     model_config = ConfigDict(extra='ignore', populate_by_name=True)
 
 
-class ProfileValidityModel(BaseModel):
+class CertProfileBaseModel(ProfileValuePropertyModel):
+    """Base model for each nesting level of certificate profiles.
+
+    This allows for granular control over allowed fields and constraints at each level.
+    """
+    allow: list[str] | Literal['*'] | None = None
+    reject_mods: bool = Field(default=False)
+
+    @field_validator('allow', mode='before')
+    @classmethod
+    def normalize_allow(cls, value: list[str] | Literal['*'] | None) -> list[str] | Literal['*'] | None:
+        """Normalize the allow list by replacing aliases with their canonical names."""
+        if not isinstance(value, list):
+            return value
+        normalized = []
+        for item in value:
+            try:
+                normalized.append(alias_map[item])
+            except KeyError:
+                normalized.append(item)
+        return normalized
+
+class ProfileValidityModel(CertProfileBaseModel):
     """Validity model for certificate profiles.
 
     Unlike :class:`ValidityModel` (used for certificate requests), this model
@@ -265,28 +316,6 @@ class ProfileValidityModel(BaseModel):
     validity_min: timedelta | None = None
 
     model_config = ConfigDict(extra='ignore', populate_by_name=True)
-
-class CertProfileBaseModel(ProfileValuePropertyModel):
-    """Base model for each nesting level of certificate profiles.
-
-    This allows for granular control over allowed fields and constraints at each level.
-    """
-    allow: list[str] | Literal['*'] | None = None
-    reject_mods: bool = Field(default=False)
-
-    @field_validator('allow', mode='before')
-    @classmethod
-    def normalize_allow(cls, value: list[str] | Literal['*'] | None) -> list[str] | Literal['*'] | None:
-        """Normalize the allow list by replacing aliases with their canonical names."""
-        if not isinstance(value, list):
-            return value
-        normalized = []
-        for item in value:
-            try:
-                normalized.append(alias_map[item])
-            except KeyError:
-                normalized.append(item)
-        return normalized
 
 class ProfileSubjectModel(SubjectModel, CertProfileBaseModel):
     """Model for the subject DN of a certificate profile, with profile constraints."""

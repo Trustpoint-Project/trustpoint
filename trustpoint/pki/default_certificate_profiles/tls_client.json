@@ -15,6 +15,15 @@
     },
     "reject_mods": false,
     "ext": {
+        "crl_distribution_points": {
+            "critical": false,
+            "uris": {
+                "value": [
+                    "http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}"
+                ],
+                "mutable": true
+            }
+        },
         "basic_constraints": {
             "ca": false
         },

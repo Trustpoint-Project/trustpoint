@@ -67,6 +67,13 @@ def _supported_key_capabilities(report: BackendCapabilityReport | None) -> list[
                 'values': ', '.join(curve.value.upper() for curve in report.ec_curves),
             }
         )
+    if report.mldsa_variants:
+        rows.append(
+            {
+                'family': 'ML-DSA',
+                'values': ', '.join(variant.upper().replace('MLDSA', 'ML-DSA-') for variant in report.mldsa_variants),
+            }
+        )
     return rows
 
 
@@ -258,7 +265,7 @@ class BackendConfigurationView(TemplateView):
         context['capability_message'] = capability_message
         context['capability_diagnostics'] = capability_report.diagnostics if capability_report is not None else ()
         context['supported_key_capabilities'] = _supported_key_capabilities(capability_report)
-        context['supported_auto_gen_pki_key_types'] = supported_key_type_choices()
+        context['supported_auto_gen_pki_key_types'] = supported_key_type_choices(report=capability_report)
         pkcs11_capability_payload = (
             getattr(pkcs11_probe_detail, 'snapshot_payload', None)
             if pkcs11_probe_detail is not None

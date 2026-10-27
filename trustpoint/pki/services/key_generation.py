@@ -9,10 +9,9 @@ from typing import TYPE_CHECKING
 
 from crypto.application.capabilities import get_active_backend_capability_report
 from crypto.application.service import TrustpointCryptoBackend
-from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
-from crypto.domain.specs import EcKeySpec, KeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
+from pki.key_types import KEY_TYPE_CHOICES, key_spec_for_key_type
 from pki.models.credential import CredentialModel
 
 if TYPE_CHECKING:
@@ -20,26 +19,7 @@ if TYPE_CHECKING:
 
     from crypto.application.capabilities import BackendCapabilityReport
 
-KEY_TYPE_CHOICES = [
-    ('RSA-2048', 'RSA 2048'),
-    ('RSA-3072', 'RSA 3072'),
-    ('RSA-4096', 'RSA 4096'),
-    ('ECC-SECP256R1', 'ECC SECP256R1'),
-    ('ECC-SECP384R1', 'ECC SECP384R1'),
-    ('ECC-SECP521R1', 'ECC SECP521R1'),
-    ('MLDSA-44', 'ML-DSA-44'),
-    ('MLDSA-65', 'ML-DSA-65'),
-    ('MLDSA-87', 'ML-DSA-87'),
-]
-
-
-def key_spec_for_key_type(key_type: str) -> KeySpec:
-    """Map a UI key type to the backend key specification."""
-    if key_type.startswith('RSA-'):
-        return RsaKeySpec(key_size=int(key_type.split('-')[1]))
-    if key_type.startswith('MLDSA-'):
-        return MlDsaKeySpec(variant=MlDsaVariant('mldsa' + key_type.split('-')[1]))
-    return EcKeySpec(curve=EllipticCurveName(key_type.split('-')[1].lower()))
+__all__ = ['KEY_TYPE_CHOICES', 'generate_pending_credential', 'key_spec_for_key_type', 'supported_key_type_choices']
 
 
 def supported_key_type_choices(

@@ -22,6 +22,7 @@ from management.models.audit_log import AuditLog
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingPkiProtocol
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import CertificateModel
+from pki.services.csr import CsrErrorCode, CsrValidationError, parse_csr
 from request.authorization import ScepAuthorization
 from request.operation_processor.general import OperationProcessor
 from request.profile_validator import ProfileValidator
@@ -101,6 +102,7 @@ class ScepPkiOperationHandler(LoggerMixin):
             message = parse_pki_message(body)
         except ScepMalformedMessageError:
             self.logger.warning('SCEP: malformed pkiMessage rejected for domain %s', self.domain.unique_name)
+            self._notify_failure()
             return ScepHttpResult(b'Malformed SCEP message.', status=400, content_type='text/plain')
         device: DeviceModel | None = None
         try:
@@ -120,7 +122,16 @@ class ScepPkiOperationHandler(LoggerMixin):
             failure.text,
         )
         self._audit_rejection(message, failure, device)
+        operations: dict[int, str] = {MessageType.PKCS_REQ: 'pkcsreq', MessageType.RENEWAL_REQ: 'renewalreq'}
+        operation = operations.get(message.message_type)
+        self._notify_failure(device, operation)
         return self._failure_response(message, failure)
+
+    def _notify_failure(self, device: DeviceModel | None = None, operation: str | None = None) -> None:
+        """Report a final failure, including CertRep failures returned with HTTP 200."""
+        from request.notifications import notify_request_failure  # noqa: PLC0415
+
+        notify_request_failure(ScepCertificateRequestContext(domain=self.domain, device=device, operation=operation))
     # ------------------------------------------------------------------ pipeline
     def _process(self, message: ParsedPkiMessage) -> ScepHttpResult:
         signer = verify_signature(message)
@@ -243,7 +254,11 @@ class ScepPkiOperationHandler(LoggerMixin):
             locked = type(config).objects.select_for_update().get(pk=config.pk)
             if self._lookup_transaction(locked, message.transaction_id) is not None:
                 raise _ReplayError
-            if ctx.operation == 'pkcsreq' and not locked.can_authorize_scep_enrollment():
+            if ctx.operation == 'pkcsreq' and (
+                not locked.can_authorize_scep_enrollment()
+                or locked.scep_secret_version != config.scep_secret_version
+                or locked.scep_challenge_digest != config.scep_challenge_digest
+            ):
                 raise ScepProtocolError(FailInfo.BAD_REQUEST, _INVALID_AUTHORIZATION)
             if ctx.cert_profile_str is None:
                 raise ScepProtocolError(FailInfo.BAD_REQUEST, _INVALID_AUTHORIZATION)
@@ -388,11 +403,15 @@ class ScepPkiOperationHandler(LoggerMixin):
     @staticmethod
     def _load_csr(csr_der: bytes) -> x509.CertificateSigningRequest:
         try:
-            csr = x509.load_der_x509_csr(csr_der)
-        except ValueError:
-            raise ScepProtocolError(FailInfo.BAD_REQUEST, 'Malformed PKCS #10 request.') from None
-        if not csr.is_signature_valid:
-            raise ScepProtocolError(FailInfo.BAD_MESSAGE_CHECK, 'The PKCS #10 signature is invalid.')
+            csr = parse_csr(csr_der, encoding='der')
+        except CsrValidationError as exc:
+            if exc.code == CsrErrorCode.INVALID_SIGNATURE:
+                raise ScepProtocolError(FailInfo.BAD_MESSAGE_CHECK, 'The PKCS #10 signature is invalid.') from exc
+            if exc.code in (
+                CsrErrorCode.UNSUPPORTED_KEY, CsrErrorCode.UNSUPPORTED_SIGNATURE, CsrErrorCode.MISSING_HASH,
+            ):
+                raise ScepProtocolError(FailInfo.BAD_ALG, str(exc)) from exc
+            raise ScepProtocolError(FailInfo.BAD_REQUEST, 'Malformed PKCS #10 request.') from exc
         if not isinstance(csr.signature_hash_algorithm, _ACCEPTED_CSR_HASHES):
             raise ScepProtocolError(FailInfo.BAD_ALG, 'The PKCS #10 request must be signed with SHA-2.')
         check_public_key_policy(csr.public_key())

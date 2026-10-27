@@ -1,3 +1,4 @@
+import { findStepSpec, findTriggerSpec } from '../document/catalog_lookup.js';
 import { escapeHtml } from '../shared/dom.js';
 import { renderStructuredStepFields } from './graph_step_structured_fields_renderer.js';
 import { fitPanelToViewport, placePanelNearNode } from './graph_overlay_position.js';
@@ -13,13 +14,6 @@ function hasOwn(obj, key) {
   return !!obj && Object.prototype.hasOwnProperty.call(obj, key);
 }
 
-function findStepSpec(catalog, stepType) {
-  return (catalog?.steps || []).find((step) => step.type === stepType) || null;
-}
-
-function findTriggerSpec(catalog, triggerKey) {
-  return (catalog?.events || []).find((eventSpec) => eventSpec.key === triggerKey) || null;
-}
 
 function getFieldSpecs(catalog, stepType) {
   const commonFields = (catalog?.meta?.common_step_fields || []).filter(

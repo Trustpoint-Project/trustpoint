@@ -72,8 +72,10 @@ STATIC_ROOT = Path(__file__).parent.parent / Path('collected_static')
 LOG_DIR_PATH = BASE_DIR / Path('media/log/')
 LOG_DIR_PATH.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
+LOG_SIZE_WARNING_THRESHOLD_MIB = 10
 
 BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
+BACKUP_MAX_AGE_DAYS = 7
 
 # Allows all paths that start with:
 PUBLIC_PATHS = [
@@ -641,6 +643,11 @@ LOGGING = {
         '': {
             'level': 'INFO',
             'handlers': ['console', 'rotatingFile'],
+        },
+        'django-q': {
+            'level': 'WARNING',
+            'handlers': [],
+            'propagate': True,
         },
     },
 }

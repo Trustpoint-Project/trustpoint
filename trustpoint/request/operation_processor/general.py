@@ -4,6 +4,7 @@
 """Carries out the requested operation after authentication and authorization."""
 
 from cmp.util import PKIFailureInfo
+from devices.secrets import secret_use
 from request.request_context import (
     BaseCertificateRequestContext,
     BaseRequestContext,
@@ -27,6 +28,11 @@ class OperationProcessor(AbstractOperationProcessor, LoggerMixin):
     """Chooses the appropriate operation processor based on the context."""
 
     def process_operation(self, context: BaseRequestContext) -> None:
+        """Reserve the authenticated credential through issuance and transaction persistence."""
+        with secret_use(context):
+            self._process_operation(context)
+
+    def _process_operation(self, context: BaseRequestContext) -> None:
         """Process the requested operation."""
         processor_instance: AbstractOperationProcessor
         if isinstance(context, CmpPollRequestContext):

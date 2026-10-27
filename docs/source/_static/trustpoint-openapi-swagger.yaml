@@ -2089,11 +2089,13 @@ components:
     DeviceTypeEnum:
       enum:
       - 0
-      - 1
+      - 2
+      - 3
       type: integer
       description: |-
         * `0` - Generic Device
-        * `1` - OPC UA GDS
+        * `2` - OPC UA GDS Push
+        * `3` - Agent (1-to-1)
     Domain:
       type: object
       description: |-

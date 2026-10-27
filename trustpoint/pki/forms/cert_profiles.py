@@ -19,7 +19,15 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from pki.util.cert_req_converter import JSONCertRequestConverter
-from request.template_vars import build_variable_map_from_models, resolve_string, resolve_template_variables
+from pki.util.crl_urls import validate_crl_url
+from pki.util.san import SAN_FIELDS, SanValidationError, normalize_san_values, split_san_values
+from request.request_context import ManualCredentialRequestContext
+from request.template_vars import (
+    build_variable_map_from_models,
+    resolve_crl_urls,
+    resolve_string,
+    resolve_template_variables,
+)
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -247,6 +255,24 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             elif san:
                 self._build_san_fields_from_sample(san)
 
+            crl = extensions.get('crl_distribution_points')
+            if isinstance(crl, dict) and 'uris' in crl:
+                spec = crl['uris']
+                inherited_mutable = extensions.get('mutable', self.profile.get('mutable', False))
+                if isinstance(spec, dict):
+                    value = spec.get('value', spec.get('default', []))
+                    mutable = spec.get('mutable', crl.get('mutable', inherited_mutable))
+                    required = spec.get('required', False)
+                else:
+                    value = spec or []
+                    mutable = crl.get('mutable', inherited_mutable)
+                    required = False
+                self.fields['crl_distribution_point_uris'] = forms.CharField(
+                    label=_('CRL Distribution Point URLs (comma separated)'),
+                    initial=', '.join(value or []), required=required, disabled=not mutable,
+                    widget=forms.TextInput(attrs={'class': 'form-control'}),
+                )
+
         validity = sample_request.get('validity', {})
         if validity:
             self._build_validity_fields_from_sample(validity)
@@ -419,6 +445,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
     def _build_validity_fields_from_sample(self, validity: dict[str, Any]) -> None:
         """Build validity fields based on sample values."""
         profile_validity = self.profile.get('validity', {})
+        profile_mutable = profile_validity.get('mutable', self.profile.get('mutable', False))
 
         for ts_field in ('not_before', 'not_after'):
             ts_value = validity.get(ts_field)
@@ -438,16 +465,13 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 continue
 
             field_spec = profile_validity.get(field_name, {})
+            is_mutable = profile_mutable
             if isinstance(field_spec, dict):
                 is_required = field_spec.get('required', False)
-                is_mutable = field_spec.get('mutable', True)
+                is_mutable = field_spec.get('mutable', is_mutable)
                 field_value = field_spec.get('value', field_spec.get('default', 0))
             else:
                 is_required = field_name in profile_validity.get('required', [])
-                is_mutable = (
-                    field_name in profile_validity.get('mutable', [])
-                    or field_name not in profile_validity.get('value', {})
-                )
                 is_changeme = isinstance(sample_value, str) and sample_value.startswith('CHANGEME_')
                 field_value = 0 if is_changeme else (sample_value if sample_value is not None else 0)
 
@@ -517,6 +541,18 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
                 if isinstance(field.initial, str):
                     field.initial = resolve_string(field.initial, template_vars)
 
+        crl_field = self.fields.get('crl_distribution_point_uris')
+        if crl_field is not None and isinstance(crl_field.initial, str) and crl_field.initial:
+            initial_crl = {'uris': [url.strip() for url in crl_field.initial.split(',') if url.strip()]}
+            initial_request = {'extensions': {'crl_distribution_points': initial_crl}}
+            try:
+                resolve_crl_urls(initial_request, ManualCredentialRequestContext(device=device, domain=domain))
+            except ValueError as exc:
+                # Keep the field usable so a missing TLS IP SAN can be replaced with a fixed URL.
+                crl_field.help_text = f'{crl_field.help_text} {exc}'
+            else:
+                crl_field.initial = ', '.join(initial_crl['uris'])
+
     def get_certificate_builder(
         self, request_context: BaseRequestContext | None = None,
     ) -> CertificateBuilder:
@@ -529,6 +565,9 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
             CertificateBuilder ready for signing
         """
         cert_request = self._form_data_to_json_request()
+
+        if isinstance(request_context, ManualCredentialRequestContext):
+            request_context.requested_validity = cert_request.get('validity')
 
         validated_request = self.verifier.apply_profile_to_request(cert_request)
 
@@ -579,6 +618,12 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         if san:
             extensions['subject_alternative_name'] = san
 
+        crl_urls = cleaned_data.get('crl_distribution_point_uris')
+        if crl_urls and not self.fields['crl_distribution_point_uris'].disabled:
+            extensions['crl_distribution_points'] = {
+                'uris': [url.strip() for url in crl_urls.split(',') if url.strip()]
+            }
+
         return extensions
 
     def _build_san_from_form_data(self, cleaned_data: dict[str, Any]) -> dict[str, list[str]]:
@@ -587,7 +632,7 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         for field_name in ProfileBasedFormFieldBuilder.SAN_LABELS:
             value = cleaned_data.get(field_name)
             if value:
-                values = [v.strip() for v in value.split(',') if v.strip()]
+                values = split_san_values(value)
                 if values:
                     san[field_name] = values
         return san
@@ -604,6 +649,24 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
     def clean(self) -> dict[str, Any]:
         """Validate the requested certificate validity against the active security policy."""
         cleaned_data = cast('dict[str, Any]', super().clean())
+        for field_name in SAN_FIELDS:
+            field = self.fields.get(field_name)
+            if field is None or field.disabled or field_name not in cleaned_data:
+                continue
+            try:
+                normalized = normalize_san_values(field_name, cleaned_data[field_name])
+                if field.required and not normalized:
+                    self.add_error(field_name, field.error_messages['required'])
+                else:
+                    cleaned_data[field_name] = ', '.join(normalized)
+            except SanValidationError as exc:
+                self.add_error(field_name, _(str(exc)))
+        for url in (cleaned_data.get('crl_distribution_point_uris') or '').split(','):
+            if url.strip():
+                try:
+                    validate_crl_url(url.strip())
+                except ValueError as exc:
+                    self.add_error('crl_distribution_point_uris', str(exc))
         total_days = _validity_days_from_components(
             days=cleaned_data.get('days'),
             hours=cleaned_data.get('hours'),

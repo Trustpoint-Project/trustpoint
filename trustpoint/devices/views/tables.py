@@ -5,15 +5,12 @@
 
 import abc
 from collections.abc import Sequence
-from datetime import timedelta
 from typing import Any, cast
 
 from django.db.models import (
     Case,
-    Exists,
     F,
     IntegerField,
-    OuterRef,
     Prefetch,
     QuerySet,
     Value,
@@ -22,25 +19,25 @@ from django.db.models import (
 from django.http import HttpResponse, HttpResponseRedirect
 from django.http.request import HttpRequest
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy
 from django.views.generic.list import ListView
 
 from devices.filters import DeviceFilter
+from devices.health import APPLICATION_HEALTH_RANKS, DOMAIN_HEALTH_RANKS, credential_health_expression
 
 # noinspection PyUnresolvedReferences
 from devices.models import (
     DeviceModel,
 )
+from devices.presentation import DeviceHealthPresentationMixin, onboarding_progress, pki_protocols_display
 from onboarding.enums import OnboardingStatus
 from pki.models import IssuedCredentialModel
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from trustpoint.settings import UIConfig
@@ -54,7 +51,9 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
-class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceModel], abc.ABC):
+class AbstractDeviceTableView(
+    DeviceHealthPresentationMixin, ExportMixin, PageContextMixin, ListView[DeviceModel], abc.ABC,
+):
     """Device Table View."""
 
     http_method_names = ('get',)
@@ -122,7 +121,7 @@ class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceMode
         Returns:
             The filtered queryset according to GET parameters.
         """
-        self.filterset = DeviceFilter(self.request.GET, queryset=qs)
+        self.filterset = DeviceFilter(self.request.GET, queryset=qs, reference_time=self.health_as_of)
         return cast('QuerySet[DeviceModel]', self.filterset.qs)
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -216,21 +215,6 @@ class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceMode
 
     def get_base_queryset(self) -> QuerySet[DeviceModel]:
         """Return the shared base queryset for device list pages."""
-        now = timezone.now()
-        next_7_days = now + timedelta(days=7)
-        # Correlated subqueries used to derive sortable device-state annotations
-        # directly in SQL. That keeps sorting/pagination database-backed instead
-        # of re-sorting the current page in Python after rendering.
-        domain_credentials = IssuedCredentialModel.objects.filter(
-            device_id=OuterRef('pk'),
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-            credential__certificate__isnull=False,
-        )
-        application_credentials = IssuedCredentialModel.objects.filter(
-            device_id=OuterRef('pk'),
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            credential__certificate__isnull=False,
-        )
         issued_credentials_prefetch = Prefetch(
             'issued_credentials',
             queryset=IssuedCredentialModel.objects.select_related('credential__certificate__revoked_certificate'),
@@ -252,40 +236,13 @@ class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceMode
                     default=Value(3),
                     output_field=IntegerField(),
                 ),
-                # Boolean existence checks reused by the later sort annotations.
-                has_domain_credential=Exists(domain_credentials),
-                has_valid_domain_credential=Exists(
-                    domain_credentials.filter(
-                        credential__certificate__revoked_certificate__isnull=True,
-                        credential__certificate__not_valid_after__gt=next_7_days,
-                    )
+                domain_credential_sort=credential_health_expression(
+                    IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                    as_of=self.health_as_of, state_values=DOMAIN_HEALTH_RANKS,
                 ),
-                has_expiring_domain_credential=Exists(
-                    domain_credentials.filter(
-                        credential__certificate__revoked_certificate__isnull=True,
-                        credential__certificate__not_valid_after__gt=now,
-                        credential__certificate__not_valid_after__lte=next_7_days,
-                    )
-                ),
-                has_application_certificate=Exists(application_credentials),
-                has_active_application_certificate=Exists(
-                    application_credentials.filter(
-                        credential__certificate__revoked_certificate__isnull=True,
-                        credential__certificate__not_valid_after__gt=now,
-                    )
-                ),
-                domain_credential_sort=Case(
-                    When(has_domain_credential=False, then=Value(0)),
-                    When(has_valid_domain_credential=True, then=Value(1)),
-                    When(has_expiring_domain_credential=True, then=Value(2)),
-                    default=Value(3),
-                    output_field=IntegerField(),
-                ),
-                application_certificate_sort=Case(
-                    When(has_application_certificate=False, then=Value(0)),
-                    When(has_active_application_certificate=True, then=Value(1)),
-                    default=Value(2),
-                    output_field=IntegerField(),
+                application_certificate_sort=credential_health_expression(
+                    IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+                    as_of=self.health_as_of, state_values=APPLICATION_HEALTH_RANKS,
                 ),
                 onboarding_protocol_sort=Case(
                     When(onboarding_config__isnull=False, then=F('onboarding_config__onboarding_protocol')),
@@ -327,178 +284,17 @@ class AbstractDeviceTableView(ExportMixin, PageContextMixin, ListView[DeviceMode
         )
 
     def _get_pki_protocols(self, record: DeviceModel) -> str:
-        if record.onboarding_config:
-            return ', '.join([str(p.label) for p in record.onboarding_config.get_pki_protocols()])
-
-        if record.no_onboarding_config:
-            return ', '.join([str(p.label) for p in record.no_onboarding_config.get_pki_protocols()])
-
-        return ''
+        """Return the device's enabled PKI protocol labels."""
+        return pki_protocols_display(record)
 
     def _get_onboarding_progress(self, record: DeviceModel) -> dict[str, Any]:
-        """Builds structured progress data for the enrollment column."""
-        if record.onboarding_config:
-            cfg = record.onboarding_config
-            is_onboarded = cfg.onboarding_status == OnboardingStatus.ONBOARDED
-            status_key = 'onboarded' if is_onboarded else 'pending'
-            status_label = str(gettext_lazy('Onboarded') if is_onboarded else gettext_lazy('Pending'))
-            onboarding_protocol = str(cfg.get_onboarding_protocol_display())
-            pki_labels = [str(p.label) for p in cfg.get_pki_protocols()]
-            none_str = str(gettext_lazy('None'))
-            pki_list = ''.join(f'<li>{p}</li>' for p in pki_labels) if pki_labels else f'<li>{none_str}</li>'
-            tooltip = (
-                f'<strong>{gettext_lazy("Onboarding Protocol")}:</strong> {onboarding_protocol}<br>'
-                f'<strong>{gettext_lazy("Status")}:</strong> {status_label}<br>'
-                f'<strong>{gettext_lazy("PKI Protocols")}:</strong>'
-                f'<ul class="mb-0 ps-3 mt-1">{pki_list}</ul>'
-            )
-        elif record.no_onboarding_config:
-            pki_labels = [str(p.label) for p in record.no_onboarding_config.get_pki_protocols()]
-            none_str = str(gettext_lazy('None'))
-            pki_list = ''.join(f'<li>{p}</li>' for p in pki_labels) if pki_labels else f'<li>{none_str}</li>'
-            status_key = 'no-onboarding'
-            status_label = str(gettext_lazy('No onboarding'))
-            onboarding_protocol = '—'
-            tooltip = (
-                f'<strong>{gettext_lazy("Enrollment")}:</strong> {gettext_lazy("No onboarding")}<br>'
-                f'<strong>{gettext_lazy("PKI Protocols")}:</strong>'
-                f'<ul class="mb-0 ps-3 mt-1">{pki_list}</ul>'
-            )
-        else:
-            status_key = 'none'
-            status_label = str(gettext_lazy('Unknown'))
-            onboarding_protocol = '—'
-            pki_labels = []
-            tooltip = str(gettext_lazy('No enrollment or PKI configuration found.'))
-
-        pki_protocols = ', '.join(pki_labels) if pki_labels else '—'
-
-        return {
-            'status_key': status_key,
-            'status_label': status_label,
-            'tooltip': tooltip,
-            'onboarding_protocol': onboarding_protocol,
-            'pki_protocols': pki_protocols,
-        }
-
-    @staticmethod
-    def _format_datetime_for_tooltip(value: Any) -> str:
-        if not value:
-            return '—'
-        return timezone.localtime(value).strftime('%Y-%m-%d %H:%M')
-
-    @staticmethod
-    def _get_certificates_for_type(
-        record: DeviceModel,
-        credential_type: IssuedCredentialModel.IssuedCredentialType,
-    ) -> list[Any]:
-        # `issued_credentials` is prefetched in `get_base_queryset()`, so this
-        # loop stays in memory while building the badge text/tooltips.
-        certificates = []
-        for issued_credential in record.issued_credentials.all():
-            if issued_credential.issued_credential_type != credential_type:
-                continue
-
-            certificate = getattr(issued_credential.credential, 'certificate', None)
-            if certificate is not None:
-                certificates.append(certificate)
-
-        return certificates
-
-    def _get_domain_credential_status(self, record: DeviceModel) -> dict[str, str]:
-        """Build the domain-credential state for the device table."""
-        now = timezone.now()
-        next_7_days = now + timedelta(days=7)
-        certificates = self._get_certificates_for_type(
-            record, IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+        """Build enrollment display data with this page's empty-state text."""
+        return onboarding_progress(
+            record,
+            empty_protocols_label='—',
+            unconfigured_label=str(gettext_lazy('Unknown')),
+            unconfigured_tooltip=str(gettext_lazy('No enrollment or PKI configuration found.')),
         )
-
-        if not certificates:
-            return {
-                'status_key': 'none',
-                'status_label': str(gettext_lazy('None')),
-                'tooltip': str(gettext_lazy('No domain credential issued.')),
-            }
-
-        active_certificates = [cert for cert in certificates if not hasattr(cert, 'revoked_certificate')]
-        valid_certificates = [cert for cert in active_certificates if cert.not_valid_after > next_7_days]
-
-        if valid_certificates:
-            next_expiry = min(cert.not_valid_after for cert in active_certificates if cert.not_valid_after > now)
-            return {
-                'status_key': 'valid',
-                'status_label': str(gettext_lazy('Valid')),
-                'tooltip': (
-                    f'<strong>{gettext_lazy("Certificates")}:</strong> {len(certificates)}<br>'
-                    f'<strong>{gettext_lazy("Next expiry")}:</strong> '
-                    f'{self._format_datetime_for_tooltip(next_expiry)}'
-                ),
-            }
-
-        expiring_certs = [cert for cert in active_certificates if cert.not_valid_after > now]
-        if expiring_certs:
-            next_expiry = min(cert.not_valid_after for cert in expiring_certs)
-            return {
-                'status_key': 'expiring',
-                'status_label': str(gettext_lazy('Expiring')),
-                'tooltip': (
-                    f'<strong>{gettext_lazy("Certificates")}:</strong> {len(certificates)}<br>'
-                    f'<strong>{gettext_lazy("Next expiry")}:</strong> '
-                    f'{self._format_datetime_for_tooltip(next_expiry)}'
-                ),
-            }
-
-        latest_expiry = max(cert.not_valid_after for cert in certificates)
-        return {
-            'status_key': 'expired',
-            'status_label': str(gettext_lazy('Expired')),
-            'tooltip': (
-                f'<strong>{gettext_lazy("Certificates")}:</strong> {len(certificates)}<br>'
-                f'<strong>{gettext_lazy("Latest expiry")}:</strong> '
-                f'{self._format_datetime_for_tooltip(latest_expiry)}'
-            ),
-        }
-
-    def _get_application_certificate_status(self, record: DeviceModel) -> dict[str, str]:
-        """Build the application-certificate state for the device table."""
-        now = timezone.now()
-        certificates = self._get_certificates_for_type(
-            record, IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
-        )
-
-        if not certificates:
-            return {
-                'status_key': 'none',
-                'status_label': str(gettext_lazy('None')),
-                'tooltip': str(gettext_lazy('No application certificates issued.')),
-            }
-
-        active_certificates = [
-            cert for cert in certificates
-            if not hasattr(cert, 'revoked_certificate') and cert.not_valid_after > now
-        ]
-        if active_certificates:
-            next_expiry = min(cert.not_valid_after for cert in active_certificates)
-            return {
-                'status_key': 'active',
-                'status_label': str(gettext_lazy('Active')),
-                'tooltip': (
-                    f'<strong>{gettext_lazy("Certificates")}:</strong> {len(certificates)}<br>'
-                    f'<strong>{gettext_lazy("Next expiry")}:</strong> '
-                    f'{self._format_datetime_for_tooltip(next_expiry)}'
-                ),
-            }
-
-        latest_expiry = max(cert.not_valid_after for cert in certificates)
-        return {
-            'status_key': 'expired',
-            'status_label': str(gettext_lazy('Expired')),
-            'tooltip': (
-                f'<strong>{gettext_lazy("Certificates")}:</strong> {len(certificates)}<br>'
-                f'<strong>{gettext_lazy("Latest expiry")}:</strong> '
-                f'{self._format_datetime_for_tooltip(latest_expiry)}'
-            ),
-        }
 
 
 class DeviceTableView(AbstractDeviceTableView):
@@ -514,39 +310,9 @@ class DeviceTableView(AbstractDeviceTableView):
         1-to-1 agents are shown here because the agent IS the device.
 
         Returns:
-            Returns a queryset of DeviceModels, excluding OPC_UA_GDS
-            types, filtered by UI filters.
+            Returns a queryset of DeviceModels filtered by UI filters.
         """
-        base_qs = self.get_base_queryset().exclude(
-            device_type__in=[
-                DeviceModel.DeviceType.OPC_UA_GDS,
-            ]
-        )
-        queryset = self.apply_filters(base_qs)
-        ordering = self.get_ordering()
-        if ordering:
-            if isinstance(ordering, str):
-                return queryset.order_by(ordering)
-            return queryset.order_by(*ordering)
-        return queryset
-
-
-class OpcUaGdsTableView(DeviceTableView):
-    """Table View for devices where opc_ua_gds is True."""
-
-    template_name = 'devices/opc_ua_gds.html'
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-    def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to only include devices which are of OPC-UA GDS type and filtered by UI filters.
-
-        Returns:
-            Returns a queryset of all DeviceModels which are of OPC-UA GDS type, filtered by UI filters.
-        """
-        base_qs = self.get_base_queryset().filter(
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS
-        )
+        base_qs = self.get_base_queryset()
         queryset = self.apply_filters(base_qs)
         ordering = self.get_ordering()
         if ordering:

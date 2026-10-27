@@ -5,10 +5,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from cryptography import x509
+
+from pki.models.ca_rollover import CaRolloverState
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from pki.services.ca_rollover import CaRolloverService
+from pki.util.crl_urls import CRL_PLACEHOLDER, validate_crl_url
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -45,8 +52,8 @@ class TemplateVariableResolver(LoggerMixin):
             # Optional fields are omitted when unset so the placeholder is left unresolved.
             if device.ip_address:
                 variables['device.ip_address'] = str(device.ip_address)
-            if device.opc_server_port:
-                variables['device.opc_server_port'] = str(device.opc_server_port)
+            if hasattr(device, 'opc_ua_gds_push_config') and device.opc_ua_gds_push_config.opc_server_port:
+                variables['device.opc_server_port'] = str(device.opc_ua_gds_push_config.opc_server_port)
 
         if domain is not None:
             variables['domain.unique_name'] = domain.unique_name
@@ -136,6 +143,7 @@ class TemplateVariableResolver(LoggerMixin):
             return data
 
         resolved: dict[str, Any] = cls._resolve_recursively(data, variables)
+        resolve_crl_urls(resolved, context)
         cls.logger.debug('Template variable substitution complete. Result: %s', resolved)
         return resolved
 
@@ -158,3 +166,48 @@ def resolve_template_variables(
 ) -> dict[str, Any]:
     """Resolve ``{{ ... }}`` template variables in *data* using *context*."""
     return TemplateVariableResolver.resolve_template_variables(data, context)
+
+
+def resolve_crl_urls(data: dict[str, Any], context: BaseRequestContext) -> None:
+    """Resolve CRL placeholders using the active TLS certificate and effective issuing CA."""
+    crl = data.get('extensions', {}).get('crl_distribution_points', {})
+    urls = crl.get('uris', [])
+    variables: dict[str, str] = {}
+    keys = {match.group(1) or match.group(2) for url in urls for match in CRL_PLACEHOLDER.finditer(url)}
+    if 'issuing_ca.id' in keys:
+        if context.domain is None:
+            msg = 'An issuing domain is required to resolve {issuing_ca.id}.'
+            raise ValueError(msg)
+        ca = context.domain.get_issuing_ca_or_value_error()
+        rollover = CaRolloverService.get_active_rollover(ca)
+        if (rollover and rollover.state == CaRolloverState.TRANSITION
+                and rollover.new_issuing_ca and rollover.new_issuing_ca.credential):
+            ca = rollover.new_issuing_ca
+        variables['issuing_ca.id'] = str(ca.pk)
+    if any(key.startswith('tls_certificate.') for key in keys):
+        variables.update(_tls_ip_variables())
+
+    def replace(match: re.Match[str]) -> str:
+        key = match.group(1) or match.group(2)
+        if key not in variables:
+            msg = f'Cannot resolve CRL URL placeholder {{{key}}}; check the active TLS certificate IP SANs.'
+            raise ValueError(msg)
+        return variables[key]
+
+    if urls:
+        crl['uris'] = [validate_crl_url(CRL_PLACEHOLDER.sub(replace, url)) for url in urls]
+
+
+def _tls_ip_variables() -> dict[str, str]:
+    """Read IP SANs in certificate order; bracket IPv6 addresses for URL hosts."""
+    active = ActiveTrustpointTlsServerCredentialModel.objects.select_related('credential').first()
+    addresses = []
+    if active and active.credential:
+        cert = active.credential.get_certificate()
+        with contextlib.suppress(x509.ExtensionNotFound):
+            san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+            addresses = san.get_values_for_type(x509.IPAddress)
+    return {
+        f'tls_certificate.ip_address.{index}': f'[{address}]' if ':' in str(address) else str(address)
+        for index, address in enumerate(addresses, start=1)
+    }

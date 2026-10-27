@@ -6,9 +6,11 @@
 from typing import Any, ClassVar
 
 from django.core.exceptions import PermissionDenied
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy
 from drf_spectacular.utils import OpenApiExample, extend_schema
-from rest_framework import viewsets
+from rest_framework import serializers, viewsets
+from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -16,7 +18,8 @@ from rest_framework.response import Response
 from devices.models import (
     DeviceModel,
 )
-from devices.serializers import DeviceSerializer
+from devices.secrets import assign_secret
+from devices.serializers import DeviceSerializer, SecretReplacementSerializer
 from users.permissions import AppPermissions
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
@@ -39,6 +42,27 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
     to set up automatic certificate enrollment. The API supports both
     enum names (e.g., "CMP", "EST") and integer values for protocols.
     """
+
+    @action(detail=True, methods=['post'], url_path='change-secret')
+    def change_secret(self, request: Request, pk: str | None = None) -> Response:
+        """Replace one eligible enrollment credential using explicit generated/custom intent."""
+        del pk
+        if not request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
+        device = self.get_object()
+        payload = SecretReplacementSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        config = device.onboarding_config or device.no_onboarding_config
+        if config is None:
+            msg = 'No enrollment configuration is available.'
+            raise serializers.ValidationError(msg)
+        try:
+            secret = assign_secret(config, data['credential'], custom=data['action'] == 'custom',
+                                   value=data.get('value'), device=device, actor=request.user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+        return Response({'credential': data['credential'], 'value': secret}, headers={'Cache-Control': 'no-store'})
 
     queryset = DeviceModel.objects.all()
     serializer_class = DeviceSerializer
@@ -165,13 +189,15 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
                     'serial_number': 'SN-OPC-001',
                     'domain': 1,
                     'ip_address': '192.168.1.50',
-                    'opc_server_port': 4840,
                     'device_type': 2,
                     'onboarding_config': {
                         'onboarding_protocol': 7,
+                        'pki_protocols': ['OPC_GDS_PUSH'],
+                    },
+                    'opc_ua_gds_push_config': {
+                        'opc_server_port': 4840,
                         'opc_user': 'admin',
                         'opc_password': 'opc-secure-pass',
-                        'pki_protocols': ['OPC_GDS_PUSH'],
                         'opc_trust_store': 10,
                     },
                 },

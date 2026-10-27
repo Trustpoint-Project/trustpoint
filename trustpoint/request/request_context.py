@@ -50,6 +50,11 @@ class BaseRequestContext(LoggerMixin):
     domain: DomainModel | None = None
     device: DeviceModel | None = None
 
+    authenticated_secret_field: str | None = None
+    authenticated_secret_version: int | None = None
+    authenticated_secret_config: str | None = None
+    authenticated_secret_pk: int | None = None
+
     owner_credential: CredentialModel | None = None
     issuer_credential: CredentialModel | None = None
 
@@ -64,6 +69,9 @@ class BaseRequestContext(LoggerMixin):
     event: Event | None = None
     event_payload: dict[str, Any] | None = None
     workflow2_outcome: DispatchOutcome | None = None
+
+    failure_notification_sent: bool | None = None
+    request_failed: bool | None = None
 
     def error(self, ext_msg: str | bytes |None,
               http_status: int | None = None,
@@ -91,6 +99,10 @@ class BaseRequestContext(LoggerMixin):
         if self.http_response_headers:
             for header_name, header_value in self.http_response_headers.items():
                 response[header_name] = header_value
+        if self.request_failed or response.status_code >= 400:  # noqa: PLR2004 - HTTP error responses.
+            from request.notifications import notify_request_failure  # noqa: PLC0415
+
+            notify_request_failure(self)
         return response
 
     def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:
@@ -305,3 +317,6 @@ class CmpPollRequestContext(CmpBaseRequestContext):
 @dataclass(kw_only=True)
 class ManualCredentialRequestContext(ManualBaseRequestContext, BaseCredentialRequestContext):
     """Manual context for credential requests triggered from the web UI."""
+
+    requested_validity: dict[str, int] | None = None
+    """Relative validity submitted by the manual issuance form, before building X.509 dates."""

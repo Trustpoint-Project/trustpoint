@@ -1,6 +1,5 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 
 {% block content %}
 <div class="card">
@@ -135,6 +134,49 @@
                     </section>
 
 
+                    {% if form.crl_distribution_point_uris %}
+                        <section class="mb-5">
+                            <div class="mb-3">
+                                <h2 class="h4 mb-1">{% trans 'CRL Distribution Points' %}</h2>
+                                <p class="text-muted mb-0">
+                                    {% trans 'Define the URLs clients use to retrieve the certificate revocation list.' %}
+                                </p>
+                            </div>
+
+                            <hr class="mb-4">
+
+                            <div class="tp-kvp-list">
+                                {% with field=form.crl_distribution_point_uris %}
+                                    <div>
+                                        <div>
+                                            <label for="{{ field.id_for_label }}">
+                                                {{ field.label }}
+                                            </label>
+                                        </div>
+
+                                        <div>
+                                            {{ field }}
+
+                                            {% if field.help_text %}
+                                                <div class="form-text">
+                                                    {{ field.help_text }}
+                                                </div>
+                                            {% endif %}
+
+                                            {% if field.errors %}
+                                                <div class="invalid-feedback d-block">
+                                                    {% for error in field.errors %}
+                                                        {{ error }}
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endwith %}
+                            </div>
+                        </section>
+                    {% endif %}
+
                     {# ================================================== #}
                     {# Validity                                           #}
                     {# ================================================== #}
@@ -195,7 +237,7 @@
 
     <div class="card-footer d-flex justify-content-between align-items-center">
         <a
-            href="{% url 'pki:cert_profiles' %}"
+            href="{% if back_url %}{{ back_url }}{% else %}{% url 'pki:cert_profiles' %}{% endif %}"
             class="btn btn-secondary"
         >
             {% trans 'Back' %}

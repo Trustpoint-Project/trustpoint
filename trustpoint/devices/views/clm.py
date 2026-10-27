@@ -4,11 +4,10 @@
 """Views for certificate lifecycle management (CLM)."""
 
 import abc
-import datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q, QuerySet
 from django.http import HttpResponse, HttpResponseBase
@@ -20,6 +19,7 @@ from django.utils.translation import gettext_lazy
 from django.views.generic.detail import DetailView
 
 from devices.forms import (
+    ChangeDeviceSecretForm,
     ClmAgentDeviceForm,
     ClmDeviceModelNoOnboardingForm,
     ClmDeviceModelOnboardingForm,
@@ -30,6 +30,7 @@ from devices.forms import (
 from devices.models import (
     DeviceModel,
 )
+from devices.presentation import credential_expiry_display, pki_protocols_display
 from onboarding.models import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
@@ -44,11 +45,13 @@ from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from trustpoint.settings import UIConfig
 from users.permissions import AppPermissions
+
+if TYPE_CHECKING:
+    import datetime
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -225,6 +228,10 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         self.domain_credentials_qs = self.get_domain_credentials_qs()
         self.application_credentials_qs = self.get_application_credentials_qs()
         context = super().get_context_data(**kwargs)
+        context['can_change_secret'] = (
+            self.request.user.has_perm(AppPermissions.MANAGE_DEVICES)
+            and ChangeDeviceSecretForm(device=self.object).available
+        )
 
         context['domain_credentials'] = self.domain_credentials_qs
         context['application_credentials'] = self.application_credentials_qs
@@ -436,25 +443,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             return self.get_onboarding_form()
         return self.get_no_onboarding_form()
 
-    @staticmethod
-    def _get_expires_in(record: IssuedCredentialModel | RemoteIssuedCredentialModel) -> str:
-        """Gets the remaining time until the credential expires as human-readable string.
-
-        Args:
-            record: The corresponding IssuedCredentialModel or RemoteIssuedCredentialModel.
-
-        Returns:
-            The remaining time until the credential expires as human-readable string.
-        """
-        cert = record.credential.certificate_or_error
-        if cert.certificate_status != CertificateModel.CertificateStatus.OK:
-            return str(cert.certificate_status.label)
-        now = datetime.datetime.now(datetime.UTC)
-        expire_timedelta = cert.not_valid_after - now
-        days = expire_timedelta.days
-        hours, remainder = divmod(expire_timedelta.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f'{days} days, {hours}:{minutes:02d}:{seconds:02d}'
+    _get_expires_in = staticmethod(credential_expiry_display)
 
     def _get_revoke_button_html(self, record: IssuedCredentialModel | RemoteIssuedCredentialModel) -> str:
         """Gets the HTML for the revoke button in the devices table.
@@ -474,13 +463,8 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         return format_html('<a href="{}" class="btn btn-danger tp-table-btn w-100">{}</a>', url, gettext_lazy('Revoke'))
 
     def _get_pki_protocols(self, record: DeviceModel) -> str:
-        if record.onboarding_config:
-            return ', '.join([str(p.label) for p in record.onboarding_config.get_pki_protocols()])
-
-        if record.no_onboarding_config:
-            return ', '.join([str(p.label) for p in record.no_onboarding_config.get_pki_protocols()])
-
-        return ''
+        """Return the device's enabled PKI protocol labels."""
+        return pki_protocols_display(record)
 
     def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
         """Handles the POST request used for device form submission.
@@ -507,18 +491,30 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 # Agent device
                 form = ClmAgentDeviceForm(request.POST, instance=self.object)
                 if form.is_valid():
-                    form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                    try:
+                        form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                    except ValidationError as exc:
+                        form.add_error(None, exc)
             else:
                 # Regular onboarding device
                 form = ClmDeviceModelOnboardingForm(request.POST, instance=self.object)
+                form.actor = request.user
                 if form.is_valid():
-                    form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                    try:
+                        form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                    except ValidationError as exc:
+                        form.add_error(None, exc)
         else:
             form = ClmDeviceModelNoOnboardingForm(request.POST, instance=self.object)
+            form.actor = request.user
             if form.is_valid():
-                form.save()
+                try:
+                    form.save()
+                except ValidationError as exc:
+                    form.add_error(None, exc)
 
         context = self.get_context_data(object=self.object, **kwargs)
+        context['device_form'] = form
         return self.render_to_response(context)
 
 
@@ -557,12 +553,6 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
         return super().dispatch(request, *args, **kwargs)
 
 
-class OpcUaGdsCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
-    """Certificate Lifecycle Management Summary View for OPC UA Devcies."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
     """Certificate Lifecycle Management Summary View for OPC UA GDS Push devices."""
 
@@ -593,7 +583,7 @@ class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateL
             'serial_number': self.object.serial_number,
             'domain': self.object.domain,
             'ip_address': self.object.ip_address,
-            'opc_server_port': self.object.opc_server_port,
+            'opc_server_port': self.object.opc_ua_gds_push_config.opc_server_port,
             'onboarding_protocol': OnboardingProtocol.OPC_GDS_PUSH.label,
             'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
             'pki_protocol_opc_gds_push': self.object.onboarding_config.has_pki_protocol(
