@@ -29,12 +29,20 @@ from crypto.models import CryptoManagedKeyModel
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.authorization import PkiSecurityAuthorization
-from pki.forms.credentials import parse_private_key_upload
+from pki.forms.credentials import (
+    encode_credential_password,
+    parse_certificate_chain_upload,
+    parse_certificate_upload,
+    parse_private_key_upload,
+    read_pkcs12_upload,
+)
 from pki.models import CaModel
 from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.services import credential_upload as uploads
+from pki.services.credential_upload import parse_pkcs12
 from pki.services.external_csr import certificate_matches_credential
 from pki.services.key_generation import (
     KEY_TYPE_CHOICES,
@@ -48,7 +56,7 @@ from util.field import UniqueNameValidator, get_certificate_name
 from util.validation import ValidationError as UtilValidationError
 from util.validation import validate_remote_ca_connection
 
-MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+MAX_PKCS12_UPLOAD_BYTES = uploads.MAX_PKCS12_UPLOAD_BYTES
 
 if TYPE_CHECKING:
     from crypto.domain.specs import KeySpec
@@ -392,39 +400,16 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
     )
 
     def _read_and_encode_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, bytes | None]:
-        """Reads the PKCS#12 file and encodes the password if provided."""
-        pkcs12_file = cleaned_data.get('pkcs12_file')
-        if pkcs12_file is None:
-            self._raise_validation_error('PKCS#12 file is required.')
-        if getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
-            self._raise_validation_error('PKCS#12 file is too large, max. 256 kiB.')
-
-        try:
-            pkcs12_raw = pkcs12_file.read()
-            pkcs12_password = cleaned_data.get('pkcs12_password')
-        except (OSError, AttributeError) as original_exception:
-            error_message = _(
-                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
-            )
-            raise ValidationError(error_message, code='unexpected-error') from original_exception
-
-        if pkcs12_password:
-            try:
-                pkcs12_password = pkcs12_password.encode()
-            except Exception as original_exception:
-                error_message = _('The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.')
-                raise ValidationError(error_message) from original_exception
-        else:
-            pkcs12_password = None
-
-        return pkcs12_raw, pkcs12_password
+        """Read bounded PKCS#12 data and encode its optional password."""
+        raw = read_pkcs12_upload(cleaned_data.get('pkcs12_file'))
+        return raw, encode_credential_password(cleaned_data.get('pkcs12_password'), pkcs12=True)
 
     def _parse_and_prepare_credential(
         self, pkcs12_raw: bytes, pkcs12_password: bytes | None, _unique_name: str | None
     ) -> CredentialSerializer:
         """Parses the PKCS#12 file and prepares the credential serializer."""
         try:
-            credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
+            credential_serializer = parse_pkcs12(pkcs12_raw, pkcs12_password)
             if credential_serializer.private_key is None:
                 self._raise_validation_error('Private key is missing from credential serializer.')
         except ValidationError:
@@ -524,23 +509,12 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
             ValidationError: If the file is missing, too large, corrupted, or already
             associated with an existing Issuing CA.
         """
-        ca_certificate = self.cleaned_data['ca_certificate']
-
-        if not ca_certificate:
-            err_msg = 'No Issuing CA file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if ca_certificate.size > max_size:
-            err_msg = 'Issuing CA file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        try:
-            certificate_serializer = CertificateSerializer.from_bytes(ca_certificate.read())
-        except Exception:  # noqa: BLE001
-            err_msg = 'Failed to parse the Issuing CA certificate. Seems to be corrupted.'
-            self._raise_validation_error(err_msg)
+        certificate_serializer = parse_certificate_upload(
+            self.cleaned_data.get('ca_certificate'),
+            missing_message='No Issuing CA file was uploaded.',
+            too_large_message='Issuing CA file is too large, max. 64 kiB.',
+            parse_message='Failed to parse the Issuing CA certificate. Seems to be corrupted.',
+        )
 
         cert_crypto = certificate_serializer.as_crypto()
         if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
@@ -553,30 +527,11 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
         return certificate_serializer
 
     def clean_ca_certificate_chain(self) -> CertificateCollectionSerializer | None:
-        """Validates and parses the uploaded Issuing CA certificate chain file.
-
-        This method checks if the optional certificate chain file is provided.
-        If present, it validates and attempts to parse the file into a collection
-        of certificates. Raises a validation error if parsing fails or the file
-        appears corrupted.
-
-        Returns:
-            CertificateCollectionSerializer: A serializer containing the parsed
-            certificate chain if provided.
-
-        Raises:
-            ValidationError: If the certificate chain cannot be parsed.
-        """
-        ca_certificate_chain = self.cleaned_data['ca_certificate_chain']
-
-        if ca_certificate_chain:
-            try:
-                return CertificateCollectionSerializer.from_bytes(ca_certificate_chain.read())
-            except Exception as exception:
-                err_msg = _('Failed to parse the Issuing CA certificate chain. Seems to be corrupted.')
-                raise ValidationError(err_msg) from exception
-
-        return None
+        """Parse an optional certificate chain using shared upload limits."""
+        return parse_certificate_chain_upload(
+            self.cleaned_data.get('ca_certificate_chain'),
+            parse_message=_('Failed to parse the Issuing CA certificate chain. Seems to be corrupted.'),
+        )
 
     def clean(self) -> None:
         """Cleans and validates the form data.
@@ -821,12 +776,13 @@ class IssuingCaExternalCsrCertificateForm(forms.Form):
 
     def clean_certificate(self) -> CertificateSerializer:
         """Parse and validate the externally issued CA certificate."""
-        certificate_file = self.cleaned_data['certificate']
-        if certificate_file.size > 64 * 1024:
-            raise forms.ValidationError(_('Certificate file is too large, max. 64 kiB.'))
-
+        certificate_serializer = parse_certificate_upload(
+            self.cleaned_data.get('certificate'),
+            missing_message='No Issuing CA file was uploaded.',
+            too_large_message=_('Certificate file is too large, max. 64 kiB.'),
+            parse_message=_('Failed to parse the Issuing CA certificate.'),
+        )
         try:
-            certificate_serializer = CertificateSerializer.from_bytes(certificate_file.read())
             certificate = certificate_serializer.as_crypto()
             basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
         except Exception as exception:

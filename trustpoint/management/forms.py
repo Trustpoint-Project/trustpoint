@@ -24,7 +24,6 @@ from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeySerializer,
 )
 
 from crypto.models import BackendKind, CryptoProviderProfileModel
@@ -43,9 +42,19 @@ from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
+from pki.forms.credentials import (
+    encode_credential_password,
+    parse_certificate_chain_upload,
+    parse_certificate_upload,
+    parse_private_key_data,
+    read_pkcs12_upload,
+    read_private_key_upload,
+)
 from pki.key_types import TLS_KEY_TYPE_CHOICES
 from pki.models import CredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.services import credential_upload as uploads
+from pki.services.credential_upload import parse_pkcs12
 from pki.services.external_csr import certificate_matches_credential, parse_single_certificate
 from pki.services.key_generation import supported_key_type_choices
 from pki.util.x509 import CertificateVerifier
@@ -56,7 +65,7 @@ if TYPE_CHECKING:
 
     from django.core.files.uploadedfile import UploadedFile
 
-MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+MAX_PKCS12_UPLOAD_BYTES = uploads.MAX_PKCS12_UPLOAD_BYTES
 MAX_PASSWORD_LIST_BYTES = 10 * 1024 * 1024
 
 
@@ -99,10 +108,15 @@ class TlsExternalCsrCertificateForm(forms.Form):
 
     def clean_certificate(self) -> x509.Certificate:
         """Validate identity and perform full TLS path validation."""
-        uploaded = self.cleaned_data['certificate']
-        if uploaded.size > 64 * 1024:
-            raise forms.ValidationError(_('Certificate file is too large, max. 64 KiB.'))
-        certificate = parse_single_certificate(uploaded.read())
+        try:
+            data = uploads.read_credential_upload(
+                self.cleaned_data['certificate'], kind=uploads.CredentialFileKind.CERTIFICATE,
+            )
+        except uploads.CredentialUploadError as exc:
+            if exc.code == uploads.CredentialUploadErrorCode.TOO_LARGE:
+                raise forms.ValidationError(_('Certificate file is too large, max. 64 KiB.')) from exc
+            raise forms.ValidationError(_('Failed to read the uploaded certificate.')) from exc
+        certificate = parse_single_certificate(data)
         try:
             constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
         except x509.ExtensionNotFound:
@@ -731,51 +745,22 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         raise ValidationError(message)
 
     def _read_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, Any, Any]:
-        """Read and extract data from PKCS#12 file.
-
-        Returns:
-            Tuple of (pkcs12_raw, pkcs12_password, domain_name)
-        """
-        pkcs12_file = cleaned_data.get('pkcs12_file')
-        if pkcs12_file is None:
-            self._raise_validation_error('No PKCS#12 file was uploaded.')
-        if getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
-            self._raise_validation_error('PKCS#12 file is too large, max. 256 kiB.')
-
-        try:
-            pkcs12_raw = pkcs12_file.read()
-            pkcs12_password = cleaned_data.get('pkcs12_password')
-            domain_name = cleaned_data.get('domain_name')
-        except (OSError, AttributeError) as original_exception:
-            error_message = _(
-                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
-            )
-            raise ValidationError(error_message, code='unexpected-error') from original_exception
-        else:
-            return pkcs12_raw, pkcs12_password, domain_name
+        """Read bounded PKCS#12 data and retain the TLS form's remaining fields."""
+        raw = read_pkcs12_upload(
+            cleaned_data.get('pkcs12_file'), missing_message='No PKCS#12 file was uploaded.',
+        )
+        return raw, cleaned_data.get('pkcs12_password'), cleaned_data.get('domain_name')
 
     def _encode_password(self, pkcs12_password: Any) -> bytes | None:
-        """Encode PKCS#12 password if provided.
-
-        Returns:
-            Encoded password bytes or None if no password provided
-        """
-        if pkcs12_password:
-            try:
-                encoded: bytes = pkcs12_password.encode()
-            except Exception as original_exception:
-                error_message = _('The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.')
-                raise ValidationError(error_message) from original_exception
-            else:
-                return encoded
-        return None
+        """Encode a PKCS#12 password using shared input validation."""
+        return encode_credential_password(pkcs12_password, pkcs12=True)
 
     def _parse_and_save_credential(
         self, pkcs12_raw: bytes, pkcs12_password: bytes | None, domain_name: Any
     ) -> None:
         """Parse PKCS#12 data and save credential."""
         try:
-            tls_credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
+            tls_credential_serializer = parse_pkcs12(pkcs12_raw, pkcs12_password)
         except Exception as exception:
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
@@ -868,101 +853,36 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     )
 
     def clean_private_key_file(self) -> bytes:
-        """Validates the uploaded private key file.
-
-        This method checks if the private key file is provided and ensures it meets
-        size constraints. The actual parsing happens in clean() where the password is available.
-
-        Returns:
-            bytes: The raw bytes of the private key file.
-
-        Raises:
-            ValidationError: If the private key file is missing or too large.
-        """
-        private_key_file = self.cleaned_data.get('private_key_file')
-
-        if not private_key_file:
-            err_msg = 'No private key file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if private_key_file.size > max_size:
-            err_msg = 'Private key file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        return bytes(private_key_file.read())
+        """Read a bounded private key; clean() parses it once the password is available."""
+        return read_private_key_upload(self.cleaned_data.get('private_key_file'))
 
     def clean_tls_certificate(self) -> CertificateSerializer:
-        """Validates and parses the uploaded TLS certificate file.
-
-        This method ensures the provided TLS certificate file is valid and
-        not already associated with an existing TLS in the database. If the
-        file is too large, corrupted, or already in use, a validation error is raised.
-
-        Returns:
-            CertificateSerializer: A serializer containing the parsed certificate.
-
-        Raises:
-            ValidationError: If the file is missing, too large, corrupted, or already
-            associated with an existing TLS.
-        """
-        tls_certificate = self.cleaned_data['tls_certificate']
-
-        if not tls_certificate:
-            err_msg = 'No TLS certificate file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if tls_certificate.size > max_size:
-            err_msg = 'TLS certificate file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        try:
-            certificate_serializer = CertificateSerializer.from_bytes(tls_certificate.read())
-        except Exception as exception:
-            err_msg = 'Failed to parse the TLS certificate. Seems to be corrupted.'
-            raise ValidationError(err_msg) from exception
-
-        return certificate_serializer
+        """Parse the TLS leaf while retaining its existing field error messages."""
+        return parse_certificate_upload(
+            self.cleaned_data.get('tls_certificate'),
+            missing_message='No TLS certificate file was uploaded.',
+            too_large_message='TLS certificate file is too large, max. 64 kiB.',
+            parse_message='Failed to parse the TLS certificate. Seems to be corrupted.',
+        )
 
     def clean_tls_certificate_chain(self) -> CertificateCollectionSerializer | None:
-        """Validates and parses the uploaded TLS certificate chain file."""
-        tls_certificate_chain = self.cleaned_data['tls_certificate_chain']
-
-        if tls_certificate_chain:
-            try:
-                return CertificateCollectionSerializer.from_bytes(tls_certificate_chain.read())
-            except Exception as exception:
-                err_msg = _('Failed to parse the TLS certificate chain. Seems to be corrupted.')
-                raise ValidationError(err_msg) from exception
-
-        return None
+        """Parse an optional certificate chain using shared upload limits."""
+        return parse_certificate_chain_upload(
+            self.cleaned_data.get('tls_certificate_chain'),
+            parse_message=_('Failed to parse the TLS certificate chain. Seems to be corrupted.'),
+        )
 
     def _raise_validation_error(self, message: str) -> NoReturn:
         """Raises a validation error with the given message."""
         raise forms.ValidationError(message)
 
     def _encode_private_key_password(self, private_key_password: Any) -> bytes | None:
-        """Encode private key password if provided."""
-        if private_key_password:
-            try:
-                encoded: bytes = private_key_password.encode()
-            except Exception as original_exception:
-                error_message = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
-                raise ValidationError(error_message) from original_exception
-            else:
-                return encoded
-        return None
+        """Encode a private-key password using shared input validation."""
+        return encode_credential_password(private_key_password)
 
     def _parse_private_key(self, private_key_bytes: bytes, private_key_password_bytes: bytes | None) -> Any:
-        """Parse private key with optional password."""
-        try:
-            return PrivateKeySerializer.from_bytes(private_key_bytes, private_key_password_bytes)
-        except Exception as exception:
-            err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
-            raise ValidationError(err_msg) from exception
+        """Parse the private key with the shared credential parser."""
+        return parse_private_key_data(private_key_bytes, private_key_password_bytes)
 
     def _create_and_save_credential(
         self,
