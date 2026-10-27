@@ -53,13 +53,13 @@ class Command(BaseCommand):
         output.write('Preparing bootstrap database schema...')
         self._prepare_bootstrap_database()
         self._create_bootstrap_login(output)
-        self._trigger_auto_setup_if_requested(output)
 
         completed_row, _ = SetupWizardCompletedModel.objects.get_or_create(
             singleton_id=SetupWizardCompletedModel.SINGLETON_ID
         )
         config = SetupWizardConfigModel.get_singleton()
         self._seed_operational_database_defaults(config, output)
+        self._trigger_auto_setup_if_requested(output)
         current_step = config.FreshInstallCurrentStep(config.fresh_install_current_step)
         output.write(f'Bootstrap wizard completed: {completed_row.setup_completed_at is not None}')
         output.write(f'Bootstrap wizard current step: {current_step.name}')

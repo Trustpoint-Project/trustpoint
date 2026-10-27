@@ -386,3 +386,58 @@ def test_auto_setup_uses_the_same_non_executable_handoff_writer(monkeypatch, set
     assert values['DATABASE_HOST'] == 'postgres'
     assert 'DATABASE_PASSWORD' not in values
     assert (tmp_path / 'auto-setup.marker').is_file()
+
+
+@pytest.mark.parametrize('credential_source', ['environment', 'file'])
+def test_fresh_bootstrap_seeds_database_before_auto_setup(monkeypatch, settings, handoff_paths, credential_source):
+    from management.management.commands import bootstrap_manager
+
+    settings.TRUSTPOINT_IS_BOOTSTRAP = True
+    settings.TRUSTPOINT_IS_OPERATIONAL = False
+    settings.DATABASE_PASSWORD = 'deployment-test-secret'
+    settings.APP_VERSION = '1.0.0'
+    monkeypatch.setenv('TP_AUTO_SETUP', 'true')
+    monkeypatch.setenv('DATABASE_HOST', 'deployment-postgres')
+    monkeypatch.setenv('DATABASE_PORT', '5433')
+    monkeypatch.setenv('POSTGRES_DB', 'deployment_db')
+    monkeypatch.setenv('DATABASE_USER', 'deployment_user')
+    monkeypatch.delenv('DATABASE_PASSWORD_FILE', raising=False)
+    if credential_source == 'file':
+        secret = handoff_paths / 'database-secret'
+        secret.write_text('deployment-test-secret\n')
+        monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret))
+        monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
+    else:
+        monkeypatch.setenv('DATABASE_PASSWORD', 'deployment-test-secret')
+
+    # Leave seeding and handoff creation real, starting with a fresh wizard row.
+    config = SetupWizardConfigModel.get_singleton()
+    assert config.operational_db_password == ''
+    for method in ('_prepare_bootstrap_database', '_create_bootstrap_login', '_collect_static_files', '_compile_messages'):
+        monkeypatch.setattr(bootstrap_manager.Command, method, Mock())
+    monkeypatch.setattr(bootstrap_manager.Command, '_has_staged_tls', Mock(return_value=False))
+    monkeypatch.setattr(bootstrap_manager.BootstrapTlsMaterialStrategy, 'apply', Mock())
+    original_path = Path
+    monkeypatch.setattr(
+        bootstrap_manager,
+        'Path',
+        lambda value: (
+            handoff_paths / 'auto-setup.marker' if str(value).endswith('/auto-setup.marker') else original_path(value)
+        ),
+    )
+
+    bootstrap_manager.Command().handle()
+
+    config.refresh_from_db()
+    assert config.operational_db_password == 'deployment-test-secret'
+    values = json.loads((handoff_paths / 'operational.env').read_text())
+    assert values['DATABASE_HOST'] == 'deployment-postgres'
+    assert values['DATABASE_PORT'] == '5433'
+    assert values['POSTGRES_DB'] == 'deployment_db'
+    assert values['DATABASE_USER'] == 'deployment_user'
+    assert 'DATABASE_PASSWORD' not in values
+    assert 'deployment-test-secret' not in (handoff_paths / 'operational.env').read_text()
+    if credential_source == 'file':
+        assert values['DATABASE_PASSWORD_FILE'] == str(secret)
+    assert (handoff_paths / 'operational.ready').exists()
+    assert (handoff_paths / 'auto-setup.marker').exists()
