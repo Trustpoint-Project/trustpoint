@@ -1199,6 +1199,26 @@ input[readonly].readonly-field {
     background-color: #adb5bd;
 }
 
+/* revoked credentials */
+.tp-status-badge.tp-status-revoked {
+    color: #b42318;
+    border-color: #ffb3b3;
+    background-color: #fff1f1;
+}
+.tp-status-badge.tp-status-revoked .tp-status-dot {
+    background-color: #dc3545;
+}
+
+/* certificates whose validity period has not started */
+.tp-status-badge.tp-status-not_yet_valid {
+    color: #856404;
+    border-color: #ffc107;
+    background-color: #fff8e1;
+}
+.tp-status-badge.tp-status-not_yet_valid .tp-status-dot {
+    background-color: #ffc107;
+}
+
 /* active application certificates — green */
 .tp-status-badge.tp-status-active {
     color: #198754;

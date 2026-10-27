@@ -28,6 +28,7 @@ from pki.filters import CertificateFilter
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.serializer.certificate import CertificateSerializer
+from pki.services.certificate_health import certificate_health_conditions
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.page_context import (
     PKI_PAGE_CATEGORY,
@@ -111,14 +112,15 @@ class CertificateTableView(
     def get_base_queryset(self) -> QuerySet[CertificateModel]:
         """Return the annotated base queryset used by the certificates table."""
         now = timezone.now()
+        conditions = certificate_health_conditions(as_of=now, expiry_days=0)
         return (
             CertificateModel.objects
             .select_related('revoked_certificate')
             .annotate(
                 certificate_status_sort=Case(
-                    When(revoked_certificate__isnull=False, then=Value(3)),
-                    When(not_valid_before__gt=now, then=Value(4)),
-                    When(not_valid_after__lte=now, then=Value(2)),
+                    When(conditions['revoked'], then=Value(3)),
+                    When(conditions['not_yet_valid'], then=Value(4)),
+                    When(conditions['expired'], then=Value(2)),
                     default=Value(0),
                     output_field=IntegerField(),
                 ),

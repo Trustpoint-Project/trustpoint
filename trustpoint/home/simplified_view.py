@@ -9,7 +9,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -20,9 +20,10 @@ from django.views.generic import ListView
 
 from devices.filters import DeviceFilter
 from devices.models import DeviceModel
-from devices.presentation import onboarding_progress
+from devices.presentation import DeviceHealthPresentationMixin, onboarding_progress
 from management.models import NotificationModel
 from pki.models import CaModel, CertificateModel, DomainModel, IssuedCredentialModel
+from pki.services.certificate_health import certificate_health_counts
 from trustpoint.views.base import ContextDataMixin
 from users.models import TrustpointUser
 
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
     from django.utils.safestring import SafeString
 
 
-class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
+class SimplifiedDomainOverviewView(DeviceHealthPresentationMixin, ContextDataMixin, ListView[DomainModel]):
     """Simplified domain-centric overview view."""
 
     template_name = 'home/simplified_overview.html'
@@ -45,7 +46,6 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
         queryset = (
             DomainModel.objects
             .select_related('issuing_ca__credential__certificate')
-            .prefetch_related('devices')
             .order_by('unique_name')
         )
 
@@ -70,9 +70,14 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
         ).exists()
 
         for domain in context['domains']:
-            devices = domain.devices.all()
+            devices = domain.devices.select_related('onboarding_config', 'no_onboarding_config').prefetch_related(
+                Prefetch(
+                    'issued_credentials',
+                    queryset=IssuedCredentialModel.objects.select_related('credential__certificate__revoked_certificate'),
+                ),
+            )
 
-            device_filter = DeviceFilter(self.request.GET, queryset=devices)
+            device_filter = DeviceFilter(self.request.GET, queryset=devices, reference_time=self.health_as_of)
             filtered_devices = device_filter.qs
 
             domain.total_devices = devices.count()
@@ -90,28 +95,13 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
             ])
             domain.filters_active = filters_active
 
-            active_certs = CertificateModel.objects.filter(
-                credential__issued_credential__domain=domain,
-                revoked_certificate__isnull=True,
-                not_valid_after__gt=timezone.now(),
-            ).count()
-
-            expiring_certs = CertificateModel.objects.filter(
-                credential__issued_credential__domain=domain,
-                revoked_certificate__isnull=True,
-                not_valid_after__lte=timezone.now() + timedelta(days=30),
-                not_valid_after__gt=timezone.now(),
-            ).count()
-
-            expired_certs = CertificateModel.objects.filter(
-                credential__issued_credential__domain=domain,
-                revoked_certificate__isnull=True,
-                not_valid_after__lte=timezone.now(),
-            ).count()
-
-            domain.active_certificates = active_certs
-            domain.expiring_certificates = expiring_certs
-            domain.expired_certificates = expired_certs
+            health = certificate_health_counts(
+                CertificateModel.objects.filter(credential__issued_credential__domain=domain),
+                as_of=self.health_as_of,
+            )
+            domain.active_certificates = health['active']
+            domain.expiring_certificates = health['expiring']
+            domain.expired_certificates = health['expired']
 
             domain_notifications = NotificationModel.objects.filter(
                 Q(domain=domain) |
@@ -150,81 +140,6 @@ class SimplifiedDomainOverviewView(ContextDataMixin, ListView[DomainModel]):
             empty_protocols_label=str(gettext_lazy('None')),
             unconfigured_label=str(gettext_lazy('None')),
             unconfigured_tooltip=str(gettext_lazy('No onboarding configuration')),
-        )
-
-    def _get_domain_credential_status(self, record: DeviceModel) -> dict[str, Any]:
-        """Build the domain-credential state for the device table."""
-        now = timezone.now()
-        certificates = self._get_certificates_for_type(
-            record, IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
-        )
-
-        if not certificates:
-            return {
-                'status_key': 'none',
-                'status_label': str(gettext_lazy('None')),
-                'tooltip': str(gettext_lazy('No domain credentials issued.')),
-            }
-
-        active_certificates = [
-            cert for cert in certificates
-            if not hasattr(cert, 'revoked_certificate') and cert.not_valid_after > now
-        ]
-        if active_certificates:
-            next_expiry = min(cert.not_valid_after for cert in active_certificates)
-            return {
-                'status_key': 'active',
-                'status_label': str(gettext_lazy('Active')),
-                'tooltip': f'{gettext_lazy("Expires")}: {next_expiry.strftime("%Y-%m-%d %H:%M")}',
-            }
-
-        return {
-            'status_key': 'revoked',
-            'status_label': str(gettext_lazy('Revoked/Expired')),
-            'tooltip': str(gettext_lazy('All domain credentials are revoked or expired.')),
-        }
-
-    def _get_application_certificate_status(self, record: DeviceModel) -> dict[str, Any]:
-        """Build the application-certificate state for the device table."""
-        now = timezone.now()
-        certificates = self._get_certificates_for_type(
-            record, IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
-        )
-
-        if not certificates:
-            return {
-                'status_key': 'none',
-                'status_label': str(gettext_lazy('None')),
-                'tooltip': str(gettext_lazy('No application certificates issued.')),
-            }
-
-        active_certificates = [
-            cert for cert in certificates
-            if not hasattr(cert, 'revoked_certificate') and cert.not_valid_after > now
-        ]
-        if active_certificates:
-            next_expiry = min(cert.not_valid_after for cert in active_certificates)
-            return {
-                'status_key': 'active',
-                'status_label': str(gettext_lazy('Active')),
-                'tooltip': f'{gettext_lazy("Expires")}: {next_expiry.strftime("%Y-%m-%d %H:%M")}',
-            }
-
-        return {
-            'status_key': 'revoked',
-            'status_label': str(gettext_lazy('Revoked/Expired')),
-            'tooltip': str(gettext_lazy('All application certificates are revoked or expired.')),
-        }
-
-    def _get_certificates_for_type(
-        self, record: DeviceModel, credential_type: IssuedCredentialModel.IssuedCredentialType
-    ) -> list[CertificateModel]:
-        """Get all certificates for a specific credential type."""
-        return list(
-            CertificateModel.objects.filter(
-                credential__issued_credential__device=record,
-                credential__issued_credential__issued_credential_type=credential_type,
-            ).select_related('revoked_certificate')
         )
 
     def _get_clm_button_html(self, record: DeviceModel) -> SafeString:

@@ -457,14 +457,23 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
     @property
     def certificate_status(self) -> CertificateStatus:
-        """Status of the certificate."""
-        if hasattr(self, 'revoked_certificate'):
-            return self.CertificateStatus.REVOKED
-        if datetime.datetime.now(datetime.UTC) < self.not_valid_before:
-            return self.CertificateStatus.NOT_YET_VALID
-        if datetime.datetime.now(datetime.UTC) > self.not_valid_after:
-            return self.CertificateStatus.EXPIRED
-        return self.CertificateStatus.OK
+        """Return certificate validity using the shared health rules."""
+        from pki.services.certificate_health import classify_certificate  # noqa: PLC0415
+
+        health = classify_certificate(
+            not_valid_before=self.not_valid_before,
+            not_valid_after=self.not_valid_after,
+            revoked=hasattr(self, 'revoked_certificate'),
+            as_of=datetime.datetime.now(datetime.UTC),
+            expiry_days=0,
+        )
+        return {
+            'valid': self.CertificateStatus.OK,
+            'expiring': self.CertificateStatus.OK,
+            'revoked': self.CertificateStatus.REVOKED,
+            'not_yet_valid': self.CertificateStatus.NOT_YET_VALID,
+            'expired': self.CertificateStatus.EXPIRED,
+        }[health]
 
     @property
     def table_status(self) -> str:
