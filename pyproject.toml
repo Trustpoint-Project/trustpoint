@@ -100,6 +100,7 @@ override-dependencies = [
     "sqlparse>=0.6.0",
     "pyjwt>=2.15.0",
     "urllib3>=2.8.0",
+    "setuptools>=84.1.0"
 ]
 
 [tool.ruff]
