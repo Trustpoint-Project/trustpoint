@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+from trustpoint_core.oid import KeyPairGenerator
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -26,6 +26,7 @@ from onboarding.models import (
     OnboardingPkiProtocol,
     OnboardingProtocol,
 )
+from pki.key_types import OWNER_CREDENTIAL_KEY_TYPE_CHOICES, public_key_info_from_key_type
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.domain import DomainModel
@@ -439,16 +440,6 @@ class OwnerCredentialTruststoreAssociationForm(forms.Form):
             )
 
 
-_KEY_TYPE_CHOICES = [
-    ('RSA-2048', 'RSA 2048'),
-    ('RSA-3072', 'RSA 3072'),
-    ('RSA-4096', 'RSA 4096'),
-    ('ECC-SECP256R1', 'ECC SECP256R1'),
-    ('ECC-SECP384R1', 'ECC SECP384R1'),
-    ('ECC-SECP521R1', 'ECC SECP521R1'),
-]
-
-
 class _OwnerCredentialEstBaseMixin(LoggerMixin, forms.Form):
     """Shared fields and key-generation logic for EST-based DevOwnerID enrollment forms."""
 
@@ -482,27 +473,14 @@ class _OwnerCredentialEstBaseMixin(LoggerMixin, forms.Form):
 
     key_type = forms.ChoiceField(
         label=_('Key Type'),
-        choices=_KEY_TYPE_CHOICES,
+        choices=OWNER_CREDENTIAL_KEY_TYPE_CHOICES,
         initial='RSA-2048',
         help_text=_('Cryptographic key type and size for the generated keypair'),
     )
 
     def _generate_private_key(self, key_type: str) -> Any:
-        """Generate a private key according to the selected key_type choice string."""
-        if key_type.startswith('RSA-'):
-            key_size = int(key_type.split('-')[1])
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA,
-                key_size=key_size,
-            )
-        else:
-            curve_name = key_type.split('-', 1)[1]
-            named_curve = NamedCurve[curve_name.upper()]
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC,
-                named_curve=named_curve,
-            )
-        return KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
+        """Generate the selected key using the shared catalog conversion."""
+        return KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info_from_key_type(key_type))
 
     def _resolve_unique_name(self, unique_name: str | None, host: str) -> str:
         """Return the given unique_name, or derive one from the remote host."""

@@ -43,6 +43,7 @@ from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
+from pki.key_types import TLS_KEY_TYPE_CHOICES
 from pki.models import CredentialModel
 from pki.models.truststore import TruststoreModel
 from pki.services.external_csr import certificate_matches_credential, parse_single_certificate
@@ -67,10 +68,7 @@ class TlsExternalCsrKeyForm(forms.Form):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Limit offerings to supported RSA and TLS elliptic curves."""
         super().__init__(*args, **kwargs)
-        choices = supported_key_type_choices([
-            ('RSA-2048', 'RSA 2048'), ('RSA-3072', 'RSA 3072'), ('RSA-4096', 'RSA 4096'),
-            ('ECC-SECP256R1', 'ECC SECP256R1'), ('ECC-SECP384R1', 'ECC SECP384R1'),
-        ])
+        choices = supported_key_type_choices(TLS_KEY_TYPE_CHOICES)
         key_type_field = cast('forms.ChoiceField', self.fields['key_type'])
         key_type_field.choices = choices
         if choices and 'ECC-SECP256R1' not in dict(choices):

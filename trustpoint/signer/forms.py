@@ -20,11 +20,12 @@ from trustpoint_core.serializer import (
 )
 
 from crypto.application.capabilities import get_active_backend_capability_report
-from crypto.domain.algorithms import EllipticCurveName
-from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.domain.specs import KeySpec
 from crypto.runtime import configured_private_key_location
 from pki.forms.credentials import parse_private_key_upload
+from pki.key_types import SIGNER_KEY_TYPE_CHOICES, key_spec_for_key_type
 from pki.models.certificate import CertificateModel
+from pki.services.key_generation import supported_key_type_choices
 from signer.models import SignerModel
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
@@ -70,11 +71,7 @@ class SignerGenerateForm(LoggerMixin, forms.Form):
     """Form for generating a backend-managed signer."""
 
     KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        ('rsa_2048', _('RSA 2048')),
-        ('rsa_3072', _('RSA 3072')),
-        ('rsa_4096', _('RSA 4096')),
-        ('ec_secp256r1', _('EC SECP256R1')),
-        ('ec_secp384r1', _('EC SECP384R1')),
+        (value, _(label)) for value, label in SIGNER_KEY_TYPE_CHOICES
     ]
 
     unique_name = forms.CharField(
@@ -90,29 +87,16 @@ class SignerGenerateForm(LoggerMixin, forms.Form):
 
     @staticmethod
     def _key_spec_for_key_type(key_type: str) -> KeySpec:
-        """Map form key choices to backend key specs."""
-        if key_type == 'rsa_2048':
-            return RsaKeySpec(key_size=2048)
-        if key_type == 'rsa_3072':
-            return RsaKeySpec(key_size=3072)
-        if key_type == 'rsa_4096':
-            return RsaKeySpec(key_size=4096)
-        if key_type == 'ec_secp256r1':
-            return EcKeySpec(curve=EllipticCurveName.SECP256R1)
-        if key_type == 'ec_secp384r1':
-            return EcKeySpec(curve=EllipticCurveName.SECP384R1)
-        msg = f'Unsupported signer key type {key_type!r}.'
-        raise ValueError(msg)
+        """Map the existing signer form values through the shared catalog."""
+        if key_type not in dict(SIGNER_KEY_TYPE_CHOICES):
+            msg = f'Unsupported signer key type {key_type!r}.'
+            raise ValueError(msg)
+        return key_spec_for_key_type(key_type)
 
     @classmethod
     def supported_key_type_choices(cls) -> list[tuple[str, str]]:
         """Return signer key choices supported by the active backend."""
-        report = get_active_backend_capability_report()
-        return [
-            (value, label)
-            for value, label in cls.KEY_TYPE_CHOICES
-            if report.supports_key_spec(cls._key_spec_for_key_type(value))
-        ]
+        return supported_key_type_choices(cls.KEY_TYPE_CHOICES, report=get_active_backend_capability_report())
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the form with backend-supported key choices."""

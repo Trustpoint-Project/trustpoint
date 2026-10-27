@@ -111,7 +111,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -174,7 +174,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -215,7 +215,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -261,7 +261,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -311,7 +311,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -352,7 +352,7 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -414,7 +414,7 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
@@ -455,7 +455,7 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')

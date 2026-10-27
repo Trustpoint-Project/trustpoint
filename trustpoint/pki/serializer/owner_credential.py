@@ -18,18 +18,12 @@ from trustpoint_core.serializer import (
 
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingPkiProtocol, OnboardingProtocol
 from onboarding.models import NoOnboardingConfigModel, OnboardingConfigModel
+from pki.key_types import OWNER_CREDENTIAL_KEY_TYPE_CHOICES
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from util.field import UniqueNameValidator
 
-_KEY_TYPE_CHOICES = [
-    'RSA-2048',
-    'RSA-3072',
-    'RSA-4096',
-    'ECC-SECP256R1',
-    'ECC-SECP384R1',
-    'ECC-SECP521R1',
-]
+_KEY_TYPE_CHOICES = [value for value, _label in OWNER_CREDENTIAL_KEY_TYPE_CHOICES]
 
 class OwnerCredentialSerializer(serializers.ModelSerializer[OwnerCredentialModel]):
     """Read-only serializer for OwnerCredentialModel instances."""

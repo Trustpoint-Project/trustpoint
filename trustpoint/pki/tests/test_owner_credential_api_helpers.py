@@ -63,7 +63,7 @@ def test_public_key_info_parses_supported_key_types(key_type: str, algorithm: st
 
 def test_public_key_info_rejects_unknown_curve() -> None:
     """Unknown curve names are rejected instead of silently defaulting."""
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match='Unsupported key type'):
         _public_key_info_from_key_type('ECC-unknown')
 
 

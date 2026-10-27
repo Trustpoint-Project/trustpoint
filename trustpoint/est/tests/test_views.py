@@ -33,9 +33,9 @@ def request_factory():
 @pytest.fixture
 def security_helpers():
     """Isolate the policy and atomic issuance helpers in view orchestration tests."""
-    with patch('est.views.require_single_security_config') as policy, patch(
-        'est.views.process_certificate_operation_atomically'
-    ) as issue, patch('est.views.release_delivered_workflow2_request') as release:
+    with patch('request.enrollment.require_single_security_config') as policy, patch(
+        'request.enrollment.process_certificate_operation_atomically'
+    ) as issue, patch('request.enrollment.release_delivered_workflow2_request') as release:
         yield policy, issue, release
 
 
@@ -162,13 +162,13 @@ def test_est_simple_enrollment_mixin_event():
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.EstMessageResponder')
-@patch('est.views.OperationProcessor')
-@patch('est.views.Workflow2Handler')
-@patch('est.views.EstAuthorization')
-@patch('est.views.authenticate_est_request')
-@patch('est.views.EstMessageParser')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.EstMessageResponder')
+@patch('request.enrollment.OperationProcessor')
+@patch('request.enrollment.Workflow2Handler')
+@patch('request.enrollment.EstAuthorization')
+@patch('request.enrollment.authenticate_est_request')
+@patch('request.enrollment.EstMessageParser')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_process_enrollment_success(
     mock_request_context,
@@ -231,13 +231,13 @@ def test_process_enrollment_success(
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.EstMessageResponder')
-@patch('est.views.OperationProcessor')
-@patch('est.views.Workflow2Handler')
-@patch('est.views.EstAuthorization')
-@patch('est.views.authenticate_est_request')
-@patch('est.views.EstMessageParser')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.EstMessageResponder')
+@patch('request.enrollment.OperationProcessor')
+@patch('request.enrollment.Workflow2Handler')
+@patch('request.enrollment.EstAuthorization')
+@patch('request.enrollment.authenticate_est_request')
+@patch('request.enrollment.EstMessageParser')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_process_enrollment_skips_processing_when_workflow_blocks(
     mock_request_context,
@@ -304,7 +304,7 @@ def test_process_enrollment_request_context_failure(mock_request_context, reques
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_process_enrollment_validation_failure(
     mock_request_context, mock_validator, mock_error_responder, request_factory
@@ -392,13 +392,13 @@ def test_est_simple_reenrollment_view_csrf_exempt():
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.EstMessageResponder')
-@patch('est.views.OperationProcessor')
-@patch('est.views.Workflow2Handler')
-@patch('est.views.EstAuthorization')
-@patch('est.views.authenticate_est_request')
-@patch('est.views.EstMessageParser')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.EstMessageResponder')
+@patch('request.enrollment.OperationProcessor')
+@patch('request.enrollment.Workflow2Handler')
+@patch('request.enrollment.EstAuthorization')
+@patch('request.enrollment.authenticate_est_request')
+@patch('request.enrollment.EstMessageParser')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_est_simple_reenrollment_view_post_success(
     mock_request_context,
@@ -480,9 +480,9 @@ def test_est_simple_reenrollment_view_post_context_failure(mock_request_context,
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.authenticate_est_request')
-@patch('est.views.EstMessageParser')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.authenticate_est_request')
+@patch('request.enrollment.EstMessageParser')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_est_simple_reenrollment_view_post_authentication_failure(
     mock_request_context, mock_validator, mock_parser, mock_auth, mock_error_responder, request_factory, security_helpers

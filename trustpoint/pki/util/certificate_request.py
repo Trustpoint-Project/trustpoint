@@ -6,7 +6,12 @@
 from typing import Any
 
 from django.utils.translation import gettext as _
-from trustpoint_core.oid import NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+
+from pki.key_types import public_key_info_from_key_type
+
+__all__ = [
+    'build_ca_request_data', 'build_cert_content_summary', 'build_request_data', 'public_key_info_from_key_type',
+]
 
 
 def build_request_data(
@@ -50,16 +55,6 @@ def build_request_data(
         if value is not None:
             request_data['validity'][field] = int(value)
     return request_data
-
-
-def public_key_info_from_key_type(key_type: str) -> PublicKeyInfo:
-    """Convert a key_type string (e.g. 'RSA-2048', 'ECC-SECP256R1') to a PublicKeyInfo."""
-    if key_type.startswith('RSA-'):
-        key_size = int(key_type.split('-')[1])
-        return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=key_size)
-    curve_name = key_type.split('-', 1)[1]
-    named_curve = NamedCurve[curve_name.upper()]
-    return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=named_curve)
 
 
 def build_cert_content_summary(cert_data: dict[str, Any]) -> dict[str, Any]:

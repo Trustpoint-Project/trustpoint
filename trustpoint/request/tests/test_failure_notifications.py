@@ -106,7 +106,7 @@ def test_notification_failure_preserves_response_and_transaction(notifications_e
 
 def test_est_pipeline_exception_is_notified(notifications_enabled):
     request = RequestFactory().post('/', b'invalid CSR', content_type='application/pkcs10')
-    with patch('est.views.EstHttpRequestValidator.validate', side_effect=ValueError('secret error')):
+    with patch('request.enrollment.EstHttpRequestValidator.validate', side_effect=ValueError('secret error')):
         response = EstSimpleEnrollmentMixin().process_enrollment(request, 'domain', 'tls_server')
     assert response.status_code == 500
     assert NotificationModel.objects.get(event='REQUEST_FAILED').message_data == {
