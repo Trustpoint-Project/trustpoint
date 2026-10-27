@@ -3,7 +3,7 @@
 """Processing of SCEP PKIOperation messages (PKCSReq and RenewalReq) on top of the shared enrollment pipeline."""
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import hashlib
 import hmac
 from dataclasses import dataclass
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
     from onboarding.models import ScepEnrollmentModelMixin
     from pki.models import CertificateProfileModel, CredentialModel, DomainModel
-_CLOCK_SKEW = datetime.timedelta(days=1)
+_CLOCK_SKEW = dt.timedelta(days=1)
 _ACCEPTED_CSR_HASHES = (hashes.SHA256, hashes.SHA384, hashes.SHA512)
 _GENERIC_FAILURE_TEXT = 'The request could not be processed.'
 _INVALID_AUTHORIZATION = 'The enrollment authorization is not valid.'

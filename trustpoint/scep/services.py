@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from typing import TYPE_CHECKING
 
 from cryptography import x509
@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from pki.models import DomainModel
 
 SERVER_KEY_BITS = 2048
-SERVER_CERT_VALIDITY = datetime.timedelta(days=3 * 365)
-SERVER_CERT_RENEW_BEFORE = datetime.timedelta(days=30)
+SERVER_CERT_VALIDITY = dt.timedelta(days=3 * 365)
+SERVER_CERT_RENEW_BEFORE = dt.timedelta(days=30)
 
 LOCAL_CA_TYPES = frozenset(
     {
@@ -70,7 +70,7 @@ def _issue_server_certificate(domain: DomainModel, public_key: rsa.RSAPublicKey)
     hash_enum = suite.algorithm_identifier.hash_algorithm
     hash_algorithm: hashes.HashAlgorithm | None = hash_enum.hash_algorithm() if hash_enum is not None else None
 
-    now = datetime.datetime.now(datetime.UTC)
+    now = dt.datetime.now(dt.UTC)
     not_after = min(now + SERVER_CERT_VALIDITY, issuer_cert.not_valid_after_utc)
     builder = (
         x509.CertificateBuilder()
@@ -82,7 +82,7 @@ def _issue_server_certificate(domain: DomainModel, public_key: rsa.RSAPublicKey)
         .issuer_name(issuer_cert.subject)
         .public_key(public_key)
         .serial_number(x509.random_serial_number())
-        .not_valid_before(now - datetime.timedelta(minutes=5))
+        .not_valid_before(now - dt.timedelta(minutes=5))
         .not_valid_after(not_after)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(
@@ -137,7 +137,7 @@ def server_credential_is_usable(config: ScepServerConfigModel) -> bool:
 
     cert = credential.get_certificate()
 
-    if cert.not_valid_after_utc - datetime.datetime.now(datetime.UTC) < SERVER_CERT_RENEW_BEFORE:
+    if cert.not_valid_after_utc - dt.datetime.now(dt.UTC) < SERVER_CERT_RENEW_BEFORE:
         return False
 
     issuing_credential = get_local_issuing_ca(config.domain).get_credential()

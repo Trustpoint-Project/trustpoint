@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Django backup view."""
-import datetime
+import datetime as dt
 import io
 import tarfile
 import zipfile
@@ -66,8 +66,8 @@ def get_backup_file_data(filename: str) -> dict[str, Any]:
     if file_path is None:
         return {}
     stat = file_path.stat()
-    created_dt = datetime.datetime.fromtimestamp(stat.st_ctime, datetime.UTC)
-    modified_dt = datetime.datetime.fromtimestamp(stat.st_mtime, datetime.UTC)
+    created_dt = dt.datetime.fromtimestamp(stat.st_ctime, dt.UTC)
+    modified_dt = dt.datetime.fromtimestamp(stat.st_mtime, dt.UTC)
     size_kb = stat.st_size / 1024
     return {
         'filename': filename,
@@ -93,7 +93,7 @@ def create_db_backup(path: Path) -> str:
         CalledProcessError: If the `dbbackup` command fails.
     """
     path.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d_%H-%M-%S')
+    timestamp = dt.datetime.now(dt.UTC).strftime('%Y-%m-%d_%H-%M-%S')
     filename = f'backup_{timestamp}.dump.gz'
     call_command('trustpointbackup', filename=filename)
     return filename

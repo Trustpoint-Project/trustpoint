@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import hashlib
 import hmac
 import os
@@ -461,7 +461,7 @@ def build_cert_rep(  # noqa: PLR0913
 
     attrs = [
         _attribute(OID_ATTR_CONTENT_TYPE, OID_DATA),
-        _attribute(OID_ATTR_SIGNING_TIME, useful.UTCTime.fromDateTime(datetime.datetime.now(datetime.UTC))),
+        _attribute(OID_ATTR_SIGNING_TIME, useful.UTCTime.fromDateTime(dt.datetime.now(dt.UTC))),
         _attribute(OID_ATTR_MESSAGE_DIGEST, univ.OctetString(hashlib.sha256(econtent or b'').digest())),
         _attribute(OID_TRANSACTION_ID, char.PrintableString(transaction_id)),
         _attribute(OID_MESSAGE_TYPE, char.PrintableString(str(int(MessageType.CERT_REP)))),

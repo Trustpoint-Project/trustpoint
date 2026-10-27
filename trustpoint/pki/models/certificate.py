@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -464,7 +464,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
             not_valid_before=self.not_valid_before,
             not_valid_after=self.not_valid_after,
             revoked=hasattr(self, 'revoked_certificate'),
-            as_of=datetime.datetime.now(datetime.UTC),
+            as_of=dt.datetime.now(dt.UTC),
             expiry_days=0,
         )
         return {
@@ -483,7 +483,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     @property
     def days_left(self) -> int:
         """Returns number of days from now until not_valid_after. If expired, returns 0."""
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         if self.not_valid_after > now:
             return (self.not_valid_after - now).days
         return 0
