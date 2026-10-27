@@ -262,14 +262,6 @@ for dns_name in _tls_dns_names:
             CSRF_TRUSTED_ORIGINS.append(_https_origin)
 
 
-# Basic SMTP backend
-if DEBUG:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-else:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no-reply@trustpoint.ai')
-
-
 # Settings for postgreql database
 DATABASE_ENGINE = os.environ.get('DATABASE_ENGINE', 'django.db.backends.postgresql')
 DATABASE_HOST = os.environ.get('DATABASE_HOST', 'localhost')
@@ -337,27 +329,33 @@ TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_flag(
 # Setting for email backend
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
-# Default: console (safe for dev/showcases)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Default to console output unless an SMTP host is configured.
+MAILERS: dict[str, dict[str, Any]] = {'default': {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}}
 
-# If EMAIL_HOST is present, switch to SMTP
-_email_host = os.getenv('EMAIL_HOST')  # e.g. "smtp.customer.tld" or "mailpit"
+# Keep the deployment environment variables while configuring Django via MAILERS.
+_email_host = os.getenv('EMAIL_HOST')
 if _email_host:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = _email_host
-    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
-
-    # Sensible defaults based on port; env can override
+    _email_port = int(os.getenv('EMAIL_PORT', '587'))
     _SMTP_TLS_PORT = 587
     _SMTP_SSL_PORT = 465
     _use_tls_env = os.getenv('EMAIL_USE_TLS')
     _use_ssl_env = os.getenv('EMAIL_USE_SSL')
-    EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == _SMTP_TLS_PORT)
-    EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == _SMTP_SSL_PORT)
-
-    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # auth only if both non-empty
-    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-    EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
+    MAILERS['default'] = {
+        'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+        'OPTIONS': {
+            'host': _email_host,
+            'port': _email_port,
+            'use_tls': (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (
+                _email_port == _SMTP_TLS_PORT
+            ),
+            'use_ssl': (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (
+                _email_port == _SMTP_SSL_PORT
+            ),
+            'username': os.getenv('EMAIL_HOST_USER', ''),
+            'password': os.getenv('EMAIL_HOST_PASSWORD', ''),
+            'timeout': int(os.getenv('EMAIL_TIMEOUT', '10')),
+        },
+    }
 
 
 STORAGES = {

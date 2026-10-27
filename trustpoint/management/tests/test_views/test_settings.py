@@ -315,7 +315,7 @@ class SettingsTabViewTest(TestCase):
         self.assertIsInstance(context['smtp_email_test_form'], SmtpEmailTestForm)
 
     @override_settings(
-        EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend',
+        MAILERS={'default': {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}},
         DEFAULT_FROM_EMAIL='before@example.com',
     )
     def test_post_smtp_email_settings_saves_and_applies_runtime_settings(self):
@@ -343,9 +343,9 @@ class SettingsTabViewTest(TestCase):
         self.assertIn('tab=smtp-email', response.url)
         self.assertTrue(smtp_config.enabled)
         self.assertEqual(smtp_config.host, 'smtp.example.com')
-        self.assertEqual(django_settings.EMAIL_BACKEND, SmtpEmailConfig.SMTP_BACKEND)
-        self.assertEqual(django_settings.EMAIL_HOST, 'smtp.example.com')
-        self.assertEqual(django_settings.EMAIL_PORT, 2525)
+        self.assertEqual(django_settings.MAILERS['default']['BACKEND'], SmtpEmailConfig.SMTP_BACKEND)
+        self.assertEqual(django_settings.MAILERS['default']['OPTIONS']['host'], 'smtp.example.com')
+        self.assertEqual(django_settings.MAILERS['default']['OPTIONS']['port'], 2525)
         self.assertEqual(django_settings.DEFAULT_FROM_EMAIL, 'no-reply@example.com')
 
     def test_post_smtp_email_test_sends_using_current_form_settings(self):
