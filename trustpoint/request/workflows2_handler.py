@@ -11,8 +11,10 @@ from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
 
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import CertificateSigningRequest
+from django.db import transaction
 from pyasn1.codec.der import encoder as der_encoder  # type: ignore[import-untyped]
 
 from cmp.util import PKI_STATUS_REJECTION
@@ -24,7 +26,7 @@ from request.request_context import (
     HttpBaseRequestContext,
 )
 from trustpoint.logger import LoggerMixin
-from workflows2.events.payloads import build_device_snapshot, serialize_source
+from workflows2.events.payloads import build_device_snapshot, build_enrollment_request_snapshot, serialize_source
 from workflows2.events.triggers import Triggers
 from workflows2.services.dispatch import DispatchOutcome, EventSource, WorkflowDispatchService
 from workflows2.services.request_decision import Workflow2RequestDecision, resolve_request_decision
@@ -438,6 +440,41 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
         if builder is None:
             return None
         return builder(context)
+
+    def handle_issued(self, context: BaseRequestContext) -> None:
+        """Capture effective attributes now and notify after issuance commits.
+
+        This is separate from the pre-issuance decision: notification failures
+        must neither block delivery nor overwrite the authorization outcome.
+        """
+        if not isinstance(context, BaseCertificateRequestContext) or context.issued_certificate is None:
+            return
+        try:
+            dispatch_request = self._build_dispatch_request(context)
+            if dispatch_request is None:
+                return
+            event = dispatch_request.event
+            event['phase'] = 'after_issuance'
+            event['request'] = build_enrollment_request_snapshot(context.issued_certificate)
+            fingerprint = context.issued_certificate.fingerprint(hashes.SHA256()).hex()
+
+            def dispatch() -> None:
+                try:
+                    # Isolate persistence errors from any surrounding transaction.
+                    with transaction.atomic():
+                        WorkflowDispatchService().emit_event(
+                            on=dispatch_request.on,
+                            event=event,
+                            source=dispatch_request.source,
+                            initial_vars=dispatch_request.initial_vars,
+                            idempotency_key=f'issued:{fingerprint}',
+                        )
+                except Exception:
+                    self.logger.exception('Failed to dispatch post-issuance workflow event.')
+
+            transaction.on_commit(dispatch)
+        except Exception:
+            self.logger.exception('Failed to capture post-issuance workflow event.')
 
     @staticmethod
     def _result_for_outcome(

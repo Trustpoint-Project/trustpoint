@@ -30,7 +30,7 @@ class SchemaLinter:
 
     _TOP_LEVEL_KEYS: ClassVar[frozenset[str]] = frozenset({'schema', 'name', 'enabled', 'trigger', 'apply', 'workflow'})
     _WORKFLOW_KEYS: ClassVar[frozenset[str]] = frozenset({'start', 'steps', 'flow'})
-    _TRIGGER_KEYS: ClassVar[frozenset[str]] = frozenset({'on', 'sources'})
+    _TRIGGER_KEYS: ClassVar[frozenset[str]] = frozenset({'on', 'sources', 'phase'})
     _TRIGGER_SOURCES_KEYS: ClassVar[frozenset[str]] = frozenset({'trustpoint', 'ca_ids', 'domain_ids', 'device_ids'})
 
     _STEP_SPECS: ClassVar[dict[str, _StepSpec]] = {

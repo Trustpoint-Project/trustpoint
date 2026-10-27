@@ -59,5 +59,5 @@ class EmailService(LoggerMixin):
                 message.attach(filename, content, mime)
 
         # synchronous send
-        message.send(fail_silently=False)
+        message.send(using='default')
         EmailService.logger.info('Sent email "%s" to %s', subject, ', '.join(to))

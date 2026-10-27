@@ -21,7 +21,7 @@ from request.security_hardening import (
     require_single_security_config,
 )
 from request.workflow2_issuance import release_delivered_workflow2_request
-from request.workflows2_handler import Workflow2Handler
+from request.workflows2_handler import Workflow2CertificateRequestHandler, Workflow2Handler
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -35,10 +35,11 @@ def process_workflow_operation[Context: BaseRequestContext](
     context: Context,
     process: Callable[[Context], None],
 ) -> None:
-    """Dispatch workflows before issuing, and never process a stopped request."""
+    """Preserve the request gate, then notify workflows after successful issuance."""
     result = Workflow2Handler().handle(context)
     if not result.should_stop:
         process(context)
+        Workflow2CertificateRequestHandler().handle_issued(context)
 
 
 @dataclass
