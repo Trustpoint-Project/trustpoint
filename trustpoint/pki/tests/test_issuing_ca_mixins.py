@@ -59,7 +59,10 @@ def test_est_and_cmp_request_data_convert_form_values() -> None:
     assert est == cmp
     assert IssuingCaExternalCsrView()._build_request_data_from_form(content) == est
     assert est['subj'] == {'common_name': 'ca.example', 'country_name': 'DE'}
-    assert est['ext']['subject_alternative_name']['ip_addresses'] == '192.0.2.1'
+    assert est['ext']['subject_alternative_name'] == {
+        'dns_names': ['ca.example'],
+        'ip_addresses': ['192.0.2.1'],
+    }
     assert est['validity'] == {'days': 30}
 
 
