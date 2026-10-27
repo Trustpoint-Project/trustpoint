@@ -330,7 +330,7 @@ TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_flag(
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
 # Default to console output unless an SMTP host is configured.
-MAILERS = {'default': {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}}
+MAILERS: dict[str, dict[str, Any]] = {'default': {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}}
 
 # Keep the deployment environment variables while configuring Django via MAILERS.
 _email_host = os.getenv('EMAIL_HOST')
