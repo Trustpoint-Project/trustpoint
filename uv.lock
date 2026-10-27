@@ -264,21 +264,20 @@ wheels = [
 
 [[package]]
 name = "asyncua"
-version = "2.0.1"
+version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "anyio" },
     { name = "cryptography" },
-    { name = "pyopenssl" },
     { name = "python-dateutil" },
     { name = "pytz" },
     { name = "sortedcontainers" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d9/7d/14830444700e18631853c417b05472c7036cd266e90866e8d0ae4bcd7c72/asyncua-2.0.1.tar.gz", hash = "sha256:f9f73804b4d56a12aaad7a2f062b15f08c856718d93a10c647d82a9f38f787df", size = 1213396, upload-time = "2026-06-29T07:14:43.388Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/90/13c47fa62aa83f2ed98a931aa3a7bcc77a3e7163400eb9f2d9e1d3c9df07/asyncua-2.1.0.tar.gz", hash = "sha256:d741f5e21f189ac0a45b8dda13539c2d49d8d992b9b62d2758efe1bfd3d1454c", size = 795989, upload-time = "2026-10-06T17:15:58.34Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/8e/37545889e8fa056accb03fe3f546fcf0f3e49192682f1dfa913a18fc5937/asyncua-2.0.1-py3-none-any.whl", hash = "sha256:f21d58c78f6fa9b592c7c29890527e530a35cbb4ac9f96002b6bddce7425a404", size = 1314333, upload-time = "2026-06-29T07:14:45.395Z" },
+    { url = "https://files.pythonhosted.org/packages/de/8e/6077d337d31d784c0267fa685da5840867866c7ca0cb1cbfe31d46af2b5d/asyncua-2.1.0-py3-none-any.whl", hash = "sha256:81d0c66b93b2ffdf97f672572d1ac975cc0b86a62b4c4e67034485dc0a2a2994", size = 890612, upload-time = "2026-10-06T17:15:56.153Z" },
 ]
 
 [[package]]
@@ -2766,7 +2765,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
-    { name = "asyncua", specifier = "~=2.0.1" },
+    { name = "asyncua", specifier = "~=2.1.0" },
     { name = "certifi", specifier = ">=2026.7.22" },
     { name = "crispy-bootstrap5", specifier = "~=2026.3" },
     { name = "cryptography", specifier = ">=50.0.0" },
