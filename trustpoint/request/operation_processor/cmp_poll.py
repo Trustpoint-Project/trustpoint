@@ -12,6 +12,7 @@ from django.db import transaction
 from cmp.models import CmpTransactionModel
 from request.cmp_transaction_state import CmpTransactionState
 from request.request_context import BaseRequestContext, CmpPollRequestContext
+from request.workflows2_handler import Workflow2CertificateRequestHandler
 from trustpoint.logger import LoggerMixin
 from workflows2.models import Workflow2Run
 from workflows2.services.request_decision import Workflow2RequestDecision, resolve_request_decision
@@ -102,6 +103,7 @@ class CmpPollProcessor(AbstractOperationProcessor, LoggerMixin):
         )
         context.cmp_transaction = issued_transaction
         CmpCertificateRequestProcessor.populate_success_context(context, issued_transaction)
+        Workflow2CertificateRequestHandler().handle_issued(replay_context)
 
     def _refresh_waiting_transaction(self, transaction_record: CmpTransactionModel) -> CmpTransactionModel:
         """Refresh one waiting CMP transaction from its backend state."""

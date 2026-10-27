@@ -28,3 +28,9 @@ class Triggers:
     EST_SIMPLEREENROLL: ClassVar[str] = 'est.simplereenroll'
     REST_ENROLL: ClassVar[str] = 'rest.enroll'
     REST_REENROLL: ClassVar[str] = 'rest.reenroll'
+
+    ENROLLMENT: ClassVar[frozenset[str]] = frozenset({
+        CMP_INITIALIZATION, CMP_CERTIFICATION,
+        EST_SIMPLEENROLL, EST_SIMPLEREENROLL,
+        REST_ENROLL, REST_REENROLL,
+    })
