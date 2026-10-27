@@ -9,6 +9,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import Encoding
 from pyasn1.codec.der.encoder import encode as der_encode
 from pyasn1.type import univ
 from pyasn1_modules import rfc2459, rfc2511, rfc4210, rfc4211, rfc5280
@@ -189,6 +190,7 @@ class TestEstCsrSignatureVerification:
         mock_context = Mock(spec=EstCertificateRequestContext)
         mock_csr = Mock(spec=x509.CertificateSigningRequest)
         mock_csr.signature_hash_algorithm = None
+        mock_csr.public_key.return_value = Mock(spec=rsa.RSAPublicKey)
         mock_context.cert_requested = mock_csr
 
         verifier = EstCsrSignatureVerification()
@@ -218,29 +220,17 @@ class TestEstCsrSignatureVerification:
         except TypeError as e:
             assert 'Unsupported public key type for CSR signature verification.' in str(e)
 
-    def test_verify_signature_failure(self):
+    def test_verify_signature_failure(self, test_csr_fixture):
         """Test handling of signature verification failure."""
         mock_context = Mock(spec=EstCertificateRequestContext)
-        mock_csr = Mock(spec=x509.CertificateSigningRequest)
-        mock_rsa_key = Mock(spec=rsa.RSAPublicKey)
-        mock_hash_algorithm = Mock(spec=hashes.SHA256)
-
-        mock_csr.public_key.return_value = mock_rsa_key
-        mock_csr.signature_hash_algorithm = mock_hash_algorithm
-        mock_csr.signature = b'signature'
-        mock_csr.tbs_certrequest_bytes = b'tbs_data'
-        mock_context.cert_requested = mock_csr
-
-        mock_rsa_key.verify.side_effect = Exception('Verification failed')
+        der = bytearray(test_csr_fixture.get_cryptography_object().public_bytes(Encoding.DER))
+        der[-1] ^= 1
+        mock_context.cert_requested = x509.load_der_x509_csr(bytes(der))
 
         verifier = EstCsrSignatureVerification()
 
-        with patch('request.message_parser.csr.padding.PKCS1v15'):
-            try:
-                verifier.parse(mock_context)
-                assert False, 'Expected ValueError to be raised'
-            except ValueError as e:
-                assert 'Failed to verify the CSR signature.' in str(e)
+        with pytest.raises(ValueError, match='Failed to verify the CSR signature'):
+            verifier.parse(mock_context)
 
 
 class TestEstAuthorizationHeaderParsing:

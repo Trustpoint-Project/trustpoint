@@ -6,13 +6,8 @@
 from typing import ClassVar
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
-try:
-    from cryptography.hazmat.primitives.asymmetric import mldsa
-except ImportError:
-    mldsa = None  # type: ignore[assignment]
-
+from pki.services.csr import CsrErrorCode, CsrValidationError, verify_csr_signature
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -45,47 +40,15 @@ class CsrSignatureVerification(ParsingComponent, LoggerMixin):
             )
             raise self.invalid_csr_exception(self.invalid_csr_message)
 
-        public_key = csr.public_key()
-        hash_algorithm = csr.signature_hash_algorithm
-        is_mldsa = mldsa is not None and isinstance(
-            public_key,
-            (
-                mldsa.MLDSA44PublicKey,
-                mldsa.MLDSA65PublicKey,
-                mldsa.MLDSA87PublicKey,
-            ),
-        )
-        if hash_algorithm is None and not is_mldsa:
-            msg = 'CSR does not contain a signature hash algorithm.'
-            self.logger.warning('%s CSR signature verification failed: No signature hash algorithm', self.protocol)
-            raise ValueError(msg)
-        if not isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)) and not is_mldsa:
-            msg = 'Unsupported public key type for CSR signature verification.'
-            self.logger.warning('%s CSR signature verification failed: Unsupported public key type', self.protocol)
-            raise TypeError(msg)
-
         try:
-            if isinstance(public_key, rsa.RSAPublicKey):
-                key_type = 'RSA'
-                public_key.verify(
-                    signature=csr.signature,
-                    data=csr.tbs_certrequest_bytes,
-                    padding=padding.PKCS1v15(),
-                    algorithm=hash_algorithm,  # type: ignore[arg-type]
-                )
-            elif isinstance(public_key, ec.EllipticCurvePublicKey):
-                key_type = 'EC'
-                public_key.verify(
-                    signature=csr.signature,
-                    data=csr.tbs_certrequest_bytes,
-                    signature_algorithm=ec.ECDSA(hash_algorithm),  # type: ignore[arg-type]
-                )
-            else:
-                key_type = public_key.__class__.__name__.replace('PublicKey', '').replace('MLDSA', 'ML-DSA-')
-                public_key.verify(signature=csr.signature, data=csr.tbs_certrequest_bytes)  # type: ignore[union-attr,call-arg]
-            hash_info = f' with {hash_algorithm.name}' if hash_algorithm else ''
-            self.logger.info('%s CSR signature verification successful: %s key%s', self.protocol, key_type, hash_info)
-        except Exception as exc:
+            verify_csr_signature(csr)
+        except CsrValidationError as exc:
+            self.logger.warning('%s CSR signature verification failed: %s', self.protocol, exc)
+            if exc.code == CsrErrorCode.UNSUPPORTED_KEY:
+                msg = 'Unsupported public key type for CSR signature verification.'
+                raise TypeError(msg) from exc
+            if exc.code == CsrErrorCode.MISSING_HASH:
+                raise ValueError(str(exc)) from exc
             msg = 'Failed to verify the CSR signature.'
-            self.logger.exception('%s CSR signature verification failed', self.protocol)
             raise ValueError(msg) from exc
+        self.logger.info('%s CSR signature verification successful', self.protocol)

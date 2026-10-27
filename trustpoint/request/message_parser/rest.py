@@ -5,12 +5,12 @@
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import json
 
 from cryptography import x509
 
+from pki.services.csr import decode_base64_csr, load_csr, validate_csr_size
 from request.request_context import BaseRequestContext, RestBaseRequestContext, RestCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -38,63 +38,52 @@ class RestPkiMessageParsing(ParsingComponent, LoggerMixin):
     """
 
     def parse(self, context: BaseRequestContext) -> None:
-        """Parse the JSON body and extract the CSR."""
+        """Decode REST JSON/CSR transport and parse a single PKCS#10 request."""
         if not isinstance(context, RestCertificateRequestContext):
             exc_msg = 'RestPkiMessageParsing requires a RestCertificateRequestContext.'
             raise TypeError(exc_msg)
-
         if context.raw_message is None:
-            error_message = 'Raw message is missing from the context.'
-            self.logger.warning('REST PKI message parsing failed: Raw message is missing')
-            raise ValueError(error_message)
-
+            msg = 'Raw message is missing from the context.'
+            raise ValueError(msg)
         if not hasattr(context.raw_message, 'body') or not context.raw_message.body:
-            error_message = 'Raw message is missing body.'
-            self.logger.warning('REST PKI message parsing failed: Body is missing')
-            raise ValueError(error_message)
-
+            msg = 'Raw message is missing body.'
+            raise ValueError(msg)
+        error_message = 'Failed to parse JSON body.'
         try:
             body = context.raw_message.body
+            validate_csr_size(len(body), transport=True)
             data = json.loads(body.decode('utf-8') if isinstance(body, bytes) else body)
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            error_message = 'Failed to parse JSON body.'
-            self.logger.warning('REST PKI message parsing failed: Invalid JSON - %s', e)
+        except (ValueError, TypeError) as exc:
             context.error(error_message, http_status=400)
-            raise ValueError(error_message) from e
-
+            raise ValueError(error_message) from exc
+        if not isinstance(data, dict):
+            context.error(error_message, http_status=400)
+            raise ValueError(error_message)  # noqa: TRY004 - HTTP parsers expose validation failures as ValueError.
         csr_value = data.get('csr')
         if not csr_value:
             error_message = "Missing 'csr' field in JSON body."
-            self.logger.warning('REST PKI message parsing failed: Missing csr field')
             context.error(error_message, http_status=400)
             raise ValueError(error_message)
-
+        error_message = 'Failed to parse the CSR from JSON body.'
+        if not isinstance(csr_value, str):
+            context.error(error_message, http_status=400)
+            raise ValueError(error_message)  # noqa: TRY004 - Preserve the parser's validation error contract.
         try:
-            csr_bytes = csr_value.encode('utf-8') if isinstance(csr_value, str) else csr_value
-
-            if b'CERTIFICATE REQUEST' in csr_bytes:
-                csr = x509.load_pem_x509_csr(csr_bytes)
-                self.logger.debug('REST PKI message parsing: Detected PEM CSR')
-            else:
-                # Assume Base64-encoded DER
-                der_data = base64.b64decode(csr_bytes)
-                csr = x509.load_der_x509_csr(der_data)
-                self.logger.debug('REST PKI message parsing: Detected Base64-DER CSR')
-
+            csr_bytes = csr_value.encode('utf-8')
+            csr = (
+                load_csr(csr_bytes, encoding='pem') if csr_bytes.lstrip().startswith(b'-----BEGIN')
+                else load_csr(decode_base64_csr(csr_bytes), encoding='der')
+            )
             context.cert_requested = csr
-
             subject_cn = 'unknown'
             with contextlib.suppress(IndexError, AttributeError):
                 cn_value = csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
                 subject_cn = cn_value if isinstance(cn_value, str) else cn_value.decode('utf-8')
-
             self.logger.info('REST PKI message parsing successful: subject CN: %s', subject_cn)
-
-        except Exception as e:
-            error_message = 'Failed to parse the CSR from JSON body.'
+        except Exception as exc:
             self.logger.exception('REST PKI message parsing failed')
             context.error(error_message, http_status=400)
-            raise ValueError(error_message) from e
+            raise ValueError(error_message) from exc
 
 
 class RestCsrSignatureVerification(CsrSignatureVerification):

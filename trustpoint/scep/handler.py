@@ -22,6 +22,7 @@ from management.models.audit_log import AuditLog
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingPkiProtocol
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import CertificateModel
+from pki.services.csr import CsrErrorCode, CsrValidationError, parse_csr
 from request.authorization import ScepAuthorization
 from request.operation_processor.general import OperationProcessor
 from request.profile_validator import ProfileValidator
@@ -402,11 +403,15 @@ class ScepPkiOperationHandler(LoggerMixin):
     @staticmethod
     def _load_csr(csr_der: bytes) -> x509.CertificateSigningRequest:
         try:
-            csr = x509.load_der_x509_csr(csr_der)
-        except ValueError:
-            raise ScepProtocolError(FailInfo.BAD_REQUEST, 'Malformed PKCS #10 request.') from None
-        if not csr.is_signature_valid:
-            raise ScepProtocolError(FailInfo.BAD_MESSAGE_CHECK, 'The PKCS #10 signature is invalid.')
+            csr = parse_csr(csr_der, encoding='der')
+        except CsrValidationError as exc:
+            if exc.code == CsrErrorCode.INVALID_SIGNATURE:
+                raise ScepProtocolError(FailInfo.BAD_MESSAGE_CHECK, 'The PKCS #10 signature is invalid.') from exc
+            if exc.code in (
+                CsrErrorCode.UNSUPPORTED_KEY, CsrErrorCode.UNSUPPORTED_SIGNATURE, CsrErrorCode.MISSING_HASH,
+            ):
+                raise ScepProtocolError(FailInfo.BAD_ALG, str(exc)) from exc
+            raise ScepProtocolError(FailInfo.BAD_REQUEST, 'Malformed PKCS #10 request.') from exc
         if not isinstance(csr.signature_hash_algorithm, _ACCEPTED_CSR_HASHES):
             raise ScepProtocolError(FailInfo.BAD_ALG, 'The PKCS #10 request must be signed with SHA-2.')
         check_public_key_policy(csr.public_key())

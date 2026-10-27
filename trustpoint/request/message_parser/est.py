@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 """Provides classes for parsing EST PKI messages."""
-import base64
 import contextlib
-import re
 
 from cryptography import x509
 
+from pki.services.csr import decode_base64_csr, load_csr, validate_csr_size
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -28,87 +27,42 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
     """Component for parsing EST-specific PKI messages."""
 
     def parse(self, context: BaseRequestContext) -> None:
-        """Parse a DER-encoded PKCS#10 certificate signing request."""
+        """Decode EST's transport representation and parse a single PKCS#10 request."""
         if not isinstance(context, EstCertificateRequestContext):
             exc_msg = 'EstPkiMessageParsing requires an EstCertificateRequestContext.'
             raise TypeError(exc_msg)
-
-        def raise_parsing_error(message: str) -> None:
-            """Helper to raise a ValueError with given error message."""
-            raise ValueError(message)
-
         if context.raw_message is None:
-            error_message = 'Raw message is missing from the context.'
-            self.logger.warning('EST PKI message parsing failed: Raw message is missing')
-            raise ValueError(error_message)
-
+            msg = 'Raw message is missing from the context.'
+            raise ValueError(msg)
         if not hasattr(context.raw_message, 'body') or not context.raw_message.body:
-            error_message = 'Raw message is missing body.'
-            self.logger.warning('EST PKI message parsing failed: Raw message body is missing')
-            raise ValueError(error_message)
+            msg = 'Raw message is missing body.'
+            raise ValueError(msg)
 
         try:
-            body_size = len(context.raw_message.body)
             body = context.raw_message.body
-
-            content_transfer_encoding = context.raw_message.headers.get(
-                'Content-Transfer-Encoding', ''
-            ).strip().lower()
-            if content_transfer_encoding == 'base64':
-                body = base64.b64decode(body)
-                self.logger.debug(
-                    'EST PKI message parsing: Content-Transfer-Encoding: base64 decoded body '
-                    'from %(body_size)s to %(decoded_size)s bytes',
-                    extra={'body_size': body_size, 'decoded_size': len(body)},
-                )
-
-            # Our response format is based on the incoming CSR format for maximum compatibility
-            # For DER-encoded CSRs (optional Base64), we respond with PKCS#7 DER (CMS, RFC 7030-compliant)
-            # For PEM-encoded CSRs, we respond with the PEM-encoded certificate
-            if b'CERTIFICATE REQUEST-----' in body:
-                est_encoding = 'pem'
-                csr = x509.load_pem_x509_csr(body)
-                self.logger.debug('EST PKI message parsing: Detected PEM format, body size: %(body_size)s bytes',
-                                   extra={'body_size': body_size})
-            elif body.startswith(b'\x30'):  # ASN.1 DER starts with 0x30
-                est_encoding = 'pkcs7'
-                csr = x509.load_der_x509_csr(body)
-                self.logger.debug('EST PKI message parsing: Detected DER format, body size: %(body_size)s bytes',
-                                   extra={'body_size': body_size})
-            elif re.match(rb'^[A-Za-z0-9+/=\n\r]+$', body):
-                # Body is still base64 (no Content-Transfer-Encoding header was set)
-                est_encoding = 'pkcs7'
-                der_data = base64.b64decode(body)
-                csr = x509.load_der_x509_csr(der_data)
-                self.logger.debug(
-                    'EST PKI message parsing: Detected Base64 DER format, '
-                    'body size: %(body_size)s bytes, decoded: %(decoded_size)s bytes',
-                    extra={'body_size': body_size, 'decoded_size': len(der_data)}
-                )
+            validate_csr_size(len(body), transport=True)
+            transfer_encoding = context.raw_message.headers.get('Content-Transfer-Encoding', '').strip().lower()
+            if transfer_encoding == 'base64':
+                body = decode_base64_csr(body)
+            if body.lstrip().startswith(b'-----BEGIN'):
+                csr = load_csr(body, encoding='pem')
+                context.est_encoding = 'pem'
             else:
-                self.logger.warning(
-                    'EST PKI message parsing failed: Unsupported CSR format, '
-                    'body size: %(body_size)s bytes',
-                    extra={'body_size': body_size}
-                )
-                raise_parsing_error("Unsupported CSR format. Ensure it's PEM, Base64, or raw DER.")
-
+                der = body if body.startswith(b'\x30') else decode_base64_csr(body)
+                csr = load_csr(der, encoding='der')
+                context.est_encoding = 'pkcs7'
             context.cert_requested = csr
-            context.est_encoding = est_encoding
-
             subject_cn = 'unknown'
             with contextlib.suppress(IndexError, AttributeError):
                 cn_value = csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
                 subject_cn = cn_value if isinstance(cn_value, str) else cn_value.decode('utf-8')
-
-            self.logger.info('EST PKI message parsing successful: %(format)s format, subject CN: %(subject_cn)s',
-                             extra={'format': est_encoding, 'subject_cn': subject_cn})
-
-        except Exception as e:
+            self.logger.info('EST PKI message parsing successful: %s format, subject CN: %s',
+                             context.est_encoding, subject_cn)
+        except Exception as exc:
             error_message = 'Failed to parse the CSR.'
-            self.logger.exception('EST PKI message parsing failed', extra={'exception': str(e)})
+            self.logger.exception('EST PKI message parsing failed')
             context.error(error_message, http_status=400)
-            raise ValueError(error_message) from e
+            raise ValueError(error_message) from exc
 
 
 class EstCsrSignatureVerification(CsrSignatureVerification):

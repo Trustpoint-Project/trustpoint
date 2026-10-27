@@ -3,11 +3,10 @@
 
 """Regression tests for signature verification shared by EST and REST."""
 
-from unittest.mock import Mock
-
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import mldsa
+from cryptography.hazmat.primitives.serialization import Encoding
 
 from request.message_parser.est import EstCsrSignatureVerification
 from request.message_parser.rest import RestCsrSignatureVerification
@@ -41,12 +40,9 @@ def test_mldsa_csr_signature_validation(verifier_type, context_type, key_type, t
     context = context_type(cert_requested=csr)
 
     if tampered:
-        invalid_csr = Mock(spec=x509.CertificateSigningRequest)
-        invalid_csr.public_key.return_value = csr.public_key()
-        invalid_csr.signature_hash_algorithm = None
-        invalid_csr.signature = bytes(len(csr.signature))
-        invalid_csr.tbs_certrequest_bytes = csr.tbs_certrequest_bytes
-        context.cert_requested = invalid_csr
+        der = bytearray(csr.public_bytes(Encoding.DER))
+        der[-1] ^= 1
+        context.cert_requested = x509.load_der_x509_csr(bytes(der))
         with pytest.raises(ValueError, match='Failed to verify the CSR signature'):
             verifier_type().parse(context)
     else:

@@ -6,10 +6,9 @@
 from __future__ import annotations
 
 import json
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 from uuid import uuid4
 
-from cryptography import x509
 from cryptography.hazmat.primitives.serialization import Encoding
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
@@ -31,6 +30,7 @@ from pki.forms import CertificateIssuanceForm, TruststoreAddForm
 from pki.models import CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import TruststoreModel
+from pki.services.csr import parse_csr
 from pki.services.external_csr import (
     build_external_csr,
     csr_download_response,
@@ -40,6 +40,9 @@ from pki.services.external_csr import (
 from pki.services.key_generation import generate_pending_credential
 from pki.util.cert_profile import ProfileValidationError
 from users.permissions import AppPermissions
+
+if TYPE_CHECKING:
+    from cryptography import x509
 
 TLS_CSR_SCOPE = 'management-tls-external-csr'
 WizardForm = TypeVar('WizardForm', bound=Form)
@@ -215,7 +218,7 @@ class TlsExternalCsrView(TlsExternalCsrWizardView[TlsExternalCsrCertificateForm]
     def get_csr(self) -> x509.CertificateSigningRequest:
         """Read the exact session CSR rather than signing a fresh request on every GET."""
         try:
-            return x509.load_pem_x509_csr(self.state['csr_pem'].encode('ascii'))
+            return parse_csr(self.state['csr_pem'].encode('ascii'), encoding='pem')
         except (KeyError, ValueError) as exception:
             raise Http404 from exception
 

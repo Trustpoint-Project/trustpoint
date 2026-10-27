@@ -22,6 +22,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID
 
 from pki.models import CertificateModel, IssuedCredentialModel, TruststoreOrderModel
 from pki.models.certificate import RevokedCertificateModel
+from pki.services.csr import parse_csr
 from pki.services.revocation import revoke_certificate
 from request.operation_processor import CertificateIssueProcessor
 from request.profile_validator import ProfileValidator
@@ -1206,7 +1207,7 @@ class GdsPushService(LoggerMixin):
             GdsPushError: If signing fails.
         """
         try:
-            csr = x509.load_der_x509_csr(csr_der)
+            csr = parse_csr(csr_der, encoding='der')
 
             self.logger.info('Signing CSR from OPC UA server: %s', csr.subject.rfc4514_string())
 

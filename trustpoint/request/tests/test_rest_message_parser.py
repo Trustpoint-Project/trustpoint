@@ -246,6 +246,7 @@ class TestRestCsrSignatureVerification:
         ctx = RestCertificateRequestContext()
         mock_csr = Mock(spec=x509.CertificateSigningRequest)
         mock_csr.signature_hash_algorithm = None
+        mock_csr.public_key.return_value = Mock(spec=rsa.RSAPublicKey)
         ctx.cert_requested = mock_csr
         with pytest.raises(ValueError, match='does not contain a signature hash algorithm'):
             RestCsrSignatureVerification().parse(ctx)
@@ -276,12 +277,9 @@ class TestRestCsrSignatureVerification:
         """An EC CSR with a corrupted signature raises ValueError."""
         ctx = RestCertificateRequestContext()
         csr = _make_ec_csr()
-        mock_csr = Mock(spec=x509.CertificateSigningRequest)
-        mock_csr.signature_hash_algorithm = hashes.SHA256()
-        mock_csr.public_key.return_value = csr.public_key()
-        mock_csr.signature = b'\x00' * 72  # wrong signature bytes
-        mock_csr.tbs_certrequest_bytes = csr.tbs_certrequest_bytes
-        ctx.cert_requested = mock_csr
+        der = bytearray(csr.public_bytes(Encoding.DER))
+        der[-1] ^= 1
+        ctx.cert_requested = x509.load_der_x509_csr(bytes(der))
         with pytest.raises(ValueError, match='Failed to verify the CSR signature'):
             RestCsrSignatureVerification().parse(ctx)
 
@@ -289,12 +287,9 @@ class TestRestCsrSignatureVerification:
         """An RSA CSR with a corrupted signature raises ValueError."""
         ctx = RestCertificateRequestContext()
         csr = _make_rsa_csr()
-        mock_csr = Mock(spec=x509.CertificateSigningRequest)
-        mock_csr.signature_hash_algorithm = hashes.SHA256()
-        mock_csr.public_key.return_value = csr.public_key()
-        mock_csr.signature = b'\x00' * 256  # wrong signature bytes
-        mock_csr.tbs_certrequest_bytes = csr.tbs_certrequest_bytes
-        ctx.cert_requested = mock_csr
+        der = bytearray(csr.public_bytes(Encoding.DER))
+        der[-1] ^= 1
+        ctx.cert_requested = x509.load_der_x509_csr(bytes(der))
         with pytest.raises(ValueError, match='Failed to verify the CSR signature'):
             RestCsrSignatureVerification().parse(ctx)
 
