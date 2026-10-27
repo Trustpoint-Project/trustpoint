@@ -53,7 +53,7 @@ def parse_single_certificate(data: bytes) -> x509.Certificate:
 
 def request_data_from_content(content: dict[str, Any]) -> dict[str, Any]:
     """Convert external CSR content, retaining string coercion and empty SAN lists."""
-    return build_request_data(content, stringify_san_items=True, keep_empty_sans=True)
+    return build_request_data(content, keep_empty_sans=True)
 
 
 def external_csr_profile(profile: CertificateProfileModel) -> CertificateProfileModel:

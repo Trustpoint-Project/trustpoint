@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import ipaddress
 import secrets
 import string
 from typing import TYPE_CHECKING, Any, cast
@@ -41,6 +40,7 @@ from onboarding.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+from pki.forms.san import clean_dns_sans, clean_ipv4_sans, clean_ipv6_sans
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
@@ -49,6 +49,8 @@ from trustpoint.forms import DisableOptionsSelect
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
+    import ipaddress
+
     from django.db.models.query import QuerySet
 
 
@@ -216,35 +218,20 @@ class BaseServerCredentialForm(BaseCredentialForm):
     )
 
     def clean_ipv4_addresses(self) -> list[ipaddress.IPv4Address]:
-        """Checks the IPv4 addresses."""
-        data = self.cleaned_data['ipv4_addresses'].strip()
-        if not data:
-            return []
-
-        addresses = data.split(',')
-        try:
-            return [ipaddress.IPv4Address(address.strip()) for address in addresses if address.strip() != '']
-        except ipaddress.AddressValueError as exception:
-            err_msg = _('Contains an invalid IPv4-Address.')
-            raise forms.ValidationError(err_msg) from exception
+        """Normalize and validate IPv4 SAN input."""
+        return clean_ipv4_sans(
+            self.cleaned_data['ipv4_addresses'], error_message=_('Contains an invalid IPv4-Address.'),
+        )
 
     def clean_ipv6_addresses(self) -> list[ipaddress.IPv6Address]:
-        """Checks the IPv6 addresses."""
-        data = self.cleaned_data['ipv6_addresses'].strip()
-        if not data:
-            return []
-
-        addresses = data.split(',')
-        try:
-            return [ipaddress.IPv6Address(address.strip()) for address in addresses if address.strip() != '']
-        except ipaddress.AddressValueError as exception:
-            err_msg = _('Contains an invalid IPv6-Address.')
-            raise forms.ValidationError(err_msg) from exception
+        """Normalize and validate IPv6 SAN input."""
+        return clean_ipv6_sans(
+            self.cleaned_data['ipv6_addresses'], error_message=_('Contains an invalid IPv6-Address.'),
+        )
 
     def clean_domain_names(self) -> list[str]:
-        """Checks the domain names."""
-        data = self.cleaned_data['domain_names'].strip()
-        return [domain.strip() for domain in data.split(',') if domain.strip()]
+        """Normalize and validate DNS SAN input, including leftmost wildcards."""
+        return clean_dns_sans(self.cleaned_data['domain_names'], error_message=_('Contains an invalid DNS name.'))
 
     def clean(self) -> dict[str, Any]:
         """Ensures at least one SAN entry is set."""

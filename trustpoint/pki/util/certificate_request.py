@@ -8,6 +8,7 @@ from typing import Any
 from django.utils.translation import gettext as _
 
 from pki.key_types import public_key_info_from_key_type
+from pki.util.san import SAN_FIELDS, split_san_values
 
 __all__ = [
     'build_ca_request_data', 'build_cert_content_summary', 'build_request_data', 'public_key_info_from_key_type',
@@ -17,7 +18,6 @@ __all__ = [
 def build_request_data(
     cert_content_data: dict[str, Any],
     *,
-    stringify_san_items: bool = False,
     keep_empty_sans: bool = False,
 ) -> dict[str, Any]:
     """Convert flat serializer data into the nested structure expected by the profile verifier."""
@@ -38,16 +38,11 @@ def build_request_data(
         value = cert_content_data.get(field)
         if value:
             request_data['subj'][field] = value
-    for field in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
+    # Immutable profile templates are resolved later; editable inputs are validated by their form/API adapters.
+    for field in SAN_FIELDS:
         value = cert_content_data.get(field)
         if value:
-            if isinstance(value, list):
-                items = [
-                    str(v).strip() if stringify_san_items else v.strip()
-                    for v in value if str(v).strip()
-                ]
-            else:
-                items = [v.strip() for v in str(value).split(',') if v.strip()]
+            items = split_san_values(value)
             if items or keep_empty_sans:
                 request_data['ext']['subject_alternative_name'][field] = items
     for field in ('days', 'hours', 'minutes', 'seconds'):
@@ -95,10 +90,10 @@ def build_ca_request_data(cert_content_data: dict[str, Any]) -> dict[str, Any]:
         value = cert_content_data.get(field_name)
         if value:
             request_data['subj'][field_name] = value
-    for field_name in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
+    for field_name in SAN_FIELDS:
         value = cert_content_data.get(field_name)
         if value is not None:
-            request_data['ext']['subject_alternative_name'][field_name] = value
+            request_data['ext']['subject_alternative_name'][field_name] = split_san_values(value)
     for field_name in ('days', 'hours', 'minutes', 'seconds'):
         value = cert_content_data.get(field_name)
         if value is not None:

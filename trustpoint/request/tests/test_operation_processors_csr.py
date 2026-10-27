@@ -144,11 +144,11 @@ class TestCsrBuilderBuildExtensions:
         ips = [n for n in san_ext if isinstance(n, x509.IPAddress)]
         assert any(str(n.value) == '192.168.1.1' for n in ips)
 
-    def test_invalid_ip_is_silently_skipped(self) -> None:
-        """Invalid IP strings are logged and skipped rather than raising."""
+    def test_invalid_ip_is_rejected(self) -> None:
+        """Invalid IP strings must fail rather than silently changing the requested SANs."""
         data = {'ext': {'subject_alternative_name': {'ip_addresses': '999.999.999.999'}}}
-        exts = self._builder()._build_extensions(data)
-        assert exts == []  # no valid SANs → no extension
+        with pytest.raises(ValueError, match='invalid IP address'):
+            self._builder()._build_extensions(data)
 
     def test_rfc822_name_is_included(self) -> None:
         """Email SAN is included when rfc822_names is provided."""

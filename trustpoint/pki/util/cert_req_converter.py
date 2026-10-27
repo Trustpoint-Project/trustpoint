@@ -4,7 +4,6 @@
 """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
 import datetime
-import ipaddress
 import logging
 from typing import Any, cast
 
@@ -13,6 +12,7 @@ from trustpoint_core.oid import NameOid
 
 from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.ext_oids import ExtendedKeyUsageOid
+from pki.util.san import parse_ip_addresses
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ class JSONCertRequestConverter:
             elif san_type == 'uris':
                 general_names.extend([x509.UniformResourceIdentifier(v) for v in san_values])
             elif san_type == 'ip_addresses':
-                general_names.extend([x509.IPAddress(ipaddress.ip_address(v)) for v in san_values])
+                general_names.extend(x509.IPAddress(address) for address in parse_ip_addresses(san_values))
             else:
                 logger.debug('JSON Cert Request Converter: Skipping unsupported SAN type: %s', san_type)
         return general_names

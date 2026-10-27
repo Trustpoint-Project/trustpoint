@@ -22,6 +22,7 @@ from pki.key_types import OWNER_CREDENTIAL_KEY_TYPE_CHOICES
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.services import credential_upload as uploads
+from pki.util.san import SAN_FIELDS, SanValidationError, normalize_san_values
 from util.field import UniqueNameValidator
 
 _KEY_TYPE_CHOICES = [value for value, _label in OWNER_CREDENTIAL_KEY_TYPE_CHOICES]
@@ -437,3 +438,17 @@ class CertificateIssuanceContentSerializer(serializers.Serializer[Any]):
             msg = f'Certificate profile with pk {value} does not exist.'
             raise serializers.ValidationError(msg)
         return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Normalize editable SAN content and return field-level errors for malformed identities."""
+        errors = {}
+        for field in SAN_FIELDS:
+            if field not in attrs:
+                continue
+            try:
+                attrs[field] = ', '.join(normalize_san_values(field, attrs[field]))
+            except SanValidationError as exc:
+                errors[field] = str(exc)
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs

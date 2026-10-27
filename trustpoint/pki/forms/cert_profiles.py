@@ -20,6 +20,7 @@ from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from pki.util.cert_req_converter import JSONCertRequestConverter
 from pki.util.crl_urls import validate_crl_url
+from pki.util.san import SAN_FIELDS, SanValidationError, normalize_san_values, split_san_values
 from request.request_context import ManualCredentialRequestContext
 from request.template_vars import (
     build_variable_map_from_models,
@@ -631,7 +632,7 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         for field_name in ProfileBasedFormFieldBuilder.SAN_LABELS:
             value = cleaned_data.get(field_name)
             if value:
-                values = [v.strip() for v in value.split(',') if v.strip()]
+                values = split_san_values(value)
                 if values:
                     san[field_name] = values
         return san
@@ -648,6 +649,18 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
     def clean(self) -> dict[str, Any]:
         """Validate the requested certificate validity against the active security policy."""
         cleaned_data = cast('dict[str, Any]', super().clean())
+        for field_name in SAN_FIELDS:
+            field = self.fields.get(field_name)
+            if field is None or field.disabled or field_name not in cleaned_data:
+                continue
+            try:
+                normalized = normalize_san_values(field_name, cleaned_data[field_name])
+                if field.required and not normalized:
+                    self.add_error(field_name, field.error_messages['required'])
+                else:
+                    cleaned_data[field_name] = ', '.join(normalized)
+            except SanValidationError as exc:
+                self.add_error(field_name, _(str(exc)))
         for url in (cleaned_data.get('crl_distribution_point_uris') or '').split(','):
             if url.strip():
                 try:
