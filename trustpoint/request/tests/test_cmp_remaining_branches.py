@@ -17,6 +17,7 @@ from pyasn1_modules import rfc2459, rfc4210, rfc5280
 from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
 from cmp.models import CmpTransactionModel
+from management.models import SecurityConfig
 from pki.models import IssuedCredentialModel
 from pki.models.ca_rollover import CaRolloverState
 from request.authorization.base import (
@@ -162,8 +163,8 @@ class TestAuthorizationPolicyBranches:
         csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([])).sign(
             rsa.generate_private_key(public_exponent=65537, key_size=2048), hashes.SHA256(),
         )
-        component._check_key_constraints(csr, Mock(rsa_minimum_key_size=0))
-        component._check_signature_algorithm(csr, Mock(not_permitted_signature_algorithm_oids=['1.2.3']))
+        component._check_key_constraints(csr, SecurityConfig(rsa_minimum_key_size=0))
+        component._check_signature_algorithm(csr, SecurityConfig(not_permitted_signature_algorithm_oids=['1.2.3']))
         component._check_ca_issuance(csr, Mock(allow_ca_issuance=True))
         assert component._hash_oid('SHA-256') == HashAlgorithm.SHA256.dotted_string
 

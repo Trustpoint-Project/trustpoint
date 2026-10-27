@@ -5,28 +5,31 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import ClassVar
+from typing import TYPE_CHECKING
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-
-try:
-    from cryptography.hazmat.primitives.asymmetric import mldsa
-except ImportError:
-    mldsa = None  # type: ignore[assignment]
-
 from cryptography.x509.base import CertificateBuilder
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, NamedCurve
 
 from aoki.views import AokiServiceMixin
 from management.models import SecurityConfig
 from pki.models import IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
+from pki.security_policy import (
+    CryptographicPolicy,
+    curve_oid_for_key,
+    enforce_cryptographic_policy,
+    hash_oid_for_name,
+    public_key_facts,
+    signature_facts,
+)
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 _CertRequest = x509.CertificateSigningRequest | CertificateBuilder
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric import ec
 
 class AuthorizationComponent(ABC):
     """Abstract base class for authorization components."""
@@ -250,27 +253,6 @@ class DevOwnerIDAuthorization(AuthorizationComponent, LoggerMixin):
 class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
     """Validates a certificate request against the active :class:`~management.models.SecurityConfig` policy."""
 
-    _EC_CURVE_OID_MAP: ClassVar[dict[type[ec.EllipticCurve], str]] = {
-        ec.SECP192R1: NamedCurve.SECP192R1.dotted_string,
-        ec.SECP224R1: NamedCurve.SECP224R1.dotted_string,
-        ec.SECP256K1: NamedCurve.SECP256K1.dotted_string,
-        ec.SECP256R1: NamedCurve.SECP256R1.dotted_string,
-        ec.SECP384R1: NamedCurve.SECP384R1.dotted_string,
-        ec.SECP521R1: NamedCurve.SECP521R1.dotted_string,
-        ec.BrainpoolP256R1: NamedCurve.BRAINPOOLP256R1.dotted_string,
-        ec.BrainpoolP384R1: NamedCurve.BRAINPOOLP384R1.dotted_string,
-        ec.BrainpoolP512R1: NamedCurve.BRAINPOOLP512R1.dotted_string,
-    }
-
-    _HASH_OID_MAP: ClassVar[dict[str, str]] = {
-        'md5':    HashAlgorithm.MD5.dotted_string,
-        'sha1':   HashAlgorithm.SHA1.dotted_string,
-        'sha224': HashAlgorithm.SHA224.dotted_string,
-        'sha256': HashAlgorithm.SHA256.dotted_string,
-        'sha384': HashAlgorithm.SHA384.dotted_string,
-        'sha512': HashAlgorithm.SHA512.dotted_string,
-    }
-
     def authorize(self, context: BaseRequestContext) -> None:
         """Run all applicable :class:`SecurityConfig` policy checks."""
         if not isinstance(context, BaseCertificateRequestContext):
@@ -299,8 +281,13 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
                 'SecurityConfigAuthorization: multiple SecurityConfig rows found; using first.'
             )
 
-        self._check_key_constraints(csr, cfg)
-        self._check_signature_algorithm(csr, cfg)
+        policy = CryptographicPolicy.from_config(cfg)
+        key = self._get_public_key(csr) if csr is not None else None
+        enforce_cryptographic_policy(
+            policy,
+            key=public_key_facts(key) if key is not None else None,
+            signature=signature_facts(csr) if isinstance(csr, x509.CertificateSigningRequest) else None,
+        )
 
         profile_validated = context.cert_requested_profile_validated
         ca_check_target: _CertRequest | None = (
@@ -311,135 +298,29 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
         self._check_ca_issuance(ca_check_target, cfg)
 
     @staticmethod
-    def _get_public_key(
-        req: _CertRequest,
-    ) -> rsa.RSAPublicKey | ec.EllipticCurvePublicKey | object | None:
-        """Return the public key from either a CSR or a :class:`CertificateBuilder`."""
-        if isinstance(req, x509.CertificateSigningRequest):
-            pk = req.public_key()
-            if isinstance(pk, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
-                return pk
-            # Check for ML-DSA keys
-            if mldsa and isinstance(pk, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)):
-                return pk
-            return None
-        raw_pk = req._public_key  # noqa: SLF001
-        if isinstance(raw_pk, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
-            return raw_pk
-        if mldsa and isinstance(
-            raw_pk, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)
-        ):
-            return raw_pk
-        return None
+    def _get_public_key(req: _CertRequest) -> object | None:
+        """Read a CSR key, or the optional key on an unsigned builder."""
+        return req.public_key() if isinstance(req, x509.CertificateSigningRequest) else req._public_key  # noqa: SLF001
 
     @staticmethod
-    def _get_signature_hash_name(req: _CertRequest) -> str | None:
-        """Return the lower-case hash algorithm name used in the request's signature."""
-        if isinstance(req, x509.CertificateSigningRequest):
-            sig_hash = req.signature_hash_algorithm
-            return sig_hash.name if sig_hash is not None else None
-        # TODO (FHK): CertificateBuilder has no signature yet — hash algorithm is chosen at sign() time.  # noqa: FIX002
-        return None
+    def _ec_curve_oid(key: ec.EllipticCurvePublicKey) -> str | None:
+        """Retain the existing helper while delegating to the shared OID registry."""
+        return curve_oid_for_key(key)
 
-    @classmethod
-    def _ec_curve_oid(cls, key: ec.EllipticCurvePublicKey) -> str | None:
-        """Return the dotted-string OID for an EC public key's curve, or ``None`` if unknown."""
-        return cls._EC_CURVE_OID_MAP.get(type(key.curve))
+    @staticmethod
+    def _hash_oid(hash_name: str) -> str | None:
+        """Retain the existing helper while delegating digest normalization."""
+        return hash_oid_for_name(hash_name)
 
-    @classmethod
-    def _hash_oid(cls, hash_name: str) -> str | None:
-        """Return the dotted-string OID for a hash algorithm name (e.g. ``'sha256'``), or ``None``."""
-        return cls._HASH_OID_MAP.get(hash_name.lower().replace('-', ''))
+    def _check_key_constraints(self, csr: _CertRequest | None, cfg: SecurityConfig) -> None:
+        """Enforce the shared key policy when a request already has a public key."""
+        if csr is not None and (key := self._get_public_key(csr)) is not None:
+            enforce_cryptographic_policy(CryptographicPolicy.from_config(cfg), key=public_key_facts(key))
 
-    def _check_key_constraints(  # noqa: C901, PLR0912
-        self,
-        csr: _CertRequest | None,
-        cfg: SecurityConfig,
-    ) -> None:
-        """Enforce RSA minimum key size and ECC curve restrictions."""
-        if csr is None:
-            return
-
-        public_key = self._get_public_key(csr)
-        if public_key is None:
-            return
-
-        if isinstance(public_key, rsa.RSAPublicKey):
-            min_size = cfg.rsa_minimum_key_size
-            if min_size is None:
-                msg = 'RSA keys are not permitted by the active security policy.'
-                self.logger.warning('SecurityConfigAuthorization: %s', msg)
-                raise ValueError(msg)
-            key_size = public_key.key_size
-            if min_size > 0 and key_size < min_size:
-                msg = (
-                    f'RSA key size {key_size} bits is below the minimum of '
-                    f'{min_size} bits required by the active security policy.'
-                )
-                self.logger.warning('SecurityConfigAuthorization: %s', msg)
-                raise ValueError(msg)
-
-        elif isinstance(public_key, ec.EllipticCurvePublicKey):
-            not_permitted: list[str] = cfg.not_permitted_ecc_curve_oids or []
-            if not_permitted:
-                curve_oid = self._ec_curve_oid(public_key)
-                if curve_oid and curve_oid in not_permitted:
-                    curve_name = type(public_key.curve).__name__
-                    msg = (
-                        f"ECC curve '{curve_name}' is not permitted by the active security policy."
-                    )
-                    self.logger.warning('SecurityConfigAuthorization: %s', msg)
-                    raise ValueError(msg)
-
-        # Check ML-DSA variant restrictions
-        elif mldsa and isinstance(
-            public_key, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)
-        ):
-            not_permitted_mldsa: list[str] = cfg.not_permitted_mldsa_variant_oids or []
-            if not_permitted_mldsa:
-                if isinstance(public_key, mldsa.MLDSA44PublicKey):
-                    variant_oid = AlgorithmIdentifier.ML_DSA_44.dotted_string
-                    variant_name = 'ML-DSA-44'
-                elif isinstance(public_key, mldsa.MLDSA65PublicKey):
-                    variant_oid = AlgorithmIdentifier.ML_DSA_65.dotted_string
-                    variant_name = 'ML-DSA-65'
-                else:  # MLDSA87PublicKey
-                    variant_oid = AlgorithmIdentifier.ML_DSA_87.dotted_string
-                    variant_name = 'ML-DSA-87'
-
-                if variant_oid in not_permitted_mldsa:
-                    msg = (
-                        f"ML-DSA variant '{variant_name}' is not permitted by the active security policy."
-                    )
-                    self.logger.warning('SecurityConfigAuthorization: %s', msg)
-                    raise ValueError(msg)
-
-    def _check_signature_algorithm(
-        self,
-        csr: _CertRequest | None,
-        cfg: SecurityConfig,
-    ) -> None:
-        """Enforce signature hash algorithm restrictions from the request."""
-        if csr is None:
-            return
-
-        not_permitted: list[str] = cfg.not_permitted_signature_algorithm_oids or []
-        if not not_permitted:
-            return
-
-        hash_name = self._get_signature_hash_name(csr)
-        if hash_name is None:
-            return
-
-        hash_oid = self._hash_oid(hash_name)
-        if hash_oid and hash_oid in not_permitted:
-            msg = (
-                f"Signature hash algorithm '{hash_name}' is not permitted "
-                f'by the active security policy.'
-            )
-            self.logger.warning('SecurityConfigAuthorization: %s', msg)
-            raise ValueError(msg)
-
+    def _check_signature_algorithm(self, csr: _CertRequest | None, cfg: SecurityConfig) -> None:
+        """Enforce the shared signature policy on signed CSRs."""
+        if isinstance(csr, x509.CertificateSigningRequest):
+            enforce_cryptographic_policy(CryptographicPolicy.from_config(cfg), signature=signature_facts(csr))
 
     @staticmethod
     def _get_extensions(req: _CertRequest) -> x509.Extensions:
