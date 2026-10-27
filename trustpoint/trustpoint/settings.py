@@ -268,7 +268,13 @@ DATABASE_HOST = os.environ.get('DATABASE_HOST', 'localhost')
 DATABASE_PORT = os.environ.get('DATABASE_PORT', '5432')
 POSTGRES_DB = os.environ.get('POSTGRES_DB', 'trustpoint_db')
 DATABASE_USER = os.environ.get('DATABASE_USER', 'admin')
-DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD', 'testing321')
+_DATABASE_PASSWORD_FILE = os.getenv('DATABASE_PASSWORD_FILE')
+if _DATABASE_PASSWORD_FILE:
+    # An explicit mounted secret takes precedence over inherited development
+    # defaults. A missing secret must stop startup rather than fall back.
+    DATABASE_PASSWORD = Path(_DATABASE_PASSWORD_FILE).read_text(encoding='utf-8').strip()
+else:
+    DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD', 'testing321')
 _DEFAULT_OPERATIONAL_DATABASE = 'postgresql' if DOCKER_CONTAINER else 'sqlite'
 TRUSTPOINT_OPERATIONAL_DATABASE = os.environ.get(
     'TRUSTPOINT_OPERATIONAL_DATABASE',

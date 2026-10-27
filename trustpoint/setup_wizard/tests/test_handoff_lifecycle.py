@@ -4,9 +4,12 @@
 """Exercise handoff files and failure recovery without starting an operational runtime."""
 
 import json
+import os
 import shlex
 import stat
 import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -25,8 +28,10 @@ def handoff_paths(monkeypatch, tmp_path):
 
 
 @pytest.fixture
-def config():
+def config(monkeypatch):
     """Use an unsaved config so tests cannot change real operational state."""
+    monkeypatch.setenv('DATABASE_PASSWORD', 'test password')
+    monkeypatch.delenv('DATABASE_PASSWORD_FILE', raising=False)
     return SetupWizardConfigModel(
         operational_db_host='postgres',
         operational_db_name='testdb',
@@ -58,7 +63,7 @@ def test_environment_preserves_allowed_values_and_rewrites_uploaded_config(monke
     config.fresh_install_pkcs11_config_env_var = 'VENDOR_CONFIG'
     config.fresh_install_pkcs11_config_path = '/temporary/upload.cfg'
     values = handoff.build_operational_environment(config)
-    assert values['DATABASE_PASSWORD'] == 'test password'
+    assert 'DATABASE_PASSWORD' not in values
     assert values['DATABASE_PORT'] == '5432'
     assert values['TRUSTPOINT_PHASE'] == 'operational'
     assert values['EMAIL_HOST'] == 'mail.test'
@@ -226,3 +231,117 @@ def test_marker_write_failure_is_reported_after_successful_switch(monkeypatch, s
     with pytest.raises(ValidationError, match='final handoff marker could not be written: disk full'):
         handoff.run_operational_runtime_switch()
     assert not handoff.operational_ready_file_path().exists()
+
+
+def test_mounted_password_is_referenced_without_copying_it(monkeypatch, config, tmp_path):
+    secret = tmp_path / 'mounted-secret'
+    secret.write_text('test password\n')
+    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret))
+    monkeypatch.setenv('DATABASE_PASSWORD', 'stale-container-default')
+    values = handoff.build_operational_environment(config)
+    env_file = tmp_path / 'operational.env'
+    handoff.write_operational_env_file(values, env_file)
+    assert values['DATABASE_PASSWORD_FILE'] == str(secret)
+    assert 'DATABASE_PASSWORD' not in values
+    assert 'test password' not in env_file.read_text()
+    assert 'stale-container-default' not in env_file.read_text()
+    assert secret.read_text() == 'test password\n'
+
+
+def test_inherited_password_is_not_written_to_handoff(config, tmp_path):
+    values = handoff.build_operational_environment(config)
+    path = tmp_path / 'operational.env'
+    handoff.write_operational_env_file(values, path)
+    assert 'test password' not in path.read_text()
+    assert 'DATABASE_PASSWORD' not in path.read_text()
+
+
+@pytest.mark.parametrize('source', ['missing', 'mismatch', 'missing-file', 'file-mismatch'])
+def test_invalid_external_credential_fails_before_applying_state(monkeypatch, config, handoff_paths, source):
+    monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
+    if source == 'mismatch':
+        monkeypatch.setenv('DATABASE_PASSWORD', 'different-password')
+    elif source in {'missing-file', 'file-mismatch'}:
+        secret = handoff_paths / 'mounted-secret'
+        if source == 'file-mismatch':
+            secret.write_text('different-password')
+        monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret))
+    ready = handoff.operational_ready_file_path()
+    ready.write_text('existing ready marker')
+    runner = Mock()
+    monkeypatch.setattr(handoff, '_run_operational_manage_command', runner)
+    with pytest.raises(ValidationError) as error:
+        handoff.run_operational_handoff(config)
+    assert 'test password' not in str(error.value)
+    assert 'different-password' not in str(error.value)
+    assert ready.read_text() == 'existing ready marker'
+    assert not handoff.operational_payload_file_path().exists()
+    assert not handoff.pending_operational_env_file_path().exists()
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize('key', ['DATABASE_PASSWORD', 'PGPASSWORD'])
+def test_env_writer_rejects_plaintext_database_passwords(tmp_path, key):
+    path = tmp_path / 'operational.env'
+    path.write_text('original configuration')
+    with pytest.raises(ValidationError, match='must not be persisted'):
+        handoff.write_operational_env_file({key: 'sensitive-value'}, path)
+    assert path.read_text() == 'original configuration'
+
+
+def test_private_permissions_apply_before_atomic_publication(tmp_path, monkeypatch):
+    path = tmp_path / 'operational.env'
+    path.write_text('original configuration')
+    path.chmod(0o644)
+    original_replace = Path.replace
+    replaced = []
+
+    def inspect_replace(source, destination):
+        assert destination == path
+        assert stat.S_IMODE(source.stat().st_mode) == 0o600
+        assert path.read_text() == 'original configuration'
+        replaced.append(source)
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(Path, 'replace', inspect_replace)
+    handoff.write_operational_env_file({'DATABASE_HOST': 'postgres'}, path)
+    assert len(replaced) == 1
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert path.read_text().endswith('export DATABASE_HOST=postgres\n')
+
+
+def test_failed_publication_keeps_previous_file_and_cleans_temporary_file(tmp_path, monkeypatch):
+    path = tmp_path / 'operational.env'
+    path.write_text('original configuration')
+    monkeypatch.setattr(Path, 'replace', Mock(side_effect=OSError('disk full')))
+    with pytest.raises(OSError, match='disk full'):
+        handoff.write_operational_env_file({'DATABASE_HOST': 'postgres'}, path)
+    assert path.read_text() == 'original configuration'
+    assert list(tmp_path.iterdir()) == [path]
+
+
+@pytest.mark.parametrize('mounted_secret', [False, True])
+def test_sourced_handoff_loads_database_credential_in_a_fresh_process(monkeypatch, config, tmp_path, mounted_secret):
+    """Restarted settings resolve the external credential without a password in the handoff file."""
+    if mounted_secret:
+        secret = tmp_path / 'mounted-secret'
+        secret.write_text('test password\n')
+        monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret))
+        monkeypatch.setenv('DATABASE_PASSWORD', 'stale-default')
+    env_file = tmp_path / 'operational.env'
+    handoff.write_operational_env_file(handoff.build_operational_environment(config), env_file)
+    assert 'test password' not in env_file.read_text()
+    source = """
+from trustpoint import settings
+assert settings.DATABASE_PASSWORD == 'test password'
+assert settings.DATABASES['default']['PASSWORD'] == 'test password'
+assert settings.DATABASES['default']['HOST'] == 'postgres'
+"""
+    subprocess.run(
+        ['/bin/sh', '-c', '. "$1"; exec "$2" -c "$3"', 'handoff-test', str(env_file), sys.executable, source],
+        env={**os.environ, 'PYTHONPATH': str(handoff.settings.BASE_DIR)},
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=10,
+    )

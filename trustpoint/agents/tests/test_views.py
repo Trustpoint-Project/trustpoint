@@ -216,6 +216,34 @@ class TestAgentCertificateAuthentication:
         with pytest.raises(AuthenticationFailed, match='Invalid HTTP_SSL_CLIENT_CERT'):
             _parse_client_cert(request)
 
+    def test_parse_client_cert_does_not_expose_parser_exception(self):
+        """Keep parser diagnostics in the exception chain, outside the public detail."""
+        request = RequestFactory().get('/test/', HTTP_SSL_CLIENT_CERT='invalid-cert-data')
+        parser_error = ValueError('internal parser detail: /private/server/path and sensitive input')
+
+        with patch('agents.api_views.x509.load_pem_x509_certificate', side_effect=parser_error):
+            with pytest.raises(AuthenticationFailed) as error:
+                _parse_client_cert(request)
+
+        assert str(error.value.detail) == 'Invalid HTTP_SSL_CLIENT_CERT header.'
+        assert error.value.__cause__ is parser_error
+
+    @pytest.mark.parametrize('method,endpoint', [('get', '/api/agents/jobs/'), ('post', '/api/agents/jobs/result/')])
+    @pytest.mark.parametrize('mock_parser', [False, True])
+    def test_invalid_certificate_api_response_is_generic(self, api_client, method, endpoint, mock_parser):
+        """Rendered API errors contain no parser exception details or certificate input."""
+        parser_error = ValueError('sensitive-parser-detail /private/server/path')
+        with patch('agents.api_views.x509.load_pem_x509_certificate', wraps=x509.load_pem_x509_certificate) as parser:
+            if mock_parser:
+                parser.side_effect = parser_error
+            response = getattr(api_client, method)(endpoint, HTTP_SSL_CLIENT_CERT='invalid-cert-data')
+
+        assert response.status_code == 401
+        assert response.json() == {'detail': 'Invalid HTTP_SSL_CLIENT_CERT header.'}
+        assert response['WWW-Authenticate'] == 'mTLS realm="Trustpoint Agent API"'
+        for private_detail in ('sensitive-parser-detail', '/private/server/path', 'invalid-cert-data', 'ValueError'):
+            assert private_detail not in response.content.decode()
+
     def test_authenticate_no_cert(self):
         """Test authentication fails when no certificate is provided."""
         auth = AgentCertificateAuthentication()

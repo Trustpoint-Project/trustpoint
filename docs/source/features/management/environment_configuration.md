@@ -23,9 +23,22 @@ Unless stated otherwise, all variables are optional.
 | `POSTGRES_DB` | `trustpoint_db` | PostgreSQL database name. |
 | `DATABASE_USER` | `admin` | PostgreSQL user. |
 | `DATABASE_PASSWORD` | `testing321` | PostgreSQL password. Change for production deployments. |
+| `DATABASE_PASSWORD_FILE` | unset | Path to a mounted database-password secret. Takes precedence over `DATABASE_PASSWORD`; startup fails if the configured file cannot be read. |
 | `DATABASE_HOST` | `postgres` | PostgreSQL hostname. |
 | `DATABASE_PORT` | `5432` | PostgreSQL port. |
 | `DATABASE_ENGINE` | `django.db.backends.postgresql` | Django database backend. |
+
+The setup wizard requires its database password to match either the mounted
+`DATABASE_PASSWORD_FILE` secret or `DATABASE_PASSWORD` supplied by the deployment.
+The operational handoff file stores connection settings and the secret-file path,
+but never the password itself. Keep the external credential available to the web
+container and workers across restarts. Supply or mount a replacement credential
+before applying a password change in the wizard.
+
+Existing handoff files from older releases may still contain a password. After
+configuring the matching external credential, regenerate the pending handoff via
+the wizard and complete the runtime switch to replace the final file. Protect any
+backups of the older files as credentials.
 
 ## TLS and Network Configuration
 
