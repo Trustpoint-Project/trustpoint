@@ -516,20 +516,6 @@ class CertificateVerifier:
         )
 
     @staticmethod
-    def _check_rsa_key_size(certificate: x509.Certificate) -> None:
-        """Compatibility adapter for checking RSA keys against the shared policy."""
-        policy = CertificateVerifier._active_cryptographic_policy()
-        if isinstance(certificate.public_key(), rsa.RSAPublicKey):
-            enforce_cryptographic_policy(policy, key=public_key_facts(certificate.public_key()))
-
-    @staticmethod
-    def _check_ecc_curve(certificate: x509.Certificate) -> None:
-        """Compatibility adapter for checking ECC keys against the shared policy."""
-        policy = CertificateVerifier._active_cryptographic_policy()
-        if isinstance(certificate.public_key(), ec.EllipticCurvePublicKey):
-            enforce_cryptographic_policy(policy, key=public_key_facts(certificate.public_key()))
-
-    @staticmethod
     def _check_ca_key_usage(
         certificate: x509.Certificate,
         required_key_usage: x509.KeyUsage | None = None
