@@ -232,9 +232,6 @@ wait_for_postgres
 run_as_www_data "uv run trustpoint/manage.py startup_manager"
 configure_web_edge
 
-echo "Starting cron service..."
-cron
-
 version=$(awk -F\" '/^version =/ { print $2 }' pyproject.toml)
 echo "Finished with initialisation"
 echo "Trustpoint version: $version"
