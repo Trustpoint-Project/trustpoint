@@ -17,9 +17,11 @@ from rest_framework.test import APIClient
 
 from management.models import SecurityConfig
 from management.models.audit_log import AuditLog
-from pki.models import CaModel, CertificateModel, CrlModel
+from pki.models import CaModel, CrlModel
 from pki.util.x509 import CertificateGenerator
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
+from pki.services.ca_rollover import CaRolloverError
+from pki.util.cert_profile import ProfileValidationError
 from users.models import TrustpointUser
 
 
@@ -82,6 +84,78 @@ def test_issuing_ca_retrieve_accepts_router_pk(api, ca):
     assert response.status_code == 200
     assert response.data['crl_validity_hours'] == 24
     assert 'private_key' not in response.data
+
+
+@pytest.mark.parametrize(
+    ('exception_type', 'status_code', 'expected_message'),
+    [
+        (ValueError, 400, 'The PKI operation could not be completed. Check the input and configuration.'),
+        (ProfileValidationError, 400, 'The PKI operation could not be completed. Check the input and configuration.'),
+        (CaRolloverError, 409, 'The CA rollover could not be completed in its current state.'),
+    ],
+)
+def test_ca_domain_errors_do_not_expose_exception_details(api, ca, exception_type, status_code, expected_message):
+    """Shared error handling preserves status codes without returning internal details."""
+    with patch('pki.views.ca_api.CaViewSet.get_object', side_effect=exception_type('secret credential path')):
+        response = api.get(f'/api/cas/{ca.pk}/')
+
+    assert response.status_code == status_code
+    assert response.json() == ({'detail': expected_message} if status_code == 409 else [expected_message])
+    assert b'secret credential path' not in response.content
+
+
+def test_csr_error_does_not_expose_exception_details(api, lab_config):
+    """CSR builder exceptions return a safe validation message."""
+    configured = api.post(
+        '/api/issuing-cas/configure-external-csr/',
+        {'unique_name': 'external-ca', 'key_type': 'RSA-2048'},
+        format='json',
+    )
+    assert configured.status_code == 201, configured.data
+    ca_pk = configured.data['id']
+    with (
+        patch('pki.views.ca_api.IssuingCaManagementViewSet._certificate_content', return_value=(None, {}, None)),
+        patch('pki.views.ca_api.build_external_csr', side_effect=ValueError('secret credential path')) as builder,
+    ):
+        response = api.post(f'/api/issuing-cas/{ca_pk}/csr/', {}, format='json')
+
+    builder.assert_called_once()
+    assert response.status_code == 400
+    assert response.json() == [
+        'Unable to build the CA certificate signing request. Check the profile and request data.'
+    ]
+    assert b'secret credential path' not in response.content
+
+
+def test_generate_error_does_not_expose_exception_details(api, lab_config):
+    """PKI generation errors cannot reveal backend exception text."""
+    lab_config.auto_gen_pki = True
+    lab_config.save()
+    with (
+        patch('pki.views.ca_api.AutoGenPki.get_auto_gen_pki', return_value=None),
+        patch(
+            'pki.views.ca_api.AutoGenPki.enable_auto_gen_pki', side_effect=ValueError('secret credential path')
+        ) as generate,
+    ):
+        response = api.post('/api/issuing-cas/generate/', {'key_type': 'RSA-2048'}, format='json')
+
+    generate.assert_called_once()
+    assert response.status_code == 400
+    assert response.json() == ['Unable to generate the PKI. Check the key type and security settings.']
+    assert b'secret credential path' not in response.content
+
+
+def test_rollover_transition_error_does_not_expose_exception_details(api, ca):
+    """A failed transition keeps its conflict status without disclosing internal text."""
+    rollover = CaRolloverModel.objects.create(old_issuing_ca=ca, strategy_type=CaRolloverStrategyType.IMPORT_CA)
+    with patch('pki.views.ca_api.CaRolloverService.execute_rollover', side_effect=ValueError('secret credential path')):
+        response = api.post(f'/api/ca-rollovers/{rollover.pk}/start/')
+
+    assert response.status_code == 409
+    assert response.json() == {'detail': 'The CA rollover transition could not be completed in its current state.'}
+    assert b'secret credential path' not in response.content
+    rollover.refresh_from_db()
+    assert rollover.state == CaRolloverState.PLANNED
 
 
 @pytest.mark.parametrize('encoding', ['pem', 'der'])
@@ -455,16 +529,27 @@ def test_upstream_ca_enrollment(api, ca, lab_config, protocol):
         else 'pki.services.ca_enrollment.CmpClient.send_and_extract_certificate'
     )
     upstream_result = cert if protocol == 'est' else (cert, [ca.get_certificate()])
+    enrollment_data = {
+        'common_name': 'New CA',
+        'organization_name': 'Example',
+        'country_name': 'DE',
+        'state_or_province_name': 'Berlin',
+        'days': 30,
+    }
+    service = 'EstCaEnrollmentService' if protocol == 'est' else 'CmpCaEnrollmentService'
+    with patch(f'pki.views.ca_api.{service}.enroll', side_effect=ValueError('secret credential path')) as enroll:
+        response = api.post(f'/api/issuing-cas/{new_ca.pk}/enroll/', enrollment_data, format='json')
+    enroll.assert_called_once()
+    assert response.status_code == 400
+    assert response.json() == ['Unable to enroll the CA. Check the enrollment configuration and request data.']
+    assert b'secret credential path' not in response.content
+    new_ca.refresh_from_db()
+    assert new_ca.credential.certificate is None
+
     with patch(path, return_value=upstream_result) as upstream:
         response = api.post(
             f'/api/issuing-cas/{new_ca.pk}/enroll/',
-            {
-                'common_name': 'New CA',
-                'organization_name': 'Example',
-                'country_name': 'DE',
-                'state_or_province_name': 'Berlin',
-                'days': 30,
-            },
+            enrollment_data,
             format='json',
         )
     assert response.status_code == 200, response.data

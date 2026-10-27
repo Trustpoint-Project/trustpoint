@@ -99,9 +99,9 @@ class PkiApiErrorsMixin(APIView):
         elif isinstance(exc, DjangoValidationError):
             exc = ValidationError(exc.message_dict if hasattr(exc, 'message_dict') else exc.messages)
         elif isinstance(exc, (ProfileValidationError, ValueError)):
-            exc = ValidationError(str(exc))
+            exc = ValidationError('The PKI operation could not be completed. Check the input and configuration.')
         elif isinstance(exc, CaRolloverError):
-            exc = Conflict(str(exc))
+            exc = Conflict('The CA rollover could not be completed in its current state.')
         return super().handle_exception(exc)
 
 
@@ -247,7 +247,8 @@ class IssuingCaManagementViewSet(PkiApiErrorsMixin, CaInventoryMixin, IssuingCaV
         try:
             csr = build_external_csr(ca.credential, profile, content, allow_ca=True)
         except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
+            msg = 'Unable to build the CA certificate signing request. Check the profile and request data.'
+            raise ValidationError(msg) from exc
         return download_response(
             csr.public_bytes(serialization.Encoding.PEM), f'{ca.unique_name}.csr', 'application/pkcs10'
         )
@@ -319,7 +320,8 @@ class IssuingCaManagementViewSet(PkiApiErrorsMixin, CaInventoryMixin, IssuingCaV
             except (EstClientError, CmpClientError) as exc:
                 raise UpstreamError from exc
             except ValueError as exc:
-                raise ValidationError(str(exc)) from exc
+                msg = 'Unable to enroll the CA. Check the enrollment configuration and request data.'
+                raise ValidationError(msg) from exc
             certificate_model = ca.credential.certificate
             if certificate_model is None:
                 raise UpstreamError
@@ -349,7 +351,8 @@ class IssuingCaManagementViewSet(PkiApiErrorsMixin, CaInventoryMixin, IssuingCaV
         try:
             ca = AutoGenPki.enable_auto_gen_pki(form.cleaned_data['key_type'])
         except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
+            msg = 'Unable to generate the PKI. Check the key type and security settings.'
+            raise ValidationError(msg) from exc
         if ca is None:
             msg = 'An auto-generated PKI is already active.'
             raise Conflict(msg)
@@ -629,7 +632,8 @@ class CaRolloverViewSet(
             else:
                 CaRolloverService.cancel_rollover(rollover)
         except ValueError as exc:
-            raise Conflict(str(exc)) from exc
+            msg = 'The CA rollover transition could not be completed in its current state.'
+            raise Conflict(msg) from exc
         audit_operation = {
             'start': AuditLog.OperationType.CA_ROLLOVER_STARTED,
             'transition': AuditLog.OperationType.CA_ROLLOVER_TRANSITIONED,

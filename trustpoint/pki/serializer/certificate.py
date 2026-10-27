@@ -242,7 +242,8 @@ class CertificateDetailSerializer(CertificateSummarySerializer):
         try:
             return [issuer.pk for issuer in certificate_chain(obj)]
         except ValueError as exc:
-            raise serializers.ValidationError(str(exc)) from exc
+            msg = 'Unable to build the certificate issuer chain.'
+            raise serializers.ValidationError(msg) from exc
 
     @extend_schema_field(CertificateIssuedCredentialSerializer(many=True))
     def get_issued_credentials(self, obj: CertificateModel) -> list[dict[str, Any]]:

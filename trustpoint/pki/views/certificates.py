@@ -497,7 +497,8 @@ class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
         try:
             certificates = [certificate, *certificate_chain(certificate)] if include_chain else [certificate]
         except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
+            msg = 'Unable to build the certificate issuer chain.'
+            raise ValidationError(msg) from exc
         for item in certificates:
             self.check_object_permissions(request, item)
         return certificates

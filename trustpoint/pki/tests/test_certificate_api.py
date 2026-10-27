@@ -11,7 +11,7 @@ from datetime import timedelta
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import pkcs7
 from django.urls import reverse
@@ -311,6 +311,44 @@ def test_cyclic_issuer_chain_returns_validation_error(api, leaf, issuing_ca_inst
     response = api.get(f'/api/certificates/{leaf.pk}/download/', {'include_chain': 'true'})
     assert response.status_code == 400
     assert api.get(f'/api/certificates/{leaf.pk}/').status_code == 400
+
+
+def test_certificate_detail_does_not_expose_chain_exception(api, leaf, monkeypatch):
+    """Internal exception details must not appear in certificate API responses."""
+    sensitive_detail = 'Internal credential path: /private/credentials/issuer.pem'
+
+    def fail_certificate_chain(certificate):
+        raise ValueError(sensitive_detail)
+
+    monkeypatch.setattr('pki.serializer.certificate.certificate_chain', fail_certificate_chain)
+
+    response = api.get(f'/api/certificates/{leaf.pk}/')
+
+    assert response.status_code == 400
+    assert response.json() == ['Unable to build the certificate issuer chain.']
+    assert sensitive_detail not in response.content.decode()
+
+
+@pytest.mark.parametrize('download_mode', ['single', 'archive'])
+def test_certificate_download_does_not_expose_chain_exception(api, leaf, monkeypatch, download_mode):
+    """Both export endpoints hide internal exception details when building issuer chains."""
+    sensitive_detail = 'Internal credential path: /private/credentials/issuer.pem'
+
+    def fail_certificate_chain(certificate):
+        raise ValueError(sensitive_detail)
+
+    monkeypatch.setattr('pki.views.certificates.certificate_chain', fail_certificate_chain)
+
+    if download_mode == 'single':
+        response = api.get(f'/api/certificates/{leaf.pk}/download/', {'include_chain': 'true'})
+    else:
+        response = api.post(
+            '/api/certificates/download/', {'certificate_ids': [leaf.pk], 'include_chain': True}, format='json'
+        )
+
+    assert response.status_code == 400
+    assert response.json() == ['Unable to build the certificate issuer chain.']
+    assert sensitive_detail not in response.content.decode()
 
 
 def test_root_der_download_with_chain_does_not_duplicate_root(api, issuing_ca_instance):
