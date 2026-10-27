@@ -8,13 +8,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import ProtectedError
 from django.forms import BaseModelForm
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
+from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
@@ -22,13 +22,13 @@ from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, status
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from trustpoint_core.oid import AlgorithmIdentifier
 
 from management.models.organization import OrganizationModel
-from management.security_change_audit import audit_security_change, security_change, snapshot_security_state
+from management.security_change_audit import audit_security_change, security_change
 from pki.filters import DomainFilter
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
@@ -41,10 +41,11 @@ from pki.models import (
 from pki.models.truststore import TruststoreModel
 from pki.serializer.devid_registration import DevIdRegistrationDetailSerializer, DevIdRegistrationSerializer
 from pki.serializer.domain import DomainDetailSerializer, DomainSerializer
+from shared.api import AuditedModelViewSet
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
+from shared.views import AuditedBulkDeleteView
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
-    BulkDeleteView,
     ContextDataMixin,
     ListInDetailView,
     SortableTableMixin,
@@ -325,7 +326,7 @@ class DomainDetailView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         return DomainModel.objects.select_related('organization', 'issuing_ca__credential__certificate')
 
 
-class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
+class DomainCaBulkDeleteConfirmView(DomainContextMixin, AuditedBulkDeleteView):
     """View to confirm the deletion of multiple Domains."""
 
     model = DomainModel
@@ -333,6 +334,12 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
     ignore_url = reverse_lazy('pki:domains')
     template_name = 'pki/domains/confirm_delete.html'
     context_object_name = 'domains'
+
+    delete_permission = AppPermissions.MANAGE_DOMAINS
+    protected_error_message = gettext_lazy(
+        'Cannot delete the selected Domain(s) because they are referenced by other objects.'
+    )
+    delete_success_message = gettext_lazy('Successfully deleted {count} Domains.')
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests."""
@@ -342,34 +349,6 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
             return HttpResponseRedirect(self.success_url)
         return super().get(request, *args, **kwargs)
 
-    def form_valid(self, form: Form) -> HttpResponse:
-        """Attempt to delete domains if the form is valid."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_DOMAINS):
-            raise PermissionDenied
-        queryset = self.get_queryset()
-        deleted_count = queryset.count()
-
-        try:
-            with transaction.atomic():
-                targets = list(queryset.select_for_update())
-                snapshots = [(target, snapshot_security_state(target)) for target in targets]
-                response = super().form_valid(form)
-                for target, before in snapshots:
-                    audit_security_change(
-                        target=target, actor=self.request.user, before=before, action='deleted'
-                    )
-        except ProtectedError:
-            messages.error(
-                self.request, _('Cannot delete the selected Domain(s) because they are referenced by other objects.')
-            )
-            return HttpResponseRedirect(self.success_url)
-        except ValidationError as exc:
-            messages.error(self.request, exc.message)
-            return HttpResponseRedirect(self.success_url)
-
-        messages.success(self.request, _('Successfully deleted {count} Domains.').format(count=deleted_count))
-
-        return response
 
 
 class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistrationForm]):
@@ -435,8 +414,6 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
                     raise Http404(msg) from err
 
         return None
-
-
 
     def get_truststore(self, truststore_id: int) -> TruststoreModel:
         """Fetch the truststore based on the primary key passed in the URL."""
@@ -590,7 +567,7 @@ class CanManageDomains(BasePermission):
     partial_update=extend_schema(description='Partially update an existing domain.'),
     destroy=extend_schema(description='Delete a domain.')
 )
-class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
+class DomainViewSet(AuditedModelViewSet[DomainModel]):
     """ViewSet for managing Domain instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -607,22 +584,6 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
             return DomainDetailSerializer
         return DomainSerializer
 
-    @transaction.atomic
-    def perform_create(self, serializer: Any) -> None:
-        """Create and audit the object once at the API operation boundary."""
-        target = serializer.save()
-        audit_security_change(target=target, actor=self.request.user, before=None, action='created')
-
-    def perform_update(self, serializer: Any) -> None:
-        """Audit the final persisted state, including serializer-managed relations."""
-        with security_change(target=serializer.instance, actor=self.request.user):
-            serializer.save()
-
-    def perform_destroy(self, instance: Any) -> None:
-        """Preserve the deleted object's identity and state in one audit entry."""
-        with security_change(target=instance, actor=self.request.user, action='deleted'):
-            instance.delete()
-
 
 @extend_schema(tags=['DevID Registration'])
 @extend_schema_view(
@@ -633,7 +594,7 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
     partial_update=extend_schema(description='Partially update an existing DevID registration.'),
     destroy=extend_schema(description='Delete a DevID registration.'),
 )
-class DevIdRegistrationViewSet(viewsets.ModelViewSet[DevIdRegistration]):
+class DevIdRegistrationViewSet(AuditedModelViewSet[DevIdRegistration]):
     """ViewSet for managing DevIdRegistration instances via REST API.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -679,19 +640,3 @@ class DevIdRegistrationViewSet(viewsets.ModelViewSet[DevIdRegistration]):
         instance = self.get_object()
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @transaction.atomic
-    def perform_create(self, serializer: Any) -> None:
-        """Create and audit the object once at the API operation boundary."""
-        target = serializer.save()
-        audit_security_change(target=target, actor=self.request.user, before=None, action='created')
-
-    def perform_update(self, serializer: Any) -> None:
-        """Audit the final persisted state, including serializer-managed relations."""
-        with security_change(target=serializer.instance, actor=self.request.user):
-            serializer.save()
-
-    def perform_destroy(self, instance: Any) -> None:
-        """Preserve the deleted object's identity and state in one audit entry."""
-        with security_change(target=instance, actor=self.request.user, action='deleted'):
-            instance.delete()

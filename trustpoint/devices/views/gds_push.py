@@ -31,6 +31,7 @@ from pki.models import IssuedCredentialModel
 from pki.models.ca import CaModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from pki.services.revocation import revoke_certificate
 from request.gds_push import GdsPushService
 from request.gds_push.gds_push_service import GdsPushError
 from trustpoint.page_context import (
@@ -186,9 +187,10 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
             if not cert_exists:
                 for existing_cert_model in truststore.certificates.all():
                     if not existing_cert_model.is_ca:
-                         RevokedCertificateModel.objects.create(
-                            certificate=existing_cert_model,
-                            revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION
+                        revoke_certificate(
+                            existing_cert_model,
+                            reason=RevokedCertificateModel.ReasonCode.CESSATION,
+                            ca=None,
                         )
 
                 truststore.truststoreordermodel_set.all().delete()

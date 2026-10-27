@@ -23,6 +23,7 @@ from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.crl import CrlModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from pki.util.signature_suite import format_signature_suite
 from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
@@ -264,7 +265,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """Returns a string representation of the CaModel instance."""
         return f'CaModel({self.unique_name})'
 
-
     @property
     def is_issuing_ca(self) -> bool:
         """Returns True if this is an issuing CA (can issue certificates)."""
@@ -273,7 +273,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             self.CaTypeChoice.REMOTE_CMP_RA,
             self.CaTypeChoice.REMOTE_EST_RA,
         )
-
 
     @property
     def is_keyless_ca(self) -> bool:
@@ -286,7 +285,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
                 self.CaTypeChoice.REMOTE_EST_RA,
             )
         )
-
 
     @property
     def common_name(self) -> str:
@@ -301,7 +299,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return f'{self.unique_name} (Certificate pending)'
         return f'{self.unique_name} (Credential missing)'
 
-
     @property
     def subject_public_bytes(self) -> bytes:
         """Returns the subject public bytes from the CA certificate, or b'' if missing."""
@@ -313,7 +310,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return bytes.fromhex(self.credential.certificate_or_error.subject_public_bytes)
         return b''
 
-
     @property
     def ca_certificate_model(self) -> CertificateModel | None:
         """Returns the CA certificate model for both issuing and keyless CAs, or None if missing."""
@@ -323,14 +319,12 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return self.certificate
         return None
 
-
     def get_certificate(self) -> x509.Certificate | None:
         """Returns the CA certificate (crypto object) for both issuing and keyless CAs, or None if missing."""
         cert_model = self.ca_certificate_model
         if cert_model is not None:
             return cert_model.get_certificate_serializer().as_crypto()
         return None
-
 
     def get_credential(self) -> CredentialModel | None:
         """Returns the credential for issuing CAs, or None if not present."""
@@ -789,21 +783,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
     @property
     def signature_suite_display(self) -> str:
-        """Get a safe string representation of the signature suite."""
+        """Return a readable signature suite, or a placeholder when it is unavailable."""
         try:
-            ss = self.signature_suite
-            if ss is None:
-                return '-'
-            if hasattr(ss, 'signature_algorithm') and ss.signature_algorithm:
-                sig_alg = ss.signature_algorithm
-                if hasattr(sig_alg, 'value'):
-                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_44.dotted_string:
-                        return 'ML-DSA-44'
-                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_65.dotted_string:
-                        return 'ML-DSA-65'
-                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_87.dotted_string:
-                        return 'ML-DSA-87'
-            return str(ss)
+            return format_signature_suite(self.signature_suite)
         except ValueError:
             return '-'
 
@@ -1009,13 +991,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
     def revoke_all_issued_certificates(self, reason: str = RevokedCertificateModel.ReasonCode.UNSPECIFIED) -> None:
         """Revokes all certificates issued by this CA."""
-        qs = self.get_issued_certificates()
+        from pki.services.revocation import revoke_certificates  # noqa: PLC0415
 
-        for cert in qs:
-            if (cert.certificate_status
-                not in [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
-                continue
-            RevokedCertificateModel.objects.create(certificate=cert, revocation_reason=reason, ca=self)
+        qs = self.get_issued_certificates()
+        revoke_certificates(qs, reason=reason, ca=self, only_unexpired=True)
 
         self.logger.info('All %i certificates issued by CA %s have been revoked.', qs.count(), self.unique_name)
         self.issue_crl(crl_validity_hours=int(self.crl_validity_hours))

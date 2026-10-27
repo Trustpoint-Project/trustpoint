@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import psycopg
-from cryptography.hazmat.primitives import hashes
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
@@ -42,14 +41,12 @@ from appsecrets.models import (
     AppSecretBackendModel,
     AppSecretPkcs11AuthSource,
     AppSecretPkcs11ConfigModel,
-    AppSecretSoftwareConfigModel,
 )
 from appsecrets.service import (
     DEK_LENGTH_BYTES,
     AppSecretConfigurationError,
     Pkcs11AppSecretService,
     clear_app_secret_cache,
-    get_app_secret_service,
 )
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
@@ -65,10 +62,7 @@ from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.models import (
     BackendKind,
     CryptoProviderPkcs11ConfigModel,
-    CryptoProviderProfileModel,
-    CryptoProviderSoftwareConfigModel,
     Pkcs11AuthSource,
-    SoftwareKeyEncryptionSource,
 )
 from management.backup_artifacts import BackupManifestError, backup_manifest_path, verify_backup_manifest
 from management.nginx_paths import (
@@ -77,8 +71,8 @@ from management.nginx_paths import (
     NGINX_KEY_PATH,
 )
 from management.security_change_audit import provider_configuration_changes
-from pki.models import CredentialModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from management.tls_files import write_tls_pem_files
+from setup_wizard.backend_configuration import BackendConfigurationMixin
 from setup_wizard.operational_attach import (
     CompatibilityCheck,
     CompatibilitySeverity,
@@ -109,6 +103,7 @@ from setup_wizard.pkcs11_staging import (
     existing_wizard_pkcs11_staged_file,
     wizard_pkcs11_staging_root,
 )
+from setup_wizard.tls_activation import activate_staged_tls_credential
 from setup_wizard.tls_credential import (
     TlsServerCredentialFileParser,
     TlsServerCredentialGenerator,
@@ -139,6 +134,7 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import CertificateSerializer
 
     from crypto.application.provider_backend import ManagedKeyBackendAdapter
+    from pki.models import CredentialModel
 
 logger = logging.getLogger(__name__)
 
@@ -1930,7 +1926,7 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
             return self.form_invalid(form)
 
 
-class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryModelForm]):
+class FreshInstallSummaryView(BackendConfigurationMixin, FreshInstallModelFormBaseView[FreshInstallSummaryModelForm]):
     """Render the fresh-install step for the summary."""
 
     form_class = FreshInstallSummaryModelForm
@@ -1963,193 +1959,26 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
     @staticmethod
     def _write_pem_files(credential_model: CredentialModel) -> None:
-        """Writes the private key, certificate, and trust store PEM files to disk.
-
-        Args:
-            credential_model (CredentialModel): The credential model instance containing
-            the keys and certificates.
-        """
-        private_key_pem = credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
-        certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
-        trust_store_pem = credential_model.get_certificate_chain_serializer().as_pem().decode()
-
-        NGINX_KEY_PATH.write_text(private_key_pem)
-        NGINX_CERT_PATH.write_text(certificate_pem)
-
-        # Only write chain file if there's actually a chain (not empty)
-        if trust_store_pem.strip():
-            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
-        elif NGINX_CERT_CHAIN_PATH.exists():
-            # Remove chain file if it exists but chain is empty
-            NGINX_CERT_CHAIN_PATH.unlink()
+        """Write the TLS credential to the configured Nginx paths."""
+        write_tls_pem_files(
+            credential_model,
+            key_path=NGINX_KEY_PATH,
+            cert_path=NGINX_CERT_PATH,
+            chain_path=NGINX_CERT_CHAIN_PATH,
+        )
 
     def _apply_staged_tls_credential(self) -> None:
-        """Promote the staged TLS credential to active and apply it for nginx."""
+        """Promote the staged TLS credential and apply it using this caller's I/O hooks."""
         staged_tls_serializer = load_staged_tls_credential()
         if staged_tls_serializer is None:
-            err_msg = 'No staged TLS Server Credential found.'
-            raise ValueError(err_msg)
-
-        staged_tls_credential = CredentialModel.save_credential_serializer(
-            credential_serializer=staged_tls_serializer,
-            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            msg = 'No staged TLS Server Credential found.'
+            raise ValueError(msg)
+        activate_staged_tls_credential(
+            staged_tls_serializer,
+            write_pem_files=self._write_pem_files,
+            apply_to_nginx=lambda: execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm'),
+            logger=self.logger,
         )
-
-        active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-        active_tls.credential = staged_tls_credential
-        active_tls.save()
-
-        self._write_pem_files(staged_tls_credential)
-        execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm')
-        sha256_fingerprint = staged_tls_credential.get_certificate().fingerprint(hashes.SHA256())
-        formatted_fingerprint = ':'.join(f'{byte:02X}' for byte in sha256_fingerprint)
-        self.logger.info('TLS SHA256 fingerprint: %s', formatted_fingerprint)
-        clear_staged_tls_credential()
-
-    @staticmethod
-    def _load_existing_backend_profile(backend_kind: BackendKind) -> CryptoProviderProfileModel | None:
-        """Return an existing profile for the given backend kind when one already exists."""
-        return (
-            CryptoProviderProfileModel.objects.filter(backend_kind=backend_kind)
-            .order_by('-active', 'id')
-            .first()
-        )
-
-    @classmethod
-    def _ensure_backend_kind_matches_instance(cls, backend_kind: BackendKind) -> None:
-        """Reject mixing backend kinds within one Trustpoint instance."""
-        existing_kinds = set(CryptoProviderProfileModel.objects.values_list('backend_kind', flat=True))
-        if existing_kinds and backend_kind.value not in existing_kinds:
-            configured_backend_kind = min(existing_kinds)
-            err_msg = (
-                'This Trustpoint instance already contains crypto backend '
-                f'configuration for {configured_backend_kind!r}.'
-            )
-            raise DjangoValidationError(err_msg)
-
-    @classmethod
-    def _activate_profile(
-        cls,
-        *,
-        backend_kind: BackendKind,
-        default_name: str,
-    ) -> CryptoProviderProfileModel:
-        """Activate or create the singleton profile for the chosen backend kind."""
-        cls._ensure_backend_kind_matches_instance(backend_kind)
-        existing_profile = cls._load_existing_backend_profile(backend_kind)
-        if existing_profile is not None:
-            CryptoProviderProfileModel.objects.filter(active=True).exclude(pk=existing_profile.pk).update(active=False)
-            existing_profile.active = True
-            _save_untyped_model(existing_profile)
-            return existing_profile
-
-        CryptoProviderProfileModel.objects.filter(active=True).update(active=False)
-        profile = CryptoProviderProfileModel(
-            name=default_name,
-            backend_kind=backend_kind,
-            active=True,
-        )
-        _save_untyped_model(profile)
-        return profile
-
-    @classmethod
-    def _configure_software_backend(cls) -> None:
-        """Configure the software backend for the instance."""
-        profile = cls._activate_profile(
-            backend_kind=BackendKind.SOFTWARE,
-            default_name='trustpoint-software-demo-testing-backend',
-        )
-        defaults = {
-            'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
-            'encryption_source_ref': '',
-            'allow_exportable_private_keys': False,
-        }
-        config, created = CryptoProviderSoftwareConfigModel.objects.get_or_create(
-            profile=profile,
-            defaults=defaults,
-        )
-        if not created:
-            for field_name, value in defaults.items():
-                setattr(config, field_name, value)
-        config.full_clean()
-        _save_untyped_model(config)
-
-    @staticmethod
-    def _configure_software_app_secret_backend() -> None:
-        """Configure the software app-secret backend."""
-        backend = AppSecretBackendModel.get_singleton()
-        backend.backend_kind = AppSecretBackendKind.SOFTWARE
-        _save_untyped_model(backend)
-
-        AppSecretPkcs11ConfigModel.objects.filter(backend=backend).delete()
-        software_config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
-        software_config.full_clean()
-        _save_untyped_model(software_config)
-
-        clear_app_secret_cache()
-        get_app_secret_service().ensure_backend_ready()
-
-    @staticmethod
-    def _configure_pkcs11_app_secret_backend() -> None:
-        """Configure the PKCS#11-backed app-secret subsystem from the active crypto profile."""
-        crypto_profile = CryptoProviderProfileModel.objects.get(active=True, backend_kind=BackendKind.PKCS11)
-        crypto_config = crypto_profile.pkcs11_config
-
-        backend = AppSecretBackendModel.get_singleton()
-        backend.backend_kind = AppSecretBackendKind.PKCS11
-        _save_untyped_model(backend)
-
-        AppSecretSoftwareConfigModel.objects.filter(backend=backend).delete()
-        secret_config, created = AppSecretPkcs11ConfigModel.objects.get_or_create(
-            backend=backend,
-            defaults={
-                'module_path': crypto_config.module_path,
-                'token_label': crypto_config.token_label,
-                'token_serial': crypto_config.token_serial,
-                'slot_id': crypto_config.slot_id,
-                'auth_source': AppSecretPkcs11AuthSource(crypto_config.auth_source),
-                'auth_source_ref': crypto_config.auth_source_ref,
-            },
-        )
-
-        changed_runtime = False
-        desired_values = {
-            'module_path': crypto_config.module_path,
-            'token_label': crypto_config.token_label,
-            'token_serial': crypto_config.token_serial,
-            'slot_id': crypto_config.slot_id,
-            'auth_source': AppSecretPkcs11AuthSource(crypto_config.auth_source),
-            'auth_source_ref': crypto_config.auth_source_ref,
-        }
-        if not created:
-            for field_name, value in desired_values.items():
-                if getattr(secret_config, field_name) != value:
-                    changed_runtime = True
-                setattr(secret_config, field_name, value)
-            if changed_runtime:
-                secret_config.wrapped_dek = None
-                secret_config.backup_encrypted_dek = None
-
-        secret_config.full_clean()
-        _save_untyped_model(secret_config)
-
-        clear_app_secret_cache()
-        get_app_secret_service().ensure_backend_ready()
-
-    @staticmethod
-    def _map_pkcs11_install_exit_code_to_message(return_code: int) -> str:
-        """Map PKCS#11 asset-install script exit codes to user-facing error messages."""
-        error_messages = {
-            1: 'The PKCS#11 install script did not receive the required staged setup values.',
-            2: 'The staged PKCS#11 library is missing or no longer belongs to this wizard session.',
-            3: 'The staged PKCS#11 user PIN file is missing or no longer belongs to this wizard session.',
-            4: 'Failed to install the PKCS#11 library into the protected HSM area.',
-            5: 'Failed to create the protected PKCS#11 user PIN file.',
-            6: 'Failed to persist the installed PKCS#11 module path for the instance.',
-            7: 'The staged PKCS#11 provider config is missing or no longer belongs to this wizard session.',
-            8: 'Failed to install the PKCS#11 provider config into the protected HSM area.',
-        }
-        return error_messages.get(return_code, 'An unknown error occurred while installing PKCS#11 assets.')
 
     @staticmethod
     def _ensure_local_dev_pkcs11_module(config_model: SetupWizardConfigModel) -> Path:

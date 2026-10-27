@@ -77,7 +77,7 @@ class TestEstClient:
         client = EstClient(client_context())
         with pytest.raises(EstClientError, match='Unexpected content type'):
             client._parse_response(b'', 'text/plain')
-        with patch('request.clients.est_client.pkcs7.load_der_pkcs7_certificates', return_value=[]):
+        with patch('trustpoint_core.serializer.pkcs7.load_der_pkcs7_certificates', return_value=[]):
             with pytest.raises(EstClientError, match='No certificates found'):
                 client._parse_response(base64.b64encode(b'valid-pkcs7'), 'application/pkcs7-mime')
 

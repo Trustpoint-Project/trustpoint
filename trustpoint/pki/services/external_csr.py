@@ -17,6 +17,7 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.util.cert_profile import alias_map
+from pki.util.certificate_request import build_request_data
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.request_context import CmpCertificateRequestContext
 
@@ -51,26 +52,8 @@ def parse_single_certificate(data: bytes) -> x509.Certificate:
 
 
 def request_data_from_content(content: dict[str, Any]) -> dict[str, Any]:
-    """Convert the flat certificate-content form values into profile request data."""
-    subject_fields = (
-        'common_name', 'organization_name', 'organizational_unit_name', 'country_name',
-        'state_or_province_name', 'locality_name', 'email_address',
-    )
-    san_fields = ('dns_names', 'ip_addresses', 'rfc822_names', 'uris')
-    return {
-        'subj': {field: content[field] for field in subject_fields if content.get(field)},
-        'ext': {'subject_alternative_name': {
-            field: (
-                [str(value).strip() for value in content[field] if str(value).strip()]
-                if isinstance(content[field], list)
-                else [value.strip() for value in str(content[field]).split(',') if value.strip()]
-            ) for field in san_fields if content.get(field)
-        }},
-        'validity': {
-            field: int(content[field]) for field in ('days', 'hours', 'minutes', 'seconds')
-            if content.get(field) is not None
-        },
-    }
+    """Convert external CSR content, retaining string coercion and empty SAN lists."""
+    return build_request_data(content, keep_empty_sans=True)
 
 
 def external_csr_profile(profile: CertificateProfileModel) -> CertificateProfileModel:

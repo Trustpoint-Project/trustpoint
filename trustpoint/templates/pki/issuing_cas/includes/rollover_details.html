@@ -1,0 +1,65 @@
+{% load i18n internationalization_tags %}
+<div class="tp-kvp-list">
+    <div>
+        <div>{% trans 'Current (Old) CA' %}</div>
+        <div>{{ rollover.old_issuing_ca.unique_name }}</div>
+    </div>
+    <div>
+        <div>{% trans 'New CA' %}</div>
+        <div>
+            {% if action == 'cancel' and not rollover.new_issuing_ca %}
+                <span class="text-muted">{% trans '(pending)' %}</span>
+            {% else %}
+                {{ rollover.new_issuing_ca.unique_name }}
+            {% endif %}
+        </div>
+    </div>
+    <div>
+        <div>{% trans 'Strategy' %}</div>
+        <div>{{ rollover.get_strategy_type_display }}</div>
+    </div>
+    <div>
+        <div>{% trans 'State' %}</div>
+        <div>
+            <span class="badge
+                {% if action == 'complete' %}bg-warning text-dark
+                {% elif action == 'cancel' %}
+                    {% if rollover.state == 'planned' %}bg-info
+                    {% elif rollover.state == 'awaiting_new_ca' %}bg-secondary
+                    {% else %}bg-warning text-dark
+                    {% endif %}
+                {% else %}bg-info
+                {% endif %}">{{ rollover.get_state_display }}</span>
+        </div>
+    </div>
+    {% if action != 'complete' %}
+    <div>
+        <div>{% trans 'Planned At' %}</div>
+        <div>{{ rollover.planned_at|local_datetime }}</div>
+    </div>
+    {% endif %}
+    {% if action == 'transition' or action == 'complete' or action == 'cancel' and rollover.started_at %}
+    <div>
+        <div>{% trans 'Started At' %}</div>
+        <div>{{ rollover.started_at|local_datetime }}</div>
+    </div>
+    {% endif %}
+    {% if action != 'cancel' and rollover.transition_scheduled_at %}
+    <div>
+        <div>{% trans 'Scheduled Transition Time' %}</div>
+        <div>{{ rollover.transition_scheduled_at|local_datetime }}</div>
+    </div>
+    {% endif %}
+    {% if rollover.initiated_by %}
+    <div>
+        <div>{% trans 'Initiated By' %}</div>
+        <div>{{ rollover.initiated_by.username }}</div>
+    </div>
+    {% endif %}
+    {% if action != 'cancel' and rollover.notes %}
+    <div>
+        <div>{% trans 'Notes' %}</div>
+        <div>{{ rollover.notes }}</div>
+    </div>
+    {% endif %}
+</div>

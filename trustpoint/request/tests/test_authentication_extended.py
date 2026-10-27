@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509.oid import NameOID
-from pyasn1.codec.der import decoder, encoder
+from pyasn1.codec.der import decoder
 from pyasn1.type import univ
 from pyasn1_modules import rfc4210, rfc5280
 
@@ -24,14 +24,14 @@ from devices.models import (
     OnboardingConfigModel,
     OnboardingProtocol,
 )
+from pki.models import IssuedCredentialModel
+from pki.tests.credential_helpers import issue_test_credential
 from pki.util.keys import KeyGenerator
 from request.authentication import (
     ClientCertificateAuthentication,
     IDevIDAuthentication,
 )
-from pki.models import IssuedCredentialModel
 from request.authentication.cmp import (
-    CmpCertConfAuthentication,
     CmpSharedSecretAuthentication,
     CmpSignatureBasedCertificationAuthentication,
     CmpSignatureBasedInitializationAuthentication,
@@ -46,7 +46,6 @@ from request.authentication.est import (
 from request.authentication.rest import RestUsernamePasswordAuthentication
 from request.request_context import (
     BaseRequestContext,
-    BaseCertificateRequestContext,
     CmpBaseRequestContext,
     CmpCertificateRequestContext,
     CmpPollRequestContext,
@@ -400,13 +399,10 @@ class TestClientCertificateAuthenticationExtended:
     ) -> None:
         """Test authentication fails with invalid domain credential."""
         device = device_instance['device']
-        domain = device_instance['domain']
         
         # Create an issued credential but mock it as invalid
-        from devices.issuer import LocalDomainCredentialIssuer
         
-        issuer = LocalDomainCredentialIssuer(device=device, domain=domain)
-        issued_cred = issuer.issue_domain_credential()
+        issued_cred = issue_test_credential(device, 'domain_credential', common_name='Trustpoint Domain Credential')
         
         cert = issued_cred.credential.get_certificate()
         

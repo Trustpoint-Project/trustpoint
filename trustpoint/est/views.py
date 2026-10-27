@@ -4,7 +4,7 @@
 """Views for EST (Enrollment over Secure Transport) handling authentication and certificate issuance."""
 
 import base64
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
@@ -15,19 +15,9 @@ from trustpoint_core.serializer import CertificateCollectionSerializer
 from pki.models.ca_rollover import CaRolloverState
 from pki.models.domain import DomainModel
 from pki.services.ca_rollover import CaRolloverService
-from request.authorization import EstAuthorization
-from request.message_parser import EstMessageParser
-from request.message_responder import EstErrorMessageResponder, EstMessageResponder
-from request.operation_processor.general import OperationProcessor
+from request.enrollment import est_enrollment
+from request.message_responder import EstErrorMessageResponder
 from request.request_context import EstCertificateRequestContext
-from request.request_validator.http_req import EstHttpRequestValidator
-from request.security_hardening import (
-    authenticate_est_request,
-    process_certificate_operation_atomically,
-    require_single_security_config,
-)
-from request.workflow2_issuance import release_delivered_workflow2_request
-from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 from workflows2.events.request_events import Events
 
@@ -76,6 +66,9 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
     """Mixin providing common logic for EST simple enrollment operations."""
 
     EVENT = Events.est_simpleenroll
+    operation: Literal['simpleenroll', 'simplereenroll'] = 'simpleenroll'
+    context_error_message = 'Failed to set up EST request context.'
+    context_error_response: ClassVar[type[HttpResponse]] = HttpResponse
 
     def process_enrollment(
         self,
@@ -90,34 +83,24 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             ctx = EstCertificateRequestContext(
                 raw_message=request,
                 protocol='est',
-                operation='simpleenroll',
+                operation=self.operation,
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
                 event=self.EVENT,
             )
         except Exception:
-            err_msg = 'Failed to set up EST request context.'
+            err_msg = self.context_error_message
             self.logger.exception(err_msg)
-            return HttpResponse(err_msg, status=500)
+            return self.context_error_response(err_msg, status=500)
 
+        orchestrator = est_enrollment(ctx, operation=self.operation)
         try:
-            EstHttpRequestValidator().validate(ctx)
-            ctx = cast('EstCertificateRequestContext', EstMessageParser().parse(ctx))
-            require_single_security_config(ctx)
-            authenticate_est_request(ctx)
-            EstAuthorization(allowed_operations=['simpleenroll']).authorize(ctx)
-
-            workflow2_result = Workflow2Handler().handle(ctx)
-            if not workflow2_result.should_stop:
-                process_certificate_operation_atomically(ctx, OperationProcessor())
-
-            EstMessageResponder.build_response(ctx)
-            release_delivered_workflow2_request(ctx)
+            orchestrator.run()
         except Exception:
-            self.logger.exception('Error processing EST simpleenroll request')
-            EstErrorMessageResponder.build_response(ctx)
+            self.logger.exception('Error processing EST %s request', self.operation)
+            EstErrorMessageResponder.build_response(orchestrator.context)
 
-        return ctx.to_http_response()
+        return orchestrator.context.to_http_response()
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -133,50 +116,13 @@ class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class EstSimpleReEnrollmentView(LoggerMixin, View):
-    """Handles EST simplereenroll requests."""
+class EstSimpleReEnrollmentView(EstSimpleEnrollmentView):
+    """Handle reenrollment through the same EST orchestration as initial enrollment."""
 
     EVENT = Events.est_simplereenroll
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle POST requests for simple reenrollment."""
-        self.logger.info('Request received: method=%s path=%s', request.method, request.path)
-        del args
-
-        try:
-            domain_name = cast('str', kwargs.get('domain'))
-            cert_profile = cast('str', kwargs.get('cert_profile'))
-            ctx = EstCertificateRequestContext(
-                raw_message=request,
-                protocol='est',
-                operation='simplereenroll',
-                domain_str=domain_name,
-                cert_profile_str=cert_profile,
-                event=self.EVENT,
-            )
-        except Exception:
-            err_msg = 'Failed to set up request context.'
-            self.logger.exception(err_msg)
-            return LoggedHttpResponse(err_msg, status=500)
-
-        try:
-            EstHttpRequestValidator().validate(ctx)
-            ctx = cast('EstCertificateRequestContext', EstMessageParser().parse(ctx))
-            require_single_security_config(ctx)
-            authenticate_est_request(ctx)
-            EstAuthorization(allowed_operations=['simplereenroll']).authorize(ctx)
-
-            workflow2_result = Workflow2Handler().handle(ctx)
-            if not workflow2_result.should_stop:
-                process_certificate_operation_atomically(ctx, OperationProcessor())
-
-            EstMessageResponder.build_response(ctx)
-            release_delivered_workflow2_request(ctx)
-        except Exception:
-            self.logger.exception('Error processing EST simplereenroll request')
-            EstErrorMessageResponder.build_response(ctx)
-
-        return ctx.to_http_response()
+    operation = 'simplereenroll'
+    context_error_message = 'Failed to set up request context.'
+    context_error_response = LoggedHttpResponse
 
 
 @method_decorator(csrf_exempt, name='dispatch')

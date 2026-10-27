@@ -22,6 +22,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import BasePermission
+from trustpoint_core.archiver import ArchiveFormat
 
 from management.backup_artifacts import backup_manifest_path
 from management.forms import BackupOptionsForm
@@ -30,6 +31,7 @@ from management.serializer.backup import BackupSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import SortableTableFromListMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
+from util.archives import archive_named_files
 from util.sftp import SftpClient, SftpError
 
 
@@ -455,23 +457,11 @@ class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
             messages.error(request, 'No valid files to download.')
             return redirect('management:backups')
 
-        buffer = io.BytesIO()
         ext = archive_format.lower()
-
-        if ext == 'zip':
-            with zipfile.ZipFile(buffer, 'w') as zip_archive:
-                for fname, data in backup_artifacts:
-                    zip_archive.writestr(fname, data)
-        else:
-            with tarfile.open(fileobj=buffer, mode='w:gz') as tar_archive:
-                for fname, data in backup_artifacts:
-                    info = tarfile.TarInfo(name=fname)
-                    info.size = len(data)
-                    tar_archive.addfile(info, io.BytesIO(data))
-
-        buffer.seek(0)
+        selected_format = ArchiveFormat.ZIP if ext == 'zip' else ArchiveFormat.TAR_GZ
+        archive_bytes = archive_named_files(backup_artifacts, selected_format)
         archive_name = f'backups.{ext}'
-        response = HttpResponse(buffer.read(), content_type='application/octet-stream')
+        response = HttpResponse(archive_bytes, content_type='application/octet-stream')
         response['Content-Disposition'] = f'attachment; filename={archive_name}'
         return response
 

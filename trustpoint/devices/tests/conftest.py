@@ -7,10 +7,10 @@ from typing import Any
 
 import pytest
 
-from devices.issuer import LocalDomainCredentialIssuer
 from devices.models import DeviceModel, RemoteDeviceCredentialDownloadModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import CaModel, DomainModel
+from pki.tests.credential_helpers import issue_test_credential
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 
@@ -74,8 +74,11 @@ def create_mock_models() -> dict[str, Any]:
     )
     mock_device.save()
 
-    credential_issuer = LocalDomainCredentialIssuer(device=mock_device, domain=mock_domain)
-    mock_issued_credential = credential_issuer.issue_domain_credential()
+    mock_issued_credential = issue_test_credential(
+        mock_device,
+        'domain_credential',
+        common_name='Trustpoint Domain Credential',
+    )
 
     mock_remote_credential_download = RemoteDeviceCredentialDownloadModel(
         issued_credential_model=mock_issued_credential, device=mock_device

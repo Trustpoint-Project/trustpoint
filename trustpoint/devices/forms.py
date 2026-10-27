@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import ipaddress
 import secrets
 import string
 from typing import TYPE_CHECKING, Any, cast
@@ -41,6 +40,7 @@ from onboarding.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+from pki.forms.san import clean_dns_sans, clean_ipv4_sans, clean_ipv6_sans
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
@@ -49,6 +49,8 @@ from trustpoint.forms import DisableOptionsSelect
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
+    import ipaddress
+
     from django.db.models.query import QuerySet
 
 
@@ -216,35 +218,20 @@ class BaseServerCredentialForm(BaseCredentialForm):
     )
 
     def clean_ipv4_addresses(self) -> list[ipaddress.IPv4Address]:
-        """Checks the IPv4 addresses."""
-        data = self.cleaned_data['ipv4_addresses'].strip()
-        if not data:
-            return []
-
-        addresses = data.split(',')
-        try:
-            return [ipaddress.IPv4Address(address.strip()) for address in addresses if address.strip() != '']
-        except ipaddress.AddressValueError as exception:
-            err_msg = _('Contains an invalid IPv4-Address.')
-            raise forms.ValidationError(err_msg) from exception
+        """Normalize and validate IPv4 SAN input."""
+        return clean_ipv4_sans(
+            self.cleaned_data['ipv4_addresses'], error_message=_('Contains an invalid IPv4-Address.'),
+        )
 
     def clean_ipv6_addresses(self) -> list[ipaddress.IPv6Address]:
-        """Checks the IPv6 addresses."""
-        data = self.cleaned_data['ipv6_addresses'].strip()
-        if not data:
-            return []
-
-        addresses = data.split(',')
-        try:
-            return [ipaddress.IPv6Address(address.strip()) for address in addresses if address.strip() != '']
-        except ipaddress.AddressValueError as exception:
-            err_msg = _('Contains an invalid IPv6-Address.')
-            raise forms.ValidationError(err_msg) from exception
+        """Normalize and validate IPv6 SAN input."""
+        return clean_ipv6_sans(
+            self.cleaned_data['ipv6_addresses'], error_message=_('Contains an invalid IPv6-Address.'),
+        )
 
     def clean_domain_names(self) -> list[str]:
-        """Checks the domain names."""
-        data = self.cleaned_data['domain_names'].strip()
-        return [domain.strip() for domain in data.split(',') if domain.strip()]
+        """Normalize and validate DNS SAN input, including leftmost wildcards."""
+        return clean_dns_sans(self.cleaned_data['domain_names'], error_message=_('Contains an invalid DNS name.'))
 
     def clean(self) -> dict[str, Any]:
         """Ensures at least one SAN entry is set."""
@@ -469,6 +456,42 @@ class DeviceSecretCreationMixin(forms.Form):
             value=self.cleaned_data.get(f'{field}_value'),
         )
 
+    def _render_pki_protocols_switches(self, field_name: str) -> str:
+        """Renders PKI protocol switches as HTML."""
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
+        html_parts = ['<div class="mt-2">']
+
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
+            checked = str(value) in (self.initial.get(field_name, []) or [])
+            html_parts.append(
+                f'<div class="form-check form-switch mb-2">'
+                f'<input type="checkbox" class="form-check-input" role="switch" '
+                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
+                f'{"checked" if checked else ""}>'
+                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
+                f'</div>'
+            )
+
+        html_parts.append('</div>')
+        return ''.join(html_parts)
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Args:
+            common_name: The desired name of the new device.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
+        if DeviceModel.objects.filter(common_name=common_name).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
+
 
 class ChangeDeviceSecretForm(forms.Form):
     """Explicit confirmation and single-credential replacement in CLM."""
@@ -588,42 +611,6 @@ class NoOnboardingCreateForm(DeviceSecretCreationMixin):
             HTML('</fieldset></section>'),
         )
         self.setup_secret_inputs()
-
-    def _render_pki_protocols_switches(self, field_name: str) -> str:
-        """Renders PKI protocol switches as HTML."""
-        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
-        html_parts = ['<div class="mt-2">']
-
-        for choice in field.widget.choices:
-            value, label = choice[0], choice[1]
-            checked = str(value) in (self.initial.get(field_name, []) or [])
-            html_parts.append(
-                f'<div class="form-check form-switch mb-2">'
-                f'<input type="checkbox" class="form-check-input" role="switch" '
-                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
-                f'{"checked" if checked else ""}>'
-                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
-                f'</div>'
-            )
-
-        html_parts.append('</div>')
-        return ''.join(html_parts)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Args:
-            common_name: The desired name of the new device.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     @transaction.atomic
     def save(self, device_type: DeviceModel.DeviceType) -> DeviceModel:
@@ -763,42 +750,6 @@ class OnboardingCreateForm(DeviceSecretCreationMixin):
             HTML('</fieldset></section>'),
         )
         self.setup_secret_inputs()
-
-    def _render_pki_protocols_switches(self, field_name: str) -> str:
-        """Renders PKI protocol switches as HTML."""
-        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
-        html_parts = ['<div class="mt-2">']
-
-        for choice in field.widget.choices:
-            value, label = choice[0], choice[1]
-            checked = str(value) in (self.initial.get(field_name, []) or [])
-            html_parts.append(
-                f'<div class="form-check form-switch mb-2">'
-                f'<input type="checkbox" class="form-check-input" role="switch" '
-                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
-                f'{"checked" if checked else ""}>'
-                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
-                f'</div>'
-            )
-
-        html_parts.append('</div>')
-        return ''.join(html_parts)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Args:
-            common_name: The desired name of the new device.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     @transaction.atomic
     def save(self, device_type: DeviceModel.DeviceType) -> DeviceModel:
@@ -1047,7 +998,26 @@ class OpcUaGdsPushCreateForm(forms.Form):
         return device_model
 
 
-class ClmDeviceModelOnboardingForm(forms.Form):
+class ClmDeviceNameValidationMixin(forms.Form):
+    """Validate a device name while allowing the device to retain its current name."""
+
+    instance: DeviceModel
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
+        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
+
+
+class ClmDeviceModelOnboardingForm(ClmDeviceNameValidationMixin):
     """CLM Device Model form for devices that use onboarding."""
 
     actor: Any = None
@@ -1100,19 +1070,6 @@ class ClmDeviceModelOnboardingForm(forms.Form):
         )
 
         super().__init__(*args, **kwargs)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     def save(self, onboarding_protocol: OnboardingProtocol) -> None:
         """Saves the changes to DB."""
@@ -1297,7 +1254,7 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             self.instance.save()
 
 
-class ClmDeviceModelNoOnboardingForm(forms.Form):
+class ClmDeviceModelNoOnboardingForm(ClmDeviceNameValidationMixin):
     """CLM Device Model form for devices that do not use onboarding."""
 
     actor: Any = None
@@ -1343,19 +1300,6 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
         )
 
         super().__init__(*args, **kwargs)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     @transaction.atomic
     def save(self) -> None: # noqa: C901
@@ -1444,7 +1388,7 @@ class OpcUaGdsPushTruststoreAssociationForm(forms.Form):
             self.instance.opc_ua_gds_push_config.save(update_fields=['opc_trust_store'])
 
 
-class ClmAgentDeviceForm(forms.Form):
+class ClmAgentDeviceForm(ClmDeviceNameValidationMixin):
     """CLM form for agent devices."""
 
     common_name = forms.CharField(max_length=100, validators=[UniqueNameValidator()])
@@ -1502,19 +1446,6 @@ class ClmAgentDeviceForm(forms.Form):
         )
 
         super().__init__(*args, **kwargs)
-
-    def clean_common_name(self) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Returns:
-            The device name if it passed the checks.
-        """
-        common_name = cast('str', self.cleaned_data['common_name'])
-        validate_common_name_characters(common_name)
-        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
-            err_msg = _('Device with this common name already exists.')
-            raise forms.ValidationError(err_msg)
-        return common_name
 
     def save(self, onboarding_protocol: OnboardingProtocol) -> None:
         """Saves the changes to DB including agent-specific fields."""

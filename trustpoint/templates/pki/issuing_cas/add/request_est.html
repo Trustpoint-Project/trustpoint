@@ -1,62 +1,18 @@
-{% extends 'trustpoint/base.html' %}
+{% extends 'pki/issuing_cas/add/form_base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h1 class="mb-1">
-            {% trans 'Request Issuing CA Certificate' %}
-        </h1>
+    {% with ca_form_id='request-issuing-ca-est-form' %}
+        {{ block.super }}
+    {% endwith %}
+{% endblock %}
 
-        <p class="mb-0 text-muted">
-            {% trans 'Generate the Issuing CA keypair in Trustpoint and request the certificate from an external PKI using EST.' %}
-        </p>
-    </div>
+{% block form_title %}{% trans 'Request Issuing CA Certificate' %}{% endblock %}
 
-    <div class="card-body text-start">
-        <div class="tp-card-centered-content">
-            <form
-                id="request-issuing-ca-est-form"
-                method="post"
-                autocomplete="off"
-            >
-                {% csrf_token %}
+{% block form_description %}{% trans 'Generate the Issuing CA keypair in Trustpoint and request the certificate from an external PKI using EST.' %}{% endblock %}
 
-                <section>
-                    <div class="mb-3">
-                        <h2 class="h4 mb-1">
-                            {% trans 'EST Configuration' %}
-                        </h2>
+{% block section_title %}{% trans 'EST Configuration' %}{% endblock %}
 
-                        <p class="mb-0 text-muted">
-                            {% trans 'Configure the EST endpoint and certificate request parameters.' %}
-                        </p>
-                    </div>
+{% block section_description %}{% trans 'Configure the EST endpoint and certificate request parameters.' %}{% endblock %}
 
-                    <hr class="mb-4">
-
-                    {{ form|crispy }}
-                </section>
-            </form>
-        </div>
-    </div>
-
-    <div class="card-footer d-flex justify-content-between align-items-center">
-        <a
-            href="{% url 'pki:issuing_cas-add-method_select' %}"
-            class="btn btn-secondary"
-        >
-            {% trans 'Back' %}
-        </a>
-
-        <button
-            type="submit"
-            form="request-issuing-ca-est-form"
-            class="btn btn-primary"
-        >
-            {% trans 'Create Issuing CA' %}
-        </button>
-    </div>
-</div>
-{% endblock content %}
+{% block submit_label %}{% trans 'Create Issuing CA' %}{% endblock %}

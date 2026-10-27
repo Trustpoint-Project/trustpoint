@@ -293,20 +293,7 @@ def run_operational_attach_handoff(config_model: SetupWizardConfigModel) -> Oper
     Runtime startup will run normal operational migrations after the explicit
     switch begins.
     """
-    env_file = operational_env_file_path()
-    pending_env_file = pending_operational_env_file_path()
-    ready_file = operational_ready_file_path()
-    payload_file = operational_payload_file_path()
-
-    clear_operational_ready_file(ready_file)
-    write_operational_env_file(build_operational_environment(config_model), pending_env_file)
-
-    return OperationalHandoffResult(
-        env_file=env_file,
-        pending_env_file=pending_env_file,
-        ready_file=ready_file,
-        payload_file=payload_file,
-    )
+    return refresh_pending_operational_env(config_model)
 
 
 def run_operational_runtime_switch(env_file: Path | None = None) -> OperationalRuntimeSwitchResult:

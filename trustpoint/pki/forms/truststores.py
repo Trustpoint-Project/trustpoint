@@ -98,8 +98,9 @@ class TruststoreAddForm(forms.Form):
         except Exception:  # noqa: BLE001
             try:
                 certificate_serializer = CertificateSerializer.from_bytes(trust_store_file)
-                der_bytes = certificate_serializer.as_der()
-                certificate_collection_serializer = CertificateCollectionSerializer.from_list_of_der([der_bytes])
+                certificate_collection_serializer = CertificateCollectionSerializer(
+                    [certificate_serializer.as_crypto()]
+                )
             except Exception as exception:
                 error_message = _('Unable to process the Truststore. May be malformed / corrupted.')
                 raise ValidationError(error_message) from exception

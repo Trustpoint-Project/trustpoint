@@ -122,60 +122,45 @@ class SignerAddFileImportFileTypeSelectView(SignerContextMixin, FormView[SignerA
         return HttpResponseRedirect(reverse_lazy('signer:signer-add-file_import-file_type_select'))
 
 
-class SignerAddFileImportPkcs12View(SignerContextMixin, FormView[SignerAddFileImportPkcs12Form]):
-    """View to import an Issuing CA from a PKCS12 file."""
+class SignerFileImportView(
+    SignerContextMixin, FormView[SignerAddFileImportPkcs12Form | SignerAddFileImportSeparateFilesForm]
+):
+    """Audit an imported signer and return to the signer list."""
 
     template_name = 'signer/add/file_import.html'
+    success_url = reverse_lazy('signer:signer_list')
+
+    def form_valid(self, form: SignerAddFileImportPkcs12Form | SignerAddFileImportSeparateFilesForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
+            raise PermissionDenied
+        signer = form.created_signer
+        user = getattr(self.request, 'user', None)
+        actor = user if user is not None and user.is_authenticated else None
+
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.SIGNER_ADDED,
+            target=signer,
+            target_display=f'Signer: {signer.unique_name}',
+            actor=actor,
+        )
+        messages.success(
+            self.request,
+            _('Successfully added Signer {name}.').format(name=form.cleaned_data['unique_name']),
+        )
+        return super().form_valid(form)
+
+
+class SignerAddFileImportPkcs12View(SignerFileImportView):
+    """Import a signer from a PKCS#12 file."""
+
     form_class = SignerAddFileImportPkcs12Form
-    success_url = reverse_lazy('signer:signer_list')
-
-    def form_valid(self, form: SignerAddFileImportPkcs12Form) -> HttpResponse:
-        """Handle the case where the form is valid."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
-            raise PermissionDenied
-        signer = form.created_signer
-        user = getattr(self.request, 'user', None)
-        actor = user if user is not None and user.is_authenticated else None
-
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.SIGNER_ADDED,
-            target=signer,
-            target_display=f'Signer: {signer.unique_name}',
-            actor=actor,
-        )
-        messages.success(
-            self.request,
-            _('Successfully added Signer {name}.').format(name=form.cleaned_data['unique_name']),
-        )
-        return super().form_valid(form)
 
 
-class SignerAddFileImportSeparateFilesView(SignerContextMixin, FormView[SignerAddFileImportSeparateFilesForm]):
-    """View to import a Signer from separate PEM files."""
+class SignerAddFileImportSeparateFilesView(SignerFileImportView):
+    """Import a signer from separate PEM files."""
 
-    template_name = 'signer/add/file_import.html'
     form_class = SignerAddFileImportSeparateFilesForm
-    success_url = reverse_lazy('signer:signer_list')
-
-    def form_valid(self, form: SignerAddFileImportSeparateFilesForm) -> HttpResponse:
-        """Handle the case where the form is valid."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
-            raise PermissionDenied
-        signer = form.created_signer
-        user = getattr(self.request, 'user', None)
-        actor = user if user is not None and user.is_authenticated else None
-
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.SIGNER_ADDED,
-            target=signer,
-            target_display=f'Signer: {signer.unique_name}',
-            actor=actor,
-        )
-        messages.success(
-            self.request,
-            _('Successfully added Signer {name}.').format(name=form.cleaned_data['unique_name']),
-        )
-        return super().form_valid(form)
 
 
 class SignerConfigView(LoggerMixin, SignerContextMixin, DetailView[SignerModel]):

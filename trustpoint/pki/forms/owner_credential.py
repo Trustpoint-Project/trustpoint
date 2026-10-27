@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+from trustpoint_core.oid import KeyPairGenerator
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -26,6 +26,8 @@ from onboarding.models import (
     OnboardingPkiProtocol,
     OnboardingProtocol,
 )
+from pki.forms.credentials import parse_certificate_chain_upload, parse_certificate_upload, parse_private_key_upload
+from pki.key_types import OWNER_CREDENTIAL_KEY_TYPE_CHOICES, public_key_info_from_key_type
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.domain import DomainModel
@@ -70,45 +72,10 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
     )
 
     def clean_private_key_file(self) -> PrivateKeySerializer:
-        """Validates and parses the uploaded private key file.
-
-        This method checks if the private key file is provided, ensures it meets
-        size constraints, and validates its contents. If a password is provided,
-        it is used to decrypt the private key. Raises validation errors for missing,
-        oversized, or corrupted private key files.
-
-        Returns:
-            PrivateKeySerializer: A serializer containing the parsed private key.
-
-        Raises:
-            ValidationError: If the private key file is missing, too large, or
-            corrupted, or if the password is invalid or incompatible.
-        """
-        private_key_file = self.cleaned_data.get('private_key_file')
-        private_key_file_password = self.data.get('private_key_file_password') or None
-
-        if not private_key_file:
-            err_msg = 'No private key file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if private_key_file.size > max_size:
-            err_msg = 'Private key file is too large, max. 64 kiB.'
-            self._raise_validation_error(err_msg)
-
-        if private_key_file_password:
-            try:
-                private_key_file_password = private_key_file_password.encode('utf-8')
-            except Exception as original_exception:
-                err_msg = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
-                raise ValidationError(err_msg) from original_exception
-
-        try:
-            return PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
-        except Exception:  # noqa: BLE001
-            err_msg = 'Failed to parse the private key file. Either wrong password or file corrupted.'
-            self._raise_validation_error(err_msg)
+        """Validate and parse the uploaded private key with the shared helper."""
+        return parse_private_key_upload(
+            self.cleaned_data.get('private_key_file'), self.data.get('private_key_file_password') or None,
+        )
 
     def clean_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded certificate file.
@@ -124,23 +91,12 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             ValidationError: If the file is missing, too large, corrupted, or already
             associated with an existing Issuing CA.
         """
-        certificate = self.cleaned_data['certificate']
-
-        if not certificate:
-            err_msg = 'No certificate file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if certificate.size > max_size:
-            err_msg = 'Certificate file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        try:
-            certificate_serializer = CertificateSerializer.from_bytes(certificate.read())
-        except Exception:  # noqa: BLE001
-            err_msg = 'Failed to parse the certificate. Seems to be corrupted.'
-            self._raise_validation_error(err_msg)
+        certificate_serializer = parse_certificate_upload(
+            self.cleaned_data.get('certificate'),
+            missing_message='No certificate file was uploaded.',
+            too_large_message='Certificate file is too large, max. 64 kiB.',
+            parse_message='Failed to parse the certificate. Seems to be corrupted.',
+        )
 
         certificate_in_db = CertificateModel.get_cert_by_sha256_fingerprint(
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
@@ -163,30 +119,11 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
         return certificate_serializer
 
     def clean_certificate_chain(self) -> CertificateCollectionSerializer | None:
-        """Validates and parses the uploaded certificate chain file.
-
-        This method checks if the optional certificate chain file is provided.
-        If present, it validates and attempts to parse the file into a collection
-        of certificates. Raises a validation error if parsing fails or the file
-        appears corrupted.
-
-        Returns:
-            CertificateCollectionSerializer: A serializer containing the parsed
-            certificate chain if provided.
-
-        Raises:
-            ValidationError: If the certificate chain cannot be parsed.
-        """
-        ca_certificate_chain = self.cleaned_data['certificate_chain']
-
-        if ca_certificate_chain:
-            try:
-                return CertificateCollectionSerializer.from_bytes(ca_certificate_chain.read())
-            except Exception as exception:
-                err_msg = _('Failed to parse the certificate chain. Seems to be corrupted.')
-                raise ValidationError(err_msg) from exception
-
-        return None
+        """Parse an optional certificate chain using shared upload limits."""
+        return parse_certificate_chain_upload(
+            self.cleaned_data.get('certificate_chain'),
+            parse_message=_('Failed to parse the certificate chain. Seems to be corrupted.'),
+        )
 
     def _raise_validation_error(self, message: str) -> NoReturn:
         """Helper method to raise a ValidationError with a given message.
@@ -337,8 +274,9 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
         except Exception:  # noqa: BLE001
             try:
                 certificate_serializer = CertificateSerializer.from_bytes(file_bytes)
-                der_bytes = certificate_serializer.as_der()
-                certificate_collection_serializer = CertificateCollectionSerializer.from_list_of_der([der_bytes])
+                certificate_collection_serializer = CertificateCollectionSerializer(
+                    [certificate_serializer.as_crypto()]
+                )
             except Exception as exception:
                 raise ValidationError(
                     _('Unable to process the truststore file. It may be malformed or corrupted.')
@@ -438,16 +376,6 @@ class OwnerCredentialTruststoreAssociationForm(forms.Form):
             )
 
 
-_KEY_TYPE_CHOICES = [
-    ('RSA-2048', 'RSA 2048'),
-    ('RSA-3072', 'RSA 3072'),
-    ('RSA-4096', 'RSA 4096'),
-    ('ECC-SECP256R1', 'ECC SECP256R1'),
-    ('ECC-SECP384R1', 'ECC SECP384R1'),
-    ('ECC-SECP521R1', 'ECC SECP521R1'),
-]
-
-
 class _OwnerCredentialEstBaseMixin(LoggerMixin, forms.Form):
     """Shared fields and key-generation logic for EST-based DevOwnerID enrollment forms."""
 
@@ -481,27 +409,14 @@ class _OwnerCredentialEstBaseMixin(LoggerMixin, forms.Form):
 
     key_type = forms.ChoiceField(
         label=_('Key Type'),
-        choices=_KEY_TYPE_CHOICES,
+        choices=OWNER_CREDENTIAL_KEY_TYPE_CHOICES,
         initial='RSA-2048',
         help_text=_('Cryptographic key type and size for the generated keypair'),
     )
 
     def _generate_private_key(self, key_type: str) -> Any:
-        """Generate a private key according to the selected key_type choice string."""
-        if key_type.startswith('RSA-'):
-            key_size = int(key_type.split('-')[1])
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA,
-                key_size=key_size,
-            )
-        else:
-            curve_name = key_type.split('-', 1)[1]
-            named_curve = NamedCurve[curve_name.upper()]
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC,
-                named_curve=named_curve,
-            )
-        return KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
+        """Generate the selected key using the shared catalog conversion."""
+        return KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info_from_key_type(key_type))
 
     def _resolve_unique_name(self, unique_name: str | None, host: str) -> str:
         """Return the given unique_name, or derive one from the remote host."""

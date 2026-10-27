@@ -17,6 +17,7 @@ from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import HashAlgorithm
 
+from cmp.der import der_tlv as _der_tlv
 from cmp.models import CmpTransactionModel
 from cmp.util import cmp_hmac_algorithm
 from devices.secrets import retire_onboarding_secrets
@@ -41,21 +42,6 @@ if TYPE_CHECKING:
 CMP_MESSAGE_VERSION = 2
 SENDER_NONCE_LENGTH = 16
 HTTP_ERROR_STATUS_THRESHOLD = 400
-
-# Threshold below which DER length fits in a single byte (short form).
-_DER_LENGTH_SHORT_FORM_MAX = 0x7F
-
-
-def _der_tlv(tag_byte: int, value: bytes) -> bytes:
-    """Construct a DER Tag-Length-Value triplet.
-
-    Handles both short-form (length < 128) and long-form DER lengths.
-    """
-    length = len(value)
-    if length <= _DER_LENGTH_SHORT_FORM_MAX:
-        return bytes([tag_byte, length]) + value
-    length_payload = length.to_bytes((length.bit_length() + 7) // 8, 'big')
-    return bytes([tag_byte, 0x80 | len(length_payload)]) + length_payload + value
 
 
 class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
@@ -270,6 +256,24 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
 
         return certificate_chain
 
+    @classmethod
+    def _protect_and_respond(cls, pki_message: rfc4210.PKIMessage, context: CmpCertificateRequestContext) -> None:
+        """Apply CMP protection and write the encoded certificate response."""
+        if context.implicit_confirm:
+            pki_message = cls._grant_implicit_confirm(pki_message)
+        if context.cmp_shared_secret:
+            pki_message = cls._add_protection_shared_secret(pki_message=pki_message, context=context)
+        else:
+            pki_message = cls._sign_pki_message(pki_message=pki_message, context=context)
+
+        encoded_message = encoder.encode(pki_message)
+
+        if context.implicit_confirm and context.device and context.device.onboarding_config:
+            retire_onboarding_secrets(context.device.onboarding_config)
+        context.http_response_status = 200
+        context.http_response_content = encoded_message
+        context.http_response_content_type = 'application/pkixcmp'
+
 
 class CmpInitializationResponder(CmpMessageResponder):
     """Respond to a CMP initialization request (IR) with the issued certificate (IP)."""
@@ -360,7 +364,6 @@ class CmpInitializationResponder(CmpMessageResponder):
 
         return ip_message
 
-
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP initialization message with the issued certificate."""
@@ -393,25 +396,7 @@ class CmpInitializationResponder(CmpMessageResponder):
             signer_credential=signer_credential,
             context=context,
         )
-        if context.implicit_confirm:
-            pki_message = CmpInitializationResponder._grant_implicit_confirm(pki_message)
-        if context.cmp_shared_secret:
-            pki_message = CmpInitializationResponder._add_protection_shared_secret(
-                pki_message=pki_message, context=context
-            )
-        else:
-            pki_message = CmpInitializationResponder._sign_pki_message(
-                pki_message=pki_message, context=context
-            )
-
-        encoded_message = encoder.encode(pki_message)
-
-        if context.implicit_confirm and context.device and context.device.onboarding_config:
-
-            retire_onboarding_secrets(context.device.onboarding_config)
-        context.http_response_status = 200
-        context.http_response_content = encoded_message
-        context.http_response_content_type = 'application/pkixcmp'
+        CmpInitializationResponder._protect_and_respond(pki_message, context)
 
 
 class CmpCertificationResponder(CmpMessageResponder):
@@ -521,25 +506,7 @@ class CmpCertificationResponder(CmpMessageResponder):
             issuer_credential=issuing_ca_credential,
             context=context,
         )
-        if context.implicit_confirm:
-            pki_message = CmpCertificationResponder._grant_implicit_confirm(pki_message)
-        if context.cmp_shared_secret:
-            pki_message = CmpCertificationResponder._add_protection_shared_secret(
-                pki_message=pki_message, context=context
-            )
-        else:
-            pki_message = CmpCertificationResponder._sign_pki_message(
-                pki_message=pki_message, context=context
-            )
-
-        encoded_message = encoder.encode(pki_message)
-
-        if context.implicit_confirm and context.device and context.device.onboarding_config:
-
-            retire_onboarding_secrets(context.device.onboarding_config)
-        context.http_response_status = 200
-        context.http_response_content = encoded_message
-        context.http_response_content_type = 'application/pkixcmp'
+        CmpCertificationResponder._protect_and_respond(pki_message, context)
 
 
 class CmpTransactionResponder(CmpMessageResponder):
@@ -1055,7 +1022,6 @@ class CmpErrorMessageResponder(CmpMessageResponder):
         context.http_response_status = 200
         context.http_response_content = encoded_message
         context.http_response_content_type = 'application/pkixcmp'
-
 
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:

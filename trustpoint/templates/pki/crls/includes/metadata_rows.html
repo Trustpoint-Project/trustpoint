@@ -1,0 +1,12 @@
+{% load i18n %}
+{% include 'pki/crls/includes/number_and_dates.html' with crl=crl only %}
+
+<div>
+    <div>
+        {% trans 'Revoked Certificates' %}
+    </div>
+
+    <div>
+        {{ crl.get_revoked_serial_numbers|length }}
+    </div>
+</div>

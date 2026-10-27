@@ -4,7 +4,8 @@
 """EST-specific message responder classes."""
 import base64
 
-from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
+from cryptography.hazmat.primitives.serialization import Encoding
+from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from devices.secrets import retire_onboarding_secrets
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
@@ -91,7 +92,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
             chain = [context.issued_certificate]
             if context.issued_certificate_chain:
                 chain.extend(context.issued_certificate_chain)
-            cert_bytes = pkcs7.serialize_certificates(chain, encoding=Encoding.DER)
+            cert_bytes = CertificateCollectionSerializer(chain).as_pkcs7_der()
         else:
             cert_bytes = context.issued_certificate.public_bytes(encoding=encoding)
 

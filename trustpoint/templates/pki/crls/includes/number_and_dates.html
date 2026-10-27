@@ -1,0 +1,42 @@
+{% load i18n internationalization_tags %}
+<div>
+    <div>
+        {% trans 'CRL Number' %}
+    </div>
+
+    <div>
+        {% if crl.crl_number %}
+            {{ crl.crl_number }}
+        {% else %}
+            <span class="text-muted">
+                {% trans 'No number' %}
+            </span>
+        {% endif %}
+    </div>
+</div>
+
+<div>
+    <div>
+        {% trans 'This Update' %}
+    </div>
+
+    <div>
+        {{ crl.this_update|local_datetime }}
+    </div>
+</div>
+
+<div>
+    <div>
+        {% trans 'Next Update' %}
+    </div>
+
+    <div>
+        {% if crl.next_update %}
+            {{ crl.next_update|local_datetime }}
+        {% else %}
+            <span class="text-muted">
+                {% trans 'Not set' %}
+            </span>
+        {% endif %}
+    </div>
+</div>

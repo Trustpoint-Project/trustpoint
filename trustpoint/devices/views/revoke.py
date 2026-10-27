@@ -26,19 +26,18 @@ from devices.forms import (
 from devices.models import (
     DeviceModel,
 )
-from devices.revocation import DeviceCredentialRevocation
+from devices.views.mixins import DeviceBulkSelectionMixin
 from management.models.audit_log import AuditLog
 from onboarding.models import NoOnboardingPkiProtocol
 from pki.models import IssuedCredentialModel
 from pki.models.certificate import CertificateModel
-from trustpoint.logger import LoggerMixin
+from pki.services.revocation import revoke_primary_certificate
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     PageContextMixin,
 )
 from users.permissions import AppPermissions
-from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -127,7 +126,7 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
                 msg = gettext_lazy('Certificate is already revoked. Cannot revoke a revoked certificate again.')
                 messages.error(self.request, msg)
                 return redirect(reverse_path)
-            revoked_successfully, _ = DeviceCredentialRevocation.revoke_certificate(self.object.id, revocation_reason)
+            revoked_successfully, _ = revoke_primary_certificate(self.object.id, revocation_reason)
             if revoked_successfully:
                 msg = gettext_lazy('Successfully revoked one active credential.')
                 messages.success(self.request, msg)
@@ -162,8 +161,10 @@ class OpcUaGdsPushIssuedCredentialRevocationView(AbstractIssuedCredentialRevocat
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
-class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel]):
+class AbstractBulkRevokeView(DeviceBulkSelectionMixin, PageContextMixin, ListView[DeviceModel]):
     """View to confirm the deletion of multiple Devices."""
+
+    selection_required_message = gettext_lazy('Please select the devices you would like to revoke.')
 
     model = DeviceModel
     template_name = 'devices/confirm_bulk_revoke.html'
@@ -191,49 +192,6 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
         context['revoke_form'] = self.form_class(initial={'pks': self.pks})
         context['device_revoke_url'] = f'{self.page_category}:{self.page_name}_device_revoke'
         return context
-
-    def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Gets the queryset of DeviceModel objects that are requested to be revoked.
-
-        Returns:
-            The queryset of DeviceModel objects that are requested to be revoked.
-        """
-        if not self.pks:
-            self.pks = self.kwargs.get('pks', '')
-        pks_list = get_primary_keys_from_str_as_list_of_ints(pks=self.pks)
-        qs = DeviceModel.objects.filter(pk__in=pks_list)
-
-        found_pks = set(qs.values_list('pk', flat=True))
-        missing = set(pks_list) - found_pks
-
-        self.missing = ', '.join(str(pk) for pk in missing)
-
-        return qs
-
-    def _set_queryset(self, request: HttpRequest) -> str | None:
-        try:
-            self.queryset = self.get_queryset()
-        except ValueError:
-            err_msg_template = gettext_lazy('Please select the devices you would like to revoke.')
-            err_msg = err_msg_template.format(pks=self.pks)
-            messages.error(request, err_msg)
-            return 'devices:devices'
-        except Exception:
-            err_msg_template = gettext_lazy(
-                f'Failed to retrieve the queryset for primary keys: {self.pks}.See logs for more details.'
-            )
-            err_msg = err_msg_template.format(pks=self.pks)
-            self.logger.exception(err_msg)
-            messages.error(request, err_msg)
-            return 'devices:devices'
-
-        if self.missing:
-            err_msg_template = gettext_lazy(f'Devices for the following primary keys were not found: {self.pks}.')
-            err_msg = err_msg_template.format(pks=self.missing)
-            messages.error(request, err_msg)
-            return 'devices:devices'
-
-        return None
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """HTTP GET processing.
@@ -285,7 +243,7 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
 
             n_revoked = 0
             for credential in issued_credentials_to_revoke_qs:
-                revoked_successfully, _ = DeviceCredentialRevocation.revoke_certificate(
+                revoked_successfully, _ = revoke_primary_certificate(
                     credential.id, revocation_reason
                 )
                 if revoked_successfully:

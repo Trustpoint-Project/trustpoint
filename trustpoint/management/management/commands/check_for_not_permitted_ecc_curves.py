@@ -9,9 +9,11 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+from trustpoint_core.oid import PublicKeyAlgorithmOid
 
 from management.models import NotificationModel, NotificationStatus, SecurityConfig
 from pki.models import CertificateModel
+from pki.security_policy import CryptographicPolicy, PolicyViolationCode, evaluate_public_key, stored_public_key_facts
 
 
 class Command(BaseCommand):
@@ -34,12 +36,19 @@ class Command(BaseCommand):
         config = SecurityConfig.objects.first()
         if config is None:
             return
-        not_permitted_ecc_curves = config.not_permitted_ecc_curve_oids
+        policy = CryptographicPolicy.from_config(config)
+        if not policy.blocked_curve_oids:
+            return
 
-        not_permitted_ecc_certificates = CertificateModel.objects.filter(spki_ec_curve_oid__in=not_permitted_ecc_curves)
+        not_permitted_ecc_certificates = CertificateModel.objects.filter(
+            spki_algorithm_oid=PublicKeyAlgorithmOid.ECC.dotted_string,
+        )
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
 
-        for cert in not_permitted_ecc_certificates:
+        for cert in not_permitted_ecc_certificates.iterator():
+            if not any(failure.code == PolicyViolationCode.ECC_CURVE_BLOCKED
+                       for failure in evaluate_public_key(policy, stored_public_key_facts(cert))):
+                continue
             if not NotificationModel.objects.filter(event='WEAK_ECC_CURVE', certificate=cert).exists():
                 message_data = {'common_name': cert.common_name, 'spki_ec_curve': cert.spki_ec_curve}
 

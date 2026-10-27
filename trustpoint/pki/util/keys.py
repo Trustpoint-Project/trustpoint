@@ -22,8 +22,10 @@ except ImportError:
 
 from django.db import models
 from trustpoint_core.crypto_types import PublicKey
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+from trustpoint_core.oid import KeyPairGenerator, PublicKeyInfo
 from trustpoint_core.serializer import PrivateKeySerializer
+
+from pki.key_types import public_key_info_from_key_type
 
 if TYPE_CHECKING:
     from typing import Any, TypeGuard
@@ -45,21 +47,8 @@ class AutoGenPkiKeyAlgorithm(models.TextChoices):
     # omitting the rest of the choices as an example that Auto Gen PKI doesn't have to support all key algorithms
 
     def to_public_key_info(self) -> PublicKeyInfo:
-        """Gets the corresponding public key info for the key algorithm."""
-        if self.value == AutoGenPkiKeyAlgorithm.RSA2048:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=2048)
-        if self.value == AutoGenPkiKeyAlgorithm.RSA4096:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=4096)
-        if self.value == AutoGenPkiKeyAlgorithm.SECP256R1:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=NamedCurve.SECP256R1)
-        if self.value == AutoGenPkiKeyAlgorithm.MLDSA44:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_44)
-        if self.value == AutoGenPkiKeyAlgorithm.MLDSA65:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_65)
-        if self.value == AutoGenPkiKeyAlgorithm.MLDSA87:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_87)
-        exc_msg = f'Unsupported key algorithm type for AutoGenPKI: {self.value}'
-        raise ValueError(exc_msg)
+        """Resolve the legacy algorithm identifier through the shared catalog."""
+        return public_key_info_from_key_type(self.value)
 
 
 class KeyGenerator:

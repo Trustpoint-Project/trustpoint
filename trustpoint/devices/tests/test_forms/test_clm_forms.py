@@ -8,7 +8,12 @@ from typing import Any
 import pytest
 from django.forms import ValidationError
 
-from devices.forms import ClmDeviceModelNoOnboardingForm, ClmDeviceModelOnboardingForm, ClmDeviceModelOpcUaGdsPushOnboardingForm
+from devices.forms import (
+    ClmAgentDeviceForm,
+    ClmDeviceModelNoOnboardingForm,
+    ClmDeviceModelOnboardingForm,
+    ClmDeviceModelOpcUaGdsPushOnboardingForm,
+)
 from devices.models import (
     DeviceModel,
     NoOnboardingPkiProtocol,
@@ -16,6 +21,20 @@ from devices.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+
+
+@pytest.mark.parametrize('form_type', [ClmDeviceModelOnboardingForm, ClmDeviceModelNoOnboardingForm, ClmAgentDeviceForm])
+def test_clm_name_validation_excludes_the_current_device(form_type, device_instance):
+    """All CLM edit forms retain the current name and reject another device's name."""
+    device = device_instance['device']
+    form = form_type(instance=device)
+    form.cleaned_data = {'common_name': device.common_name}
+    assert form.clean_common_name() == device.common_name
+
+    other = DeviceModel.objects.create(common_name='occupied-device')
+    form.cleaned_data = {'common_name': other.common_name}
+    with pytest.raises(ValidationError, match='Device with this common name already exists'):
+        form.clean_common_name()
 
 
 @pytest.mark.django_db
