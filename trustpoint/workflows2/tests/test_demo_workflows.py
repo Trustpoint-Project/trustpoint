@@ -43,6 +43,14 @@ def definition(name):
     return Workflow2Definition.objects.get(name=f'[Demo] {name}')
 
 
+def enable_approval_demos():
+    service = WorkflowDefinitionService()
+    for name in ('Enrollment approval', 'Conditional enrollment approval'):
+        workflow = definition(name)
+        _, result = service.update_definition(definition=workflow, enabled=True, yaml_text=workflow.yaml_text)
+        assert result.ok, result.error
+
+
 def test_installation_is_create_only_even_after_rename(demos):
     workflow = definition('Enrollment approval')
     source = parse_yaml_text(workflow.yaml_text)
@@ -77,6 +85,8 @@ def test_every_demo_compiles_and_has_description_scope_and_graph(demos):
         compiled = WorkflowDefinitionService().compile_yaml(workflow.yaml_text)
         assert compiled.ok, compiled.error
         assert compiled.ir == workflow.ir_json
+        assert not workflow.enabled
+        assert compiled.ir['enabled'] is False
         assert workflow.yaml_text.startswith('# ')
         assert compiled.ir['trigger']['on'] == 'cmp.initialization'
         assert compiled.ir['trigger']['sources']['trustpoint']
@@ -109,6 +119,7 @@ def test_demo_command_installs_workflows_last():
 
 @pytest.mark.parametrize('decision', ['approved', 'rejected'])
 def test_manual_approval_gates_real_enrollment_trigger(demos, decision):
+    enable_approval_demos()
     cfg = WorkflowExecutionConfig.load()
     cfg.mode = WorkflowExecutionConfig.Mode.WORKER
     cfg.save()
@@ -158,12 +169,17 @@ def test_conditional_enrollment_branches(demos, profile, status):
 
 
 @pytest.mark.parametrize('domain_id', [123, 456])
-def test_cmp_matches_any_domain_and_notifications_start_disabled(demos, domain_id):
+def test_demos_start_disabled_and_match_any_domain_when_enabled(demos, domain_id):
     cfg = WorkflowExecutionConfig.load()
     cfg.mode = WorkflowExecutionConfig.Mode.WORKER
     cfg.save()
     service = WorkflowDispatchService()
     source = EventSource(trustpoint=False, domain_id=domain_id)
+    assert not Workflow2Definition.objects.filter(enabled=True).exists()
+    assert service.emit_event(
+        on='cmp.initialization', event={'cmp': {'cert_profile': 'tls_client'}}, source=source,
+    ) == []
+    enable_approval_demos()
     instances = service.emit_event(
         on='cmp.initialization', event={'cmp': {'cert_profile': 'tls_client'}}, source=source,
     )

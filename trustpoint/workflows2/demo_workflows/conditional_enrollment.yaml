@@ -1,3 +1,4 @@
+# Enable this workflow and Save & Compile.
 # Requires a CMP initialization request from any domain. Requests for the existing tls_client profile
 # are approved automatically; other profiles require an operator decision in Workflows > Approvals
 # within one hour. Rejection denies enrollment and timeout fails it. Other enabled enrollment
@@ -5,7 +6,7 @@
 
 schema: trustpoint.workflow.v2
 name: '[Demo] Conditional enrollment approval'
-enabled: true
+enabled: false
 trigger:
   on: cmp.initialization
   sources:

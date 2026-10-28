@@ -1,10 +1,11 @@
+# Enable this workflow and Save & Compile.
 # Requires a CMP initialization request from any domain. Pauses enrollment for an operator decision in
 # Workflows > Approvals. Approval permits issuance; rejection denies it; no decision within one hour
 # times out. Uses the domain CA and requested certificate profile.
 
 schema: trustpoint.workflow.v2
 name: '[Demo] Enrollment approval'
-enabled: true
+enabled: false
 trigger:
   on: cmp.initialization
   sources:

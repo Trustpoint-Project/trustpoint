@@ -165,13 +165,14 @@ Explicit demo-data setup installs four editable `[Demo]` workflows through the
 existing `add_domains_and_devices` command. The setup wizard's demo-data option,
 `TP_INJECT_DEMO_DATA`, and `reset_db --add` all use this path. Normal initialization
 without demo data installs none. Setup imports YAML definitions only; it does not
-start executions. Repeating setup preserves existing definitions,
-including renamed, disabled, or edited examples.
+start executions. All demo workflows start disabled and must be enabled explicitly.
+Repeating setup preserves existing definitions, including renamed, disabled, or
+edited examples.
 
 | Workflow | Initial state | Behavior |
 | --- | --- | --- |
-| Enrollment approval | Enabled | CMP initialization waits for approval; rejection denies enrollment and one hour without a decision times out. |
-| Conditional enrollment approval | Enabled | CMP initialization with `tls_client` is approved automatically; other profiles wait for approval. |
+| Enrollment approval | Disabled | CMP initialization waits for approval; rejection denies enrollment and one hour without a decision times out. |
+| Conditional enrollment approval | Disabled | CMP initialization with `tls_client` is approved automatically; other profiles wait for approval. |
 | Issued certificate email | Disabled | Emails final certificate attributes after CMP initialization issuance. |
 | Final certificate webhook | Disabled | Posts final certificate attributes after CMP initialization issuance and branches on the HTTP response status. |
 
