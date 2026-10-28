@@ -141,6 +141,7 @@ Application Certificates
 | **AOKI** *(proof of concept)* | Zero-touch industrial device onboarding | IDevID / DevOwnerID based trust | Initial device onboarding and identity establishment |
 | **EST** | Standards-based certificate enrollment | Username/password, IDevID, client certificate | Onboarding, application certificates, renewal, re-enrollment |
 | **CMP** | Flexible enrollment for industrial or constrained devices | Shared secret, IDevID, client certificate | Onboarding, enrollment, renewal, rekeying |
+| **SCEP** | Certificate enrollment for industrial and other devices | Per-device challengePassword for initial enrollment, client certificate for renewal | Application certificate enrollment and renewal |
 | **OPC UA GDS Push** | OPC UA certificate and trust-list distribution | Secure device registration and certificate authentication | Server certificate and trust-anchor distribution, cyclic updates |
 | **Manual / remote download** | Operator-driven or browser-assisted issuance | Operator workflow / one-time password | PKCS#12 or PEM credential delivery |
 
@@ -149,6 +150,7 @@ Learn more:
 - [AOKI — Automated Onboarding Key Infrastructure](https://trustpoint.readthedocs.io/en/latest/features/aoki/index.html)
 - [EST API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/est.html)
 - [CMP API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/cmp.html)
+- [SCEP API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/scep.html)
 - [OPC UA GDS Push specification](https://reference.opcfoundation.org/GDS/v105/docs/7.4)
 
 ## Core capabilities
