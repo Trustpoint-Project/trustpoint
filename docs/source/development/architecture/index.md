@@ -129,7 +129,6 @@ This architecture documentation is organized into the following topics:
 ```{toctree}
 :maxdepth: 2
 
-overview
 runtime_architecture
 component_structure
 security_model

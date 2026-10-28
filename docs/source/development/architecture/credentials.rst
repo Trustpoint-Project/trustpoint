@@ -11,7 +11,11 @@ Credentials - Architecture
 Overview
 --------
 
-The **CredentialModel** is the central abstraction for managing certificates and private keys in Trustpoint. It supports multiple credential types (TLS Server, Root CA, Issuing CA, Issued Credentials, DevOwnerID, Signer) and can store keys either directly in the database or in hardware security modules (HSM) via PKCS#11.
+The **CredentialModel** associates certificates with their purpose and key material.
+It supports TLS Server, Root CA, Issuing CA, Issued Credential, DevOwnerID, and
+Signer types. Signing credentials use a ``managed_private_key`` reference to the
+configured crypto backend. Stored exportable end-entity/TLS material may instead
+use the encrypted ``private_key`` field. A credential cannot use both key paths.
 
 The credential architecture manages the lifecycle from issuance through validation, storage, and deployment to devices.
 
@@ -55,9 +59,9 @@ CredentialModel stores:
    * - **credential_type**
      - One of the CredentialTypeChoice values above
    * - **private_key** (PEM)
-     - Encrypted private key stored in database (for software keys)
-   * - **pkcs11_private_key**
-     - Reference to private key in HSM/token (for PKCS#11 keys)
+     - Encrypted PEM for permitted exportable end-entity/TLS material
+   * - **managed_private_key**
+     - Reference to a CryptoManagedKeyModel; backend bindings select software or PKCS#11 storage
    * - **certificate**
      - Primary certificate (ForeignKey to CertificateModel)
    * - **certificates**
@@ -73,19 +77,19 @@ Each credential has a **primary certificate** (the leaf/end-entity certificate) 
 
 .. uml::
 
-   CredentialModel {
+   class CredentialModel {
       + certificate: CertificateModel (primary/leaf)
       + certificates: [CertificateModel] (via PrimaryCredentialCertificate)
       + certificate_chain: [CertificateModel] (ordered, via CertificateChainOrderModel)
    }
 
-   PrimaryCredentialCertificate {
+   class PrimaryCredentialCertificate {
       + credential: CredentialModel
-      + certificate: CertificateModel (OneToOne)
+      + certificate: CertificateModel (ForeignKey)
       + is_primary: bool
    }
 
-   CertificateChainOrderModel {
+   class CertificateChainOrderModel {
       + credential: CredentialModel
       + certificate: CertificateModel
       + order: int

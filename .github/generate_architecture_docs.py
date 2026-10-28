@@ -343,7 +343,7 @@ URL Patterns by App
             view = route.get('view', '').rsplit('.', 1)[-1] if 'view' in route else '-'
             name = route.get('name', '-')
 
-            rst_content += f'   * - ``{pattern}``\n'
+            rst_content += f'   * - ``{pattern or "/"}``\n'
             rst_content += f'     - ``{view}``\n'
             rst_content += f'     - ``{name}``\n'
 

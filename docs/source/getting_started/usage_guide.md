@@ -1,3 +1,5 @@
+(trustpoint_usage_guide)=
+
 # Trustpoint Usage Guide
 
 Trustpoint provides secure and efficient certificate management. This guide outlines the main stages of using Trustpoint and describes the various ways it can operate in regard to the Issuing Certificate Authority (CA).

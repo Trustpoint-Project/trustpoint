@@ -44,14 +44,14 @@ Below is an overview of the key workflows included in the project:
 Sequence Diagram CI/CD Pipeline
 -------------------------------
 
-.. plantuml:: ../diagrams/sequence_pipeline.puml
+.. plantuml:: ../../diagrams/sequence_pipeline.puml
     :caption: Sequence Diagram of the automatically triggered pipelines
 
 --------------------------------
 Component Diagram CI/CD Pipeline
 --------------------------------
 
-.. plantuml:: ../diagrams/component_pipeline.puml
+.. plantuml:: ../../diagrams/component_pipeline.puml
     :caption: Component Diagram of the automatically triggered pipelines
 
 .. _composite_setup_action:
@@ -65,40 +65,44 @@ it makes sense to create a separate action that can be used from every other act
 The so called `"composite action" <https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-composite-action>`_
 looks like the following:
 
-.. literalinclude:: ../../../.github/actions/setup-uv-action/action.yml
+.. literalinclude:: ../../../../.github/actions/setup-uv-action/action.yml
     :language: yaml
     :caption: Setup uv composite action
 
 As said, this action sets up the environment by installing :term:`uv` via Astrals github action
 `setup-uv <https://github.com/marketplace/actions/astral-sh-setup-uv>`_ and uses a pinned version, as well as caching.
 After this, the `setup-python <https://github.com/actions/setup-python>`_ action
-is called which takes the python version from the pyproject file.
+is called with the shared action's ``python-version`` input (currently Python 3.14),
+matching the Docker runtime. ``pyproject.toml`` defines the supported minimum, not
+that CI input.
 At the time of writing this, that action may be faster than uv's own action because of GitHubs caching mechanism.
-The action ends with maybe running database migrations depending on the switch provided by the input ``run_migrations``.
+With ``run_migrations=true``, the action provisions a synthetic software KEK for
+the job and resets its disposable database while preserving tracked migrations.
+That destructive setup is for isolated CI, not an installation or upgrade recipe.
 
 ===============
 Behave Pipeline
 ===============
 
 The following workflow file is a reusable template workflow
-because we want to have exactly one result for every feature file executed.
-That is to show the progress inside the README.md file which features are working and which do not work just yet.
-This workflow template uses a string as an input value which just specifies which feature file to run.
+with one result per capability directory selected by the matrix.
+The template accepts a path below ``trustpoint/features/`` and uploads a report
+for the selected scenarios.
 First of all, we checkout the code via `actions/checkout <https://github.com/actions/checkout>`_.
 Then, we are using the previously defined action (see :ref:`composite_setup_action`) to make :term:`uv` usable inside this workflow.
 Having :term:`uv` activated, the behave action is triggered for the given feature file.
 Note that we need to use ``uv run trustpoint/manage.py behave`` instead of ``uv run behave`` to make :term:`Django` available for behave.
 Once the tests are ran, an artifact with the test reports is uploaded.
 
-.. literalinclude:: ../../../.github/workflows/behave-test-template.yml
+.. literalinclude:: ../../../../.github/workflows/behave-test-template.yml
     :language: yaml
     :caption: Behave template workflow
 
 We provide an example on how to use this workflow below:
 
-.. literalinclude:: ../../../.github/workflows/r_013_feature_test.yml
+.. literalinclude:: ../../../../.github/workflows/behave.yml
     :language: yaml
-    :caption: R_013 workflow
+    :caption: Behave capability matrix
 
 .. _codecov_pipeline:
 
@@ -110,7 +114,7 @@ We are using `Codecov <https://about.codecov.io/>`_ for analyzing our pytest cod
 This workflow is also setting up :term:`uv` as in :ref:`composite_setup_action`
 and using it to run pytest with a coverage report which will be uploaded to codecov in the next step.
 
-.. literalinclude:: ../../../.github/workflows/codecov-upload.yml
+.. literalinclude:: ../../../../.github/workflows/codecov-upload.yml
     :language: yaml
     :caption: Upload to codecov workflow
 
@@ -118,14 +122,14 @@ and using it to run pytest with a coverage report which will be uploaded to code
 Pytest Pipeline
 ===============
 
-This pipeline/workflow is kind of the same as `the one above <codecov_pipeline>`_
+This pipeline/workflow is kind of the same as :ref:`the coverage pipeline <codecov_pipeline>`
 except from not running the coverage reports and therefore also not uploading them.
 Here, we use a git flavored markdown report for printing the report nicely to the job summary.
 After this, there is the full report uploaded first and lastly,
 if one or more tests fail,
 we add a comment to the current pull request.
 
-.. literalinclude:: ../../../.github/workflows/pytest.yml
+.. literalinclude:: ../../../../.github/workflows/pytest.yml
     :language: yaml
     :caption: Pytest workflow
 
@@ -138,7 +142,7 @@ mypy Pipeline
 We use :term:`mypy` for static type checking in python.
 This pipeline is actually really short because it just sets up :term:`uv` from :ref:`composite_setup_action` and then runs :term:`mypy`.
 
-.. literalinclude:: ../../../.github/workflows/mypy.yml
+.. literalinclude:: ../../../../.github/workflows/mypy.yml
     :language: yaml
     :caption: mypy workflow
 
@@ -147,9 +151,10 @@ Ruff Pipeline
 =============
 
 Also, the :term:`ruff` action is nearly as short as the :ref:`mypy_pipeline`.
-The only difference is that we now run :term:`ruff` and upload the report if there are any errors.
+It runs ``ruff check .``. It does not run the formatter or upload a separate
+report; use the development guide's formatter check locally.
 
-.. literalinclude:: ../../../.github/workflows/ruff.yml
+.. literalinclude:: ../../../../.github/workflows/ruff.yml
     :language: yaml
     :caption: ruff workflow
 
@@ -162,7 +167,7 @@ This pipeline runs CodeQL analysis on multiple languages including Python, JavaS
 It performs static analysis to identify potential security vulnerabilities and code quality issues.
 The analysis is configured with a custom CodeQL configuration file and runs on a schedule as well as on pushes and pull requests to the main branch.
 
-.. literalinclude:: ../../../.github/workflows/codeql.yml
+.. literalinclude:: ../../../../.github/workflows/codeql.yml
     :language: yaml
     :caption: CodeQL workflow
 
@@ -173,8 +178,11 @@ ZAP Pipeline
 We use `OWASP ZAP <https://www.zaproxy.org/>`_ (Zed Attack Proxy) for automated security scanning of the web application.
 This pipeline performs baseline security scans on both HTTP and HTTPS endpoints of the running Trustpoint application.
 It starts the application using Docker Compose, runs ZAP scans on ports 80 (HTTP) and 443 (HTTPS), and uploads the scan reports as artifacts.
-The pipeline fails if high or medium severity issues are found, while low severity issues are reported as warnings.
+The final step counts ``FAIL-NEW`` and ``WARN-NEW`` entries in available reports.
+Scan steps currently allow errors, and absent reports are not rejected by that
+final step. Inspect scan completion and artifacts before treating a green job as
+security evidence. It is not an authenticated operational-coverage guarantee.
 
-.. literalinclude:: ../../../.github/workflows/zap.yml
+.. literalinclude:: ../../../../.github/workflows/zap.yml
     :language: yaml
     :caption: ZAP workflow

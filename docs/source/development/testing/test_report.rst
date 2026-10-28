@@ -1,170 +1,88 @@
 .. _test_report:
 
-***********
+===========
 Test Report
-***********
+===========
 
-This document is providing a test report for Trustpoint.
-It should be updated with every version bump.
+Release evidence must identify the tested commit/image, environment, command,
+result, skipped cases, and retained logs. A workflow badge is a moving branch
+status, not evidence that a particular release passed every check. Record the
+final candidate results alongside the release notes and use
+:doc:`../release-checklist` for the remaining acceptance scenarios.
 
-.. warning::
-    This is still w.i.p.!
-
-=================
-Unit Test Results
-=================
-
-For a summary of all pytest executions please see the output of the GitHub action
-that provides an action to run every pytest.
-This action can be found here:
-`pytest action <https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml>`_.
-
-The current status of all test executions is |pytest|.
-
-.. |pytest| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg
-    :alt: Pytest
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml
-
-========================
-Integration Test Results
-========================
-
-Since we are using :term:`BDD` to define the tests,
-we provide the test runs by leveraging the :term:`behave` framework.
-The summary of the tests can be seen in the following table.
-For more detailed output please visit the corresponding github action pages.
-
-.. csv-table:: Functional Requirements
-   :header: "Name (Identifier)", "Title", "Status of the behave tests"
-   :widths: 10, 60, 30
-
-   _`R_001`, "Create, view, edit and delete a device", "|R_001_badge|"
-   _`R_002`, "Usage of any zero touch onboarding protocol", "No test present."
-   _`R_003`, "Certificate Lifecycle Management", "|R_003_badge|"
-   _`R_004`, "REST API", "|R_004_badge|"
-   _`R_005`, "Docker Container Support", "|R_005_badge|"
-   _`R_006`, "Backup, Restore, and Update Mechanisms", "|R_006_badge|"
-   _`R_007`, "Logging Capabilities", "|R_007_badge|"
-   _`R_008`, "Auto-Generated :term:`Issuing CA`'s", "|R_008_badge|"
-   _`R_009`, "High Availability", "No test present."
-   _`R_010`, ":term:`CMP` Endpoint for Onboarded Devices", "|R_010_badge|"
-   _`R_011`, ":term:`EST` Endpoint for Onboarded Devices", "|R_011_badge|"
-   _`R_012`, "Language Selection and Translation", "|R_012_badge|"
-   _`R_013`, "Remote Credential Download", "|R_013_badge|"
-   _`R_101`, "Security Level Configuration", "|R_101_badge|"
-   _`R_102`, "Certificate Template Security", "|R_102_badge|"
-   _`R_103`, "Create, view, and delete a domain", "|R_103_badge|"
-   _`R_104`, "Create, view, and delete a truststore", "|R_104_badge|"
-   _`F_001`, "NTEU must be able to execute R_001 and R_002.", "|F_001_badge|"
-
-
-.. |R_001_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml/badge.svg
-    :alt: R_001_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml
-
-.. |R_003_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml/badge.svg
-    :alt: R_003_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml
-
-.. |R_004_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml/badge.svg
-    :alt: R_004_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml
-
-.. |R_005_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-test-compose.yml/badge.svg
-    :alt: R_005_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-test-compose.yml
-
-.. |R_006_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml/badge.svg
-    :alt: R_006_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml
-
-.. |R_007_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml/badge.svg
-    :alt: R_007_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml
-
-.. |R_008_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml/badge.svg
-    :alt: R_008_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml
-
-.. |R_010_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml/badge.svg
-    :alt: R_010_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml
-
-.. |R_011_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml/badge.svg
-    :alt: R_011_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml
-
-.. |R_012_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml/badge.svg
-    :alt: R_012_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml
-
-.. |R_013_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml/badge.svg
-    :alt: R_013_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml
-
-.. |R_101_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml/badge.svg
-    :alt: R_101_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml
-
-.. |R_102_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml/badge.svg
-    :alt: R_102_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml
-
-.. |R_103_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml/badge.svg
-    :alt: R_103_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml
-
-.. |R_104_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml/badge.svg
-    :alt: R_104_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml
-
-.. |F_001_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml/badge.svg
-    :alt: F_001_badge
-    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml
-
-===========================
-Defect and Incident Reports
-===========================
-
-Here, the following should be provided:
-
-- A summary of defects identified during testing.
-- Resolution status of each defect.
-- Associated logs for debugging.
-
-==========================
-Acceptance Testing Summary
-==========================
-
-Here, the following should be provided:
-
-- Results of acceptance tests conducted with end users.
-- User feedback and final approval status.
-- Any open issues and their planned resolutions.
-
-================
-Coverage Metrics
+Automated suites
 ================
 
-The coverage metrics and the current coverage can be seen on `Codecov <https://app.codecov.io/>`_.
-As of now, there is a coverage of |codecoverage|.
+The repository currently provides these workflow entry points:
 
-.. |codecoverage| image:: https://codecov.io/gh/Trustpoint-Project/trustpoint/graph/badge.svg?token=0N31L1QWPE
-    :alt: Coverage
-    :target: https://app.codecov.io/gh/Trustpoint-Project/trustpoint
+.. list-table:: Test and analysis workflows
+   :header-rows: 1
+   :widths: 30 35 35
 
-=========================
-Test Environment Details
-=========================
+   * - Area
+     - Workflow under ``.github/workflows/``
+     - Evidence to inspect
+   * - Application pytest
+     - ``pytest.yml``
+     - Test report, failures, skips, and selected test directories
+   * - Behave capability scenarios
+     - ``behave.yml`` / ``behave-test-template.yml``
+     - Devices, PKI, API, security, and system matrix results
+   * - Coverage
+     - ``codecov-upload.yml``
+     - Measured coverage for the tested commit and actual configured gate
+   * - Lint/type/shell checks
+     - ``ruff.yml``, ``mypy.yml``, ``shellcheck.yml``
+     - Exit status with locked tool versions; formatting is a separate check
+   * - Container setup
+     - ``docker-test-compose.yml``, ``docker-test-auto-setup.yml``, ``r_200_feature_test.yml``
+     - Clean startup, configured setup path, and HTTP/application assertions
+   * - Enrollment interoperability
+     - ``enrollment-endpoints.yml``
+     - Configured OpenSSL/client results and issued certificate assertions
+   * - Migration compatibility
+     - ``test-migrations-compatibility.yml``
+     - Inspect test direction and data assertions; system checks alone do not prove forward upgrades
+   * - Backup/restore
+     - ``backup-restore.yml``
+     - Reusable workflow only; confirm it was actually invoked and had matching secrets
+   * - Security analysis
+     - ``codeql.yml``, ``zap.yml``, ``sbom.yml``
+     - Scan completion, artifacts, findings, and review decisions
 
-To set up the test environment one can basically use the :ref:`trustpoint_dev_env_setup`.
-The pipelines for running the tests are explained in the :ref:`ci_cd` chapter.
+The current pytest workflow selects ``trustpoint/``; local complete test runs
+must also include root ``tests/`` utilities. The capability matrix replaces the
+old per-requirement ``r_001`` through ``r_104`` badge links. Requirement tags remain
+in feature files; they do not imply separate hosted workflows still exist.
 
-====================
-Remaining Test Tasks
-====================
+Environment and failure triage
+==============================
 
-Here, the following should be provided:
+Follow :ref:`trustpoint_dev_env_setup` for interpreter, database, and synthetic
+KEK setup. Follow :ref:`ci_cd` for workflow definitions. Distinguish implementation
+failures from test/configuration/environment problems and record the rerun that
+supports that classification. Never discard the original failed result.
 
-- Any pending testing activities or unresolved issues.
-- Plan for further improvements, if applicable.
+In particular:
+
+* Networking tests require permission to bind local sockets.
+* SQLite skips genuine PostgreSQL locking/concurrency behavior.
+* PKCS#11 and real GDS tests require their provider/server configuration.
+* URL-validation utility tests currently include live-DNS assumptions.
+* On macOS, temporary-file group ownership can affect initializer fixtures.
+
+Acceptance and release record
+=============================
+
+For each candidate, record:
+
+* the exact commit, package version, image digest, platform, and configuration;
+* counts of passed/failed/skipped tests, including why integration cases skipped;
+* documentation, dependency, container, and security scan results;
+* clean-install, interactive setup, update, and original-key restore results;
+* real client/provider/server combinations exercised;
+* unresolved defects, accepted limitations, and maintainer approval.
+
+See :doc:`../../release_notes` for the candidate's compatibility boundary and
+:doc:`../../features/capabilities` for limitations. This page does not announce
+acceptance, infer end-user approval, or mark unexecuted release checks as passed.

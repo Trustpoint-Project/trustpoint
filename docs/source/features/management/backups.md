@@ -26,6 +26,13 @@ Do not continue with the upgrade if creation or download fails.
 Database backups do not include the external software KEK, Django signing key, or
 HSM token. Preserve those separately as described in the [upgrade guide](upgrading.rst).
 
+The matching manifest checks the payload digest and compatibility metadata. It
+does not encrypt the payload or authenticate an untrusted backup source. Only
+restore backups from a trusted source for an explicitly compatible release.
+A raw PostgreSQL dump must still match the intended database schema and encryption
+format. See the [backup/restore contract](../../development/architecture/backup_restore.rst)
+for the separate signing-key, software KEK, and HSM recovery requirements.
+
 ## SFTP backup
 
 SFTP backup stores backups on a remote server.
@@ -49,8 +56,9 @@ The notification cycle warns when no completed local backup is available from th
 last **7 days**, including when no backups exist. Set `BACKUP_MAX_AGE_DAYS` in
 Django settings to change this threshold, or override it for a manual check:
 
-```console
-python manage.py check_backup_age --max-age-days 3
+```bash
+# From the repository root, with the intended instance configuration:
+uv run trustpoint/manage.py check_backup_age --max-age-days 3
 ```
 
 The check uses the completion timestamp in the manifest written after a successful

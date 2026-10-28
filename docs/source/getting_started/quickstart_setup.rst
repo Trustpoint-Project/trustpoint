@@ -45,8 +45,8 @@ and trusted origins. ``TP_HTTP_PORT`` and ``TP_HTTPS_PORT`` select published por
 
 Stop with ``stop`` or ``down`` to keep persistent data. Do not use ``down -v`` for
 routine maintenance. Existing 1.0 installations must preserve both keys and all
-runtime state before container replacement. Pre-1.0 encrypted database migration
-is unsupported.
+runtime state before container replacement. Trustpoint 1.0.0 is the first stable
+version and the baseline for subsequent updates.
 
 See :doc:`../features/management/docker_deployment` for published images, workers,
 SoftHSM, demo mail/SFTP services, external PostgreSQL, upgrades, and secret recovery. Continue with

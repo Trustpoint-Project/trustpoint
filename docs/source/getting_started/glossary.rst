@@ -112,6 +112,11 @@ Glossary
         The Enrollment over Secure Transport protocol is used for securely enrolling devices with a Certificate Authority,
         allowing for the automated issuance and renewal of digital certificates.
 
+    REST
+        Representational State Transfer, an architectural style for HTTP APIs.
+        Trustpoint exposes a management API under ``/api/`` and device certificate
+        enrollment endpoints under ``/rest/``; these are Trustpoint-specific interfaces.
+
     CMP
         The Certificate Management Protocol is used for managing digital certificates within a Public Key Infrastructure (PKI),
         including certificate issuance, renewal, and revocation.

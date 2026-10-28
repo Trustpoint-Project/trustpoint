@@ -1637,7 +1637,7 @@ Trustpoint
    * - URL Pattern
      - View
      - Name
-   * - ````
+   * - ``/``
      - ``view``
      - ``-``
    * - ``api/token/``

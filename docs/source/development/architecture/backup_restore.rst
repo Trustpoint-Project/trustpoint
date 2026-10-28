@@ -19,17 +19,19 @@ see :doc:`../../features/management/upgrading`.
 Restore Contract
 ================
 
-Restore always restores the database payload first. When a manifest sidecar is
-available, it must verify before restore proceeds:
+Verify a supplied manifest sidecar before applying the database payload:
 
 * the manifest version is supported;
 * the backup payload exists;
 * the manifest contains a payload SHA-256 digest;
 * the digest matches the payload bytes.
 
-The setup wizard can still accept raw PostgreSQL dumps for compatibility, but
-Trustpoint-created backups should include the sidecar. CI verifies the manifest
-before restoring the payload.
+The setup wizard can accept raw PostgreSQL dumps without a sidecar, but
+Trustpoint-created backups should retain it. A SHA-256 digest detects payload
+changes relative to the manifest; it does not authenticate a manifest supplied
+by an untrusted source. Restore only trusted, compatible backups. The reusable
+backup/restore workflow includes a manifest-verification step; inspect its actual
+execution result before treating it as release evidence.
 
 Django Signing Key
 ==================
@@ -62,8 +64,8 @@ as raw Docker secrets. Use vendor-supported hardware HSM backups.
 Database-only compromise does not expose the separate software KEK, but a fully
 compromised application host can access plaintext keys in memory and files.
 Compose file secrets provide no hardware security boundary. See
-:doc:`../../features/security/db_encryption` for details. Migration of encrypted
-databases from pre-1.0 releases is unsupported.
+:doc:`../../features/security/db_encryption` for the 1.0 encryption format and
+recovery requirements.
 
 Out Of Scope
 ============

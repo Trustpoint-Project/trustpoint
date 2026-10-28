@@ -269,19 +269,6 @@ backups, source-built or published images, worker ordering, validation, and
 rollback. Keep the same Compose project, configuration, secret files, and runtime
 volumes. Rebuilding an image alone does not migrate an unsupported database.
 
-Pre-1.0 Installations
-------------------------
-
-Migration of encrypted databases from pre-1.0 releases is unsupported. Deploy
-Trustpoint 1.0 with a fresh database and independent secrets. Keep the original
-installation and its backups intact until a separately supported migration path
-is available. The application schema transition refuses existing pre-1.0 key
-material instead of silently deleting or converting it.
-
-The initializer still supports explicit Django signing-key import with
-``--import-from``; importing that key does not migrate encrypted fields or HSM
-state. Do not fake migrations or point a fresh installation at old encrypted data.
-
 Rotation, Recovery, And Troubleshooting
 ------------------------------------------
 

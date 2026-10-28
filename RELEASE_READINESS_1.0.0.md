@@ -1,0 +1,356 @@
+# Trustpoint 1.0.0 Release Readiness Review
+
+## Executive Summary
+
+**Recommendation: NOT READY. Do not tag the reviewed commit as v1.0.0.**
+
+Reviewed commit: `695df736b` (`Merge pull request #937 from Trustpoint-Project/v1_prep`). Review date: 28 October 2026, Europe/Berlin. The worktree was clean when the audit began. This report is the only intended repository change; no implementation fixes were made.
+
+**Documentation follow-up:** the user subsequently authorized documentation fixes.
+The Documentation Assessment below records that work and its verification.
+Finding totals and original test results above/below describe the audit baseline;
+they are not a claim that all findings remain untouched. H2's first-stable baseline decision is accepted, H5's documentation defects
+are fixed, and H6's instructions are corrected; its root DNS-test/CI implementation
+issues remain. No security blocker was resolved by these documentation changes.
+
+| Severity | Findings |
+| --- | ---: |
+| P0 — Release Blocker | 6 |
+| P1 — Should Fix Before 1.0 | 9 |
+| P2 — Good 1.0 Cleanup | 4 |
+| P3 — Post-1.0 Improvement | 2 |
+
+The deployment and envelope-encryption work has substantial positive evidence: the current Dockerfile builds, isolated Compose setup/restart/recreation tests pass, secrets remain stable, concurrent PostgreSQL DEK initialization passes, and Behave passes with its required KEK configured. Ruff, mypy, Django system checks, migration drift checks, and shell checks pass. Dependency advisory scans found no known vulnerabilities in the scanned Python/runtime and JavaScript/production lock selections.
+
+These checks do not compensate for concrete authorization and trust-boundary defects. Authenticated users can bypass issuance/download permissions, backup settings expose credentials on GET, upstream CMP CA enrollment lacks server/message authentication, and SFTP does not authenticate its destination. Gunicorn also accepts connections from the container network while certificate authentication trusts HTTP headers.
+
+Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 108 Markdown/reStructuredText files, 19 feature files, deployment scripts, hidden tooling, workflows, migrations, frontend manifests, bundled assets, and test credentials. Repository-wide mechanical searches and documentation builds were combined with manual tracing of critical flows. This is a broad release audit, **not a claim that every line, binary, historical commit, or possible protocol interaction was exhaustively verified**. Findings distinguish runtime probes, source tracing, and outstanding verification.
+
+## Release Blockers
+
+### B1 — RELEASE BLOCKER: management REST mutations bypass role permissions
+
+- **Severity:** P0.
+- **Affected files:** `trustpoint/rest_pki/api_views.py:165–243`, `trustpoint/request/enrollment.py:102–155`, `trustpoint/request/authorization/rest.py`, `trustpoint/pki/views/owner_credentials_api.py:97–231`, `trustpoint/trustpoint/settings.py:678`.
+- **Problem:** `ApplicationCertificateEnrollView` requires only `IsAuthenticated`. It never checks `users.issue_certificates`. The management adapter binds the caller-selected device directly; downstream authorization checks device/domain/profile/protocol rules, not the management user's permission. In contrast, revocation explicitly checks `REVOKE_CERTIFICATES`. `DevOwnerIdViewSet` likewise uses only `IsAuthenticated` for creation and deletion of DevOwnerIDs.
+- **Concrete consequence:** an authenticated service account with REST access but without issuance rights can request an application certificate for an existing eligible device using its own CSR. Device bootstrap credentials are unnecessary through this management adapter. An authenticated API caller can also mutate owner-credential configuration without a corresponding management permission.
+- **Verification:** an isolated `APIRequestFactory` request, authenticated as a synthetic user whose `has_perm()` always returns false, reached `_run_enrollment_pipeline` and returned HTTP 200. Device lookup and issuance were mocked to avoid issuing a real certificate; this verifies the missing management authorization gate, not complete end-to-end issuance. Source tracing established the downstream checks.
+- **Recommended fix:** enforce the relevant action permission before lookup or mutation, define the owner-credential management permission explicitly, and add deny/allow tests using real low-privilege users and service accounts. Preserve all existing device/profile policy checks.
+
+### B2 — RELEASE BLOCKER: browser OTP creation bypasses private-key download permission
+
+- **Severity:** P0.
+- **Affected files:** `trustpoint/devices/views/browser_onboarding.py:42–101`, `trustpoint/devices/views/download.py:47–80,227–248`, `trustpoint/devices/urls.py:282`, `trustpoint/devices/models.py:368–409`.
+- **Problem:** the manual download POST checks `DOWNLOAD_CREDENTIALS`, but the browser OTP view has no equivalent permission check. Its GET deletes an existing download record, creates a replacement, and returns the OTP for the supplied issued-credential ID.
+- **Concrete consequence:** a logged-in user without download permission can visit `/devices/credential-download/browser/<id>/`, obtain an OTP, exchange it through the public browser login, and download a stored exportable device private key. The credential must have a stored downloadable key; CSR-only credentials do not provide one. GET also invalidates an existing operator's OTP.
+- **Verification:** an isolated view request with every user permission false returned HTTP 200, created a synthetic OTP record, and included the OTP in the response. ORM access was mocked. The public token-to-credential export path was traced through the login form, token mixin, and base download view.
+- **Recommended fix:** require `DOWNLOAD_CREDENTIALS` for OTP generation/cancellation, use POST with CSRF protection for these state changes, scope the selected credential as intended, and add a negative test spanning OTP creation through export.
+
+### B3 — RELEASE BLOCKER: backup settings disclose SFTP credentials to ordinary logged-in users
+
+- **Severity:** P0.
+- **Affected files:** `trustpoint/management/views/backup.py:101–156`, `trustpoint/management/forms.py:595–625`, `trustpoint/templates/management/backups/manage_backups.html:312–344`, `trustpoint/management/urls.py:95`.
+- **Problem:** `BackupManageView` checks `MANAGE_BACKUPS` only on POST. GET constructs a model form from the saved singleton. Password and key-passphrase widgets use `render_value=True`, and the private key is rendered in a textarea. The template includes these fields without a permission gate.
+- **Concrete consequence:** any logged-in web user can retrieve the configured backup password, SSH private key, and passphrase from the HTML, even if the navigation hides the page. This can expose the external backup account and its accessible backup history.
+- **Verification:** an isolated GET with `has_perm()` always false returned HTTP 200 and included all three synthetic credential values. The singleton lookup and response renderer were mocked; the actual model form generated the fields.
+- **Recommended fix:** protect the entire view with backup-management permission. Make secret fields replacement-only, never render existing credentials, and preserve existing values when an authorized administrator leaves them blank. Add low-privilege GET tests and response-body secret absence assertions.
+
+### B4 — RELEASE BLOCKER: upstream CMP CA enrollment accepts unauthenticated certificate material
+
+- **Severity:** P0.
+- **Affected files:** `trustpoint/request/clients/cmp_client.py:173–208,481–574`, `trustpoint/pki/services/ca_enrollment.py:124–197,269–410`, `trustpoint/pki/views/ca_api.py:317–319`, `trustpoint/pki/views/issuing_cas.py:1153`.
+- **Problem:** `send_pki_message()` disables HTTPS certificate verification. `_parse_response()` decodes the message but does not verify CMP protection, transaction ID, or nonce binding. `CmpCaEnrollmentService` then saves the returned CA certificate/chain without validating its key against the pending managed key or its chain against the configured truststore. The configured truststore is used to derive the recipient name; that does not authenticate a response. The stronger device RA validator in `request/security_hardening.py:801` does not cover this CA-enrollment service.
+- **Concrete consequence:** with an active network interception position during an administrator's CMP CA enrollment, an attacker can replace the reply and introduce untrusted CA/chain material or bind the pending key to an unrelated certificate, breaking subsequent issuance and CA trust relationships. This does not imply disclosure of the original managed private key.
+- **Verification:** source trace through both browser/API callers to persistence. A local probe confirmed `_parse_response()` accepts a DER-encoded CMP confirmation with no protection. A full interception/forged-CP integration test was not performed.
+- **Recommended fix:** authenticate upstream responses using the configured TLS trust and/or verified CMP protection, bind replies to the request, verify the returned CA certificate's public key, CA constraints, validity, and chain, then persist all related state atomically. Reject malformed/unprotected/untrusted/mismatched responses in negative integration tests.
+
+### B5 — RELEASE BLOCKER: SFTP backups do not verify the SSH server host key
+
+- **Severity:** P0.
+- **Affected files:** `trustpoint/util/sftp.py:98–142`, `trustpoint/management/models/backup.py`, `trustpoint/management/views/backup.py` (SFTP upload actions).
+- **Problem:** `_connect_sftp()` constructs `paramiko.Transport` and calls `connect(username=..., password=...)` or `connect(..., pkey=...)` without `hostkey`. No known-hosts lookup or fingerprint comparison occurs. Installed Paramiko's signature defaults `hostkey=None`; its docstring explicitly identifies this as disabling host-key verification.
+- **Concrete consequence:** an attacker intercepting the configured backup destination can impersonate it, receive database backups, and, for password authentication, receive the SFTP password. Private-key authentication does not send the private key, but still sends the backup to an unauthenticated destination.
+- **Verification:** application path and installed Paramiko API inspected. No live external backup server was contacted.
+- **Recommended fix:** provision an expected host key/fingerprint or managed known-hosts file, verify it before authenticating, fail closed on mismatch, and test both authentication modes against a wrong-host-key server.
+
+### B6 — RELEASE BLOCKER: network-accessible Gunicorn permits certificate-header impersonation
+
+- **Severity:** P0, conditional on direct backend reachability.
+- **Affected files:** `docker/trustpoint/runtime_config.py:329–343`, `trustpoint/agents/api_views.py:32–99`, `trustpoint/request/authentication/base.py` (`ClientCertificateAuthentication`), `trustpoint/pki/util/x509.py:454–493`, `docker/trustpoint/nginx/trustpoint-nginx-https.conf`.
+- **Problem:** production/bootstrap Gunicorn binds `0.0.0.0` on ports 8001/8000. Agent certificate authentication parses `SSL-Client-Cert` and resolves a registered valid credential without checking that the connection came from the TLS proxy. The shared certificate extractor also reads the header directly. Nginx correctly overwrites these headers on the normal ingress path, but direct backend traffic bypasses nginx.
+- **Concrete consequence:** a process able to reach the application container's backend port can submit another device's public certificate in a header and impersonate that agent without its private key. Sibling containers on the Compose network can reach the backend; Linux host access to container addresses is also relevant. This is **not** an allegation that external port 443 accepts a spoofed header: that ingress is overwritten correctly.
+- **Verification:** bind configuration and authentication source paths traced; no cross-container impersonation exploit was run. Prerequisites are backend network access and possession of the victim's registered public certificate.
+- **Recommended fix:** bind Gunicorn to loopback or a protected Unix socket and centralize trusted-proxy/TLS-proof checks for every certificate-authenticated endpoint. Add a regression where a sibling container's direct header request is refused while genuine mTLS through nginx succeeds.
+
+## P1 — Should Fix Before 1.0
+
+### H1 — EST CA enrollment selects certificates by position and omits CA-result validation
+
+- **Severity:** P1.
+- **Affected files:** `trustpoint/request/clients/est_client.py:120–147`, `trustpoint/pki/services/ca_enrollment.py:41–121,269–410`.
+- **Problem:** EST response parsing selects the first non-CA certificate, otherwise `certificates[0]`. For CA enrollment, every certificate in a valid returned CA chain can be a CA, and PKCS#7 order is not a reliable leaf indicator. The service assigns the chosen certificate without matching its public key, verifying CA semantics/trust, or atomically updating primary-certificate relationships. CMP hierarchy helpers additionally identify existing CAs by subject/issuer names rather than fingerprint and link parents by names.
+- **Consequence:** a legitimate unordered chain, or renewed CA certificates with the same distinguished names, can attach the wrong certificate/parent or leave inconsistent credential relationships. EST's verified TLS does not guarantee that its returned application data matches the requested key.
+- **Fix:** select by requested public key, validate the complete CA result and signatures, identify certificates by DER fingerprint, preserve primary-certificate invariants, and commit the complete update atomically. Add shuffled-chain and same-DN rollover tests.
+
+### H2 — Compatibility baseline accepted: 1.0.0 is the first stable version
+
+- **Original severity:** P1; **1.0 API/UX DECISION — resolved by the user's baseline decision**.
+- **Decision:** 1.0.0 is the first stable version. Documentation describes its current schema, device types, and encryption format without development-era migration history.
+- **Affected files:** `README.md`, `CHANGELOG.md`, `docs/source/features/management/upgrading.rst`, `docs/source/development/architecture/device_lifecycle.md`.
+- **Future requirement:** preserve stable migration history and verify explicitly supported updates between subsequent stable releases, including key and data continuity.
+
+### H3 — Backup/restore CI still launches containers without required secrets
+
+- **Severity:** P1.
+- **Affected files:** `.github/workflows/backup-restore.yml` (both `docker run` steps and trigger), `trustpoint/trustpoint/secret_key.py`.
+- **Problem:** the backup/restore workflow's application containers receive database settings but no Django signing-key mount or software-KEK mount. The production signing-key loader requires the mounted key. The isolated Docker smoke test independently confirmed that production settings fail when it is absent.
+- **Consequence:** this workflow cannot validate successful runtime backup/restore as written; it either fails earlier or tests a container that cannot start. Its host-side setup also needs a stable KEK shared with the container for encrypted data to remain readable. It is `workflow_call`-only, and no caller was found in the tracked workflows, so normal main/PR CI does not run it at all.
+- **Fix:** provision synthetic installation-specific signing/KEK secrets once, mount them consistently into initial and restored containers, preserve all required crypto state, and verify decrypted credentials after restore. Run the repaired reusable workflow before release. This workflow was inspected, not executed locally.
+
+### H4 — Migration compatibility CI tests the wrong upgrade direction
+
+- **Severity:** P1.
+- **Affected files:** `.github/workflows/test-migrations-compatibility.yml`, `.github/actions/setup-uv-action/action.yml`, `docs/source/development/release-checklist.rst`.
+- **Problem:** the job migrates the proposed branch first, checks out the base branch, then runs `check` and `showmigrations`. That does not migrate an existing base schema/data set forward, and Django's system checks do not prove that old model queries work against the new schema. The path filter also excludes model-only edits that forget migrations.
+- **Consequence:** a green compatibility check cannot establish data preservation, encryption continuity, or forward upgrades. The separately provided Compose regression is valuable but not invoked by this workflow and normally recreates the same image unless an upgrade image is explicitly supplied.
+- **Fix:** add a PostgreSQL base-release database with representative encrypted data, apply the candidate forward, and exercise issuance/decryption/revocation. Run `makemigrations --check --dry-run` on model changes as well. Keep backward-code compatibility as a separate assertion when required.
+
+### H5 — Documentation build has duplicate pages and missing operational/testing content
+
+- **Severity:** P1.
+- **Follow-up status:** documentation defects resolved; a clean strict HTML build now passes. Original evidence below is retained as the audit baseline.
+- **Affected files:** `docs/source/features/workflows/index.md` and `index.rst`; `docs/source/development/architecture/backup_restore.md` and `backup_restore.rst`; `docs/source/development/testing/ci_cd.rst`; `docs/source/development/testing/test_plan.rst`; `docs/source/development/architecture/index.md:129`.
+- **Problem:** the HTML build with nitpicky references produced **63 warnings**, including duplicate document names, a nonexistent architecture overview, missing PlantUML diagrams, and missing source includes whose paths point under `docs/.github` or `docs/trustpoint` instead of the repository root. One include still names `r_013_feature_test.yml`, which is absent.
+- **Consequence:** rendered docs can omit intended workflow/backup instructions and testing evidence while the build still succeeds. Which duplicate source is selected must not determine release documentation accidentally.
+- **Fix:** consolidate duplicate docnames, repair actual includes/references, inspect rendered deployment/workflow/backup pages, and gate a Sphinx build with warnings treated as failures. The lightweight local Markdown-link scan found no missing filesystem targets; it does not validate anchors, RST roles, or remote URLs.
+
+### H6 — Contributor commands omit the application suite; one root test relies on external DNS
+
+- **Severity:** P1.
+- **Follow-up status:** documentation and setup commands corrected/verified; root DNS-test behavior and CI test selection still require implementation changes.
+- **Affected files:** `CONTRIBUTING.md` (Making Changes/Testing), `docs/source/development/index.rst:75–81,295–305`, `tests/test_validation.py:58–70`, `.github/workflows/pytest.yml`.
+- **Problem:** contributing instructions run `pytest tests/`, while the main application tests live under `trustpoint/` and CI selects that directory. The root test's purported valid webhook hostnames require real DNS; `api.example.com` failed resolution locally. Developer docs also describe PostgreSQL with an automatic SQLite fallback, while settings explicitly select SQLite for normal local development and do not implement that described fallback. Running `manage.py behave` from the repository root did not locate the feature directory; an explicit `trustpoint/features/` path worked.
+- **Consequence:** contributors can run only six tests and believe the application is validated; a documented test selection also fails depending on external DNS. Test setup must explain the KEK required for encrypted fields.
+- **Fix:** document one complete test command and its database/secret prerequisites, include root utility tests in CI, replace live DNS in unit tests with controlled resolver results, and correct database/cwd instructions.
+
+### H7 — SMTP and backup credentials remain plaintext in the database
+
+- **Severity:** P1.
+- **Affected files:** `trustpoint/management/models/backup.py:37–55`, `trustpoint/management/models/email.py:46`, `trustpoint/management/forms.py:595–625`, `trustpoint/util/encrypted_fields.py`.
+- **Problem:** SFTP password, private key, key passphrase, and persisted SMTP password use ordinary text fields despite the existing application-secret encryption service. The SFTP model explicitly calls its password plaintext.
+- **Consequence:** database snapshots/backups expose these external-service credentials without requiring the application's separate KEK. This is distinct from the remotely reachable HTML disclosure in B3; fixing B3 alone does not protect copies of the database.
+- **Fix:** use the established encrypted field/service abstraction, provide a safe migration for any supported baseline, keep credentials write-only in forms/APIs, and test recovery with the original KEK. Do not simply rename field types and assume existing plaintext rows will decrypt correctly.
+
+### H8 — Scheduled health/security checks report success without performing checks
+
+- **Severity:** P1.
+- **Affected files:** `trustpoint/management/management/commands/check_for_security_vulnerabilities.py:36–40`, `check_system_health.py:20,40–44`, `run_all_notifications.py`, `execute_all_notifications.py`.
+- **Problem:** vulnerability detection is hardcoded false and system health true. Both commands print successful completion and are included in the notification runner. `run_all_notifications` collects failures but returns normally, allowing the outer command to announce success even when checks failed. `check_system_health` also performs a database write during module import.
+- **Consequence:** operators and automation receive misleading assurance from nonfunctional checks, and command failure does not reliably reach the scheduler/caller.
+- **Fix:** implement narrowly defined checks or explicitly mark/remove unavailable checks; raise a command error for aggregate failures after completing independent checks. Move import-time database access into execution.
+
+### H9 — Bundled frontend/third-party attribution needs a release review
+
+- **Severity:** P1; requires human licensing/attribution verification.
+- **Affected files:** `trustpoint/workflows2/frontend/build.mjs` (`legalComments: 'none'`), `trustpoint/workflows2/frontend/package-lock.json`, `trustpoint/static/js/workflows2/editor_bundle.js`, `trustpoint/static/js/theme.js`, `trustpoint/static/js/bootstrap.bundle.min.js`, `trustpoint/static/js/chart.js`, `THIRD_PARTY_LICENSES/`, `docker/trustpoint/Dockerfile`.
+- **Problem:** the shipped editor bundles third-party JavaScript with legal comments removed, and no corresponding CodeMirror/YAML notice inventory was found among tracked license files. The copied Django theme identifies BSD-3-Clause but does not include its complete license text there. The current third-party notice directory covers qrcode only. Python-license CI scans the runtime environment, not the JavaScript bundle or all container OS packages/assets.
+- **Consequence:** the public distribution's attribution completeness cannot be established from the current repository checks. This is an evidence gap, not a definitive legal finding that a particular license has been violated.
+- **Fix:** have maintainers verify required notices for actual shipped bundles, copied source, fonts, diagrams/JAR, logos, and container components; retain/extract notices during builds and distribute them with artifacts. Historical copyright years alone are not defects. MIT project licensing, contributor certification, a font OFL, and a PlantUML license are already present.
+
+## P2 — Good 1.0 Cleanup
+
+### C1 — Local hooks, CI tools, and documented formatting disagree
+
+- **Severity:** P2.
+- **Files:** `.pre-commit-config.yaml`, `pyproject.toml`, `.github/workflows/ruff.yml`, `docs/source/development/index.rst`.
+- **Problem/consequence:** hooks pin Ruff `0.9.4` and mypy `1.15.0`, versus project Ruff `0.17.3` and mypy `2.4.0`. CI runs lint but not format; `ruff format --check .` reports 558 files requiring formatting. Hook isolation can also omit Django/runtime typing dependencies. Contributors get inconsistent results.
+- **Fix:** align versions/environments, decide the intended format baseline, and make checks reflect that decision. Do not mix a repository-wide mechanical reformat into security fixes.
+
+### C2 — Committed editor bundle is not reproduced by the documented build
+
+- **Severity:** P2.
+- **Files:** `trustpoint/workflows2/frontend/package-lock.json`, `build.mjs`, `trustpoint/static/js/workflows2/editor_bundle.js`, `.github/workflows/`, `docker/trustpoint/Dockerfile`.
+- **Problem/consequence:** `npm ci` and `npm run build` succeed in a temporary copy, but `cmp` reports the output differs from the committed bundle at character 68. Docker ships the committed bundle; no corresponding frontend rebuild/check was found in the inspected CI. A byte difference alone does not establish a functional regression; minifier/toolchain differences may contribute.
+- **Fix:** establish a reproducible Node/toolchain baseline, regenerate/review the bundle, and check source-to-artifact consistency in CI. Keep all rebuilds outside the audit worktree until a fix is requested.
+
+### C3 — An obsolete publishing pipeline references a nonexistent root Dockerfile
+
+- **Severity:** P2.
+- **Files:** `.github/workflows/main-ci-cd.yml` (build job), `docker/trustpoint/Dockerfile`, `.github/workflows/docker-manual.yml`, `.github/workflows/publish-ghcr.yml`.
+- **Problem/consequence:** the message-gated main pipeline uses `docker build ... --file Dockerfile`, but the tracked application Dockerfile is under `docker/trustpoint/`. A matching `build:` commit therefore activates a broken job. Other publishing workflows use the correct path, leaving multiple inconsistent release routes.
+- **Fix:** remove or repair the obsolete job, choose the supported registry/release path, require tests before release publishing, and assert tag/metadata agreement. The GHCR workflow can publish version-derived tags on main pushes independently of release validation.
+
+### C4 — ZAP can finish green without scan reports
+
+- **Severity:** P2.
+- **Files:** `.github/workflows/zap.yml`, `.github/workflows/codecov-upload.yml`, `docs/source/development/release-checklist.rst`.
+- **Problem/consequence:** ZAP scan steps use `continue-on-error` and `fail_action: false`; missing reports leave final counters at zero. The workflow does not require completed operational setup/authenticated coverage. Coverage upload also does not implement the checklist's stated >85% release threshold. These checks provide evidence when inspected, but their green state is weaker than the release checklist implies.
+- **Fix:** require scan completion/artifacts, distinguish scan infrastructure failure from accepted findings, review authenticated operational coverage, and either enforce the stated coverage gate or correct the checklist. ZAP and remote CI execution were not run in this local audit.
+
+## P3 — Post-1.0 Improvements
+
+### F1 — Plan supported database KEK/DEK rotation
+
+**P3.** `trustpoint/appsecrets/service.py`, `docs/source/features/management/docker_deployment.rst` (Rotation/Recovery). Missing/wrong keys fail closed, which is appropriate. Software KEK/DEK rotation is explicitly unimplemented. Design and test a recoverable rotation procedure after the immediate defects are fixed; do not rotate keys during ordinary updates.
+
+### F2 — Replace a remaining placeholder GDS unit test
+
+**P3.** `trustpoint/request/tests/test_gds_push_service.py:288–303`, `trustpoint/request/tests/integration/test_gds_push_workflow.py`. `test_build_ca_chain` patches the very method it purports to test and finishes with `assert True` without invoking it. Replace it with a real chain assertion; maintain a separate real-server GDS interoperability test. This does not negate the other GDS tests in the suite.
+
+## Security Findings
+
+| Finding | Boundary/asset | Required action |
+| --- | --- | --- |
+| B1 | Management API role authorization | Deny mutations without action permission |
+| B2 | Exportable device private keys | Authorize OTP creation and cancellation |
+| B3 | External backup credentials | Protect GET and stop secret readback |
+| B4 | Upstream CMP CA trust | Authenticate and bind replies before persistence |
+| B5 | External backup destination | Pin/verify SSH host identity |
+| B6 | mTLS proxy boundary | Restrict backend reachability and trust proxy proof |
+| H1 | Upstream CA/key integrity | Match keys, validate chains, commit atomically |
+| H7 | External-service credentials at rest | Encrypt through the established secret service |
+| H8 | Operator security assurance | Implement/label checks and propagate failures |
+| H9/C4 | Distribution/release assurance | Verify notices and scan completion |
+
+No real deployment secrets were printed or copied into this report. The tracked-file secret-marker search found test keys/fixtures and synthetic examples, not a confirmed live API/cloud credential. Many PEM/private-key/PKCS#12 fixtures are intentionally tracked under `tests/data`; never reuse these identities in production. Local `.env`, credential files, databases, logs, and `secrets/` exist but are ignored rather than tracked. This was not a full-history entropy/credential scan, and a clean marker search is not a guarantee that no historical secret exists.
+
+Positive source observations: production signing keys are loaded from supplied files and are not generated into the image; nginx overwrites client-cert headers; operational Django has DEBUG disabled; PostgreSQL's published port is loopback-bound; protocol handlers verify CSRs/proof-of-possession in the reviewed enrollment paths; revocation uses transactions/row locks and resolves the verified issuing CA for rollover; YAML uses a safe loader. Disabled certificate validation in the discovery scanner is intentional certificate collection, not authentication. Webhooks and remote-CA destinations are administrator-configured integrations; no generic SSRF claim is made solely because they make outbound requests.
+
+Advisory results: `pip-audit` reported no known vulnerabilities for 102 exported locked runtime dependencies. `npm audit --omit=dev --package-lock-only` reported zero findings. These are point-in-time advisory checks, not proof that the application, vendored JavaScript, development packages, or container OS has no vulnerabilities. No arbitrary dependency upgrades were performed.
+
+## Upgrade and Migration Assessment
+
+- **Clean installation:** the current source image built successfully; the repository's isolated `compose_smoke.py` passed auto-setup with PostgreSQL, web, and worker, synthetic secrets, and no published ports. Interactive wizard completion was not manually exercised in a browser.
+- **Fresh schema:** pytest and Behave create test schemas; the Compose regression applies the production PostgreSQL schema. `makemigrations --check --dry-run` reports no changes. This establishes current model/schema agreement, not historical upgrade compatibility.
+- **Stable baseline:** 1.0.0 is the first stable version (H2). Initial installation uses its current schema and installation-specific keys. Supported cross-version update validation applies to subsequent stable releases.
+- **Persistent signing key:** `docker/init_secret.py` creates the host file atomically, validates existing files, preserves exact contents, refuses conflicting imports/symlinks, and requires root ownership/group 33/mode 0440. Runtime production loading fails closed when unavailable. Image rebuild does not replace the key.
+- **Software KEK/DEK:** the independent KEK is a supplied host secret; the wrapped DEK resides in the database. Web/worker must use the same secret and database. Recreating containers with the same Compose project/volumes preserves them. Wrong/missing keys are recovery failures, not instructions to regenerate.
+- **Observed rebuild/restart behavior:** the isolated smoke test verified signing-key/DEK stability across restart and recreation and verified operational data retention. It also verified read-only secret mounts even for container root and concurrent PostgreSQL initialization selecting one shared DEK. The test used the same candidate image for recreation; it was not a historical cross-version image upgrade.
+- **HSM:** preserve provider/PIN files, token objects, HSM KEK, bootstrap handoff, media, and appropriate volumes. The standalone envelope regressions passed for software and an actual synthetic SoftHSM token inside network-isolated candidate containers, including recovery, fail-closed behavior, and encrypted-field round trips. That does not establish real hardware-HSM behavior or the complete optional SoftHSM Compose stack.
+- **Routine commands:** `docker compose up -d` and `up -d --build` are structurally safe for a compatible existing 1.0 schema when the same project/configuration/secrets/volumes are retained. `down -v`, volume pruning, changing project names, replacing secrets, and reinitializing HSM state are destructive changes, not routine updates.
+- **Rollback:** restore a matched database, original secrets, and matching token/runtime state. Rolling back only the image after a forward schema change is not proven safe. Repair and execute the backup/restore workflow before release (H3).
+
+Architecture assessment: keep the current separation between root deployment configuration, web-owned application state, bootstrap handoff, managed signing keys, and app-secret envelopes. The concrete weaknesses are inconsistent security enforcement across adapters (management API versus protocol authorization; device RA validation versus CA enrollment), and implicit trust in network/proxy boundaries. Consolidating those checks is justified; a broad architectural rewrite is not required. Startup still couples versioning, migrations, security synchronization, TLS restoration, and scheduled initialization, so failures must leave recoverable state and surface clearly.
+
+## Test Assessment
+
+Discovered pytest application tests, root validation tests, Behave capability suites, Docker setup integration features, deployment/security smoke scripts, OpenSSL protocol endpoint scripts, and real-server GDS/HSM tests. Local Python is 3.13.0; the Docker image uses Python 3.14. Native test success alone therefore does not prove identical behavior on the production interpreter.
+
+| Check actually executed | Result / interpretation |
+| --- | --- |
+| `.venv/bin/pytest trustpoint/ -q -o md_report=false --basetemp=/tmp/trustpoint-release-pytest` with SQLite selection | 6,128 passed, 12 failed, 17 skipped, 48 subtests passed in 615.16 seconds; all 12 failures subsequently passed in targeted runs with corrected execution conditions, as detailed below |
+| Targeted unrestricted rerun of failing network tests, CMP workflow module, and secret-initializer module | 20 passed, 7 failed; all five original network failures passed; the seven remaining failures were temporary-directory group ownership, not key-content validation |
+| Secret-initializer module rerun using the native user temporary directory | 22 passed; all seven remaining application-suite failures resolved under the correct directory ownership |
+| `.venv/bin/pytest tests/ -q -o md_report=false` | 5 passed, 1 failed: `test_valid_webhook_urls`, DNS resolution of `api.example.com`; test/environment dependency, not demonstrated production validator failure |
+| `manage.py behave trustpoint/features/ --no-capture --format pretty` with temporary SQLite DB and synthetic KEK | 18 features, 70 scenarios, 365 steps passed |
+| `ruff check . --output-format concise` | Passed |
+| `ruff format --check .` | Failed: 558 files would be reformatted, 575 already formatted; formatting/configuration issue (C1) |
+| `mypy .` | Passed: 611 source files |
+| `manage.py check` | Passed, no issues |
+| `manage.py makemigrations --check --dry-run` | Passed, no changes detected |
+| `shellcheck --severity=warning` on all tracked shell scripts | Passed |
+| `sphinx-build -b html -n docs/source /tmp/trustpoint-release-docs` | Build succeeded with 63 warnings; documentation defects (H5) |
+| Relative filesystem-target scan across tracked Markdown | No missing local targets; anchors/remote targets not checked |
+| `docker build -t trustpoint-release-audit:695df736b -f docker/trustpoint/Dockerfile .` | Passed |
+| `TRUSTPOINT_TEST_IMAGE=trustpoint-release-audit:695df736b python tests/docker_security/compose_smoke.py` | Passed: initial secret failures, fresh install, web/worker key sharing, read-only secrets, restart/recreation/data retention, PostgreSQL concurrent initialization |
+| `docker run --rm --network=none --user 33:33 ... /tests/envelope_smoke.py software` and `pkcs11` against the candidate image, mounting only the test script | Both passed: wrapping, recovery, fail-closed behavior, and field round trips; PKCS#11 uses a fresh synthetic SoftHSM token without deployment volumes |
+| `uv export --frozen --no-dev --no-emit-project --no-hashes` then `pip-audit --no-deps --disable-pip` | No known vulnerabilities, 102 dependencies |
+| `npm audit --omit=dev --package-lock-only` | Zero vulnerabilities reported |
+| `npm ci` + `npm run build` in a temporary frontend copy, then byte comparison | Build passed; committed bundle differs (C2) |
+| Isolated authorization probes | B1, B2, B3 reproduced at the view/adapter boundary with mocked persistence; no real credential issuance/export performed |
+| Unprotected CMP parser probe | An unprotected CMP confirmation was accepted (B4); no network interception performed |
+
+Execution caveats and failure triage:
+
+- Initial Docker socket access was blocked by the sandbox; the approved isolated Docker commands subsequently succeeded. Existing user deployments were not stopped or reset.
+- The first Behave invocation from the repository root omitted the feature path and failed to discover steps (invocation/cwd issue). An explicit path then hit the sandbox's local-port restriction (environment). An unrestricted run without a supplied KEK produced 56 passed scenarios, 1 failed, 13 errors, including missing `/run/secrets/trustpoint_software_kek` (configuration). Supplying a synthetic temporary KEK resolved these failures; the final complete Behave run passed.
+- The root validation failure depends on live DNS for an example host; control DNS in the unit test rather than weakening production hostname validation.
+- Five main-suite failures were local-port sandbox restrictions: the CMP webhook receiver, three CMP mock-server cases, and encrypted OPC UA discovery. They passed when rerun with local sockets permitted. Seven initializer cases created preexisting files under `/tmp` with inherited group 0, while the fixture expected process group 20; permission validation correctly ran before malformed-content validation. They still failed outside the sandbox with that directory, and all 22 initializer tests passed under the native user temporary root (group 20). Do not weaken production permission checks to accommodate this fixture/environment mismatch.
+- The application suite therefore has no unresolved implementation failure demonstrated by this run, but the full suite was not rerun as one unrestricted invocation. The root DNS-dependent test remains failing. The 17 application skips include unavailable configured PKCS#11 providers, opt-in real-server GDS networking, and PostgreSQL row-lock behavior unavailable on SQLite; they are not recorded as passes.
+- Formatting and documentation warnings are recorded as failures/gaps rather than silently ignored. Successful lint/type/system checks do not establish authorization correctness.
+
+Important missing/remaining coverage: low-privilege mutation and secret-readback tests; OTP-to-export permission tests; direct backend versus nginx mTLS tests; malformed/untrusted/mismatched upstream CA replies; shuffled EST CA chains; same-subject CA rollover; wrong SSH host keys; actual cross-version PostgreSQL upgrades with encrypted records; restore with retained keys; real hardware HSM and OPC UA server interoperability; external OpenSSL EST/CMP/SCEP endpoint interoperability. SQLite skips genuine row-lock behavior, so database concurrency must be tested on PostgreSQL.
+
+Not executed here: remote GitHub Actions/CodeQL/ZAP, full authenticated browser UX, hardware HSM tests, the complete SoftHSM Compose variant, complete backup/restore CI, historical upgrade, remote documentation-link crawl, full-history secrets scan, container OS vulnerability scan, frontend browser tests, or a fresh package-index installation across every declared Python/platform combination. These require external services, dedicated credentials/hardware, separate deployment scenarios, or additional isolated infrastructure; no result is implied. Run the remaining documented SoftHSM-stack commands in `docs/source/development/release-checklist.rst`, the repaired backup workflow, and `tests/scripts/test_protocol_endpoints.sh` in their configured environments before tagging.
+
+Local evidence logs are under `/tmp/trustpoint-release-*` (pytest, Ruff, format, mypy, docs, shellcheck, Docker build, Compose, Behave, dependency scans, frontend build). They are temporary local evidence, not committed release artifacts.
+
+## CI Assessment
+
+The repository has substantial CI breadth: pytest, Behave capability matrices, mypy, Ruff, shellcheck, CodeQL, Docker Compose/auto-setup, OpenSSL enrollment endpoints, backup/restore, migration compatibility, copyright/license checks, SBOM generation, attestations, and ZAP. This audit inspected definitions; it did not fetch the current hosted run status or branch-protection settings.
+
+Address H3/H4 before relying on recovery/upgrade evidence. Address C3/C4 and align the written release checklist with actual gates. Ensure the main pytest selection also covers root utility tests. Add format and documentation warning gates once their baselines are repaired. Run the secret-persistence and PostgreSQL concurrency regressions in CI rather than relying only on their documented manual commands. Actions largely use version tags, not immutable commit SHAs; consider reviewed SHA pinning, but no unsupported assertion is made that a particular action tag is obsolete or compromised. The optional comprehensive report workflow still targets `master`/a special report branch, unlike normal `main` CI.
+
+## Documentation Assessment
+
+- **README — fixed:** documented 1.0.0 as the first stable baseline; documented retention of the Django signing key, independent software KEK, runtime volumes, and HSM recovery material. Replaced the v0.6.0-centered highlights with accurately labeled 1.0 candidate information and links to release notes and capability limits.
+- **Installation/operations — clarified:** retained the existing Compose/key/backup instructions and added explicit manual acceptance scenarios for interactive setup, custom ports/hostnames, IPv6, original-key restore, cross-version updates, and real client/provider combinations in `docs/source/development/release-checklist.rst`. These checks are still pending for the final candidate; documentation edits do not constitute deployment verification.
+- **User documentation — fixed and rendered:** kept `features/workflows/index.md` and `development/architecture/backup_restore.rst` as canonical pages, removing their duplicate sources. Corrected backup manifest/recovery wording, management API documentation URLs, SCEP's implemented certificate-authenticated PKCSReq behavior, CMP trigger limitations, and the unregistered remote-rollover stub. Added `features/capabilities.md` to distinguish implementation, unavailable functionality, and interoperability evidence.
+- **Developer documentation — instructions fixed:** `CONTRIBUTING.md` and the development guide now select both application/root pytest tests and the explicit Behave directory; explain a synthetic KEK, database selection, native temporary-file ownership, matching Python/tool versions, and skipped integration requirements. Documented the current device types without development-era migration references. The documented native SQLite setup sequence was executed successfully against a separate temporary database. The root DNS-dependent test and CI selection are implementation follow-ups, not fixed here.
+- **Markdown/Sphinx consistency — fixed:** repaired include paths, absent references, empty CRA links, glossary/usage-guide labels, invalid RST headings, a PlantUML class diagram, and empty root-URL rendering in generated docs/the generator. A clean HTML build with `-E -a -n -W --keep-going` passed with no warnings/errors when Java execution was permitted. Local Markdown targets passed across the 109 source files inventoried after these edits. Remote URLs, screenshots, translations, and every prose claim were not exhaustively validated; they remain separate acceptance checks.
+- **Release documentation — draft prepared:** created `CHANGELOG.md` with an explicitly unreleased 1.0.0 entry and included it in the Sphinx release-notes page. It covers the compatibility boundary, recovery material, CA/backend/protocol limitations, and pending security/acceptance work. It does not announce a release or claim maintainer approval, standards certification, or hardware interoperability.
+
+## 1.0 API / UX Decisions
+
+1. **1.0 API/UX DECISION — Compatibility baseline (H2), accepted:** 1.0.0 is the first stable version; stable migration and key-continuity guarantees start at that baseline.
+2. **1.0 API/UX DECISION — Authorization model (B1–B3):** define action permissions consistently across web, REST, OTP delegation, owner credentials, service accounts, and organization/domain scopes. Do not freeze the current authorization gaps as intended semantics.
+3. **1.0 API/UX DECISION — Public API naming:** `/api/`, `/rest/`, `/api/rest-pki/`, `workflows2`, and DevOwnerID/owner-credential terminology appear in separate interfaces. Accept their meanings and compatibility policy consciously; no mass rename is recommended in this audit. References: `trustpoint/trustpoint/urls.py`, `rest_pki/api_urls.py`, `pki/views/owner_credentials_api.py`, `workflows2/api_urls.py`.
+4. **1.0 API/UX DECISION — Protocol/backend capability matrix:** explicitly document SCEP's unsupported operations, software-only ML-DSA capability, RA versus locally held CA-key semantics, AOKI's proof-of-concept status, and real-HSM/GDS interoperability evidence. References: `scep/views.py`, `pki/models/ca.py`, `crypto/domain/`, README, cryptography docs.
+5. **1.0 API/UX DECISION — Secret lifecycle:** retain distinct signing-key, software KEK, wrapped DEK, and HSM recovery responsibilities. Key rotation/restore behavior and irrecoverability on lost keys must be operational contracts, not assumptions hidden in initialization code.
+6. **1.0 API/UX DECISION — Workflow delivery semantics:** accept idempotency release, approval/polling behavior, leases, and retry/side-effect expectations before treating the YAML DSL as stable. References: `workflows2/services/dispatch.py`, `runtime.py`, `worker.py`, `request/workflow2_issuance.py`, workflows documentation. Row locking, leases, and transaction handling exist; exactly-once delivery to external systems was not established.
+
+## Repository Hygiene
+
+The initial tracked worktree was clean. `.gitignore` and `.dockerignore` exclude local `.env`, `secrets/`, database/credential files, media, logs, common caches, and IDE state. The local checkout contains ignored databases, logs, keys, reports, and editor files; their presence is not evidence they were committed. Do not delete them as audit cleanup. The Docker build excludes the sensitive local paths and copies selected public test chains for demo truststores rather than all test private keys.
+
+Tracked private-key/PKCS#12 files are predominantly explicit test fixtures and should remain visibly non-production. Five nonempty non-migration Python files lacked an SPDX header in their first 600 characters: `tests/docker_integration/features/environment.py`, `tests/docker_integration/features/steps/__init__.py`, `tests/docker_integration/features/steps/r_200_steps.py`, `tests/scripts/est_csr.py`, and `tests/test_validation.py`; review them against project policy without mechanically changing historical copyright dates. `docs/unused/` and internal architecture implementation plans contain historical TODO/design material; label their status rather than presenting it as current user guidance. The remaining remote-CA rollover stub is not automatically a broken user feature: registration/reachability must be checked before advertising it.
+
+Dependency organization: the committed `uv.lock` provides a production version selection; broad declaration ranges are not by themselves a defect in the frozen Docker build. `pyproject.toml` puts documentation/analysis/stub packages such as furo, pydeps, and Django typing dependencies in runtime dependencies. `requests` is directly imported by production EST/CMP/webhook code but declared directly only in the dev group; the current production closure nevertheless includes it through Sphinx/furo. Declare runtime imports directly before pruning tooling dependencies. No installed dependency was conclusively proven unused across every supported workflow, and no arbitrary upgrades are recommended.
+
+## Version / Release Changes Required
+
+- [ ] Set `pyproject.toml` project version from `1.0.0dev` to `1.0.0` after fixes are approved.
+- [ ] Regenerate/verify the project metadata entry in `uv.lock` without unrelated dependency upgrades.
+- [ ] Set `docs/source/conf.py:43` release to `1.0.0`, or deliberately derive it from the package source of truth.
+- [x] Update README v0.6.0 highlights with accurate candidate information and the initial stable installation.
+- [x] Prepare an explicitly unreleased `CHANGELOG.md` entry and include it in the Sphinx release notes.
+- [ ] Obtain maintainer approval of final release notes and update them against the final release commit.
+- [x] Document 1.0.0 as the first stable compatibility baseline (H2).
+- [ ] Review `docs/source/cra/CRA_COMPLIANCE.md` claims/version table against actual release evidence; do not imply that the audit establishes legal conformity.
+- [ ] Confirm package `APP_VERSION`, displayed UI version, database `AppVersion`, OpenAPI version, container labels, registry tags, and Git tag agree. Runtime settings already read installed package metadata; do not blindly replace protocol/agent/fixture versions.
+- [ ] Verify `.github/workflows/docker-manual.yml` and `publish-ghcr.yml` tag generation, registry destinations, test gating, and candidate image digests. Avoid silently overwriting a final version-derived tag during unrelated main pushes.
+- [ ] Decide which registry/images and CPU architectures are supported. QEMU setup alone does not establish a multi-architecture build; inspected publishing steps do not specify a platforms matrix.
+- [ ] Produce reviewed SBOM, notices, provenance, and security/test artifacts for the exact release image, including its OS packages and shipped frontend.
+- [ ] Run the full supported test/deployment matrix against the final versioned commit before creating `v1.0.0`.
+
+## Final 1.0 Checklist
+
+- [ ] Resolve B1–B6 and add negative authorization/trust-boundary regressions.
+- [ ] Resolve selected P1 findings and explicitly accept/document any deferred ones.
+- [x] Record the full application pytest result and triage all failures/skips; affected cases pass with corrected execution conditions.
+- [ ] Obtain a single green full application/root test invocation in the supported release environment, retaining the separate HSM/PostgreSQL/interoperability requirements.
+- [ ] Fix the root utility test's live-DNS dependency and include it in normal CI.
+- [x] Behave passes with the documented required secret configuration.
+- [x] Ruff lint, mypy, Django system checks, migration drift check, and shellcheck pass locally.
+- [ ] Reconcile formatter/tool baselines and rerun the chosen checks.
+- [x] Current Dockerfile builds.
+- [x] Isolated software-backed Compose clean-install, restart, recreation, and PostgreSQL concurrent DEK tests pass.
+- [x] Persistent signing key/DEK and read-only secret mounts survive recreation in the isolated candidate stack.
+- [ ] For subsequent stable releases, test supported previous-stable-image → new-image updates with encrypted data; this is not an acceptance prerequisite for the first stable baseline.
+- [x] Accept 1.0.0 as the first stable version; describe current behavior without development-era migration history.
+- [ ] Verify recovery from matched database/KEK/HSM backups; repair/run backup-restore CI.
+- [x] Run software and real SoftHSM/PKCS#11 envelope regressions inside the candidate image.
+- [ ] Validate the complete optional SoftHSM stack and required hardware-HSM behavior.
+- [ ] Run real EST/CMP/SCEP/OpenSSL and OPC UA interoperability checks for advertised capabilities.
+- [ ] Verify production configuration, external hostnames, custom ports, IPv6, proxy boundaries, and interactive wizard in a fresh browser session.
+- [x] Resolve Sphinx warnings/duplicate pages and verify a clean strict build and rendered workflow/backup/release/development pages.
+- [ ] Complete production README installation and manual deployment acceptance checks on the final candidate.
+- [ ] Verify remote documentation links and important screenshots/examples.
+- [x] Locked Python runtime and npm production advisory scans completed without known findings.
+- [ ] Review container OS scan, CodeQL/ZAP results, historical secrets scan, notices, and release SBOM.
+- [ ] Rebuild/review the shipped frontend bundle using a fixed toolchain.
+- [ ] Set version consistently to 1.0.0 and prepare accurate release notes.
+- [ ] Confirm required hosted CI checks and branch/release protections for the exact final commit.
+- [ ] Create the release tag only after the blockers are fixed and the release evidence is complete.
+
+**Would you tag the current commit as Trustpoint v1.0.0? No.** The verified permission/credential-disclosure paths and the traced upstream/SSH/proxy trust failures are unacceptable in a public PKI release, even though deployment persistence and many automated checks pass. Fix those boundaries, establish the upgrade contract, and rerun the final release matrix before tagging.

@@ -101,7 +101,7 @@ Definition
    :examples:
 
 CA and CRL management
---------------------
+---------------------
 
 CA and CRL administration requires authentication and the ``manage_cas``
 permission. Private keys and upstream authentication secrets are never included
@@ -194,7 +194,7 @@ private key. Existing certificates cannot be replaced through these actions;
 use a rollover instead.
 
 CRL configuration and inventory
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``PATCH /api/issuing-cas/{id}/crl-settings/`` accepts any subset of::
 
@@ -261,7 +261,7 @@ updates to rollover state fields are not supported.
 
 
 Certificate details and downloads
---------------------------------
+---------------------------------
 
 Certificate reads and downloads require authentication, using the existing
 certificate API access policy.

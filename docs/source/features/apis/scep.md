@@ -13,7 +13,12 @@ Trustpoint's SCEP server supports:
 - Transaction retry handling that returns the previously issued certificate for the same request.
 - RSA-based enrollment and supported elliptic-curve client keys, subject to the implementation's cryptographic constraints.
 
-**Implementation note:** Some `sscep` versions send a certificate-authenticated `PKCSReq` instead of `RenewalReq` when renewing with `-K` and `-O`. Support for treating such a request as renewal is a compatibility change under development in PR #973; verify that it is present in your deployed version. The baseline handler on the `scep_server` branch distinguishes initial enrollment from renewal by the SCEP message type.
+**Client compatibility:** Some `sscep` versions send a certificate-authenticated
+`PKCSReq` instead of `RenewalReq` when renewing with `-K` and `-O`. The current
+handler routes a `PKCSReq` whose signer is not self-signed through renewal
+authentication. That path checks the registered signer credential, its status,
+domain, and requested identity. Test the intended client version against the
+deployed Trustpoint release; message type alone does not establish authorization.
 
 ## Base URL
 
@@ -29,7 +34,7 @@ SCEP uses CMS message protection, but **HTTPS is recommended in production**, pa
 
 ### Domain endpoint
 
-```http
+```text
 GET  /.well-known/scep/<domain>/?operation=GetCACaps
 GET  /.well-known/scep/<domain>/?operation=GetCACert
 POST /.well-known/scep/<domain>/?operation=PKIOperation
@@ -39,7 +44,7 @@ For POST, `operation=PKIOperation` is optional; omitting it defaults to `PKIOper
 
 ### Domain and certificate profile
 
-```http
+```text
 POST /.well-known/scep/<domain>/<cert_profile>/?operation=PKIOperation
 ```
 
@@ -114,7 +119,7 @@ openssl pkcs7 -inform DER -in ca-certs.p7b -print_certs -out ca-certs.pem
 
 ### HTTP method and headers
 
-```http
+```text
 POST /.well-known/scep/arburg/tls_server/?operation=PKIOperation
 Content-Type: application/x-pki-message
 ```
@@ -325,19 +330,21 @@ A request with a new transaction ID is a new operation—not a retry of the prev
 2. **Authenticate the CA:** Verify downloaded CA certificates and SCEP server identity against an independently trusted source.
 3. **Protect private keys:** Keep device private keys local, encrypted or hardware-backed where possible. Never upload them to the SCEP endpoint.
 4. **Enforce device/domain ownership:** Renewal requests must validate the existing signer certificate against Trustpoint's issued credential and domain records.
-5. **Avoid accidental credential replacement:** Separate new issuance from renewal; do not identify the credential to replace solely by common name. This lifecycle behavior is being addressed separately from the SCEP server feature.
+5. **Avoid accidental credential replacement:** Separate new issuance from renewal; do not identify the credential to replace solely by common name. Verify the intended renewal/replacement behavior in the shared credential lifecycle for your release.
 6. **Use TLS where available:** CMS protects protocol messages, but HTTPS adds transport protections and helps reduce deployment risks.
 7. **Observe supported algorithms and limits:** The current implementation advertises AES, SHA-256, and POST PKIOperation; request processing is bounded by limits including a 128 KiB body size.
 
 ## Integration with Trustpoint Workflows
 
-SCEP uses Trustpoint's shared certificate profile validation and issuance pipeline. Authorization is checked before issuance. Availability and behavior of Workflow2 approval/pending processing for SCEP should be validated separately; this documentation does not claim full asynchronous SCEP polling support.
+SCEP uses Trustpoint's shared certificate profile validation and issuance pipeline. Authorization is checked before issuance. The current handler does not invoke the workflow enrollment orchestrator and has
+no built-in SCEP approval/pending trigger. Do not configure a workflow expecting
+it to gate SCEP issuance. Asynchronous SCEP polling is not implemented.
 
 ## Current Limitations
 
 - `GetNextCACert`, `GetCert`, `GetCRL`, and `CertPoll` are not implemented.
 - SCEP `PENDING` responses and certificate polling are not currently supported.
-- `sscep` renewal compatibility depends on the updated SCEP handler and may not be present in all revisions of PR #973.
+- Certificate-authenticated `PKCSReq` renewal is implemented, but interoperability must be checked with the intended client version.
 - Certificate profiles that alter the subject can cause client-side subject mismatch errors.
 - Correct separation of independently issued credentials and renewal replacement is a shared credential lifecycle concern and is not guaranteed by SCEP alone.
 

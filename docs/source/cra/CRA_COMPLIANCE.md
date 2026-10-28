@@ -68,7 +68,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | 1. Threat Model | [`THREAT_MODEL.md`](./THREAT_MODEL.md) | Identifies threats to Trustpoint assets and affected components |
 | 2. Risk Register | [`RISK_REGISTER.md`](./RISK_REGISTER.md) | Groups threats into cybersecurity risks, evaluates inherent and residual risk |
 | 3. Controls | [`CONTROLS.md`](./CONTROLS.md) | Documents implemented, in-progress, and planned controls |
-| 4. Evidence | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) - [![Critical][badge-you-are-here]]() · [`SECURITY.md`][security] · CI/CD artifacts · SBOM | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance |
+| 4. Evidence | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) - ![Current document][badge-you-are-here] · [`SECURITY.md`][security] · CI/CD artifacts · SBOM | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance |
 | 5. Review | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) · [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) | Ensures that threats, risks, controls, and evidence remain current over time |
 
 ---
@@ -125,11 +125,11 @@ Threat Model → Risk Register → Controls → Evidence → Review
 
 *References CRA Article 2 - Scope, Article 7 - Important Products with Digital Elements, Article 8 - Critical Products with Digital Elements, Article 32 - Conformity Assessment Procedures, and Annex III / Annex IV.*
 
-### Current Distribution: [![Non-commercial OSS](https://img.shields.io/badge/Distribution-Non--commercial_OSS-lightgreen?style=flat-square&logo=github&logoColor=white)](#cra-scope--reference-classification)
+### Current Distribution: [![Non-commercial OSS](https://img.shields.io/badge/Distribution-Non--commercial_OSS-lightgreen?style=flat-square&logo=github&logoColor=white)](#cra-scope--classification)
 
-### License: [![MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square&logo=opensourceinitiative&logoColor=white)](#cra-scope--reference-classification)
+### License: [![MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square&logo=opensourceinitiative&logoColor=white)](#cra-scope--classification)
 
-### CRA Reference Classification: [![Annex III Class I](https://img.shields.io/badge/CRA_Reference-Annex_III_Class_I-orange?style=flat-square&logo=clipboard-check&logoColor=white)](#cra-scope--reference-classification)
+### CRA Reference Classification: [![Annex III Class I](https://img.shields.io/badge/CRA_Reference-Annex_III_Class_I-orange?style=flat-square&logo=clipboard-check&logoColor=white)](#cra-scope--classification)
 
 **Scope:** Trustpoint is free and open-source software distributed under the MIT License through public repositories such as GitHub and Docker Hub. The Trustpoint project currently provides the software on a non-monetised basis.
 

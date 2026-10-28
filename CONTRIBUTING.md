@@ -36,10 +36,19 @@ Please refer to our [Security Policy](SECURITY.md) for instructions on how to re
 
 4. **Ensure all tests pass** before submitting a pull request:
    ```bash
-   uv run pytest tests/
+   # From the repository root, after configuring test secrets:
+   uv run pytest trustpoint/ tests/
+   uv run trustpoint/manage.py behave trustpoint/features/
    uv run mypy .
    uv run ruff check .
    ```
+
+   Follow the [development setup and test-secret instructions](docs/source/development/index.rst).
+   The project requires Python 3.13 or newer; Docker and shared CI currently use
+   Python 3.14. Use `uv sync --locked --python 3.14` to match that interpreter.
+   Database tests need a synthetic software KEK, and networking tests need local
+   socket access. Inspect failures and skipped tests; SQLite does not exercise
+   PostgreSQL row locks, and hardware/provider tests need their own configuration.
 
 5. **Update documentation** if you're adding new features or changing existing behavior.
 
@@ -54,11 +63,12 @@ Please follow the guidelines which include:
 ### Code Style
 - Follow PEP 8 and Django's coding style guide
 - Add type annotations to all functions and methods
-- Include descriptive docstrings in reStructuredText (reST) style
+- Include descriptive docstrings following the project's Google-style Ruff convention
 - Use Django's built-in features wherever possible
 
 ### Testing
-- Write tests for new functionality in `tests/`
+- Put application tests in the relevant `trustpoint/<app>/tests/` directory;
+  root utility tests live in `tests/` and Behave scenarios in `trustpoint/features/`
 - Test file naming: `test_<module>.py`
 - Test function naming: Start with `test_`
 - Run the full test suite before submitting
@@ -67,6 +77,11 @@ Please follow the guidelines which include:
 Before submitting your pull request, ensure your code passes:
 - **Ruff linting**: `uv run ruff check .`
 - **MyPy type checking**: `uv run mypy .`
+
+Use tools from the locked project environment. The pre-commit hooks currently pin
+older Ruff/mypy versions than the project. `uv run ruff format --check .` checks
+formatting without editing files; the existing formatting baseline still needs
+cleanup, so report its result separately from linting.
 
 ## Testing Policy
 

@@ -73,8 +73,8 @@ Keep the host key across upgrades. Import an existing installation's exact key
 with `sudo python3 docker/init_secret.py --import-from /path/to/saved-key` before
 replacing its containers. A conflicting existing destination is left unchanged
 and reported as an error. See the [Docker deployment guide](docker_deployment.rst)
-for fresh installation, upgrades, and recovery. Importing Django signing keys
-does not provide a migration path for pre-1.0 encrypted databases.
+for initial installation, updates, and recovery. Importing a Django signing key
+does not restore the separate database KEK or HSM state.
 
 ## Database
 

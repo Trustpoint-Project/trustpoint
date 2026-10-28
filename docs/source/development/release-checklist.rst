@@ -7,6 +7,8 @@ Pre-release Preparations
 ------------------------
 - Update version number in :code:`pyproject.toml` and :code:`docs/source/conf.py` files.
 - Update :code:`CHANGELOG.md` with new features, fixes, and improvements.
+  Keep the 1.0 entry marked unreleased until the release is approved; it is also
+  included in :doc:`../release_notes`.
 - Review :code:`pyproject.toml`
   - Update dependencies if needed.
   - Pin versions for production stability in :code:`uv.lock`
@@ -23,15 +25,18 @@ Pre-release Preparations
 -------
 Release
 -------
-- GitHub Workflow Checks
+- GitHub Workflow Checks:
+
   - Code coverage threshold maintained ( >85%).
   - Docker build passes.
   - All feature test pass
   - All unit test pass
-  - Read the docs build passes
+  - Strict documentation build passes, including rendered-page review:
+    ``uv run sphinx-build -b html -n -W --keep-going docs/source docs/build/html``.
   - SBOM generation passes
   - Code linter (:code:`ruff` and :code:`mypy`) tests pass
   - No new deprecations from Django or libraries in test logs.
+
 - Create git tag for release
 
 ------------
@@ -82,5 +87,41 @@ DEK protection without any software KEK.
 
 Set ``TRUSTPOINT_TEST_IMAGE`` to the initial test image and
 ``TRUSTPOINT_TEST_UPGRADE_IMAGE`` to a second compatible test image to include an
-actual image replacement during the recreation check. Do not use pre-1.0 images
-for this test: encrypted database migration from those releases is unsupported.
+actual image replacement during the recreation check. Trustpoint 1.0.0 is the
+first stable compatibility baseline; cross-version update tests apply to
+subsequent explicitly supported releases.
+
+Manual Deployment Acceptance
+----------------------------
+
+Record the image digest/commit, Compose file selection, host platform, and actual
+result for each scenario. These are outstanding acceptance checks until a result
+is recorded for the final candidate; documentation updates do not mark them passed.
+Use isolated installations and synthetic data. Never reset an existing deployment
+to perform a release smoke test.
+
+* **Interactive setup:** initialize independent secrets, start a fresh stack,
+  obtain bootstrap credentials from its logs, and complete every wizard step.
+  Confirm operational login, issuance, background processing, and restart without
+  returning to the wizard or replacing keys.
+* **Custom ports and hostnames:** configure the intended ``TP_TLS_*`` names and
+  ``TP_HTTP_PORT`` / ``TP_HTTPS_PORT`` before setup. Confirm initial HTTP redirects
+  preserve the intended HTTPS destination, certificate SANs match, login/forms
+  pass host/CSRF checks, and protocol URLs use the externally reachable ports.
+  Record failures; do not document a redirect/port combination as validated based
+  only on Compose accepting its configuration.
+* **IPv6:** on a host with working IPv6, configure the address and published-port
+  bindings, then verify bracketed URL access, certificate SANs, allowed hosts,
+  CSRF-protected forms, enrollment, and CRL retrieval from an IPv6 client.
+* **Recovery and updates:** restore a compatible database and its original
+  signing/KEK/HSM material into a separate stack. Verify decryption and certificate
+  lifecycle operations. For subsequent stable releases, separately test the
+  supported previous stable image to new image update; same-image recreation
+  does not establish cross-version compatibility.
+* **Backend/client matrix:** record real hardware-HSM/provider mechanisms and
+  intended EST/CMP/SCEP clients and OPC UA servers. Software or SoftHSM success
+  does not establish hardware compatibility. See :doc:`../features/capabilities`.
+* **Rendered documentation:** inspect the workflow guide's YAML examples, trigger
+  table, and approvals; backup instructions and recovery-key warnings; API endpoint
+  paths; and :doc:`../release_notes`. Check important screenshots and external
+  links separately from the local strict Sphinx build.
