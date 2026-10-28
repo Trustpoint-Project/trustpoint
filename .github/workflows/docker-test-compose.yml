@@ -18,6 +18,9 @@ jobs:
       - name: Setup .env file
         run: cp .env.example .env
 
+      - name: Initialize Django signing key
+        run: sudo python3 docker/init_secret.py
+
       - name: Run Docker compose
         uses: hoverkraft-tech/compose-action@v3.2.0
         with:
@@ -37,6 +40,7 @@ jobs:
               echo "✅ Success on attempt $i"
               break
             else
+
               echo "⏳ Attempt $i failed with HTTP code $http_response, retrying..."
               sleep 3
             fi

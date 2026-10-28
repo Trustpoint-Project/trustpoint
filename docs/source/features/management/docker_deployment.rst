@@ -312,7 +312,9 @@ Rotation, Recovery, And Troubleshooting
 A key is installation-specific and shared by all Django services. Rotate it only
 as a planned administrator action: retain a private copy, provision the replacement
 in a new file, point ``DJANGO_SECRET_KEY_HOST_FILE`` to it, and recreate all Django
-services. Without a configured fallback key, old signatures, password-reset links,
+services using ``--force-recreate``. Changing a file alone does not refresh the
+key already loaded by running Django processes. Without a configured fallback
+key, old signatures, password-reset links,
 and authenticated sessions become invalid. Rotation does not change user password
 hashes or the separate database-encryption/HSM keys. Django's
 ``SECRET_KEY_FALLBACKS`` can support a separately planned grace-period deployment;

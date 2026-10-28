@@ -29,6 +29,7 @@
 # | SFTPGo UI    | http://localhost:8080   | http://sftpgo:8080        |
 # | SFTPGo SFTP  | localhost:2222          | sftpgo:2022               |
 # | Webhook Echo | http://localhost:8081   | http://webhook-echo:8080  |
+# | Prometheus UI| http://localhost:9090   | http://prometheus:9090    |
 # +--------------+-------------------------+---------------------------+
 
 
@@ -59,8 +60,23 @@ services:
     ports:
       - "127.0.0.1:${WEBHOOK_ECHO_PORT:-8081}:8080"
 
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - type: bind
+        source: ./docker/prometheus/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - prometheus_data:/prometheus
+
 volumes:
   sftpgo_data:
+  prometheus_data:
 
 networks:
   default:
