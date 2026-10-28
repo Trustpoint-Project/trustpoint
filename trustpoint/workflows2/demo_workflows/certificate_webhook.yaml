@@ -1,9 +1,11 @@
-# Requires successful CMP initialization issuance from any domain. Replace the webhook URL with your
-# JSON receiver, then enable and Save & Compile. Posts attributes from the final issued certificate
-# after profile processing. subject_serial_number is its subject serialNumber (OID 2.5.4.5), rendered
-# as an empty string if absent. It is independent of the stored device serial and the CA-assigned
-# integer certificate serial. Captures HTTP status and branches to a success or failure result. This
-# post-issuance workflow cannot block delivery.
+# Requires successful CMP initialization issuance from any domain. Uses webhook-echo from
+# docker-compose.demo.yml. Start the demo services, enable this workflow, and Save & Compile.
+# Inspect requests with: docker compose -p trustpoint-demo -f docker-compose.demo.yml logs -f webhook-echo
+# When Trustpoint runs on the host instead of Docker, use http://localhost:8081/trustpoint/certificates.
+# Posts final certificate attributes after profile processing. subject_serial_number is the subject
+# serialNumber (OID 2.5.4.5), rendered as an empty string if absent. It is independent of the stored
+# device serial and the CA-assigned integer certificate serial. Branches on HTTP response status.
+# This post-issuance workflow cannot block certificate delivery.
 
 schema: trustpoint.workflow.v2
 name: '[Demo] Final certificate webhook'
@@ -20,7 +22,7 @@ workflow:
       type: webhook
       title: Forward final certificate attributes
       method: POST
-      url: https://example.invalid/trustpoint/certificates
+      url: http://webhook-echo:8080/trustpoint/certificates
       timeout_seconds: 10
       headers:
         Content-Type: application/json

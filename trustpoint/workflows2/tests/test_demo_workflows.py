@@ -220,6 +220,7 @@ def test_webhook_forwards_final_certificate_snapshot_after_commit(demos, serial,
     runtime = WorkflowRuntimeService(executor=WorkflowExecutor(webhook=webhook))
     instance = Workflow2Instance.objects.get(run=run)
     runtime.run_instance(instance)
+    assert webhook.request.call_args.kwargs['url'] == 'http://webhook-echo:8080/trustpoint/certificates'
     assert webhook.request.call_args.kwargs['body'] == {
         'common_name': 'final-cn', 'subject_serial_number': serial or '', 'device_id': '55', 'profile': 'tls_client',
     }
@@ -240,6 +241,7 @@ def test_email_sends_final_certificate_attributes(demos):
         result = WorkflowExecutor().run(definition('Issued certificate email').ir_json, event=event, vars={})
     assert result.status == 'finished'
     assert len(mail.outbox) == 1
+    assert mail.outbox[0].to == ['operator@trustpoint.example']
     assert 'final-email-serial' in mail.outbox[0].body
     assert 'final-cn' in mail.outbox[0].body
     assert 'csr-value' not in mail.outbox[0].body

@@ -261,7 +261,7 @@ def test_compiler_restricts_phase_to_enrollment_and_rejects_post_success_approva
 
 
 def test_documented_effective_serial_workflow_compiles():
-    guide = (Path(__file__).parents[1] / 'docs/USER_GUIDE.md').read_text()
+    guide = (Path(__file__).resolve().parents[3] / 'docs/source/features/workflows/index.md').read_text()
     example = next(
         block.split('```')[0] for block in guide.split('```yaml\n')[1:]
         if 'name: CMP Effective Subject Serial Number Webhook' in block.split('```')[0]

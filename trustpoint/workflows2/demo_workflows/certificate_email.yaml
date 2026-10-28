@@ -1,6 +1,8 @@
-# Requires successful CMP initialization issuance from any domain. Sends the final certificate subject
-# common name and serialNumber by email. Configure SMTP in Trustpoint and replace the recipient below,
-# then enable and Save & Compile. Runs after issuance and cannot block certificate delivery.
+# Requires successful CMP initialization issuance from any domain. Uses Mailpit from
+# docker-compose.demo.yml. In Management > Settings > SMTP Email, enable SMTP with host mailpit,
+# port 1025, no TLS/SSL, and blank username/password. Enable this workflow and Save & Compile.
+# View captured messages at http://localhost:8025. When Trustpoint runs on the host instead of
+# Docker, use SMTP host localhost. Sends final certificate attributes after issuance.
 
 schema: trustpoint.workflow.v2
 name: '[Demo] Issued certificate email'
@@ -16,7 +18,7 @@ workflow:
     notify:
       type: email
       title: Email issued certificate details
-      to: [operator@example.invalid]
+      to: [operator@trustpoint.example]
       subject: 'Certificate issued for ${event.device.common_name}'
       body: |-
         Final certificate common name: ${event.request.subject.common_name}
