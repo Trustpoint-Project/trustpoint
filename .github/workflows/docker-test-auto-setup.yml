@@ -24,8 +24,9 @@ jobs:
           echo "TP_ADMIN_PASSWORD=testing321" >> .env
           echo "TP_INJECT_DEMO_DATA=true" >> .env
           
-          echo "Environment variables set in .env:"
-          grep "TP_" .env || true
+
+      - name: Initialize deployment signing key
+        run: sudo python3 docker/init_secret.py
 
       - name: Run Docker compose
         run: |

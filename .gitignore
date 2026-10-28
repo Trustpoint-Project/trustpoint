@@ -205,3 +205,6 @@ trustpoint/request/gds_push/asyncua-gds-push-test/state/*
 /db_password.txt
 /hsm_pin.txt
 /hsm_so_pin.txt
+
+# Deployment-provided secret files
+/secrets/

@@ -1,7 +1,7 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""Shared helpers for the local tp_wizard PKCS#11 handoff."""
+"""Shared helpers for the local Docker Compose PKCS#11 handoff."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def local_dev_pkcs11_config_env_var() -> str:
 
 
 def local_dev_pkcs11_handoff_available() -> bool:
-    """Return whether tp_wizard exposed a local-dev PKCS#11 handoff."""
+    """Return whether Docker Compose exposed a local-dev PKCS#11 handoff."""
     return (
         os.getenv('TRUSTPOINT_LOCAL_HSM_ENABLED') == '1'
         and local_dev_pkcs11_module_path().is_file()
@@ -45,5 +45,5 @@ def local_dev_pkcs11_handoff_available() -> bool:
 
 
 def local_dev_pkcs11_config_available() -> bool:
-    """Return whether tp_wizard exposed a readable local-dev PKCS#11 provider config."""
+    """Return whether Docker Compose exposed a readable local-dev PKCS#11 provider config."""
     return local_dev_pkcs11_handoff_available() and local_dev_pkcs11_config_path().is_file()

@@ -22,6 +22,8 @@ from typing import Any, ClassVar
 import django_stubs_ext
 from django.utils.translation import gettext_lazy as _
 
+from trustpoint.secret_key import development_secret_key, load_secret_key
+
 try:
     APP_VERSION = version('trustpoint')
 except PackageNotFoundError:
@@ -267,7 +269,11 @@ DATABASE_ENGINE = os.environ.get('DATABASE_ENGINE', 'django.db.backends.postgres
 DATABASE_HOST = os.environ.get('DATABASE_HOST', 'localhost')
 DATABASE_PORT = os.environ.get('DATABASE_PORT', '5432')
 POSTGRES_DB = os.environ.get('POSTGRES_DB', 'trustpoint_db')
-DATABASE_USER = os.environ.get('DATABASE_USER', 'admin')
+_DATABASE_USER_FILE = os.getenv('DATABASE_USER_FILE')
+DATABASE_USER = (
+    Path(_DATABASE_USER_FILE).read_text(encoding='utf-8').strip()
+    if _DATABASE_USER_FILE else os.environ.get('DATABASE_USER', 'admin')
+)
 _DATABASE_PASSWORD_FILE = os.getenv('DATABASE_PASSWORD_FILE')
 if _DATABASE_PASSWORD_FILE:
     # An explicit mounted secret takes precedence over inherited development
@@ -605,12 +611,12 @@ else:
     raise RuntimeError(msg)
 
 
-# SECURITY WARNING: keep the secret key used in production secret!
-if DEBUG:
-    SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'  # noqa: S105
+# Production requires a provisioned, read-only secret; it never generates a key.
+_django_secret_key_file = os.getenv('DJANGO_SECRET_KEY_FILE')
+if _django_secret_key_file or not DEBUG:
+    SECRET_KEY = load_secret_key(_django_secret_key_file or '/run/secrets/django_secret_key', strip_whitespace=False)
 else:
-    # TODO(AlexHx8472): Use proper docker secrets handling.  # noqa: FIX002
-    SECRET_KEY = Path('/etc/trustpoint/secrets/django_secret_key.env').read_text()
+    SECRET_KEY = development_secret_key(REPO_ROOT / 'var' / 'development' / 'django_secret_key')
 
 
 class UTCFormatter(logging.Formatter):

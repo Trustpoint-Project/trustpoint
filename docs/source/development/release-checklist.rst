@@ -42,3 +42,23 @@ Post-Release
   - Tag the docker image with release tag and push to the Docker Hub
   - Update the README.md on the Docker Hub if required
 - Update `Trustpoint website <https://trustpoint.campus-schwarzwald.de/en/>`_ with release information.
+
+Docker Deployment Validation
+----------------------------
+
+Run the Compose and secret-initializer unit tests, then build an isolated test
+image and exercise a fresh web/worker deployment. The smoke test uses synthetic
+data, temporary named volumes, and no published ports; it cleans up its own project.
+
+.. code-block:: bash
+
+   uv run pytest trustpoint/setup_wizard/tests/test_secret_initialization.py trustpoint/setup_wizard/tests/test_docker_deployment.py
+   docker build -t trustpoint-compose-regression:local -f docker/trustpoint/Dockerfile .
+   python3 tests/docker_security/compose_smoke.py
+
+To include the optional SoftHSM service and worker profile:
+
+.. code-block:: bash
+
+   docker build -t trustpoint-softhsm-regression:local -f docker/softhsm/Dockerfile .
+   TRUSTPOINT_TEST_COMPOSE_FILE=docker-compose.softhsm.yml python3 tests/docker_security/compose_smoke.py

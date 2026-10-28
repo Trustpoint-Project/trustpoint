@@ -28,6 +28,20 @@ The setup wizard can still accept raw PostgreSQL dumps for compatibility, but
 Trustpoint-created backups should include the sidecar. CI verifies the manifest
 before restoring the payload.
 
+Django Signing Key
+==================
+
+The Django signing key is deployment state. The administrator provisions the host
+file ``secrets/django_secret_key`` once; Compose mounts it read-only at
+``/run/secrets/django_secret_key`` in web and worker containers. Preserve the file
+alongside database backups to retain existing signatures and sessions. Images
+and production startup never generate signing keys.
+
+Explicitly import the current key before migrating an existing installation.
+See :doc:`../../features/management/docker_deployment` for the procedure and
+recovery requirements. The signing key is separate from application-secret
+encryption keys and HSM key material.
+
 Out Of Scope
 ============
 

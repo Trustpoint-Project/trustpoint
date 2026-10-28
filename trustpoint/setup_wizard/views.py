@@ -624,7 +624,7 @@ def _persist_local_dev_pkcs11_config_if_available(
     current_config_path: str,
     current_config_exists: bool,
 ) -> None:
-    """Persist the local-dev PKCS#11 provider config when tp_wizard exposed one."""
+    """Persist the local-dev PKCS#11 provider config when Docker Compose exposed one."""
     if current_staged_config is not None or not local_dev_pkcs11_config_available():
         return
 

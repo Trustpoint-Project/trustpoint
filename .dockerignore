@@ -50,3 +50,6 @@ ca_workspace/
 htmlcov/
 docs/.building
 docs/_build/
+
+# Deployment-provided secret files
+/secrets/

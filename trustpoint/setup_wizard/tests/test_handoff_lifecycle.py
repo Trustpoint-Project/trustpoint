@@ -395,6 +395,7 @@ def test_fresh_bootstrap_seeds_database_before_auto_setup(monkeypatch, settings,
     settings.TRUSTPOINT_IS_BOOTSTRAP = True
     settings.TRUSTPOINT_IS_OPERATIONAL = False
     settings.DATABASE_PASSWORD = 'deployment-test-secret'
+    settings.DATABASE_USER = 'deployment_user'
     settings.APP_VERSION = '1.0.0'
     monkeypatch.setenv('TP_AUTO_SETUP', 'true')
     monkeypatch.setenv('DATABASE_HOST', 'deployment-postgres')

@@ -155,7 +155,7 @@ class Command(BaseCommand):
             'operational_db_host': os.getenv('DATABASE_HOST'),
             'operational_db_port': os.getenv('DATABASE_PORT'),
             'operational_db_name': os.getenv('POSTGRES_DB'),
-            'operational_db_user': os.getenv('DATABASE_USER'),
+            'operational_db_user': settings.DATABASE_USER,
             'operational_db_password': settings.DATABASE_PASSWORD,
         }
         update_fields = []

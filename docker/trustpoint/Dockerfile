@@ -123,11 +123,8 @@ RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
     visudo -cf /etc/sudoers && \
     service sudo restart
 
-# TODO: We may want to use proper Docker secrets handling in the future.
-RUN mkdir -p /etc/trustpoint/secrets && \
-    uv run python -c "from pathlib import Path; from django.core.management.utils import get_random_secret_key; Path('/etc/trustpoint/secrets/django_secret_key.env').write_text(get_random_secret_key())" && \
-    chown -R www-data:www-data /etc/trustpoint/secrets && \
-    chmod -R 700 /etc/trustpoint/secrets
+# The deployment supplies /run/secrets/django_secret_key as a read-only Compose secret.
+# No signing key is generated or stored in this image.
 
 # NGINX configuration.
 RUN rm -f /etc/nginx/sites-enabled/*
@@ -140,8 +137,7 @@ RUN chmod +x /etc/trustpoint/wizard/transition/*.sh \
              /etc/trustpoint/wizard/update_tls.sh \
              /etc/trustpoint/wizard/update_tls_nginx.sh \
              /etc/trustpoint/wizard/wizard_restore.sh \
-             ./docker/trustpoint/entrypoint.sh \
-             ./docker/trustpoint/scripts/upsert_local_dev_pkcs11_profile.sh
+             ./docker/trustpoint/entrypoint.sh
 
 # Translation catalogs are image artifacts; runtime startup must not write code.
 RUN .venv/bin/python -m django compilemessages -l de -l en --ignore .venv

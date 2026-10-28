@@ -23,6 +23,32 @@ helper = '/etc/trustpoint/wizard/switch_to_operational.sh'
 os.environ['DATABASE_PASSWORD'] = 'external-test-credential'
 runtime['initialize_deployment']()
 
+# The host initializer is explicit and idempotent; the application only reads.
+initializer = runpy.run_path('/tests/init_secret.py')['initialize_secret']
+signing_key = Path('/run/secrets/django_secret_key')
+# Emulate Docker's secret-mount parent, not the private host source directory.
+signing_key.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+assert initializer(signing_key)
+original_key = signing_key.read_bytes()
+assert not initializer(signing_key)
+assert signing_key.read_bytes() == original_key
+assert len(original_key) >= 50
+assert signing_key.stat().st_uid == 0
+assert signing_key.stat().st_gid == account.pw_gid
+assert signing_key.stat().st_mode & 0o777 == 0o440
+key_probe = """
+from pathlib import Path
+p = Path('/run/secrets/django_secret_key')
+assert len(p.read_text()) >= 50
+try:
+    p.write_text('replacement')
+except PermissionError:
+    pass
+else:
+    raise AssertionError('www-data can overwrite the signing key')
+"""
+subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', key_probe], check=True)
+
 # Exercise the real auto-setup switch before replacing its body below. Service
 # executables are stubs; a second TLS install would fail on the empty staging dir.
 app = Path('/var/www/html/trustpoint')
@@ -253,4 +279,4 @@ for name in ('trustpoint/media', 'trustpoint/collected_static',
     path.unlink()
 """
 subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', permission_probe], check=True)
-print('PASS: auto-setup, sudo restrictions, UID/GID drop, protected application code/dependencies, and writable data.')
+print('PASS: host-provisioned signing key, idempotent initialization, permissions, auto-setup, sudo restrictions, and protected code.')

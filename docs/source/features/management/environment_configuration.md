@@ -51,6 +51,30 @@ docker build -f tests/docker_security/Dockerfile -t trustpoint-runtime-boundary-
 docker run --rm --network=none trustpoint-runtime-boundary-test
 ```
 
+## Django signing key
+
+Initialize the deployment's key once with `sudo python3 docker/init_secret.py`.
+The helper creates `secrets/django_secret_key` on the host with owner root, group
+33 (`www-data` in the image), and mode `0440`. Existing keys are never overwritten
+or silently repaired. Compose mounts the file read-only in web and worker.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DJANGO_SECRET_KEY_HOST_FILE` | `./secrets/django_secret_key` | Host source file for the Compose secret. |
+| `DJANGO_SECRET_KEY_FILE` | `/run/secrets/django_secret_key` | Mounted path read by production Django settings. |
+| `TRUSTPOINT_IMAGE` | `trustpointproject/trustpoint:latest` | Application image used by web and worker. |
+| `TRUSTPOINT_NETWORK_NAME` | `trustpoint-net` | Network name for the standard and worker configurations. |
+
+Production never generates a key and fails if the mounted file is missing,
+empty, or unreadable. A separate local-development key is cached under the ignored
+`var/development/` directory only when running non-Docker development settings.
+
+Keep the host key across upgrades. Import an existing installation's exact key
+with `sudo python3 docker/init_secret.py --import-from /path/to/saved-key` before
+replacing its containers. A conflicting existing destination is left unchanged
+and reported as an error. See the [Docker deployment guide](docker_deployment.rst)
+for fresh installation, migration, upgrades, and recovery.
+
 ## Database
 
 | Variable | Default | Description |
