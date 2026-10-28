@@ -166,8 +166,12 @@ if [ "$PHASE" = "bootstrap" ]; then
     echo "Auto-setup marker detected - triggering immediate switch to operational mode"
     if [ -f "/etc/trustpoint/wizard/switch_to_operational.sh" ]; then
       /etc/trustpoint/wizard/switch_to_operational.sh --final
-      echo "Operational mode activated - container will now serve operational runtime"
-      exit 0
+      echo "Operational mode activated - starting the web edge without restarting the container"
+      # The switch installed TLS and the operational upstream before nginx ran.
+      # Enable that configured site without copying the bootstrap upstream back.
+      ln -sf /etc/nginx/sites-available/trustpoint /etc/nginx/sites-enabled/trustpoint
+      nginx -t
+      start_nginx_foreground
     else
       echo "ERROR: switch_to_operational.sh not found, cannot auto-switch"
       exit 1

@@ -133,9 +133,9 @@ class BackendConfigurationMixin:
                 if getattr(secret_config, field_name) != value:
                     changed_runtime = True
                 setattr(secret_config, field_name, value)
-            if changed_runtime:
-                secret_config.wrapped_dek = None
-                secret_config.backup_encrypted_dek = None
+            if changed_runtime and backend.dek_initialized:
+                msg = 'Cannot change PKCS#11 configuration after DEK initialization.'
+                raise RuntimeError(msg)
 
         secret_config.full_clean()
         secret_config.save()

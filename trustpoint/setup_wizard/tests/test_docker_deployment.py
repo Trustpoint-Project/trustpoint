@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[3]
     (['docker-compose.softhsm.yml'], 'worker'),
     (['docker-compose.yml', 'docker-compose.demo.yml'], None),
     (['docker-compose.yml', 'docker-compose.mdns.yml'], None),
+    (['docker-compose.yml', 'docker-compose.pkcs11.yml'], None),
+    (['docker-compose.worker.yml', 'docker-compose.pkcs11.yml', 'docker-compose.worker.pkcs11.yml'], None),
 ])
 def test_compose_services_share_readonly_secret_and_persistent_state(tmp_path, files, profile):
     for filename in files:
@@ -39,12 +41,18 @@ def test_compose_services_share_readonly_secret_and_persistent_state(tmp_path, f
     }, text=True, capture_output=True, check=True, timeout=30)
     config = json.loads(result.stdout)
     assert config['secrets']['django_secret_key']['file'] == str(tmp_path / 'secrets/django_secret_key')
+    software = not any('pkcs11' in filename or 'softhsm' in filename for filename in files)
     for name, service in config['services'].items():
         if name not in {'trustpoint', 'trustpoint-worker'}:
             continue
         assert service['environment']['DJANGO_SECRET_KEY_FILE'] == '/run/secrets/django_secret_key'
         assert any(s['source'] == 'django_secret_key' and s['target'] == '/run/secrets/django_secret_key'
                    for s in service['secrets'])
+        kek_mounts = [secret for secret in service['secrets'] if secret['source'] == 'trustpoint_software_kek']
+        assert bool(kek_mounts) == software
+        if software:
+            assert config['secrets']['trustpoint_software_kek']['file'] == str(tmp_path / 'secrets/trustpoint_software_kek')
+            assert service['environment']['TRUSTPOINT_SOFTWARE_KEK_FILE'] == '/run/secrets/trustpoint_software_kek'
         targets = {v['target'] for v in service['volumes']}
         assert '/var/lib/trustpoint/bootstrap' in targets
         assert '/var/www/html/trustpoint/trustpoint/media' in targets
@@ -84,3 +92,27 @@ fi
     assert not marker.exists()
     assert not (config / 'user-pin.txt').exists()
     assert token.read_text() == 'preserve-key-material'
+
+
+@pytest.mark.skipif(shutil.which('docker') is None, reason='Docker Compose CLI is not installed')
+@pytest.mark.parametrize('filename', ['docker-compose.yml', 'docker-compose.worker.yml'])
+def test_compose_software_kek_source_and_target_are_configurable(tmp_path, filename):
+    shutil.copyfile(ROOT / filename, tmp_path / filename)
+    (tmp_path / '.env').write_text(
+        'TRUSTPOINT_SOFTWARE_KEK_HOST_FILE=./external-kek\n'
+        'TRUSTPOINT_SOFTWARE_KEK_FILE=/run/secrets/custom-kek\n'
+    )
+    result = subprocess.run(
+        ['docker', 'compose', '-f', filename, 'config', '--format', 'json'],
+        cwd=tmp_path, env={'PATH': os.environ['PATH'], 'HOME': os.environ['HOME']},
+        text=True, capture_output=True, check=True, timeout=30,
+    )
+    config = json.loads(result.stdout)
+    assert config['secrets']['trustpoint_software_kek']['file'] == str(tmp_path / 'external-kek')
+    for name in ('trustpoint', 'trustpoint-worker'):
+        if name not in config['services']:
+            continue
+        service = config['services'][name]
+        assert service['environment']['TRUSTPOINT_SOFTWARE_KEK_FILE'] == '/run/secrets/custom-kek'
+        assert any(secret['source'] == 'trustpoint_software_kek' and secret['target'] == '/run/secrets/custom-kek'
+                   for secret in service['secrets'])

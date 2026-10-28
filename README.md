@@ -91,7 +91,7 @@ git clone https://github.com/Trustpoint-Project/trustpoint.git
 cd trustpoint
 cp .env.example .env
 # Set database credentials and TLS names in .env.
-sudo python3 docker/init_secret.py
+sudo python3 docker/init_secret.py --type all
 docker compose up -d --build
 ```
 

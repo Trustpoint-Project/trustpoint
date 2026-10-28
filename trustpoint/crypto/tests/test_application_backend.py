@@ -376,6 +376,7 @@ def test_imported_private_key_is_stored_as_protected_binding_and_signs_locally()
         defaults={'allow_imported_private_keys': True},
     )
     profile = _create_pkcs11_profile(name='provider-1', active=True)
+    AppSecretBackendModel.objects.all().delete()
     AppSecretBackendModel.objects.update_or_create(
         singleton_id=AppSecretBackendModel.SINGLETON_ID,
         defaults={'backend_kind': AppSecretBackendKind.PKCS11},
@@ -431,6 +432,7 @@ def test_imported_private_key_is_supported_with_software_backend() -> None:
         defaults={'allow_imported_private_keys': True},
     )
     profile = _create_software_profile(name='software-provider', active=True)
+    AppSecretBackendModel.objects.all().delete()
     AppSecretBackendModel.objects.update_or_create(
         singleton_id=AppSecretBackendModel.SINGLETON_ID,
         defaults={'backend_kind': AppSecretBackendKind.SOFTWARE},
@@ -479,6 +481,7 @@ def test_imported_private_key_is_supported_with_software_backend() -> None:
 def test_imported_private_key_requires_security_setting() -> None:
     """Private-key imports fail closed unless the Security setting explicitly allows them."""
     _create_pkcs11_profile(name='provider-1', active=True)
+    AppSecretBackendModel.objects.all().delete()
     AppSecretBackendModel.objects.update_or_create(
         singleton_id=AppSecretBackendModel.SINGLETON_ID,
         defaults={'backend_kind': AppSecretBackendKind.PKCS11},

@@ -24,7 +24,7 @@ jobs:
         run: cp .env.example .env
 
       - name: Initialize deployment signing key
-        run: sudo python3 docker/init_secret.py
+        run: sudo python3 docker/init_secret.py --type all
 
       - name: Start Trustpoint via docker-compose
         run: |

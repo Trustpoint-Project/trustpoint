@@ -19,7 +19,7 @@ from django.core.management import call_command
 from trustpoint_core.serializer import CertificateCollectionSerializer, CredentialSerializer
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
-from appsecrets.service import DEK_LENGTH_BYTES, AppSecretConfigurationError, get_app_secret_service
+from appsecrets.service import AppSecretConfigurationError, get_app_secret_service
 from management.models import AppVersion, NotificationConfig
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -332,9 +332,8 @@ class CompletedRuntimeStartupStrategy(StartupStrategy):
 
     @staticmethod
     def _ensure_software_appsecret_dek(backend: AppSecretBackendModel) -> None:
-        """Require a valid raw DEK for the software app-secret backend."""
-        raw_dek = bytes(backend.software_config.raw_dek or b'')
-        if len(raw_dek) != DEK_LENGTH_BYTES:
+        """Require a wrapped DEK for the software app-secret backend."""
+        if not backend.software_config.wrapped_dek or not backend.dek_initialized:
             msg = 'The setup wizard is complete, but the software app-secret backend has no valid DEK.'
             raise RuntimeError(msg)
 

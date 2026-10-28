@@ -1,11 +1,11 @@
 Docker Compose Deployment
-=========================
+============================
 
 Docker Compose is the supported Docker deployment mechanism. The application web
 setup wizard remains available for configuring Trustpoint after deployment.
 
 Prerequisites
--------------
+----------------
 
 Use a Linux server with Docker Engine, Docker Compose v2.32.4 or newer, Git,
 Python 3, and administrator access. The examples run Docker as an authorized
@@ -13,7 +13,7 @@ Docker user; prefix Docker commands with ``sudo`` if required on your server.
 Set the database password, TLS DNS/IP names, and exposed ports in ``.env``.
 
 Fresh Installation
-------------------
+---------------------
 
 From a release checkout:
 
@@ -22,7 +22,7 @@ From a release checkout:
    cp .env.example .env
    chmod 600 .env
    # Edit .env before exposing the installation.
-   sudo python3 docker/init_secret.py
+   sudo python3 docker/init_secret.py --type all
    docker compose up -d --build --wait --wait-timeout 300
 
 Open ``https://<your-server>/``. Accept the initial certificate as appropriate and
@@ -38,16 +38,31 @@ a separate deployment directory or secret source file for each installation; onl
 that installation's web and workers should share its key.
 
 Signing Key Initialization
---------------------------
+-----------------------------
 
-``docker/init_secret.py`` only provisions the signing-key file. It does not run
+``docker/init_secret.py`` provisions host secret files. It does not run
 Docker, rewrite ``.env``, or alter an existing deployment. Run it once with sudo:
 
 .. code-block:: bash
 
    sudo python3 docker/init_secret.py
 
-It creates ``secrets/django_secret_key`` using cryptographically secure randomness
+The default ``--type django`` creates only Django's signing key. For the software
+backend, initialize the independent database KEK as well:
+
+.. code-block:: bash
+
+   sudo python3 docker/init_secret.py --type kek
+   # Or initialize both in one invocation:
+   sudo python3 docker/init_secret.py --type all
+
+``--type kek`` creates ``secrets/trustpoint_software_kek`` using
+``secrets.token_hex(32)``: exactly 64 hexadecimal characters, without a newline.
+``--type all`` validates and preserves each existing secret independently. If the
+second operation fails, the first result remains in place; resolve the error
+and rerun. ``--path`` and the Django-only ``--import-from`` require a single type.
+
+The Django default creates ``secrets/django_secret_key`` using cryptographically secure randomness
 and atomic file creation. The file is owned by root, group 33 (the image's
 ``www-data`` group), with mode ``0440``. The invoking administrator owns the
 private secrets directory, so Compose can locate its source file. Do not make the
@@ -72,11 +87,20 @@ contents exactly, including trailing newlines, to preserve imported signatures.
 Production fails clearly when the file is missing, empty, or unreadable. It
 never generates a production key. Images contain no key.
 
+The main and worker Compose files also mount the software KEK read-only at
+``/run/secrets/trustpoint_software_kek``. Override its host source with
+``TRUSTPOINT_SOFTWARE_KEK_HOST_FILE``. It is independent of Django signing and
+required even for local software-backend development. See
+:doc:`../security/db_encryption` for the Trustpoint 1.0 envelope format and recovery.
+On macOS, Docker Desktop may map host numeric IDs differently; verify guest
+``www-data`` read access. Linux production ownership stays root:33/0440. Do not
+make the key world-readable to work around Desktop file sharing.
+
 Local, non-Docker development uses a separate generated key in the ignored
 ``var/development/`` directory. That fallback is unavailable in production.
 
 Start, Stop, And Inspect
-------------------------
+---------------------------
 
 .. code-block:: bash
 
@@ -91,10 +115,10 @@ for routine stops or upgrades. Preserve the project name and deployment files.
 Use ``docker compose -p <project>`` consistently when choosing a custom name.
 
 Optional Services
------------------
+--------------------
 
 Background worker
-~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 The standalone worker configuration adds a workflows2 worker using the same
 secret, bootstrap handoff, media, and HSM storage as the web service:
@@ -108,13 +132,14 @@ sleep, and ID options remain configurable through ``WORKFLOWS2_WORKER_*`` in
 ``.env``.
 
 SoftHSM
-~~~~~~~
+~~~~~~~~~~
 
 SoftHSM is intended for local development and integration testing. For this
 configuration, provision the existing file-based PostgreSQL credentials too:
 
 .. code-block:: bash
 
+   sudo python3 docker/init_secret.py
    # Run only when these database credential files do not already exist.
    (umask 077; set -C; printf '%s\n' admin > db_user.txt)
    (umask 077; set -C; openssl rand -hex 32 > db_password.txt)
@@ -122,6 +147,8 @@ configuration, provision the existing file-based PostgreSQL credentials too:
    sudo chmod 0440 db_user.txt db_password.txt
    docker compose -f docker-compose.softhsm.yml up -d --build --wait --wait-timeout 300
 
+This standalone PKCS#11 configuration requires only Django's secret, not a
+software KEK. Select the HSM app-secret backend in the web setup wizard.
 Enable its optional worker with ``--profile worker``. The SoftHSM service owns
 its token/config volumes. Trustpoint uses the direct SoftHSM PKCS#11 module and
 shared token storage because application-secret protection requires mechanisms
@@ -136,8 +163,32 @@ missing PIN files stops with an error; restore its original PINs rather than
 reinitializing or deleting the token. Keep hardware HSM keys and recovery material
 according to the vendor's procedures.
 
+External PKCS#11 provider
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For an external provider, configure the provider module, token selector, and PIN
+file in the web setup wizard. Initialize Django's secret only and remove the
+software KEK mount with the PKCS#11-only override:
+
+.. code-block:: bash
+
+   sudo python3 docker/init_secret.py
+   docker compose -f docker-compose.yml -f docker-compose.pkcs11.yml up -d --build
+
+For workers use all three files consistently:
+
+.. code-block:: bash
+
+   docker compose -f docker-compose.worker.yml -f docker-compose.pkcs11.yml \
+     -f docker-compose.worker.pkcs11.yml up -d --build
+
+The overrides use Compose's ``!override`` sequence replacement. No dummy software
+KEK file is needed. Supply HSM PIN credentials through the existing file-based
+provider configuration or a separate credential secret mount; never export raw
+HSM KEKs. Preserve token state across updates.
+
 Demo mail and SFTP
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 
 Export a separate ``SFTPGO_ADMIN_PASSWORD`` in the deployment shell and start
 the optional helper configuration. Keep this helper-admin credential out of the
@@ -159,7 +210,7 @@ These helpers are optional test services, not a production
 mail or backup architecture. Use SSH forwarding for remote access to their UIs.
 
 mDNS and external PostgreSQL
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 On Linux, add ``-f docker-compose.mdns.yml`` to advertise the service. The
 advertiser uses host networking and additional capabilities; it remains separate
@@ -173,7 +224,7 @@ web setup wizard. Configure HTTPS names and ports through ``TP_TLS_*``,
 ``TP_HTTP_PORT``, and ``TP_HTTPS_PORT`` in ``.env``.
 
 Persistence And Backups
------------------------
+--------------------------
 
 .. list-table:: Deployment state
    :header-rows: 1
@@ -182,6 +233,8 @@ Persistence And Backups
      - Storage
    * - Django signing key
      - Host file ``secrets/django_secret_key``, mounted read-only
+   * - Software database KEK
+     - Host file ``secrets/trustpoint_software_kek``, mounted read-only
    * - PostgreSQL database
      - ``postgres_data`` volume
    * - Bootstrap database and operational handoff
@@ -193,18 +246,18 @@ Persistence And Backups
    * - SoftHSM token/configuration when enabled
      - ``softhsm_tokens`` and ``softhsm_config`` volumes
 
-Back up the database, signing-key file, ``.env``, other credential files, and all
+Back up the database, signing-key file, software KEK, ``.env``, other credential files, and all
 applicable runtime volumes. Pause application/worker and other writers when taking
 a coordinated filesystem snapshot. Hardware HSM backups are separate. See
 :doc:`backups` and :doc:`../../development/architecture/backup_restore`.
 
-Before first recreating an existing container with these new volume mounts,
+For an existing Trustpoint 1.0 deployment, before first recreating a container with new volume mounts,
 explicitly copy its bootstrap, media, and HSM state into the corresponding
 volumes. An empty volume does not recover files from a previous container's
 writable layer. Do not discard that container until recovery copies exist.
 
 Routine Updates
----------------
+------------------
 
 Use a target release with a compatible database migration path. Take and verify
 recovery backups, update the release checkout, and retain the same Compose project,
@@ -227,87 +280,21 @@ credential access, enrollment, and backups after startup. If migrations have run
 returning to an old image alone is not a reliable rollback: restore the matching
 database and runtime state as well.
 
-Migration From The Former Deployment Wizard
--------------------------------------------
+Pre-1.0 Installations
+------------------------
 
-This is an explicit administrator operation. Do not run the initializer without
-``--import-from`` first: that would create a different key. No automatic import
-or migration of production secrets is performed.
+Migration of encrypted databases from pre-1.0 releases is unsupported. Deploy
+Trustpoint 1.0 with a fresh database and independent secrets. Keep the original
+installation and its backups intact until a separately supported migration path
+is available. The application schema transition refuses existing pre-1.0 key
+material instead of silently deleting or converting it.
 
-1. Record the old image, environment, container names, database version, and mounts.
-   Save inspection output in a private directory, since it can contain credentials.
-   Stop application and worker writes, then take a PostgreSQL custom-format dump
-   and archives of the application runtime directories. For the former default
-   container names, for example:
-
-   .. code-block:: bash
-
-      umask 077
-      mkdir -p var/compose-migration
-      docker stop trustpoint
-      # Also stop the old workflows2 worker, if present.
-      docker inspect trustpoint postgres > var/compose-migration/containers.json
-      docker exec postgres sh -ec 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
-        > var/compose-migration/database.dump
-      docker cp trustpoint:/var/lib/trustpoint - > var/compose-migration/state.tar
-      docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media - > var/compose-migration/media.tar
-      docker cp trustpoint:/etc/trustpoint/secrets/django_secret_key.env \
-        var/compose-migration/django_secret_key
-      sudo python3 docker/init_secret.py --import-from var/compose-migration/django_secret_key
-
-   If a prior installation used another key path, import its actual active key.
-   Also preserve custom mounts, including the former host-side ``var/hsm`` tree.
-   The initializer preserves every byte and refuses a conflicting destination.
-   If the old key is irretrievably lost, signed sessions/tokens cannot be retained;
-   provision a new key deliberately and expect users to sign in again. This does
-   not recover lost application-encryption or HSM keys. If the old key came from
-   a shared image, importing also retains its shared identity. Plan an explicit
-   rotation to a deployment-specific key after migration when appropriate.
-
-2. Use a new Compose project and network for the migration, for example set
-   ``COMPOSE_PROJECT_NAME=trustpoint-compose`` and
-   ``TRUSTPOINT_NETWORK_NAME=trustpoint-compose-net`` in ``.env``. Match the old
-   database credentials and TLS settings. Stop/remove only the old deployment's
-   containers once all backups are verified, leaving their data volumes and host
-   files intact. This avoids conflicts with the default container names.
-
-3. The old workflow used PostgreSQL 15; the current image uses PostgreSQL 18.
-   Never attach a PostgreSQL 15 data directory directly to PostgreSQL 18. See
-   `PostgreSQL major-version upgrades <https://www.postgresql.org/docs/current/upgrading.html>`_. Start
-   the new PostgreSQL service on its new project's volume and restore the dump
-   using the configured database owner:
-
-   .. code-block:: bash
-
-      docker compose up -d postgres
-      # Wait for PostgreSQL to be healthy. Substitute your database owner/name.
-      docker compose exec -T postgres pg_restore -U admin -d trustpoint_db \
-        --no-owner --exit-on-error < var/compose-migration/database.dump
-
-   This requires a target release with supported migrations for the restored
-   schema. Regenerated or renamed initial migrations are a fresh-install baseline,
-   not an upgrade path. Resolve that history transition explicitly after checking
-   schema compatibility; do not blindly fake migrations.
-
-4. Build and create the application without starting it, then restore state into
-   its newly mounted volumes. With the appropriate Compose file selected:
-
-   .. code-block:: bash
-
-      docker compose build trustpoint
-      docker compose up --no-start --no-deps --no-build trustpoint
-      container_id=$(docker compose ps --all --quiet trustpoint)
-      docker cp - "$container_id:/var/lib" < var/compose-migration/state.tar
-      docker cp - "$container_id:/var/www/html/trustpoint/trustpoint" \
-        < var/compose-migration/media.tar
-      docker compose up -d --no-build --wait --wait-timeout 300
-
-   When using SoftHSM, restore its original token/config/PIN data before starting
-   the SoftHSM service. Keep the old data and image until the new installation is
-   verified. Apply the same procedure to extra state owned by separate workers.
+The initializer still supports explicit Django signing-key import with
+``--import-from``; importing that key does not migrate encrypted fields or HSM
+state. Do not fake migrations or point a fresh installation at old encrypted data.
 
 Rotation, Recovery, And Troubleshooting
----------------------------------------
+------------------------------------------
 
 A key is installation-specific and shared by all Django services. Rotate it only
 as a planned administrator action: retain a private copy, provision the replacement
@@ -337,3 +324,9 @@ this configuration does not automatically retain previous keys.
 If the signing key is lost and no backup exists, its signatures cannot be
 recovered. Generating another key is a deliberate recovery action, not a normal
 startup behavior.
+
+Software KEKs must remain unchanged for the lifetime of the current encrypted
+database. A replacement KEK cannot decrypt its wrapped DEK. Software KEK and DEK
+rotation are not implemented. Missing, invalid, or wrong KEKs cause cryptographic
+operations to fail without generating a new DEK. Restore the original KEK and
+matching database backup; see :doc:`../security/db_encryption`.

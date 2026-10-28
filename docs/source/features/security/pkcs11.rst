@@ -17,7 +17,7 @@ SoftHSM
 - **Library Path**: ``/usr/lib/libsofthsm2.so`` in the Trustpoint container, which points to the packaged SoftHSM module.
 - **Use Case**: Development and CI validation. Use a production-grade HSM for production deployments.
 
-The ``docker-compose.softhsm.yml`` setup mounts the SoftHSM token directory into the Trustpoint container and uses the SoftHSM PKCS#11 module directly. This is intentional: the direct module exposes the AES key-wrap and AES-CBC mechanisms required for HSM-backed application-secret protection.
+The ``docker-compose.softhsm.yml`` setup mounts the SoftHSM token directory into the Trustpoint container and uses the SoftHSM PKCS#11 module directly. This is intentional: the direct module exposes the AES key-wrap and AES-GCM mechanisms required for HSM-backed application-secret protection.
 
 Physical HSM
 ~~~~~~~~~~~~
@@ -82,7 +82,7 @@ AES Key Operations
 
 **Encryption/Decryption Operations**:
 - DEK protection with standard PKCS#11 AES key wrap/unwrap mechanisms when available
-- Fallback DEK protection with AES-CBC-PAD or AES-CBC C_Encrypt/C_Decrypt
+- Authenticated fallback DEK protection with AES-GCM C_Encrypt/C_Decrypt
 
 General HSM Operations
 ~~~~~~~~~~~~~~~~~~~~~~

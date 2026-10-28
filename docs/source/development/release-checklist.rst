@@ -62,3 +62,25 @@ To include the optional SoftHSM service and worker profile:
 
    docker build -t trustpoint-softhsm-regression:local -f docker/softhsm/Dockerfile .
    TRUSTPOINT_TEST_COMPOSE_FILE=docker-compose.softhsm.yml python3 tests/docker_security/compose_smoke.py
+
+To exercise real software and SoftHSM envelopes inside the application image
+without using the deployment's database or secrets:
+
+.. code-block:: bash
+
+   docker run --rm --network=none --user 33:33 \
+     --entrypoint /var/www/html/trustpoint/.venv/bin/python \
+     --mount type=bind,src="$PWD/tests/docker_security/envelope_smoke.py",dst=/tests/envelope_smoke.py,readonly \
+     trustpoint-compose-regression:local /tests/envelope_smoke.py software
+   # Repeat with the final argument pkcs11 for a fresh synthetic SoftHSM token.
+
+The Compose regression checks a shared DEK across web and worker processes,
+read-only secret mounts, restart/recreation, and simultaneous PostgreSQL DEK
+initialization. The standalone SoftHSM-stack auto-setup test still exercises
+software storage; the ``pkcs11`` envelope regression verifies actual HSM-backed
+DEK protection without any software KEK.
+
+Set ``TRUSTPOINT_TEST_IMAGE`` to the initial test image and
+``TRUSTPOINT_TEST_UPGRADE_IMAGE`` to a second compatible test image to include an
+actual image replacement during the recreation check. Do not use pre-1.0 images
+for this test: encrypted database migration from those releases is unsupported.

@@ -26,7 +26,7 @@ jobs:
           
 
       - name: Initialize deployment signing key
-        run: sudo python3 docker/init_secret.py
+        run: sudo python3 docker/init_secret.py --type all
 
       - name: Run Docker compose
         run: |

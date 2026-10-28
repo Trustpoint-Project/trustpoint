@@ -35,6 +35,9 @@ try:
     fixture = temp / 'secrets/django_secret_key'
     fixture.write_text('synthetic-integration-signing-key-' + 'x' * 64)
     fixture.chmod(0o444)
+    kek_fixture = temp / 'secrets/trustpoint_software_kek'
+    kek_fixture.write_text('ab' * 32)
+    kek_fixture.chmod(0o444)
     shutil.copyfile(root / compose_file, temp / compose_file)
     (temp / 'db_user.txt').write_text('admin')
     (temp / 'db_password.txt').write_text('synthetic-integration-password')
@@ -70,6 +73,13 @@ try:
     config = json.loads(rendered)
     config['networks']['default']['name'] = project + '-network'
     if 'softhsm' in config['services']:
+        # This legacy auto-setup regression exercises software storage, even on
+        # the SoftHSM stack. Real HSM envelopes are tested by envelope_smoke.py.
+        config['secrets']['trustpoint_software_kek'] = {'file': str(kek_fixture)}
+        for name in ('trustpoint', 'trustpoint-worker'):
+            config['services'][name]['secrets'].append({'source': 'trustpoint_software_kek',
+                                                       'target': '/run/secrets/trustpoint_software_kek'})
+            config['services'][name]['environment']['TRUSTPOINT_SOFTWARE_KEK_FILE'] = '/run/secrets/trustpoint_software_kek'
         config['services']['softhsm']['image'] = os.environ.get(
             'TRUSTPOINT_TEST_SOFTHSM_IMAGE', 'trustpoint-softhsm-regression:local'
         )
@@ -144,7 +154,21 @@ try:
 
     print('Starting isolated web, PostgreSQL, and worker services...', flush=True)
     call(compose + ['up', '-d', '--no-build', '--wait', '--wait-timeout', '300'], cwd=temp)
-    probe = "import sys,json,hashlib,os;sys.path.insert(0,'/var/www/html/trustpoint/trustpoint');from trustpoint import settings;print(json.dumps({'digest':hashlib.sha256(settings.SECRET_KEY.encode()).hexdigest(),'leaked':any(settings.SECRET_KEY in v for v in os.environ.values())}))"
+    probe = """import sys,json,hashlib,os
+sys.path.insert(0,'/var/www/html/trustpoint/trustpoint')
+os.environ['DJANGO_SETTINGS_MODULE']='trustpoint.settings'
+import django
+django.setup()
+from django.conf import settings
+from appsecrets.service import get_app_secret_service
+from appsecrets.models import AppSecretBackendModel, AppSecretSoftwareConfigModel
+service=get_app_secret_service()
+dek=service.require_dek()
+assert service.decrypt_text(service.encrypt_text('integration encrypted value'))=='integration encrypted value'
+print(json.dumps({'digest':hashlib.sha256(settings.SECRET_KEY.encode()).hexdigest(),
+                 'dek_digest':hashlib.sha256(dek).hexdigest(),
+                 'leaked':any(settings.SECRET_KEY in v or ('ab'*32) in v for v in os.environ.values())}))
+"""
 
     def key(service):
         return json.loads(
@@ -179,7 +203,7 @@ try:
         print('PASS: application can open the shared SoftHSM token with its persisted PIN.', flush=True)
     first = key('trustpoint')
     assert first == key('trustpoint-worker') and not first['leaked']
-    print('PASS: web and worker share the mounted key; key contents are absent from environment variables.', flush=True)
+    print('PASS: web and worker share signing key and DEK; secrets are absent from environment variables.', flush=True)
     readonly = "from pathlib import Path; p=Path('/run/secrets/django_secret_key'); p.write_text('must-fail')"
     result = subprocess.run(
         compose + ['exec', '-T', '--user', '0', 'trustpoint', '/usr/local/bin/python3', '-c', readonly],
@@ -188,7 +212,14 @@ try:
         cwd=temp,
     )
     assert result.returncode and 'Read-only file system' in result.stderr
-    print('PASS: the Compose secret is read-only even to container root.', flush=True)
+    print('PASS: the Compose signing secret is read-only even to container root.', flush=True)
+    kek_readonly = readonly.replace('django_secret_key', 'trustpoint_software_kek')
+    result = subprocess.run(
+        compose + ['exec', '-T', '--user', '0', 'trustpoint', '/usr/local/bin/python3', '-c', kek_readonly],
+        capture_output=True, text=True, cwd=temp,
+    )
+    assert result.returncode and 'Read-only file system' in result.stderr
+    print('PASS: software KEK is read-only even to container root.', flush=True)
     call(compose + ['restart', 'trustpoint', 'trustpoint-worker'], cwd=temp)
     call(
         compose
@@ -207,7 +238,12 @@ try:
         cwd=temp,
     )
     assert first == key('trustpoint') == key('trustpoint-worker')
-    print('PASS: restart preserves the signing key.', flush=True)
+    print('PASS: restart preserves the signing key and DEK.', flush=True)
+    upgrade_image = os.environ.get('TRUSTPOINT_TEST_UPGRADE_IMAGE')
+    if upgrade_image:
+        for name in ('trustpoint', 'trustpoint-worker'):
+            config['services'][name]['image'] = upgrade_image
+        (temp / 'stack.json').write_text(json.dumps(config))
     call(
         compose
         + [
@@ -225,7 +261,44 @@ try:
         cwd=temp,
     )
     assert first == key('trustpoint') == key('trustpoint-worker')
-    print('PASS: container recreation preserves the signing key and operational data.', flush=True)
+    print('PASS: container recreation/image update preserves signing key, DEK, and operational data.', flush=True)
+    concurrent_probe = r'''import os, sys
+sys.path.insert(0, '/var/www/html/trustpoint/trustpoint')
+os.environ['DJANGO_SETTINGS_MODULE']='trustpoint.settings'
+import django
+django.setup()
+from django.conf import settings
+import psycopg
+from django.db import connections, close_old_connections
+from django.core.management import call_command
+from concurrent.futures import ThreadPoolExecutor
+from appsecrets.models import AppSecretBackendModel, AppSecretSoftwareConfigModel
+from appsecrets.service import SoftwareAppSecretService, clear_app_secret_cache
+cfg=settings.DATABASES['default']
+with psycopg.connect(dbname=cfg['NAME'],user=cfg['USER'],password=cfg['PASSWORD'],host=cfg['HOST'],port=cfg['PORT'],autocommit=True) as admin:
+    admin.execute('CREATE DATABASE envelope_concurrency_test')
+connections.close_all()
+cfg['NAME']='envelope_concurrency_test'
+call_command('migrate',interactive=False,verbosity=0)
+b=AppSecretBackendModel.objects.create(backend_kind='software')
+AppSecretSoftwareConfigModel.objects.create(backend=b)
+clear_app_secret_cache()
+def initialize(_):
+    close_old_connections()
+    try:
+        return SoftwareAppSecretService(AppSecretSoftwareConfigModel.objects.get()).require_dek()
+    finally:
+        close_old_connections()
+with ThreadPoolExecutor(max_workers=8) as pool:
+    keys=list(pool.map(initialize,range(8)))
+assert all(key==keys[0] for key in keys)
+assert AppSecretBackendModel.objects.get().dek_initialized
+assert AppSecretSoftwareConfigModel.objects.count()==1
+print('PASS: eight PostgreSQL initializers recovered the same committed DEK.')
+'''
+    call(compose + ['exec', '-T', '--user', '33:33', 'trustpoint',
+                    '/var/www/html/trustpoint/.venv/bin/python', '-c', concurrent_probe], cwd=temp)
+    print('PASS: PostgreSQL concurrent initialization commits one shared DEK.', flush=True)
 except Exception:
     if (temp / 'stack.json').exists():
         diagnostic = (

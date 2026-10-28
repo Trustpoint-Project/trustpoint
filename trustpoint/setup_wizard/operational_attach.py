@@ -92,7 +92,6 @@ class OperationalAppSecretMaterial:
     """Raw app-secret material read from the target database for validation only."""
 
     backend_kind: str | None
-    raw_dek: bytes = b''
     wrapped_dek: bytes = b''
     kek_label: str = 'trustpoint-app-secret-kek'
 
@@ -622,7 +621,7 @@ class OperationalTargetInspector:
             if app_secret_backend_kind == 'software':  # noqa: S105 - backend kind value, not a secret.
                 return OperationalAppSecretMaterial(
                     backend_kind=app_secret_backend_kind,
-                    raw_dek=self._read_software_app_secret_dek(cursor),
+                    wrapped_dek=self._read_software_app_secret_dek(cursor),
                 )
             if app_secret_backend_kind == 'pkcs11':  # noqa: S105 - backend kind value, not a secret.
                 wrapped_dek, kek_label = self._read_pkcs11_app_secret_material(cursor)
@@ -1044,7 +1043,7 @@ class OperationalTargetInspector:
                 return False
             cursor.execute(
                 """
-                SELECT raw_dek IS NOT NULL AND OCTET_LENGTH(raw_dek) = 32
+                SELECT wrapped_dek IS NOT NULL AND OCTET_LENGTH(wrapped_dek) > 0
                 FROM app_secret_software_config
                 WHERE backend_id = 1
                 LIMIT 1
@@ -1071,12 +1070,12 @@ class OperationalTargetInspector:
 
     @classmethod
     def _read_software_app_secret_dek(cls, cursor: Any) -> bytes:
-        """Read the software app-secret DEK from the target database."""
+        """Read the wrapped software app-secret DEK from the target database."""
         if not cls._table_exists(cursor, table_name='app_secret_software_config'):
             return b''
         cursor.execute(
             """
-            SELECT raw_dek
+            SELECT wrapped_dek
             FROM app_secret_software_config
             WHERE backend_id = 1
             LIMIT 1

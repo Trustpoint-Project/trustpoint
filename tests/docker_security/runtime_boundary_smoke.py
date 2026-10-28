@@ -48,6 +48,17 @@ else:
     raise AssertionError('www-data can overwrite the signing key')
 """
 subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', key_probe], check=True)
+software_kek = Path('/run/secrets/trustpoint_software_kek')
+assert initializer(software_kek, kind='kek')
+original_kek = software_kek.read_bytes()
+assert len(bytes.fromhex(original_kek.decode())) == 32
+assert software_kek.stat().st_uid == 0 and software_kek.stat().st_gid == account.pw_gid
+assert software_kek.stat().st_mode & 0o777 == 0o440
+assert not initializer(software_kek, kind='kek')
+assert software_kek.read_bytes() == original_kek
+kek_probe = key_probe.replace('django_secret_key', 'trustpoint_software_kek')
+subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', kek_probe], check=True)
+
 
 # Exercise the real auto-setup switch before replacing its body below. Service
 # executables are stubs; a second TLS install would fail on the empty staging dir.

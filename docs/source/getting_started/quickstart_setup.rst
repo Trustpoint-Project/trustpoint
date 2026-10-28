@@ -13,12 +13,12 @@ Docker Compose v2.32.4 or newer, Git, Python 3, and administrator access.
    cp .env.example .env
    chmod 600 .env
    # Set a strong database password and the server's TLS names/IP addresses.
-   sudo python3 docker/init_secret.py
+   sudo python3 docker/init_secret.py --type all
    docker compose up -d --build --wait --wait-timeout 300
 
-The one-time initializer creates an installation-specific Django signing key on
-the host. It never replaces an existing key. Compose mounts it read-only in all
-Django containers. Keep the key, ``.env``, and named volumes for future updates.
+The one-time initializer creates an installation-specific Django signing key and an independent software
+database KEK on the host. It never replaces an existing key. Compose mounts both read-only in all
+Django containers. Keep both keys, ``.env``, and named volumes for future updates.
 
 Open ``https://<your-server>/`` and complete the web setup wizard. Obtain the
 initial bootstrap credentials from ``docker compose logs trustpoint``. Startup
@@ -44,10 +44,10 @@ and trusted origins. ``TP_HTTP_PORT`` and ``TP_HTTPS_PORT`` select published por
    docker compose stop
 
 Stop with ``stop`` or ``down`` to keep persistent data. Do not use ``down -v`` for
-routine maintenance. Existing installations must preserve their current signing
-key and migrate their runtime data before container replacement.
+routine maintenance. Existing 1.0 installations must preserve both keys and all
+runtime state before container replacement. Pre-1.0 encrypted database migration
+is unsupported.
 
 See :doc:`../features/management/docker_deployment` for published images, workers,
-SoftHSM, demo mail/SFTP services, external PostgreSQL, upgrades, migration from the
-former deployment workflow, and secret recovery. Continue with
+SoftHSM, demo mail/SFTP services, external PostgreSQL, upgrades, and secret recovery. Continue with
 :ref:`quickstart-operation-guide` after setup.
