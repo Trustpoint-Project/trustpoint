@@ -18,6 +18,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('singleton_id', models.PositiveSmallIntegerField(default=1, editable=False, help_text='Singleton primary key. Always 1.', primary_key=True, serialize=False)),
                 ('backend_kind', models.CharField(choices=[('pkcs11', 'PKCS#11'), ('software', 'Software')], max_length=16)),
+                ('dek_initialized', models.BooleanField(default=False, editable=False)),
             ],
             options={
                 'db_table': 'app_secret_backend',
@@ -45,7 +46,7 @@ class Migration(migrations.Migration):
             name='AppSecretSoftwareConfigModel',
             fields=[
                 ('backend', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='software_config', serialize=False, to='appsecrets.appsecretbackendmodel')),
-                ('raw_dek', models.BinaryField(blank=True, help_text='Development-only DEK storage.', null=True)),
+                ('wrapped_dek', models.BinaryField(blank=True, help_text='Versioned DEK wrapped by the external software KEK.', null=True)),
             ],
             options={
                 'db_table': 'app_secret_software_config',
