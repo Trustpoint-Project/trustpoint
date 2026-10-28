@@ -28,9 +28,6 @@ from devices import views
             {'pk': 1, 'profile_id': 1},
             views.DeviceIssueCsrCredentialView,
         ),
-        # OPC UA GDS
-        ('devices:opc_ua_gds', {}, views.OpcUaGdsTableView),
-        # ('devices:opc_ua_gds-add', {}, views.CreateOpcUaGdsView),
         # Certificate Lifecycle Management - Credential Issuance
         # (
         #     'devices:certificate_lifecycle_management-issue_tls_client_credential',
@@ -55,7 +52,6 @@ from devices import views
         # # Help Pages
         # ('devices:help_dispatch_domain', {'pk': 1}, views.HelpDispatchDomainCredentialView),
         # ('devices:help_dispatch_device_type_redirect', {'pk': 1}, views.HelpDispatchDeviceTypeRedirectView),
-        # ('devices:help_dispatch_opc_ua_gds', {'pk': 1}, views.HelpDispatchOpcUaGdsView),
         # ('devices:help_dispatch_application', {'pk': 1}, views.HelpDispatchApplicationCredentialView),
         # (
         #     'devices:help_dispatch_application_template',
@@ -90,11 +86,6 @@ from devices import views
         #('devices:help-onboarding_est-idevid', {'pk': 1}, views.OnboardingEstIdevidHelpView),
         #('devices:help-onboarding_est-idevid-registration', {'pk': 1}, views.OnboardingEstIdevidRegistrationHelpView),
         #('devices:help-onboarding_method_select-idevid', {'pk': 1}, views.OnboardingMethodSelectIdevidHelpView),
-        # (
-        #     'devices:help-no-onboarding_est-opc-ua-gds-username-password',
-        #     {'pk': 1},
-        #     views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView,
-        # ),
         # Downloads
         #('devices:download', {'pk': 1}, views.DownloadPageDispatcherView),
         #('devices:certificate-download', {'pk': 1}, views.CertificateDownloadView),

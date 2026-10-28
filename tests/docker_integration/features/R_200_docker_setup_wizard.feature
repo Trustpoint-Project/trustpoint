@@ -83,7 +83,7 @@ Feature: Docker Setup Wizard
     When the user navigates to "/home/dashboard/"
     Then the page should load without errors
 
-    When the user navigates to "/devices/opc-ua-gds/"
+    When the user navigates to "/devices/"
     Then the page should load without errors
 
     When the user navigates to "/workflows2/definitions"

@@ -1,22 +1,34 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""Middleware for service account security and per-user preferences."""
+"""Middleware for web authentication and service account security and per-user preferences."""
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.contrib.auth import logout
-from django.shortcuts import redirect
+from django.contrib.auth import BACKEND_SESSION_KEY, REDIRECT_FIELD_NAME, login, logout
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import ValidationError
+from django.shortcuts import redirect, resolve_url
 from django.urls import reverse
 from django.utils import timezone, translation
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.translation import gettext as _
+from django_otp import DEVICE_ID_SESSION_KEY
 
 from management.i18n_context import reset_current_user, set_current_user
-from management.models import AccountSecurityConfig
+from management.models import AccountSecurityConfig, PasswordPolicy
 
-from .models import TrustpointUser
+from .authentication import (
+    CERTIFICATE_BACKEND,
+    CERTIFICATE_LOGIN_ERROR_SESSION_KEY,
+    REJECTED_CERTIFICATE_SESSION_KEY,
+    ClientCertificateBackend,
+)
+from .models import TrustpointUser, UserOTPDevice
 
 SESSION_ACTIVITY_WRITE_INTERVAL_SECONDS = 60
 
@@ -25,6 +37,106 @@ if TYPE_CHECKING:
 
     from django.contrib.auth.models import AnonymousUser
     from django.http import HttpRequest, HttpResponse
+
+
+class ClientCertificateAuthenticationMiddleware:
+    """Sign in users with registered TLS certificates and recheck certificate sessions."""
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        """Store the next middleware and the certificate validation backend."""
+        self.get_response = get_response
+        self.backend = ClientCertificateBackend()
+        self.login_path = reverse('users:login')
+        self.logout_path = reverse('users:logout')
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        """Authenticate web requests without interfering with password login or public APIs."""
+        certificate_session = request.session.get(BACKEND_SESSION_KEY) == CERTIFICATE_BACKEND
+        if self._skip_authentication(request, certificate_session=certificate_session):
+            return self.get_response(request)
+        if not request.META.get('HTTP_SSL_CLIENT_CERT') and not certificate_session:
+            return self.get_response(request)
+
+        try:
+            user = self._authenticate(request)
+        except ValidationError as exc:
+            return self._authentication_failed(request, exc)
+
+        if not request.user.is_authenticated or request.user.pk != user.pk or not certificate_session:
+            # Django flushes a different user's session and replaces request.user, including its permissions.
+            login(request, user, backend=CERTIFICATE_BACKEND)
+        request.session.pop(CERTIFICATE_LOGIN_ERROR_SESSION_KEY, None)
+        request.session.pop(REJECTED_CERTIFICATE_SESSION_KEY, None)
+        if request.path_info == self.login_path:
+            next_url = request.GET.get(REDIRECT_FIELD_NAME, '')
+            if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=True):
+                next_url = resolve_url(settings.LOGIN_REDIRECT_URL)
+            return redirect(next_url)
+        return self.get_response(request)
+
+    def _authenticate(self, request: HttpRequest) -> TrustpointUser:
+        """Select the authenticated user exclusively from the validated certificate."""
+        user = self.backend.authenticate(request, certificate_login=True)
+        if user is None:
+            raise ValidationError(_('No valid client certificate was supplied.'))
+        return user
+
+    def _authentication_failed(self, request: HttpRequest, error: ValidationError) -> HttpResponse:
+        """Allow password fallback only for the same rejected certificate after a fresh password login."""
+        certificate_digest = hashlib.sha256(request.META.get('HTTP_SSL_CLIENT_CERT', '').encode('utf-8')).hexdigest()
+        if (
+            request.user.is_authenticated
+            and request.session.get(BACKEND_SESSION_KEY) == 'django.contrib.auth.backends.ModelBackend'
+            and request.session.get(REJECTED_CERTIFICATE_SESSION_KEY) == certificate_digest
+        ):
+            return self.get_response(request)
+        logout(request)
+        request.session[REJECTED_CERTIFICATE_SESSION_KEY] = certificate_digest
+        request.session[CERTIFICATE_LOGIN_ERROR_SESSION_KEY] = ' '.join(error.messages)
+        next_path = request.get_full_path() if request.path_info != self.login_path else ''
+        return redirect_to_login(next_path, f'{self.login_path}?password=1')
+
+    def _skip_authentication(self, request: HttpRequest, *, certificate_session: bool) -> bool:
+        """Leave password/OTP fallback, logout, bootstrap, and unauthenticated public requests usable."""
+        path = request.path_info
+        if settings.TRUSTPOINT_IS_BOOTSTRAP:
+            return True
+        if (
+            not certificate_session and not request.user.is_authenticated
+            and any(path.startswith(prefix) for prefix in settings.PUBLIC_PATHS)
+        ):
+            return True
+        if path.startswith('/static/') or path == self.logout_path:
+            return True
+        if path.startswith(self.login_path) and (
+            path != self.login_path or request.method != 'GET' or request.GET.get('password') == '1'
+        ):
+            return True
+        # Login rotates CSRF tokens; authenticate new sessions on navigation, before forms are submitted.
+        return not request.user.is_authenticated and request.method not in {'GET', 'HEAD'}
+
+
+class PasswordOTPRequiredMiddleware:
+    """Enforce OTP on web sessions authenticated by the password backend."""
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        """Store the next middleware or view."""
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        """Require a fresh password and OTP for existing unverified password sessions."""
+        if (
+            not request.path_info.startswith('/api/')
+            and request.user.is_authenticated
+            and request.session.get(BACKEND_SESSION_KEY) == 'django.contrib.auth.backends.ModelBackend'
+            and PasswordPolicy.is_otp_required()
+        ):
+            device = UserOTPDevice.objects.filter(user=request.user, confirmed=True).only('id').first()
+            if device is None or request.session.get(DEVICE_ID_SESSION_KEY) != device.persistent_id:
+                logout(request)
+                next_path = '' if request.path_info.startswith('/users/') else request.get_full_path()
+                return redirect_to_login(next_path, reverse('users:login'))
+        return self.get_response(request)
 
 
 class UserPreferencesMiddleware:

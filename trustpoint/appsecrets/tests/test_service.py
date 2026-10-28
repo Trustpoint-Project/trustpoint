@@ -14,7 +14,7 @@ import pytest
 from appsecrets.service import (
     DEK_LENGTH_BYTES,
     PKCS11_CWRAP_DEK_PREFIX,
-    PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX,
+    PKCS11_ENCRYPTED_DEK_GCM_PREFIX,
     AppSecretConfigurationError,
     Pkcs11AppSecretService,
 )
@@ -118,7 +118,7 @@ class _FakeKek:
         self.destroyed = False
         self.fail_wrap = False
         self.fail_encrypt = False
-        self.fail_cbc_encrypt = False
+        self.fail_gcm_encrypt = False
 
     def __getitem__(self, _attribute: pkcs11.Attribute) -> object:
         attributes = {
@@ -166,26 +166,26 @@ class _FakeKek:
         plaintext: bytes,
         *,
         mechanism: pkcs11.Mechanism,
-        mechanism_param: bytes | None = None,
+        mechanism_param: bytes | pkcs11.GCMParams | None = None,
     ) -> bytes:
         if not self.allow_encrypt:
             raise pkcs11.exceptions.MechanismInvalid
         if self.fail_encrypt:
             raise pkcs11.exceptions.MechanismInvalid
-        if self.fail_cbc_encrypt and mechanism in {pkcs11.Mechanism.AES_CBC_PAD, pkcs11.Mechanism.AES_CBC}:
+        if self.fail_gcm_encrypt and mechanism == pkcs11.Mechanism.AES_GCM:
             raise pkcs11.exceptions.MechanismInvalid
         self.encrypt_calls.append((plaintext, mechanism, mechanism_param))
-        return b'encrypted:' + plaintext
+        return b'encrypted:' + plaintext + b't' * 16
 
     def decrypt(
         self,
         ciphertext: bytes,
         *,
         mechanism: pkcs11.Mechanism,
-        mechanism_param: bytes | None = None,
+        mechanism_param: bytes | pkcs11.GCMParams | None = None,
     ) -> bytes:
         self.decrypt_calls.append((ciphertext, mechanism, mechanism_param))
-        return ciphertext.removeprefix(b'encrypted:')
+        return ciphertext.removeprefix(b'encrypted:')[:-16]
 
     def destroy(self) -> None:
         self.destroyed = True
@@ -204,7 +204,7 @@ def test_pkcs11_app_secret_protect_dek_uses_key_wrap_operation() -> None:
 
     wrapped = service._protect_dek(kek=kek, dek=b'a' * 32)  # noqa: SLF001
 
-    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + b'wrapped:' + (b'a' * 32)
+    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + (b'a' * 32)
     assert len(kek.wrap_calls) == 1
     wrapped_key, mechanism = kek.wrap_calls[0]
     assert mechanism == pkcs11.Mechanism.AES_KEY_WRAP
@@ -219,7 +219,7 @@ def test_pkcs11_app_secret_generate_protected_dek_prefers_token_generated_key() 
     dek, wrapped = service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
 
     assert dek == b'g' * 32
-    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + b'wrapped:' + (b'g' * 32)
+    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + (b'g' * 32)
     assert len(kek.session.generated_keys) == 1
     assert not kek.session.created_keys
     assert kek.session.generated_keys[0].destroyed
@@ -234,7 +234,7 @@ def test_pkcs11_app_secret_generate_protected_dek_falls_back_to_imported_key() -
     dek, wrapped = service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
 
     assert len(dek) == DEK_LENGTH_BYTES
-    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + b'wrapped:' + dek
+    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + dek
     assert len(kek.session.created_keys) == 1
     assert kek.session.created_keys[0].destroyed
 
@@ -271,7 +271,7 @@ def test_pkcs11_app_secret_kek_creation_falls_back_to_encrypt_profile() -> None:
     kek, dek, protected_dek = service._create_kek_with_protected_dek(session)  # noqa: SLF001
 
     assert dek == b'g' * 32
-    assert protected_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX)
+    assert protected_dek.startswith(PKCS11_ENCRYPTED_DEK_GCM_PREFIX)
     expected_kek_profile_attempts = 2
     assert len(session.generated_keks) == expected_kek_profile_attempts
     assert session.generated_keks[0].destroyed
@@ -287,20 +287,20 @@ def test_pkcs11_app_secret_generate_protected_dek_falls_back_to_encrypt_when_wra
     dek, protected_dek = service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
 
     assert dek == b'g' * 32
-    assert protected_dek.startswith(PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX)
+    assert protected_dek.startswith(PKCS11_ENCRYPTED_DEK_GCM_PREFIX)
     assert len(kek.encrypt_calls) == 1
     plaintext, mechanism, mechanism_param = kek.encrypt_calls[0]
     assert plaintext == dek
-    assert mechanism == pkcs11.Mechanism.AES_CBC_PAD
-    assert isinstance(mechanism_param, bytes)
+    assert mechanism == pkcs11.Mechanism.AES_GCM
+    assert isinstance(mechanism_param, pkcs11.GCMParams)
 
 
 def test_pkcs11_app_secret_rejects_tokens_with_only_ecb_encryption() -> None:
-    """Tokens without key-wrap or CBC encryption cannot protect the app-secret DEK."""
+    """Tokens without key-wrap or GCM encryption cannot protect the app-secret DEK."""
     service = _service()
     kek = _FakeKek()
     kek.fail_wrap = True
-    kek.fail_cbc_encrypt = True
+    kek.fail_gcm_encrypt = True
 
     with pytest.raises(AppSecretConfigurationError, match='standard PKCS#11 AES flows') as exc_info:
         service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
@@ -314,7 +314,7 @@ def test_pkcs11_app_secret_recover_dek_uses_key_unwrap_operation() -> None:
     service = _service()
     kek = _FakeKek()
 
-    protected_dek = PKCS11_CWRAP_DEK_PREFIX + b'wrapped:' + (b'b' * 32)
+    protected_dek = PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + (b'b' * 32)
 
     dek = service._recover_dek(kek=kek, protected_dek=protected_dek)  # noqa: SLF001
 
@@ -330,19 +330,20 @@ def test_pkcs11_app_secret_decrypts_encrypted_dek_envelope() -> None:
     """Encrypted DEK envelopes are recovered with PKCS#11 C_Decrypt."""
     service = _service()
     kek = _FakeKek()
-    iv = b'i' * 16
+    iv = b'i' * 12
 
     dek = service._recover_dek(  # noqa: SLF001
         kek=kek,
-        protected_dek=PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX + iv + b'encrypted:' + (b'c' * 32),
+        protected_dek=PKCS11_ENCRYPTED_DEK_GCM_PREFIX + iv + b'encrypted:' + (b'c' * 32) + b't' * 16,
     )
 
     assert dek == b'c' * 32
     assert len(kek.decrypt_calls) == 1
     ciphertext, mechanism, mechanism_param = kek.decrypt_calls[0]
-    assert ciphertext == b'encrypted:' + (b'c' * 32)
-    assert mechanism == pkcs11.Mechanism.AES_CBC_PAD
-    assert mechanism_param == iv
+    assert ciphertext == b'encrypted:' + (b'c' * 32) + b't' * 16
+    assert mechanism == pkcs11.Mechanism.AES_GCM
+    assert isinstance(mechanism_param, pkcs11.GCMParams)
+    assert mechanism_param.nonce == iv
 
 
 def test_pkcs11_app_secret_rejects_ecb_encrypted_dek_envelope() -> None:
@@ -376,3 +377,44 @@ def test_pkcs11_app_secret_protection_failure_reports_attempts() -> None:
 
     assert 'generate/private-readable-session' in str(exc_info.value)
     assert 'import/private-readable-session' in str(exc_info.value)
+
+
+def test_pkcs11_missing_dek_never_reinitializes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A committed initialization marker forbids any attempt to create replacement HSM keys."""
+    from appsecrets.models import AppSecretBackendModel, AppSecretPkcs11ConfigModel
+
+    AppSecretBackendModel.objects.all().delete()
+    backend = AppSecretBackendModel.objects.create(backend_kind='pkcs11', dek_initialized=True)
+    config = AppSecretPkcs11ConfigModel.objects.create(
+        backend=backend, module_path='/not/loaded.so', token_serial='known-token',
+        auth_source='file', auth_source_ref='/not/read-pin',
+    )
+    service = Pkcs11AppSecretService(config)
+    monkeypatch.delenv('TRUSTPOINT_SOFTWARE_KEK_FILE', raising=False)
+    with pytest.raises(AppSecretConfigurationError, match='DEK is missing'):
+        service.require_dek()
+    assert AppSecretPkcs11ConfigModel.objects.get().wrapped_dek is None
+
+
+def test_pkcs11_recovery_needs_no_software_kek(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HSM recovery uses only the token KEK and stored envelope, even after cache clearing."""
+    from contextlib import nullcontext
+
+    from appsecrets.models import AppSecretBackendModel, AppSecretPkcs11ConfigModel
+    from appsecrets.service import clear_app_secret_cache
+
+    AppSecretBackendModel.objects.all().delete()
+    backend = AppSecretBackendModel.objects.create(backend_kind='pkcs11', dek_initialized=True)
+    wrapped = PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + b'x' * 32
+    config = AppSecretPkcs11ConfigModel.objects.create(
+        backend=backend, module_path='/not/loaded.so', token_serial='known-token',
+        auth_source='file', auth_source_ref='/not/read-pin', wrapped_dek=wrapped,
+    )
+    service = Pkcs11AppSecretService(config)
+    kek = _FakeKek()
+    monkeypatch.setenv('TRUSTPOINT_SOFTWARE_KEK_FILE', '/deliberately/nonexistent/software-kek')
+    monkeypatch.setattr(service, '_open_session', lambda: nullcontext(kek.session))
+    monkeypatch.setattr(service, '_load_existing_kek', lambda _: kek)
+    clear_app_secret_cache()
+    assert service.require_dek() == b'x' * 32
+    assert bytes(AppSecretPkcs11ConfigModel.objects.get().wrapped_dek) == wrapped

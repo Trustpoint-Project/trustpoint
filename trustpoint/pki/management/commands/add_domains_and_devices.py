@@ -36,7 +36,7 @@ from onboarding.models import (
 from pki.models import CaModel, CredentialModel, DevIdRegistration, DomainModel, TruststoreModel
 from pki.util.x509 import CertificateGenerator
 from signer.models import SignerModel
-from trustpoint.logger import LoggerMixin
+from util.commands import CommandLoggingMixin
 
 ALLOWED_CHARS = allowed_chars = string.ascii_letters + string.digits
 
@@ -171,32 +171,10 @@ def create_signer_for_domain(
     )
     return SignerModel.objects.create(unique_name=f'signer-{domain_name}', credential=credential_model)
 
-class Command(BaseCommand, LoggerMixin):
+class Command(BaseCommand, CommandLoggingMixin):
     """Add domains and associated device names with random onboarding protocol and serial number."""
 
     help = 'Add domains and associated device names with random onboarding protocol and serial number'
-
-    def log_and_stdout(self, message: str, level: str = 'info') -> None:
-        """Log a message and write it to stdout.
-
-        Parameters
-        ----------
-        message : str
-            The message to log and print.
-        level : str
-            The logging level ('info', 'warning', 'error', etc.).
-        """
-        log_method = getattr(self.logger, level, self.logger.info)
-        log_method(message)
-
-        if level == 'error':
-            self.stdout.write(self.style.ERROR(message))
-        elif level == 'warning':
-            self.stdout.write(self.style.WARNING(message))
-        elif level == 'info':
-            self.stdout.write(self.style.SUCCESS(message))
-        else:
-            self.stdout.write(message)
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Execute the command."""
@@ -323,7 +301,7 @@ class Command(BaseCommand, LoggerMixin):
                     f"'{issuing_ca_name}' with truststore '{truststore_name}'"
                 )
                 AuditLog.create_entry(
-                    operation_type=AuditLog.OperationType.MODEL_CREATED,
+                    operation_type=AuditLog.OperationType.DEVID_REGISTRATION_CREATED,
                     target=devid_reg,
                     target_display=f'DevIdRegistration: {devid_reg.unique_name} (demo data)',
                     actor=None,
@@ -343,7 +321,7 @@ class Command(BaseCommand, LoggerMixin):
                         f"with CN '{signer.common_name}' issued by '{issuing_ca_name}'"
                     )
                     AuditLog.create_entry(
-                        operation_type=AuditLog.OperationType.MODEL_CREATED,
+                        operation_type=AuditLog.OperationType.SIGNER_ADDED,
                         target=signer,
                         target_display=f'Signer: {signer.unique_name} (demo data)',
                         actor=None,
@@ -364,8 +342,7 @@ class Command(BaseCommand, LoggerMixin):
                     self.log_and_stdout(f"Device '{device_name}' already exists, skipping.")
                     continue
 
-                random_device_type = random.choice( # noqa: S311
-                        [DeviceModel.DeviceType.GENERIC_DEVICE, DeviceModel.DeviceType.OPC_UA_GDS])
+                device_type = DeviceModel.DeviceType.GENERIC_DEVICE
                 serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))  # noqa: S311
 
                 if device_uses_onboarding:
@@ -418,7 +395,7 @@ class Command(BaseCommand, LoggerMixin):
                         common_name=device_name,
                         serial_number=serial_number,
                         domain=domain,
-                        device_type=random_device_type,
+                        device_type=device_type,
                         onboarding_config=onboarding_config_model
                     )
 
@@ -462,7 +439,7 @@ class Command(BaseCommand, LoggerMixin):
                         common_name=device_name,
                         serial_number=serial_number,
                         domain=domain,
-                        device_type=random_device_type
+                        device_type=device_type
                     )
 
                     device_model.no_onboarding_config = no_onboarding_config_model

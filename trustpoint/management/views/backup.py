@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Django backup view."""
-import datetime
+import datetime as dt
 import io
 import tarfile
 import zipfile
@@ -22,6 +22,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import BasePermission
+from trustpoint_core.archiver import ArchiveFormat
 
 from management.backup_artifacts import backup_manifest_path
 from management.forms import BackupOptionsForm
@@ -30,6 +31,7 @@ from management.serializer.backup import BackupSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import SortableTableFromListMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
+from util.archives import archive_named_files
 from util.sftp import SftpClient, SftpError
 
 
@@ -64,8 +66,8 @@ def get_backup_file_data(filename: str) -> dict[str, Any]:
     if file_path is None:
         return {}
     stat = file_path.stat()
-    created_dt = datetime.datetime.fromtimestamp(stat.st_ctime, datetime.UTC)
-    modified_dt = datetime.datetime.fromtimestamp(stat.st_mtime, datetime.UTC)
+    created_dt = dt.datetime.fromtimestamp(stat.st_ctime, dt.UTC)
+    modified_dt = dt.datetime.fromtimestamp(stat.st_mtime, dt.UTC)
     size_kb = stat.st_size / 1024
     return {
         'filename': filename,
@@ -91,7 +93,7 @@ def create_db_backup(path: Path) -> str:
         CalledProcessError: If the `dbbackup` command fails.
     """
     path.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d_%H-%M-%S')
+    timestamp = dt.datetime.now(dt.UTC).strftime('%Y-%m-%d_%H-%M-%S')
     filename = f'backup_{timestamp}.dump.gz'
     call_command('trustpointbackup', filename=filename)
     return filename
@@ -455,23 +457,11 @@ class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
             messages.error(request, 'No valid files to download.')
             return redirect('management:backups')
 
-        buffer = io.BytesIO()
         ext = archive_format.lower()
-
-        if ext == 'zip':
-            with zipfile.ZipFile(buffer, 'w') as zip_archive:
-                for fname, data in backup_artifacts:
-                    zip_archive.writestr(fname, data)
-        else:
-            with tarfile.open(fileobj=buffer, mode='w:gz') as tar_archive:
-                for fname, data in backup_artifacts:
-                    info = tarfile.TarInfo(name=fname)
-                    info.size = len(data)
-                    tar_archive.addfile(info, io.BytesIO(data))
-
-        buffer.seek(0)
+        selected_format = ArchiveFormat.ZIP if ext == 'zip' else ArchiveFormat.TAR_GZ
+        archive_bytes = archive_named_files(backup_artifacts, selected_format)
         archive_name = f'backups.{ext}'
-        response = HttpResponse(buffer.read(), content_type='application/octet-stream')
+        response = HttpResponse(archive_bytes, content_type='application/octet-stream')
         response['Content-Disposition'] = f'attachment; filename={archive_name}'
         return response
 

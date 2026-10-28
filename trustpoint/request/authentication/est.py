@@ -7,20 +7,24 @@ from typing import Never
 
 from cryptography import x509
 
-from devices.models import DeviceModel
-from pki.models import CredentialModel, IssuedCredentialModel
-from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
-from trustpoint.logger import LoggerMixin
-
-from .base import (
-    AuthenticationComponent,
-    ClientCertificateAuthentication,
-    CompositeAuthentication,
-    IDevIDAuthentication,
+from pki.models import CredentialModel
+from request.request_context import (
+    BaseCertificateRequestContext,
+    BaseRequestContext,
+    EstBaseRequestContext,
+    EstCertificateRequestContext,
 )
 
+from .base import (
+    ClientCertificateAuthentication,
+    CompositeAuthentication,
+    DevicePasswordAuthentication,
+    IDevIDAuthentication,
+)
+from .base import ReenrollmentAuthentication as BaseReenrollmentAuthentication
 
-class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
+
+class UsernamePasswordAuthentication(DevicePasswordAuthentication):
     """Handles authentication via username/password credentials."""
 
     def authenticate(self, context: BaseRequestContext) -> None:
@@ -36,73 +40,16 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
         password = context.est_password
 
         try:
-            device = DeviceModel.objects.select_related(
-                'onboarding_config', 'no_onboarding_config'
-            ).filter(
-                common_name=username
-            ).first()
-
-            if not device:
-                self.logger.warning('Authentication failed: Unknown username %s', username)
-                self._raise_authentication_error()
-
-            device_config = device.onboarding_config or device.no_onboarding_config
-
-            if not isinstance(device, DeviceModel) or not device_config:
-                self.logger.warning('Authentication failed: Invalid device model for %s', username)
-                self._raise_authentication_error()
-
-            if not device_config.est_password:
-                self.logger.warning('Authentication failed: No EST password set for %s', username)
-                self._raise_authentication_error()
-
-            # Use proper password hashing instead of plaintext comparison
-            if password != device_config.est_password:
-                self.logger.warning('Authentication failed: Invalid password for %s', username)
-                self._raise_authentication_error()
-
-            self.logger.info('Successfully authenticated device %s', username)
-            context.device = device
+            self._authenticate_credentials(context, username, password)
 
         except Exception as e:
             self.logger.exception('Authentication error for user %s', username)
             error_message = 'Authentication failed: Invalid username or password.'
             raise ValueError(error_message) from e
 
-    def _raise_authentication_error(self) -> Never:
-        """Raise authentication error with standardized message."""
-        error_message = 'Authentication failed: Invalid username or password.'
-        raise ValueError(error_message)
 
-
-class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
+class ReenrollmentAuthentication(BaseReenrollmentAuthentication):
     """Handles authentication for EST reenrollment using an Application Credential."""
-
-    def _validate_certificate_extensions(
-        self,
-        credential_cert: x509.Certificate,
-        client_cert: x509.Certificate,
-        csr: x509.CertificateSigningRequest
-    ) -> None:
-        """Validate that certificate extensions match between credential, client cert, and CSR."""
-        try:
-            credential_cert_san = credential_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-        except x509.ExtensionNotFound:
-            credential_cert_san = None
-
-        try:
-            csr_san = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-        except x509.ExtensionNotFound:
-            csr_san = None
-
-        try:
-            client_san = client_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-        except x509.ExtensionNotFound:
-            client_san = None
-
-        if client_san != csr_san or credential_cert_san != csr_san:
-            error_message = 'CSR/client SAN does not match the credential certificate SAN.'
-            raise ValueError(error_message)
 
     def _raise_value_error(self, message: str) -> Never:
         """Raise a ValueError with the given message."""
@@ -136,7 +83,7 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
         self.logger.info('Successfully authenticated device for reenrollment')
         context.device = issued_credential.device
 
-    def _validate_context(self, context: EstCertificateRequestContext) -> bool:
+    def _validate_context(self, context: BaseCertificateRequestContext) -> bool:
         """Validate the context for reenrollment."""
         if not context.client_certificate:
             return False
@@ -152,35 +99,6 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
             self._raise_value_error(error_message)
 
         return True
-
-    def _get_issued_credential(self, client_cert: x509.Certificate) -> IssuedCredentialModel:
-        """Retrieve the issued credential for the client certificate."""
-        try:
-            return IssuedCredentialModel.get_credential_for_certificate(client_cert)
-        except IssuedCredentialModel.DoesNotExist:
-            error_message = 'Issued credential not found for client certificate during reenrollment'
-            self.logger.warning(error_message)
-            raise ValueError(error_message) from None
-
-    def _validate_credential(
-        self, credential_model: CredentialModel, csr: x509.CertificateSigningRequest, client_cert: x509.Certificate
-    ) -> None:
-        """Validate the credential model against the CSR and client certificate."""
-        is_valid, reason = credential_model.is_valid_issued_credential()
-        if not is_valid:
-            error_message = f'Invalid client certificate for reenrollment: {reason}'
-            self.logger.warning(error_message)
-            raise ValueError(error_message)
-
-        cert = credential_model.certificate_or_error
-
-        if (
-            not cert.subjects_match(csr.subject) or
-            not cert.subjects_match(client_cert.subject)
-        ):
-            error_message = "CSR/client subject does not match the credential certificate's subject"
-            self.logger.warning(error_message)
-            raise ValueError(error_message)
 
     def _validate_certificate_extensions_safe(
         self, credential_model: CredentialModel, client_cert: x509.Certificate, csr: x509.CertificateSigningRequest
@@ -205,4 +123,3 @@ class EstAuthentication(CompositeAuthentication):
         self.add(UsernamePasswordAuthentication())
         self.add(ClientCertificateAuthentication())
         self.add(IDevIDAuthentication())
-

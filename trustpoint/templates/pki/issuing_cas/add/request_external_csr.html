@@ -1,0 +1,90 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+<div class="card">
+
+    {# ============================================================ #}
+    {# Header                                                      #}
+    {# ============================================================ #}
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Add new Issuing CA' %}
+        </h1>
+        <p class="mb-0 text-muted">
+            {% trans 'Generate a new keypair in Trustpoint and request the Issuing CA certificate from an external PKI.' %}
+        </p>
+    </div>
+
+
+    {# ============================================================ #}
+    {# Content                                                     #}
+    {# ============================================================ #}
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+
+            {# Method heading #}
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h2 class="h4 mb-1">
+                        {% trans 'External PKI' %}
+                    </h2>
+                    <p class="text-muted mb-0">
+                        {% trans 'Create the Issuing CA keypair and prepare Trustpoint for a manual certificate request.' %}
+                    </p>
+                </div>
+
+                <span class="badge text-bg-primary">
+                    {% trans 'CSR' %}
+                </span>
+            </div>
+
+            <hr class="mb-4">
+
+
+            {# Workflow information #}
+            <div class="alert alert-info mb-4" role="alert">
+                <strong>{% trans 'How it works:' %}</strong>
+                {% trans 'Trustpoint generates and securely stores the keypair. After defining the certificate content, a CSR is created that can be submitted to your external PKI.' %}
+            </div>
+
+
+            {# Form #}
+            <form
+                id="external-pki-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+                {{ form|crispy }}
+            </form>
+
+        </div>
+    </div>
+
+
+    {# ============================================================ #}
+    {# Footer Actions                                              #}
+    {# ============================================================ #}
+    <div class="card-footer d-flex justify-content-between align-items-center">
+
+        <a
+            href="{% url 'pki:issuing_cas-add-method_select' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Back' %}
+        </a>
+
+        <button
+            type="submit"
+            form="external-pki-form"
+            class="btn btn-primary"
+        >
+            {% trans 'Create Issuing CA' %}
+        </button>
+
+    </div>
+
+</div>
+{% endblock content %}

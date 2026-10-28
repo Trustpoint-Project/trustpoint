@@ -1,0 +1,80 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Create User" %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans "Create a new user account and define the associated user information and role." %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="create-user-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {% for error in form.non_field_errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label
+                            for="{{ field.id_for_label }}"
+                            class="form-label"
+                        >
+                            {{ field.label }}
+                        </label>
+
+                        {{ field }}
+
+                        {% if field.help_text %}
+                            <div class="form-text">
+                                {{ field.help_text }}
+                            </div>
+                        {% endif %}
+
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in field.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </form>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'management:user_management' %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Cancel" %}
+        </a>
+
+        <button
+            type="submit"
+            form="create-user-form"
+            class="btn btn-primary"
+        >
+            {% trans "Create User" %}
+        </button>
+    </div>
+</div>
+{% endblock %}

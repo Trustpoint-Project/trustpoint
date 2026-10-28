@@ -8,16 +8,17 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import Mock, patch
 
-from django.contrib.auth import get_user_model
+from django.contrib.auth import BACKEND_SESSION_KEY, get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.template import Context, Template
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
+from management.models import PasswordPolicy
 from users.form import TrustpointPasswordChangeForm, TrustpointUserProfileForm
-from users.models import BuiltinRole
-from users.views import TrustpointLoginView
+from users.models import BuiltinRole, UserOTPDevice, UserOTPRecoveryCode
+from users.views import OTP_LOGIN_TIMEOUT, PENDING_OTP_SESSION_KEY, TrustpointLoginView
 
 User = get_user_model()
 
@@ -28,6 +29,7 @@ class TrustpointProfileViewTest(TestCase):
     def setUp(self) -> None:
         self.factory = RequestFactory()
         self.profile_url = reverse('users:profile')
+        self.password_change_url = reverse('users:profile_password')
         self.user = User.objects.create_user(username='profileuser', password='testpass123')
 
     def test_get_requires_login(self) -> None:
@@ -73,6 +75,38 @@ class TrustpointProfileViewTest(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_manager_can_set_another_users_password(self) -> None:
+        """A user manager can set a human user's password without their current password."""
+        other_user = User.objects.create_user(username='otheruser', password='testpass123')
+        permission = Permission.objects.get(codename='manage_users')
+        self.user.user_permissions.add(permission)
+        self.client.force_login(self.user)
+        password_url = reverse('users:user-profile-password', kwargs={'pk': other_user.pk})
+
+        response = self.client.get(password_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, other_user.username)
+        self.assertNotContains(response, 'Current password')
+
+        response = self.client.post(
+            password_url,
+            {'new_password1': 'ManagerSetPass456!', 'new_password2': 'ManagerSetPass456!'},
+        )
+
+        self.assertRedirects(response, reverse('users:user-profile', kwargs={'pk': other_user.pk}))
+        other_user.refresh_from_db()
+        self.assertTrue(other_user.check_password('ManagerSetPass456!'))
+
+    def test_user_without_manage_permission_cannot_set_another_users_password(self) -> None:
+        """A regular user cannot open the manager password-reset view."""
+        other_user = User.objects.create_user(username='otheruser', password='testpass123')
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('users:user-profile-password', kwargs={'pk': other_user.pk}))
+
+        self.assertEqual(response.status_code, 403)
+
     def test_get_renders_profile_page_for_authenticated_user(self) -> None:
         """The authenticated user can open their profile page."""
         self.client.force_login(self.user)
@@ -85,7 +119,7 @@ class TrustpointProfileViewTest(TestCase):
         self.assertContains(response, 'Registration date')
         self.assertContains(response, 'Last login')
         self.assertContains(response, 'Account Security')
-        self.assertContains(response, 'Current password')
+        self.assertContains(response, 'Change Password')
         self.assertContains(response, 'User Interface')
         self.assertContains(response, 'Standard View')
         self.assertContains(response, 'Simplified View')
@@ -207,9 +241,8 @@ class TrustpointProfileViewTest(TestCase):
         self.client.force_login(self.user)
 
         response = self.client.post(
-            self.profile_url,
+            self.password_change_url,
             {
-                'form_name': 'password_change',
                 'old_password': 'testpass123',
                 'new_password1': 'NewTestPass456!',
                 'new_password2': 'NewTestPass456!',
@@ -224,9 +257,8 @@ class TrustpointProfileViewTest(TestCase):
         self.client.force_login(self.user)
 
         response = self.client.post(
-            self.profile_url,
+            self.password_change_url,
             {
-                'form_name': 'password_change',
                 'old_password': 'wrong-password',
                 'new_password1': 'NewTestPass456!',
                 'new_password2': 'NewTestPass456!',
@@ -265,16 +297,15 @@ class TrustpointProfileViewTest(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('The new password must differ from the current password.', form.errors['new_password1'])
 
-    def test_user_can_require_password_change_on_next_login(self) -> None:
-        """The Account Security action marks the account for the next login."""
+    def test_regular_user_cannot_require_password_change_on_self(self) -> None:
+        """Only user managers can require an account to change its password."""
         self.client.force_login(self.user)
 
         response = self.client.post(self.profile_url, {'form_name': 'require_password_change'})
 
-        self.assertRedirects(response, self.profile_url)
+        self.assertEqual(response.status_code, 403)
         self.user.refresh_from_db()
-        self.assertTrue(self.user.must_change_password)
-        self.assertTrue(self.client.session.get('password_change_current_session'))
+        self.assertFalse(self.user.must_change_password)
 
     def test_required_password_change_redirects_and_clears_flag(self) -> None:
         """A flagged user is forced to change the password and the flag is cleared."""
@@ -377,3 +408,174 @@ class TrustpointLoginViewTest(TestCase):
         mock_get_messages.assert_called_once_with(request)
         mock_super_post.assert_called_once()
         self.assertEqual(response.status_code, 302)
+
+
+@override_settings(TRUSTPOINT_IS_OPERATIONAL=True, TRUSTPOINT_IS_BOOTSTRAP=False)
+class TrustpointOTPLoginSecurityTest(TestCase):
+    """Protect password-to-OTP state transitions and web-login account boundaries."""
+
+    def setUp(self) -> None:
+        self.login_url = reverse('users:login')
+        self.otp_url = reverse('users:otp')
+        self.user = User.objects.create_user(username='otp-user', password='StrongPass123!')
+        self.policy = PasswordPolicy.objects.create(require_otp=True)
+
+    def start_otp_login(self) -> None:
+        """Submit a correct password and assert that authentication is still pending."""
+        response = self.client.post(
+            self.login_url,
+            {'username': self.user.username, 'password': 'StrongPass123!'},
+        )
+        self.assertRedirects(response, self.otp_url, fetch_redirect_response=False)
+        assert PENDING_OTP_SESSION_KEY in self.client.session
+        assert '_auth_user_id' not in self.client.session
+
+    def confirmed_device(self) -> UserOTPDevice:
+        """Create an already-enrolled authenticator suitable for login-flow tests."""
+        return UserOTPDevice.objects.create(user=self.user, confirmed=True, last_t=0)
+
+    def test_password_login_creates_anonymous_pending_state_and_enrollment_device(self) -> None:
+        """A password alone must not authenticate when OTP is required."""
+        self.start_otp_login()
+
+        device = UserOTPDevice.objects.get(user=self.user)
+        assert not device.confirmed
+        pending = self.client.session[PENDING_OTP_SESSION_KEY]
+        assert pending['user_id'] == self.user.pk
+        assert pending['device_id'] == device.pk
+        assert pending['enrolling'] is True
+
+    def test_expired_pending_otp_state_is_rejected_and_removed(self) -> None:
+        """Password proof cannot be replayed after the five-minute OTP window."""
+        self.confirmed_device()
+        self.start_otp_login()
+        session = self.client.session
+        pending = session[PENDING_OTP_SESSION_KEY]
+        pending['issued_at'] -= OTP_LOGIN_TIMEOUT
+        session[PENDING_OTP_SESSION_KEY] = pending
+        session.save()
+
+        response = self.client.get(self.otp_url)
+
+        self.assertRedirects(response, self.login_url, fetch_redirect_response=False)
+        assert PENDING_OTP_SESSION_KEY not in self.client.session
+        assert '_auth_user_id' not in self.client.session
+
+    def test_tampered_password_auth_hash_is_rejected(self) -> None:
+        """Changing the pending session cannot manufacture valid password proof."""
+        self.confirmed_device()
+        self.start_otp_login()
+        session = self.client.session
+        pending = session[PENDING_OTP_SESSION_KEY]
+        pending['auth_hash'] = '0' * 64
+        session[PENDING_OTP_SESSION_KEY] = pending
+        session.save()
+
+        response = self.client.get(self.otp_url)
+
+        self.assertRedirects(response, self.login_url, fetch_redirect_response=False)
+        assert PENDING_OTP_SESSION_KEY not in self.client.session
+
+    def test_tampered_device_id_cannot_use_another_users_authenticator(self) -> None:
+        """The pending device must belong to the password-verified user."""
+        self.confirmed_device()
+        other = User.objects.create_user(username='other-otp-user', password='OtherPass123!')
+        other_device = UserOTPDevice.objects.create(user=other, confirmed=True, last_t=0)
+        self.start_otp_login()
+        session = self.client.session
+        pending = session[PENDING_OTP_SESSION_KEY]
+        pending['device_id'] = other_device.pk
+        session[PENDING_OTP_SESSION_KEY] = pending
+        session.save()
+
+        response = self.client.get(self.otp_url)
+
+        self.assertRedirects(response, self.login_url, fetch_redirect_response=False)
+        assert PENDING_OTP_SESSION_KEY not in self.client.session
+
+    @patch('users.models.UserOTPDevice.verify_token', side_effect=[False, True])
+    def test_failed_otp_keeps_pending_state_then_success_authenticates(self, _verify_token: Mock) -> None:
+        """A failed code must not consume password proof; a subsequent valid code completes login."""
+        self.confirmed_device()
+        self.start_otp_login()
+        expected_backend = self.client.session[PENDING_OTP_SESSION_KEY]['backend']
+
+        failed = self.client.post(self.otp_url, {'token': '000000'})
+        assert failed.status_code == 200
+        self.assertContains(failed, 'Invalid or already used code')
+        assert PENDING_OTP_SESSION_KEY in self.client.session
+        assert '_auth_user_id' not in self.client.session
+
+        successful = self.client.post(self.otp_url, {'token': '000001'})
+        assert successful.status_code == 302
+        assert PENDING_OTP_SESSION_KEY not in self.client.session
+        assert self.client.session[BACKEND_SESSION_KEY] == expected_backend
+        assert int(self.client.session['_auth_user_id']) == self.user.pk
+
+    @patch('users.models.UserOTPDevice.verify_token', return_value=True)
+    def test_manipulated_external_next_url_is_not_followed_after_otp(self, _verify_token: Mock) -> None:
+        """OTP completion must not turn manipulated session state into an open redirect."""
+        self.confirmed_device()
+        self.start_otp_login()
+        session = self.client.session
+        pending = session[PENDING_OTP_SESSION_KEY]
+        pending['next'] = 'https://evil.example/phishing'
+        session[PENDING_OTP_SESSION_KEY] = pending
+        session.save()
+
+        response = self.client.post(self.otp_url, {'token': '123456'})
+
+        assert response.status_code == 302
+        assert response.url == reverse('home:index')
+
+    def test_service_account_password_cannot_sign_in_to_web_interface(self) -> None:
+        """Interactive login remains unavailable to service accounts even with a correct password."""
+        service = User.objects.create_user(
+            username='service-user',
+            password='ServicePass123!',
+            account_type=User.AccountType.SERVICE,
+        )
+
+        response = self.client.post(
+            self.login_url,
+            {'username': service.username, 'password': 'ServicePass123!'},
+        )
+
+        assert response.status_code == 200
+        self.assertContains(response, 'Service accounts cannot sign in')
+        assert '_auth_user_id' not in self.client.session
+
+
+@override_settings(TRUSTPOINT_IS_OPERATIONAL=True, TRUSTPOINT_IS_BOOTSTRAP=False)
+class UserOTPRecoveryCodeTest(TestCase):
+    """Verify single-use persistence and reset behavior for recovery credentials."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username='recovery-user', password='StrongPass123!')
+        self.device = UserOTPDevice.objects.create(user=self.user, confirmed=True, last_t=0)
+
+    def test_recovery_code_is_consumed_exactly_once(self) -> None:
+        """A used recovery code is persisted as consumed and cannot be replayed."""
+        code = self.device.generate_recovery_codes()[0]
+
+        assert self.device.verify_token(code)
+        recovery = UserOTPRecoveryCode.objects.get(
+            device=self.device,
+            code_hash__isnull=False,
+            used_at__isnull=False,
+        )
+        assert recovery.used_at is not None
+        assert not self.device.verify_token(code)
+        assert UserOTPRecoveryCode.objects.filter(device=self.device, used_at__isnull=False).count() == 1
+
+    def test_reset_otp_deletes_device_and_recovery_codes(self) -> None:
+        """Resetting an authenticator removes both the device and all recovery-code records."""
+        self.device.generate_recovery_codes()
+        recovery_ids = list(self.device.recovery_codes.values_list('pk', flat=True))
+        self.client.force_login(self.user)
+
+        response = self.client.post(reverse('users:profile_reset_otp'))
+
+        self.assertRedirects(response, reverse('users:profile'), fetch_redirect_response=False)
+        assert not UserOTPDevice.objects.filter(pk=self.device.pk).exists()
+        assert not UserOTPRecoveryCode.objects.filter(pk__in=recovery_ids).exists()

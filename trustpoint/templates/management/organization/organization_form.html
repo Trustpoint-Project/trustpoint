@@ -1,0 +1,86 @@
+{% extends 'trustpoint/base.html' %}
+{% load crispy_forms_tags i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% if object %}
+                {% blocktranslate with name=object.name %}
+                    Edit Organization "{{ name }}"
+                {% endblocktranslate %}
+            {% else %}
+                {% trans 'Create Organization' %}
+            {% endif %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% if object %}
+                {% trans 'Review and update the organization configuration in Trustpoint.' %}
+            {% else %}
+                {% trans 'Create a new organization and define its configuration in Trustpoint.' %}
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="organization-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+                {% crispy form %}
+            </form>
+
+            {% if object %}
+                <section class="mt-5">
+                    <h2 class="h5 mb-1">{% trans 'Associated Domains' %}</h2>
+                    <p class="text-muted">
+                        {% blocktranslate trimmed %}
+                            To associate a domain with this organization, open the domain under PKI &gt; Domains,
+                            choose Configure and select this organization.
+                        {% endblocktranslate %}
+                    </p>
+
+                    {% with domains=object.domains.all %}
+                        {% if domains %}
+                            <ul class="list-group">
+                                {% for domain in domains %}
+                                    <li class="list-group-item">
+                                        <a href="{% url 'pki:domains-config' pk=domain.pk %}">{{ domain.unique_name }}</a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="mb-0">{% trans 'No domains are associated with this organization.' %}</p>
+                        {% endif %}
+                    {% endwith %}
+                </section>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'management:organization' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <button
+            type="submit"
+            form="organization-form"
+            class="btn btn-primary"
+        >
+            {% if object %}
+                {% trans 'Save Organization' %}
+            {% else %}
+                {% trans 'Create Organization' %}
+            {% endif %}
+        </button>
+    </div>
+</div>
+{% endblock %}

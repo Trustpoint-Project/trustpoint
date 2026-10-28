@@ -22,6 +22,7 @@ from pki.forms.issuing_cas import (
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddRequestCmpForm,
     IssuingCaAddRequestEstForm,
+    IssuingCaAddRequestExternalCsrForm,
     IssuingCaAddRequestMixin,
     IssuingCaCrlCycleForm,
     IssuingCaImportMixin,
@@ -509,6 +510,15 @@ class TestIssuingCaRequestForms:
         assert form.fields['remote_path'].initial == '/.well-known/cmp/p/certification'
         assert form.fields['ca_type'].initial == CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
 
+    def test_external_csr_form_has_no_remote_fields(self) -> None:
+        """The external CSR form should expose the same key-type choices without remote PKI fields."""
+        form = IssuingCaAddRequestExternalCsrForm()
+
+        assert 'remote_host' not in form.fields
+        assert 'remote_port' not in form.fields
+        assert 'remote_path' not in form.fields
+        assert form.fields['ca_type'].initial == CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+
     def test_unsupported_key_type_is_rejected(self) -> None:
         """A key type the backend cannot generate is rejected."""
         form = IssuingCaAddRequestEstForm(
@@ -533,6 +543,115 @@ class TestIssuingCaRequestForms:
 
         assert choices
         assert all(value for value, _label in choices)
+
+    @staticmethod
+    def _est_form_data(unique_name: str) -> dict[str, Any]:
+        return {
+            'unique_name': unique_name,
+            'remote_host': 'localhost',
+            'remote_port': 443,
+            'remote_path': '/.well-known/est/simpleenroll',
+            'est_username': 'operator',
+            'est_password': TEST_KEY_PASSWORD,
+            'key_type': 'RSA-2048',
+            'ca_type': CaModel.CaTypeChoice.REMOTE_ISSUING_EST,
+        }
+
+    @staticmethod
+    def _cmp_form_data(unique_name: str) -> dict[str, Any]:
+        return {
+            'unique_name': unique_name,
+            'remote_host': 'localhost',
+            'remote_port': 443,
+            'remote_path': '/.well-known/cmp/p/certification',
+            'cmp_shared_secret': TEST_KEY_PASSWORD,
+            'key_type': 'RSA-2048',
+            'ca_type': CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+        }
+
+    def test_est_form_save_creates_exactly_one_managed_key(self) -> None:
+        """Saving the EST request form creates a single managed key for the new alias."""
+        from crypto.models import CryptoManagedKeyModel
+
+        form = IssuingCaAddRequestEstForm(data=self._est_form_data('remote-est-single'))
+
+        assert form.is_valid(), form.errors
+        ca = form.save()
+
+        assert CryptoManagedKeyModel.objects.filter(alias='remote-est-single').count() == 1
+        assert ca.credential is not None
+
+    def test_cmp_form_save_creates_exactly_one_managed_key(self) -> None:
+        """Saving the CMP request form creates a single managed key for the new alias."""
+        from crypto.models import CryptoManagedKeyModel
+
+        form = IssuingCaAddRequestCmpForm(data=self._cmp_form_data('remote-cmp-single'))
+
+        assert form.is_valid(), form.errors
+        ca = form.save()
+
+        assert CryptoManagedKeyModel.objects.filter(alias='remote-cmp-single').count() == 1
+        assert ca.credential is not None
+
+    def test_est_ra_mode_does_not_create_a_managed_key(self) -> None:
+        """Saving the EST request form in RA mode must not create a managed key."""
+        from crypto.models import CryptoManagedKeyModel
+
+        form = IssuingCaAddRequestEstForm(data=self._est_form_data('remote-est-ra'))
+
+        assert form.is_valid(), form.errors
+        ca = form.save(is_ra_mode=True)
+
+        assert not CryptoManagedKeyModel.objects.filter(alias='remote-est-ra').exists()
+        assert ca.credential is None
+
+    def test_cmp_ra_mode_does_not_create_a_managed_key(self) -> None:
+        """Saving the CMP request form in RA mode must not create a managed key."""
+        from crypto.models import CryptoManagedKeyModel
+
+        form = IssuingCaAddRequestCmpForm(data=self._cmp_form_data('remote-cmp-ra'))
+
+        assert form.is_valid(), form.errors
+        ca = form.save(is_ra_mode=True)
+
+        assert not CryptoManagedKeyModel.objects.filter(alias='remote-cmp-ra').exists()
+        assert ca.credential is None
+
+    def test_est_form_rejects_an_alias_already_used_by_a_managed_key(self) -> None:
+        """A `unique_name` colliding with an existing managed-key alias is rejected on the form."""
+        from crypto.application.service import TrustpointCryptoBackend
+        from crypto.domain.policies import KeyPolicy
+        from crypto.domain.specs import RsaKeySpec
+
+        TrustpointCryptoBackend().generate_managed_key(
+            alias='taken-key-alias',
+            key_spec=RsaKeySpec(key_size=2048),
+            policy=KeyPolicy.managed_signing_key(),
+        )
+
+        form = IssuingCaAddRequestEstForm(data=self._est_form_data('taken-key-alias'))
+
+        assert not form.is_valid()
+        assert 'unique_name' in form.errors
+        assert not CaModel.objects.filter(unique_name='taken-key-alias').exists()
+
+    def test_cmp_form_rejects_an_alias_already_used_by_a_managed_key(self) -> None:
+        """A `unique_name` colliding with an existing managed-key alias is rejected on the form."""
+        from crypto.application.service import TrustpointCryptoBackend
+        from crypto.domain.policies import KeyPolicy
+        from crypto.domain.specs import RsaKeySpec
+
+        TrustpointCryptoBackend().generate_managed_key(
+            alias='taken-cmp-alias',
+            key_spec=RsaKeySpec(key_size=2048),
+            policy=KeyPolicy.managed_signing_key(),
+        )
+
+        form = IssuingCaAddRequestCmpForm(data=self._cmp_form_data('taken-cmp-alias'))
+
+        assert not form.is_valid()
+        assert 'unique_name' in form.errors
+        assert not CaModel.objects.filter(unique_name='taken-cmp-alias').exists()
 
 
 class TestIssuingCaTruststoreAssociationForm:
@@ -583,10 +702,10 @@ class TestIssuingCaTruststoreAssociationForm:
         assert 'Step 2/2' in str(form.fields['trust_store'].help_text)
 
     @pytest.mark.parametrize(
-        'ca_type', [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]
+        'ca_type', [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_ISSUING_CSR, CaModel.CaTypeChoice.REMOTE_CMP_RA]
     )
-    def test_cmp_requires_issuing_ca_chain(self, ca_type: CaModel.CaTypeChoice) -> None:
-        """CMP CAs and RAs only accept issuing CA chain truststores."""
+    def test_cmp_and_csr_require_issuing_ca_chain(self, ca_type: CaModel.CaTypeChoice) -> None:
+        """CMP and external-CSR CAs only accept issuing CA chain truststores."""
         chain_store = TruststoreModel.objects.create(
             unique_name='chain-store', intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
         )

@@ -4,16 +4,22 @@
 """Certificate issuance operation processor classes."""
 
 import contextlib
+import re
 from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
+
+from devices.secrets import secret_use
 
 try:
     from cryptography.hazmat.primitives.asymmetric import mldsa
 except ImportError:
     mldsa = None  # type: ignore[assignment]
 from django.conf import settings
+from django.db import transaction
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
@@ -27,14 +33,21 @@ from pki.models.credential import CredentialModel
 from pki.services.ca_rollover import CaRolloverService
 from pki.util.keys import is_supported_public_key
 from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
+from request.clients.cmp_client import CmpClient, CmpClientError
 from request.clients.est_client import EstClient
+from request.message_builder.cmp import CmpMessageBuilder, CmpMessageBuilderError
 from request.request_context import (
     BaseCertificateRequestContext,
     BaseCredentialRequestContext,
     BaseRequestContext,
+    CmpCertificateRequestContext,
     EstCertificateRequestContext,
     HttpBaseRequestContext,
     ManualIssuanceMethod,
+)
+from request.security_hardening import (
+    retire_bootstrap_credential_after_domain_identity,
+    validate_upstream_issuance_result,
 )
 from trustpoint.logger import LoggerMixin
 
@@ -44,6 +57,7 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
     from devices.models import DeviceModel
+    from pki.models import TruststoreModel
     from pki.models.domain import DomainModel
 
 
@@ -86,6 +100,11 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
     """Operation processor for issuing certificates."""
 
     def process_operation(self, context: BaseRequestContext) -> None:
+        """Reserve an authenticated credential even when called directly by workflow processing."""
+        with secret_use(context):
+            self._process_operation(context)
+
+    def _process_operation(self, context: BaseRequestContext) -> None:
         """Process the certificate issuance operation.
 
         Routes to the appropriate certificate issuance processor based on the
@@ -400,11 +419,33 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         if self.ca_type == 'est':
             self._process_est_enrollment(context)
         elif self.ca_type == 'cmp':
-            exc_msg = 'CMP remote certificate issuance is not yet implemented.'
-            raise NotImplementedError(exc_msg)
+            self._process_cmp_enrollment(context)
         else:
             exc_msg = f'Unknown remote CA type: {self.ca_type}'
             raise ValueError(exc_msg)
+
+    def _save_validated_remote_credential(
+        self,
+        context: BaseCertificateRequestContext,
+        issuer_path: list[x509.Certificate],
+    ) -> None:
+        """Validate remote output before saving it, without holding locks over HTTP."""
+        certificate = context.issued_certificate
+        if certificate is None or context.device is None or context.domain is None:
+            msg = 'Remote issuance requires a certificate, device and domain.'
+            raise ValueError(msg)
+        validate_upstream_issuance_result(context)
+        common_names = certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+        cn = common_names[0].value if common_names else '(no CN set)'
+        common_name = cn.decode() if isinstance(cn, bytes) else cn
+        _, profile_display_name = self._get_credential_type_for_template(context)
+        with transaction.atomic():
+            CredentialSaver(device=context.device, domain=context.domain).save_remote_keyless_credential(
+                certificate, issuer_path, common_name, profile_display_name,
+            )
+            if isinstance(context, CmpCertificateRequestContext):
+                context.issuer_credential = self._get_keyless_issuer_credential(issuer_path)
+            retire_bootstrap_credential_after_domain_identity(context)
 
     def _validate_est_enrollment_config(self, issuing_ca: CaModel) -> None:
         """Validate EST enrollment configuration.
@@ -483,7 +524,7 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             ValueError: If EST server configuration is invalid or enrollment fails.
             EstClientError: If communication with the EST server fails.
         """
-        if context.domain is None:
+        if context.domain is None or context.device is None:
             exc_msg = 'Domain must be set in the certificate request context.'
             raise ValueError(exc_msg)
 
@@ -520,25 +561,9 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             for cert in issuing_ca.chain_truststore.truststoreordermodel_set.order_by('order')
         ]
 
-        common_names = issued_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-        cn = common_names[0].value if common_names else '(no CN set)'
-        common_name = cn.decode() if isinstance(cn, bytes) else cn
-
-        _, cert_profile_disp_name = self._get_credential_type_for_template(context)
-        if context.device is None:
-            exc_msg = 'Device is required for saving credentials.'
-            raise ValueError(exc_msg)
-
-        saver = CredentialSaver(device=context.device, domain=context.domain)
-        saver.save_remote_keyless_credential(
-            issued_cert,
-            ca_chain,
-            common_name,
-            cert_profile_disp_name,
-        )
-
         context.issued_certificate = issued_cert
         context.issued_certificate_chain = ca_chain
+        self._save_validated_remote_credential(context, ca_chain)
         self.logger.info(
             'Successfully issued certificate via remote EST CA: %s',
             issuing_ca.unique_name
@@ -551,5 +576,231 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             operation_type=AuditLog.OperationType.CREDENTIAL_ISSUED,
             target=context.device,
             target_display=f'Device: {device_name} | Domain: {domain_name} | Protocol: {protocol}',
+            actor=context.actor,
+        )
+
+    @staticmethod
+    def _get_cmp_truststore(issuing_ca: CaModel) -> 'TruststoreModel | None':
+        """Return the truststore holding the upstream CMP CA chain."""
+        config = issuing_ca.no_onboarding_config
+        return (config.trust_store if config and config.trust_store else None) or issuing_ca.chain_truststore
+
+    def _validate_cmp_enrollment_config(self, issuing_ca: CaModel) -> None:
+        """Validate the CMP RA configuration.
+
+        Raises:
+            ValueError: If any required configuration is missing or invalid.
+        """
+        if issuing_ca.ca_type != CaModel.CaTypeChoice.REMOTE_CMP_RA:
+            exc_msg = f'Expected REMOTE_CMP_RA, got {issuing_ca.get_ca_type_display()}'
+            raise ValueError(exc_msg)
+        if not issuing_ca.remote_host:
+            exc_msg = 'Remote CMP host is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+        if not issuing_ca.remote_port:
+            exc_msg = 'Remote CMP port is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+        if not issuing_ca.remote_path:
+            exc_msg = 'Remote CMP path is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+        if not (issuing_ca.no_onboarding_config and issuing_ca.no_onboarding_config.cmp_shared_secret):
+            exc_msg = 'CMP shared secret is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+        if self._get_cmp_truststore(issuing_ca) is None:
+            exc_msg = 'CA truststore is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+
+    @staticmethod
+    def _load_truststore_chain(truststore: 'TruststoreModel') -> list[x509.Certificate]:
+        """Load the ordered certificates of a truststore."""
+        return [
+            entry.certificate.get_certificate_serializer().as_crypto()
+            for entry in truststore.truststoreordermodel_set.order_by('order')
+        ]
+
+    @staticmethod
+    def _validate_cmp_issued_certificate(
+        issued_cert: x509.Certificate,
+        extra_certs: list[x509.Certificate],
+        ca_chain: list[x509.Certificate],
+        device_public_key: object,
+    ) -> list[x509.Certificate]:
+        """Validate the certificate returned by the upstream CMP CA.
+
+        Returns:
+            The verified issuer path, from the direct issuer up to the trusted certificate.
+
+        Raises:
+            ValueError: If the key does not match, the certificate is a CA, or it does not chain to the truststore.
+        """
+        spki = serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        if issued_cert.public_key().public_bytes(*spki) != device_public_key.public_bytes(*spki):  # type: ignore[attr-defined]
+            exc_msg = 'Issued certificate public key does not match the device public key.'
+            raise ValueError(exc_msg)
+
+        try:
+            basic_constraints = issued_cert.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except x509.ExtensionNotFound:
+            basic_constraints = None
+        if basic_constraints is not None and basic_constraints.ca:
+            exc_msg = 'Issued certificate is a CA certificate, which is not allowed.'
+            raise ValueError(exc_msg)
+
+        trusted = {cert.fingerprint(hashes.SHA256()) for cert in ca_chain}
+        pool = [*ca_chain, *extra_certs]
+        current = issued_cert
+        path: list[x509.Certificate] = []
+        for _ in range(len(pool) + 1):
+            issuer = None
+            for candidate in pool:
+                try:
+                    current.verify_directly_issued_by(candidate)
+                except (InvalidSignature, ValueError, TypeError):
+                    continue
+                issuer = candidate
+                break
+            if issuer is None:
+                break
+            path.append(issuer)
+            if issuer.fingerprint(hashes.SHA256()) in trusted:
+                return path
+            current = issuer
+        exc_msg = 'Issued certificate does not chain to the configured upstream CA truststore.'
+        raise ValueError(exc_msg)
+
+    @staticmethod
+    def _get_keyless_issuer_credential(issuer_path: list[x509.Certificate]) -> CredentialModel:
+        """Return (creating once) a keyless credential for the upstream issuing CA."""
+        issuer, chain = issuer_path[0], issuer_path[1:]
+        existing = CredentialModel.objects.filter(
+            certificate__sha256_fingerprint=issuer.fingerprint(hashes.SHA256()).hex().upper(),
+            private_key='',
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+        ).first()
+        if existing is not None:
+            return existing
+        return CredentialModel.save_keyless_credential(
+            issuer, chain, CredentialModel.CredentialTypeChoice.ISSUING_CA,
+        )
+
+    @staticmethod
+    def _upstream_cmp_path(remote_path: str, cert_profile: str | None) -> str:
+        """Insert the certificate profile into Trustpoint-style paths (``.../p/<domain>/certification``)."""
+        if not cert_profile:
+            return remote_path
+        return re.sub(
+            r'^(/\.well-known/cmp/p/[^/~]+)/(certification/?)$', rf'\1/{cert_profile}/\2', remote_path,
+        )
+
+    def _build_cmp_request_message(
+        self,
+        context: BaseCertificateRequestContext,
+        issuing_ca: CaModel,
+        ca_chain: list[x509.Certificate],
+    ) -> tuple[CmpCertificateRequestContext, object]:
+        """Build a new upstream CMP CR (raVerified) from the validated profile request.
+
+        Returns:
+            The upstream CMP context and the device public key.
+        """
+        builder = context.cert_requested_profile_validated
+        if not isinstance(builder, x509.CertificateBuilder):
+            exc_msg = 'Validated certificate request is required for CMP RA enrollment.'
+            raise TypeError(exc_msg)
+
+        subject = builder._subject_name  # noqa: SLF001
+        # The profile-validated builder carries no key; the device key lives in the original request.
+        cert_req = context.cert_requested
+        public_key = cert_req._public_key if isinstance(cert_req, x509.CertificateBuilder) else (  # noqa: SLF001
+            cert_req.public_key() if cert_req is not None else None
+        )
+        if subject is None or public_key is None:
+            exc_msg = 'Certificate request must contain a subject and a public key.'
+            raise ValueError(exc_msg)
+        extensions = [ext for ext in builder._extensions  # noqa: SLF001
+                      if not isinstance(ext.value, x509.CRLDistributionPoints)]
+
+        no_onboarding_config = issuing_ca.no_onboarding_config
+        if no_onboarding_config is None or not ca_chain:
+            exc_msg = 'CMP RA configuration is incomplete.'
+            raise ValueError(exc_msg)
+
+        cmp_context = CmpCertificateRequestContext(
+            protocol='cmp',
+            operation='certification',
+            cmp_server_host=issuing_ca.remote_host,
+            cmp_server_port=issuing_ca.remote_port,
+            cmp_server_path=self._upstream_cmp_path(issuing_ca.remote_path, context.cert_profile_str),
+            cmp_shared_secret=no_onboarding_config.cmp_shared_secret,
+            cmp_server_truststore=self._get_cmp_truststore(issuing_ca),
+            request_data={
+                'subject': subject,
+                'public_key': public_key,
+                'extensions': extensions or None,
+                'recipient_name': ca_chain[0].subject.rfc4514_string(),
+                'use_initialization_request': False,
+                'proof_of_possession': 'ra_verified',
+                'prepare_shared_secret_protection': True,
+                'sender_kid': issuing_ca.cmp_sender_kid,
+            },
+        )
+        try:
+            CmpMessageBuilder().build(cmp_context)
+        except (CmpMessageBuilderError, ValueError, TypeError) as e:
+            exc_msg = f'Failed to build upstream CMP request: {e!s}'
+            raise ValueError(exc_msg) from e
+        return cmp_context, public_key
+
+    def _process_cmp_enrollment(self, context: BaseCertificateRequestContext) -> None:
+        """Process certificate issuance via a remote CMP CA with Trustpoint acting as RA.
+
+        A new upstream CR (raVerified PoP, PBM protected) is built from the validated request;
+        only synchronous issuance is supported.
+
+        Raises:
+            ValueError: If the configuration is invalid, the upstream request fails or validation fails.
+        """
+        if context.domain is None or context.device is None:
+            exc_msg = 'Domain and device must be set in the certificate request context.'
+            raise ValueError(exc_msg)
+        issuing_ca = context.domain.issuing_ca
+        if not issuing_ca:
+            exc_msg = 'Issuing CA must be set in the domain.'
+            raise ValueError(exc_msg)
+
+        self._validate_cmp_enrollment_config(issuing_ca)
+        truststore = self._get_cmp_truststore(issuing_ca)
+        if truststore is None:
+            exc_msg = 'CA truststore is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+        ca_chain = self._load_truststore_chain(truststore)
+
+        cmp_context, device_public_key = self._build_cmp_request_message(context, issuing_ca, ca_chain)
+        if cmp_context.parsed_message is None:
+            exc_msg = 'Upstream CMP request message was not built.'
+            raise ValueError(exc_msg)
+
+        try:
+            issued_cert, extra_certs = CmpClient(cmp_context).send_and_extract_certificate(
+                cmp_context.parsed_message,
+                add_shared_secret_protection=True,
+            )
+        except CmpClientError as e:
+            exc_msg = f'Upstream CMP enrollment failed (only synchronous issuance is supported): {e!s}'
+            raise ValueError(exc_msg) from e
+
+        issuer_path = self._validate_cmp_issued_certificate(issued_cert, extra_certs, ca_chain, device_public_key)
+
+        context.issued_certificate = issued_cert
+        context.issued_certificate_chain = issuer_path
+        self._save_validated_remote_credential(context, issuer_path)
+        self.logger.info('Successfully issued certificate via remote CMP RA CA: %s', issuing_ca.unique_name)
+
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CREDENTIAL_ISSUED,
+            target=context.device,
+            target_display=(
+                f'Device: {context.device.common_name} | Domain: {context.domain.unique_name} | Protocol: cmp'
+            ),
             actor=context.actor,
         )

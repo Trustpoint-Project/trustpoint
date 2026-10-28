@@ -97,6 +97,110 @@ workflow:
   flow: []
 ```
 
+## Effective enrollment certificate attributes
+
+The existing enrollment triggers support `trigger.phase: after_issuance`:
+
+- `cmp.initialization` and `cmp.certification`
+- `est.simpleenroll` and `est.simplereenroll`
+- `rest.enroll` and `rest.reenroll` (including enrollment through the management API)
+
+Set this phase explicitly for notifications about a successfully issued certificate.
+Omitting `phase` retains the existing `before_issuance` behavior, including approval,
+rejection, and request gating. Those earlier events do not contain `request`.
+An existing pre-issuance workflow must opt into `after_issuance` to use the effective
+certificate fields. Approval steps are unavailable in this phase; notification
+failure cannot reverse issuance or block delivery. Trigger names and source filters
+are unchanged. SCEP is not supported by these workflow triggers.
+
+Post-issuance events retain the existing `device`, `source`, and protocol-specific
+(`cmp`, `est`, or `rest`) sections, and add:
+
+```json
+{
+  "phase": "after_issuance",
+  "request": {
+    "subject": {
+      "common_name": "Trustpoint-Domain-Credential",
+      "serial_number": "SN123456",
+      "organization": null,
+      "organizational_unit": null,
+      "country": null,
+      "state_or_province": null,
+      "locality": null
+    },
+    "subject_alternative_names": {
+      "dns_names": ["plc.example.com"],
+      "ip_addresses": ["192.168.1.10"],
+      "uris": [],
+      "email_addresses": []
+    }
+  }
+}
+```
+
+Despite its interface name, `request` contains attributes extracted from the final
+issued X.509 certificate **after certificate profile processing**, including any
+changes made by an upstream CA. It does not expose the original CSR or CRMF values.
+`request.subject.serial_number` is the subject's serialNumber attribute (OID 2.5.4.5).
+It is independent of the stored `device.serial_number` and of the certificate's
+automatically assigned integer serial number.
+
+Every listed subject key is a string or `null`; every SAN key is an array of strings
+and is `[]` when absent. IP addresses use canonical string notation. For repeated
+subject attributes, the first value in certificate subject order is selected,
+matching credential saving's first-value convention. This simple view does not
+preserve repeated RDNs, arbitrary OIDs, or unsupported SAN types.
+
+Values are captured when issuance succeeds, before deferred dispatch. Dispatch
+waits for the issuance transaction to commit, so failed or rolled-back issuance
+does not emit a post-issuance event. The run and each workflow instance persist the
+snapshot; later device or certificate changes do not affect delayed or retried
+execution. CMP approval followed by polling uses the original enrollment operation.
+
+Example forwarding the effective subject serial number:
+
+```yaml
+schema: trustpoint.workflow.v2
+name: CMP Effective Subject Serial Number Webhook
+enabled: true
+
+trigger:
+  on: cmp.initialization
+  phase: after_issuance
+  sources:
+    trustpoint: true
+    ca_ids: []
+    domain_ids: []
+    device_ids: []
+
+workflow:
+  start: forward_serial
+  steps:
+    forward_serial:
+      type: webhook
+      title: Forward effective certificate subject serial number
+      method: POST
+      url: https://example.invalid/cmp-audit
+      headers:
+        Content-Type: application/json
+      body:
+        effective_subject_serial_number: ${event.request.subject.serial_number}
+        stored_device_serial_number: ${event.device.serial_number}
+        operation: ${event.cmp.operation}
+  flow: []
+```
+
+The URL is intentionally nonoperational. Replace it with your receiver.
+The expression resolver renders `${...}` templates as strings; a `null` subject
+value becomes an empty string in a templated webhook body. The persisted event
+still contains JSON `null`. To send only when a serial number exists, add:
+
+```yaml
+apply:
+  - exists: ${event.request.subject.serial_number}
+```
+
 ## Supported Step Types
 
 ### `logic`

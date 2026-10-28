@@ -4,7 +4,6 @@
 """CSR build operation processor classes."""
 from __future__ import annotations
 
-from ipaddress import IPv4Address, IPv6Address
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
@@ -19,6 +18,8 @@ from cryptography.x509 import (
 )
 
 from pki.util.cert_profile import JSONProfileVerifier
+from pki.util.cert_req_converter import JSONCertRequestConverter
+from pki.util.san import parse_ip_addresses, split_san_values
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from request.template_vars import resolve_template_variables
 from trustpoint.logger import LoggerMixin
@@ -59,14 +60,16 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
 
         validated_request_data = context.validated_request_data
         subject = self._build_subject(validated_request_data)
-        extensions = self._build_extensions(validated_request_data)
         private_key = self._get_private_key(context)
 
         csr_builder = CertificateSigningRequestBuilder().subject_name(subject)
-        for ext_value, critical in extensions:
-            csr_builder = csr_builder.add_extension(ext_value, critical=critical)
+        normalized_request = JSONProfileVerifier.validate_request(validated_request_data)
+        extended_builder = JSONCertRequestConverter.add_extensions(normalized_request, csr_builder)
+        if not isinstance(extended_builder, CertificateSigningRequestBuilder):
+            msg = 'Expected a CSR builder.'
+            raise TypeError(msg)
 
-        self._csr = csr_builder.sign(private_key, hashes.SHA256())
+        self._csr = extended_builder.sign(private_key, hashes.SHA256())
 
         self.logger.info('Built CSR with subject: %s', subject.rfc4514_string())
 
@@ -141,10 +144,8 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
 
     @staticmethod
     def _iter_san_field(value: str | list[str]) -> list[str]:
-        """Return a list of non-empty stripped items from a SAN field value."""
-        if isinstance(value, list):
-            return [str(v).strip() for v in value if str(v).strip()]
-        return [v.strip() for v in str(value).split(',') if v.strip()]
+        """Normalize SAN list input with the shared parser."""
+        return split_san_values(value)
 
     def _add_dns_names(
         self,
@@ -168,12 +169,7 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
         if not ip_addresses_val:
             return
 
-        for ip_addr_clean in self._iter_san_field(ip_addresses_val):
-            try:
-                ip_obj = IPv4Address(ip_addr_clean) if '.' in ip_addr_clean else IPv6Address(ip_addr_clean)
-                san_names.append(x509.IPAddress(ip_obj))
-            except ValueError as exc:
-                self.logger.warning('Invalid IP address "%s": %s', ip_addr_clean, exc)
+        san_names.extend(x509.IPAddress(address) for address in parse_ip_addresses(ip_addresses_val))
 
     def _add_rfc822_names(
         self,

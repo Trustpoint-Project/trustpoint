@@ -1,15 +1,13 @@
 #!/bin/bash
 # Nginx base config (no TLS directory handling)
 
-LOGFILE=/var/www/html/trustpoint/trustpoint/media/log/trustpoint.log
 set -eE -o pipefail
 
+# Keep privileged logging on stdout, away from application-writable paths.
 log() {
     local level=$1; shift
-    local message
-    message="$(printf '%s - configure_nginx.sh - %s - %s\n' \
-        "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$*")"
-    echo "$message" | tee -a "$LOGFILE"
+    printf '%s - configure_nginx.sh - %s - %s\n' \
+        "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$*"
 }
 
 log INFO "Removing standard enabled Nginx sites"

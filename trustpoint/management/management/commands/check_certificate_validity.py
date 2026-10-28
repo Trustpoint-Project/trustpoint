@@ -13,10 +13,11 @@ already exist for the given certificate and event.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any, cast
+from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
 from management.models import NotificationConfig, NotificationModel, NotificationStatus
 from pki.models import CertificateModel
 
@@ -61,12 +62,8 @@ class Command(BaseCommand):
             self._create_notification(
                 certificate=cert,
                 event='CERTIFICATE_EXPIRING',
-                notification_type=cast(
-                    'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.WARNING
-                ),
-                message_type=cast(
-                    'NotificationModel.NotificationMessageType', NotificationModel.NotificationMessageType.CERT_EXPIRING
-                ),
+                notification_type=NotificationModel.NotificationTypes.WARNING,
+                message_type=NotificationModel.NotificationMessageType.CERT_EXPIRING,
                 new_status=new_status,
             )
 
@@ -75,12 +72,8 @@ class Command(BaseCommand):
             self._create_notification(
                 certificate=cert,
                 event='CERTIFICATE_EXPIRED',
-                notification_type=cast(
-                    'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.CRITICAL
-                ),
-                message_type=cast(
-                    'NotificationModel.NotificationMessageType', NotificationModel.NotificationMessageType.CERT_EXPIRED
-                ),
+                notification_type=NotificationModel.NotificationTypes.CRITICAL,
+                message_type=NotificationModel.NotificationMessageType.CERT_EXPIRED,
                 new_status=new_status,
             )
 
@@ -102,14 +95,14 @@ class Command(BaseCommand):
 
         message_data = {'common_name': certificate.common_name,
                         'not_valid_after': certificate.not_valid_after.strftime('%Y-%m-%d %H:%M:%S')}
-        
+
         issued_credential = (
             IssuedCredentialModel.objects
             .filter(credential__certificate=certificate)
             .select_related('domain')
             .first()
         )
-        
+
         if issued_credential and issued_credential.domain:
             if not NotificationModel.objects.filter(
                 event=event, certificate=certificate, domain=issued_credential.domain
@@ -125,15 +118,14 @@ class Command(BaseCommand):
                     message_data=message_data,
                 )
                 notification.statuses.add(new_status)
-        else:
-            if not NotificationModel.objects.filter(event=event, certificate=certificate, domain__isnull=True).exists():
-                notification = NotificationModel.objects.create(
-                    certificate=certificate,
-                    created_at=timezone.now(),
-                    notification_source=NotificationModel.NotificationSource.CERTIFICATE,
-                    notification_type=notification_type,
-                    message_type=message_type,
-                    event=event,
-                    message_data=message_data,
-                )
-                notification.statuses.add(new_status)
+        elif not NotificationModel.objects.filter(event=event, certificate=certificate, domain__isnull=True).exists():
+            notification = NotificationModel.objects.create(
+                certificate=certificate,
+                created_at=timezone.now(),
+                notification_source=NotificationModel.NotificationSource.CERTIFICATE,
+                notification_type=notification_type,
+                message_type=message_type,
+                event=event,
+                message_data=message_data,
+            )
+            notification.statuses.add(new_status)

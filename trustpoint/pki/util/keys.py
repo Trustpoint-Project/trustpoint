@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography.hazmat.primitives import hashes
@@ -23,8 +22,10 @@ except ImportError:
 
 from django.db import models
 from trustpoint_core.crypto_types import PublicKey
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+from trustpoint_core.oid import KeyPairGenerator, PublicKeyInfo
 from trustpoint_core.serializer import PrivateKeySerializer
+
+from pki.key_types import public_key_info_from_key_type
 
 if TYPE_CHECKING:
     from typing import Any, TypeGuard
@@ -33,9 +34,6 @@ if TYPE_CHECKING:
 
     from pki.models.credential import CredentialModel
     from pki.models.domain import DomainModel
-
-logger = logging.getLogger(__name__)
-
 
 class AutoGenPkiKeyAlgorithm(models.TextChoices):
     """The key algorithms supported by the AutoGenPKI."""
@@ -49,54 +47,8 @@ class AutoGenPkiKeyAlgorithm(models.TextChoices):
     # omitting the rest of the choices as an example that Auto Gen PKI doesn't have to support all key algorithms
 
     def to_public_key_info(self) -> PublicKeyInfo:
-        """Gets the corresponding public key info for the key algorithm."""
-        if self.value == AutoGenPkiKeyAlgorithm.RSA2048:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=2048)
-        if self.value == AutoGenPkiKeyAlgorithm.RSA4096:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=4096)
-        if self.value == AutoGenPkiKeyAlgorithm.SECP256R1:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=NamedCurve.SECP256R1)
-        if self.value == AutoGenPkiKeyAlgorithm.MLDSA44:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_44)
-        if self.value == AutoGenPkiKeyAlgorithm.MLDSA65:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_65)
-        if self.value == AutoGenPkiKeyAlgorithm.MLDSA87:
-            return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_87)
-        exc_msg = f'Unsupported key algorithm type for AutoGenPKI: {self.value}'
-        raise ValueError(exc_msg)
-
-
-def supported_auto_gen_pki_key_algorithms() -> tuple[AutoGenPkiKeyAlgorithm, ...]:
-    """Return AutoGenPKI algorithms supported by the active crypto backend."""
-    from crypto.application.capabilities import get_active_backend_capability_report  # noqa: PLC0415
-    from crypto.domain.specs import MlDsaKeySpec, MlDsaVariant  # noqa: PLC0415
-
-    report = get_active_backend_capability_report()
-    if not report.available:
-        logger.warning(
-            'Could not determine supported AutoGenPKI algorithms for backend %r: %s',
-            report.backend_kind,
-            '; '.join(report.diagnostics) or 'backend unavailable',
-        )
-        return ()
-
-    supported: list[AutoGenPkiKeyAlgorithm] = []
-    if report.supports_rsa_key_size(2048):
-        supported.append(AutoGenPkiKeyAlgorithm.RSA2048)
-    if report.supports_rsa_key_size(4096):
-        supported.append(AutoGenPkiKeyAlgorithm.RSA4096)
-    if report.supports_ec_curve(ec.SECP256R1()):
-        supported.append(AutoGenPkiKeyAlgorithm.SECP256R1)
-
-    if report.backend_kind == 'software':
-        if report.supports_key_spec(MlDsaKeySpec(variant=MlDsaVariant.MLDSA44)):
-            supported.append(AutoGenPkiKeyAlgorithm.MLDSA44)
-        if report.supports_key_spec(MlDsaKeySpec(variant=MlDsaVariant.MLDSA65)):
-            supported.append(AutoGenPkiKeyAlgorithm.MLDSA65)
-        if report.supports_key_spec(MlDsaKeySpec(variant=MlDsaVariant.MLDSA87)):
-            supported.append(AutoGenPkiKeyAlgorithm.MLDSA87)
-
-    return tuple(supported)
+        """Resolve the legacy algorithm identifier through the shared catalog."""
+        return public_key_info_from_key_type(self.value)
 
 
 class KeyGenerator:

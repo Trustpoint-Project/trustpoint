@@ -1,30 +1,18 @@
-{% extends 'trustpoint/base.html' %}
+{% extends 'pki/issuing_cas/add/form_base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST" autocomplete="off">
-        {% csrf_token %}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Add new Issuing CA' %}</h1>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    <h2>{% trans 'Request Issuing CA Certificate Using EST' %}</h2>
-                    <hr>
+    {% with ca_form_id='request-issuing-ca-est-form' %}
+        {{ block.super }}
+    {% endwith %}
+{% endblock %}
 
-                    {{ form|crispy }}
-                </div>
-            </div>
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
-                    <button type="submit" class="btn btn-primary">{% trans 'Create Issuing CA' %}</button>
-                </div>
-            </div>
-        </div>
-    </form>
-{% endblock content %}
+{% block form_title %}{% trans 'Request Issuing CA Certificate' %}{% endblock %}
+
+{% block form_description %}{% trans 'Generate the Issuing CA keypair in Trustpoint and request the certificate from an external PKI using EST.' %}{% endblock %}
+
+{% block section_title %}{% trans 'EST Configuration' %}{% endblock %}
+
+{% block section_description %}{% trans 'Configure the EST endpoint and certificate request parameters.' %}{% endblock %}
+
+{% block submit_label %}{% trans 'Create Issuing CA' %}{% endblock %}

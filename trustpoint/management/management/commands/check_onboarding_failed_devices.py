@@ -5,14 +5,15 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from management.models import NotificationModel, NotificationStatus
 from workflows.models import EnrollmentRequest, State
 
-new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
+if TYPE_CHECKING:
+    from devices.models import DeviceModel
 
 
 class Command(BaseCommand):
@@ -37,6 +38,7 @@ class Command(BaseCommand):
 
     def _check_onboarding_failed_devices(self) -> None:
         """Task to create a warning notification if a device has a failed onboarding attempt."""
+        new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
         failed_enrollment_requests = EnrollmentRequest.objects.filter(
             aggregated_state__in=[State.FAILED, State.REJECTED],
             device__isnull=False,

@@ -11,6 +11,7 @@ They can also specify default values for fields and validate the request against
 
 import enum
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
@@ -23,9 +24,10 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from trustpoint_core.oid import NameOid
+from trustpoint_core.oid import CertificateExtensionOid, NameOid
 
-from pki.util.ext_oids import CertificateExtensionOid  # temp
+from pki.util.crl_urls import validate_crl_url
+from pki.util.ext_oids import CERTIFICATE_EXTENSION_ALIASES
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +40,21 @@ ALIASES: dict[str, AliasChoices] = {
 
 CERT_PROFILE_KEYWORDS = {'type','allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
 
-def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enum]) -> dict[str, str]:
+def build_alias_map_name_oids(
+    alias_map: dict[str, str],
+    enum_cls: type[enum.Enum],
+    *,
+    extra_aliases: dict[str, tuple[str | None, str]] | None = None,
+) -> dict[str, str]:
     """Build a mapping of all known OID strings from trustpoint_core to their canonical field names."""
     for entry in enum_cls:
         canonical = entry.name.lower() # e.g. 'common_name'
         dotted_string = entry.value.dotted_string # e.g. '2.5.4.3'
-        abbreviation = entry.value.abbreviation # e.g. 'CN'
-        camel_case = entry.value.full_name # e.g. 'commonName'
+        if extra_aliases is None:
+            abbreviation = entry.value.abbreviation  # e.g. 'CN'
+            camel_case = entry.value.full_name  # e.g. 'commonName'
+        else:
+            abbreviation, camel_case = extra_aliases[entry.name]
         alias_map[dotted_string] = canonical
         choices = [dotted_string]
         if camel_case != canonical:
@@ -60,7 +70,9 @@ def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enu
     return alias_map
 
 alias_map = build_alias_map_name_oids({}, NameOid)
-alias_map = build_alias_map_name_oids(alias_map, CertificateExtensionOid)
+alias_map = build_alias_map_name_oids(
+    alias_map, CertificateExtensionOid, extra_aliases=CERTIFICATE_EXTENSION_ALIASES
+)
 
 # Important: Pydantic V2 model_config does not follow MRO!
 # Non-default Model config settings are taken from the last base class set to a non-default value.
@@ -167,6 +179,24 @@ class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValueProper
     """
     uris: list[str] | ProfileValuePropertyModel | None = None
 
+    @field_validator('uris')
+    @classmethod
+    def validate_uris(cls, value: list[str] | ProfileValuePropertyModel | None
+                      ) -> list[str] | ProfileValuePropertyModel | None:
+        """Validate both literal URLs and profile value/default lists."""
+        values = [value] if isinstance(value, list) else (
+            [value.value, value.default] if isinstance(value, ProfileValuePropertyModel) else []
+        )
+        for urls in values:
+            if urls is None:
+                continue
+            if not isinstance(urls, list) or not all(isinstance(url, str) for url in urls):
+                msg = 'CRL distribution point URIs must be a list of URLs.'
+                raise ValueError(msg)
+            for url in urls:
+                validate_crl_url(url)
+        return value
+
     model_config = ConfigDict(extra='forbid')
 
 class KeyUsageExtensionModel(BaseExtensionModel):
@@ -237,7 +267,29 @@ class ValidityModel(BaseModel):
     model_config = ConfigDict(extra='ignore', populate_by_name=True)
 
 
-class ProfileValidityModel(BaseModel):
+class CertProfileBaseModel(ProfileValuePropertyModel):
+    """Base model for each nesting level of certificate profiles.
+
+    This allows for granular control over allowed fields and constraints at each level.
+    """
+    allow: list[str] | Literal['*'] | None = None
+    reject_mods: bool = Field(default=False)
+
+    @field_validator('allow', mode='before')
+    @classmethod
+    def normalize_allow(cls, value: list[str] | Literal['*'] | None) -> list[str] | Literal['*'] | None:
+        """Normalize the allow list by replacing aliases with their canonical names."""
+        if not isinstance(value, list):
+            return value
+        normalized = []
+        for item in value:
+            try:
+                normalized.append(alias_map[item])
+            except KeyError:
+                normalized.append(item)
+        return normalized
+
+class ProfileValidityModel(CertProfileBaseModel):
     """Validity model for certificate profiles.
 
     Unlike :class:`ValidityModel` (used for certificate requests), this model
@@ -264,28 +316,6 @@ class ProfileValidityModel(BaseModel):
     validity_min: timedelta | None = None
 
     model_config = ConfigDict(extra='ignore', populate_by_name=True)
-
-class CertProfileBaseModel(ProfileValuePropertyModel):
-    """Base model for each nesting level of certificate profiles.
-
-    This allows for granular control over allowed fields and constraints at each level.
-    """
-    allow: list[str] | Literal['*'] | None = None
-    reject_mods: bool = Field(default=False)
-
-    @field_validator('allow', mode='before')
-    @classmethod
-    def normalize_allow(cls, value: list[str] | Literal['*'] | None) -> list[str] | Literal['*'] | None:
-        """Normalize the allow list by replacing aliases with their canonical names."""
-        if not isinstance(value, list):
-            return value
-        normalized = []
-        for item in value:
-            try:
-                normalized.append(alias_map[item])
-            except KeyError:
-                normalized.append(item)
-        return normalized
 
 class ProfileSubjectModel(SubjectModel, CertProfileBaseModel):
     """Model for the subject DN of a certificate profile, with profile constraints."""
@@ -366,6 +396,21 @@ class InheritedProfileConfig:
         self.allow_implicit = allow_implicit
         self.reject_mods = reject_mods
         self.mutable = mutable
+
+@dataclass(frozen=True)
+class EditableProfileField:
+    """A request field that a requester is expected or allowed to provide according to a profile.
+
+    Attributes:
+        path: The location of the field within the (sample) request, e.g. ('subject', 'common_name').
+        required: Whether the profile requires the field.
+        default: The value or default from the profile, if any.
+    """
+
+    path: tuple[str, ...]
+    required: bool
+    default: Any = None
+
 
 class JSONProfileVerifier:
     """Class to verify certificate requests against JSON-based profiles."""
@@ -647,6 +692,39 @@ class JSONProfileVerifier:
     def get_sample_request(self) -> dict[str, Any]:
         """Generate a sample certificate request that conforms to the profile."""
         return self._apply_profile_rules_sample({}, self.profile_dict)
+
+    def get_editable_fields(self) -> list[EditableProfileField]:
+        """Return all explicitly declared profile fields which are required or mutable.
+
+        Uses the same value / default / required / mutable semantics as get_sample_request().
+        """
+        fields: list[EditableProfileField] = []
+        self._collect_editable_fields(self.profile_dict, (), mutable=False, fields=fields)
+        return fields
+
+    def _collect_editable_fields(
+        self, profile: dict[str, Any], path: tuple[str, ...], *, mutable: bool, fields: list[EditableProfileField]
+    ) -> None:
+        profile_mutable = bool(profile.get('mutable', mutable))
+        for field, profile_value in profile.items():
+            if field in CERT_PROFILE_KEYWORDS:
+                continue
+            field_path = (*path, field)
+            if isinstance(profile_value, dict):
+                required = bool(profile_value.get('required'))
+                if 'value' in profile_value:
+                    if profile_value.get('mutable', profile_mutable):
+                        fields.append(EditableProfileField(field_path, required, profile_value['value']))
+                    continue
+                if 'default' in profile_value:
+                    fields.append(EditableProfileField(field_path, required, profile_value['default']))
+                    continue
+                if required or not any(k not in CERT_PROFILE_KEYWORDS for k in profile_value):
+                    fields.append(EditableProfileField(field_path, required))
+                    continue
+                self._collect_editable_fields(profile_value, field_path, mutable=profile_mutable, fields=fields)
+            elif profile_value is not None and profile_mutable and self._is_simple_type(profile_value):
+                fields.append(EditableProfileField(field_path, required=False, default=profile_value))
 
     def get_profile(self) -> dict[str, Any]:
         """Get the profile as a dictionary."""

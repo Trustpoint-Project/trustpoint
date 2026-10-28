@@ -16,6 +16,7 @@ from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core.oid import CertificateExtensionOid, NameOid
 
+from pki.util.ext_oids import ExtendedKeyUsageOid
 from util.db import CustomDeleteActionModel, OrphanDeletionMixin
 
 __all__ = [
@@ -1028,6 +1029,14 @@ class KeyPurposeIdModel(models.Model):
     def __str__(self) -> str:
         """Returns a string representation of the KeyPurposeIdModel."""
         return f'KeyPurposeId({self.oid})'
+
+    @property
+    def name(self) -> str:
+        """Human-readable name of the key purpose, or the OID if unknown."""
+        try:
+            return ExtendedKeyUsageOid(self.oid).name.replace('_', ' ').title()
+        except ValueError:
+            return self.oid
 
 
 class ExtendedKeyUsageExtension(CertificateExtension, models.Model):

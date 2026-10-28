@@ -1,4 +1,8 @@
+import { uniqStrings } from '../shared/utils.js';
+import { extractStepOutcomes } from '../document/catalog_lookup.js';
 import { analyzeWorkflowVariableAvailability } from '../document/variable_availability.js';
+
+export { uniqStrings, extractStepOutcomes };
 
 export function pathToString(path) {
   if (!Array.isArray(path) || !path.length) {
@@ -86,53 +90,8 @@ export function areaTitle(area) {
   }
 }
 
-export function uniqStrings(values) {
-  const out = [];
-  const seen = new Set();
-
-  for (const value of values || []) {
-    if (typeof value !== 'string' || !value.trim()) {
-      continue;
-    }
-
-    const s = value.trim();
-    if (!seen.has(s)) {
-      seen.add(s);
-      out.push(s);
-    }
-  }
-
-  return out;
-}
-
 export function extractKnownVarNames(rootObj) {
   return analyzeWorkflowVariableAvailability(rootObj).allWorkflowVarNames || [];
-}
-
-export function extractStepOutcomes(stepObj) {
-  if (!stepObj || typeof stepObj !== 'object') {
-    return [];
-  }
-
-  if (stepObj.type === 'logic') {
-    const cases = Array.isArray(stepObj.cases) ? stepObj.cases : [];
-    const caseOutcomes = cases
-      .map((item) => (item && typeof item === 'object' ? item.outcome : null))
-      .filter((value) => typeof value === 'string');
-
-    const defaultOutcome = typeof stepObj.default === 'string' ? [stepObj.default] : [];
-    return uniqStrings([...caseOutcomes, ...defaultOutcome]);
-  }
-
-  if (stepObj.type === 'approval') {
-    return uniqStrings([
-      stepObj.approved_outcome,
-      stepObj.rejected_outcome,
-      stepObj.timeout_outcome,
-    ]);
-  }
-
-  return [];
 }
 
 export function extractStepSummaries(rootObj) {

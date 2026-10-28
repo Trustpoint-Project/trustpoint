@@ -496,7 +496,7 @@ Additional negative tests could confirm appropriate handling when attempting to 
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_001_device_management.feature
+.. literalinclude:: ../../../trustpoint/features/devices/device_management.feature
    :language: gherkin
 
 ^^^^^
@@ -546,7 +546,7 @@ The system should handle these scenarios gracefully, with appropriate error mess
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_003_certificate_lifecycle.feature
+.. literalinclude:: ../../../trustpoint/features/pki/certificate_lifecycle.feature
    :language: gherkin
 
 ^^^^^
@@ -574,7 +574,7 @@ Edge cases, such as rate limits or concurrent requests, should be addressed to c
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_004_REST_API.feature
+.. literalinclude:: ../../../trustpoint/features/api/rest_pki.feature
    :language: gherkin
 
 ^^^^^
@@ -649,7 +649,7 @@ Edge cases include:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_006_backup_restore_update.feature
+.. literalinclude:: ../../../trustpoint/features/system/backup_restore.feature
    :language: gherkin
 
 ^^^^^
@@ -690,7 +690,7 @@ Edge cases:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_007_logging.feature
+.. literalinclude:: ../../../trustpoint/features/system/logging.feature
    :language: gherkin
 
 ^^^^^
@@ -715,7 +715,7 @@ To verify that the admin is allowed to add or delete new :term:`Issuing CA`'s, t
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_008_issuing_ca_management.feature
+.. literalinclude:: ../../../trustpoint/features/pki/ca_management.feature
    :language: gherkin
 
 ^^^^^
@@ -811,7 +811,7 @@ Edge cases:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_010_cmp_endpoint.feature
+.. literalinclude:: ../../../trustpoint/features/api/protocol_endpoints.feature
    :language: gherkin
 
 ^^^^^
@@ -861,7 +861,7 @@ Edge cases:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_011_est_endpoint.feature
+.. literalinclude:: ../../../trustpoint/features/api/protocol_endpoints.feature
    :language: gherkin
 
 ^^^^^
@@ -898,7 +898,7 @@ To verify that the system provides multi-language UI options, we will test the f
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_012_multi_language_support.feature
+.. literalinclude:: ../../../trustpoint/features/system/localization.feature
    :language: gherkin
 
 ^^^^^
@@ -942,7 +942,7 @@ The test covers the following scenarios:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_013_remote_credential_download.feature
+.. literalinclude:: ../../../trustpoint/features/devices/remote_credential_download.feature
    :language: gherkin
 
 ---------------------
@@ -992,7 +992,7 @@ To verify that administrators can configure security levels for different Trustp
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_101_security_configuration.feature
+.. literalinclude:: ../../../trustpoint/features/security/security_configuration.feature
    :language: gherkin
 
 ^^^^^
@@ -1035,7 +1035,7 @@ To verify that certificate template security is enforced properly, we will test 
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_102_certificate_template_security.feature
+.. literalinclude:: ../../../trustpoint/features/pki/certificate_profiles.feature
    :language: gherkin
 
 ^^^^^
@@ -1064,7 +1064,7 @@ Additional negative tests could confirm appropriate handling when attempting to 
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_103_domain_management.feature
+.. literalinclude:: ../../../trustpoint/features/pki/domain_management.feature
    :language: gherkin
 
 ^^^^^
@@ -1094,7 +1094,7 @@ Additional negative tests could confirm appropriate handling when attempting to 
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_104_truststore_management.feature
+.. literalinclude:: ../../../trustpoint/features/pki/truststore_management.feature
    :language: gherkin
 
 --------------------
@@ -1137,5 +1137,5 @@ To verify that an NTEU (Non-Technical Experienced User) can successfully execute
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/F_001_nteu_identity_onboarding.feature
+.. literalinclude:: ../../../trustpoint/features/devices/onboarding.feature
    :language: gherkin

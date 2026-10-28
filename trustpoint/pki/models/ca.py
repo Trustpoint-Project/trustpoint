@@ -23,12 +23,13 @@ from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.crl import CrlModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from pki.util.signature_suite import format_signature_suite
 from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
-    import datetime
+    import datetime as dt
 
     from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
@@ -66,6 +67,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         REMOTE_CMP_RA = 5, _('Remote-CMP-RA')  # Trustpoint = RA
         REMOTE_ISSUING_EST = 6, _('Remote-Issuing-EST')  # Trustpoint = CA
         REMOTE_ISSUING_CMP = 7, _('Remote-Issuing-CMP')  # Trustpoint = CA
+        REMOTE_ISSUING_CSR = 8, _('Remote-Issuing-CSR')  # Trustpoint = CA, CSR external issuance
 
 
     unique_name = models.CharField(
@@ -174,6 +176,13 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         help_text=_('Username for EST authentication')
     )
 
+    cmp_sender_kid = models.PositiveIntegerField(
+        verbose_name=_('CMP Sender KID'),
+        blank=True,
+        null=True,
+        help_text=_('senderKID for CMP shared-secret authentication (e.g. the device ID on a Trustpoint upstream)')
+    )
+
     onboarding_config = models.ForeignKey(
         'onboarding.OnboardingConfigModel',
         related_name='remote_cas',
@@ -237,7 +246,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
                 condition=(
                     models.Q(ca_type=-1, certificate__isnull=False, credential__isnull=True) |
                     models.Q(ca_type__in=[4, 5], credential__isnull=True) |
-                    models.Q(ca_type__in=[0, 1, 2, 3, 6, 7], certificate__isnull=True, credential__isnull=False)
+                    models.Q(ca_type__in=[0, 1, 2, 3, 6, 7, 8], certificate__isnull=True, credential__isnull=False)
                 ),
                 name='ca_mode_constraint',
                 violation_error_message=_('Invalid CA configuration')
@@ -256,7 +265,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """Returns a string representation of the CaModel instance."""
         return f'CaModel({self.unique_name})'
 
-
     @property
     def is_issuing_ca(self) -> bool:
         """Returns True if this is an issuing CA (can issue certificates)."""
@@ -265,7 +273,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             self.CaTypeChoice.REMOTE_CMP_RA,
             self.CaTypeChoice.REMOTE_EST_RA,
         )
-
 
     @property
     def is_keyless_ca(self) -> bool:
@@ -278,7 +285,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
                 self.CaTypeChoice.REMOTE_EST_RA,
             )
         )
-
 
     @property
     def common_name(self) -> str:
@@ -293,7 +299,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return f'{self.unique_name} (Certificate pending)'
         return f'{self.unique_name} (Credential missing)'
 
-
     @property
     def subject_public_bytes(self) -> bytes:
         """Returns the subject public bytes from the CA certificate, or b'' if missing."""
@@ -305,7 +310,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return bytes.fromhex(self.credential.certificate_or_error.subject_public_bytes)
         return b''
 
-
     @property
     def ca_certificate_model(self) -> CertificateModel | None:
         """Returns the CA certificate model for both issuing and keyless CAs, or None if missing."""
@@ -315,14 +319,12 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return self.certificate
         return None
 
-
     def get_certificate(self) -> x509.Certificate | None:
         """Returns the CA certificate (crypto object) for both issuing and keyless CAs, or None if missing."""
         cert_model = self.ca_certificate_model
         if cert_model is not None:
             return cert_model.get_certificate_serializer().as_crypto()
         return None
-
 
     def get_credential(self) -> CredentialModel | None:
         """Returns the credential for issuing CAs, or None if not present."""
@@ -362,7 +364,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return ca_chain
 
     @property
-    def last_crl_issued_at(self) -> datetime.datetime | None:
+    def last_crl_issued_at(self) -> dt.datetime | None:
         """Returns when the last CRL was issued (from active CRL).
 
         Returns:
@@ -392,7 +394,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return active_crl.crl_pem if active_crl else ''
 
     @property
-    def next_crl_generation_scheduled_at(self) -> datetime.datetime | None:
+    def next_crl_generation_scheduled_at(self) -> dt.datetime | None:
         """Returns when the next CRL generation is scheduled.
 
         Returns:
@@ -428,7 +430,11 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             )
         if self.ca_type in (self.CaTypeChoice.REMOTE_EST_RA, self.CaTypeChoice.REMOTE_CMP_RA):
             self._clean_remote_non_issuing_ca()
-        elif self.ca_type in (self.CaTypeChoice.REMOTE_ISSUING_EST, self.CaTypeChoice.REMOTE_ISSUING_CMP):
+        elif self.ca_type in (
+            self.CaTypeChoice.REMOTE_ISSUING_EST,
+            self.CaTypeChoice.REMOTE_ISSUING_CMP,
+            self.CaTypeChoice.REMOTE_ISSUING_CSR,
+        ):
             self._clean_remote_issuing_ca()
         else:
             self._clean_local_or_keyless_ca()
@@ -450,7 +456,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.onboarding_config and self.no_onboarding_config:
             raise ValidationError(_('Only one of onboarding or no-onboarding config can be set for remote CAs.'))
 
-    def _clean_remote_issuing_ca(self) -> None:
+    def _clean_remote_issuing_ca(self) -> None: # noqa: C901
         """Validates remote issuing CA fields."""
         if self.certificate is not None:
             raise ValidationError(_('Remote issuing CAs cannot have certificate set.'))
@@ -459,14 +465,15 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('Remote issuing CAs must have credential set.'))
         if self.ca_type is None:
             raise ValidationError(_('ca_type must be set for remote issuing CAs.'))
-        if not self.remote_host:
-            raise ValidationError(_('Remote host must be set for remote issuing CAs.'))
-        if self.remote_port is None:
-            raise ValidationError(_('Remote port must be set for remote issuing CAs.'))
-        if not self.remote_path:
-            raise ValidationError(_('Remote path must be set for remote issuing CAs.'))
         if self.ca_type == self.CaTypeChoice.REMOTE_ISSUING_EST and not self.est_username:
             raise ValidationError(_('EST username must be set for remote EST issuing CAs.'))
+        if self.ca_type != self.CaTypeChoice.REMOTE_ISSUING_CSR:
+            if not self.remote_host:
+                raise ValidationError(_('Remote host must be set for remote issuing CAs.'))
+            if self.remote_port is None:
+                raise ValidationError(_('Remote port must be set for remote issuing CAs.'))
+            if not self.remote_path:
+                raise ValidationError(_('Remote path must be set for remote issuing CAs.'))
         if self.pk is not None and not (self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Either onboarding or no-onboarding config must be set for remote issuing CAs.'))
         if self.onboarding_config and self.no_onboarding_config:
@@ -483,7 +490,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
             raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
         # Remote-only fields should not be set for local/keyless CAs
-        if (self.remote_host or self.remote_port is not None or self.remote_path or self.est_username):
+        if (self.remote_host or self.remote_port is not None or self.remote_path or self.est_username
+                or self.cmp_sender_kid is not None):
             raise ValidationError(_('Remote fields can only be set for remote CAs.'))
 
     def save(self, *args: Any, **kwargs: Any) -> None:
@@ -631,6 +639,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             cls.CaTypeChoice.LOCAL_PKCS11,
             cls.CaTypeChoice.REMOTE_ISSUING_EST,
             cls.CaTypeChoice.REMOTE_ISSUING_CMP,
+            cls.CaTypeChoice.REMOTE_ISSUING_CSR,
         )
         if ca_type not in ca_types:
             exc_msg = f'CA Type {ca_type} is not supported for issuing CAs.'
@@ -720,7 +729,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         return issuing_ca
 
-    def _issue_crl(self, crl_validity_hours: int = 24) -> None:
+    def _issue_crl(self, crl_validity_hours: float = 24) -> None:
         """Issues a CRL with revoked certificates issued by this CA.
 
         Only issuing CAs can issue CRLs (keyless CAs don't have private keys).
@@ -741,7 +750,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         self.logger.info('CRL generation for CA %s finished.', self.unique_name)
 
-    def issue_crl(self, crl_validity_hours: int = 24) -> bool:
+    def issue_crl(self, crl_validity_hours: float = 24) -> bool:
         """Issues a CRL with revoked certificates issued by this CA.
 
         Args:
@@ -774,21 +783,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
     @property
     def signature_suite_display(self) -> str:
-        """Get a safe string representation of the signature suite."""
+        """Return a readable signature suite, or a placeholder when it is unavailable."""
         try:
-            ss = self.signature_suite
-            if ss is None:
-                return '-'
-            if hasattr(ss, 'signature_algorithm') and ss.signature_algorithm:
-                sig_alg = ss.signature_algorithm
-                if hasattr(sig_alg, 'value'):
-                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_44.dotted_string:
-                        return 'ML-DSA-44'
-                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_65.dotted_string:
-                        return 'ML-DSA-65'
-                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_87.dotted_string:
-                        return 'ML-DSA-87'
-            return str(ss)
+            return format_signature_suite(self.signature_suite)
         except ValueError:
             return '-'
 
@@ -805,13 +802,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
     def get_issued_certificates(self) -> QuerySet[CertificateModel, CertificateModel]:
         """Returns certificates issued by this CA, except its own in case of a self-signed CA.
 
-        This goes through all active certificates and checks issuance by this CA
-        based on cert.issuer_public_bytes == ca.subject_public_bytes.
-
-        Warning:
-            This means that it may inadvertently return certificates
-            that were issued by a different CA with the same subject name.
-
         Returns:
             QuerySet: Certificates issued by this CA, or empty queryset for RAs/keyless CAs.
         """
@@ -820,12 +810,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return CertificateModel.objects.none()
         if self.credential.certificate is None:
             return CertificateModel.objects.none()
-        ca_subject_public_bytes = self.credential.certificate_or_error.subject_public_bytes
+        ca_certificate = self.credential.certificate_or_error
 
         # do not return self-signed CA certificate
-        return CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(
-            subject_public_bytes=ca_subject_public_bytes
-        )
+        return CertificateModel.objects.filter(issuer_id=ca_certificate).exclude(pk=ca_certificate.pk)
 
     # ===== CRL Helper Methods =====
 
@@ -1003,13 +991,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
     def revoke_all_issued_certificates(self, reason: str = RevokedCertificateModel.ReasonCode.UNSPECIFIED) -> None:
         """Revokes all certificates issued by this CA."""
-        qs = self.get_issued_certificates()
+        from pki.services.revocation import revoke_certificates  # noqa: PLC0415
 
-        for cert in qs:
-            if (cert.certificate_status
-                not in [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
-                continue
-            RevokedCertificateModel.objects.create(certificate=cert, revocation_reason=reason, ca=self)
+        qs = self.get_issued_certificates()
+        revoke_certificates(qs, reason=reason, ca=self, only_unexpired=True)
 
         self.logger.info('All %i certificates issued by CA %s have been revoked.', qs.count(), self.unique_name)
         self.issue_crl(crl_validity_hours=int(self.crl_validity_hours))
@@ -1048,7 +1033,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
                 self.credential.delete()
 
     @property
-    def display_not_valid_after(self) -> datetime.datetime | None:
+    def display_not_valid_after(self) -> dt.datetime | None:
         """Returns the not valid after date for display purposes."""
         if self.credential and self.credential.certificate:
             return self.credential.certificate.not_valid_after

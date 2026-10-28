@@ -11,12 +11,9 @@ from .browser_onboarding import (
     DeviceBrowserOnboardingCancelView,
     DeviceBrowserOnboardingOTPView,
     DeviceOnboardingBrowserLoginView,
-    OpcUaGdsBrowserOnboardingCancelView,
-    OpcUaGdsBrowserOnboardingOTPView,
 )
 from .clm import (
     DeviceCertificateLifecycleManagementSummaryView,
-    OpcUaGdsCertificateLifecycleManagementSummaryView,
     OpcUaGdsPushCertificateLifecycleManagementSummaryView,
 )
 from .credential_issuance import (
@@ -26,21 +23,14 @@ from .credential_issuance import (
     DeviceNoOnboardingIssueNewApplicationCredentialView,
     DeviceOnboardingIssueNewApplicationCredentialView,
     DeviceSelectCertificateProfileNewApplicationCredentialView,
-    OpcUaGdsChooseIssuanceMethodView,
-    OpcUaGdsIssueCsrCredentialView,
-    OpcUaGdsIssueProfileCredentialView,
-    OpcUaGdsNoOnboardingIssueNewApplicationCredentialView,
-    OpcUaGdsOnboardingIssueNewApplicationCredentialView,
     OpcUaGdsPushDiscoverServerView,
     OpcUaGdsPushIssueDomainCredentialView,
     OpcUaGdsPushOnboardingIssueNewApplicationCredentialView,
     OpcUaGdsPushTruststoreAssociationView,
-    OpcUaGdsSelectCertificateProfileNewApplicationCredentialView,
 )
 from .delete import (
     AgentsBulkDeleteView,
     DeviceBulkDeleteView,
-    OpcUaGdsBulkDeleteView,
     OpcUaGdsPushBulkDeleteView,
 )
 from .device_api import DeviceViewSet
@@ -51,25 +41,22 @@ from .device_create import (
     DeviceCreateOnboardingView,
     DeviceCreateOpcUaGdsPushView,
     NamedCurveMissingForEccErrorMsg,
-    OpcUaGdsCreateChooseOnboardingView,
-    OpcUaGdsCreateNoOnboardingView,
-    OpcUaGdsCreateOnboardingView,
     OpcUaGdsPushCreateChooseOnboardingView,
     OpcUaGdsPushCreateOnboardingView,
     PublicKeyInfoMissingErrorMsg,
 )
+from .device_secrets import DeviceSecretChangeView
 from .download import (
     DeviceBrowserCredentialDownloadView,
     DeviceCertificateDownloadView,
     DeviceDownloadPageDispatcherView,
     DeviceManualCredentialDownloadView,
-    OpcUaGdsCertificateDownloadView,
-    OpcUaGdsDownloadPageDispatcherView,
     OpcUaGdsPushCertificateDownloadView,
     OpcUaGdsPushDownloadPageDispatcherView,
 )
 from .gds_push import (
     OpcUaGdsPushCertRenewalSettingsView,
+    OpcUaGdsPushDomainCredentialRenewalSettingsView,
     OpcUaGdsPushUpdateServerCertificateView,
     OpcUaGdsPushUpdateTrustlistView,
     TrustBundleDownloadView,
@@ -77,14 +64,11 @@ from .gds_push import (
 from .revoke import (
     DeviceBulkRevokeView,
     DeviceIssuedCredentialRevocationView,
-    OpcUaGdsBulkRevokeView,
-    OpcUaGdsIssuedCredentialRevocationView,
     OpcUaGdsPushBulkRevokeView,
     OpcUaGdsPushIssuedCredentialRevocationView,
 )
 from .tables import (
     DeviceTableView,
-    OpcUaGdsTableView,
 )
 
 __all__ = [
@@ -112,26 +96,11 @@ __all__ = [
     'DeviceNoOnboardingIssueNewApplicationCredentialView',
     'DeviceOnboardingBrowserLoginView',
     'DeviceOnboardingIssueNewApplicationCredentialView',
+    'DeviceSecretChangeView',
     'DeviceSelectCertificateProfileNewApplicationCredentialView',
     'DeviceTableView',
     'DeviceViewSet',
     'NamedCurveMissingForEccErrorMsg',
-    'OpcUaGdsBrowserOnboardingCancelView',
-    'OpcUaGdsBrowserOnboardingOTPView',
-    'OpcUaGdsBulkDeleteView',
-    'OpcUaGdsBulkRevokeView',
-    'OpcUaGdsCertificateDownloadView',
-    'OpcUaGdsCertificateLifecycleManagementSummaryView',
-    'OpcUaGdsChooseIssuanceMethodView',
-    'OpcUaGdsCreateChooseOnboardingView',
-    'OpcUaGdsCreateNoOnboardingView',
-    'OpcUaGdsCreateOnboardingView',
-    'OpcUaGdsDownloadPageDispatcherView',
-    'OpcUaGdsIssueCsrCredentialView',
-    'OpcUaGdsIssueProfileCredentialView',
-    'OpcUaGdsIssuedCredentialRevocationView',
-    'OpcUaGdsNoOnboardingIssueNewApplicationCredentialView',
-    'OpcUaGdsOnboardingIssueNewApplicationCredentialView',
     'OpcUaGdsPushBulkDeleteView',
     'OpcUaGdsPushBulkRevokeView',
     'OpcUaGdsPushCertRenewalSettingsView',
@@ -140,6 +109,7 @@ __all__ = [
     'OpcUaGdsPushCreateChooseOnboardingView',
     'OpcUaGdsPushCreateOnboardingView',
     'OpcUaGdsPushDiscoverServerView',
+    'OpcUaGdsPushDomainCredentialRenewalSettingsView',
     'OpcUaGdsPushDownloadPageDispatcherView',
     'OpcUaGdsPushIssueDomainCredentialView',
     'OpcUaGdsPushIssuedCredentialRevocationView',
@@ -147,8 +117,6 @@ __all__ = [
     'OpcUaGdsPushTruststoreAssociationView',
     'OpcUaGdsPushUpdateServerCertificateView',
     'OpcUaGdsPushUpdateTrustlistView',
-    'OpcUaGdsSelectCertificateProfileNewApplicationCredentialView',
-    'OpcUaGdsTableView',
     'PublicKeyInfoMissingErrorMsg',
     'TrustBundleDownloadView',
 ]

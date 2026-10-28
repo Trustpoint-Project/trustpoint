@@ -6,7 +6,7 @@
 from typing import Any
 
 from django import forms
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
@@ -27,7 +27,6 @@ from management.models.audit_log import AuditLog
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from users.permissions import AppPermissions
@@ -88,26 +87,6 @@ class DeviceCreateChooseOnboardingView(AbstractCreateChooseOnboaringView):
         return context
 
 
-class OpcUaGdsCreateChooseOnboardingView(AbstractCreateChooseOnboaringView):
-    """View for choosing if the new OPC UA GDS shall be onboarded or not."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the cancel url href according to the subcategory.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to use for rendering the devices page.
-        """
-        context = super().get_context_data(**kwargs)
-        # Remove no-onboarding and OPC UA GDS Push options for OPC UA GDS
-        context.pop('use_no_onboarding_url', None)
-        context['show_opc_ua_gds_push_option'] = False
-        return context
-
 class OpcUaGdsPushCreateChooseOnboardingView(RedirectView):
     """Deprecated: Redirects to standard devices create page."""
 
@@ -146,89 +125,11 @@ class DeviceCreateAddOnboardingTypeView(AbstractCreateAddOnboardingTypeView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-
-
-class AbstractCreateNoOnboardingView(PageContextMixin, FormView[NoOnboardingCreateForm]):
-    """asdfds."""
+class DeviceCreateView(PageContextMixin, FormView[forms.Form]):
+    """Create and audit a device using the selected onboarding form."""
 
     http_method_names = ('get', 'post')
 
-    form_class = NoOnboardingCreateForm
-    template_name = 'devices/create.html'
-
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name: str
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the cancel url href according to the subcategory.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to use for rendering the devices page.
-        """
-        context = super().get_context_data(**kwargs)
-        context['cancel_create_url'] = f'{self.page_category}:{self.page_name}'
-        return context
-
-    def form_valid(self, form: NoOnboardingCreateForm) -> HttpResponse:
-        """Saves the form / creates the device model object.
-
-        Args:
-            form: The valid form.
-
-        Returns:
-            The HTTP Response to be returned.
-        """
-        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
-            raise PermissionDenied
-        if self.page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY:
-            self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
-        else:
-            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
-
-        actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.DEVICE_ADDED,
-            target=self.object,
-            target_display=f'Device: {self.object.common_name}',
-            actor=actor,
-        )
-
-        return super().form_valid(form)
-
-    def get_success_url(self) -> str:
-        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
-
-        Returns:
-            The success url to redirect to after successful processing of the POST data following a form submit.
-        """
-        return str(
-            reverse_lazy(
-                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.id}
-            )
-        )
-
-
-class DeviceCreateNoOnboardingView(AbstractCreateNoOnboardingView):
-    """Create form view for the devices section."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsCreateNoOnboardingView(AbstractCreateNoOnboardingView):
-    """Create form view for the devices section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
-class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
-    """asdfds."""
-
-    http_method_names = ('get', 'post')
-
-    form_class: type[forms.Form] = OnboardingCreateForm
     template_name = 'devices/create.html'
 
     page_category = DEVICES_PAGE_CATEGORY
@@ -258,12 +159,12 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
         """
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
-        if self.page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY:
+        form.actor = self.request.user  # type: ignore[attr-defined]
+        try:
             self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)  # type: ignore[attr-defined]
-        elif self.page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY:
-            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS)  # type: ignore[attr-defined]
-        else:  # DEVICES_PAGE_DEVICES_SUBCATEGORY
-            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)  # type: ignore[attr-defined]
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
 
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
@@ -286,6 +187,24 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
                 f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.id}
             )
         )
+
+
+class AbstractCreateNoOnboardingView(DeviceCreateView):
+    """Create a device without onboarding."""
+
+    form_class = NoOnboardingCreateForm
+
+
+class DeviceCreateNoOnboardingView(AbstractCreateNoOnboardingView):
+    """Create form view for the devices section."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class AbstractCreateOnboardingView(DeviceCreateView):
+    """Create a device with onboarding configured."""
+
+    form_class: type[forms.Form] = OnboardingCreateForm
 
 
 class DeviceCreateOnboardingView(AbstractCreateOnboardingView):
@@ -320,12 +239,6 @@ class DeviceCreateOpcUaGdsPushView(AbstractCreateOnboardingView):
         )
 
         return FormView.form_valid(self, form)
-
-
-class OpcUaGdsCreateOnboardingView(AbstractCreateOnboardingView):
-    """Create form view for the devices section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class OpcUaGdsPushCreateOnboardingView(RedirectView):

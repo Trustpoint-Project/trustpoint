@@ -1,0 +1,52 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Confirm Role Deletion' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Review the role before permanently removing it from Trustpoint.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="delete-role-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <div class="alert alert-warning mb-0" role="alert">
+                    {% blocktranslate with name=object.name %}
+                        Are you sure you want to delete the role <strong>{{ name }}</strong>?
+                        This action cannot be undone.
+                    {% endblocktranslate %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'management:role_management' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <button
+            type="submit"
+            form="delete-role-form"
+            class="btn btn-danger"
+        >
+            {% trans 'Delete Role' %}
+        </button>
+    </div>
+</div>
+{% endblock %}

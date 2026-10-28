@@ -47,6 +47,7 @@ Full Name is required, all other fields are optional.
 * Marvin Siegel 
 * Mohammad Zeeshan
 * Omkar Joglekar
+* Ricardo Cristino
 * Rohit Bohara
 * Sven Bergmann <sven.bergmann A achelos.de> - achelos GmbH
 

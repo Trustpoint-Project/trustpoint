@@ -4,68 +4,143 @@
 {% load internationalization_tags %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+<div class="card">
     <div class="card-header">
-        <h1>{% trans "Signers List" %}</h1>
+        <h1 class="mb-1">
+            {% trans "Signers" %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans "Manage signing identities and review their certificate validity and signing activity." %}
+        </p>
     </div>
 
-    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
-        <table class="table">
-            <thead>
-            <tr>
-                <th id="checkbox-column"><input type="checkbox"/></th>
-                <th>{% trans "Signer Name" %}</th>
-                <th>{% trans "Signature Suite" %}</th>
-                <th>{% trans "Created at" %}</th>
-                <th>{% trans "Expires on" %}</th>
-                <th>{% trans "Signing Log" %}</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for signer in page_obj %}
-                <tr>
-                    <td class="row_checkbox">
-                        <input type="checkbox" name="row_checkbox" value="{{ signer.pk }}"/>
-                    </td>
-                    <td>
-                        <a href="{% url 'signer:signer-config' signer.pk %}" class="text-decoration-none">
-                            {{ signer.unique_name }}
-                        </a>
-                    </td>
-                    <td>{{ signer.credential.certificate.signature_suite_display }}</td>
-                    <td>{{ signer.created_at|local_datetime }}</td>
-                    <td>{{ signer.credential.certificate.not_valid_after|local_datetime }}</td>
-                    <td>
-                        <a href="{% url 'signer:signer-signed_messages' signer.pk %}"
-                           class="btn btn-sm btn-primary">
-                            {% trans "Signing Log" %}
-                        </a>
-                    </td>
-                </tr>
-            {% empty %}
-                <tr>
-                    <td colspan="6" class="text-center">{% trans "No signers found" %}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    <div class="card-body text-start">
+        <section>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th id="checkbox-column" scope="col">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all signers' %}"
+                                >
+                            </th>
 
-        {% include 'trustpoint/pagination.html' %}
+                            <th scope="col">
+                                {% trans "Signer Name" %}
+                            </th>
+
+                            <th scope="col">
+                                {% trans "Signature Suite" %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans "Created at" %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans "Expires on" %}
+                            </th>
+
+                            <th scope="col" class="text-end">
+                                {% trans "Actions" %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for signer in page_obj %}
+                            <tr>
+                                <td class="row_checkbox">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ signer.pk }}"
+                                        aria-label="{% blocktranslate with name=signer.unique_name %}Select signer {{ name }}{% endblocktranslate %}"
+                                    >
+                                </td>
+
+                                <td>
+                                    <a href="{% url 'signer:signer-config' signer.pk %}">
+                                        {{ signer.unique_name }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {% if signer.credential.certificate.signature_suite_display %}
+                                        {{ signer.credential.certificate.signature_suite_display }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ signer.created_at|local_datetime }}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {% if signer.credential.certificate.not_valid_after %}
+                                        {{ signer.credential.certificate.not_valid_after|local_datetime }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-end">
+                                    <a
+                                        href="{% url 'signer:signer-signed_messages' signer.pk %}"
+                                        class="btn btn-sm btn-outline-secondary"
+                                    >
+                                        {% trans "Signing Log" %}
+                                    </a>
+                                </td>
+                            </tr>
+
+                        {% empty %}
+                            <tr>
+                                <td
+                                    colspan="6"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans "No signers have been configured yet." %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include 'trustpoint/pagination.html' %}
+        </section>
     </div>
 
-    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-        <div class="tp-card-btn-footer m-1">
-            <button
-                type="button"
-                class="btn btn-danger tp-table-select-btn me-2"
-                data-tp-url="delete"
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <button
+            type="button"
+            class="btn btn-outline-danger tp-table-select-btn"
+            data-tp-url="delete"
+        >
+            {% trans "Delete Selected" %}
+        </button>
+
+        <div class="d-flex flex-wrap gap-2">
+            <a
+                href="{% url 'signer:sign_hash' %}"
+                class="btn btn-outline-secondary"
             >
-                {% trans "Delete Selected" %}
-            </button>
-        </div>
-        <div class="m-1">
-            <a href="{% url 'signer:sign_hash' %}" class="btn btn-primary">{% trans "Sign Hash" %}</a>
-            <a href="{% url 'signer:signer-add-method_select' %}" class="btn btn-primary">{% trans "Add New Signer" %}</a>
+                {% trans "Sign Hash" %}
+            </a>
+
+            <a
+                href="{% url 'signer:signer-add-method_select' %}"
+                class="btn btn-primary"
+            >
+                {% trans "Add New Signer" %}
+            </a>
         </div>
     </div>
 </div>

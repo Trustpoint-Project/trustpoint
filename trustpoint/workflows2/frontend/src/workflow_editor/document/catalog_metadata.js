@@ -1,9 +1,7 @@
+import { findStepSpec, extractStepOutcomes as extractCatalogStepOutcomes } from './catalog_lookup.js';
 import { deepClone } from './yaml_document.js';
-import { uniqStrings } from './value_utils.js';
 
-export function findStepSpec(catalog, stepType) {
-  return (catalog?.steps || []).find((step) => step.type === stepType) || null;
-}
+export { findStepSpec };
 
 export function getCommonStepFields(catalog, { excludeKeys = [] } = {}) {
   const excluded = new Set(excludeKeys);
@@ -97,25 +95,7 @@ export function makeUniqueStepId(existingIds, stepType) {
 }
 
 export function extractStepOutcomes(stepObj) {
-  if (!stepObj || typeof stepObj !== 'object' || Array.isArray(stepObj)) {
-    return [];
-  }
-
-  if (stepObj.type === 'logic') {
-    const cases = Array.isArray(stepObj.cases) ? stepObj.cases : [];
-    const caseOutcomes = cases
-      .map((item) => (item && typeof item === 'object' ? item.outcome : null))
-      .filter((value) => typeof value === 'string');
-
-    const defaultOutcome = typeof stepObj.default === 'string' ? [stepObj.default] : [];
-    return uniqStrings([...caseOutcomes, ...defaultOutcome]);
-  }
-
-  if (stepObj.type === 'approval') {
-    return uniqStrings([stepObj.approved_outcome, stepObj.rejected_outcome, stepObj.timeout_outcome]);
-  }
-
-  return [];
+  return extractCatalogStepOutcomes(stepObj, { rejectArrays: true });
 }
 
 export function isOutcomeProducingStep(stepObj) {

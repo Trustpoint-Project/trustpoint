@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../_static/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
+  <img src="../_static/trustpoint_github_banner.svg" alt="Trustpoint Logo" width="600">
 </p>
 
 # Threat Model

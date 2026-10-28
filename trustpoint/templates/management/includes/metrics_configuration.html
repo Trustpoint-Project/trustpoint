@@ -1,47 +1,88 @@
 {% load i18n %}
 {% load crispy_forms_filters %}
 
-{# Prometheus Configuration Card #}
-<div class="card mb-3">
+{# ============================================================ #}
+{# Prometheus Metrics Export                                    #}
+{# ============================================================ #}
+<div class="card mb-4">
     <div class="card-header">
-        <h5 class="mb-0">{% trans "Prometheus Metrics Export" %}</h5>
-    </div>
-    <div class="card-body pt-4 pb-2">
-        <p class="text-muted mb-3">
-            {% blocktrans trimmed %}
-                When enabled, Trustpoint exposes a <code>/prometheus/metrics</code> endpoint
-                that Prometheus can scrape. The endpoint collects HTTP request/response
-                counters, database query metrics, and Django migration state.
-            {% endblocktrans %}
+        <h1 class="mb-1">
+            {% trans "Prometheus Metrics Export" %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans "Configure the Prometheus endpoint used to expose Trustpoint application metrics." %}
         </p>
-
-        {% if prometheus_config.enabled %}
-        <div class="alert alert-success mb-3" role="alert">
-            <i class="bi bi-check-circle me-2"></i>
-            <strong>{% trans "Metrics endpoint is active." %}</strong>
-        </div>
-        {% else %}
-        <div class="alert alert-secondary mb-3" role="alert">
-            <i class="bi bi-slash-circle me-2"></i>
-            {% trans "The metrics endpoint is currently disabled. Enable it below to allow Prometheus to scrape metrics." %}
-        </div>
-        {% endif %}
-
-        <form method="POST" action="{% url 'management:settings-metrics' %}" id="prometheus_configuration">
-            {% csrf_token %}
-            <fieldset class="form-group tp-form-group">
-                {% crispy form %}
-            </fieldset>
-        </form>
     </div>
-    <div class="card-footer d-flex justify-content-between">
-        <div class="tp-card-btn-footer m-1">
-            <button class="btn btn-primary" type="submit" form="prometheus_configuration">
-                {% trans "Save" %}
-            </button>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="prometheus-configuration-form"
+                method="post"
+                action="{% url 'management:settings-metrics' %}"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans "Metrics Endpoint" %}
+                        </h2>
+
+                        <p class="text-muted mb-0">
+                            {% blocktrans trimmed %}
+                                When enabled, Trustpoint exposes the /prometheus/metrics endpoint for Prometheus scraping. The endpoint provides HTTP request and response counters, database query metrics and Django migration state.
+                            {% endblocktrans %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
+
+                    {% if prometheus_config.enabled %}
+                        <div class="alert alert-success mb-4" role="status">
+                            <strong>
+                                {% trans "Metrics endpoint is active." %}
+                            </strong>
+
+                            <div class="mt-1">
+                                {% trans "Prometheus can scrape metrics from the configured Trustpoint endpoint." %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-secondary mb-4" role="status">
+                            <strong>
+                                {% trans "Metrics endpoint is disabled." %}
+                            </strong>
+
+                            <div class="mt-1">
+                                {% trans "Enable the endpoint to allow Prometheus to scrape Trustpoint metrics." %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <fieldset class="form-group tp-form-group">
+                        {% crispy form %}
+                    </fieldset>
+                </section>
+            </form>
         </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-end align-items-center">
+        <button
+            type="submit"
+            form="prometheus-configuration-form"
+            class="btn btn-primary"
+        >
+            {% trans "Save Prometheus Configuration" %}
+        </button>
     </div>
 </div>
 
-{# Runtime / Container Metrics (read-only display) #}
+
+{# ============================================================ #}
+{# Runtime / Container Metrics                                  #}
+{# ============================================================ #}
 {% include 'management/includes/metrics.html' %}

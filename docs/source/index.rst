@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-.. image:: /_static/trustpoint_banner.png
+.. image:: /_static/trustpoint_github_banner.svg
    :align: center
 
 ======================================
@@ -34,8 +34,7 @@ Welcome to Trustpoint's documentation!
    features/aoki/index
    features/aoki/mdns
 
-   features/devices/onboarding
-   features/devices/agents
+   features/devices/index
 
    features/pki/index
 
@@ -71,3 +70,4 @@ Welcome to Trustpoint's documentation!
    development/testing/test_plan
    development/testing/ci_cd
    development/testing/test_report
+   development/trustpoint_view_design_guidelines

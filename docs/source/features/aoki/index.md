@@ -117,6 +117,36 @@ that is guaranteed to be unique by combining an IANA-assigned PEN (Private Enter
 such as a model number, revision number, and serial number.
 Another example is `dev-owner:uri:urn:uuid:123e4567-e89b-12d3-a456-426614174000` for an UUID-based URI.
 
+#### Domain-based DevOwnerID
+
+In addition to device-specific DevOwnerIDs, Trustpoint supports a
+domain-based DevOwnerID model.
+
+A domain-based DevOwnerID is associated with a Trustpoint domain by
+pinning it to the domain's Issuing CA. The association is represented
+internally using the following identifier:
+
+`dev-owner:ca:<CA-SHA256-Fingerprint>`
+
+where `CA-SHA256-Fingerprint` is the SHA-256 fingerprint of the
+certificate of the Issuing CA configured for the domain.
+
+This allows a single DevOwnerID credential to represent the owner of
+all devices onboarding into a specific Trustpoint domain rather than
+requiring an individual owner credential for every device.
+
+During AOKI onboarding, Trustpoint determines the DevOwnerID belonging
+to the target domain by:
+
+1. obtaining the Issuing CA configured for the domain,
+2. calculating the SHA-256 fingerprint of its certificate,
+3. looking up the corresponding `dev-owner:ca:` reference, and
+4. using the associated DevOwnerID credential for owner authentication.
+
+This effectively binds the AOKI owner identity to the PKI trust domain
+and enables scalable onboarding of multiple devices into the same
+domain.
+
 #### Issuer
 
 The DevOwnerID is issued by a CA that is trusted by the device. A

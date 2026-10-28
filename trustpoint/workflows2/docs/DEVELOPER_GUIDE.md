@@ -1,5 +1,29 @@
 # Workflows 2 Developer Guide
 
+## Enrollment events after issuance
+
+Protocol enrollment workflows default to pre-issuance request decisions. The
+compiler also accepts `trigger.phase: after_issuance` for the six CMP, EST, and
+REST enrollment triggers listed in the user guide. Dispatch selects definitions
+by phase as well as the existing trigger, source, and `apply` filters; IR without
+a phase retains its original behavior. No new trigger or database field is used.
+
+`request.enrollment.process_workflow_operation` preserves the pre-issuance gate
+and calls `Workflow2CertificateRequestHandler.handle_issued` only after successful
+processing. CMP polling calls the same method on its finalized replay context.
+`workflows2.events.payloads.build_enrollment_request_snapshot` reads only the final
+`cryptography.x509.Certificate`, choosing the first subject value per supported
+OID and normalizing the four supported SAN categories. It creates fresh JSON data.
+
+The handler captures the payload before registering an `on_commit` callback and
+dispatches with a separate `issued:<certificate SHA-256 fingerprint>` idempotency
+key. The callback isolates persistence errors and logs failures without replacing
+the request's pre-issuance outcome. Runtime execution then uses the existing
+persisted event JSON on runs and instances, including worker retries. Malformed
+certificate data that cannot be serialized is logged and skips notification;
+it does not turn issuance into a failure. Dispatch is best effort, without a
+transactional outbox for process crashes between issuance commit and dispatch.
+
 ## Purpose
 
 `workflows2` is a YAML-first workflow system with three major responsibilities:

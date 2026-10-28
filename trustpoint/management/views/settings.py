@@ -42,11 +42,10 @@ from management.models import (
     SecurityConfig,
     SmtpEmailConfig,
 )
-from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
-from pki.util.keys import AutoGenPkiKeyAlgorithm
+from management.security_change_audit import security_change
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 from trustpoint.views.base import UserPermissionRequiredMixin
@@ -590,55 +589,54 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
         if not self.request.user.has_perm(AppPermissions.MANAGE_SECURITY_CONFIGURATION):
             raise PermissionDenied
 
-        old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
-        form.save()
+        with security_change(target=form.instance, actor=self.request.user):
+            old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
+            form.save()
 
-        security_mode_display = form.instance.get_security_mode_display()
-        actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.SECURITY_CONFIG_CHANGED,
-            target=form.instance,
-            target_display=f'SecurityConfig: {security_mode_display}',
-            actor=actor,
-        )
+            if 'security_mode' in form.changed_data:
+                old_value = getattr(old_conf, 'security_mode', None) if old_conf else None
+                new_value = form.cleaned_data.get('security_mode')
 
-        if 'security_mode' in form.changed_data:
-            old_value = getattr(old_conf, 'security_mode', None) if old_conf else None
-            new_value = form.cleaned_data.get('security_mode')
-
-            if new_value is None:
-                messages.error(self.request, 'Security mode value is missing.')
-                return redirect(self.success_url)
-
-            old_int = int(old_value) if old_value is not None else 0
-            new_int = int(new_value)
-
-            if new_int > old_int:
-                self.sec.reset_settings(new_value)
-
-
-
-        if 'auto_gen_pki' in form.changed_data:
-            old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
-            new_auto = form.cleaned_data.get('auto_gen_pki', None)
-            self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
-
-            if old_auto != new_auto and new_auto:
-                key_alg_value = form.cleaned_data.get('auto_gen_pki_key_algorithm')
-                if key_alg_value is None:
-                    messages.error(self.request, 'Auto-generated PKI key algorithm is missing.')
+                if new_value is None:
+                    messages.error(self.request, 'Security mode value is missing.')
                     return redirect(self.success_url)
-                key_alg = AutoGenPkiKeyAlgorithm(key_alg_value)
-                self.logger.info('Calling enable_feature for AutoGenPkiFeature with key_alg: %s', key_alg)
-                self.sec.enable_feature(AutoGenPkiFeature, {'key_algorithm': key_alg})
-                self.logger.info('Auto-generated PKI enabled with key algorithm: %s', key_alg.name)
 
-            elif old_auto != new_auto and not new_auto:
-                AutoGenPkiFeature.disable()
-                self.logger.info('Auto-generated PKI disabled')
+                old_int = int(old_value) if old_value is not None else 0
+                new_int = int(new_value)
 
-        messages.success(self.request, _('Your changes were saved successfully.'))
-        return redirect(self.get_success_url())
+                mode_defaults = SecurityConfig._MODE_DEFAULTS.get(str(new_value))  # noqa: SLF001
+                if mode_defaults is not None:
+                    form.instance.allow_auto_gen_pki = mode_defaults['allow_auto_gen_pki']
+                    form.instance.not_permitted_ecc_curve_oids = list(mode_defaults['not_permitted_ecc_curve_oids'])
+                    form.instance.not_permitted_mldsa_variant_oids = list(
+                        mode_defaults['not_permitted_mldsa_variant_oids']
+                    )
+                    form.instance.not_permitted_signature_algorithm_oids = list(
+                        mode_defaults['not_permitted_signature_algorithm_oids']
+                    )
+                    form.instance.save(update_fields=[
+                        'allow_auto_gen_pki',
+                        'not_permitted_ecc_curve_oids',
+                        'not_permitted_mldsa_variant_oids',
+                        'not_permitted_signature_algorithm_oids',
+                    ])
+
+                if new_int > old_int:
+                    self.sec.reset_settings(new_value)
+
+
+
+            if 'auto_gen_pki' in form.changed_data:
+                old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
+                new_auto = form.cleaned_data.get('auto_gen_pki', None)
+                self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
+
+                if old_auto != new_auto and not new_auto:
+                    AutoGenPkiFeature.disable()
+                    self.logger.info('Auto-generated PKI disabled')
+
+            messages.success(self.request, _('Your changes were saved successfully.'))
+            return redirect(self.get_success_url())
 
     def form_invalid(self, form: SecurityConfigForm) -> HttpResponse:
         """Handle invalid security form submission."""

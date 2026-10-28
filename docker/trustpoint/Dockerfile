@@ -1,5 +1,5 @@
 FROM python:3.14-slim-trixie
-COPY --from=ghcr.io/astral-sh/uv:0.12.9 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -23,7 +23,6 @@ RUN apt-get update && \
         apt-utils \
         nginx \
         gettext \
-        cron \
         locales \
         git \
         build-essential \
@@ -62,39 +61,43 @@ ENV LANG=en_US.UTF-8 \
 
 WORKDIR /var/www/html/trustpoint/
 
-ARG BRANCH=""
 COPY --chown=www-data:www-data pyproject.toml uv.lock ./
 
-# This allows you to use an argument if you want to build a specific branch, e.g.:
-# docker build --build-arg BRANCH=main ...
-# This also works for tags and specific commits by providing the tag or commit to BRANCH.
-RUN if [ "${BRANCH}" != "" ]; then \
-        apt-get update -y && apt-get install -y --no-install-recommends git; \
-        rm -rf /var/www/html/trustpoint/; \
-        git clone -b "${BRANCH}" https://github.com/Trustpoint-Project/trustpoint.git /var/www/html/trustpoint/; \
-        apt-get remove -y git; \
-        rm -rf /var/lib/apt/lists/*; \
-    fi && \
-    chmod 755 /var/www/html/trustpoint/ && \
+# Build the checked-out revision; do not fetch another source tree inside the image.
+RUN chmod 755 /var/www/html/trustpoint/ && \
     chown www-data:www-data /var/www/html/trustpoint/
 
 USER www-data
-# Install dependencies before copying the entire codebase to leverage Docker caching and speed up subsequent builds
+# Install dependencies before copying application sources to leverage Docker caching.
 RUN uv sync --no-install-project --no-dev --group docs --group docker --python-preference only-system
 
-COPY --chown=www-data:www-data ./ ./
+COPY --chown=www-data:www-data README.md LICENSE ./
+COPY --chown=www-data:www-data trustpoint/ ./trustpoint/
+COPY --chown=www-data:www-data docker/trustpoint/ ./docker/trustpoint/
+# Keep the in-app documentation builder available without copying local builds.
+COPY --chown=www-data:www-data docs/source/ ./docs/source/
+COPY --chown=www-data:www-data docs/Makefile ./docs/
+# Demo-data setup imports these public chains; do not copy fixture private-key bundles.
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/ecc1/ecc1_chain.pem ./tests/data/idevid_hierarchies/ecc1/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/ecc2/ecc2_chain.pem ./tests/data/idevid_hierarchies/ecc2/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/ecc3/ecc3_chain.pem ./tests/data/idevid_hierarchies/ecc3/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/rsa2/rsa2_chain.pem ./tests/data/idevid_hierarchies/rsa2/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/rsa3/rsa3_chain.pem ./tests/data/idevid_hierarchies/rsa3/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/rsa4/rsa4_chain.pem ./tests/data/idevid_hierarchies/rsa4/
+COPY --chown=www-data:www-data tests/data/idevid_hierarchies/mldsa65/mldsa65_chain.pem ./tests/data/idevid_hierarchies/mldsa65/
 RUN uv sync --no-dev --group docs --group docker --python-preference only-system
 USER root
 
 # Prepare Trustpoint runtime directories.
 # For the local/dev setup, Trustpoint uses the SoftHSM PKCS#11 module directly
 # against the mounted token directory.
-RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
+RUN chown root:root /var/www/html/trustpoint /var/www/html/trustpoint/docker && \
+    chown -R root:root /var/www/html/trustpoint/docker/trustpoint && \
+    mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
              /var/www/html/trustpoint/trustpoint/collected_static \
              /var/www/html/trustpoint/docker/trustpoint/nginx/tls \
              /var/lib/trustpoint/bootstrap \
              /var/lib/trustpoint/hsm/config && \
-    chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/ && \
     chown -R www-data:www-data /var/lib/trustpoint/bootstrap && \
     chown -R www-data:www-data /var/lib/trustpoint/hsm && \
     chown -R www-data:www-data /var/www/html/trustpoint/docker/trustpoint/nginx/tls && \
@@ -113,24 +116,15 @@ RUN mkdir -p /etc/trustpoint/ && \
     chown -R root:root /etc/trustpoint/ && \
     chmod -R 755 /etc/trustpoint/
 
-# Add cron setup.
-RUN chmod +x /etc/trustpoint/notifications/execute_notifications.sh && \
-    cp /etc/trustpoint/notifications/crontab.txt /etc/cron.d/execute_notifications && \
-    chmod 0644 /etc/cron.d/execute_notifications && \
-    crontab /etc/cron.d/execute_notifications && \
-    touch /var/log/cron.log
-
 # Add sudoers file and configure user and restart sudo service.
 RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
     chown root:root /etc/sudoers && \
     chmod 440 /etc/sudoers && \
+    visudo -cf /etc/sudoers && \
     service sudo restart
 
-# TODO: We may want to use proper Docker secrets handling in the future.
-RUN mkdir -p /etc/trustpoint/secrets && \
-    uv run python -c "from pathlib import Path; from django.core.management.utils import get_random_secret_key; Path('/etc/trustpoint/secrets/django_secret_key.env').write_text(get_random_secret_key())" && \
-    chown -R www-data:www-data /etc/trustpoint/secrets && \
-    chmod -R 700 /etc/trustpoint/secrets
+# The deployment supplies /run/secrets/django_secret_key as a read-only Compose secret.
+# No signing key is generated or stored in this image.
 
 # NGINX configuration.
 RUN rm -f /etc/nginx/sites-enabled/*
@@ -143,7 +137,13 @@ RUN chmod +x /etc/trustpoint/wizard/transition/*.sh \
              /etc/trustpoint/wizard/update_tls.sh \
              /etc/trustpoint/wizard/update_tls_nginx.sh \
              /etc/trustpoint/wizard/wizard_restore.sh \
-             ./docker/trustpoint/entrypoint.sh \
-             ./docker/trustpoint/scripts/upsert_local_dev_pkcs11_profile.sh
+             ./docker/trustpoint/entrypoint.sh
 
-ENTRYPOINT ["docker/trustpoint/entrypoint.sh"]
+# Translation catalogs are image artifacts; runtime startup must not write code.
+RUN .venv/bin/python -m django compilemessages -l de -l en --ignore .venv
+
+# Apply ownership last, after all installations and generated image artifacts.
+RUN /bin/bash /etc/trustpoint/lock_application.sh
+
+# The root entrypoint and its parser must never be loaded from web-writable code.
+ENTRYPOINT ["/bin/bash", "/etc/trustpoint/entrypoint.sh"]

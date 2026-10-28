@@ -9,6 +9,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
 from management.models import NotificationModel, NotificationStatus
 
 
@@ -34,7 +35,7 @@ class Command(BaseCommand):
     def _check_for_security_vulnerabilities(self) -> None:
         """Task to check for known security vulnerabilities in system components."""
         vulnerabilities_detected = False
-        new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
+        NotificationStatus.objects.get_or_create(status='NEW')
         # TODO (FHKatCSW): Implement logic for vulnerability check  # noqa: FIX002
 
         if vulnerabilities_detected:

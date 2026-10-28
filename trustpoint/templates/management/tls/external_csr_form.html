@@ -1,0 +1,147 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n crispy_forms_filters static %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">{{ title }}</h1>
+        <p class="mb-0 text-muted">
+            {% if cert_profile %}
+                {% blocktranslate with profile_name=cert_profile.display_name|default:cert_profile.unique_name %}
+                    Define the certificate content for profile "{{ profile_name }}".
+                {% endblocktranslate %}
+            {% elif import_form %}
+                {% trans 'Select the external CA chain for the TLS certificate.' %}
+            {% else %}
+                {% trans 'Select the key type for the TLS certificate request.' %}
+            {% endif %}
+        </p>
+    </div>
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+        <form id="tls-external-csr-configuration-form" method="post" enctype="multipart/form-data" autocomplete="off">
+            {% csrf_token %}
+            {% if cert_profile %}<input type="hidden" name="cert_profile_pk" value="{{ cert_profile.pk }}">{% endif %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger mb-4" role="alert">
+                    {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                </div>
+            {% endif %}
+            {% if cert_profile %}
+                <section class="mb-5">
+                    <div class="mb-3 d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <h2 class="h4 mb-1">{% trans 'Certificate Profile' %}</h2>
+                            <p class="text-muted mb-0">{% trans 'Select the certificate profile that defines the available fields and certificate requirements.' %}</p>
+                        </div>
+                        <span class="badge text-bg-primary">{% if cert_profile.unique_name == 'tls_server' %}{% trans 'TLS Server' %}{% else %}{{ cert_profile.display_name|default:cert_profile.unique_name }}{% endif %}</span>
+                    </div>
+                    <hr class="mb-4">
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div><label for="id_cert_profile_select">{% trans 'Profile' %}</label></div>
+                            <div>
+                                <select id="id_cert_profile_select" class="form-select">
+                                    {% for profile in available_profiles %}
+                                        <option value="{{ profile.pk }}" {% if profile.pk == cert_profile.pk %}selected{% endif %}>
+                                            {% if profile.unique_name == 'tls_server' %}{% trans 'TLS Server' %}{% else %}{{ profile.display_name|default:profile.unique_name }}{% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                <section class="mb-5">
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">{% trans 'Subject' %}</h2>
+                        <p class="text-muted mb-0">{% trans 'Define the distinguished name information included in the certificate subject.' %}</p>
+                    </div>
+                    <hr class="mb-4">
+                    {% include 'management/tls/external_csr_fields.html' with field_names='common_name,organization_name,organizational_unit_name,country_name,state_or_province_name,locality_name,email_address,serial_number' %}
+                </section>
+                <section class="mb-5">
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">{% trans 'Subject Alternative Names' %}</h2>
+                        <p class="text-muted mb-0">{% trans 'Define additional identities such as DNS names, IP addresses, email addresses or URIs.' %}</p>
+                    </div>
+                    <hr class="mb-4">
+                    {% include 'management/tls/external_csr_fields.html' with field_names='dns_names,ip_addresses,rfc822_names,uris' %}
+                </section>
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">{% trans 'Validity Period' %}</h2>
+                        <p class="text-muted mb-0">{% trans 'Define the validity period for the certificate.' %}</p>
+                    </div>
+                    <hr class="mb-4">
+                    {% include 'management/tls/external_csr_fields.html' with field_names='not_before,not_after,days,hours,minutes,seconds' %}
+                </section>
+            {% else %}
+                <section aria-labelledby="configuration-section-title">
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1" id="configuration-section-title">
+                            {% if import_form %}{% trans 'Trust Store Association' %}{% else %}{% trans 'Key Type' %}{% endif %}
+                        </h2>
+                        {% if import_form %}<p class="text-muted mb-0">{% trans 'The selected trust store defines the trusted certificates used for this TLS certificate.' %}</p>{% endif %}
+                    </div>
+                    <hr class="mb-4">
+                    {% if import_form %}
+                        <div class="alert alert-info mb-4" role="alert">
+                            <strong>{% trans 'External PKI (CSR):' %}</strong>
+                            {% trans 'Select or import the CA chain of the external PKI. The trust store is used to validate the TLS certificate returned for the generated CSR.' %}
+                        </div>
+                        {{ form|crispy }}
+                    {% else %}
+                        {% include 'management/tls/external_csr_fields.html' %}
+                    {% endif %}
+                </section>
+            {% endif %}
+        </form>
+        {% if import_form %}
+        <div class="mt-3">
+            <p class="text-muted mb-2">{% trans 'The required trust store is not available yet?' %}</p>
+            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#truststore-import">
+                {% trans 'Import new Trust Store' %}
+            </button>
+        </div>
+        {% endif %}
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'management:tls' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+        </div>
+        <button form="tls-external-csr-configuration-form" type="submit" class="btn btn-primary">{{ submit_label }}</button>
+    </div>
+</div>
+{% if import_form %}
+<div class="modal fade" id="truststore-import" tabindex="-1" aria-labelledby="import-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title h5 mb-1" id="import-title">{% trans 'Import Trust Store' %}</h2>
+                    <p class="text-muted small mb-0">{% trans 'Create a new trust store from certificate files.' %}</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
+            </div>
+            <div class="modal-body">
+                <form id="tls-csr-import-truststore-form" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}<input type="hidden" name="import_truststore" value="1">
+                    {% if import_form.non_field_errors %}
+                        <div class="alert alert-danger mb-4" role="alert">
+                            {% for error in import_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                        </div>
+                    {% endif %}
+                    {{ import_form|crispy }}
+                </form>
+            </div>
+            <div class="modal-footer d-flex justify-content-between align-items-center">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans 'Cancel' %}</button>
+                <button type="submit" form="tls-csr-import-truststore-form" class="btn btn-primary">{% trans 'Add new Trust Store' %}</button>
+            </div>
+    </div></div>
+</div>
+{% if import_form.errors %}<script>document.addEventListener('DOMContentLoaded', () => new bootstrap.Modal(document.getElementById('truststore-import')).show());</script>{% endif %}
+{% endif %}
+<script src="{% static 'js/management/tls_external_csr.js' %}"></script>
+{% endblock content %}

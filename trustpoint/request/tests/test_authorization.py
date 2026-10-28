@@ -419,11 +419,11 @@ class TestSecurityConfigAuthorization:
     def test_rsa_key_size_is_allowed_and_rejected(self) -> None:
         csr = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048))
         component = SecurityConfigAuthorization()
-        component._check_key_constraints(csr, Mock(rsa_minimum_key_size=2048))
+        component._check_key_constraints(csr, SecurityConfig(rsa_minimum_key_size=2048))
         with pytest.raises(ValueError, match='below the minimum'):
-            component._check_key_constraints(csr, Mock(rsa_minimum_key_size=4096))
+            component._check_key_constraints(csr, SecurityConfig(rsa_minimum_key_size=4096))
         with pytest.raises(ValueError, match='not permitted'):
-            component._check_key_constraints(csr, Mock(rsa_minimum_key_size=None))
+            component._check_key_constraints(csr, SecurityConfig(rsa_minimum_key_size=None))
 
     def test_curve_and_signature_restrictions_are_enforced(self) -> None:
         csr = _csr(ec.generate_private_key(ec.SECP256R1()))
@@ -431,11 +431,11 @@ class TestSecurityConfigAuthorization:
         curve_oid = component._ec_curve_oid(csr.public_key())
         assert curve_oid is not None
         with pytest.raises(ValueError, match='ECC curve'):
-            component._check_key_constraints(csr, Mock(not_permitted_ecc_curve_oids=[curve_oid]))
+            component._check_key_constraints(csr, SecurityConfig(not_permitted_ecc_curve_oids=[curve_oid]))
         hash_oid = component._hash_oid('sha256')
         assert hash_oid is not None
         with pytest.raises(ValueError, match='Signature hash algorithm'):
-            component._check_signature_algorithm(csr, Mock(not_permitted_signature_algorithm_oids=[hash_oid]))
+            component._check_signature_algorithm(csr, SecurityConfig(not_permitted_signature_algorithm_oids=[hash_oid]))
 
     def test_ca_policy_and_missing_security_config_paths(self) -> None:
         csr = _csr(rsa.generate_private_key(public_exponent=65537, key_size=2048), ca=True)

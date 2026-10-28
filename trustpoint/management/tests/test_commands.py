@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for Django management commands."""
+import importlib
+import sys
 import tempfile
 from io import StringIO
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
 from django.conf import settings
 from django.core.management import call_command
@@ -47,6 +49,21 @@ class BootstrapManagerCommandTest(TestCase):
         assert '--ignore' in call_args
         assert '.venv' in call_args
         output.write.assert_called_once_with('Compiling translation messages...')
+
+    @patch('management.util.startup_strategies.call_command')
+    @patch('management.management.commands.bootstrap_manager.call_command')
+    def test_container_uses_precompiled_translations(self, mock_call_command: MagicMock, runtime_call: MagicMock) -> None:
+        """Both startup phases leave image-provided translation catalogs untouched."""
+        from django.test import override_settings
+        from management.management.commands.bootstrap_manager import Command
+        from management.util.startup_strategies import RuntimeInitialization
+
+        with override_settings(DOCKER_CONTAINER=True):
+            Command._compile_messages(Mock())
+            RuntimeInitialization._compile_messages(Mock())
+
+        mock_call_command.assert_not_called()
+        runtime_call.assert_not_called()
 
 
 class MakeMsgCommandTest(TestCase):
@@ -179,7 +196,16 @@ class InitTrustpointCommandTest(TestCase):
 class StartupManagerCommandTest(TestCase):
     """Test suite for startup_manager command."""
 
-    @patch('management.management.commands.startup_manager.Path')
+    def test_startup_accepts_environment_without_dotenv_file(self) -> None:
+        """Deployment-provided settings do not require a .env file in the image."""
+        from management.management.commands.startup_manager import Command
+
+        command = Command()
+        with patch('pathlib.Path.exists', return_value=False), patch.object(command, 'manage_startup') as startup:
+            command.handle()
+
+        startup.assert_called_once_with()
+
     @patch('management.management.commands.startup_manager.call_command')
     @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
     @patch('management.management.commands.startup_manager.StartupContextBuilder')
@@ -188,12 +214,10 @@ class StartupManagerCommandTest(TestCase):
         mock_builder: MagicMock,
         mock_strategy_class: MagicMock,
         mock_call_command: MagicMock,
-        mock_path: MagicMock,
     ) -> None:
         """Test startup_manager executes the operational startup path."""
         with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             mock_first.return_value = None
-            mock_path.return_value.exists.return_value = True
 
             mock_context = Mock()
             mock_context.is_wizard_completed = True
@@ -211,11 +235,13 @@ class StartupManagerCommandTest(TestCase):
             out = StringIO()
             call_command('startup_manager', stdout=out)
 
-            mock_call_command.assert_called_once_with('migrate')
+            self.assertEqual(
+                mock_call_command.call_args_list,
+                [call('migrate'), call('sync_security_config')],
+            )
             mock_strategy_class.assert_called_once_with()
             mock_strategy.execute.assert_called_once_with(mock_context)
 
-    @patch('management.management.commands.startup_manager.Path')
     @patch('management.management.commands.startup_manager.call_command')
     @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
     @patch('management.management.commands.startup_manager.StartupContextBuilder')
@@ -224,12 +250,10 @@ class StartupManagerCommandTest(TestCase):
         mock_builder: MagicMock,
         mock_strategy_class: MagicMock,
         mock_call_command: MagicMock,
-        mock_path: MagicMock,
     ) -> None:
         """Test startup_manager reports operational dependency failures clearly."""
         with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             mock_first.return_value = None
-            mock_path.return_value.exists.return_value = True
 
             mock_context = Mock()
             mock_builder_instance = Mock()
@@ -247,7 +271,10 @@ class StartupManagerCommandTest(TestCase):
             with self.assertRaises(CommandError):
                 call_command('startup_manager', stdout=out)
 
-            mock_call_command.assert_called_once_with('migrate')
+            self.assertEqual(
+                mock_call_command.call_args_list,
+                [call('migrate'), call('sync_security_config')],
+            )
             mock_strategy_class.assert_called_once_with()
 
     def test_startup_manager_version_parsing(self) -> None:
@@ -592,3 +619,37 @@ class ManagePyOverrideTest(TestCase):
             self.assertIsNotNone(override_makemigrations)
         except ImportError as e:
             self.fail(f'Failed to import managepy_override: {e}')
+
+
+class NotificationCommandImportTest(TestCase):
+    """Importing a notification command must not query the database."""
+
+    def test_import_does_not_create_notification_status(self) -> None:
+        """Test that the NEW status is looked up when the command runs, not on import."""
+        module = 'management.management.commands.check_non_onboarded_devices'
+        sys.modules.pop(module, None)
+        with patch(
+            'management.models.NotificationStatus.objects.get_or_create',
+            return_value=(Mock(), False),
+        ) as mock_get_or_create:
+            importlib.import_module(module)
+        mock_get_or_create.assert_not_called()
+
+    def test_non_onboarded_device_without_domain(self) -> None:
+        """Test that a pending device with no domain still gets a notification."""
+        from devices.models import DeviceModel  # noqa: PLC0415
+        from onboarding.models import OnboardingConfigModel, OnboardingProtocol  # noqa: PLC0415
+
+        from management.models import NotificationModel  # noqa: PLC0415
+
+        onboarding_config = OnboardingConfigModel.objects.create(onboarding_protocol=OnboardingProtocol.MANUAL)
+        device = DeviceModel.objects.create(
+            common_name='no-domain-device',
+            serial_number='SN-NO-DOMAIN',
+            domain=None,
+            onboarding_config=onboarding_config,
+        )
+
+        call_command('check_non_onboarded_devices', stdout=StringIO())
+
+        self.assertTrue(NotificationModel.objects.filter(event='DEVICE_NOT_ONBOARDED', device=device).exists())

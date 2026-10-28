@@ -11,11 +11,7 @@ setups.
 
 from __future__ import annotations
 
-import os
-from typing import Final
-
 from django.conf import settings
-from django.db import transaction
 
 from appsecrets.models import (
     AppSecretBackendKind,
@@ -28,8 +24,6 @@ from crypto.models import (
     CryptoProviderSoftwareConfigModel,
     SoftwareKeyEncryptionSource,
 )
-
-LOCAL_DEVELOPMENT_DEK_LENGTH_BYTES: Final[int] = 32
 
 
 def local_software_backend_auto_config_enabled() -> bool:
@@ -50,7 +44,9 @@ def ensure_local_software_backends() -> None:
     if _local_software_backends_ready():
         return
 
-    with transaction.atomic():
+    from management.security_change_audit import provider_configuration_changes  # noqa: PLC0415
+
+    with provider_configuration_changes(actor=None):
         if _local_software_backends_ready():
             return
         if _ensure_crypto_software_backend():
@@ -80,12 +76,8 @@ def _local_software_backends_ready() -> bool:
     if backend is None:
         return False
 
-    raw_dek = (
-        AppSecretSoftwareConfigModel.objects.filter(backend=backend)
-        .values_list('raw_dek', flat=True)
-        .first()
-    )
-    return len(bytes(raw_dek or b'')) == LOCAL_DEVELOPMENT_DEK_LENGTH_BYTES
+    return AppSecretSoftwareConfigModel.objects.filter(backend=backend, wrapped_dek__isnull=False).exists()
+
 
 
 def _ensure_crypto_software_backend() -> bool:
@@ -173,11 +165,9 @@ def _ensure_app_secret_software_backend() -> None:
     elif backend.backend_kind != AppSecretBackendKind.SOFTWARE:
         return
 
-    config, _created = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
-    raw_dek = bytes(config.raw_dek or b'')
-    if len(raw_dek) == LOCAL_DEVELOPMENT_DEK_LENGTH_BYTES:
+    if backend.dek_initialized:
         return
+    config, _created = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
+    from appsecrets.service import SoftwareAppSecretService  # noqa: PLC0415
 
-    config.raw_dek = os.urandom(LOCAL_DEVELOPMENT_DEK_LENGTH_BYTES)
-    config.full_clean()
-    config.save(update_fields=['raw_dek'])
+    SoftwareAppSecretService(config).ensure_backend_ready()

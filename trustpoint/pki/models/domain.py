@@ -15,6 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core import oid
 
+from pki.util.signature_suite import format_signature_suite
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
@@ -38,6 +39,15 @@ class DomainModel(models.Model):
         null=True,
         verbose_name=_('Issuing CA'),
         related_name='domains',
+    )
+
+    organization = models.ForeignKey(
+        'management.OrganizationModel',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='domains',
+        verbose_name=_('Organization'),
     )
 
     domain_credential_profile = models.ForeignKey(
@@ -132,21 +142,9 @@ class DomainModel(models.Model):
 
     @property
     def signature_suite_display(self) -> str:
-        """Get a safe string representation of the signature suite."""
+        """Return a readable signature suite, or a placeholder when it is unavailable."""
         try:
-            ss = self.signature_suite
-            if ss is None:
-                return '-'
-            if hasattr(ss, 'signature_algorithm') and ss.signature_algorithm:
-                sig_alg = ss.signature_algorithm
-                if hasattr(sig_alg, 'value'):
-                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_44.dotted_string:
-                        return 'ML-DSA-44'
-                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_65.dotted_string:
-                        return 'ML-DSA-65'
-                    if sig_alg.value == oid.AlgorithmIdentifier.ML_DSA_87.dotted_string:
-                        return 'ML-DSA-87'
-            return str(ss)
+            return format_signature_suite(self.signature_suite)
         except ValueError:
             return '-'
 
@@ -268,7 +266,6 @@ class DomainModel(models.Model):
 
         return rejected_aliases
 
-
     def _add_default_profiles(self) -> None:
         """Adds default certificate profiles to the domain as allowed."""
         default_profiles = CertificateProfileModel.objects.filter(is_default=True)
@@ -277,7 +274,6 @@ class DomainModel(models.Model):
                 domain=self,
                 certificate_profile=profile,
             )
-
 
 
 class DomainAllowedCertificateProfileModel(models.Model):

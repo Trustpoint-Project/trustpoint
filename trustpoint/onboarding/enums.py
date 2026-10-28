@@ -46,6 +46,7 @@ class OnboardingPkiProtocol(models.IntegerChoices):
     EST = 2, _('EST')
     OPC_GDS_PUSH = 4, _('OPC - GDS Push')
     REST = 8, _('REST')
+    SCEP = 16, _('SCEP')
 
 
 class NoOnboardingPkiProtocol(models.IntegerChoices):
@@ -58,3 +59,4 @@ class NoOnboardingPkiProtocol(models.IntegerChoices):
     # 8 reserved for EST Client Certificate
     MANUAL = 16, _('Manual')
     REST_USERNAME_PASSWORD = 32, _('REST - Username & Password')
+    SCEP = 64, _('SCEP')

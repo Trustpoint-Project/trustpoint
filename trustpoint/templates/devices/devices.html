@@ -3,43 +3,65 @@
 {% load static %}
 
 {% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Devices' %}
+        </h1>
 
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-  <div class="card-header">
-      <h1>{% trans 'Devices' %}</h1>
-  </div>
+        <p class="mb-0 text-muted">
+            {% trans 'Manage devices, onboarding status, certificates and device lifecycle operations.' %}
+        </p>
+    </div>
 
-  {% include 'devices/table_filter.html' with table_url='devices:devices' %}
+    <div class="card-body text-start">
+        <section>
+            {% include 'devices/table_filter.html' with table_url='devices:devices' %}
 
-  {# --- Main table + pagination --- #}
-  <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
-    {% include 'devices/devices_table.html' %}
-    {% include 'trustpoint/pagination.html' %}
-  </div>
+            <div class="mt-4">
+                {% include 'devices/devices_table.html' %}
+            </div>
 
-  {# --- Footer actions from main --- #}
-  <div class="card-footer d-flex flex-column flex-md-row justify-content-between tp-sticky-footer">
-   <div class="m-1 d-flex flex-wrap gap-2">
-    <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-            data-tp-url="{{ device_revoke_url }}">
-      {% trans 'Revoke selected' %}
-    </button>
+            {% include 'trustpoint/pagination.html' %}
+        </section>
+    </div>
 
-    <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-            data-tp-url="{{ device_delete_url }}">
-      {% trans 'Delete selected' %}
-    </button>
-  </div>
+    <div class="card-footer d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
 
-  <div class="m-1 d-flex flex-wrap justify-content-md-end gap-2">
-      <a class="btn btn-primary" href="{% url new_onboarding_url %}">
-      {% trans "Add Onboarding" %}
-    </a>
-      <a class="btn btn-primary" href="{% url create_url %}">
-      {% trans "Create New Device" %}
-    </a>
+        <div class="d-flex flex-wrap gap-2">
+            <button
+                type="button"
+                class="btn btn-outline-danger tp-table-select-btn"
+                data-tp-url="{{ device_revoke_url }}"
+            >
+                {% trans 'Revoke Selected' %}
+            </button>
 
-  </div>
+            <button
+                type="button"
+                class="btn btn-outline-danger tp-table-select-btn"
+                data-tp-url="{{ device_delete_url }}"
+            >
+                {% trans 'Delete Selected' %}
+            </button>
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-md-end gap-2">
+            <a
+                href="{% url new_onboarding_url %}"
+                class="btn btn-outline-secondary"
+            >
+                {% trans 'Add Onboarding' %}
+            </a>
+
+            <a
+                href="{% url create_url %}"
+                class="btn btn-primary"
+            >
+                {% trans 'Create New Device' %}
+            </a>
+        </div>
+
+    </div>
 </div>
-
 {% endblock content %}

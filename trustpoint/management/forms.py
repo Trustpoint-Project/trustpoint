@@ -5,22 +5,25 @@
 
 from __future__ import annotations
 
+import gzip
 import logging
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
+import zlib
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast, override
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Fieldset, Layout
+from cryptography import x509
 from cryptography.x509 import Certificate
+from cryptography.x509.verification import VerificationError
 from django import forms
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import FileExtensionValidator, RegexValidator
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeySerializer,
 )
 
 from crypto.models import BackendKind, CryptoProviderProfileModel
@@ -29,6 +32,7 @@ from management.models import (
     BackupOptions,
     LoggingConfig,
     NotificationConfig,
+    PasswordPolicy,
     PrometheusConfig,
     SecurityConfig,
     SmtpEmailConfig,
@@ -38,15 +42,119 @@ from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
+from pki.forms.credentials import (
+    encode_credential_password,
+    parse_certificate_chain_upload,
+    parse_certificate_upload,
+    parse_private_key_data,
+    read_pkcs12_upload,
+    read_private_key_upload,
+)
+from pki.key_types import TLS_KEY_TYPE_CHOICES
 from pki.models import CredentialModel
-from pki.util.keys import AutoGenPkiKeyAlgorithm, supported_auto_gen_pki_key_algorithms
+from pki.models.truststore import TruststoreModel
+from pki.services import credential_upload as uploads
+from pki.services.credential_upload import parse_pkcs12
+from pki.services.external_csr import certificate_matches_credential, parse_single_certificate
+from pki.services.key_generation import supported_key_type_choices
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import ClassVar
 
-MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+    from django.core.files.uploadedfile import UploadedFile
+
+MAX_PKCS12_UPLOAD_BYTES = uploads.MAX_PKCS12_UPLOAD_BYTES
+MAX_PASSWORD_LIST_BYTES = 10 * 1024 * 1024
+
+
+class TlsExternalCsrKeyForm(forms.Form):
+    """Select a supported management TLS key type."""
+
+    key_type = forms.ChoiceField(label=_('Key Type'), initial='ECC-SECP256R1')
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Limit offerings to supported RSA and TLS elliptic curves."""
+        super().__init__(*args, **kwargs)
+        choices = supported_key_type_choices(TLS_KEY_TYPE_CHOICES)
+        key_type_field = cast('forms.ChoiceField', self.fields['key_type'])
+        key_type_field.choices = choices
+        if choices and 'ECC-SECP256R1' not in dict(choices):
+            key_type_field.initial = choices[0][0]
+
+
+class TlsExternalCsrTruststoreForm(forms.Form):
+    """Select the external PKI chain without adding a credential foreign key."""
+
+    truststore = forms.ModelChoiceField(queryset=TruststoreModel.objects.all(), label=_('Trust Store'))
+
+
+class TlsExternalCsrCertificateForm(forms.Form):
+    """Validate a single externally issued TLS leaf against its request and chain."""
+
+    certificate = forms.FileField(label=_('Issued TLS Certificate (.pem, .der, .cer)'))
+
+    def __init__(
+        self, *args: Any, credential: CredentialModel, csr: x509.CertificateSigningRequest,
+        truststore: TruststoreModel, **kwargs: Any,
+    ) -> None:
+        """Bind validation to the session's pending key and CSR."""
+        super().__init__(*args, **kwargs)
+        self.credential = credential
+        self.csr = csr
+        self.truststore = truststore
+        self.chain: list[x509.Certificate] = []
+
+    def clean_certificate(self) -> x509.Certificate:
+        """Validate identity and perform full TLS path validation."""
+        try:
+            data = uploads.read_credential_upload(
+                self.cleaned_data['certificate'], kind=uploads.CredentialFileKind.CERTIFICATE,
+            )
+        except uploads.CredentialUploadError as exc:
+            if exc.code == uploads.CredentialUploadErrorCode.TOO_LARGE:
+                raise forms.ValidationError(_('Certificate file is too large, max. 64 KiB.')) from exc
+            raise forms.ValidationError(_('Failed to read the uploaded certificate.')) from exc
+        certificate = parse_single_certificate(data)
+        try:
+            constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except x509.ExtensionNotFound:
+            constraints = None
+        if constraints is not None and constraints.ca:
+            raise forms.ValidationError(_('The issued TLS certificate must not be a CA certificate.'))
+        if not certificate_matches_credential(certificate, self.credential):
+            raise forms.ValidationError(_('The uploaded certificate does not match the generated CSR key.'))
+        if certificate.subject != self.csr.subject:
+            raise forms.ValidationError(_('The certificate subject does not match the generated CSR.'))
+        expected_san = self.san_names(self.csr)
+        actual_san = self.san_names(certificate)
+        if sorted(map(repr, expected_san)) != sorted(map(repr, actual_san)):
+            raise forms.ValidationError(_('The certificate SANs must exactly match the generated CSR.'))
+        identity = next(
+            (str(name.value) for name in expected_san if isinstance(name, (x509.DNSName, x509.IPAddress))), None,
+        )
+        if identity is None:
+            raise forms.ValidationError(_('A DNS name or IP address SAN is required for management TLS.'))
+        certificates = self.truststore.get_certificate_collection_serializer().as_crypto()
+        roots = [cert for cert in certificates if cert.subject == cert.issuer]
+        intermediates = [cert for cert in certificates if cert.subject != cert.issuer]
+        try:
+            self.chain = CertificateVerifier.verify_server_cert(certificate, identity, roots, intermediates)
+        except (VerificationError, ValueError) as exception:
+            raise forms.ValidationError(
+                _('The certificate cannot be verified with the selected trust store: %(error)s'),
+                params={'error': str(exception)},
+            ) from exception
+        return certificate
+
+    @staticmethod
+    def san_names(certificate: x509.Certificate | x509.CertificateSigningRequest) -> list[x509.GeneralName]:
+        """Return the full requested identity, including non-TLS SAN types."""
+        try:
+            return list(certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value)
+        except x509.ExtensionNotFound:
+            return []
 
 
 class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
@@ -66,41 +174,21 @@ class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
 
         model = AccountSecurityConfig
         fields = (
-            'password_minimum_length',
-            'password_similarity',
-            'password_common',
-            'password_numeric',
-            'password_prevent_reuse',
-            'password_expiry_days',
             'api_credential_expiry_days',
             'idle_timeout_minutes',
             'failed_login_attempts',
         )
         widgets: ClassVar[dict[str, forms.Widget]] = {
-            'password_minimum_length': forms.NumberInput(attrs={'min': 1}),
-            'password_expiry_days': forms.NumberInput(attrs={'min': 1}),
             'api_credential_expiry_days': forms.NumberInput(attrs={'min': 1}),
             'idle_timeout_minutes': forms.NumberInput(attrs={'min': 15, 'max': 43200}),
             'failed_login_attempts': forms.NumberInput(attrs={'min': 1}),
         }
         labels: ClassVar[dict[str, Any]] = {
-            'password_minimum_length': _('Minimum password length'),
-            'password_similarity': _('Prevent similarity to personal information'),
-            'password_common': _('Reject commonly used passwords'),
-            'password_numeric': _('Reject entirely numeric passwords'),
-            'password_prevent_reuse': _('Prevent reuse of the previous password'),
-            'password_expiry_days': _('Expire passwords after this many days'),
             'api_credential_expiry_days': _('Expire API credentials after this many days'),
             'idle_timeout_minutes': _('Idle session duration in minutes'),
             'failed_login_attempts': _('Block after this many failed login attempts'),
         }
         help_texts: ClassVar[dict[str, Any]] = {
-            'password_minimum_length': _('Passwords must contain at least this many characters.'),
-            'password_similarity': _('Reject passwords too similar to the username, name, or email address.'),
-            'password_common': _("Reject passwords found in Django's common-password list."),
-            'password_numeric': _('Reject passwords made up of numbers only.'),
-            'password_prevent_reuse': _('A new password must differ from the immediately preceding password.'),
-            'password_expiry_days': _('Leave empty to keep passwords valid indefinitely.'),
             'api_credential_expiry_days': _('Leave empty to keep API credentials valid indefinitely.'),
             'idle_timeout_minutes': _(
                 'Users are logged out after this period without activity. '
@@ -111,11 +199,6 @@ class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
                 'Successful login resets the consecutive failure count.',
             ),
         }
-
-    def clean_password_expiry_days(self) -> int | None:
-        """Accept an empty value to represent no password expiry."""
-        value = self.cleaned_data['password_expiry_days']
-        return value or None
 
     def clean_api_credential_expiry_days(self) -> int | None:
         """Accept an empty value to represent no credential expiry."""
@@ -132,7 +215,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
     """Security configuration model form."""
 
     FEATURE_TO_FIELDS: ClassVar[dict[type[SecurityFeature], list[str]]] = {
-        AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
+        AutoGenPkiFeature: ['auto_gen_pki'],
     }
 
     def __init__(self, *args: Any, **kwargs: Any)-> None:
@@ -157,42 +240,33 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['disabled'] = 'disabled'
 
-        supported_algorithms = supported_auto_gen_pki_key_algorithms()
-        self.supported_auto_gen_pki_key_algorithms = supported_algorithms
-
-        if self.instance and self.instance.auto_gen_pki:
-            self.fields['auto_gen_pki_key_algorithm'].widget.attrs['disabled'] = 'disabled'
-        elif 'auto_gen_pki_key_algorithm' in self.fields:
-            auto_gen_pki_key_algorithm_field = cast(
-                'forms.ChoiceField',
-                self.fields['auto_gen_pki_key_algorithm'],
-            )
-            if supported_algorithms:
-                auto_gen_pki_key_algorithm_field.choices = [
-                    (algorithm.value, algorithm.label) for algorithm in supported_algorithms
-                ]
-            else:
-                auto_gen_pki_key_algorithm_field.choices = [
-                    ('', _('No supported backend algorithms available')),
-                ]
-                auto_gen_pki_key_algorithm_field.widget.attrs['disabled'] = 'disabled'
-
         self.helper = FormHelper()
         self.helper.layout = Layout(
             Fieldset(
                 _('Security level presets'),
                 'security_mode',
+                css_class='border border-primary-subtle rounded-2 bg-body-tertiary p-3 mb-4',
             ),
             Fieldset(
                 _('Advanced security settings'),
-                Field('auto_gen_pki', wrapper_class='form-check form-switch'),
-                'auto_gen_pki_key_algorithm',
                 'rsa_minimum_key_size',
                 'max_cert_validity_days',
                 'max_crl_validity_days',
+                'credential_ttl_seconds',
+                Field('allow_user_defined_device_secrets', wrapper_class='form-check form-switch'),
                 Field('allow_ca_issuance', wrapper_class='form-check form-switch'),
-                Field('allow_auto_gen_pki', wrapper_class='form-check form-switch'),
                 Field('allow_self_signed_ca', wrapper_class='form-check form-switch'),
+                'permitted_cmp_hmac_algorithms',
+                Field('auto_gen_pki', wrapper_class='form-check form-switch'),
+                HTML(
+                    "{% load i18n %}"
+                    "{% if form.instance.auto_gen_pki %}"
+                    '<p class="form-text mt-0 mb-3">'
+                    '<a href="{% url \'pki:issuing_cas-add-method_select\' %}">'
+                    "{% trans 'Create an auto-generated PKI' %}"
+                    '</a></p>'
+                    "{% endif %}"
+                ),
                 Field('allow_imported_private_keys', wrapper_class='form-check form-switch'),
                 'permitted_no_onboarding_pki_protocols',
                 'permitted_onboarding_protocols'
@@ -200,12 +274,21 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         )
 
     security_mode = forms.ChoiceField(
-        choices=SecurityConfig.SecurityModeChoices, widget=forms.RadioSelect(), label=''
+        choices=SecurityConfig.SecurityModeChoices,
+        widget=forms.RadioSelect(),
+        label='',
+        help_text=_(
+            'Select a preset to populate the security requirements and permitted features. '
+            'Higher levels apply stricter restrictions.'
+        ),
     )
 
     auto_gen_pki = forms.BooleanField(
         required=False,
-        label=_('Enable local auto-generated PKI'),
+        label=_('Allow local auto-generated PKI creation'),
+        help_text=_(
+            'Turning this off disables the local auto-generated PKI and revokes all certificates issued by it.'
+        ),
         widget=forms.CheckboxInput(
             attrs={
                 'class': 'form-check-input',
@@ -217,15 +300,9 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         ),
     )
 
-    auto_gen_pki_key_algorithm = forms.ChoiceField(
-        choices=AutoGenPkiKeyAlgorithm,
-        label=_('Key Algorithm for auto-generated PKI'),
-        required=False,
-        widget=forms.Select(attrs={'data-hide-at-sl': '[false, false, true, true, true]'}),
-    )
-
     RSA_KEY_CHOICES: ClassVar[list[tuple[object, object]]] = [
-        ('', _('None / Not Permitted')),
+        (0, _('Any keysize allowed')),
+        (None, _('Not permitted')),
         (1024, '1024'),
         (2048, '2048'),
         (3072, '3072'),
@@ -236,23 +313,49 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         choices=RSA_KEY_CHOICES, required=False, widget=forms.Select()
     )
 
+    permitted_cmp_hmac_algorithms = forms.MultipleChoiceField(
+        choices=SecurityConfig.CmpHmacAlgorithmChoices.choices,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label=_('Permitted CMP HMAC algorithms'),
+        help_text=_(
+            'Select accepted CMP shared-secret HMACs. An empty selection disables shared-secret authentication. '
+            'OpenSSL defaults to HMAC-SHA1. Use Lab / Custom to select algorithms outside the other presets.',
+        ),
+    )
+
     permitted_no_onboarding_pki_protocols = forms.MultipleChoiceField(
         choices=[(c.value, c.label) for c in NoOnboardingPkiProtocol],
-        widget=forms.CheckboxSelectMultiple, required=False
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        help_text=_(
+            'Choose protocols that may issue credentials without an onboarding PKI. '
+            'Available choices depend on the selected security level.'
+        ),
     )
     permitted_onboarding_protocols = forms.MultipleChoiceField(
-        choices=[(c.value, c.label) for c in OnboardingProtocol],
-        widget=forms.CheckboxSelectMultiple, required=False
+        choices=[
+            (c.value, c.label)
+            for c in OnboardingProtocol
+            if c is not OnboardingProtocol.BRSKI
+        ],
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        help_text=_(
+            'Choose supported protocols that may onboard devices. '
+            'Available choices depend on the selected security level.'
+        ),
     )
 
     class Meta:
         """Meta configuration for SecurityConfigForm."""
         model = SecurityConfig
         fields: ClassVar[list[str]] = [
-            'security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm',
+            'security_mode',
             'rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days',
-            'allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca',
-            'allow_imported_private_keys',
+            'credential_ttl_seconds', 'allow_user_defined_device_secrets', 'auto_gen_pki',
+            'allow_ca_issuance', 'allow_self_signed_ca',
+            'allow_imported_private_keys', 'permitted_cmp_hmac_algorithms',
             'permitted_no_onboarding_pki_protocols',
             'permitted_onboarding_protocols'
         ]
@@ -307,29 +410,11 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         except (TypeError, ValueError) as err:
             raise ValidationError(_('Invalid RSA key size.')) from err
 
-    def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
-        """Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled."""
-        form_value = self.cleaned_data.get('auto_gen_pki_key_algorithm')
-        if form_value is None or form_value == '':
-            if self.instance:
-                return AutoGenPkiKeyAlgorithm(self.instance.auto_gen_pki_key_algorithm)
-            return AutoGenPkiKeyAlgorithm.RSA2048
-        selected_algorithm = AutoGenPkiKeyAlgorithm(form_value)
-        supported_algorithms = getattr(
-            self,
-            'supported_auto_gen_pki_key_algorithms',
-            supported_auto_gen_pki_key_algorithms(),
-        )
-        if selected_algorithm not in supported_algorithms:
-            msg = _('The selected auto-generated PKI algorithm is not supported by the active backend.')
-            raise ValidationError(msg)
-        return selected_algorithm
-
     def _validate_mode_constraints(self, cleaned: dict[str, Any], mode: str) -> None:
         """Validate that submitted values comply with the given security mode defaults."""
         defaults = SecurityConfig._MODE_DEFAULTS[mode]   # noqa: SLF001
 
-        for field in ['max_cert_validity_days', 'max_crl_validity_days']:
+        for field in ['max_cert_validity_days', 'max_crl_validity_days', 'credential_ttl_seconds']:
             val = cleaned.get(field)
             default_val = defaults.get(field)
             if default_val is not None and (val is None or val > default_val):
@@ -346,6 +431,13 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
             if not defaults.get(field) and cleaned.get(field):
                 self.add_error(field, 'This feature cannot be enabled at this security level.')
+
+        permitted_hmacs = set(defaults['permitted_cmp_hmac_algorithms'])
+        if set(cleaned.get('permitted_cmp_hmac_algorithms') or []) - permitted_hmacs:
+            self.add_error(
+                'permitted_cmp_hmac_algorithms',
+                'One or more selected HMAC algorithms are not permitted at this security level.',
+            )
 
         protocol_fields: list[tuple[str, list[int]]] = [
             ('permitted_no_onboarding_pki_protocols', defaults['permitted_no_onboarding_pki_protocols']),
@@ -366,22 +458,15 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         if mode != SecurityConfig.SecurityModeChoices.LAB:
             self._validate_mode_constraints(cleaned, str(mode))
 
-        if cleaned.get('auto_gen_pki') and not cleaned.get('allow_auto_gen_pki'):
-            self.add_error('auto_gen_pki', 'Cannot enable auto-generated PKI when it is not permitted.')
+        selected_mode = str(mode)
+        mode_defaults = SecurityConfig._MODE_DEFAULTS.get(selected_mode)  # noqa: SLF001
+        if self.instance and selected_mode == self.instance.security_mode:
+            auto_gen_pki_allowed = self.instance.allow_auto_gen_pki
+        else:
+            auto_gen_pki_allowed = mode_defaults['allow_auto_gen_pki'] if mode_defaults else False
 
-        supported_algorithms = getattr(
-            self,
-            'supported_auto_gen_pki_key_algorithms',
-            supported_auto_gen_pki_key_algorithms(),
-        )
-        selected_algorithm = cleaned.get('auto_gen_pki_key_algorithm')
-        if cleaned.get('auto_gen_pki') and not supported_algorithms:
-            self.add_error('auto_gen_pki', _('No auto-generated PKI algorithm is supported by the active backend.'))
-        elif cleaned.get('auto_gen_pki') and selected_algorithm not in supported_algorithms:
-            self.add_error(
-                'auto_gen_pki_key_algorithm',
-                _('The selected auto-generated PKI algorithm is not supported by the active backend.'),
-            )
+        if cleaned.get('auto_gen_pki') and not auto_gen_pki_allowed:
+            self.add_error('auto_gen_pki', 'Cannot enable auto-generated PKI when it is not permitted.')
 
         return cleaned
 
@@ -660,51 +745,22 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         raise ValidationError(message)
 
     def _read_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, Any, Any]:
-        """Read and extract data from PKCS#12 file.
-
-        Returns:
-            Tuple of (pkcs12_raw, pkcs12_password, domain_name)
-        """
-        pkcs12_file = cleaned_data.get('pkcs12_file')
-        if pkcs12_file is None:
-            self._raise_validation_error('No PKCS#12 file was uploaded.')
-        if getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
-            self._raise_validation_error('PKCS#12 file is too large, max. 256 kiB.')
-
-        try:
-            pkcs12_raw = pkcs12_file.read()
-            pkcs12_password = cleaned_data.get('pkcs12_password')
-            domain_name = cleaned_data.get('domain_name')
-        except (OSError, AttributeError) as original_exception:
-            error_message = _(
-                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
-            )
-            raise ValidationError(error_message, code='unexpected-error') from original_exception
-        else:
-            return pkcs12_raw, pkcs12_password, domain_name
+        """Read bounded PKCS#12 data and retain the TLS form's remaining fields."""
+        raw = read_pkcs12_upload(
+            cleaned_data.get('pkcs12_file'), missing_message='No PKCS#12 file was uploaded.',
+        )
+        return raw, cleaned_data.get('pkcs12_password'), cleaned_data.get('domain_name')
 
     def _encode_password(self, pkcs12_password: Any) -> bytes | None:
-        """Encode PKCS#12 password if provided.
-
-        Returns:
-            Encoded password bytes or None if no password provided
-        """
-        if pkcs12_password:
-            try:
-                encoded: bytes = pkcs12_password.encode()
-            except Exception as original_exception:
-                error_message = _('The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.')
-                raise ValidationError(error_message) from original_exception
-            else:
-                return encoded
-        return None
+        """Encode a PKCS#12 password using shared input validation."""
+        return encode_credential_password(pkcs12_password, pkcs12=True)
 
     def _parse_and_save_credential(
         self, pkcs12_raw: bytes, pkcs12_password: bytes | None, domain_name: Any
     ) -> None:
         """Parse PKCS#12 data and save credential."""
         try:
-            tls_credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
+            tls_credential_serializer = parse_pkcs12(pkcs12_raw, pkcs12_password)
         except Exception as exception:
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
@@ -797,101 +853,36 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     )
 
     def clean_private_key_file(self) -> bytes:
-        """Validates the uploaded private key file.
-
-        This method checks if the private key file is provided and ensures it meets
-        size constraints. The actual parsing happens in clean() where the password is available.
-
-        Returns:
-            bytes: The raw bytes of the private key file.
-
-        Raises:
-            ValidationError: If the private key file is missing or too large.
-        """
-        private_key_file = self.cleaned_data.get('private_key_file')
-
-        if not private_key_file:
-            err_msg = 'No private key file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if private_key_file.size > max_size:
-            err_msg = 'Private key file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        return bytes(private_key_file.read())
+        """Read a bounded private key; clean() parses it once the password is available."""
+        return read_private_key_upload(self.cleaned_data.get('private_key_file'))
 
     def clean_tls_certificate(self) -> CertificateSerializer:
-        """Validates and parses the uploaded TLS certificate file.
-
-        This method ensures the provided TLS certificate file is valid and
-        not already associated with an existing TLS in the database. If the
-        file is too large, corrupted, or already in use, a validation error is raised.
-
-        Returns:
-            CertificateSerializer: A serializer containing the parsed certificate.
-
-        Raises:
-            ValidationError: If the file is missing, too large, corrupted, or already
-            associated with an existing TLS.
-        """
-        tls_certificate = self.cleaned_data['tls_certificate']
-
-        if not tls_certificate:
-            err_msg = 'No TLS certificate file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if tls_certificate.size > max_size:
-            err_msg = 'TLS certificate file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        try:
-            certificate_serializer = CertificateSerializer.from_bytes(tls_certificate.read())
-        except Exception as exception:
-            err_msg = 'Failed to parse the TLS certificate. Seems to be corrupted.'
-            raise ValidationError(err_msg) from exception
-
-        return certificate_serializer
+        """Parse the TLS leaf while retaining its existing field error messages."""
+        return parse_certificate_upload(
+            self.cleaned_data.get('tls_certificate'),
+            missing_message='No TLS certificate file was uploaded.',
+            too_large_message='TLS certificate file is too large, max. 64 kiB.',
+            parse_message='Failed to parse the TLS certificate. Seems to be corrupted.',
+        )
 
     def clean_tls_certificate_chain(self) -> CertificateCollectionSerializer | None:
-        """Validates and parses the uploaded TLS certificate chain file."""
-        tls_certificate_chain = self.cleaned_data['tls_certificate_chain']
-
-        if tls_certificate_chain:
-            try:
-                return CertificateCollectionSerializer.from_bytes(tls_certificate_chain.read())
-            except Exception as exception:
-                err_msg = _('Failed to parse the TLS certificate chain. Seems to be corrupted.')
-                raise ValidationError(err_msg) from exception
-
-        return None
+        """Parse an optional certificate chain using shared upload limits."""
+        return parse_certificate_chain_upload(
+            self.cleaned_data.get('tls_certificate_chain'),
+            parse_message=_('Failed to parse the TLS certificate chain. Seems to be corrupted.'),
+        )
 
     def _raise_validation_error(self, message: str) -> NoReturn:
         """Raises a validation error with the given message."""
         raise forms.ValidationError(message)
 
     def _encode_private_key_password(self, private_key_password: Any) -> bytes | None:
-        """Encode private key password if provided."""
-        if private_key_password:
-            try:
-                encoded: bytes = private_key_password.encode()
-            except Exception as original_exception:
-                error_message = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
-                raise ValidationError(error_message) from original_exception
-            else:
-                return encoded
-        return None
+        """Encode a private-key password using shared input validation."""
+        return encode_credential_password(private_key_password)
 
     def _parse_private_key(self, private_key_bytes: bytes, private_key_password_bytes: bytes | None) -> Any:
-        """Parse private key with optional password."""
-        try:
-            return PrivateKeySerializer.from_bytes(private_key_bytes, private_key_password_bytes)
-        except Exception as exception:
-            err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
-            raise ValidationError(err_msg) from exception
+        """Parse the private key with the shared credential parser."""
+        return parse_private_key_data(private_key_bytes, private_key_password_bytes)
 
     def _create_and_save_credential(
         self,
@@ -1193,6 +1184,151 @@ class LoggingConfigForm(forms.Form):
                 'crypto_backend_audit_enabled': crypto_backend_audit_enabled,
             },
         )
+
+class CertificateAuthenticationEnabledForm(forms.Form):
+    """Save the certificate authentication switch for the displayed management CA."""
+
+    enabled = forms.BooleanField(required=False, label=_('Enable certificate authentication'))
+    issuing_ca_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
+
+
+class ManagementCAActionForm(forms.Form):
+    """Validate an explicit management CA action and the hierarchy shown to the administrator."""
+
+    action = forms.ChoiceField(
+        choices=[('generate', _('Generate')), ('replace', _('Generate new CA')), ('delete', _('Delete'))],
+        widget=forms.HiddenInput,
+    )
+    root_ca_id = forms.IntegerField(required=False, min_value=1, widget=forms.HiddenInput)
+    issuing_ca_id = forms.IntegerField(required=False, min_value=1, widget=forms.HiddenInput)
+
+
+class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):
+    """Edit the policy used for password creation and changes."""
+
+    common_password_list = forms.FileField(
+        required=False,
+        max_length=255,
+        label=_('Upload a custom common-password list'),
+        validators=[FileExtensionValidator(allowed_extensions=['txt', 'gz'])],
+        widget=forms.FileInput(attrs={'accept': '.txt,.gz'}),
+        help_text=_(
+            'UTF-8 text or gzip, with one lowercase password per line. '
+            'Maximum 10 MiB, including after decompression. '
+            'Leave empty to keep the currently selected list.'
+        ),
+    )
+    restore_default_list = forms.BooleanField(
+        required=False,
+        label=_('Restore Django default list'),
+        help_text=_('Use the bundled Django list after saving. Other policy settings are preserved.'),
+    )
+
+    class Meta:
+        """Editable policy fields; defaults and current values come from the model instance."""
+
+        model = PasswordPolicy
+        fields: ClassVar[tuple[str, ...]] = (
+            'minimum_length',
+            'prevent_password_reuse',
+            'password_expiry_days',
+            'user_similarity_enabled',
+            'max_similarity',
+            'reject_common_passwords',
+            'common_password_list',
+            'reject_numeric_passwords',
+            'require_otp',
+        )
+        labels: ClassVar[dict[str, Any]] = {
+            'minimum_length': _('Minimum password length'),
+            'prevent_password_reuse': _('Prevent reuse of the previous password'),
+            'password_expiry_days': _('Expire passwords after this many days'),
+            'user_similarity_enabled': _('Reject passwords similar to user information'),
+            'max_similarity': _('Maximum similarity'),
+            'reject_common_passwords': _('Reject common passwords'),
+            'reject_numeric_passwords': _('Reject entirely numeric passwords'),
+        }
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'minimum_length': forms.NumberInput(attrs={'min': 1}),
+            'password_expiry_days': forms.NumberInput(attrs={'min': 1}),
+            'max_similarity': forms.NumberInput(attrs={'min': '0.1', 'max': '1.0', 'step': '0.01'}),
+            'require_otp': forms.CheckboxInput(attrs={'id': 'require-otp'}),
+        }
+
+    def clean_password_expiry_days(self) -> int | None:
+        """Accept an empty value to represent no password expiry."""
+        value = self.cleaned_data['password_expiry_days']
+        return value or None
+
+    def clean_common_password_list(self) -> UploadedFile[Any] | None:
+        """Validate new uploads and rewind them for storage without modifying their contents."""
+        upload = self.cleaned_data.get('common_password_list')
+        if upload is None:
+            return None
+
+        if upload.size is not None and upload.size > MAX_PASSWORD_LIST_BYTES:
+            raise ValidationError(_('The password list must not exceed 10 MiB.'), code='file_too_large')
+
+        try:
+            compressed = upload.read(2) == b'\x1f\x8b'
+            upload.seek(0)
+            if compressed:
+                with gzip.GzipFile(fileobj=upload) as password_file:
+                    content = password_file.read(MAX_PASSWORD_LIST_BYTES + 1)
+            else:
+                content = upload.read(MAX_PASSWORD_LIST_BYTES + 1)
+        except (OSError, EOFError, zlib.error) as exc:
+            raise ValidationError(_('The gzip password list could not be read.'), code='invalid_gzip') from exc
+        finally:
+            upload.seek(0)
+
+        if len(content) > MAX_PASSWORD_LIST_BYTES:
+            raise ValidationError(
+                _('The password list must not exceed 10 MiB after decompression.'), code='file_too_large',
+            )
+        try:
+            text = content.decode('utf-8')
+        except UnicodeDecodeError as exc:
+            raise ValidationError(
+                _('The password list must contain UTF-8 text.'), code='invalid_encoding',
+            ) from exc
+
+        passwords = [line.strip() for line in text.split('\n') if line.strip()]
+        if not passwords:
+            raise ValidationError(_('The password list must contain at least one password.'), code='empty_list')
+        if any(password != password.lower() or not password.isprintable() for password in passwords):
+            raise ValidationError(
+                _('Use one lowercase password per line, without control characters.'), code='invalid_password_list',
+            )
+        return cast('UploadedFile[Any]', upload)
+
+    def clean(self) -> dict[str, Any]:
+        """Reject selecting both a replacement upload and the default list."""
+        cleaned = super().clean() or {}
+        if cleaned.get('restore_default_list') and cleaned.get('common_password_list'):
+            self.add_error(
+                'common_password_list', _('Choose either an upload or restoring the Django default list.'),
+            )
+        return cleaned
+
+    @override
+    def save(self, commit: bool = True) -> PasswordPolicy:
+        """Store validated uploads in the database, or clear them to restore Django's default."""
+        policy = super().save(commit=False)
+        upload = self.cleaned_data.get('common_password_list')
+        if self.cleaned_data.get('restore_default_list'):
+            policy.common_password_list_data = b''
+            policy.common_password_list_name = ''
+        elif upload is not None:
+            upload.seek(0)
+            policy.common_password_list_data = upload.read()
+            policy.common_password_list_name = upload.name
+            upload.seek(0)
+        if commit:
+            policy.save()
+            self.save_m2m()
+        return policy
+
 
 class OrganizationForm(forms.ModelForm[OrganizationModel]):
     """Form for creating and updating organizations."""

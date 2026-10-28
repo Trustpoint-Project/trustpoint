@@ -144,11 +144,11 @@ class TestCsrBuilderBuildExtensions:
         ips = [n for n in san_ext if isinstance(n, x509.IPAddress)]
         assert any(str(n.value) == '192.168.1.1' for n in ips)
 
-    def test_invalid_ip_is_silently_skipped(self) -> None:
-        """Invalid IP strings are logged and skipped rather than raising."""
+    def test_invalid_ip_is_rejected(self) -> None:
+        """Invalid IP strings must fail rather than silently changing the requested SANs."""
         data = {'ext': {'subject_alternative_name': {'ip_addresses': '999.999.999.999'}}}
-        exts = self._builder()._build_extensions(data)
-        assert exts == []  # no valid SANs → no extension
+        with pytest.raises(ValueError, match='invalid IP address'):
+            self._builder()._build_extensions(data)
 
     def test_rfc822_name_is_included(self) -> None:
         """Email SAN is included when rfc822_names is provided."""
@@ -416,12 +416,18 @@ class TestCertificateRevocationProcessor:
         ca = ctx.domain.get_issuing_ca_or_value_error.return_value
         ca.get_credential.return_value = Mock()
 
-        with patch('request.operation_processor.revoke_cert.CaRolloverService.get_active_rollover', return_value=None), \
+        with patch('request.operation_processor.revoke_cert.resolve_revocation_ca', return_value=ca), \
+            patch('request.operation_processor.revoke_cert.revoke_certificates') as revoke, \
             patch('request.operation_processor.revoke_cert.AuditLog.create_entry') as audit:
             CertificateRevocationProcessor().process_operation(ctx)
 
         assert ctx.issuer_credential is ca.get_credential.return_value
-        credential.revoke.assert_called_once_with()
+        revoke.assert_called_once_with(
+            credential.credential.certificates.all.return_value,
+            reason=ctx.revocation_reason,
+            ca=ca,
+            only_unexpired=True,
+        )
         audit.assert_called_once()
 
     def test_local_ca_revocation_rejects_already_revoked_certificate(self) -> None:
@@ -434,7 +440,7 @@ class TestCertificateRevocationProcessor:
             certificate_status=CertificateModel.CertificateStatus.REVOKED,
         )
 
-        with patch('request.operation_processor.revoke_cert.CaRolloverService.get_active_rollover', return_value=None):
+        with patch('request.operation_processor.revoke_cert.resolve_revocation_ca'):
             with pytest.raises(ValueError, match='already revoked'):
                 CertificateRevocationProcessor().process_operation(ctx)
 

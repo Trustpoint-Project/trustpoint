@@ -233,6 +233,8 @@ class BaseHelpViewTests(TestCase):
         self.view.page_category = 'devices'
         self.view.page_name = 'devices'
         request = self.factory.get('/')
+        request.user = Mock()
+        request.user.has_perm.return_value = True
         self.view.request = request
 
         with patch('help_pages.devices_help_views.settings') as mock_settings:
@@ -241,6 +243,7 @@ class BaseHelpViewTests(TestCase):
 
         assert 'help_page' in context
         assert context['help_page'].heading == 'Test Heading'
+        assert context['can_renew_credential'] is True
         assert context['ValueRenderType_CODE'] == ValueRenderType.CODE.value
         assert context['clm_url'] == 'devices:devices_certificate_lifecycle_management'
 
@@ -536,6 +539,9 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         mock_device = Mock()
         mock_device.pk = 123
+        mock_device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal = False
+        mock_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_renewal_interval = 168
+        mock_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at = None
         mock_device.domain = Mock()
         mock_device.domain.issuing_ca = None  # No CA configured
         mock_onboarding = Mock()
@@ -548,11 +554,12 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         sections, heading = self.strategy.build_sections(help_context)
 
-        assert len(sections) == 4  # summary, ca_hierarchy, download, actions
+        assert len(sections) == 5  # Includes the domain credential renewal settings.
         assert sections[0].heading == 'Summary'
         assert sections[1].heading == 'CA Certificates'  # No CA configured
         assert sections[2].heading == 'Download Trust Bundle'
         assert sections[3].heading == 'Available Actions'
+        assert sections[4].heading == 'Periodic Domain Credential Renewal'
         assert 'OPC UA GDS Push' in sections[0].rows[0].value
         assert heading == 'Help - OPC UA GDS Push Certificate Management'
 
@@ -568,6 +575,9 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         mock_device = Mock()
         mock_device.pk = 123
+        mock_device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal = False
+        mock_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_renewal_interval = 168
+        mock_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at = None
         mock_device.domain = Mock()
         mock_device.domain.issuing_ca = None
         mock_onboarding = Mock()
@@ -580,8 +590,9 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         sections, heading = self.strategy.build_sections(help_context)
 
-        assert len(sections) == 4
+        assert len(sections) == 5
         assert sections[3].heading == 'Available Actions'
+        assert sections[4].heading == 'Periodic Domain Credential Renewal'
         # Should have domain credential required message
         assert 'Domain Credential Required' in sections[3].rows[1].key
 
@@ -745,6 +756,44 @@ class OpcUaGdsPushOnboardingHelpViewTests(TestCase):
 class DeviceStrategyGeneratedContentTests(TestCase):
     """Test generated help content for device strategies without masking the strategy code."""
 
+    def test_no_onboarding_cmp_command_resolves_domain_organization_values(self) -> None:
+        """CMP help commands substitute organization variables using the device domain."""
+        domain = _domain()
+        domain.organization = Mock(
+            organization='Trustpoint Org',
+            organization_unit='Engineering',
+            country='DE',
+            state='BW',
+            locality='Stuttgart',
+        )
+        device = _device(domain, no_onboarding=True)
+        profile = _profile()
+        profile.certificate_profile.profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'allow': '*',
+                'organization_name': {'default': '{{ domain.organization }}'},
+                'organizational_unit_name': {'default': '{{ domain.organization_unit }}'},
+                'country_name': {'default': '{{ domain.country }}'},
+                'state_or_province_name': {'default': '{{ domain.state }}'},
+                'locality_name': {'default': '{{ domain.locality }}'},
+            },
+            'validity': {'days': 30},
+        }
+
+        sections, _heading = NoOnboardingCmpSharedSecretStrategy().build_sections(
+            _help_context(device, domain, [profile])
+        )
+
+        command_section = next(section for section in sections if section.css_id == 'tls_server')
+        command = command_section.rows[0].value
+        assert '/organizationName=Trustpoint Org' in command
+        assert '/organizationalUnitName=Engineering' in command
+        assert '/countryName=DE' in command
+        assert '/stateOrProvinceName=BW' in command
+        assert '/localityName=Stuttgart' in command
+        assert '{{ domain.' not in command
+
     @patch('help_pages.devices_help_views.JSONProfileVerifier')
     def test_no_onboarding_cmp_shared_secret_builds_profile_commands(self, mock_verifier: Mock) -> None:
         """Test CMP shared-secret sections include profile-specific commands and hidden state."""
@@ -757,12 +806,13 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'CMP with a shared-secret' in heading
         assert sections[0].rows[3].value == 'cmp-secret'
-        assert sections[3].css_id == 'server_alias'
-        assert sections[3].hidden is False
-        assert sections[4].css_id == 'client_auth'
-        assert sections[4].hidden is True
-        assert 'server_alias/certification' in sections[3].rows[0].value
-        assert '-secret pass:cmp-secret' in sections[3].rows[0].value
+        assert sections[3].heading == 'Certificate Parameters'
+        assert sections[4].css_id == 'server_alias'
+        assert sections[4].hidden is False
+        assert sections[5].css_id == 'client_auth'
+        assert sections[5].hidden is True
+        assert 'server_alias/certification' in sections[4].rows[0].value
+        assert '-secret pass:cmp-secret' in sections[4].rows[0].value
 
     @patch('help_pages.devices_help_views.JSONProfileVerifier', side_effect=ValueError('invalid profile'))
     def test_no_onboarding_cmp_shared_secret_reports_malformed_profile(self, mock_verifier: Mock) -> None:
@@ -774,8 +824,8 @@ class DeviceStrategyGeneratedContentTests(TestCase):
             _help_context(device, domain, [_profile()])
         )
 
-        assert sections[3].rows[0].value_render_type == ValueRenderType.PLAIN
-        assert 'Certificate Profile is malformed' in sections[3].rows[0].value
+        assert sections[4].rows[0].value_render_type == ValueRenderType.PLAIN
+        assert 'Certificate Profile is malformed' in sections[4].rows[0].value
         mock_verifier.assert_called_once()
 
     @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
@@ -794,7 +844,7 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'EST with username and password' in heading
         assert mock_tls.called
-        profile_section = sections[4]
+        profile_section = sections[5]
         assert profile_section.css_id == 'server_alias'
         assert [row.key for row in profile_section.rows] == [
             'Generate CSR with OpenSSL',
@@ -821,9 +871,10 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'CMP with a Domain Credential' in heading
         assert mock_cmp.called
-        assert sections[4].heading == 'Certificate Request for a TLS Server Certificate'
-        assert '-cert domain-credential-certificate.pem' in sections[4].rows[0].value
-        assert '-newkey key-5.pem' in sections[4].rows[0].value
+        assert sections[4].heading == 'Certificate Parameters'
+        assert sections[5].heading == 'Certificate Request for a TLS Server Certificate'
+        assert '-cert domain-credential-certificate.pem' in sections[5].rows[0].value
+        assert '-newkey key-5.pem' in sections[5].rows[0].value
 
     @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
     @patch('help_pages.devices_help_views.JSONProfileVerifier')
@@ -841,10 +892,11 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'EST with a Domain Credential' in heading
         assert mock_tls.called
-        assert sections[4].css_id == 'server_alias'
-        assert 'csr-6.der' in sections[4].rows[0].value
-        assert '--cert domain-credential-certificate.pem' in sections[4].rows[1].value
-        assert 'server_alias/simpleenroll' in sections[4].rows[1].value
+        assert sections[4].heading == 'Certificate Parameters'
+        assert sections[5].css_id == 'server_alias'
+        assert 'csr-6.der' in sections[5].rows[0].value
+        assert '--cert domain-credential-certificate.pem' in sections[5].rows[1].value
+        assert 'server_alias/simpleenroll' in sections[5].rows[1].value
         assert 'certificate-6.pem' in sections[-1].rows[0].value
 
     @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
@@ -864,9 +916,9 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         assert 'REST with username and password' in heading
         assert mock_tls.called
         assert '/rest/test-domain/<certificate_profile>/enroll/' in sections[0].rows[0].value
-        assert '--user "device-1:rest-secret"' in sections[4].rows[1].value
-        assert 'certificate-7.json' in sections[4].rows[1].value
-        assert 'certificate-7.pem' in sections[4].rows[2].value
+        assert '--user "device-1:rest-secret"' in sections[5].rows[1].value
+        assert 'certificate-7.json' in sections[5].rows[1].value
+        assert 'certificate-7.pem' in sections[5].rows[2].value
 
     @patch('help_pages.devices_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
     def test_onboarding_rest_username_password_builds_domain_credential_steps(self, mock_tls: Mock) -> None:
@@ -901,7 +953,8 @@ class DeviceStrategyGeneratedContentTests(TestCase):
 
         assert 'REST with a Domain Credential' in heading
         assert mock_tls.called
-        profile_section = sections[4]
+        assert sections[4].heading == 'Certificate Parameters'
+        profile_section = sections[5]
         assert 'server_alias/enroll/' in profile_section.rows[1].value
         assert 'server_alias/reenroll/' in profile_section.rows[2].value
         assert 'previously issued certificate' in profile_section.rows[3].value
@@ -923,10 +976,12 @@ class DeviceStrategyGeneratedContentTests(TestCase):
             _help_context(onboarding_device, domain, [_profile()])
         )
 
-        assert no_onboarding_sections[4].rows[0].value_render_type == ValueRenderType.PLAIN
-        assert 'Certificate Profile is malformed' in no_onboarding_sections[4].rows[0].value
-        assert app_sections[4].rows[0].value_render_type == ValueRenderType.PLAIN
-        assert 'Certificate Profile is malformed' in app_sections[4].rows[0].value
+        assert no_onboarding_sections[4].heading == 'Certificate Parameters'
+        assert no_onboarding_sections[5].rows[0].value_render_type == ValueRenderType.PLAIN
+        assert 'Certificate Profile is malformed' in no_onboarding_sections[5].rows[0].value
+        assert app_sections[4].heading == 'Certificate Parameters'
+        assert app_sections[5].rows[0].value_render_type == ValueRenderType.PLAIN
+        assert 'Certificate Profile is malformed' in app_sections[5].rows[0].value
         assert mock_verifier.call_count == 2
         assert mock_tls.call_count == 2
 
@@ -1064,15 +1119,15 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         future.strftime.return_value = '2026-09-04 12:00 UTC'
         mock_timezone.now.return_value = now
 
-        device.opc_gds_push_enable_periodic_update = True
-        device.opc_gds_push_last_update_scheduled_at = future
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
+        device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at = future
         enabled_section = strategy._build_renewal_settings_section(device)
 
         future.__gt__.return_value = False
         pending_section = strategy._build_renewal_settings_section(device)
 
-        device.opc_gds_push_enable_periodic_update = False
-        device.opc_gds_push_last_update_scheduled_at = None
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = False
+        device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at = None
         disabled_section = strategy._build_renewal_settings_section(device)
 
         assert 'Enabled' in enabled_section.rows[0].value

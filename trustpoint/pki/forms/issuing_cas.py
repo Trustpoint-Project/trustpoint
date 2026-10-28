@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, NoReturn, cast
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -23,26 +23,43 @@ from trustpoint_core.serializer import (
 
 from crypto.application.capabilities import get_active_backend_capability_report
 from crypto.application.service import TrustpointCryptoBackend
-from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.errors import CryptoError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
-from crypto.domain.specs import EcKeySpec, KeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.authorization import PkiSecurityAuthorization
+from pki.forms.credentials import (
+    encode_credential_password,
+    parse_certificate_chain_upload,
+    parse_certificate_upload,
+    parse_private_key_upload,
+    read_pkcs12_upload,
+)
 from pki.models import CaModel
 from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.services import credential_upload as uploads
+from pki.services.credential_upload import parse_pkcs12
+from pki.services.external_csr import certificate_matches_credential
+from pki.services.key_generation import (
+    KEY_TYPE_CHOICES,
+    generate_pending_credential,
+    key_spec_for_key_type,
+    supported_key_type_choices,
+)
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
 from util.validation import ValidationError as UtilValidationError
 from util.validation import validate_remote_ca_connection
 
-MAX_PKCS12_UPLOAD_BYTES = 256 * 1024
+MAX_PKCS12_UPLOAD_BYTES = uploads.MAX_PKCS12_UPLOAD_BYTES
+
+if TYPE_CHECKING:
+    from crypto.domain.specs import KeySpec
 
 
 def get_ca_type_from_config() -> CaModel.CaTypeChoice:
@@ -290,10 +307,43 @@ class IssuingCaAddMethodSelectForm(forms.Form):
             ('local_file_import', _('Import a new Issuing CA from file')),
             ('local_request', _('Generate a key-pair and request an Issuing CA certificate')),
             ('remote_est', _('Configure a remote Issuing CA')),
+            ('remote_csr', _('External PKI (CSR)')),
         ],
         initial='local_file_import',
         required=True,
     )
+
+
+class IssuingCaAddAutoGenForm(forms.Form):
+    """Form for generating the local auto-generated PKI."""
+
+    has_supported_key_types: bool
+
+    key_type = forms.ChoiceField(
+        label=_('Key Type'),
+        choices=KEY_TYPE_CHOICES,
+        initial='RSA-2048',
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Use only key types supported by the active crypto backend."""
+        super().__init__(*args, **kwargs)
+        choices = supported_key_type_choices()
+        self.has_supported_key_types = bool(choices)
+        key_type_field = cast('forms.ChoiceField', self.fields['key_type'])
+        key_type_field.choices = choices or [('', _('No supported backend algorithms available'))]
+        if not choices:
+            key_type_field.widget.attrs['disabled'] = 'disabled'
+
+    def clean_key_type(self) -> str:
+        """Reject key types that the active backend cannot generate."""
+        key_type = cast('str', self.cleaned_data['key_type'])
+        supported_types = {value for value, _label in supported_key_type_choices()}
+        if key_type not in supported_types:
+            raise ValidationError(_('The active crypto backend does not support this key type.'))
+        return key_type
 
 
 class IssuingCaFileTypeSelectForm(forms.Form):
@@ -350,39 +400,16 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
     )
 
     def _read_and_encode_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, bytes | None]:
-        """Reads the PKCS#12 file and encodes the password if provided."""
-        pkcs12_file = cleaned_data.get('pkcs12_file')
-        if pkcs12_file is None:
-            self._raise_validation_error('PKCS#12 file is required.')
-        if getattr(pkcs12_file, 'size', 0) > MAX_PKCS12_UPLOAD_BYTES:
-            self._raise_validation_error('PKCS#12 file is too large, max. 256 kiB.')
-
-        try:
-            pkcs12_raw = pkcs12_file.read()
-            pkcs12_password = cleaned_data.get('pkcs12_password')
-        except (OSError, AttributeError) as original_exception:
-            error_message = _(
-                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
-            )
-            raise ValidationError(error_message, code='unexpected-error') from original_exception
-
-        if pkcs12_password:
-            try:
-                pkcs12_password = pkcs12_password.encode()
-            except Exception as original_exception:
-                error_message = _('The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.')
-                raise ValidationError(error_message) from original_exception
-        else:
-            pkcs12_password = None
-
-        return pkcs12_raw, pkcs12_password
+        """Read bounded PKCS#12 data and encode its optional password."""
+        raw = read_pkcs12_upload(cleaned_data.get('pkcs12_file'))
+        return raw, encode_credential_password(cleaned_data.get('pkcs12_password'), pkcs12=True)
 
     def _parse_and_prepare_credential(
         self, pkcs12_raw: bytes, pkcs12_password: bytes | None, _unique_name: str | None
     ) -> CredentialSerializer:
         """Parses the PKCS#12 file and prepares the credential serializer."""
         try:
-            credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
+            credential_serializer = parse_pkcs12(pkcs12_raw, pkcs12_password)
             if credential_serializer.private_key is None:
                 self._raise_validation_error('Private key is missing from credential serializer.')
         except ValidationError:
@@ -463,48 +490,10 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
     )
 
     def clean_private_key_file(self) -> PrivateKeySerializer:
-        """Validates and parses the uploaded private key file.
-
-        This method checks if the private key file is provided, ensures it meets
-        size constraints, and validates its contents. If a password is provided,
-        it is used to decrypt the private key. Raises validation errors for missing,
-        oversized, or corrupted private key files.
-
-        Returns:
-            PrivateKeySerializer: A serializer containing the parsed private key.
-
-        Raises:
-            ValidationError: If the private key file is missing, too large, or
-            corrupted, or if the password is invalid or incompatible.
-        """
-        private_key_file = self.cleaned_data.get('private_key_file')
-        private_key_file_password = self.data.get('private_key_file_password') or None
-
-        if not private_key_file:
-            err_msg = 'No private key file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if private_key_file.size > max_size:
-            err_msg = 'Private key file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        if private_key_file_password:
-            try:
-                private_key_file_password = private_key_file_password.encode('utf-8')
-            except Exception as original_exception:
-                err_msg = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
-                raise ValidationError(err_msg) from original_exception
-        else:
-            private_key_file_password = None
-
-        try:
-            private_key_file = PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
-        except Exception:  # noqa: BLE001
-            err_msg = 'Failed to parse the private key file. Either wrong password or file corrupted.'
-            self._raise_validation_error(err_msg)
-        return private_key_file
+        """Validate and parse the uploaded private key file."""
+        return parse_private_key_upload(
+            self.cleaned_data.get('private_key_file'), self.data.get('private_key_file_password') or None
+        )
 
     def clean_ca_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded Issuing CA certificate file.
@@ -520,23 +509,12 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
             ValidationError: If the file is missing, too large, corrupted, or already
             associated with an existing Issuing CA.
         """
-        ca_certificate = self.cleaned_data['ca_certificate']
-
-        if not ca_certificate:
-            err_msg = 'No Issuing CA file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if ca_certificate.size > max_size:
-            err_msg = 'Issuing CA file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        try:
-            certificate_serializer = CertificateSerializer.from_bytes(ca_certificate.read())
-        except Exception:  # noqa: BLE001
-            err_msg = 'Failed to parse the Issuing CA certificate. Seems to be corrupted.'
-            self._raise_validation_error(err_msg)
+        certificate_serializer = parse_certificate_upload(
+            self.cleaned_data.get('ca_certificate'),
+            missing_message='No Issuing CA file was uploaded.',
+            too_large_message='Issuing CA file is too large, max. 64 kiB.',
+            parse_message='Failed to parse the Issuing CA certificate. Seems to be corrupted.',
+        )
 
         cert_crypto = certificate_serializer.as_crypto()
         if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
@@ -549,30 +527,11 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
         return certificate_serializer
 
     def clean_ca_certificate_chain(self) -> CertificateCollectionSerializer | None:
-        """Validates and parses the uploaded Issuing CA certificate chain file.
-
-        This method checks if the optional certificate chain file is provided.
-        If present, it validates and attempts to parse the file into a collection
-        of certificates. Raises a validation error if parsing fails or the file
-        appears corrupted.
-
-        Returns:
-            CertificateCollectionSerializer: A serializer containing the parsed
-            certificate chain if provided.
-
-        Raises:
-            ValidationError: If the certificate chain cannot be parsed.
-        """
-        ca_certificate_chain = self.cleaned_data['ca_certificate_chain']
-
-        if ca_certificate_chain:
-            try:
-                return CertificateCollectionSerializer.from_bytes(ca_certificate_chain.read())
-            except Exception as exception:
-                err_msg = _('Failed to parse the Issuing CA certificate chain. Seems to be corrupted.')
-                raise ValidationError(err_msg) from exception
-
-        return None
+        """Parse an optional certificate chain using shared upload limits."""
+        return parse_certificate_chain_upload(
+            self.cleaned_data.get('ca_certificate_chain'),
+            parse_message=_('Failed to parse the Issuing CA certificate chain. Seems to be corrupted.'),
+        )
 
     def clean(self) -> None:
         """Cleans and validates the form data.
@@ -612,17 +571,7 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
 class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
 
-    KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        ('RSA-2048', 'RSA 2048'),
-        ('RSA-3072', 'RSA 3072'),
-        ('RSA-4096', 'RSA 4096'),
-        ('ECC-SECP256R1', 'ECC SECP256R1'),
-        ('ECC-SECP384R1', 'ECC SECP384R1'),
-        ('ECC-SECP521R1', 'ECC SECP521R1'),
-        ('MLDSA-44', 'ML-DSA-44'),
-        ('MLDSA-65', 'ML-DSA-65'),
-        ('MLDSA-87', 'ML-DSA-87'),
-    ]
+    KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = KEY_TYPE_CHOICES
 
     class Meta:
         """Meta class for IssuingCaAddRequestMixin."""
@@ -655,23 +604,12 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     @classmethod
     def _key_spec_for_key_type(cls, key_type: str) -> KeySpec:
         """Map the form key type to a backend key spec."""
-        if key_type.startswith('RSA-'):
-            return RsaKeySpec(key_size=int(key_type.split('-')[1]))
-        if key_type.startswith('MLDSA-'):
-            variant_str = 'mldsa' + key_type.split('-')[1]
-            return MlDsaKeySpec(variant=MlDsaVariant(variant_str))
-        curve_name = key_type.split('-')[1]
-        return EcKeySpec(curve=EllipticCurveName(curve_name.lower()))
+        return key_spec_for_key_type(key_type)
 
     @classmethod
     def _supported_key_type_choices(cls) -> list[tuple[str, str]]:
         """Return key type choices supported by the active backend."""
-        report = get_active_backend_capability_report()
-        return [
-            (value, label)
-            for value, label in cls.KEY_TYPE_CHOICES
-            if report.supports_key_spec(cls._key_spec_for_key_type(value))
-        ]
+        return supported_key_type_choices(cls.KEY_TYPE_CHOICES, report=get_active_backend_capability_report())
 
     def clean(self) -> dict[str, Any]:
         """Validate the form data."""
@@ -694,30 +632,34 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
                 msg = f'Remote CA connection validation failed: {e}'
                 raise forms.ValidationError(msg) from e
 
+        unique_name = cleaned_data.get('unique_name')
+        if unique_name and CryptoManagedKeyModel.objects.filter(alias=unique_name).exists():
+            self.add_error(
+                'unique_name', _('A cryptographic key with this name already exists.')
+            )
+
         return cleaned_data
 
     def _create_credential(self) -> CredentialModel:
         """Create and return a temporary credential for the CA."""
-        key_type = self.cleaned_data['key_type']
-        key_spec = self._key_spec_for_key_type(key_type)
-
-        key_ref = TrustpointCryptoBackend().generate_managed_key(
+        return generate_pending_credential(
             alias=self.cleaned_data['unique_name'],
-            key_spec=key_spec,
+            key_type=self.cleaned_data['key_type'],
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            backend=TrustpointCryptoBackend(),
             policy=KeyPolicy.managed_signing_key(
                 signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
             ),
         )
-        return CredentialModel.save_managed_private_key_credential(
-            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
-            managed_key=CryptoManagedKeyModel.objects.get(pk=key_ref.id),
-        )
 
     def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
-        """Save the form and create the CA model with configuration."""
-        instance = super().save(commit=False)
+        """Save the form and create the CA model with configuration.
 
-        instance.credential = self._create_credential()
+        Credential/managed-key creation is intentionally not performed here; it is
+        the responsibility of subclasses, which decide whether and when a managed
+        key is required (e.g. not for RA-mode configurations).
+        """
+        instance = super().save(commit=False)
 
         if commit:
             instance.save()
@@ -761,30 +703,101 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
 
         If is_ra_mode is True, create a REMOTE_EST_RA (Registration Authority) instead of REMOTE_ISSUING_EST.
         """
-        if is_ra_mode:
+        with transaction.atomic():
             instance = super().save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
-            instance.credential = None
-            instance.certificate = None  # Will be set from truststore later
-        else:
-            instance = super().save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
-            instance.credential = self._create_credential()
+            if is_ra_mode:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
+                instance.credential = None
+                instance.certificate = None  # Will be set from truststore later
+            else:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
+                instance.credential = self._create_credential()
 
-        no_onboarding_config = NoOnboardingConfigModel.objects.create(
-            pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
-            est_password=self.cleaned_data['est_password'],
-            trust_store=None,  # Will be set later via truststore association
-        )
+            no_onboarding_config = NoOnboardingConfigModel.objects.create(
+                pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+                est_password=self.cleaned_data['est_password'],
+                trust_store=None,  # Will be set later via truststore association
+            )
+            instance.no_onboarding_config = no_onboarding_config
+            instance.est_username = self.cleaned_data['est_username']
+
+            PermittedProtocolsAuthorization().check(instance)
+            PkiSecurityAuthorization().check(instance)
+
+            instance.save()
+        return instance
+
+
+class IssuingCaAddRequestExternalCsrForm(IssuingCaAddRequestMixin):
+    """Form for generating a CSR for an external PKI issuance flow."""
+
+    class Meta:
+        """Meta class for IssuingCaAddRequestExternalCsrForm."""
+        model = CaModel
+        fields: ClassVar[list[str]] = ['unique_name', 'ca_type']
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form."""
+        super().__init__(*args, **kwargs)
+        self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+        self.fields['ca_type'].widget = forms.HiddenInput()
+
+    def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
+        """Save the CSR-based external-PKI CA configuration."""
+        instance = super().save(commit=False)
+        instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+        instance.credential = self._create_credential()
+
+        no_onboarding_config = NoOnboardingConfigModel()
+        no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.MANUAL])
+        no_onboarding_config.save()
         instance.no_onboarding_config = no_onboarding_config
-        instance.est_username = self.cleaned_data['est_username']
 
         PermittedProtocolsAuthorization().check(instance)
         PkiSecurityAuthorization().check(instance)
 
-        instance.save()
+        if commit:
+            instance.save()
         return instance
 
+
+class IssuingCaExternalCsrCertificateForm(forms.Form):
+    """Form for uploading the certificate issued for an external CSR."""
+
+    certificate = forms.FileField(
+        label=_('Issued Issuing CA Certificate (.cer, .der, .pem)'),
+        required=True,
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form with the pending issuing CA."""
+        self.instance: CaModel = kwargs.pop('instance')
+        super().__init__(*args, **kwargs)
+
+    def clean_certificate(self) -> CertificateSerializer:
+        """Parse and validate the externally issued CA certificate."""
+        certificate_serializer = parse_certificate_upload(
+            self.cleaned_data.get('certificate'),
+            missing_message='No Issuing CA file was uploaded.',
+            too_large_message=_('Certificate file is too large, max. 64 kiB.'),
+            parse_message=_('Failed to parse the Issuing CA certificate.'),
+        )
+        try:
+            certificate = certificate_serializer.as_crypto()
+            basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except Exception as exception:
+            raise forms.ValidationError(_('Failed to parse the Issuing CA certificate.')) from exception
+
+        if not basic_constraints.ca:
+            raise forms.ValidationError(_('The provided certificate is not a CA certificate.'))
+
+        if self.instance.credential is None:
+            raise forms.ValidationError(_('The Issuing CA credential is missing.'))
+
+        if not certificate_matches_credential(certificate, self.instance.credential):
+            raise forms.ValidationError(_('The uploaded certificate does not match the generated CSR.'))
+
+        return certificate_serializer
 
 
 class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
@@ -802,7 +815,7 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
         """Meta class for IssuingCaAddRequestCmpForm."""
         model = CaModel
         fields: ClassVar[list[str]] = [
-            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type'
+            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type', 'cmp_sender_kid'
         ]
 
     cmp_shared_secret = forms.CharField(
@@ -825,27 +838,27 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
 
         If is_ra_mode is True, create a REMOTE_CMP_RA (Registration Authority) instead of REMOTE_ISSUING_CMP.
         """
-        if is_ra_mode:
-            instance = super(IssuingCaAddRequestMixin, self).save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
-            instance.credential = None
-            instance.certificate = None  # Will be set from truststore later
-        else:
+        with transaction.atomic():
             instance = super().save(commit=False)
-            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
-            instance.credential = self._create_credential()
+            if is_ra_mode:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
+                instance.credential = None
+                instance.certificate = None  # Will be set from truststore later
+            else:
+                instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+                instance.credential = self._create_credential()
 
-        no_onboarding_config = NoOnboardingConfigModel.objects.create(
-            pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
-            cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
-            trust_store=None,  # Will be set later via truststore association
-        )
-        instance.no_onboarding_config = no_onboarding_config
+            no_onboarding_config = NoOnboardingConfigModel.objects.create(
+                pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
+                cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
+                trust_store=None,  # Will be set later via truststore association
+            )
+            instance.no_onboarding_config = no_onboarding_config
 
-        PermittedProtocolsAuthorization().check(instance)
-        PkiSecurityAuthorization().check(instance)
+            PermittedProtocolsAuthorization().check(instance)
+            PkiSecurityAuthorization().check(instance)
 
-        instance.save()
+            instance.save()
         return instance
 
 
@@ -886,12 +899,16 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
                 trust_store_field.help_text = _(
                     'EST RA (Step 2/2): Import the TLS server certificate (used for HTTPS connection security).'
                 )
-        elif self.instance.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+        elif self.instance.ca_type in [
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CSR,
+            CaModel.CaTypeChoice.REMOTE_CMP_RA,
+        ]:
             trust_store_field.queryset = TruststoreModel.objects.filter(
                 intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
             )
             trust_store_field.help_text = _(
-                'CMP: Only "Issuing CA Chain" truststores can be associated.'
+                'Only "Issuing CA Chain" truststores can be associated.'
             )
         else:
             trust_store_field.queryset = TruststoreModel.objects.filter(

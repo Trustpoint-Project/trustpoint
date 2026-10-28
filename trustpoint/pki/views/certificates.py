@@ -12,22 +12,34 @@ from django.db.models import Case, IntegerField, QuerySet, Value, When
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
-from trustpoint_core.serializer import CertificateFormat
+from trustpoint_core.serializer import CertificateCollectionSerializer, CertificateFormat
 
 from pki.filters import CertificateFilter
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from pki.serializer.certificate import CertificateSerializer
+from pki.serializer.certificate import (
+    CertificateArchiveSerializer,
+    CertificateDetailSerializer,
+    CertificateDownloadSerializer,
+    CertificateSerializer,
+    CertificateSummarySerializer,
+)
+from pki.services.certificate_download import certificate_chain, certificate_filename
+from pki.services.certificate_health import certificate_health_conditions
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.page_context import (
     PKI_PAGE_CATEGORY,
@@ -39,6 +51,8 @@ from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTa
 
 if TYPE_CHECKING:
     from typing import ClassVar
+
+    from rest_framework.request import Request
 
 
 class CertificatesRedirectView(RedirectView):
@@ -111,14 +125,15 @@ class CertificateTableView(
     def get_base_queryset(self) -> QuerySet[CertificateModel]:
         """Return the annotated base queryset used by the certificates table."""
         now = timezone.now()
+        conditions = certificate_health_conditions(as_of=now, expiry_days=0)
         return (
             CertificateModel.objects
             .select_related('revoked_certificate')
             .annotate(
                 certificate_status_sort=Case(
-                    When(revoked_certificate__isnull=False, then=Value(3)),
-                    When(not_valid_before__gt=now, then=Value(4)),
-                    When(not_valid_after__lte=now, then=Value(2)),
+                    When(conditions['revoked'], then=Value(3)),
+                    When(conditions['not_yet_valid'], then=Value(4)),
+                    When(conditions['expired'], then=Value(2)),
                     default=Value(0),
                     output_field=IntegerField(),
                 ),
@@ -140,21 +155,12 @@ class CertificateTableView(
             self.request.GET.get(key)
             for key in ('common_name', 'status', 'expiry_window', 'is_self_signed', 'created_at_from', 'created_at_to')
         )
-        for certificate in context['certificates']:
-            certificate.table_status = self._get_table_status(certificate)
         return context
 
     @staticmethod
     def _get_table_status(certificate: CertificateModel) -> str:
         """Return the status label displayed in the certificates table."""
-        now = timezone.now()
-        if hasattr(certificate, 'revoked_certificate'):
-            return 'Revoked'
-        if certificate.not_valid_before > now:
-            return 'Not Yet Valid'
-        if certificate.not_valid_after <= now:
-            return 'Expired'
-        return 'OK'
+        return certificate.table_status
 
 
 OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
@@ -467,13 +473,90 @@ class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
     create, update, and delete.
     """
 
-    queryset = CertificateModel.objects.all().order_by('-created_at')
+    queryset = CertificateModel.objects.select_related(
+        'revoked_certificate', 'basic_constraints_extension', 'issuer_id'
+    ).order_by('-created_at')
     serializer_class = CertificateSerializer
     permission_classes = (IsAuthenticated,)
     filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['serial_number', 'not_valid_before']
     search_fields: ClassVar = ['common_name', 'sha256_fingerprint']
     ordering_fields: ClassVar = ['common_name', 'created_at']
+
+    def get_serializer_class(self) -> type[CertificateSerializer]:
+        """Provide richer public reads while keeping the existing write contract."""
+        if self.action == 'retrieve':
+            return CertificateDetailSerializer
+        if self.action == 'list':
+            return CertificateSummarySerializer
+        return CertificateSerializer
+
+    def _download_certificates(self, request: Request, certificate: CertificateModel,
+                               *, include_chain: bool) -> list[CertificateModel]:
+        """Check permissions for every certificate included in an export."""
+        try:
+            certificates = [certificate, *certificate_chain(certificate)] if include_chain else [certificate]
+        except ValueError as exc:
+            msg = 'Unable to build the certificate issuer chain.'
+            raise ValidationError(msg) from exc
+        for item in certificates:
+            self.check_object_permissions(request, item)
+        return certificates
+
+    @extend_schema(
+        parameters=[CertificateDownloadSerializer],
+        responses={(200, 'application/octet-stream'): OpenApiTypes.BINARY},
+    )
+    @action(detail=True, methods=['get'], url_path='download')
+    def download(self, request: Request, pk: str | None = None) -> HttpResponse:
+        """Download a certificate as PEM, DER, PKCS#7 PEM, or PKCS#7 DER."""
+        del pk
+        certificate = self.get_object()
+        options = CertificateDownloadSerializer(data=request.query_params)
+        options.is_valid(raise_exception=True)
+        file_format = CertificateFormat(options.validated_data['file_format'])
+        certificates = self._download_certificates(
+            request, certificate, include_chain=options.validated_data['include_chain'])
+        if len(certificates) > 1:
+            if file_format == CertificateFormat.DER:
+                msg = 'DER contains one certificate. Use PEM or PKCS#7 for a chain, or download an archive.'
+                raise ValidationError({'file_format': msg})
+            data = CertificateCollectionSerializer(
+                [item.get_certificate_serializer().as_crypto() for item in certificates]).as_format(file_format)
+        else:
+            data = certificate.get_certificate_serializer().as_format(file_format)
+        response = HttpResponse(data, content_type=file_format.mime_type)
+        filename = certificate_filename(certificate, file_format.file_extension)
+        response['Content-Disposition'] = content_disposition_header(as_attachment=True, filename=filename)
+        return response
+
+    @extend_schema(
+        request=CertificateArchiveSerializer,
+        responses={(200, 'application/octet-stream'): OpenApiTypes.BINARY},
+    )
+    @action(detail=False, methods=['post'], url_path='download')
+    def download_multiple(self, request: Request) -> HttpResponse:
+        """Download selected certificates as individual files in a ZIP or TAR.GZ archive."""
+        options = CertificateArchiveSerializer(data=request.data)
+        options.is_valid(raise_exception=True)
+        values = options.validated_data
+        ids = list(dict.fromkeys(values['certificate_ids']))
+        certificates = {certificate.pk: certificate for certificate in self.get_queryset().filter(pk__in=ids)}
+        if len(certificates) != len(ids):
+            msg = 'One or more selected certificates do not exist.'
+            raise NotFound(msg)
+        selected: dict[int, CertificateModel] = {}
+        for pk in ids:
+            for certificate in self._download_certificates(request, certificates[pk],
+                                                           include_chain=values['include_chain']):
+                selected.setdefault(certificate.pk, certificate)
+        file_format = CertificateFormat(values['file_format'])
+        archive_format = ArchiveFormat(values['archive_format'])
+        contents = {certificate_filename(item, file_format.file_extension):
+                    item.get_certificate_serializer().as_format(file_format) for item in selected.values()}
+        response = HttpResponse(Archiver.archive(contents, archive_format), content_type=archive_format.mime_type)
+        response['Content-Disposition'] = f'attachment; filename="certificates{archive_format.file_extension}"'
+        return response
 
     @extend_schema(
         summary='List certificates',

@@ -46,7 +46,7 @@ class BuildDocsTriggerView(LoginRequiredMixin, View):
 
     def post(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
         """Handle POST request to build documentation."""
-        lock_file = settings.BASE_DIR.parent / 'docs' / '.building'
+        lock_file = settings.MEDIA_ROOT / 'docs.building'
 
         if lock_file.exists() and (time.time() - lock_file.stat().st_mtime < BUILD_TIMEOUT_SECONDS):
             return JsonResponse({'status': 'running'})
@@ -63,7 +63,7 @@ class BuildDocsTriggerView(LoginRequiredMixin, View):
 
     def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
         """It checks poll if the page is refreshed during a build."""
-        lock_file = settings.BASE_DIR.parent / 'docs' / '.building'
+        lock_file = settings.MEDIA_ROOT / 'docs.building'
         if lock_file.exists() and (time.time() - lock_file.stat().st_mtime < BUILD_TIMEOUT_SECONDS):
             return JsonResponse({'status': 'running'})
         return JsonResponse({'status': 'finished'})

@@ -27,7 +27,6 @@ from pki.models import IssuedCredentialModel
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 
@@ -99,12 +98,6 @@ class DeviceBrowserOnboardingOTPView(AbstractBrowserOnboardingOTPView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsBrowserOnboardingOTPView(AbstractBrowserOnboardingOTPView):
-    """The browser onboarding OTP view for the OPC UA GDS section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class AbstractBrowserOnboardingCancelView(PageContextMixin, DetailView[IssuedCredentialModel]):
     """View to cancel the browser onboarding process and delete the associated RemoteDeviceCredentialDownloadModel."""
 
@@ -147,12 +140,6 @@ class DeviceBrowserOnboardingCancelView(AbstractBrowserOnboardingCancelView):
     """Cancels the browser onboarding for the devices section."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsBrowserOnboardingCancelView(AbstractBrowserOnboardingCancelView):
-    """Cancels the browser onboarding for the OPC UA GDS section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 @method_decorator(login_not_required, name='dispatch')

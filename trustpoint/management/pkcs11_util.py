@@ -1003,6 +1003,10 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
     It implements the cryptography EllipticCurvePrivateKey interface and supports signing and key management operations.
     """
 
+    SUPPORTED_EC_CURVES: ClassVar[tuple[NamedCurve, ...]] = (
+        NamedCurve.SECP256R1, NamedCurve.SECP384R1, NamedCurve.SECP521R1,
+    )
+
     CURVE_KEY_LENGTHS: ClassVar[dict[NamedCurve, int]] = {
         NamedCurve.SECP192R1: NamedCurve.SECP192R1.key_size,
         NamedCurve.SECP224R1: NamedCurve.SECP224R1.key_size,
@@ -1094,12 +1098,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             raise ValueError(msg)
 
         named_curve = NamedCurve.from_curve(type(curve))
-        curve_oid = {
-            NamedCurve.SECP256R1: '1.2.840.10045.3.1.7',
-            NamedCurve.SECP384R1: '1.3.132.0.34',
-            NamedCurve.SECP521R1: '1.3.132.0.35',
-        }.get(named_curve)
-        if curve_oid is None:
+        if named_curve not in self.SUPPORTED_EC_CURVES:
             msg = f'Unsupported curve: {curve.name}'
             raise ValueError(msg)
 
@@ -1122,7 +1121,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
 
         parameters = self._session.create_domain_parameters(
             KeyType.EC,
-            {Attribute.EC_PARAMS: encode_named_curve_parameters(curve_oid)},
+            {Attribute.EC_PARAMS: encode_named_curve_parameters(named_curve.dotted_string)},
             local=True,
         )
         _, priv = parameters.generate_keypair(
@@ -1262,24 +1261,10 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         return ec_point
 
     def _get_curve_params(self, curve: ec.EllipticCurve) -> bytes:
-        """Get the OID parameters for a given EC curve.
-
-        Args:
-            curve: The elliptic curve object
-
-        Returns:
-            bytes: The curve OID parameters
-
-        Raises:
-            ValueError: If the curve is not supported
-        """
-        if isinstance(curve, ec.SECP256R1):
-            return b'\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07'  # secp256r1 OID
-        if isinstance(curve, ec.SECP384R1):
-            return b'\x06\x05\x2b\x81\x04\x00\x22'  # secp384r1 OID
-        if isinstance(curve, ec.SECP521R1):
-            return b'\x06\x05\x2b\x81\x04\x00\x23'  # secp521r1 OID
-
+        """Encode Core's curve OID after checking the token's supported curves."""
+        for named_curve in self.SUPPORTED_EC_CURVES:
+            if named_curve.curve is not None and isinstance(curve, named_curve.curve):
+                return encode_named_curve_parameters(named_curve.dotted_string)
         msg = f'Unsupported curve: {curve.name}'
         raise ValueError(msg)
 
@@ -1485,9 +1470,9 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             raise ValueError(msg) from e
 
         curve_oid_map = {
-            b'\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07': ec.SECP256R1(),  # secp256r1
-            b'\x06\x05\x2b\x81\x04\x00\x22': ec.SECP384R1(),  # secp384r1
-            b'\x06\x05\x2b\x81\x04\x00\x23': ec.SECP521R1(),  # secp521r1
+            encode_named_curve_parameters(named_curve.dotted_string): named_curve.curve()
+            for named_curve in self.SUPPORTED_EC_CURVES
+            if named_curve.curve is not None
         }
 
         curve = curve_oid_map.get(curve_params)

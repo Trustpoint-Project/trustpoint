@@ -20,6 +20,8 @@ jobs:
       TLS_CERT: tests/data/x509/https_server.crt
       TLS_KEY: tests/data/x509/https_server.pem
       ENV_FILE: var/protocol_test_env.json
+      # Exercise shared-secret enrollment under an explicit test policy.
+      TP_SECURITY_MODE: LAB
       # The CMP test enrolls an ML-DSA-65 certificate, which needs OpenSSL >= 3.5.
       OPENSSL_VERSION: 3.6.0
 
@@ -75,8 +77,18 @@ jobs:
         with:
           run_migrations: true
 
+      - name: Initialize the security policy
+        run: uv run trustpoint/manage.py sync_security_config
+
       - name: Create CAs, domains and test devices
         run: uv run trustpoint/manage.py create_protocol_test_env --output "${ENV_FILE}"
+
+      - name: Create EST and CMP RA setup
+        run: |
+          uv run trustpoint/manage.py create_ra_setup \
+            --host "${TRUSTPOINT_HOST%%:*}" \
+            --port "${TRUSTPOINT_HOST##*:}" \
+            --output "${ENV_FILE}"
 
       - name: Start Trustpoint HTTPS development server
         run: |
@@ -99,7 +111,7 @@ jobs:
           cat reports/server.log >&2
           exit 1
 
-      - name: Test CMP, EST and REST enrollment
+      - name: Test CMP, EST, REST and RA enrollment
         run: |
           bash tests/scripts/test_protocol_endpoints.sh \
             --host "${TRUSTPOINT_HOST}" \

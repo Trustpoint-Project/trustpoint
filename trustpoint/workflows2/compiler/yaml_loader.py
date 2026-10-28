@@ -45,10 +45,23 @@ def _add_bool_resolver(loader_cls: Any) -> None:
 _add_bool_resolver(TrustpointYamlLoader)
 
 
+def safe_load_yaml(yaml_text: str) -> Any:
+    """Construct basic YAML values with the fixed SafeLoader subclass.
+
+    Use the loader directly to retain our boolean resolvers without passing a
+    custom loader through the generic ``yaml.load`` deserialization API.
+    """
+    loader = TrustpointYamlLoader(yaml_text)
+    try:
+        return loader.get_single_data()
+    finally:
+        loader.dispose()
+
+
 def load_yaml_any(yaml_text: str) -> Any:
     """Parse YAML text into native Python values."""
     try:
-        return yaml.load(yaml_text, Loader=TrustpointYamlLoader)  # noqa: S506
+        return safe_load_yaml(yaml_text)
     except yaml.YAMLError as e:
         msg = 'Invalid YAML'
         raise CompileError(msg, details=str(e)) from e

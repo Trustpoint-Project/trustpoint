@@ -4,44 +4,124 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST" autocomplete="off">
-        {% csrf_token %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Delete Agent Profiles" %}
+        </h1>
 
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans "Confirm Workflow Definition Deletion" %}</h1>
+        <p class="mb-0 text-muted">
+            {% trans "Review the selected agent profiles before permanently deleting them." %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="delete-agent-profiles-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <div class="alert alert-warning mb-5" role="alert">
+                    <strong>
+                        {% trans "The selected agent profiles will be permanently deleted." %}
+                    </strong>
+
+                    <div class="mt-1">
+                        {% trans "This action cannot be undone." %}
+                    </div>
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    {% for profile in profiles %}
-                        <h2>({{ forloop.counter }}) {% trans "Workflow Definition" %}: {{ profile.name }}</h2>
-                        <hr class="hr-m">
+
+                {% for profile in profiles %}
+                    <section class="{% if not forloop.last %}mb-5{% endif %}">
+                        <div class="mb-3">
+                            <h2 class="h4 mb-1">
+                                {{ profile.name }}
+                            </h2>
+
+                            <p class="mb-0 text-muted">
+                                {% trans "Agent profile selected for deletion." %}
+                            </p>
+                        </div>
+
+                        <hr class="mb-4">
+
                         <div class="tp-kvp-list">
                             <div>
-                                <div>{% trans "Name" %}</div>
-                                <div>{{ profile.name }}</div>
+                                <div>
+                                    {% trans "Name" %}
+                                </div>
+
+                                <div>
+                                    {% if profile.name %}
+                                        {{ profile.name }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
                             </div>
+
                             <div>
-                                <div>{% trans "Version" %}</div>
-                                <div>{{ profile.version }}</div>
+                                <div>
+                                    {% trans "Version" %}
+                                </div>
+
+                                <div>
+                                    {% if profile.version %}
+                                        {{ profile.version }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
                             </div>
+
                             <div>
-                                <div>{% trans "Active" %}</div>
-                                <div>{% if profile.is_active %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</div>
+                                <div>
+                                    {% trans "Status" %}
+                                </div>
+
+                                <div>
+                                    {% if profile.is_active %}
+                                        <span class="badge text-bg-success">
+                                            {% trans "Active" %}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">
+                                            {% trans "Inactive" %}
+                                        </span>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
-                    {% endfor %}
-                </div>
-            </div>
+                    </section>
 
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'agents:profiles' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
-                    <button type="submit" class="btn btn-danger">{% trans "Delete Definitions" %}</button>
-                </div>
-            </div>
+                {% empty %}
+                    <div class="text-center text-muted py-5">
+                        {% trans "No agent profiles are selected for deletion." %}
+                    </div>
+                {% endfor %}
+            </form>
         </div>
-    </form>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'agents:profiles' %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Cancel" %}
+        </a>
+
+        <button
+            type="submit"
+            form="delete-agent-profiles-form"
+            class="btn btn-danger"
+            {% if not profiles %}disabled{% endif %}
+        >
+            {% trans "Delete Selected Profiles" %}
+        </button>
+    </div>
+</div>
 {% endblock content %}

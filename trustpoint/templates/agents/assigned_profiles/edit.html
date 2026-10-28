@@ -3,26 +3,62 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
-<form method="post" autocomplete="off">
-    {% csrf_token %}
-    <div class="card">
-        <div class="card-header">
-            <h1>{% trans "Configure Profile Assignment" %}</h1>
-        </div>
-        <div class="card-body">
-            <div class="tp-card-centered-content">
-                <h2>{% blocktrans with profile_name=assignment.workflow_definition.name agent_name=agent.name %}{{ profile_name }} — {{ agent_name }}{% endblocktrans %}</h2>
-                <hr>
-                {{ form|crispy }}
-            </div>
-        </div>
-        <div class="card-footer d-flex">
-            <div class="tp-card-btn-footer m-1">
-                <a href="{% url 'agents:assigned-profiles-list' agent_id=agent.pk %}"
-                   class="btn btn-secondary">{% trans "Cancel" %}</a>
-                <button type="submit" class="btn btn-primary">{% trans "Save Changes" %}</button>
-            </div>
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Configure Profile Assignment" %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% blocktrans with profile_name=assignment.workflow_definition.name agent_name=agent.name %}
+                Configure how the profile "{{ profile_name }}" is applied to agent "{{ agent_name }}".
+            {% endblocktrans %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="profile-assignment-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans "Assignment Settings" %}
+                        </h2>
+
+                        <p class="mb-0 text-muted">
+                            {% trans "Configure renewal behavior and certificate management settings for this profile assignment." %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
+
+                    {{ form|crispy }}
+                </section>
+            </form>
         </div>
     </div>
-</form>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'agents:assigned-profiles-list' agent_id=agent.pk %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Cancel" %}
+        </a>
+
+        <button
+            type="submit"
+            form="profile-assignment-form"
+            class="btn btn-primary"
+        >
+            {% trans "Save Changes" %}
+        </button>
+    </div>
+</div>
 {% endblock content %}

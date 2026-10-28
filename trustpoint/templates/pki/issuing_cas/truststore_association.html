@@ -3,78 +3,208 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
+<div class="card">
 
-    <form method="POST" autocomplete="off" id="associationForm">
-        {% csrf_token %}
+    {# ============================================================ #}
+    {# Header                                                      #}
+    {# ============================================================ #}
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Associate Trust Store' %}
+        </h1>
+        <p class="mb-0 text-muted">
+            {% trans 'Select the trust store that should be associated with this Issuing CA.' %}
+        </p>
+    </div>
 
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Associate Trust Store' %}</h1>
-                </div>
+
+    {# ============================================================ #}
+    {# Content                                                     #}
+    {# ============================================================ #}
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Trust Store Association' %}
+                </h2>
+                <p class="text-muted mb-0">
+                    {% trans 'The selected trust store defines the trusted certificates used for this Issuing CA.' %}
+                </p>
             </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    <h2>{% trans 'Trust Store Association' %}</h2>
-                    <p>{% trans 'Select a trust store to associate with this Issuing CA.' %}</p>
-                    {% if is_cmp %}
-                    <div class="alert alert-info" role="alert">
-                        <strong>{% trans 'CMP Certificate:' %}</strong> {% trans 'Import the Issuing CA certificate of the remote PKI. This certificate is used to identify the recipient CA and verify responses.' %}
-                    </div>
-                    {% elif is_est_ra %}
-                    <div class="alert alert-info" role="alert">
-                        {% if est_ra_step == 1 %}
-                        <strong>{% trans 'EST RA - Step 1/2 (CA Chain):' %}</strong> {% trans 'Import the Issuing CA chain. This establishes the RA certificate and hierarchy.' %}
-                        {% else %}
-                        <strong>{% trans 'EST RA - Step 2/2 (TLS Certificate):' %}</strong> {% trans 'Import the TLS server certificate. This certificate is used for HTTPS connection security to the remote EST server.' %}
-                        {% endif %}
-                    </div>
+
+            <hr class="mb-4">
+
+
+            {# ==================================================== #}
+            {# Context-specific information                        #}
+            {# ==================================================== #}
+            {% if is_csr %}
+                <div class="alert alert-info mb-4" role="alert">
+                    <strong>{% trans 'External PKI (CSR):' %}</strong>
+                    {% trans 'Select or import the CA chain of the external PKI. The trust store is used to validate the Issuing CA certificate returned for the generated CSR.' %}
+                </div>
+
+            {% elif is_cmp %}
+                <div class="alert alert-info mb-4" role="alert">
+                    <strong>{% trans 'CMP:' %}</strong>
+                    {% trans 'Select or import the Issuing CA certificate of the remote PKI. It is used to identify the recipient CA and verify CMP responses.' %}
+                </div>
+
+            {% elif is_est_ra %}
+                <div class="alert alert-info mb-4" role="alert">
+                    {% if est_ra_step == 1 %}
+                        <strong>
+                            {% trans 'EST RA – Step 1 of 2: CA Chain' %}
+                        </strong>
+                        <br>
+                        {% trans 'Select or import the Issuing CA chain. This establishes the trusted CA hierarchy for the remote EST service.' %}
                     {% else %}
-                    <div class="alert alert-info" role="alert">
-                        <strong>{% trans 'EST Certificate:' %}</strong> {% trans 'Import the TLS server certificate of the remote PKI. This certificate is used for HTTPS connection security.' %}
-                    </div>
+                        <strong>
+                            {% trans 'EST RA – Step 2 of 2: TLS Certificate' %}
+                        </strong>
+                        <br>
+                        {% trans 'Select or import the TLS server certificate used to secure the HTTPS connection to the remote EST server.' %}
                     {% endif %}
-                    <hr>
-                    {{ form|crispy }}
-                    <button type="button" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#truststoreImportModal">
-                        {% trans 'Import new Truststore' %}
+                </div>
+
+            {% else %}
+                <div class="alert alert-info mb-4" role="alert">
+                    <strong>{% trans 'EST:' %}</strong>
+                    {% trans 'Select or import the TLS server certificate of the remote PKI. It is used to secure and validate the HTTPS connection.' %}
+                </div>
+            {% endif %}
+
+
+            {# ==================================================== #}
+            {# Association form                                    #}
+            {# ==================================================== #}
+            <form
+                id="associationForm"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+                {{ form|crispy }}
+            </form>
+
+
+            {# ==================================================== #}
+            {# Import additional Trust Store                       #}
+            {# ==================================================== #}
+            <div class="mt-3">
+                <p class="text-muted mb-2">
+                    {% trans 'The required trust store is not available yet?' %}
+                </p>
+
+                <button
+                    type="button"
+                    class="btn btn-outline-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#truststoreImportModal"
+                >
+                    {% trans 'Import new Trust Store' %}
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+
+    {# ============================================================ #}
+    {# Footer                                                      #}
+    {# ============================================================ #}
+    <div class="card-footer d-flex justify-content-between align-items-center">
+
+        <a
+            href="{% url 'pki:issuing_cas' %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+
+        <button
+            type="submit"
+            form="associationForm"
+            class="btn btn-primary"
+        >
+            {% trans 'Associate Trust Store' %}
+        </button>
+
+    </div>
+
+</div>
+
+
+{# ================================================================ #}
+{# Trust Store Import Modal                                        #}
+{# ================================================================ #}
+<div
+    class="modal fade"
+    id="truststoreImportModal"
+    tabindex="-1"
+    aria-labelledby="truststoreImportModalLabel"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <form
+                method="post"
+                enctype="multipart/form-data"
+                id="importForm"
+            >
+                {% csrf_token %}
+
+                <div class="modal-header">
+                    <div>
+                        <h2
+                            class="modal-title h5 mb-1"
+                            id="truststoreImportModalLabel"
+                        >
+                            {% trans 'Import Trust Store' %}
+                        </h2>
+
+                        <p class="text-muted small mb-0">
+                            {% trans 'Create a new trust store from certificate files.' %}
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="{% trans 'Close' %}"
+                    ></button>
+                </div>
+
+
+                <div class="modal-body">
+                    {{ import_form|crispy }}
+                </div>
+
+
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal"
+                    >
+                        {% trans 'Cancel' %}
+                    </button>
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                    >
+                        {% trans 'Add new Trust Store' %}
                     </button>
                 </div>
 
-            </div>
-            <div class="card-footer d-flex justify-content-between align-items-center">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
-                    <button type="submit" class="btn btn-primary">{% trans "Associate Trust Store" %}</button>
-                </div>
-            </div>
-        </div>
-    </form>
+            </form>
 
-    <!-- Truststore Import Modal -->
-    <div class="modal fade" id="truststoreImportModal" tabindex="-1" aria-labelledby="truststoreImportModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form method="POST" enctype="multipart/form-data" id="importForm">
-                    {% csrf_token %}
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="truststoreImportModalLabel">{% trans 'Import Truststore' %}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="tp-card-centered-content">
-                            <h2>{% trans 'File Import' %}</h2>
-                            <hr>
-                            {{ import_form|crispy }}
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans 'Cancel' %}</button>
-                        <button type="submit" class="btn btn-primary">{% trans 'Add new Truststore' %}</button>
-                    </div>
-                </form>
-            </div>
         </div>
     </div>
+</div>
 
 {% endblock content %}

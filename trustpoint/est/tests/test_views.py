@@ -31,6 +31,15 @@ def request_factory():
 
 
 @pytest.fixture
+def security_helpers():
+    """Isolate the policy and atomic issuance helpers in view orchestration tests."""
+    with patch('request.enrollment.require_single_security_config') as policy, patch(
+        'request.enrollment.process_certificate_operation_atomically'
+    ) as issue, patch('request.enrollment.release_delivered_workflow2_request') as release:
+        yield policy, issue, release
+
+
+@pytest.fixture
 def mock_domain():
     """Fixture providing a mock DomainModel."""
     domain = Mock(spec=DomainModel)
@@ -153,13 +162,13 @@ def test_est_simple_enrollment_mixin_event():
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.EstMessageResponder')
-@patch('est.views.OperationProcessor')
-@patch('est.views.Workflow2Handler')
-@patch('est.views.EstAuthorization')
-@patch('est.views.EstAuthentication')
-@patch('est.views.EstMessageParser')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.EstMessageResponder')
+@patch('request.enrollment.OperationProcessor')
+@patch('request.enrollment.Workflow2Handler')
+@patch('request.enrollment.EstAuthorization')
+@patch('request.enrollment.authenticate_est_request')
+@patch('request.enrollment.EstMessageParser')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_process_enrollment_success(
     mock_request_context,
@@ -172,6 +181,7 @@ def test_process_enrollment_success(
     mock_responder,
     mock_error_responder,
     request_factory,
+    security_helpers,
 ):
     """Test successful enrollment processing."""
     from django.http import HttpResponse
@@ -210,22 +220,24 @@ def test_process_enrollment_success(
     assert response.content == b'Certificate issued'
     mock_validator.return_value.validate.assert_called_once_with(mock_ctx)
     mock_parser.return_value.parse.assert_called_once_with(mock_ctx)
-    mock_auth.return_value.authenticate.assert_called_once_with(mock_ctx)
+    security_helpers[0].assert_called_once_with(mock_ctx)
+    mock_auth.assert_called_once_with(mock_ctx)
     mock_authz.return_value.authorize.assert_called_once_with(mock_ctx)
     mock_workflow2.return_value.handle.assert_called_once_with(mock_ctx)
-    mock_processor.return_value.process_operation.assert_called_once_with(mock_ctx)
+    security_helpers[1].assert_called_once_with(mock_ctx, mock_processor.return_value)
     mock_responder.build_response.assert_called_once_with(mock_ctx)
     mock_error_responder.build_response.assert_not_called()
+    security_helpers[2].assert_called_once_with(mock_ctx)
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.EstMessageResponder')
-@patch('est.views.OperationProcessor')
-@patch('est.views.Workflow2Handler')
-@patch('est.views.EstAuthorization')
-@patch('est.views.EstAuthentication')
-@patch('est.views.EstMessageParser')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.EstMessageResponder')
+@patch('request.enrollment.OperationProcessor')
+@patch('request.enrollment.Workflow2Handler')
+@patch('request.enrollment.EstAuthorization')
+@patch('request.enrollment.authenticate_est_request')
+@patch('request.enrollment.EstMessageParser')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_process_enrollment_skips_processing_when_workflow_blocks(
     mock_request_context,
@@ -238,6 +250,7 @@ def test_process_enrollment_skips_processing_when_workflow_blocks(
     mock_responder,
     mock_error_responder,
     request_factory,
+    security_helpers,
 ):
     """EST enrollment should not issue when workflows2 blocks the request."""
     from django.http import HttpResponse
@@ -265,9 +278,11 @@ def test_process_enrollment_skips_processing_when_workflow_blocks(
     response = mixin.process_enrollment(request, 'test_domain', 'tls_client')
 
     assert response.status_code == 202
-    mock_processor.return_value.process_operation.assert_not_called()
+    mock_processor.assert_not_called()
+    security_helpers[1].assert_not_called()
     mock_responder.build_response.assert_called_once_with(mock_ctx)
     mock_error_responder.build_response.assert_not_called()
+    security_helpers[2].assert_called_once_with(mock_ctx)
 
 
 @patch('est.views.EstCertificateRequestContext')
@@ -289,7 +304,7 @@ def test_process_enrollment_request_context_failure(mock_request_context, reques
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_process_enrollment_validation_failure(
     mock_request_context, mock_validator, mock_error_responder, request_factory
@@ -377,13 +392,13 @@ def test_est_simple_reenrollment_view_csrf_exempt():
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.EstMessageResponder')
-@patch('est.views.OperationProcessor')
-@patch('est.views.Workflow2Handler')
-@patch('est.views.EstAuthorization')
-@patch('est.views.EstAuthentication')
-@patch('est.views.EstMessageParser')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.EstMessageResponder')
+@patch('request.enrollment.OperationProcessor')
+@patch('request.enrollment.Workflow2Handler')
+@patch('request.enrollment.EstAuthorization')
+@patch('request.enrollment.authenticate_est_request')
+@patch('request.enrollment.EstMessageParser')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_est_simple_reenrollment_view_post_success(
     mock_request_context,
@@ -396,6 +411,7 @@ def test_est_simple_reenrollment_view_post_success(
     mock_responder,
     mock_error_responder,
     request_factory,
+    security_helpers,
 ):
     """Test successful reenrollment via POST."""
     from django.http import HttpResponse
@@ -434,13 +450,15 @@ def test_est_simple_reenrollment_view_post_success(
     assert response.content == b'Certificate renewed'
     mock_validator.return_value.validate.assert_called_once_with(mock_ctx)
     mock_parser.return_value.parse.assert_called_once_with(mock_ctx)
-    mock_auth.return_value.authenticate.assert_called_once_with(mock_ctx)
+    security_helpers[0].assert_called_once_with(mock_ctx)
+    mock_auth.assert_called_once_with(mock_ctx)
     mock_authz.return_value.authorize.assert_called_once()
     assert mock_authz.call_args[1]['allowed_operations'] == ['simplereenroll']
     mock_workflow2.return_value.handle.assert_called_once_with(mock_ctx)
-    mock_processor.return_value.process_operation.assert_called_once_with(mock_ctx)
+    security_helpers[1].assert_called_once_with(mock_ctx, mock_processor.return_value)
     mock_responder.build_response.assert_called_once_with(mock_ctx)
     mock_error_responder.build_response.assert_not_called()
+    security_helpers[2].assert_called_once_with(mock_ctx)
 
 
 @patch('est.views.EstCertificateRequestContext')
@@ -462,11 +480,12 @@ def test_est_simple_reenrollment_view_post_context_failure(mock_request_context,
 
 
 @patch('est.views.EstErrorMessageResponder')
-@patch('est.views.EstAuthentication')
-@patch('est.views.EstHttpRequestValidator')
+@patch('request.enrollment.authenticate_est_request')
+@patch('request.enrollment.EstMessageParser')
+@patch('request.enrollment.EstHttpRequestValidator')
 @patch('est.views.EstCertificateRequestContext')
 def test_est_simple_reenrollment_view_post_authentication_failure(
-    mock_request_context, mock_validator, mock_auth, mock_error_responder, request_factory
+    mock_request_context, mock_validator, mock_parser, mock_auth, mock_error_responder, request_factory, security_helpers
 ):
     """Test reenrollment when authentication fails."""
     from django.http import HttpResponse
@@ -484,7 +503,8 @@ def test_est_simple_reenrollment_view_post_authentication_failure(
         content_type=mock_ctx.http_response_content_type
     )
     
-    mock_auth.return_value.authenticate.side_effect = Exception('Auth failed')
+    mock_parser.return_value.parse.return_value = mock_ctx
+    mock_auth.side_effect = ValueError('Auth failed')
     
     view = EstSimpleReEnrollmentView.as_view()
     request = request_factory.post(
@@ -496,6 +516,10 @@ def test_est_simple_reenrollment_view_post_authentication_failure(
     response = view(request, domain='test_domain', cert_profile='tls_client')
     
     assert response.status_code == 401
+    mock_auth.assert_called_once_with(mock_ctx)
+    security_helpers[0].assert_called_once_with(mock_ctx)
+    security_helpers[1].assert_not_called()
+    security_helpers[2].assert_not_called()
     mock_error_responder.build_response.assert_called_once_with(mock_ctx)
 
 

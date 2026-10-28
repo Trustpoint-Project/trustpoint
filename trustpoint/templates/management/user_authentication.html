@@ -1,0 +1,77 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans 'User Authentication' %}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
+        {{ form.non_field_errors }}
+        {% if form.issuing_ca_id.errors %}
+            <div class="alert alert-danger">{% trans 'Reload the page and try again.' %}</div>
+        {% endif %}
+        <p>
+            {% trans 'Choose how users may sign in. At least one authentication method must be enabled and configured. When several are enabled, users may use any method available to their account.' %}
+        </p>
+
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col" class="text-nowrap ps-0">{% trans 'Authentication Method' %}</th>
+                        <th scope="col">{% trans 'Enabled' %}</th>
+                        <th scope="col">{% trans 'Configuration' %}</th>
+                        <th scope="col" class="text-end">{% trans 'Actions' %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">
+                            {% trans 'Password + OTP' %}
+                            <div class="small text-muted">{% trans 'Sign in with a username and password.' %}</div>
+                        </th>
+                        <td>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch" id="password-enabled" checked disabled>
+                                <label class="visually-hidden" for="password-enabled">{% trans 'Enable password and OTP authentication' %}</label>
+                            </div>
+                        </td>
+                        <td><span class="badge text-bg-success">{% trans 'Ready' %}</span></td>
+                        <td class="text-end">
+                            <a href="{% url 'management:password_policy' %}" class="btn btn-primary btn-sm">{% trans 'Configure' %}</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row" class="fw-normal ps-0">
+                            {% trans 'Certificate' %}
+                            <div class="small text-muted">{% trans 'Sign in with a certificate associated with your user account.' %}</div>
+                        </th>
+                        <td>
+                            <form method="post" action="{% url 'management:user_authentication' %}">
+                                {% csrf_token %}
+                                {{ form.issuing_ca_id }}
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="certificate-enabled" name="enabled" onchange="this.form.requestSubmit()"{% if management_ca_complete and form.enabled.value %} checked{% endif %}{% if not management_ca_complete %} disabled{% endif %}>
+                                    <label class="visually-hidden" for="certificate-enabled">{% trans 'Enable certificate authentication' %}</label>
+                                </div>
+                            </form>
+                        </td>
+                        <td>
+                            {% if management_ca_complete %}
+                                <span class="badge text-bg-success">{% trans 'Ready' %}</span>
+                            {% else %}
+                                <span class="badge text-bg-warning">{% trans 'Setup required' %}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'management:certificate_authentication' %}" class="btn btn-primary btn-sm">{% trans 'Configure' %}</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

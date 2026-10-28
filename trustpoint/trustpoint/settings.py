@@ -22,6 +22,8 @@ from typing import Any, ClassVar
 import django_stubs_ext
 from django.utils.translation import gettext_lazy as _
 
+from trustpoint.secret_key import development_secret_key, load_secret_key
+
 try:
     APP_VERSION = version('trustpoint')
 except PackageNotFoundError:
@@ -72,13 +74,16 @@ STATIC_ROOT = Path(__file__).parent.parent / Path('collected_static')
 LOG_DIR_PATH = BASE_DIR / Path('media/log/')
 LOG_DIR_PATH.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
+LOG_SIZE_WARNING_THRESHOLD_MIB = 10
 
 BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
+BACKUP_MAX_AGE_DAYS = 7
 
 # Allows all paths that start with:
 PUBLIC_PATHS = [
     '/.well-known/cmp',
     '/.well-known/est',
+    '/.well-known/scep',
     '/rest',
     '/api',
     '/aoki',
@@ -259,21 +264,23 @@ for dns_name in _tls_dns_names:
             CSRF_TRUSTED_ORIGINS.append(_https_origin)
 
 
-# Basic SMTP backend
-if DEBUG:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-else:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no-reply@trustpoint.ai')
-
-
 # Settings for postgreql database
 DATABASE_ENGINE = os.environ.get('DATABASE_ENGINE', 'django.db.backends.postgresql')
 DATABASE_HOST = os.environ.get('DATABASE_HOST', 'localhost')
 DATABASE_PORT = os.environ.get('DATABASE_PORT', '5432')
 POSTGRES_DB = os.environ.get('POSTGRES_DB', 'trustpoint_db')
-DATABASE_USER = os.environ.get('DATABASE_USER', 'admin')
-DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD', 'testing321')
+_DATABASE_USER_FILE = os.getenv('DATABASE_USER_FILE')
+DATABASE_USER = (
+    Path(_DATABASE_USER_FILE).read_text(encoding='utf-8').strip()
+    if _DATABASE_USER_FILE else os.environ.get('DATABASE_USER', 'admin')
+)
+_DATABASE_PASSWORD_FILE = os.getenv('DATABASE_PASSWORD_FILE')
+if _DATABASE_PASSWORD_FILE:
+    # An explicit mounted secret takes precedence over inherited development
+    # defaults. A missing secret must stop startup rather than fall back.
+    DATABASE_PASSWORD = Path(_DATABASE_PASSWORD_FILE).read_text(encoding='utf-8').strip()
+else:
+    DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD', 'testing321')
 _DEFAULT_OPERATIONAL_DATABASE = 'postgresql' if DOCKER_CONTAINER else 'sqlite'
 TRUSTPOINT_OPERATIONAL_DATABASE = os.environ.get(
     'TRUSTPOINT_OPERATIONAL_DATABASE',
@@ -334,27 +341,33 @@ TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_flag(
 # Setting for email backend
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply.trustpoint@localhost')
 
-# Default: console (safe for dev/showcases)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Default to console output unless an SMTP host is configured.
+MAILERS: dict[str, dict[str, Any]] = {'default': {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}}
 
-# If EMAIL_HOST is present, switch to SMTP
-_email_host = os.getenv('EMAIL_HOST')  # e.g. "smtp.customer.tld" or "mailpit"
+# Keep the deployment environment variables while configuring Django via MAILERS.
+_email_host = os.getenv('EMAIL_HOST')
 if _email_host:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = _email_host
-    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
-
-    # Sensible defaults based on port; env can override
+    _email_port = int(os.getenv('EMAIL_PORT', '587'))
     _SMTP_TLS_PORT = 587
     _SMTP_SSL_PORT = 465
     _use_tls_env = os.getenv('EMAIL_USE_TLS')
     _use_ssl_env = os.getenv('EMAIL_USE_SSL')
-    EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == _SMTP_TLS_PORT)
-    EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == _SMTP_SSL_PORT)
-
-    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # auth only if both non-empty
-    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-    EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
+    MAILERS['default'] = {
+        'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+        'OPTIONS': {
+            'host': _email_host,
+            'port': _email_port,
+            'use_tls': (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (
+                _email_port == _SMTP_TLS_PORT
+            ),
+            'use_ssl': (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (
+                _email_port == _SMTP_SSL_PORT
+            ),
+            'username': os.getenv('EMAIL_HOST_USER', ''),
+            'password': os.getenv('EMAIL_HOST_PASSWORD', ''),
+            'timeout': int(os.getenv('EMAIL_TIMEOUT', '10')),
+        },
+    }
 
 
 STORAGES = {
@@ -422,6 +435,7 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
+    'scep.apps.ScepConfig',
     'rest_pki.apps.RestPkiConfig',
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
@@ -465,10 +479,12 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'users.middleware.ClientCertificateAuthenticationMiddleware',
     'users.middleware.UserPreferencesMiddleware',
     'users.middleware.IdleSessionTimeoutMiddleware',
     'users.middleware.PasswordChangeRequiredMiddleware',
     'users.middleware.ServiceAccountMiddleware',
+    'users.middleware.PasswordOTPRequiredMiddleware',
     'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
@@ -522,18 +538,24 @@ TEMPLATES: list[dict[str, Any]] = [
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'users.password_validation.ConfigurablePasswordValidator',
-    },
-]
+AUTH_PASSWORD_VALIDATORS = [{'NAME': 'management.password_validation.PasswordPolicyValidator'}]
 
 # Authentication backends
 # https://docs.djangoproject.com/en/5.0/ref/settings/#authentication-backends
 AUTHENTICATION_BACKENDS = [
     'users.authentication.ServiceAccountBackend',  # Service account authentication
     'users.management_backend.TrustpointModelBackend',
+    'users.authentication.ClientCertificateBackend',  # TLS client certificate sessions
+    'django.contrib.auth.backends.ModelBackend',    # Default Django authentication
 ]
+
+# Only these direct peers may assert TLS client identity. They must overwrite the
+# SSL-Client-Cert, X-SSL-Client-Verify, and X-Forwarded-Proto request headers.
+CLIENT_CERTIFICATE_TRUSTED_PROXY_IPS = tuple(
+    address.strip()
+    for address in os.getenv('TRUSTPOINT_CLIENT_CERTIFICATE_PROXY_IPS', '127.0.0.1,::1').split(',')
+    if address.strip()
+)
 
 
 def _bootstrap_database_path() -> Path:
@@ -589,12 +611,12 @@ else:
     raise RuntimeError(msg)
 
 
-# SECURITY WARNING: keep the secret key used in production secret!
-if DEBUG:
-    SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'  # noqa: S105
+# Production requires a provisioned, read-only secret; it never generates a key.
+_django_secret_key_file = os.getenv('DJANGO_SECRET_KEY_FILE')
+if _django_secret_key_file or not DEBUG:
+    SECRET_KEY = load_secret_key(_django_secret_key_file or '/run/secrets/django_secret_key', strip_whitespace=False)
 else:
-    # TODO(AlexHx8472): Use proper docker secrets handling.  # noqa: FIX002
-    SECRET_KEY = Path('/etc/trustpoint/secrets/django_secret_key.env').read_text()
+    SECRET_KEY = development_secret_key(REPO_ROOT / 'var' / 'development' / 'django_secret_key')
 
 
 class UTCFormatter(logging.Formatter):
@@ -633,6 +655,11 @@ LOGGING = {
         '': {
             'level': 'INFO',
             'handlers': ['console', 'rotatingFile'],
+        },
+        'django-q': {
+            'level': 'WARNING',
+            'handlers': [],
+            'propagate': True,
         },
     },
 }

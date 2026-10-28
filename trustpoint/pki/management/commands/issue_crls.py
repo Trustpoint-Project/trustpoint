@@ -6,39 +6,15 @@
 from __future__ import annotations
 
 from django.core.management.base import BaseCommand
+
 from pki.models import CaModel
+from util.commands import CommandLoggingMixin
 
-from trustpoint.logger import LoggerMixin
 
-
-class Command(BaseCommand, LoggerMixin):
+class Command(BaseCommand, CommandLoggingMixin):
     """Issues CRLs to all issuing CAs in the database."""
 
     help = 'Issues CRLs to all issuing CAs in the database.'
-
-    def log_and_stdout(self, message: str, level: str = 'info') -> None:
-        """Log a message and write it to stdout.
-
-        Parameters
-        ----------
-        message : str
-            The message to log and print.
-        level : str
-            The logging level ('info', 'warning', 'error', etc.).
-        """
-        # Log the message
-        log_method = getattr(self.logger, level, self.logger.info)
-        log_method(message)
-
-        # Write to stdout
-        if level == 'error':
-            self.stdout.write(self.style.ERROR(message))
-        elif level == 'warning':
-            self.stdout.write(self.style.WARNING(message))
-        elif level == 'info':
-            self.stdout.write(self.style.SUCCESS(message))
-        else:
-            self.stdout.write(message)
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Issues CRLs to all issuing CAs."""

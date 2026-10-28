@@ -1,17 +1,79 @@
 {% extends 'trustpoint/base.html' %}
-{% load static %}
+{% load static i18n %}
 {% block content %}
-{% include 'home/dashboard_header.html' %}
-{% include 'home/counts-panel-certs.html' %}
-{% include 'home/charts-panel-certs.html' %}
-{% include 'home/counts-panel-device.html' %}
-{% include 'home/charts-panel-device.html' %}
-{% include 'home/counts-panel-ica.html' %}
-{% include 'home/charts-panel-ica.html' %}
+<div class="container-fluid" id="dashboard" data-date-format="{{ dashboard_date_format }}" data-timezone="{{ dashboard_timezone }}" data-overview-url="{% url 'home:dashboard_overview' %}" data-notifications-url="{% url 'home:dashboard_notifications' %}" data-analytics-url="{% url 'home:dashboard_analytics' %}" data-security-url="{% url 'home:dashboard_security' %}" data-device-list-url="{% url 'devices:devices' %}" data-ca-list-url="{% url 'pki:cas' %}" data-certificate-list-url="{% url 'pki:certificates' %}" data-tls-settings-url="{% url 'management:tls' %}" data-security-settings-url="{% url 'management:settings' %}?tab=security" data-crypto-settings-url="{% url 'management:backend_configuration' %}">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div><h1 class="h3 mb-1">{% trans 'Dashboard' %}</h1></div>
+    <div class="d-flex align-items-center gap-2"><span id="dashboard-freshness" class="small" role="status">{% trans 'Loading' %}...</span><button type="button" class="btn btn-outline-secondary btn-sm" id="dashboard-refresh">{% trans 'Refresh' %}</button></div>
+  </div>
+  <nav class="dashboard-tabs mb-3" role="tablist" aria-label="Dashboard areas">
+    <button type="button" class="dashboard-tab is-active" data-dashboard-tab="overview" role="tab" aria-controls="dashboard-overview" aria-selected="true">Overview</button>
+    <button type="button" class="dashboard-tab" data-dashboard-tab="certificates" role="tab" aria-controls="dashboard-certificates" aria-selected="false">Certificates</button>
+    <button type="button" class="dashboard-tab" data-dashboard-tab="devices" role="tab" aria-controls="dashboard-devices-panel" aria-selected="false">Devices</button>
+    <button type="button" class="dashboard-tab" data-dashboard-tab="cas" role="tab" aria-controls="dashboard-cas-panel" aria-selected="false">Issuing CAs</button>
+  </nav>
+  <section id="dashboard-overview" class="dashboard-panel" aria-labelledby="dashboard-overview-heading">
+    <div class="d-flex justify-content-between align-items-center flex-wrap mb-3 gap-2"><h2 class="h5 mb-0" id="dashboard-overview-heading">Overview</h2><label for="dashboard-expiry-days">Expiry horizon <select id="dashboard-expiry-days" class="form-select form-select-sm d-inline-block w-auto ms-2"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label></div>
+    <div class="row g-3 mb-4">
+      <div class="col-12 col-sm-6 col-xl-3">
+        <a class="card h-100 dashboard-summary-link" href="{% url 'pki:certificates' %}" aria-labelledby="dashboard-total-label">
+          <div class="card-body">
+            <div class="text-body-secondary" id="dashboard-total-label">Device-linked certificates</div>
+            <div class="display-6 fw-bold" id="dashboard-total">—</div>
+            <small>Preview scope</small>
+          </div>
+        </a>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-3">
+        <a class="card h-100 dashboard-summary-link" id="dashboard-expiring-card" href="{% url 'pki:certificates' %}?status=ok&amp;expiry_window=30_days" aria-labelledby="dashboard-expiring-label">
+          <div class="card-body">
+            <div class="text-body-secondary" id="dashboard-expiring-label">Expiring in 30 days</div>
+            <div class="display-6 fw-bold" id="dashboard-expiring">—</div>
+            <small>Valid now, expires within horizon</small>
+          </div>
+        </a>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-3">
+        <a class="card h-100 dashboard-summary-link" href="{% url 'devices:devices' %}" aria-labelledby="dashboard-devices-label">
+          <div class="card-body">
+            <div class="text-body-secondary" id="dashboard-devices-label">Managed devices</div>
+            <div class="display-6 fw-bold" id="dashboard-devices">—</div>
+            <small>Registered device records</small>
+          </div>
+        </a>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-3">
+        <a class="card h-100 dashboard-summary-link" href="{% url 'pki:cas' %}?is_active=true&amp;ca_type_group=ca" aria-labelledby="dashboard-cas-label">
+          <div class="card-body">
+            <div class="text-body-secondary" id="dashboard-cas-label">Enabled Issuing CAs</div>
+            <div class="display-6 fw-bold" id="dashboard-cas">—</div>
+            <small>Live availability not verified</small>
+          </div>
+        </a>
+      </div>
+    </div>
+    <section class="card mb-3" aria-labelledby="dashboard-health-heading"><div class="card-body"><h3 class="h5" id="dashboard-health-heading">Certificate Health</h3><div id="dashboard-health-bar" role="img" aria-label="Certificate health distribution" class="d-flex rounded overflow-hidden mb-3" style="height: 18px; background: #6c757d22"></div><div id="dashboard-health-legend" class="d-flex flex-wrap gap-3 small"></div><p class="small text-body-secondary mt-2 mb-0" id="dashboard-health-note"></p></div></section>
+    <section class="card mb-3" aria-labelledby="dashboard-security-heading"><div class="card-body"><h3 class="h5" id="dashboard-security-heading">Security &amp; Crypto Infrastructure</h3><p class="small text-body-secondary">Operational indicators, not an overall security rating.</p><div class="row g-3" id="dashboard-security-indicators" aria-live="polite"><div class="col-12 small text-body-secondary">Loading status...</div></div></div></section>
+    <section class="card mb-3" aria-labelledby="dashboard-alerts-heading"><div class="card-body"><div class="d-flex justify-content-between"><h3 class="h5" id="dashboard-alerts-heading">Requires Attention</h3><a href="{% url 'management:notifications' %}">View all</a></div><p class="small" id="dashboard-alerts-counts" aria-live="polite">Loading notifications...</p><div id="dashboard-alerts-list" class="list-group list-group-flush"></div></div></section>
+    <section class="card" aria-labelledby="dashboard-activity-heading"><div class="card-body"><div class="d-flex align-items-center justify-content-between flex-wrap gap-2"><h3 class="h5" id="dashboard-activity-heading">Recent Notifications</h3><label for="dashboard-activity-days">Activity period <select class="form-select form-select-sm d-inline-block w-auto ms-2" id="dashboard-activity-days"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label></div><p class="small text-body-secondary">Info and Setup messages only; not a complete audit history.</p><div id="dashboard-activity-list" class="list-group list-group-flush"></div></div></section>
+  </section>
+  <div class="d-flex justify-content-end align-items-center gap-2 mb-3" id="dashboard-detail-controls" role="group" aria-label="Dashboard analytics time filters"><label for="dashboard-detail-expiry-days">Expiry horizon <select id="dashboard-detail-expiry-days" class="form-select form-select-sm d-inline-block w-auto ms-2"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label><label for="dashboard-detail-activity-days">Historical issuance period <select id="dashboard-detail-activity-days" class="form-select form-select-sm d-inline-block w-auto ms-2"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label></div>
+  <section id="dashboard-certificates" class="dashboard-panel" hidden aria-labelledby="dashboard-certificates-title">
+    <h2 class="h5" id="dashboard-certificates-title">Certificates</h2>
+    <p class="text-body-secondary">Detailed certificate analytics use existing Trustpoint aggregations. Historical activity and current status use different populations, as indicated below.</p>
+    <div class="card"><div class="card-body"><div class="d-flex align-items-center justify-content-between flex-wrap gap-2"><h3 class="h6 mb-0">Certificate Health</h3><span class="small text-body-secondary">Device-linked preview scope · selected expiry horizon</span></div><div id="dashboard-certs-breakdown" class="row g-2 my-3" aria-live="polite"><div class="col-12 text-body-secondary small">Loading certificate health...</div></div><div class="mb-2"><a id="dashboard-expiring-link" class="btn btn-outline-warning btn-sm" href="{% url 'pki:certificates' %}?status=ok&amp;expiry_window=30_days">View certificates expiring in 30 days</a></div><div id="dashboard-analytics-certificates" class="row g-3 my-2" aria-live="polite"></div><a class="btn btn-outline-primary" href="{% url 'pki:certificates' %}">Open certificate management</a></div></div>
+  </section>
+  <section id="dashboard-devices-panel" class="dashboard-panel" hidden aria-labelledby="dashboard-devices-title">
+    <h2 class="h5" id="dashboard-devices-title">Devices</h2>
+    <div class="mb-3 d-flex align-items-center flex-wrap gap-2"><label for="dashboard-device-expiry-days">Credential expiry horizon <select id="dashboard-device-expiry-days" class="form-select form-select-sm d-inline-block w-auto ms-2"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label><span class="small text-body-secondary">Device enrollment and protocol distributions are current snapshots.</span></div>
+    <div class="card"><div class="card-body"><div class="text-body-secondary">Managed devices</div><div class="display-6 fw-bold" id="dashboard-devices-detail">—</div><p class="small text-body-secondary">Enrollment, credential and protocol summaries (current snapshot).</p><div id="dashboard-analytics-devices" class="row g-3 mb-3" aria-live="polite"></div><a class="btn btn-outline-primary" href="{% url 'devices:devices' %}">Open device management</a></div></div>
+  </section>
+  <section id="dashboard-cas-panel" class="dashboard-panel" hidden aria-labelledby="dashboard-cas-title">
+    <h2 class="h5" id="dashboard-cas-title">Issuing CAs</h2>
+    <div class="card"><div class="card-body"><div class="text-body-secondary">Enabled Issuing CAs</div><div class="display-6 fw-bold" id="dashboard-cas-detail">—</div><p class="small text-body-secondary">Status uses the selected expiry horizon; live service availability is not verified.</p><div id="dashboard-analytics-cas" class="row g-3 mb-3" aria-live="polite"></div><a class="btn btn-outline-primary" href="{% url 'pki:cas' %}">Open CA management</a></div></div>
+  </section>
+</div>
 
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-<script src="{% static 'js/chart.js' %}"></script>
-<script src="{% url 'javascript-catalog' %}"></script>
-<script src="{% static 'js/dashboard/dashboard.js' %}"></script>
-
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=12">
+<script defer src="{% static 'js/dashboard/dashboard.js' %}?v=16"></script>
 {% endblock content %}

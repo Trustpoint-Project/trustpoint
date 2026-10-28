@@ -18,6 +18,7 @@ from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.engine.context import RuntimeContext
 from workflows2.engine.eval import eval_condition
 from workflows2.engine.executor import WorkflowExecutor
+from workflows2.events.triggers import Triggers
 from workflows2.models import (
     Workflow2Definition,
     Workflow2Instance,
@@ -410,6 +411,10 @@ class WorkflowDispatchService:
                 continue
 
             trig = ir.get('trigger', {}) if isinstance(ir, dict) else {}
+            if on in Triggers.ENROLLMENT and trig.get('phase', 'before_issuance') != event.get(
+                'phase', 'before_issuance',
+            ):
+                continue
             sources = trig.get('sources', {}) if isinstance(trig, dict) else {}
             if not self._matches_sources(sources, source):
                 continue

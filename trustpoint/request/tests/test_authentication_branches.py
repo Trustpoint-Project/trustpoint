@@ -410,16 +410,37 @@ def test_username_password_rejects_unknown_or_wrong_type(
 def test_rest_username_password_invalid_config_and_lookup_error() -> None:
     auth = RestUsernamePasswordAuthentication()
     context = RestBaseRequestContext(rest_username='device', rest_password='secret')
-    with patch('request.authentication.rest.DeviceModel.objects') as objects:
+    with patch('request.authentication.base.DeviceModel.objects') as objects:
         objects.select_related.return_value.filter.return_value.first.return_value = Mock(
             onboarding_config=None, no_onboarding_config=None
         )
         with pytest.raises(ValueError, match='Invalid username or password'):
             auth.authenticate(context)
-    with patch('request.authentication.rest.DeviceModel.objects') as objects:
+    with patch('request.authentication.base.DeviceModel.objects') as objects:
         objects.select_related.side_effect = RuntimeError('db')
         with pytest.raises(ValueError, match='Invalid username or password'):
             auth.authenticate(context)
+
+
+@pytest.mark.parametrize('protocol', ['est', 'rest'])
+def test_password_authentication_keeps_protocol_exception_wrapping(protocol, est_device_without_onboarding):
+    """EST wraps internal validation errors; REST retains the original ValueError."""
+    username = est_device_without_onboarding['device'].common_name
+    if protocol == 'est':
+        auth = UsernamePasswordAuthentication()
+        context = EstBaseRequestContext(est_username=username, est_password='test_est_password')
+    else:
+        auth = RestUsernamePasswordAuthentication()
+        context = RestBaseRequestContext(rest_username=username, rest_password='test_est_password')
+    original_error = ValueError('secret tracking failed')
+    with patch('request.authentication.base.remember_secret', side_effect=original_error):
+        with pytest.raises(ValueError) as caught:
+            auth.authenticate(context)
+    if protocol == 'est':
+        assert str(caught.value) == 'Authentication failed: Invalid username or password.'
+        assert caught.value.__cause__ is original_error
+    else:
+        assert caught.value is original_error
 
 
 def test_cmp_shared_secret_rejects_unsupported_hmac_algorithm() -> None:

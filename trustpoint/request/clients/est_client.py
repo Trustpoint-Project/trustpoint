@@ -12,14 +12,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import requests
+from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.serialization import pkcs7
+from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
-    from cryptography import x509
     from cryptography.x509 import CertificateSigningRequest
 
     from request.request_context import EstBaseRequestContext
@@ -109,6 +109,14 @@ class EstClient(LoggerMixin):
 
         return csr_b64, content_type
 
+    @staticmethod
+    def _is_ca_certificate(cert: x509.Certificate) -> bool:
+        """Return whether the certificate asserts BasicConstraints cA=TRUE."""
+        try:
+            return cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca
+        except x509.ExtensionNotFound:
+            return False
+
     def _parse_response(self, response_data: bytes, content_type: str) -> x509.Certificate:
         """Parse the EST server response containing the issued certificate.
 
@@ -129,13 +137,14 @@ class EstClient(LoggerMixin):
         try:
             pkcs7_der = base64.b64decode(response_data)
 
-            certificates = pkcs7.load_der_pkcs7_certificates(pkcs7_der)
+            certificates = CertificateCollectionSerializer.from_pkcs7_der(pkcs7_der).as_crypto()
 
             if not certificates:
                 msg = 'No certificates found in PKCS#7 response'
                 raise EstClientError(msg)
 
-            issued_cert = certificates[0]
+            # PKCS#7 certificate order is not guaranteed; the issued certificate is the non-CA one.
+            issued_cert = next((cert for cert in certificates if not self._is_ca_certificate(cert)), certificates[0])
 
         except (ValueError, TypeError) as e:
             msg = f'Failed to parse EST server response: {e!s}'
@@ -294,7 +303,7 @@ class EstClient(LoggerMixin):
 
             pkcs7_data = base64.b64decode(response.content)
 
-            ca_certs = pkcs7.load_der_pkcs7_certificates(pkcs7_data)
+            ca_certs = CertificateCollectionSerializer.from_pkcs7_der(pkcs7_data).as_crypto()
 
         except requests.exceptions.RequestException as e:
             msg = f'Failed to retrieve CA certificates: {e!s}'

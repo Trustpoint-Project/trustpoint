@@ -1,0 +1,61 @@
+{% load i18n %}
+
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th scope="col" class="text-nowrap">
+                    {% trans 'Name' %}
+                </th>
+                <th scope="col" class="text-nowrap">
+                    {% trans 'Permissions' %}
+                </th>
+                <th scope="col" class="text-nowrap">
+                    {% trans 'Users' %}
+                </th>
+                <th scope="col" class="text-end">
+                    {% trans 'Actions' %}
+                </th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for group in groups %}
+                <tr>
+                    <td>{{ group.name }}</td>
+                    <td>{{ group.permissions.count }}</td>
+                    <td>{{ group.trustpoint_users.count }}</td>
+
+                    <td class="text-end">
+                        <div class="d-flex justify-content-end gap-2">
+                            <a
+                                href="{% url 'management:edit_role' group.pk %}"
+                                class="btn btn-sm btn-outline-primary"
+                            >
+                                {% trans 'Edit' %}
+                            </a>
+
+                            {% if group.name not in protected_group_names %}
+                                <a
+                                    href="{% url 'management:delete_role' group.pk %}"
+                                    class="btn btn-sm btn-outline-secondary"
+                                >
+                                    {% trans 'Delete' %}
+                                </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td
+                        colspan="4"
+                        class="text-center text-muted py-5"
+                    >
+                        {% trans 'No roles have been added yet.' %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

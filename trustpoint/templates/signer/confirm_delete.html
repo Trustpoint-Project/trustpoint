@@ -4,56 +4,140 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST" autocomplete="off">
-        {% csrf_token %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Delete Signers" %}
+        </h1>
 
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h1>{% trans 'Confirm Signer Deletion' %}</h1>
+        <p class="mb-0 text-muted">
+            {% trans "Review the selected signers before permanently deleting them." %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="delete-signers-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <div class="alert alert-warning mb-5" role="alert">
+                    <strong>
+                        {% trans "The selected signers will be permanently deleted." %}
+                    </strong>
+
+                    <div class="mt-1">
+                        {% trans "This action cannot be undone." %}
+                    </div>
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    {% for signer in signers %}
-                        <h2>({{ forloop.counter }}) {% trans 'Signer' %}: {{ signer.unique_name }}</h2>
-                        <hr class="hr-m">
+
+                {% for signer in signers %}
+                    <section class="{% if not forloop.last %}mb-5{% endif %}">
+                        <div class="mb-3">
+                            <h2 class="h4 mb-1">
+                                {{ signer.unique_name }}
+                            </h2>
+
+                            <p class="mb-0 text-muted">
+                                {% trans "Signer selected for deletion." %}
+                            </p>
+                        </div>
+
+                        <hr class="mb-4">
+
                         <div class="tp-kvp-list">
                             <div>
-                                <div>{% trans 'Unique Name' %}</div>
-                                <div>{{ signer.unique_name }}</div>
-                            </div>
-                            <div>
-                                <div>{% trans 'Signer Certificate' %}</div>
                                 <div>
-                                    <a href="{% url 'pki:certificate-detail' pk=signer.credential.certificate.id %}">
-                                        {% if signer.credential.certificate.common_name %}
-                                            CN: {{ signer.credential.certificate.common_name }}
-                                        {% else %}
-                                            {% trans 'Signer Certificate' %}
-                                        {% endif %}
-                                    </a>
+                                    {% trans "Unique Name" %}
+                                </div>
+
+                                <div>
+                                    {% if signer.unique_name %}
+                                        {{ signer.unique_name }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
                                 </div>
                             </div>
+
                             <div>
-                                <div>{% trans 'Serial Number' %}</div>
-                                <div>{{ signer.credential.certificate.serial_number }}</div>
+                                <div>
+                                    {% trans "Signer Certificate" %}
+                                </div>
+
+                                <div>
+                                    {% if signer.credential.certificate %}
+                                        <a href="{% url 'pki:certificate-detail' pk=signer.credential.certificate.id %}">
+                                            {% if signer.credential.certificate.common_name %}
+                                                CN: {{ signer.credential.certificate.common_name }}
+                                            {% else %}
+                                                {% trans "Signer Certificate" %}
+                                            {% endif %}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
                             </div>
+
                             <div>
-                                <div>Fingerprint (SHA256)</div>
-                                <div>{{ signer.credential.certificate.sha256_fingerprint }}</div>
+                                <div>
+                                    {% trans "Serial Number" %}
+                                </div>
+
+                                <div class="font-monospace">
+                                    {% if signer.credential.certificate.serial_number %}
+                                        {{ signer.credential.certificate.serial_number }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div>
+                                    {% trans "Fingerprint (SHA-256)" %}
+                                </div>
+
+                                <div class="font-monospace text-break">
+                                    {% if signer.credential.certificate.sha256_fingerprint %}
+                                        {{ signer.credential.certificate.sha256_fingerprint }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
-                    {% endfor %}
-                </div>
-            </div>
+                    </section>
 
-            <div class="card-footer d-flex">
-                <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                    <button type="submit" class="btn btn-danger">{% trans 'Delete selected Signers' %}</button>
-                </div>
-            </div>
+                {% empty %}
+                    <div class="text-center text-muted py-5">
+                        {% trans "No signers are selected for deletion." %}
+                    </div>
+                {% endfor %}
+            </form>
         </div>
-    </form>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'signer:signer_list' %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Cancel" %}
+        </a>
+
+        <button
+            type="submit"
+            form="delete-signers-form"
+            class="btn btn-danger"
+            {% if not signers %}disabled{% endif %}
+        >
+            {% trans "Delete Selected Signers" %}
+        </button>
+    </div>
+</div>
 {% endblock content %}

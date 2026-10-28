@@ -7,20 +7,19 @@ from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from devices.models import DeviceModel
-from django.core.management.base import CommandError
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
-User = get_user_model()
 from pki.models import CertificateModel, CertificateProfileModel, CaModel, IssuedCredentialModel
 
 from ..views import (
-    AddDomainsAndDevicesView,
     DashboardChartsAndCountsView,
     DashboardView,
     IndexView,
 )
+
+User = get_user_model()
 
 
 class IndexViewTests(TestCase):
@@ -69,57 +68,15 @@ class DashboardViewTests(TestCase):
     def test_get_context_data(self) -> None:
         """Test that get_context_data returns correct page context."""
         request = self.factory.get(self.url)
+        request.user = User(username='dashboarduser', date_format='0', timezone='Europe/Berlin')
         view = DashboardView()
         view.request = request
         view.kwargs = {}
         context = view.get_context_data()
         assert context['page_category'] == 'home'
         assert context['page_name'] == 'dashboard'
-
-
-class AddDomainsAndDevicesViewTests(TestCase):
-    """Test cases for AddDomainsAndDevicesView."""
-
-    def setUp(self) -> None:
-        """Set up test fixtures."""
-        self.factory = RequestFactory()
-        self.url = reverse('home:dashboard')
-
-    @patch('home.views.call_command')
-    @patch('home.views.messages.add_message')
-    @patch('home.views.redirect')
-    def test_get_success(self, mock_redirect: Mock, mock_add_message: Mock, mock_call_command: Mock) -> None:
-        """Test successful execution of add_domains_and_devices command."""
-        request = self.factory.get('/add-test-data/')
-
-        view = AddDomainsAndDevicesView()
-        view.get(request)
-
-        mock_call_command.assert_called_once_with('add_domains_and_devices')
-        mock_add_message.assert_called_once()
-        args = mock_add_message.call_args[0]
-        assert args[0] == request
-        assert args[1] == 25  # SUCCESS
-        assert 'Successfully added test data' in args[2]
-        mock_redirect.assert_called_once_with('home:dashboard')
-
-    @patch('home.views.call_command')
-    @patch('home.views.messages.add_message')
-    @patch('home.views.redirect')
-    def test_get_command_error(self, mock_redirect: Mock, mock_add_message: Mock, mock_call_command: Mock) -> None:
-        """Test handling of CommandError."""
-        mock_call_command.side_effect = CommandError('Test data already available')
-        request = self.factory.get('/add-test-data/')
-
-        view = AddDomainsAndDevicesView()
-        view.get(request)
-
-        mock_add_message.assert_called_once()
-        args = mock_add_message.call_args[0]
-        assert args[0] == request
-        assert args[1] == 40  # ERROR
-        assert 'Test data already available' in args[2]
-        mock_redirect.assert_called_once_with('home:dashboard')
+        assert context['dashboard_date_format'] == '%d/%m/%Y %H:%M'
+        assert context['dashboard_timezone'] == 'Europe/Berlin'
 
 
 class DashboardChartsAndCountsViewTests(TestCase):
@@ -261,6 +218,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
         assert isinstance(result, list)
 
+    @patch('home.views.filter_credential_health')
     @patch('home.views.filter_devices_with_expired_or_revoked_domain_credential')
     @patch('home.views.filter_devices_with_expiring_domain_credential')
     @patch('home.views.filter_devices_with_valid_domain_credential')
@@ -273,6 +231,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
         mock_valid_domain_credential: Mock,
         mock_expiring_domain_credential: Mock,
         mock_expired_domain_credential: Mock,
+        mock_future_domain_credential: Mock,
     ) -> None:
         """Domain-credential chart should scope itself to devices with onboarding."""
         onboarding_devices = Mock()
@@ -281,13 +240,16 @@ class DashboardChartsAndCountsViewTests(TestCase):
         mock_valid_domain_credential.return_value.count.return_value = 2
         mock_expiring_domain_credential.return_value.count.return_value = 3
         mock_expired_domain_credential.return_value.count.return_value = 4
+        mock_future_domain_credential.return_value.count.return_value = 5
 
         result = self.view.get_device_domain_credential_counts()
 
         mock_devices_filter.assert_called_once_with(onboarding_config__isnull=False)
         mock_without_domain_credential.assert_called_once_with(onboarding_devices)
-        assert result['total'] == 10
+        assert result['not_yet_valid'] == 5
+        assert result['total'] == 15
 
+    @patch('home.views.filter_credential_health')
     @patch('home.views.filter_devices_with_expired_or_revoked_application_certificates')
     @patch('home.views.filter_devices_with_active_application_certificates')
     @patch('home.views.filter_devices_without_application_certificates')
@@ -300,6 +262,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
         mock_without_application_certificates: Mock,
         mock_active_application_certificates: Mock,
         mock_expired_application_certificates: Mock,
+        mock_future_application_certificates: Mock,
     ) -> None:
         """Application-certificate chart should scope itself to manual devices."""
         all_devices = Mock()
@@ -309,13 +272,15 @@ class DashboardChartsAndCountsViewTests(TestCase):
         mock_without_application_certificates.return_value.count.return_value = 1
         mock_active_application_certificates.return_value.count.return_value = 2
         mock_expired_application_certificates.return_value.count.return_value = 3
+        mock_future_application_certificates.return_value.count.return_value = 4
 
         result = self.view.get_device_application_certificate_counts()
 
         mock_all_devices.assert_called_once_with()
         mock_no_onboarding_devices.assert_called_once_with(all_devices)
         mock_without_application_certificates.assert_called_once_with(no_onboarding_devices)
-        assert result['total'] == 6
+        assert result['not_yet_valid'] == 4
+        assert result['total'] == 10
 
     def test_get_cert_counts_by_status(self) -> None:
         """Test get_cert_counts_by_status method."""

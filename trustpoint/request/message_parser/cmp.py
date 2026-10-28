@@ -589,10 +589,12 @@ class CmpRevocationBodyValidation(LoggerMixin):
         if rev_req_msg['crlEntryDetails'].hasValue():
             crl_entry_details = rev_req_msg['crlEntryDetails']
             if (crl_entry_details[0].hasValue()
-                and crl_entry_details[0]['extnID'] == CRLEntryExtensionOID.CRL_REASON.dotted_string):
+                and str(crl_entry_details[0]['extnID']) == CRLEntryExtensionOID.CRL_REASON.dotted_string):
                 inner_bytes = crl_entry_details[0]['extnValue'].asOctets()
-                reason_code, _ = der_decoder.decode(inner_bytes, asn1Spec=rfc5280.CRLReason())
-                context.revocation_reason = x509.ReasonFlags(int(reason_code))
+                reason_code, remainder = der_decoder.decode(inner_bytes, asn1Spec=rfc5280.CRLReason())
+                if remainder:
+                    self._raise_value_error('Unexpected trailing data in revocation reason.')
+                context.revocation_reason = x509.ReasonFlags(reason_code.prettyPrint())
             else:
                 context.revocation_reason = x509.ReasonFlags.unspecified
         else:

@@ -17,6 +17,7 @@ from appsecrets.service import get_app_secret_service
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.protected_import.bindings import ProtectedImportManagedKeyBinding
 from crypto.adapters.rest.bindings import RestManagedKeyBinding
+from crypto.adapters.software.backend import SoftwareBackend
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
 from crypto.application.audit import (
     audit_crypto_backend_operation,
@@ -32,9 +33,15 @@ from crypto.application.protected_import import (
     encrypt_imported_private_key,
     imported_key_algorithm,
 )
-from crypto.domain.errors import CryptoError, KeyNotFoundError, ProviderConfigurationError, UnsupportedKeySpecError
+from crypto.domain.errors import (
+    CryptoError,
+    KeyNotFoundError,
+    ProviderConfigurationError,
+    ProviderOperationNotImplementedError,
+    UnsupportedKeySpecError,
+)
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
-from crypto.models import BackendKind, CryptoManagedKeyModel, CryptoProviderProfileModel
+from crypto.models import BackendKind, CryptoManagedKeyModel, CryptoProviderProfileModel, ManagedKeyStatus
 from crypto.repositories import CryptoManagedKeyRepository, CryptoProviderProfileRepository, ManagedKeyBinding
 from trustpoint.logger import LoggerMixin
 
@@ -348,9 +355,33 @@ class TrustpointCryptoBackend(LoggerMixin):
             )
             return public_key
 
-    def sign(self, *, key: ManagedKeyRef, data: bytes, request: SignRequest) -> bytes:
-        """Sign bytes with a managed key."""
+    def export_private_key_pkcs8(self, key: ManagedKeyRef) -> bytes:
+        """Export an explicitly extractable active software key as unencrypted PKCS#8 PEM."""
         managed_key = self._load_managed_key(key)
+        self._require_active_managed_key(managed_key, operation='private-key export')
+        if managed_key.policy_snapshot.get('extractable') is not True:
+            msg = 'The managed private key is not extractable.'
+            raise ProviderConfigurationError(msg)
+        if managed_key.provider_profile.backend_kind != BackendKind.SOFTWARE:
+            msg = 'Managed private-key export is only supported for software backend keys, not PKCS#11 or remote keys.'
+            raise ProviderOperationNotImplementedError(msg)
+        binding = self._managed_key_repository.build_backend_binding(managed_key)
+        if not isinstance(binding, SoftwareManagedKeyBinding):
+            msg = 'Managed private-key export requires an encrypted software backend binding.'
+            raise ProviderOperationNotImplementedError(msg)
+        adapter = self._build_adapter(managed_key.provider_profile)
+        try:
+            if not isinstance(adapter, SoftwareBackend):
+                msg = 'The configured software adapter does not support managed private-key export.'
+                raise ProviderOperationNotImplementedError(msg)
+            return adapter.export_private_key_pkcs8(binding)
+        finally:
+            adapter.close()
+
+    def sign(self, *, key: ManagedKeyRef, data: bytes, request: SignRequest) -> bytes:
+        """Sign bytes with an active managed key."""
+        managed_key = self._load_managed_key(key)
+        self._require_active_managed_key(managed_key, operation='signing')
         started_at = perf_counter()
         details = sign_request_audit_details(request, data_length=len(data))
         try:
@@ -433,11 +464,19 @@ class TrustpointCryptoBackend(LoggerMixin):
 
     @staticmethod
     def _validate_protected_import_policy(profile: CryptoProviderProfileModel) -> None:
-        """Require explicit policy and app-secret protection before importing private keys."""
+        """Require explicit, unambiguous policy and app-secret protection before importing private keys."""
         from management.models import SecurityConfig  # noqa: PLC0415
 
-        security_config = SecurityConfig.objects.filter(pk=1).first() or SecurityConfig.objects.order_by('pk').first()
-        if security_config is None or not security_config.allow_imported_private_keys:
+        try:
+            security_config = SecurityConfig.objects.get()
+        except SecurityConfig.DoesNotExist as exc:
+            msg = 'Imported private keys are disabled because no SecurityConfig is configured.'
+            raise ProviderConfigurationError(msg) from exc
+        except SecurityConfig.MultipleObjectsReturned as exc:
+            msg = 'Imported private keys are disabled because multiple SecurityConfig rows are configured.'
+            raise ProviderConfigurationError(msg) from exc
+
+        if not security_config.allow_imported_private_keys:
             msg = (
                 'Imported private keys are disabled. Enable "Allow imported private keys" in '
                 'Management > Settings > Security to allow private-key imports.'
@@ -470,6 +509,17 @@ class TrustpointCryptoBackend(LoggerMixin):
         except CryptoManagedKeyModel.DoesNotExist as exc:
             msg = f'Managed key {key.id} does not exist.'
             raise KeyNotFoundError(msg) from exc
+
+    @staticmethod
+    def _require_active_managed_key(managed_key: CryptoManagedKeyModel, *, operation: str) -> None:
+        """Fail closed when a managed key has not passed provider verification."""
+        if managed_key.status == ManagedKeyStatus.ACTIVE:
+            return
+        msg = (
+            f'Managed key {managed_key.alias!r} cannot be used for {operation}: '
+            f'verification status is {managed_key.status!r}.'
+        )
+        raise ProviderConfigurationError(msg)
 
     def _build_adapter(self, profile_model: CryptoProviderProfileModel) -> ManagedKeyBackendAdapter:
         """Build a backend-kind-specific adapter for a persisted provider profile."""

@@ -6,13 +6,14 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 from django.views import View
 
 from management.models.audit_log import AuditLog
@@ -26,6 +27,7 @@ from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
+    from django_stubs_ext import StrPromise
 
 logger = logging.getLogger(__name__)
 
@@ -243,151 +245,92 @@ class PlanRolloverView(LoginRequiredMixin, View):
         return redirect('pki:issuing_cas-config', pk=pk)
 
 
-class StartRolloverView(LoginRequiredMixin, View):
-    """Handle GET (confirmation page) and POST (execute) for starting a CA rollover."""
+class RolloverActionView(LoginRequiredMixin, View):
+    """Confirm and execute a rollover action with shared permission and audit handling."""
+
+    template_name: ClassVar[str]
+    success_message: ClassVar[StrPromise]
+    operation_type: ClassVar[AuditLog.OperationType]
+    handled_errors: ClassVar[tuple[type[Exception], ...]] = (CaRolloverError,)
 
     def get(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
-        """Render the confirmation page for starting the rollover."""
+        """Render the action's confirmation page for this CA's rollover."""
         _ensure_strategies_loaded()
         issuing_ca = get_object_or_404(CaModel, pk=pk)
         rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
-        return render(request, 'pki/issuing_cas/rollover/confirm_start.html', {
-            'issuing_ca': issuing_ca,
-            'rollover': rollover,
-        })
+        return render(request, self.template_name, {'issuing_ca': issuing_ca, 'rollover': rollover})
 
     def post(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
-        """Start the specified rollover."""
+        """Execute the configured action, report its result, and audit success."""
         if not request.user.has_perm(AppPermissions.MANAGE_CAS):
             raise PermissionDenied
         _ensure_strategies_loaded()
         rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
-
         try:
-            CaRolloverService.execute_rollover(rollover)
-            messages.success(
-                request,
-                _('Rollover started. New certificates will be issued by the new CA.'),
-            )
+            self.perform_action(rollover)
+            messages.success(request, self.success_message)
             actor = request.user if request.user.is_authenticated else None
             AuditLog.create_entry(
-                operation_type=AuditLog.OperationType.CA_ROLLOVER_STARTED,
+                operation_type=self.operation_type,
                 target=rollover,
                 target_display=f'CA Rollover: {rollover.old_issuing_ca} → {rollover.new_issuing_ca}',
                 actor=actor,
             )
-        except CaRolloverError as exc:
+        except self.handled_errors as exc:
             messages.error(request, str(exc))
-
         return redirect('pki:issuing_cas-config', pk=pk)
 
-
-class TransitionRolloverView(LoginRequiredMixin, View):
-    """Handle GET (confirmation page) and POST (execute) for transitioning a CA rollover."""
-
-    def get(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
-        """Render the confirmation page for transitioning the rollover."""
-        _ensure_strategies_loaded()
-        issuing_ca = get_object_or_404(CaModel, pk=pk)
-        rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
-        return render(request, 'pki/issuing_cas/rollover/confirm_transition.html', {
-            'issuing_ca': issuing_ca,
-            'rollover': rollover,
-        })
-
-    def post(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
-        """Transition the specified rollover from PREPARATION to TRANSITION."""
-        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
-            raise PermissionDenied
-        _ensure_strategies_loaded()
-        rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
-
-        try:
-            rollover.transition_to_transition()
-            messages.success(
-                request,
-                _('Rollover transitioned. New CA is now issuing certificates, old CA remains in truststore.'),
-            )
-            actor = request.user if request.user.is_authenticated else None
-            AuditLog.create_entry(
-                operation_type=AuditLog.OperationType.CA_ROLLOVER_TRANSITIONED,
-                target=rollover,
-                target_display=f'CA Rollover: {rollover.old_issuing_ca} → {rollover.new_issuing_ca}',
-                actor=actor,
-            )
-        except ValueError as exc:
-            messages.error(request, str(exc))
-
-        return redirect('pki:issuing_cas-config', pk=pk)
+    def perform_action(self, rollover: CaRolloverModel) -> None:
+        """Execute the state change defined by the concrete action view."""
+        raise NotImplementedError
 
 
-class CompleteRolloverView(LoginRequiredMixin, View):
-    """Handle GET (confirmation page) and POST (finalize) for completing a CA rollover."""
+class StartRolloverView(RolloverActionView):
+    """Confirm and start a CA rollover."""
 
-    def get(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
-        """Render the confirmation page for completing the rollover."""
-        _ensure_strategies_loaded()
-        issuing_ca = get_object_or_404(CaModel, pk=pk)
-        rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
-        return render(request, 'pki/issuing_cas/rollover/confirm_complete.html', {
-            'issuing_ca': issuing_ca,
-            'rollover': rollover,
-        })
+    template_name = 'pki/issuing_cas/rollover/confirm_start.html'
+    operation_type = AuditLog.OperationType.CA_ROLLOVER_STARTED
+    success_message = gettext_lazy('Rollover started. New certificates will be issued by the new CA.')
 
-    def post(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
-        """Complete the specified rollover."""
-        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
-            raise PermissionDenied
-        _ensure_strategies_loaded()
-        rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
-
-        try:
-            CaRolloverService.finalize_rollover(rollover)
-            messages.success(request, _('Rollover completed successfully.'))
-            actor = request.user if request.user.is_authenticated else None
-            AuditLog.create_entry(
-                operation_type=AuditLog.OperationType.CA_ROLLOVER_COMPLETED,
-                target=rollover,
-                target_display=f'CA Rollover: {rollover.old_issuing_ca} → {rollover.new_issuing_ca}',
-                actor=actor,
-            )
-        except CaRolloverError as exc:
-            messages.error(request, str(exc))
-
-        return redirect('pki:issuing_cas-config', pk=pk)
+    def perform_action(self, rollover: CaRolloverModel) -> None:
+        """Apply the start action."""
+        CaRolloverService.execute_rollover(rollover)
 
 
-class CancelRolloverView(LoginRequiredMixin, View):
-    """Handle GET (confirmation page) and POST (cancel) for cancelling a CA rollover."""
+class TransitionRolloverView(RolloverActionView):
+    """Confirm and transition a CA rollover."""
 
-    def get(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
-        """Render the confirmation page for cancelling the rollover."""
-        _ensure_strategies_loaded()
-        issuing_ca = get_object_or_404(CaModel, pk=pk)
-        rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
-        return render(request, 'pki/issuing_cas/rollover/confirm_cancel.html', {
-            'issuing_ca': issuing_ca,
-            'rollover': rollover,
-        })
+    template_name = 'pki/issuing_cas/rollover/confirm_transition.html'
+    operation_type = AuditLog.OperationType.CA_ROLLOVER_TRANSITIONED
+    success_message = gettext_lazy(
+        'Rollover transitioned. New CA is now issuing certificates, old CA remains in truststore.'
+    )
+    handled_errors = (ValueError,)
 
-    def post(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
-        """Cancel the specified rollover."""
-        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
-            raise PermissionDenied
-        _ensure_strategies_loaded()
-        rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
+    def perform_action(self, rollover: CaRolloverModel) -> None:
+        """Apply the transition action."""
+        rollover.transition_to_transition()
 
-        try:
-            CaRolloverService.cancel_rollover(rollover)
-            messages.success(request, _('Rollover cancelled.'))
-            actor = request.user if request.user.is_authenticated else None
-            AuditLog.create_entry(
-                operation_type=AuditLog.OperationType.CA_ROLLOVER_CANCELLED,
-                target=rollover,
-                target_display=f'CA Rollover: {rollover.old_issuing_ca} → {rollover.new_issuing_ca}',
-                actor=actor,
-            )
-        except CaRolloverError as exc:
-            messages.error(request, str(exc))
 
-        return redirect('pki:issuing_cas-config', pk=pk)
+class CompleteRolloverView(RolloverActionView):
+    """Confirm and complete a CA rollover."""
+
+    template_name = 'pki/issuing_cas/rollover/confirm_complete.html'
+    operation_type = AuditLog.OperationType.CA_ROLLOVER_COMPLETED
+    success_message = gettext_lazy('Rollover completed successfully.')
+
+    def perform_action(self, rollover: CaRolloverModel) -> None:
+        """Apply the complete action."""
+        CaRolloverService.finalize_rollover(rollover)
+
+
+class CancelRolloverView(RolloverActionView):
+    """Confirm and cancel a CA rollover."""
+
+    template_name = 'pki/issuing_cas/rollover/confirm_cancel.html'
+    operation_type = AuditLog.OperationType.CA_ROLLOVER_CANCELLED
+    success_message = gettext_lazy('Rollover cancelled.')
+
+    def perform_action(self, rollover: CaRolloverModel) -> None:
+        """Apply the cancel action."""
+        CaRolloverService.cancel_rollover(rollover)

@@ -8,7 +8,13 @@ from __future__ import annotations
 from django.test import SimpleTestCase
 from django.urls import resolve, reverse
 
-from users.views import PasswordChangeRequiredView, TrustpointLoginView, TrustpointProfileView
+from users.views import (
+    ManagedUserPasswordChangeView,
+    PasswordChangeRequiredView,
+    TrustpointLoginView,
+    UserProfileDeleteView,
+    TrustpointProfileView,
+)
 
 
 class UsersUrlsTest(SimpleTestCase):
@@ -55,6 +61,25 @@ class UsersUrlsTest(SimpleTestCase):
         self.assertEqual(url, '/users/password-change-required/')
         resolver = resolve(url)
         self.assertEqual(resolver.func.view_class, PasswordChangeRequiredView)
+
+    def test_managed_user_password_url_resolves(self) -> None:
+        """Resolve the manager-only password reset page for a selected user."""
+        url = reverse('users:user-profile-password', kwargs={'pk': 1})
+        self.assertEqual(url, '/users/profile/1/password/')
+        resolver = resolve(url)
+        self.assertEqual(resolver.func.view_class, ManagedUserPasswordChangeView)
+
+    def test_self_delete_url_resolves(self) -> None:
+        """Resolve the signed-in user's account deletion confirmation page."""
+        url = reverse('users:profile_delete')
+        self.assertEqual(url, '/users/profile/delete/')
+        self.assertEqual(resolve(url).func.view_class, UserProfileDeleteView)
+
+    def test_managed_user_delete_url_resolves(self) -> None:
+        """Resolve the manager-facing deletion page for a selected user."""
+        url = reverse('users:user-profile-delete', kwargs={'pk': 1})
+        self.assertEqual(url, '/users/profile/1/delete/')
+        self.assertEqual(resolve(url).func.view_class, UserProfileDeleteView)
 
     def test_login_url_name(self) -> None:
         """Test that login URL has correct name."""

@@ -4,17 +4,24 @@
 """pytest configuration for the tests in the PKI app."""
 import base64
 import uuid
+from pathlib import Path
 from typing import Any
 
 import pytest
-from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel, AppSecretSoftwareConfigModel
-from appsecrets.service import clear_app_secret_cache
 from cryptography import x509
 from cryptography.hazmat._oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer
+from django.http import HttpRequest
+from django.test import SimpleTestCase, TransactionTestCase
+from django.test.client import RequestFactory
+from trustpoint_core.serializer import CredentialSerializer
+
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel, AppSecretSoftwareConfigModel
+from appsecrets.service import SoftwareAppSecretService, clear_app_secret_cache
+from crypto.application.private_keys import generate_managed_signing_private_key
+from crypto.domain.specs import RsaKeySpec
 from devices.models import (
     DeviceModel,
     NoOnboardingConfigModel,
@@ -24,18 +31,13 @@ from devices.models import (
     OnboardingProtocol,
     RemoteDeviceCredentialDownloadModel,
 )
-from django.http import HttpRequest
-from django.test import SimpleTestCase, TransactionTestCase
-from django.test.client import RequestFactory
-from crypto.application.private_keys import generate_managed_signing_private_key
-from crypto.domain.specs import RsaKeySpec
-from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel
+from devices.secrets import retire_onboarding_secrets
+from pki.models import CaModel, CertificateModel, CredentialModel, IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
-from pki.models import CaModel
-from setup_wizard.models import SetupWizardCompletedModel
+from pki.tests.credential_helpers import issue_test_credential
 from pki.util.x509 import CertificateGenerator
-from trustpoint_core.serializer import CredentialSerializer
+from setup_wizard.models import SetupWizardCompletedModel
 
 
 def _is_db_less_django_simple_test(request: pytest.FixtureRequest) -> bool:
@@ -44,6 +46,27 @@ def _is_db_less_django_simple_test(request: pytest.FixtureRequest) -> bool:
     if not isinstance(test_cls, type):
         return False
     return issubclass(test_cls, SimpleTestCase) and not issubclass(test_cls, TransactionTestCase)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Declare dynamically requested DB access before pytest-django selects databases.
+
+    Without collection markers, a standalone pure-test module can make pytest-
+    django select no test database while our autouse fixtures still request db.
+    That must never cause fixtures to access the developer's application DB.
+    """
+    test_root = Path(__file__).resolve().parent
+    for item in items:
+        if not Path(str(item.fspath)).is_relative_to(test_root):
+            continue
+        if '/trustpoint/tests/test_settings.py' in str(item.fspath):
+            continue
+        test_cls = getattr(item, 'cls', None)
+        if isinstance(test_cls, type) and issubclass(test_cls, SimpleTestCase):
+            if not issubclass(test_cls, TransactionTestCase):
+                continue
+        if item.get_closest_marker('django_db') is None:
+            item.add_marker(pytest.mark.django_db)
 
 
 @pytest.fixture(autouse=True)
@@ -94,7 +117,7 @@ def complete_setup_wizard_by_default(monkeypatch: pytest.MonkeyPatch, request: p
 
 
 @pytest.fixture(autouse=True)
-def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest) -> None:
+def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest, tmp_path_factory: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide a development app-secret backend for tests that save encrypted model fields."""
     if _is_db_less_django_simple_test(request):
         return
@@ -111,8 +134,13 @@ def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest) -> No
     backend.backend_kind = AppSecretBackendKind.SOFTWARE
     backend.save()
     config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
-    config.raw_dek = b'a' * 32
+    key_file = tmp_path_factory.mktemp('software-kek') / 'key'
+    key_file.write_text('ab' * 32)
+    monkeypatch.setenv('TRUSTPOINT_SOFTWARE_KEK_FILE', str(key_file))
+    config.wrapped_dek = SoftwareAppSecretService.wrap_dek(bytes.fromhex('ab' * 32), b'a' * 32)
     config.save()
+    backend.dek_initialized = True
+    backend.save(update_fields=['dek_initialized'])
     clear_app_secret_cache()
 
 
@@ -375,10 +403,8 @@ def tls_client_credential_instance(device_instance: dict[str, Any]) -> dict[str,
         error_message = "Device's associated domain cannot be None"
         raise ValueError(error_message)
 
-    issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
     common_name = 'Fixture TLS Client Credential'
-    validity_days = 365
-    issued_credential = issuer.issue_tls_client_credential(common_name=common_name, validity_days=validity_days)
+    issued_credential = issue_test_credential(device, 'tls_client', common_name=common_name)
     device_instance.update({'issued_credential': issued_credential})
     return device_instance
 
@@ -450,9 +476,14 @@ def domain_credential_est_onboarding(
 
     credential_request = rsa_private_key.public_key()
 
-    domain_credential_issuer = LocalDomainCredentialIssuer(device=device, domain=domain)
-    issued_domain_credential = domain_credential_issuer.issue_domain_credential_certificate(
-        public_key=credential_request)
+    issued_domain_credential = issue_test_credential(
+        device,
+        'domain_credential',
+        public_key=credential_request,
+        common_name='Trustpoint Domain Credential',
+    )
+    if device.onboarding_config is not None:
+        retire_onboarding_secrets(device.onboarding_config)
 
     est_device_with_onboarding.update({'domain_credential': issued_domain_credential})
     return est_device_with_onboarding
@@ -472,9 +503,14 @@ def domain_credential_cmp_onboarding(
 
     credential_request = rsa_private_key.public_key()
 
-    domain_credential_issuer = LocalDomainCredentialIssuer(device=device, domain=domain)
-    issued_domain_credential = domain_credential_issuer.issue_domain_credential_certificate(
-        public_key=credential_request)
+    issued_domain_credential = issue_test_credential(
+        device,
+        'domain_credential',
+        public_key=credential_request,
+        common_name='Trustpoint Domain Credential',
+    )
+    if device.onboarding_config is not None:
+        retire_onboarding_secrets(device.onboarding_config)
 
     cmp_device_with_onboarding.update({'domain_credential': issued_domain_credential})
     return cmp_device_with_onboarding
@@ -494,12 +530,12 @@ def tls_client_certificate_instance_est_onboarding(
 
     credential_request = rsa_private_key.public_key()
 
-    tls_client_issuer = LocalTlsClientCredentialIssuer(device=device, domain=domain)
     common_name = 'Fixture TLS Client Certificate'
-    issued_tls_client_certificate = tls_client_issuer.issue_tls_client_certificate(
+    issued_tls_client_certificate = issue_test_credential(
+        device,
+        'tls_client',
         common_name=common_name,
         public_key=credential_request,
-        validity_days=365,
     )
 
     est_device_with_onboarding.update({'tls_client_certificate': issued_tls_client_certificate})
@@ -520,13 +556,13 @@ def tls_client_certificate_instance_est_no_onboarding(
 
     credential_request = rsa_private_key.public_key()
 
-    tls_client_issuer = LocalTlsClientCredentialIssuer(device=device, domain=domain)
     common_name = 'TLS Client Certificate for EST without Onboarding'
 
-    issued_tls_client_certificate = tls_client_issuer.issue_tls_client_certificate(
+    issued_tls_client_certificate = issue_test_credential(
+        device,
+        'tls_client',
         common_name=common_name,
         public_key=credential_request,
-        validity_days=365,
     )
 
     est_device_without_onboarding.update({'tls_client_certificate': issued_tls_client_certificate})
@@ -548,9 +584,14 @@ def domain_credential_instance_for_cmp(
 
     credential_request = rsa_private_key.public_key()
 
-    domain_credential_issuer = LocalDomainCredentialIssuer(device=device, domain=domain)
-    issued_domain_credential = domain_credential_issuer.issue_domain_credential_certificate(
-        public_key=credential_request)
+    issued_domain_credential = issue_test_credential(
+        device,
+        'domain_credential',
+        public_key=credential_request,
+        common_name='Trustpoint Domain Credential',
+    )
+    if device.onboarding_config is not None:
+        retire_onboarding_secrets(device.onboarding_config)
 
     cmp_device_with_onboarding.update({'domain_credential': issued_domain_credential})
     return cmp_device_with_onboarding

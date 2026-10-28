@@ -456,12 +456,12 @@ class TestOpcUaGdsPushCreateForm:
         assert device.serial_number == 'SN123456'
         assert device.domain == domain
         assert device.ip_address == '192.168.1.100'
-        assert device.opc_server_port == 4840
+        assert device.opc_ua_gds_push_config.opc_server_port == 4840
         assert device.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH
         assert device.onboarding_config is not None
         assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.OPC_GDS_PUSH
-        assert device.onboarding_config.opc_user == 'admin'
-        assert device.onboarding_config.opc_password == 'secret123'
+        assert device.opc_ua_gds_push_config.opc_user == 'admin'
+        assert device.opc_ua_gds_push_config.opc_password == 'secret123'
         assert device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
 
     def test_duplicate_common_name_validation(self, device_instance: dict[str, Any]) -> None:
@@ -528,6 +528,8 @@ class TestOpcUaGdsPushTruststoreAssociationForm:
     def test_save_associates_truststore(self, device_instance_onboarding: dict[str, Any]) -> None:
         """Test that save() associates the truststore with the device."""
         device = device_instance_onboarding['device']
+        device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        device.save()
         
         # Create a mock truststore
         from pki.models.truststore import TruststoreModel
@@ -546,4 +548,4 @@ class TestOpcUaGdsPushTruststoreAssociationForm:
         form.save()
 
         device.refresh_from_db()
-        assert device.onboarding_config.opc_trust_store == truststore
+        assert device.opc_ua_gds_push_config.opc_trust_store == truststore

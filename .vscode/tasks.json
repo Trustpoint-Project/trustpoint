@@ -1,0 +1,26 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "External TLS CSR focused tests",
+			"type": "shell",
+			"command": "uv run pytest trustpoint/pki/tests/test_external_csr.py trustpoint/request/tests/test_operation_processors_csr.py trustpoint/pki/tests/test_util_cert_req_converter.py -q -o md_report=false",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "External TLS wizard tests",
+			"type": "shell",
+			"command": "uv run pytest trustpoint/management/tests/test_views/test_tls_external_csr.py -q -o md_report=false",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "External TLS wizard first failure",
+			"type": "shell",
+			"command": "uv run pytest trustpoint/management/tests/test_views/test_tls_external_csr.py -x -q -o md_report=false",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

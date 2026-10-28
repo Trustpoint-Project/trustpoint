@@ -5,12 +5,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import hashlib
+import secrets
+from datetime import timedelta
+from typing import TYPE_CHECKING, ClassVar, cast
 
+from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from devices.secrets import assign_secret, guard_configuration_save
 from onboarding.enums import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
@@ -21,7 +27,10 @@ from pki.models.truststore import TruststoreModel
 from util.encrypted_fields import EncryptedCharField
 
 if TYPE_CHECKING:
+    from datetime import datetime
     from typing import Any
+
+SCEP_CHALLENGE_BYTES = 32
 
 
 __all__ = [
@@ -86,7 +95,170 @@ class AbstractPkiProtocolModel[T: models.IntegerChoices]:
             self.add_pki_protocol(pki_protocol)
 
 
-class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], models.Model):
+class DeviceSecretAssignmentLock(models.Model):
+    """One shared writer lock for challenge uniqueness across both configuration tables."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+
+    def __str__(self) -> str:
+        """Describe the shared serialization lock."""
+        return 'Device secret assignment lock'
+
+
+class DeviceSecretUse(models.Model):
+    """Durable reservation preventing rotation while issuance, including remote issuance, runs.
+
+    Abandoned reservations fail closed and require operator investigation before removal.
+    """
+
+    config_label = models.CharField(max_length=100)
+    config_pk = models.PositiveBigIntegerField()
+    credential = models.CharField(max_length=32)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        """Index the configuration lookup used while holding its row lock."""
+
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=['config_label', 'config_pk', 'credential'],
+                name='device_secret_use_config_idx',
+            )
+        ]
+
+    def __str__(self) -> str:
+        """Identify the reserved operation without credential material."""
+        return f'{self.config_label}:{self.config_pk} ({self.credential})'
+
+
+class DeviceSecretStateMixin(models.Model):
+    """Shared CMP/EST/REST credential generations and assignment lifecycle guards."""
+
+    cmp_secret_version = models.PositiveBigIntegerField(default=0, editable=False)
+    est_password_version = models.PositiveBigIntegerField(default=0, editable=False)
+
+    class Meta:
+        """Keep credential state on the concrete configuration tables."""
+
+        abstract = True
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Keep transient assignment audit metadata separate for each instance."""
+        super().__init__(*args, **kwargs)
+        self.secret_assignment_actions: dict[str, str] = {}
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Serialize secret changes and reject stale lifecycle writes."""
+        with guard_configuration_save(cast('OnboardingConfigModel | NoOnboardingConfigModel', self), kwargs):
+            super().save(*args, **kwargs)
+
+
+class ScepEnrollmentModelMixin(DeviceSecretStateMixin):
+    """SCEP (RFC 8894) enrollment state of a device, shared by both onboarding config models.
+
+    The challenge serves two separate purposes: it authorizes exactly one initial PKCSReq (ends with
+    ``scep_challenge_consumed_at``, expiry or reset), and it stays available as shared secret for
+    CMS PasswordRecipientInfo response encryption towards ECDSA clients. It never authorizes issuance
+    after consumption.
+
+    Inherit the shared secret lifecycle so SCEP saves use the same assignment guards.
+    """
+
+    objects = models.Manager()
+
+    scep_secret_version = models.PositiveBigIntegerField(default=0, editable=False)
+
+    scep_challenge = EncryptedCharField(
+        verbose_name=_('SCEP Challenge Password'), max_length=256, blank=True, default=''
+    )
+    scep_challenge_digest = models.CharField(
+        verbose_name=_('SCEP Challenge Lookup Digest'),
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text=_('SHA-256 of the high-entropy challenge; used only to locate the device.'),
+    )
+    scep_challenge_expires_at = models.DateTimeField(verbose_name=_('SCEP Challenge Expiry'), null=True, blank=True)
+    scep_challenge_consumed_at = models.DateTimeField(
+        verbose_name=_('SCEP Enrollment Authorization Consumed'), null=True, blank=True
+    )
+    scep_transactions = models.JSONField(
+        verbose_name=_('SCEP Transactions'),
+        default=dict,
+        blank=True,
+        help_text=_('Issued SCEP transactions by transactionID: request digest, message type, certificate.'),
+    )
+
+    class Meta:
+        """Abstract mixin."""
+
+        abstract = True
+
+    @staticmethod
+    def scep_digest_for(challenge: str) -> str:
+        """Return the lookup digest for a challenge."""
+        return hashlib.sha256(challenge.encode('utf-8')).hexdigest()
+
+    def set_scep_challenge(self, ttl: timedelta | None = None) -> str:
+        """Set a fresh per-device challenge without saving; returns the plaintext (never log it).
+
+        The lifetime defaults to ``SecurityConfig.credential_ttl_seconds`` like the other onboarding credentials.
+        """
+        if ttl is None:
+            security_config = apps.get_model('management', 'SecurityConfig').objects.first()
+            seconds = security_config.credential_ttl_seconds if security_config is not None else None
+            ttl = timedelta(seconds=seconds) if seconds is not None else None
+        challenge = secrets.token_urlsafe(SCEP_CHALLENGE_BYTES)
+        self.scep_challenge = challenge
+        self.scep_challenge_digest = self.scep_digest_for(challenge)
+        self.scep_challenge_expires_at = timezone.now() + ttl if ttl is not None else None
+        self.scep_challenge_consumed_at = None
+        return challenge
+
+    def provision_scep_challenge(self, ttl: timedelta | None = None) -> str:
+        """Create and save a fresh per-device challenge (reset)."""
+        if ttl is not None:
+            msg = 'Per-device SCEP TTL overrides are not supported.'
+            raise ValidationError(msg)
+        return assign_secret(cast('OnboardingConfigModel | NoOnboardingConfigModel', self), 'scep_challenge')
+
+    def scep_challenge_state(self, now: datetime | None = None) -> str:
+        """Return 'none', 'active', 'expired' or 'consumed'."""
+        if not self.scep_challenge_digest:
+            return 'none'
+        if self.scep_challenge_consumed_at is not None:
+            return 'consumed'
+        if self.scep_challenge_expires_at is not None and (now or timezone.now()) >= self.scep_challenge_expires_at:
+            return 'expired'
+        return 'active'
+
+    def can_authorize_scep_enrollment(self, now: datetime | None = None) -> bool:
+        """Return whether the challenge can still authorize an initial enrollment."""
+        return self.scep_challenge_state(now) == 'active'
+
+    def consume_scep_challenge(self, now: datetime | None = None) -> bool:
+        """Atomically consume the enrollment authorization; False if it was no longer usable."""
+        now = now or timezone.now()
+        updated = (
+            type(self).objects.filter(
+                models.Q(scep_challenge_expires_at__gt=now) | models.Q(scep_challenge_expires_at__isnull=True),
+                pk=self.pk,
+                scep_challenge_digest=self.scep_challenge_digest,
+                scep_secret_version=self.scep_secret_version,
+                scep_challenge_consumed_at__isnull=True,
+            )
+            .exclude(scep_challenge_digest='')
+            .update(scep_challenge_consumed_at=now)
+        )
+        if updated:
+            self.scep_challenge_consumed_at = now
+        return bool(updated)
+
+
+class OnboardingConfigModel(
+    AbstractPkiProtocolModel[OnboardingPkiProtocol], ScepEnrollmentModelMixin,
+):
     """Onboarding Configuration Model."""
 
     pki_protocol_class = OnboardingPkiProtocol
@@ -114,8 +286,13 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
     est_password = EncryptedCharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
     cmp_shared_secret = EncryptedCharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
-    opc_user = models.CharField(verbose_name=_('OPC User'), max_length=128, blank=True, default='')
-    opc_password = EncryptedCharField(verbose_name=_('OPC Password'), max_length=128, blank=True, default='')
+    credential_expires_at = models.DateTimeField(
+        verbose_name=_('Credential Expiry'),
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_('Expiry for CMP shared-secret and EST/REST password authentication. Null means no expiry.'),
+    )
 
     idevid_trust_store = models.ForeignKey(
         TruststoreModel,
@@ -136,14 +313,10 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         help_text=_('Trust store containing certificates to verify the remote server'),
     )
 
-    opc_trust_store = models.ForeignKey(
-        TruststoreModel,
-        verbose_name=_('OPC Server Truststore'),
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='opc_onboarding_configs',
-    )
+    class Meta:
+        """Resolve the abstract mixins' model options for this concrete table."""
+
+        abstract = False
 
     def __str__(self) -> str:
         """Gets the model instance as human-readable string."""
@@ -162,14 +335,42 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             *args: Positional arguments are passed to super().save().
             **kwargs: Keyword arguments are passed to super().save().
         """
+        if (
+            self._state.adding
+            and self.credential_expires_at is None
+            and self.onboarding_protocol in (
+                OnboardingProtocol.CMP_SHARED_SECRET,
+                OnboardingProtocol.EST_USERNAME_PASSWORD,
+                OnboardingProtocol.REST_USERNAME_PASSWORD,
+                OnboardingProtocol.AGENT,
+            )
+            and (self.cmp_shared_secret or self.est_password)
+        ):
+            security_config = apps.get_model('management', 'SecurityConfig').objects.filter(pk=1).first()
+            if security_config is not None and security_config.credential_ttl_seconds is not None:
+                self.credential_expires_at = timezone.now() + timedelta(seconds=security_config.credential_ttl_seconds)
         self.full_clean()
         super().save(*args, **kwargs)
 
     def clean(self) -> None:
         """Validation before saving the model."""
+        if self.onboarding_status == OnboardingStatus.ONBOARDED and (self.est_password or self.cmp_shared_secret):
+            msg = 'Completed onboarding credentials cannot be restored.'
+            raise ValidationError(msg)
         error_messages = self._dispatch_protocol_validation()
         if error_messages:
             raise ValidationError(error_messages)
+
+    def is_credential_expired(self) -> bool:
+        """Checks whether the shared authentication credential has expired.
+
+        Returns:
+            True if an expiry is set and the current time is past it, False otherwise
+            (including when no expiry is configured).
+        """
+        if self.credential_expires_at is None:
+            return False
+        return timezone.now() >= self.credential_expires_at
 
     def _dispatch_protocol_validation(self) -> dict[str, str]:
         """Dispatch validation to the appropriate handler based on the onboarding protocol."""
@@ -345,14 +546,10 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         error_messages = {}
 
         if self.cmp_shared_secret != '':
-            error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must not be set for Agent onboarding.'  # noqa: S105
-            )
+            error_messages['cmp_shared_secret'] = 'CMP shared-secret must not be set for Agent onboarding.'  # noqa: S105
 
         if self.idevid_trust_store is not None:
-            error_messages['idevid_trust_store'] = (
-                'IDevID truststore must not be set for Agent onboarding.'
-            )
+            error_messages['idevid_trust_store'] = 'IDevID truststore must not be set for Agent onboarding.'
 
         allowed_protocols = self.get_pki_protocols()
         if OnboardingPkiProtocol.REST not in allowed_protocols:
@@ -361,7 +558,9 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         return error_messages
 
 
-class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol], models.Model):
+class NoOnboardingConfigModel(
+    AbstractPkiProtocolModel[NoOnboardingPkiProtocol], ScepEnrollmentModelMixin,
+):
     """No Onboarding Configuration Model."""
 
     pki_protocol_class = NoOnboardingPkiProtocol
@@ -381,6 +580,11 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
         related_name='no_onboarding_configs',
         help_text=_('Trust store containing certificates to verify the remote server'),
     )
+
+    class Meta:
+        """Resolve the abstract mixins' model options for this concrete table."""
+
+        abstract = False
 
     def __str__(self) -> str:
         """Gets the model instance as human-readable string."""

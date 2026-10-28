@@ -117,6 +117,7 @@ This architecture documentation is organized into the following topics:
 ### Deployment and Operations
 
 - **[Deployment Scenarios](deployment_scenarios.md)** - Common deployment patterns and configurations
+- **[Upgrading Trustpoint](../../features/management/upgrading.rst)** - Upgrade compatibility, backups, application replacement, validation, and rollback
 - **[Operations and Maintenance](operations.md)** - Monitoring, logging, troubleshooting, performance tuning
 
 ### Extensibility

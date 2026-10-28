@@ -1,35 +1,49 @@
 # Copyright (c) 2025 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
+"""Runserver_plus variant that stores the TLS server credential in the database."""
+
 from __future__ import annotations
 
-import os
+from pathlib import Path
+from typing import Any
 
 from django_extensions.management.commands.runserver_plus import Command as RunServerPlusCommand
-from pki.models import CredentialModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from trustpoint_core.serializer import CertificateSerializer, CredentialSerializer, PrivateKeySerializer
 
+from pki.models import CredentialModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 
-class Command(RunServerPlusCommand):
-    """Custom runserver_plus command that stores the TLS certificate to the database."""
+from .runserver_with_qcluster import QClusterMixin
 
-    def store_tls_certificate(self, cert_file_path, key_file_path):
+
+class Command(QClusterMixin, RunServerPlusCommand):
+    """Custom runserver_plus command that stores the TLS certificate to the database and runs the qcluster."""
+
+    def store_tls_certificate(
+        self, cert_file_path: str | Path, key_file_path: str | Path
+    ) -> tuple[str | Path | None, str | Path | None]:
         """Fetch or create the TLS certificate and key from the database."""
-        if not os.path.exists(cert_file_path) or not os.path.exists(key_file_path):
-            print(f'Certificate or key file not found: {cert_file_path}, {key_file_path}')
+        cert_path = Path(cert_file_path)
+        key_path = Path(key_file_path)
+        if not cert_path.exists() or not key_path.exists():
+            self.stdout.write(
+                self.style.WARNING(f'Certificate or key file not found: {cert_path}, {key_path}')
+            )
 
         active_credential = ActiveTrustpointTlsServerCredentialModel.objects.first()
 
-        if active_credential and active_credential.credential:
-            print('Active TLS credential already exists in the database.')
-            return None, None
-
-        with open(cert_file_path, 'rb') as cert_file:
+        with cert_path.open('rb') as cert_file:
             cert_pem = cert_file.read()
         certificate_serializer = CertificateSerializer.from_pem(cert_pem)
 
-        with open(key_file_path, 'rb') as key_file:
+        if active_credential and active_credential.credential:
+            stored_cert = active_credential.credential.get_certificate_serializer().as_crypto()
+            if stored_cert == certificate_serializer.as_crypto():
+                self.stdout.write('Active TLS credential already matches the given certificate.')
+                return None, None
+
+        with key_path.open('rb') as key_file:
             key_pem = key_file.read()
         key_serializer = PrivateKeySerializer.from_pem(key_pem)
 
@@ -48,11 +62,11 @@ class Command(RunServerPlusCommand):
         active_tls.credential = trustpoint_tls_server_credential
         active_tls.save()
 
-        print('Updated ActiveTrustpointTlsServerCredentialModel.')
+        self.stdout.write(self.style.SUCCESS('Updated ActiveTrustpointTlsServerCredentialModel.'))
 
         return cert_file_path, key_file_path
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         """Main command execution logic."""
         cert_file = options.get('cert_path')
         key_file = options.get('key_file_path')

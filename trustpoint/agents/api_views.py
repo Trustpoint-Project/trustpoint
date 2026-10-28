@@ -39,7 +39,7 @@ def _parse_client_cert(request: Request) -> x509.Certificate | None:
         pem_bytes = urllib.parse.unquote(raw).encode('utf-8')
         return x509.load_pem_x509_certificate(pem_bytes)
     except Exception as exc:
-        msg = f'Invalid HTTP_SSL_CLIENT_CERT header: {exc}'
+        msg = 'Invalid HTTP_SSL_CLIENT_CERT header.'
         raise AuthenticationFailed(msg) from exc
 
 

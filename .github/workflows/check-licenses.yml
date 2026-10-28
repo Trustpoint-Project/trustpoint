@@ -6,9 +6,7 @@ on:
       - opened
       - synchronize
     paths:
-      # Self
       - ".github/workflows/check-licenses.yml"
-      # Python Ecosystem
       - "**/pyproject.toml"
       - "**/setup.py"
       - "**/requirements*.txt"
@@ -18,10 +16,11 @@ on:
 jobs:
   check-licenses:
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       pull-requests: write
-    
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -42,19 +41,41 @@ jobs:
 
       - name: Check for incompatible licenses
         run: |
-          LICENSES="$(uv tool run pip-licenses --python .venv/bin/python)"
+          LICENSES="$(uv tool run pip-licenses \
+            --python .venv/bin/python \
+            --format=plain)"
 
-          if echo "$LICENSES" | grep -iE "GPL-[0-9]|GPLv[0-9]" | grep -v "LGPL"; then
+          echo "Checking licenses..."
+
+          # Reject GPL licenses, excluding LGPL.
+          GPL_LICENSES="$(
+            echo "$LICENSES" \
+              | grep -iE "GPL-[0-9]|GPLv[0-9]" \
+              | grep -vi "LGPL" \
+              || true
+          )"
+
+          if [ -n "$GPL_LICENSES" ]; then
             echo "::error::Found GPL-licensed dependencies which may require review"
             echo "GPL licenses found:"
-            echo "$LICENSES" | grep -iE "GPL-[0-9]|GPLv[0-9]" | grep -v "LGPL"
+            echo "$GPL_LICENSES"
             exit 1
           fi
 
-          if echo "$LICENSES" | grep -iE "Proprietary|Commercial"; then
+          # qrcode is BSD-licensed, but its PyPI metadata also contains
+          # the "Other/Proprietary License" classifier.
+          # It has been manually reviewed and is therefore excluded here.
+          PROPRIETARY="$(
+            echo "$LICENSES" \
+              | grep -iE "Proprietary|Commercial" \
+              | grep -viE "^[[:space:]]*qrcode[[:space:]]" \
+              || true
+          )"
+
+          if [ -n "$PROPRIETARY" ]; then
             echo "::error::Found proprietary/commercial licenses that need review"
             echo "Proprietary licenses found:"
-            echo "$LICENSES" | grep -iE "Proprietary|Commercial"
+            echo "$PROPRIETARY"
             exit 1
           fi
 

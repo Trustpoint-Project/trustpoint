@@ -13,40 +13,41 @@
   data-mode="{{ mode }}"
   data-context-catalog-url="{% url 'workflows2:context_catalog' %}"
 >
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <div>
-      {% if mode == "create" %}
-        <h1 class="h4 mb-0">{% trans "New workflow (v2)" %}</h1>
-      {% else %}
-        <h1 class="h4 mb-0">{% trans "Edit workflow (v2)" %}</h1>
-        <div class="text-muted small">{% trans "ID" %}: <code>{{ definition.id }}</code></div>
+  <div class="card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <div>
+        {% if mode == "create" %}
+          <h1 class="mb-1">{% trans "New Workflow" %}</h1>
+          <p class="mb-0 text-muted">{% trans "Define and validate a workflow." %}</p>
+        {% else %}
+          <h1 class="mb-1">{% trans "Edit Workflow" %}</h1>
+          <p class="mb-0 text-muted">{% trans "Workflow ID" %}: <code>{{ definition.id }}</code></p>
+        {% endif %}
+      </div>
+      <a class="btn btn-secondary" href="{% url 'workflows2:definitions_list' %}">{% trans "Cancel" %}</a>
+    </div>
+
+    <div class="card-body text-start">
+      {% if compile_error %}
+        <div class="alert alert-danger" role="alert">
+          <div class="fw-semibold">{% trans "Compile error" %}</div>
+          <pre class="font-monospace mt-2 mb-0 text-break">{{ compile_error }}</pre>
+        </div>
       {% endif %}
-    </div>
-    <a class="btn btn-outline-secondary" href="{% url 'workflows2:definitions_list' %}">{% trans "Back" %}</a>
-  </div>
 
-  {% if compile_error %}
-    <div class="alert alert-danger">
-      <div class="fw-semibold">{% trans "Compile error" %}</div>
-      <div class="font-monospace mt-2 wf2-pre-wrap">{{ compile_error }}</div>
-    </div>
-  {% endif %}
-
-  <div class="row g-3">
-    <div class="col-12 col-xl-7">
-      <div class="card">
-        <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12 col-xl-7">
           <form method="post" id="wf2-form" novalidate>
             {% csrf_token %}
 
             <div class="form-check mb-3">
               {{ form.enabled }}
-              <label class="form-check-label">{{ form.enabled.label }}</label>
+              <label class="form-check-label" for="{{ form.enabled.id_for_label }}">{{ form.enabled.label }}</label>
             </div>
 
             <div class="mb-3">
               <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <label class="form-label mb-0">{{ form.yaml_text.label }}</label>
+                <label class="form-label mb-0" for="wf2-code-editor">{{ form.yaml_text.label }}</label>
                 <div class="d-flex gap-2">
                   <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-open-guide">
                     {% trans "Guide" %}
@@ -79,7 +80,6 @@
             </div>
 
             <div class="d-flex gap-2">
-              <button class="btn btn-primary" type="submit">{% trans "Save & Compile" %}</button>
               {% if mode == "edit" %}
                 <a class="btn btn-outline-secondary" href="{% url 'workflows2:definitions_edit' definition.id %}">
                   {% trans "Reload" %}
@@ -88,69 +88,72 @@
             </div>
           </form>
         </div>
-      </div>
-    </div>
 
-    <div class="col-12 col-xl-5">
-      <div class="card mb-3" id="wf2-graph-card" tabindex="0">
-        <div class="card-header d-flex align-items-center justify-content-between">
-          <div class="fw-semibold">{% trans "Interactive flow editor" %}</div>
-          <div class="d-flex align-items-center gap-2">
-            <span class="text-muted small" id="wf2-graph-status">{% trans "Loading…" %}</span>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-secondary"
-              id="wf2-graph-expand"
-              aria-expanded="false"
-            >
-              {% trans "Expand" %}
-            </button>
-          </div>
-        </div>
-
-        <div class="card-body wf2-graph-card-body">
-          <div class="wf2-graph-issues-wrap">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-              <div class="fw-semibold">{% trans "Issues" %}</div>
-              <div class="small text-muted">
-                {% trans "Syntax, draft-graph, and editor issues" %}
+        <div class="col-12 col-xl-5">
+          <div class="card mb-3" id="wf2-graph-card" tabindex="0">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <div class="fw-semibold">{% trans "Interactive flow editor" %}</div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small" id="wf2-graph-status">{% trans "Loading…" %}</span>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary"
+                  id="wf2-graph-expand"
+                  aria-expanded="false"
+                >
+                  {% trans "Expand" %}
+                </button>
               </div>
             </div>
 
-            <div
-              id="wf2-issues-list"
-              class="wf2-issues-panel"
-              aria-live="polite"
-            >
-              <div class="text-muted">{% trans "No current issues." %}</div>
+            <div class="card-body wf2-graph-card-body">
+              <div class="wf2-graph-issues-wrap">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <div class="fw-semibold">{% trans "Issues" %}</div>
+                  <div class="small text-muted">
+                    {% trans "Syntax, draft-graph, and editor issues" %}
+                  </div>
+                </div>
+
+                <div
+                  id="wf2-issues-list"
+                  class="wf2-issues-panel"
+                  aria-live="polite"
+                >
+                  <div class="text-muted">{% trans "No current issues." %}</div>
+                </div>
+              </div>
+
+              <div
+                id="wf2-graph-editor"
+                class="wf2-graph-editor-host"
+                aria-label="{% trans 'Interactive workflow graph editor' %}"
+              >
+                {% trans "Loading graph…" %}
+              </div>
             </div>
           </div>
 
-          <div
-            id="wf2-graph-editor"
-            class="wf2-graph-editor-host"
-            aria-label="{% trans 'Interactive workflow graph editor' %}"
-          >
-            {% trans "Loading graph…" %}
-          </div>
+          <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <div class="fw-semibold">{% trans "Compiled IR" %}</div>
+              {% if definition %}
+                <span class="text-muted small"><code>{{ definition.ir_hash }}</code></span>
+              {% endif %}
+            </div>
+            <div class="card-body">
+              {% if ir_json %}
+                <pre class="wf2-pretty-box mb-0 p-3 border rounded bg-body-tertiary small">{{ ir_json|safe }}</pre>
+              {% else %}
+                <div class="text-muted">{% trans "Save to compile and display IR." %}</div>
+              {% endif %}
+            </div>
         </div>
       </div>
+    </div>
 
-      <div class="card">
-        <div class="card-header d-flex align-items-center justify-content-between">
-          <div class="fw-semibold">{% trans "Compiled IR" %}</div>
-          {% if definition %}
-            <span class="text-muted small"><code>{{ definition.ir_hash }}</code></span>
-          {% endif %}
-        </div>
-        <div class="card-body">
-          {% if ir_json %}
-            <pre class="wf2-pretty-box mb-0">{{ ir_json|safe }}</pre>
-          {% else %}
-            <div class="text-muted">{% trans "Save to compile and display IR." %}</div>
-          {% endif %}
-        </div>
-      </div>
+    <div class="card-footer d-flex justify-content-end">
+      <button class="btn btn-primary" type="submit" form="wf2-form">{% trans "Save & Compile" %}</button>
     </div>
   </div>
 </div>

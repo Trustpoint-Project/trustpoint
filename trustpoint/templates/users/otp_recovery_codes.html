@@ -1,0 +1,29 @@
+{% extends 'users/base.html' %}
+{% load static i18n %}
+
+{% block head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
+{% endblock head %}
+
+{% block content %}
+    <section class="tp-setup-form-shell">
+        <div class="tp-setup-form-header">
+            <h1 class="tp-setup-form-heading">{% trans 'Save your recovery codes' %}</h1>
+        </div>
+
+        <div class="tp-setup-form-panel">
+            <div class="tp-setup-form text-start">
+                <p class="tp-setup-form-copy">{% trans 'Your authenticator is set up and you are signed in. Store these codes somewhere safe, such as your password manager. Each code can be used once if you lose access to your authenticator.' %}</p>
+                <p class="tp-setup-form-copy">{% trans 'These codes are shown only once.' %}</p>
+                <ul class="list-unstyled user-select-all mb-0">
+                    {% for code in recovery_codes %}<li><code>{{ code }}</code></li>{% endfor %}
+                </ul>
+                <hr class="tp-setup-form-divider">
+                <div class="tp-setup-form-actions">
+                    <a class="btn tp-setup-form-submit" href="{{ next_url }}">{% trans 'Continue' %}</a>
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock content %}

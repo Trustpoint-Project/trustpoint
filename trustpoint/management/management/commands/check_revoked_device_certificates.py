@@ -5,11 +5,12 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
-from devices.models import DeviceModel
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
+from devices.models import DeviceModel
 from management.models import NotificationModel, NotificationStatus
 
 new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
@@ -45,7 +46,7 @@ class Command(BaseCommand):
         for device in devices_with_revoked_certs:
             event = f'DEVICE_CERT_REVOKED_{device.pk}'
             if not NotificationModel.objects.filter(event=event, device=device).exists():
-                device_name = cast('DeviceModel', device).common_name
+                device_name = device.common_name
 
                 message_data = {'device': device_name}
 

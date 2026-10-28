@@ -1,0 +1,24 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans 'Roles & Organization' %}: {{ object.username }}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
+        <dl class="row">
+            <dt class="col-sm-3">{% trans 'Role' %}</dt>
+            <dd class="col-sm-9">{{ object.role.name }}</dd>
+            <dt class="col-sm-3">{% trans 'Organization' %}</dt>
+            <dd class="col-sm-9">{% if object.organization %}{{ object.organization }}{% else %}{% trans 'No organization' %}{% endif %}</dd>
+        </dl>
+        <p class="text-muted">{% trans 'Contact an administrator to change your role or organization.' %}</p>
+    </div>
+
+    <div class="card-footer d-flex tp-sticky-footer">
+        <a href="{% url 'users:profile' %}" class="btn btn-secondary m-1">{% trans 'Back' %}</a>
+    </div>
+</div>
+{% endblock %}

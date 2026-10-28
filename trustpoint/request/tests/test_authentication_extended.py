@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509.oid import NameOID
-from pyasn1.codec.der import decoder, encoder
+from pyasn1.codec.der import decoder
 from pyasn1.type import univ
 from pyasn1_modules import rfc4210, rfc5280
 
@@ -24,14 +24,14 @@ from devices.models import (
     OnboardingConfigModel,
     OnboardingProtocol,
 )
+from pki.models import IssuedCredentialModel
+from pki.tests.credential_helpers import issue_test_credential
 from pki.util.keys import KeyGenerator
 from request.authentication import (
     ClientCertificateAuthentication,
     IDevIDAuthentication,
 )
-from pki.models import IssuedCredentialModel
 from request.authentication.cmp import (
-    CmpCertConfAuthentication,
     CmpSharedSecretAuthentication,
     CmpSignatureBasedCertificationAuthentication,
     CmpSignatureBasedInitializationAuthentication,
@@ -43,15 +43,16 @@ from request.authentication.est import (
     ReenrollmentAuthentication,
     UsernamePasswordAuthentication,
 )
+from request.authentication.rest import RestUsernamePasswordAuthentication
 from request.request_context import (
     BaseRequestContext,
-    BaseCertificateRequestContext,
     CmpBaseRequestContext,
     CmpCertificateRequestContext,
     CmpPollRequestContext,
     EstBaseRequestContext,
     EstCertificateRequestContext,
     HttpBaseRequestContext,
+    RestBaseRequestContext,
 )
 
 
@@ -99,6 +100,44 @@ def _cmp_message_with_certificate(certificate: x509.Certificate) -> rfc4210.PKIM
 @pytest.mark.django_db
 class TestUsernamePasswordAuthenticationExtended:
     """Extended tests for UsernamePasswordAuthentication."""
+
+    @pytest.mark.parametrize('protocol', ['est', 'rest'])
+    @pytest.mark.parametrize('config_class', [OnboardingConfigModel, NoOnboardingConfigModel])
+    @pytest.mark.parametrize('expiry_offset', [None, -1, 0, 1])
+    def test_password_credential_expiry(
+        self, protocol: str,
+        config_class: type[OnboardingConfigModel] | type[NoOnboardingConfigModel],
+        expiry_offset: int | None,
+    ) -> None:
+        """EST and REST enforce expiry only for onboarding configurations."""
+        now = datetime(2026, 10, 2, tzinfo=timezone.utc)
+        expiry = None if expiry_offset is None else now + timedelta(seconds=expiry_offset)
+        config = config_class(est_password='test-secret')
+        if isinstance(config, OnboardingConfigModel):
+            config.credential_expires_at = expiry
+        device = DeviceModel(common_name='device')
+        if config_class is OnboardingConfigModel:
+            device.onboarding_config = config
+        else:
+            device.no_onboarding_config = config
+
+        if protocol == 'est':
+            context = EstBaseRequestContext(est_username='device', est_password='test-secret')
+            auth = UsernamePasswordAuthentication()
+        else:
+            context = RestBaseRequestContext(rest_username='device', rest_password='test-secret')
+            auth = RestUsernamePasswordAuthentication()
+
+        with patch('onboarding.models.timezone.now', return_value=now), \
+                patch.object(DeviceModel.objects, 'select_related') as select_related:
+            select_related.return_value.filter.return_value.first.return_value = device
+            if isinstance(config, OnboardingConfigModel) and expiry_offset is not None and expiry_offset <= 0:
+                with pytest.raises(ValueError, match='Invalid username or password'):
+                    auth.authenticate(context)
+                assert context.device is None
+            else:
+                auth.authenticate(context)
+                assert context.device is device
 
     def test_authenticate_rejects_non_base_est_context(self) -> None:
         """Test authentication requires the EST base context contract."""
@@ -360,13 +399,10 @@ class TestClientCertificateAuthenticationExtended:
     ) -> None:
         """Test authentication fails with invalid domain credential."""
         device = device_instance['device']
-        domain = device_instance['domain']
         
         # Create an issued credential but mock it as invalid
-        from devices.issuer import LocalDomainCredentialIssuer
         
-        issuer = LocalDomainCredentialIssuer(device=device, domain=domain)
-        issued_cred = issuer.issue_domain_credential()
+        issued_cred = issue_test_credential(device, 'domain_credential', common_name='Trustpoint Domain Credential')
         
         cert = issued_cred.credential.get_certificate()
         
@@ -385,6 +421,32 @@ class TestClientCertificateAuthenticationExtended:
 @pytest.mark.django_db
 class TestCmpSharedSecretAuthentication:
     """Tests for CMP Shared Secret Authentication."""
+
+    @pytest.mark.parametrize('config_class', [OnboardingConfigModel, NoOnboardingConfigModel])
+    @pytest.mark.parametrize('expiry_offset', [None, -1, 0, 1])
+    def test_shared_secret_expiry_for_both_configurations(
+        self, config_class: type[OnboardingConfigModel] | type[NoOnboardingConfigModel],
+        expiry_offset: int | None,
+    ) -> None:
+        """Both configurations reject secrets at or after expiry, but allow unset expiry."""
+        now = datetime(2026, 10, 2, tzinfo=timezone.utc)
+        expiry = None if expiry_offset is None else now + timedelta(seconds=expiry_offset)
+        config = config_class(cmp_shared_secret='test-secret')
+        if isinstance(config, OnboardingConfigModel):
+            config.credential_expires_at = expiry
+        device = Mock(
+            common_name='device',
+            onboarding_config=config if config_class is OnboardingConfigModel else None,
+            no_onboarding_config=config if config_class is NoOnboardingConfigModel else None,
+        )
+        auth = CmpSharedSecretAuthentication()
+
+        with patch('onboarding.models.timezone.now', return_value=now):
+            if isinstance(config, OnboardingConfigModel) and expiry_offset is not None and expiry_offset <= 0:
+                with pytest.raises(ValueError, match='Shared secret has expired'):
+                    auth._validate_device_configuration(device, sender_kid=7)
+            else:
+                assert auth._validate_device_configuration(device, sender_kid=7) is config
     
     def test_authenticate_non_cmp_protocol(self) -> None:
         """Test authentication raises error when protocol is not CMP."""

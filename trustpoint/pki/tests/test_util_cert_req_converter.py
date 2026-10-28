@@ -11,13 +11,15 @@ import ipaddress
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509.oid import NameOID
 
+from pki.util.cert_profile import JSONProfileVerifier
 from pki.util.cert_req_converter import (
     JSONCertRequestCommandExtractor,
     JSONCertRequestConverter,
 )
+from request.template_vars import TemplateVariableResolver
 
 
 @pytest.fixture
@@ -456,6 +458,68 @@ class TestJSONCertRequestConverterFromJson:
         builder = JSONCertRequestConverter.from_json(json_data)
         
         assert isinstance(builder, x509.CertificateBuilder)
+
+    @pytest.mark.parametrize('usage', ['clientAuth', 'client_auth', 'CLIENT_AUTH', '1.3.6.1.5.5.7.3.2'])
+    def test_from_json_extended_key_usage_name_variants(self, usage: str) -> None:
+        """EKU accepts snake_case, RFC 5280 camelCase and dotted-string OIDs."""
+        json_data = {
+            'type': 'cert_request',
+            'subject': {'common_name': 'tech'},
+            'extensions': {'extended_key_usage': {'usages': [usage]}},
+            'validity': {'hours': 8},
+        }
+
+        builder = JSONCertRequestConverter.from_json(json_data)
+
+        eku = next(e.value for e in builder._extensions if isinstance(e.value, x509.ExtendedKeyUsage))  # noqa: SLF001
+        assert list(eku) == [x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]
+
+    def test_from_json_extended_key_usage_unknown_raises_clear_error(self) -> None:
+        """An unknown EKU name raises a descriptive error instead of an ASN.1 parse error."""
+        json_data = {
+            'type': 'cert_request',
+            'subject': {'common_name': 'tech'},
+            'extensions': {'extended_key_usage': {'usages': ['notAUsage']}},
+            'validity': {'hours': 8},
+        }
+
+        with pytest.raises(ValueError, match="Unknown extended key usage: 'notAUsage'"):
+            JSONCertRequestConverter.from_json(json_data)
+
+    def test_service_technician_profile_resolves_san_uris(self) -> None:
+        """Profile SAN ``uris.value`` is flattened to a list of resolved strings and the cert can be signed."""
+        profile = {
+            'type': 'cert_profile',
+            'subj': {'common_name': {'required': True, 'mutable': True}},
+            'ext': {
+                'basic_constraints': {'ca': False, 'critical': True},
+                'extended_key_usage': {'usages': {'value': ['clientAuth']}},
+                'subject_alternative_name': {
+                    'uris': {'value': ['urn:device:uuid:{{ device.rfc_4122_uuid }}']},
+                },
+            },
+            'validity': {'hours': 8},
+        }
+        uuid = '0b3c6d4e-1111-4222-8333-444455556666'
+        request = {'type': 'cert_request', 'subject': {'common_name': 'tech'}, 'validity': {'hours': 8}}
+
+        applied = JSONProfileVerifier(profile).apply_profile_to_request(request)
+        resolved = TemplateVariableResolver._resolve_recursively(  # noqa: SLF001
+            applied, {'device.rfc_4122_uuid': uuid}
+        )
+
+        assert resolved['extensions']['subject_alternative_name']['uris'] == [f'urn:device:uuid:{uuid}']
+
+        key = ec.generate_private_key(ec.SECP256R1())
+        cert = (
+            JSONCertRequestConverter.from_json(resolved)
+            .issuer_name(x509.Name([x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'ca')]))
+            .serial_number(1)
+            .public_key(key.public_key())
+            .sign(key, hashes.SHA256())
+        )
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        assert san.get_values_for_type(x509.UniformResourceIdentifier) == [f'urn:device:uuid:{uuid}']
 
     def test_from_json_with_basic_constraints_ca_true(self) -> None:
         """Test from_json with ca=True in BasicConstraints passes it through to the builder."""

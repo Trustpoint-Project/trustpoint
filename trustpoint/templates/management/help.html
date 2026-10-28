@@ -2,247 +2,414 @@
 {% load static i18n %}
 
 {% block content %}
-<div class="container mt-5">
-    <h2 class="mb-1">Help & Support</h2>
-    <p class="text-muted mb-4">Need help using Trustpoint? Choose an option below.</p>
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Help & Support" %}
+        </h1>
 
-    <div class="row g-4">
+        <p class="mb-0 text-muted">
+            {% trans "Access documentation, support resources and project information for Trustpoint." %}
+        </p>
+    </div>
 
-        <!-- Feature Request -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-lightbulb"></use>
-                        </svg>
-                        Request a Feature
-                    </h5>
-                    <p class="text-muted">Have an idea to improve Trustpoint? Submit a feature request.</p>
-                    <a href="https://github.com/Trustpoint-Project/trustpoint/issues/new?template=feature_request.md" 
-                       target="_blank" class="btn btn-primary" aria-label="Submit a feature request on GitHub">
-                        Submit Feature Request
-                    </a>
-                </div>
+    <div class="card-body text-start">
+
+        {# --- Support and feedback --- #}
+        <section class="mb-5">
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans "Support & Feedback" %}
+                </h2>
+
+                <p class="text-muted mb-0">
+                    {% trans "Report issues, suggest improvements or contact the Trustpoint project." %}
+                </p>
             </div>
-        </div>
 
-        <!-- Bug Report -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-bug"></use>
-                        </svg>
-                        Report a Bug
-                    </h5>
-                    <p class="text-muted">Found something broken or not working? Help us fix it.</p>
-                    <a href="https://github.com/Trustpoint-Project/trustpoint/issues/new?template=bug_report.md"
-                       target="_blank" class="btn btn-danger" aria-label="Report a bug on GitHub">
-                        Report Bug
-                    </a>
-                </div>
-            </div>
-        </div>
+            <hr class="mb-4">
 
-        <!-- Documentation -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                    <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                        <use href="{% static 'img/icons.svg' %}#icon-book"></use>
-                    </svg>
-                    Documentation
-                    </h5>
+            <div class="row g-4">
 
-                <div id="docs-status-area">
-                    {% if build_in_progress %}
-                        <div class="text-center mb-3">
-                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                            <span class="ms-2 small text-muted">Building docs... may take few minutes</span>
+                {# Feature Request #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "Request a Feature" %}
+                            </h3>
+
+                            <p class="text-muted">
+                                {% trans "Have an idea to improve Trustpoint? Submit a feature request." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="https://github.com/Trustpoint-Project/trustpoint/issues/new?template=feature_request.md"
+                                    target="_blank"
+                                    class="btn btn-outline-secondary"
+                                    aria-label="{% trans 'Submit a feature request on GitHub' %}"
+                                >
+                                    {% trans "Submit Feature Request" %}
+                                </a>
+                            </div>
                         </div>
-                    {% elif local_docs_available %}
-                        <span class="badge bg-success mb-2">Docs hosted locally</span>
-                        <div class="text-muted mb-3" style="font-size: 0.75rem;">
-                            <em>Got Updates? <a href="#" id="rebuild-docs-btn" data-url="{% url 'management:trigger_build_docs' %}" data-csrf="{{ csrf_token }}">Rebuild Docs</a></em>
+                    </div>
+                </div>
+
+                {# Bug Report #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "Report a Bug" %}
+                            </h3>
+
+                            <p class="text-muted">
+                                {% trans "Found something broken or not working as expected? Help us fix it." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="https://github.com/Trustpoint-Project/trustpoint/issues/new?template=bug_report.md"
+                                    target="_blank"
+                                    class="btn btn-outline-secondary"
+                                    aria-label="{% trans 'Report a bug on GitHub' %}"
+                                >
+                                    {% trans "Report Bug" %}
+                                </a>
+                            </div>
                         </div>
-                    {% else %}
-                        <span class="badge bg-secondary mb-2">Docs hosted externally (Requires Internet)</span>
-                        <div class="text-muted mb-3" style="font-size: 0.75rem;">
-                            <em>To host docs locally
-                                <kbd id="build-docs-btn"
-                                     class="user-select-all py-1 px-2"
-                                     style="cursor: pointer; border: 1px solid #555;"
-                                     data-url="{% url 'management:trigger_build_docs' %}"
-                                     data-csrf="{{ csrf_token }}">Click Here</kbd>
-                            </em>
+                    </div>
+                </div>
+
+                {# Security Issue #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "Report Security Issue" %}
+                            </h3>
+
+                            <p class="text-muted">
+                                {% trans "Found a potential security vulnerability? Report it privately through GitHub." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="https://github.com/Trustpoint-Project/trustpoint/security/advisories/new"
+                                    target="_blank"
+                                    class="btn btn-outline-secondary"
+                                    aria-label="{% trans 'Report a vulnerability on GitHub' %}"
+                                >
+                                    {% trans "Report Vulnerability" %}
+                                </a>
+                            </div>
                         </div>
-                    {% endif %}
+                    </div>
                 </div>
 
-                <div id="docs-loading" class="d-none text-center mb-3">
-                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                    <span class="ms-2 small text-muted">Building docs...</span>
+                {# Contact #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "Contact Us" %}
+                            </h3>
+
+                            <p class="text-muted">
+                                {% trans "Still have questions? Contact the Trustpoint project by email." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="mailto:trustpoint@campus-schwarzwald.de"
+                                    target="_blank"
+                                    class="btn btn-outline-secondary"
+                                    aria-label="{% trans 'Send an email to the Trustpoint project' %}"
+                                >
+                                    {% trans "Send Email" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <p class="text-muted">Find setup instructions, tutorials, and advanced topics.</p>
-                <a href="{% url 'management:local_docs' %}"
-                   {% if not local_docs_available %}target="_blank"{% endif %}
-                   class="btn btn-primary">View Documentation</a>
-                </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Report Security Issue -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-shield-exclamation"></use>
-                        </svg>
-                            Report Security Issue
-                    </h5>
-                    <p class="text-muted">Found a vulnerability? Help us fix it.</p>
-                    <a href="https://github.com/Trustpoint-Project/trustpoint/security/advisories/new"
-                       target="_blank" class="btn btn-danger" aria-label="Report a vulnerability on GitHub">
-                        Report Vulnerability
-                    </a>
-                </div>
+
+        {# --- Documentation and technical resources --- #}
+        <section class="mb-5">
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans "Documentation & Technical Resources" %}
+                </h2>
+
+                <p class="text-muted mb-0">
+                    {% trans "Access user documentation, API information, demonstrations and software metadata." %}
+                </p>
             </div>
-        </div>
 
-        <!-- Video Demos -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-youtube"></use>
-                        </svg>
-                        Video Demos
-                    </h5>
-                    <p class="text-muted">Watch quick demos and tutorials on our YouTube channel.</p>
-                    <a href="https://www.youtube.com/@Trustpoint-oss" 
-                       target="_blank" class="btn btn-primary" aria-label="Watch on YouTube">
-                        Watch on YouTube
-                    </a>
+            <hr class="mb-4">
+
+            <div class="row g-4">
+
+                {# Documentation #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "Documentation" %}
+                            </h3>
+
+                            <div id="docs-status-area" class="mb-3">
+                                {% if build_in_progress %}
+                                    <div>
+                                        <div
+                                            class="spinner-border spinner-border-sm text-primary"
+                                            role="status"
+                                        >
+                                            <span class="visually-hidden">
+                                                {% trans "Building documentation" %}
+                                            </span>
+                                        </div>
+
+                                        <span class="ms-2 small text-muted">
+                                            {% trans "Building documentation. This may take a few minutes." %}
+                                        </span>
+                                    </div>
+
+                                {% elif local_docs_available %}
+                                    <div class="mb-2">
+                                        <span class="badge text-bg-success">
+                                            {% trans "Hosted locally" %}
+                                        </span>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        id="rebuild-docs-btn"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        data-url="{% url 'management:trigger_build_docs' %}"
+                                        data-csrf="{{ csrf_token }}"
+                                    >
+                                        {% trans "Rebuild Documentation" %}
+                                    </button>
+
+                                {% else %}
+                                    <div class="mb-2">
+                                        <span class="badge text-bg-secondary">
+                                            {% trans "Hosted externally" %}
+                                        </span>
+                                    </div>
+
+                                    <p class="small text-muted mb-2">
+                                        {% trans "Internet access is required to view the external documentation." %}
+                                    </p>
+
+                                    <button
+                                        type="button"
+                                        id="build-docs-btn"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        data-url="{% url 'management:trigger_build_docs' %}"
+                                        data-csrf="{{ csrf_token }}"
+                                    >
+                                        {% trans "Build Local Documentation" %}
+                                    </button>
+                                {% endif %}
+                            </div>
+
+                            <div
+                                id="docs-loading"
+                                class="d-none mb-3"
+                            >
+                                <div
+                                    class="spinner-border spinner-border-sm text-primary"
+                                    role="status"
+                                >
+                                    <span class="visually-hidden">
+                                        {% trans "Building documentation" %}
+                                    </span>
+                                </div>
+
+                                <span class="ms-2 small text-muted">
+                                    {% trans "Building documentation..." %}
+                                </span>
+                            </div>
+
+                            <p class="text-muted">
+                                {% trans "Find setup instructions, tutorials and advanced Trustpoint topics." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="{% url 'management:local_docs' %}"
+                                    {% if not local_docs_available %}target="_blank"{% endif %}
+                                    class="btn btn-outline-secondary"
+                                >
+                                    {% trans "View Documentation" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Homepage -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-homepage"></use>
-                        </svg>
-                        Trustpoint Homepage
-                    </h5>
-                    <p class="text-muted">Visit our homepage for updates, partnerships, and more.</p>
-                    <a href="https://trustpoint.campus-schwarzwald.de" 
-                       target="_blank" class="btn btn-primary" aria-label="Visit the Trustpoint homepage">
-                        Go to Trustpoint Homepage
-                    </a>
+                {# API Documentation #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "API Documentation" %}
+                            </h3>
+
+                            <p class="text-muted">
+                                {% trans "Explore the REST API documentation and available endpoints." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="/swagger/"
+                                    class="btn btn-outline-secondary"
+                                    aria-label="{% trans 'View API documentation' %}"
+                                >
+                                    {% trans "View API Documentation" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- License -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-license"></use>
-                        </svg>
-                        License
-                    </h5>
-                    <p class="text-muted">Read the Trustpoint project license on GitHub.</p>
-                    <a href="https://github.com/Trustpoint-Project/trustpoint/blob/main/LICENSE" 
-                       target="_blank" class="btn btn-primary" aria-label="View the Trustpoint license on GitHub">
-                    View License
-                    </a>
+                {# Video Demos #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "Video Demos" %}
+                            </h3>
+
+                            <p class="text-muted">
+                                {% trans "Watch demonstrations and tutorials on the Trustpoint YouTube channel." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="https://www.youtube.com/@Trustpoint-oss"
+                                    target="_blank"
+                                    class="btn btn-outline-secondary"
+                                    aria-label="{% trans 'Watch Trustpoint videos on YouTube' %}"
+                                >
+                                    {% trans "Watch on YouTube" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
+                {# SBOM #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "Software Bill of Materials (SBOM)" %}
+                            </h3>
 
-        <!-- View SBOM -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-file-code"></use>
-                        </svg>
-                        View Software Bill of Materials (SBOM)
-                    </h5>
-                    <p class="text-muted">See the list of packages used in this project.</p>
-                    <a href="https://github.com/Trustpoint-Project/trustpoint/actions/workflows/sbom.yml" 
-                       target="_blank" class="btn btn-primary" aria-label="View the CycloneDX SBOM on GitHub">
-                        Download SBOM
-                    </a>
+                            <p class="text-muted">
+                                {% trans "Review the software components and packages used by Trustpoint." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="https://trustpoint-project.github.io/trustpoint/"
+                                    target="_blank"
+                                    class="btn btn-outline-secondary"
+                                    aria-label="{% trans 'View the Trustpoint SBOM on GitHub' %}"
+                                >
+                                    {% trans "View SBOM" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- API Documentation -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-swagger"></use>
-                        </svg>
-                        API Documentation
-                    </h5>
-                    <p class="text-muted">Explore the REST API documentation and try out endpoints.</p>
-                    <a href="/swagger/" 
-                       class="btn btn-primary" aria-label="View API documentation">
-                        View API Docs
-                    </a>
-                </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Contact Us -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-envelope"></use>
-                        </svg>
-                        Contact Us
-                    </h5>
-                    <p class="text-muted">Still have questions? Reach out by email.</p>
-                    <a href="mailto:trustpoint@campus-schwarzwald.de" 
-                       target="_blank" class="btn btn-primary" aria-label="Visit the Trustpoint homepage">
-                        Send Email
-                    </a>
-                </div>
+
+        {# --- Project information --- #}
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans "Project Information" %}
+                </h2>
+
+                <p class="text-muted mb-0">
+                    {% trans "Learn more about the Trustpoint project, source code and licensing." %}
+                </p>
             </div>
-        </div>
+
+            <hr class="mb-4">
+
+            <div class="row g-4">
+
+                {# Homepage #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "Trustpoint Homepage" %}
+                            </h3>
+
+                            <p class="text-muted">
+                                {% trans "Visit the Trustpoint homepage for project updates, partnerships and further information." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="https://industrial-security.io"
+                                    target="_blank"
+                                    class="btn btn-outline-secondary"
+                                    aria-label="{% trans 'Visit the Trustpoint homepage' %}"
+                                >
+                                    {% trans "Visit Homepage" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {# License #}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5">
+                                {% trans "License" %}
+                            </h3>
+
+                            <p class="text-muted">
+                                {% trans "Review the license under which the Trustpoint project is distributed." %}
+                            </p>
+
+                            <div class="mt-auto">
+                                <a
+                                    href="https://github.com/Trustpoint-Project/trustpoint/blob/main/LICENSE"
+                                    target="_blank"
+                                    class="btn btn-outline-secondary"
+                                    aria-label="{% trans 'View the Trustpoint license on GitHub' %}"
+                                >
+                                    {% trans "View License" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
 
     </div>
 
-    <!-- Footer -->
-    <hr class="mt-5">
-    <div class="text-center text-muted small mt-3">
-        Funded by the Federal Ministry of Research, Technology and Space (BMFTR)
-        <br>
-        <a href="https://www.bmftr.bund.de/DE/Home/home_node.html" target="_blank" aria-label="Visit BMFTR website">
-            <img src="{% static 'img/BMFTR_Logo.svg.png' %}" class="mt-2" alt="BMFTR Logo" height="90" 
-                 style="background-color: white; border-radius: 6px; padding: 4px;">
-        </a>
-    </div>
 </div>
 
 <script src="{% static 'js/build_docs.js' %}"></script>
-
 {% endblock content %}

@@ -1,30 +1,146 @@
 {% load i18n %}
 
 <div class="card">
-    <div class="card-header"><h5 class="mb-0">{% trans "Log Configuration" %}</h5></div>
-    <div class="card-body pt-4 pb-4">
-        <form method="POST" action="{% url 'management:settings-logging' %}" id="loglevel_configuration">
-            {% csrf_token %}
-            <fieldset class="form-group tp-form-group">
-                <div class="mb-3">
-                    {{ form.loglevel.label_tag }}
-                    {{ form.loglevel }}
-                </div>
-                <div class="form-check form-switch mb-2">
-                    {{ form.crypto_backend_audit_enabled }}
-                    <label class="form-check-label" for="{{ form.crypto_backend_audit_enabled.id_for_label }}">
-                        {{ form.crypto_backend_audit_enabled.label }}
-                    </label>
-                </div>
-                {% if form.crypto_backend_audit_enabled.help_text %}
-                    <div class="form-text">{{ form.crypto_backend_audit_enabled.help_text }}</div>
-                {% endif %}
-            </fieldset>
-        </form>
+
+    {# ============================================================ #}
+    {# Header                                                      #}
+    {# ============================================================ #}
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Log Configuration' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Configure the application log level and cryptographic backend audit logging.' %}
+        </p>
     </div>
-    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-        <div class="tp-card-btn-footer m-1">
-            <button class="btn btn-primary" type="submit" form="loglevel_configuration">{% trans "Save" %}</button>
+
+
+    {# ============================================================ #}
+    {# Content                                                     #}
+    {# ============================================================ #}
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+
+            <form
+                method="post"
+                action="{% url 'management:settings-logging' %}"
+                id="loglevel_configuration"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <fieldset class="form-group tp-form-group">
+
+                    {# ==================================================== #}
+                    {# Application Logging                                 #}
+                    {# ==================================================== #}
+                    <section class="mb-5">
+
+                        <div class="mb-3">
+                            <h2 class="h4 mb-1">
+                                {% trans 'Application Logging' %}
+                            </h2>
+
+                            <p class="text-muted mb-0">
+                                {% trans 'Define the level of detail written to the Trustpoint application logs.' %}
+                            </p>
+                        </div>
+
+                        <hr class="mb-4">
+
+
+                        <div class="mb-3">
+                            <label
+                                for="{{ form.loglevel.id_for_label }}"
+                                class="form-label"
+                            >
+                                {{ form.loglevel.label }}
+                            </label>
+
+                            {{ form.loglevel }}
+
+                            {% if form.loglevel.help_text %}
+                                <div class="form-text">
+                                    {{ form.loglevel.help_text }}
+                                </div>
+                            {% endif %}
+
+                            {% if form.loglevel.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.loglevel.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                    </section>
+
+
+                    {# ==================================================== #}
+                    {# Cryptographic Backend Audit                         #}
+                    {# ==================================================== #}
+                    <section>
+
+                        <div class="mb-3">
+                            <h2 class="h4 mb-1">
+                                {% trans 'Cryptographic Backend Audit' %}
+                            </h2>
+
+                            <p class="text-muted mb-0">
+                                {% trans 'Control whether security-relevant operations performed by the cryptographic backend are recorded separately.' %}
+                            </p>
+                        </div>
+
+                        <hr class="mb-4">
+
+
+                        <div class="form-check form-switch">
+                            {{ form.crypto_backend_audit_enabled }}
+
+                            <label
+                                class="form-check-label"
+                                for="{{ form.crypto_backend_audit_enabled.id_for_label }}"
+                            >
+                                {{ form.crypto_backend_audit_enabled.label }}
+                            </label>
+                        </div>
+
+
+                        {% if form.crypto_backend_audit_enabled.help_text %}
+                            <div class="form-text mt-2">
+                                {{ form.crypto_backend_audit_enabled.help_text }}
+                            </div>
+                        {% endif %}
+
+
+                        {% if form.crypto_backend_audit_enabled.errors %}
+                            <div class="invalid-feedback d-block mt-2">
+                                {{ form.crypto_backend_audit_enabled.errors }}
+                            </div>
+                        {% endif %}
+
+                    </section>
+
+                </fieldset>
+            </form>
+
         </div>
     </div>
+
+
+    {# ============================================================ #}
+    {# Footer                                                      #}
+    {# ============================================================ #}
+    <div class="card-footer d-flex justify-content-end align-items-center tp-sticky-footer">
+
+        <button
+            class="btn btn-primary"
+            type="submit"
+            form="loglevel_configuration"
+        >
+            {% trans 'Save Configuration' %}
+        </button>
+
+    </div>
+
 </div>

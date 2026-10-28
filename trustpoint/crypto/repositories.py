@@ -5,11 +5,9 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from cryptography.hazmat.primitives import serialization
 from django.db import transaction
 from django.utils import timezone
 
@@ -23,6 +21,7 @@ from crypto.adapters.software.capabilities import SoftwareCapabilities
 from crypto.domain.algorithms import KeyAlgorithm
 from crypto.domain.errors import InternalConsistencyError, UnsupportedBackendKindError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.domain.public_keys import public_key_fingerprint_sha256
 from crypto.local_development import ensure_local_software_backends
 from crypto.models import (
     BackendKind,
@@ -426,14 +425,7 @@ class CryptoManagedKeyRepository:
             'usages': sorted(usage.value for usage in policy.usages),
         }
 
-    @staticmethod
-    def public_key_fingerprint_sha256(public_key: SupportedPublicKey) -> str:
-        """Return the SHA-256 fingerprint of SubjectPublicKeyInfo DER."""
-        spki_der = public_key.public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return hashlib.sha256(spki_der).hexdigest()
+    public_key_fingerprint_sha256 = staticmethod(public_key_fingerprint_sha256)
 
     @staticmethod
     def _validate_profile_binding_compatibility(

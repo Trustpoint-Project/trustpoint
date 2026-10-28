@@ -14,10 +14,13 @@ from django.http import HttpResponse
 from django.test import RequestFactory
 from rest_framework.test import APIRequestFactory
 
+from pki.models import CaModel, CertificateModel, RevokedCertificateModel
+from pki.tests.managed_ca_helpers import create_managed_root_ca
 from pki.util.crl import generate_empty_crl
 from pki.util.x509 import CertificateGenerator
 from pki.views.issuing_cas import (
     CrlDownloadView,
+    IssuedCertificatesListView,
     IssuingCaCrlGenerationView,
     IssuingCaTableView,
     IssuingCaViewSet,
@@ -42,6 +45,57 @@ def test_issuing_ca_table_maps_common_name_sort() -> None:
 
     assert result is queryset
     queryset.order_by.assert_called_once_with('-is_active', 'credential__certificate__common_name')
+
+
+def test_issued_certificates_list_uses_verified_issuer_relationship() -> None:
+    """The list includes only leaf certificates linked to the selected CA certificate."""
+    selected_cert, selected_key = create_managed_root_ca(cn='Shared Issuer Name')
+    selected_ca = CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=selected_cert,
+        private_key=selected_key,
+        chain=[],
+        unique_name='selected-ca',
+        ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11,
+    )
+    other_cert, other_key = create_managed_root_ca(cn='Shared Issuer Name')
+    CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=other_cert,
+        private_key=other_key,
+        chain=[],
+        unique_name='other-ca',
+        ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11,
+    )
+    selected_leaf, _ = CertificateGenerator.create_ee(selected_key, selected_cert.subject, 'selected-leaf')
+    other_leaf, _ = CertificateGenerator.create_ee(other_key, other_cert.subject, 'other-leaf')
+    selected_leaf_model = CertificateModel.save_certificate(selected_leaf)
+    other_leaf_model = CertificateModel.save_certificate(other_leaf)
+    RevokedCertificateModel.objects.create(certificate=selected_leaf_model, ca=selected_ca)
+
+    view = IssuedCertificatesListView()
+    view.kwargs = {'pk': selected_ca.pk}
+    issued_certificates = view.get_queryset()
+
+    assert selected_leaf_model in issued_certificates
+    assert other_leaf_model not in issued_certificates
+    assert selected_ca.ca_certificate_model not in issued_certificates
+    listed_certificate = issued_certificates.get(pk=selected_leaf_model.pk)
+    assert listed_certificate.table_status == 'Revoked'
+
+
+def test_issued_certificates_list_is_empty_for_ca_without_leaf_certificates() -> None:
+    """An Issuing CA with no issued end-entity certificates has an empty list."""
+    ca_cert, ca_key = create_managed_root_ca(cn='Empty Issuer')
+    issuing_ca = CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=ca_cert,
+        private_key=ca_key,
+        chain=[],
+        unique_name='empty-ca',
+        ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11,
+    )
+    view = IssuedCertificatesListView()
+    view.kwargs = {'pk': issuing_ca.pk}
+
+    assert not view.get_queryset().exists()
 
 
 def test_crl_generation_rejects_inactive_ca() -> None:

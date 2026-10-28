@@ -1,4 +1,4 @@
-![Trustpoint](.github-assets/trustpoint_banner.png)
+![Trustpoint](.github-assets/trustpoint_github_banner.svg)
 
 <div align="center">
 
@@ -60,23 +60,27 @@ Trustpoint is designed to help you:
 
 ## Quickstart
 
-The fastest way to explore Trustpoint is the guided setup wizard on a **Linux host**.
+Deploy Trustpoint with **Docker Compose on a Linux host**. The web setup wizard configures the application.
 
 ### Prerequisites
 
 - Docker 20.10+
 - Docker Compose 2.32.4+
-- Git
+- Git and Python 3
 
 ### Start Trustpoint
 
 ```bash
 git clone https://github.com/Trustpoint-Project/trustpoint.git
 cd trustpoint
-./tp_wizard.sh
+cp .env.example .env
+# Set database credentials and TLS names in .env.
+sudo python3 docker/init_secret.py --type all
+docker compose up -d --build
 ```
 
-The wizard guides you through the Docker-based setup.
+The one-time initializer creates a private, installation-specific Django signing key.
+Keep `secrets/django_secret_key` and the Compose volumes when upgrading.
 
 
 
@@ -125,6 +129,7 @@ Application Certificates
 | **AOKI** *(proof of concept)* | Zero-touch industrial device onboarding | IDevID / DevOwnerID based trust | Initial device onboarding and identity establishment |
 | **EST** | Standards-based certificate enrollment | Username/password, IDevID, client certificate | Onboarding, application certificates, renewal, re-enrollment |
 | **CMP** | Flexible enrollment for industrial or constrained devices | Shared secret, IDevID, client certificate | Onboarding, enrollment, renewal, rekeying |
+| **SCEP** | Certificate enrollment for industrial and other devices | Per-device challengePassword for initial enrollment, client certificate for renewal | Application certificate enrollment and renewal |
 | **OPC UA GDS Push** | OPC UA certificate and trust-list distribution | Secure device registration and certificate authentication | Server certificate and trust-anchor distribution, cyclic updates |
 | **Manual / remote download** | Operator-driven or browser-assisted issuance | Operator workflow / one-time password | PKCS#12 or PEM credential delivery |
 
@@ -133,6 +138,7 @@ Learn more:
 - [AOKI — Automated Onboarding Key Infrastructure](https://trustpoint.readthedocs.io/en/latest/features/aoki/index.html)
 - [EST API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/est.html)
 - [CMP API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/cmp.html)
+- [SCEP API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/scep.html)
 - [OPC UA GDS Push specification](https://reference.opcfoundation.org/GDS/v105/docs/7.4)
 
 ## Core capabilities

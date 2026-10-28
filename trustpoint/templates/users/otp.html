@@ -1,0 +1,45 @@
+{% extends 'users/base.html' %}
+{% load static i18n crispy_forms_filters %}
+
+{% block head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
+{% endblock head %}
+
+{% block content %}
+    <section class="tp-setup-form-shell">
+        <div class="tp-setup-form-header">
+            <h1 class="tp-setup-form-heading">
+                {% if enrolling %}
+                    {% trans 'Set up your authenticator' %}
+                {% else %}
+                    {% trans 'Verify your login' %}
+                {% endif %}
+            </h1>
+        </div>
+
+        <div class="tp-setup-form-panel">
+            <form method="post" action="{% url 'users:otp' %}" class="tp-setup-form text-start">
+                {% csrf_token %}
+                {% if enrolling %}
+                    <p class="tp-setup-form-copy">{% trans 'Open your authenticator app, add an account, and scan this QR code.' %}</p>
+                    <div class="text-center">
+                        <img src="{{ qr_code_url }}" alt="{% trans 'Scan with your authenticator app to set up your account' %}"
+                             class="img-fluid bg-white rounded" width="280" height="280">
+                    </div>
+                    <p class="tp-setup-form-copy">{% trans 'Enter the code shown in the app to finish setup and sign in.' %}</p>
+                {% else %}
+                    <p class="tp-setup-form-copy">{% trans 'Enter the code from your authenticator app, or an unused recovery code.' %}</p>
+                {% endif %}
+                <fieldset class="form-group tp-form-group">
+                    {{ form|crispy }}
+                </fieldset>
+                <hr class="tp-setup-form-divider">
+                <div class="tp-setup-form-actions">
+                    <a href="{% url 'users:login' %}" class="btn tp-setup-form-back">{% trans 'Back to login' %}</a>
+                    <button type="submit" class="btn tp-setup-form-submit">{% trans 'Verify and sign in' %}</button>
+                </div>
+            </form>
+        </div>
+    </section>
+{% endblock content %}

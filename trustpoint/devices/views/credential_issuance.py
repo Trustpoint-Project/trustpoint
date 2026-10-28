@@ -5,10 +5,8 @@
 
 import abc
 import asyncio
-import json
 from typing import Any, cast
 
-from cryptography import x509
 from django import forms
 from django.contrib import messages
 from django.db.models import QuerySet
@@ -16,21 +14,13 @@ from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.http.request import HttpRequest
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy, ngettext
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormMixin, FormView
 
 from devices.forms import (
-    BaseCredentialForm,
-    IssueDomainCredentialForm,
-    IssueOpcUaGdsPushDomainCredentialForm,
     OpcUaGdsPushTruststoreAssociationForm,
-)
-
-# noinspection PyUnresolvedReferences
-from devices.issuer import (
-    BaseTlsCredentialIssuer,
-    LocalDomainCredentialIssuer,
 )
 from devices.models import (
     DeviceModel,
@@ -38,6 +28,7 @@ from devices.models import (
 from onboarding.models import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
+    OnboardingProtocol,
 )
 from pki.forms import TruststoreAddForm
 from pki.forms.cert_profiles import CertificateIssuanceForm
@@ -51,11 +42,11 @@ from request.authorization import ManualAuthorization
 from request.gds_push import GdsPushService
 from request.operation_processor.issue_cred import CredentialIssueProcessor
 from request.request_context import ManualCredentialRequestContext, ManualIssuanceMethod
+from shared.views import FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 
@@ -105,6 +96,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
         sections.append(
             {
                 'heading': gettext_lazy('CMP with OpenSSL (shared-secret)'),
+                'group': 'CMP',
                 'description': gettext_lazy(
                     'This option will guide you through all steps and commands that are '
                     'required to issue a new application certificate '
@@ -119,6 +111,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
         sections.append(
             {
                 'heading': gettext_lazy('EST with OpenSSL and curL (username & password)'),
+                'group': 'EST',
                 'description': gettext_lazy(
                     'This option will guide you through all steps and commands that are '
                     'required to issue a new application certificate using EST using OpenSSL and curL.'
@@ -134,6 +127,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
         sections.append(
             {
                 'heading': gettext_lazy('Manual Issuance'),
+                'group': gettext_lazy('Manual'),
                 'description': gettext_lazy(
                     'This option will allow you to issue a new domain credential on the Trustpoint. '
                     'The domain credential can then be downloaded for manual injection into the device, '
@@ -148,6 +142,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
         sections.append(
             {
                 'heading': gettext_lazy('REST with curl (username & password)'),
+                'group': 'REST',
                 'description': gettext_lazy(
                     'This option will guide you through all steps and commands that are '
                     'required to issue a new application certificate using REST with curl.'
@@ -159,9 +154,35 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
                 'url': f'{self.page_category}:{self.page_name}_no_onboarding_rest_username_password_help',
             }
         )
-
-
-
+        sections.append(
+            {
+                'heading': gettext_lazy('SCEP with sscep (enrollment secret)'),
+                'group': 'SCEP',
+                'description': gettext_lazy(
+                    'This option will guide you through all steps and commands that are '
+                    'required to issue a new application certificate using SCEP (RFC 8894).'
+                ),
+                'protocol': 'scep',
+                'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP),
+                'url': f'{self.page_category}:{self.page_name}_no_onboarding_scep_help',
+            }
+        )
+        sections.insert(1, {
+            'heading': gettext_lazy('CMP with WebUI'),
+            'group': 'CMP',
+            'description': gettext_lazy('Configure CMP enrollment in the device WebUI using a shared secret.'),
+            'protocol': 'cmp-shared-secret',
+            'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET),
+            'url': f'{self.page_category}:{self.page_name}_no_onboarding_cmp_webui_help',
+        })
+        sections.insert(3, {
+            'heading': gettext_lazy('EST with WebUI'),
+            'group': 'EST',
+            'description': gettext_lazy('Configure EST enrollment in the device WebUI using a username and password.'),
+            'protocol': 'est-username-password',
+            'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD),
+            'url': f'{self.page_category}:{self.page_name}_no_onboarding_est_webui_help',
+        })
         context['sections'] = sections
 
         return context
@@ -207,12 +228,6 @@ class DeviceNoOnboardingIssueNewApplicationCredentialView(AbstractNoOnboardingIs
     """Issue a new application credential for a no-onboarding device in the Devices section."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsNoOnboardingIssueNewApplicationCredentialView(AbstractNoOnboardingIssueNewApplicationCredentialView):
-    """Issue a new application credential for a no-onboarding OPC UA GDS device."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class AbstractSelectCertificateProfileNewApplicationCredentialView(PageContextMixin, DetailView[DeviceModel]):
@@ -291,26 +306,12 @@ class DeviceChooseIssuanceMethodView(AbstractChooseIssuanceMethodView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsChooseIssuanceMethodView(AbstractChooseIssuanceMethodView):
-    """Choose an issuance method within the OPC UA GDS section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class DeviceSelectCertificateProfileNewApplicationCredentialView(
     AbstractSelectCertificateProfileNewApplicationCredentialView
 ):
     """abc."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsSelectCertificateProfileNewApplicationCredentialView(
-    AbstractSelectCertificateProfileNewApplicationCredentialView
-):
-    """abc."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class AbstractOnboardingIssueNewApplicationCredentialView(PageContextMixin, DetailView[DeviceModel]):
@@ -400,12 +401,6 @@ class DeviceOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueN
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
-    """abc."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
     """View for issuing application credentials for OPC UA GDS Push devices - redirects directly to help page."""
 
@@ -455,8 +450,8 @@ class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboarding
         )
 
 
-class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCredentialIssuer](
-    PageContextMixin, FormMixin[forms.Form], DetailView[DeviceModel]
+class AbstractIssueCredentialView[FormClass: forms.Form](
+    PageContextMixin, FormMixin[FormClass], DetailView[DeviceModel]
 ):
     """Base view for all credential issuance views."""
 
@@ -466,8 +461,7 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
     context_object_name = 'device'
     template_name = 'devices/credentials/issue_application_credential.html'
 
-    form_class: type[forms.Form]
-    issuer_class: type[IssuerClass]
+    form_class: type[FormClass]
     friendly_name: str
 
     page_category = DEVICES_PAGE_CATEGORY
@@ -489,6 +483,12 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
         context['clm_url'] = f'devices:{self.page_name}_certificate_lifecycle_management'
         return context
 
+    def get_success_url(self) -> str:
+        """Return to the device after successful issuance."""
+        return reverse(
+            f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.pk}
+        )
+
     def get_form_kwargs(self) -> dict[str, Any]:
         """This method adds the concerning device model to the form kwargs and returns them.
 
@@ -498,13 +498,7 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
         if self.object.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
-        form_kwargs = {}
-        if not issubclass(self.form_class, CertificateIssuanceForm):
-            form_kwargs = {
-                'initial': self.issuer_class.get_fixed_values(device=self.object, domain=self.object.domain),
-                'prefix': None,
-                'device': self.object,
-            }
+        form_kwargs: dict[str, Any] = {}
 
         if self.request.method == 'POST':
             form_kwargs.update({'data': self.request.POST})
@@ -546,120 +540,10 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
                 )
             except Exception as e:  # noqa: BLE001
                 messages.error(request, f'Failed to issue {self.friendly_name}: {e}')
-            return HttpResponseRedirect(
-                reverse_lazy(
-                    f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.get_object().id}
-                )
-            )
-
-        return self.render_to_response(self.get_context_data(form=form))
-
-
-class AbstractIssueDomainCredentialView(
-    AbstractIssueCredentialView[IssueDomainCredentialForm, LocalDomainCredentialIssuer]
-):
-    """Base view for issuing domain credentials."""
-
-    form_class: type[BaseCredentialForm] = IssueDomainCredentialForm
-    template_name = 'devices/credentials/issue_domain_credential.html'
-    issuer_class = LocalDomainCredentialIssuer
-    friendly_name = 'Domain Credential'
-
-    def issue_credential(self, device: DeviceModel, _form: forms.Form) -> IssuedCredentialModel:
-        """Issue a domain credential for the device.
-
-        Args:
-            device: The device to issue the credential for.
-            _form: The form instance containing the validated data.
-
-        Returns:
-            The issued credential model.
-        """
-        if device.domain is None:
-            err_msg = gettext_lazy('Device has no domain configured.')
-            raise Http404(err_msg)
-
-        issuer = self.issuer_class(device=device, domain=device.domain)
-        return issuer.issue_domain_credential()
-
-
-class DeviceIssueDomainCredentialView(AbstractIssueDomainCredentialView):
-    """View for issuing domain credentials for devices."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsIssueDomainCredentialView(AbstractIssueDomainCredentialView):
-    """View for issuing domain credentials for OPC-UA GDS devices."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
-class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
-    """View for issuing domain credentials for OPC-UA GDS Push devices."""
-
-    form_class = IssueOpcUaGdsPushDomainCredentialForm
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-    def issue_credential(self, device: DeviceModel, form: forms.Form) -> IssuedCredentialModel:
-        """Issues a domain credential for the device with OPC UA specific extensions.
-
-        Args:
-            device: The device to be associated with the new credential.
-            form: The form instance containing the validated data.
-
-        Returns:
-            The IssuedCredentialModel object that was created and saved.
-        """
-        if not device.domain:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-
-        issuer = self.issuer_class(device=device, domain=device.domain)
-        application_uri = cast('str', form.cleaned_data.get('application_uri'))
-
-        opc_ua_extensions = [
-            (
-                x509.KeyUsage(
-                    digital_signature=True,
-                    content_commitment=True,
-                    key_encipherment=True,  # Required for OPC UA SignAndEncrypt security mode
-                    data_encipherment=True,  # Additional encryption capability
-                    key_agreement=False,
-                    key_cert_sign=False,
-                    crl_sign=False,
-                    encipher_only=False,
-                    decipher_only=False,
-                ),
-                True,
-            ),
-            (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
-        ]
-
-        if application_uri:
-            opc_ua_extensions.append(
-                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
-            )
-
-        return issuer.issue_domain_credential(
-            application_uri=None,
-            extra_extensions=opc_ua_extensions
-        )
-
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Handle the POST request with custom redirect to truststore association."""
-        self.object = self.get_object()
-        form = self.form_class(**self.get_form_kwargs())
-
-        if form.is_valid():
-            self.issue_credential(device=self.object, form=form)
-            messages.success(
-                request, f'Successfully issued {self.friendly_name} for device {self.object.common_name}'
-            )
-            return HttpResponseRedirect(
-                reverse_lazy(
-                    f'devices:{self.page_name}_truststore_association', kwargs={'pk': self.get_object().id}
-                )
-            )
+                return HttpResponseRedirect(reverse(
+                    f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.pk}
+                ))
+            return HttpResponseRedirect(self.get_success_url())
 
         return self.render_to_response(self.get_context_data(form=form))
 
@@ -795,12 +679,11 @@ class OpcUaGdsPushTruststoreAssociationView(
         )
 
 
-class AbstractIssueProfileCredentialView(
-    AbstractIssueCredentialView[CertificateIssuanceForm, BaseTlsCredentialIssuer]
+class AbstractIssueProfileCredentialView(FormErrorMessageMixin,
+    AbstractIssueCredentialView[CertificateIssuanceForm]
 ):
     """View to issue a new certificate profile credential."""
 
-    issuer_class = BaseTlsCredentialIssuer
     friendly_name = 'Certificate Profile Credential'
 
     page_name: str
@@ -810,13 +693,17 @@ class AbstractIssueProfileCredentialView(
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Dispatch the request, ensuring the profile exists."""
-        self.profile = get_object_or_404(CertificateProfileModel, pk=kwargs['profile_id'])
+        self.profile = self.get_certificate_profile()
         return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
+    def get_certificate_profile(self) -> CertificateProfileModel:
+        """Resolve the profile selected in the issuance URL."""
+        return get_object_or_404(CertificateProfileModel, pk=self.kwargs['profile_id'])
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get form kwargs, including the profile and device/domain for template resolution."""
         kwargs = super().get_form_kwargs()
-        raw_profile = json.loads(self.profile.profile_json)
+        raw_profile = self.profile.profile
         kwargs['profile'] = raw_profile
         kwargs['device'] = self.object
         kwargs['domain'] = self.object.domain
@@ -827,14 +714,10 @@ class AbstractIssueProfileCredentialView(
         context = super().get_context_data(**kwargs)
         context['profile'] = self.profile
         context['profile_dict'] = self.get_form_kwargs()['profile']
+        context['back_url'] = reverse(
+            context['clm_url'], kwargs={'pk': self.object.pk}
+        )
         return context
-
-    def form_invalid(self, form: forms.Form) -> HttpResponse:
-        """Handle the case where the form is invalid."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error}')
-        return super().form_invalid(form)
 
     def form_valid(self, form: forms.Form) -> HttpResponse:
         """Handle the case where the form is valid."""
@@ -880,9 +763,7 @@ class AbstractIssueProfileCredentialView(
             manual_issuance_method=ManualIssuanceMethod.TRUSTPOINT_GENERATED,
         )
 
-        cert_builder = form.get_certificate_builder(request_context=ctx)
-        ctx.cert_requested = cert_builder
-
+        ctx.cert_requested = form.get_certificate_builder(request_context=ctx)
         ManualAuthorization().authorize(ctx)
         CredentialIssueProcessor().process_operation(ctx)
         if not ctx.issued_credential:
@@ -891,10 +772,47 @@ class AbstractIssueProfileCredentialView(
         return ctx.issued_credential
 
 
-class AbstractIssueCsrCredentialView(AbstractIssueCredentialView[CsrIssuanceForm, BaseTlsCredentialIssuer]):
+class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueProfileCredentialView):
+    """Issue a profile-based domain credential for OPC UA GDS Push onboarding."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    friendly_name = 'Domain Credential'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Warn when the domain is using a different credential profile."""
+        context = super().get_context_data(**kwargs)
+        if self.profile.unique_name != 'opc_ua_domain_credential':
+            messages.warning(self.request, format_html(
+                str(gettext_lazy(
+                    'This domain is not using the OPC UA Domain Credential profile. '
+                    'Select it in the <a href="{url}">domain settings</a> before issuing '
+                    'an OPC UA domain credential.'
+                )),
+                url=reverse('pki:domains-config', kwargs={'pk': self.object.domain_id}),
+            ))
+        return context
+
+    def get_certificate_profile(self) -> CertificateProfileModel:
+        """Resolve the device's domain profile without requiring a profile URL parameter."""
+        device = self.get_object()
+        if (
+            device.device_type != DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+            or not device.onboarding_config
+            or device.onboarding_config.onboarding_protocol != OnboardingProtocol.OPC_GDS_PUSH
+        ):
+            raise Http404(gettext_lazy('Device is not configured for OPC UA GDS Push onboarding.'))
+        if device.domain is None:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+        return device.domain.get_domain_credential_profile()
+
+    def get_success_url(self) -> str:
+        """Continue onboarding with truststore association."""
+        return reverse('devices:devices_truststore_association', kwargs={'pk': self.object.pk})
+
+
+class AbstractIssueCsrCredentialView(AbstractIssueCredentialView[CsrIssuanceForm]):
     """Issue an application credential from an externally generated CSR."""
 
-    issuer_class = BaseTlsCredentialIssuer
     form_class = CsrIssuanceForm
     template_name = 'devices/credentials/csr_issuance.html'
     friendly_name = 'Certificate Profile Credential'
@@ -954,19 +872,7 @@ class DeviceIssueCsrCredentialView(AbstractIssueCsrCredentialView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsIssueCsrCredentialView(AbstractIssueCsrCredentialView):
-    """Issue a CSR-backed credential within the OPC UA GDS section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class DeviceIssueProfileCredentialView(AbstractIssueProfileCredentialView):
     """Issue a new certificate profile credential within the devices section."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsIssueProfileCredentialView(AbstractIssueProfileCredentialView):
-    """Issue a new certificate profile credential within the devices section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY

@@ -196,6 +196,31 @@ def test_crl_download_der_format(
     assert crl is not None
 
 
+@pytest.mark.parametrize('query', ['', '?encoding=der'])
+def test_crl_file_url_serves_active_ca_crl(
+    client: Client, issuing_ca_instance: dict[str, Any], query: str,
+) -> None:
+    """The .crl URL downloads the current CA CRL without authentication or redirects."""
+    ca = issuing_ca_instance['issuing_ca']
+    ca.issue_crl()
+    file_url = f'/crl/{ca.pk}.crl'
+    standard_url = reverse('crl-download', kwargs={'pk': ca.pk})
+    first = client.get(file_url + query)
+    standard = client.get(standard_url + query)
+    assert first.status_code == 200
+    assert first.content == standard.content
+    assert first['Content-Type'] == standard['Content-Type']
+
+    ca.issue_crl()
+    updated = client.get(file_url + query)
+    assert updated.status_code == 200
+    assert updated.content == client.get(standard_url + query).content
+    load_crl = x509.load_der_x509_crl if query else x509.load_pem_x509_crl
+    first_number = load_crl(first.content).extensions.get_extension_for_class(x509.CRLNumber).value.crl_number
+    updated_number = load_crl(updated.content).extensions.get_extension_for_class(x509.CRLNumber).value.crl_number
+    assert updated_number > first_number
+
+
 def test_crl_download_no_authentication_required(
     client: Client,
     issuing_ca_instance: dict[str, Any]

@@ -3,18 +3,33 @@
 
 """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
-import datetime
-import ipaddress
+import datetime as dt
 import logging
-from typing import Any
+from typing import Any, cast
 
 from cryptography import x509
 from trustpoint_core.oid import NameOid
 
 from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.ext_oids import ExtendedKeyUsageOid
+from pki.util.san import parse_ip_addresses
 
 logger = logging.getLogger(__name__)
+
+# Matches 'client_auth', 'CLIENT_AUTH' and RFC 5280 style 'clientAuth' alike.
+_EKU_BY_COMPACT_NAME = {member.name.replace('_', ''): member for member in ExtendedKeyUsageOid}
+
+
+def _eku_oid_from_str(usage_str: str) -> x509.ObjectIdentifier:
+    """Resolve an EKU name or dotted-string OID to an ObjectIdentifier."""
+    member = _EKU_BY_COMPACT_NAME.get(usage_str.replace('_', '').upper())
+    if member is not None:
+        return x509.ObjectIdentifier(member.value)
+    try:
+        return x509.ObjectIdentifier(usage_str)
+    except ValueError as e:
+        exc_msg = f'Unknown extended key usage: {usage_str!r}'
+        raise ValueError(exc_msg) from e
 
 class JSONCertRequestConverter:
     """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
@@ -77,6 +92,12 @@ class JSONCertRequestConverter:
             elif isinstance(ext.value, x509.ExtendedKeyUsage):
                 eku = [ExtendedKeyUsageOid(oid.dotted_string).name.lower() for oid in ext.value]
                 req_ext['extended_key_usage'] = {'usages': eku, 'critical': ext.critical}
+            elif isinstance(ext.value, x509.CRLDistributionPoints):
+                req_ext['crl_distribution_points'] = {
+                    'critical': ext.critical,
+                    'uris': [name.value for point in ext.value for name in (point.full_name or [])
+                             if isinstance(name, x509.UniformResourceIdentifier)],
+                }
             elif isinstance(ext.value, x509.BasicConstraints):
                 bc: dict[str, Any] = {'ca': ext.value.ca, 'critical': ext.critical}
                 if ext.value.path_length is not None:
@@ -145,7 +166,7 @@ class JSONCertRequestConverter:
             elif san_type == 'uris':
                 general_names.extend([x509.UniformResourceIdentifier(v) for v in san_values])
             elif san_type == 'ip_addresses':
-                general_names.extend([x509.IPAddress(ipaddress.ip_address(v)) for v in san_values])
+                general_names.extend(x509.IPAddress(address) for address in parse_ip_addresses(san_values))
             else:
                 logger.debug('JSON Cert Request Converter: Skipping unsupported SAN type: %s', san_type)
         return general_names
@@ -166,10 +187,10 @@ class JSONCertRequestConverter:
         )
 
     @staticmethod
-    def _ext_from_json(  # noqa: C901
+    def add_extensions(
         json: dict[str, Any],
-        builder: x509.CertificateBuilder
-        ) -> x509.CertificateBuilder:
+        builder: x509.CertificateBuilder | x509.CertificateSigningRequestBuilder,
+        ) -> x509.CertificateBuilder | x509.CertificateSigningRequestBuilder:
         """Processes JSON data to add X.509 certificate extensions to a CertificateBuilder.
 
         Args:
@@ -192,12 +213,7 @@ class JSONCertRequestConverter:
                     critical=critical,
                 )
             elif ext_name == 'extended_key_usage':
-                eku_oids: list[x509.ObjectIdentifier] = []
-                for usage_str in ext_value.get('usages', []):
-                    try:
-                        eku_oids.append(x509.ObjectIdentifier(ExtendedKeyUsageOid[usage_str.upper()].value))
-                    except KeyError:
-                        eku_oids.append(x509.ObjectIdentifier(usage_str))
+                eku_oids = [_eku_oid_from_str(usage_str) for usage_str in ext_value.get('usages', [])]
                 builder = builder.add_extension(x509.ExtendedKeyUsage(eku_oids), critical=critical)
             elif ext_name == 'basic_constraints':
                 ca = ext_value.get('ca', False)
@@ -220,19 +236,25 @@ class JSONCertRequestConverter:
         return builder
 
     @staticmethod
-    def validity_period_from_json(validity: dict[str, Any]) -> datetime.timedelta:
+    def _ext_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:
+        """Preserve the certificate converter's existing extension API."""
+        result = JSONCertRequestConverter.add_extensions(json, builder)
+        return cast('x509.CertificateBuilder', result)
+
+    @staticmethod
+    def validity_period_from_json(validity: dict[str, Any]) -> dt.timedelta:
         """Parses validity period from JSON."""
-        validity_period: datetime.timedelta
+        validity_period: dt.timedelta
         if validity.get('duration'):
-            validity_period = datetime.timedelta(seconds=validity['duration'])
+            validity_period = dt.timedelta(seconds=validity['duration'])
         else:
             days = validity.get('days', 0)
             hours = validity.get('hours', 0)
             minutes = validity.get('minutes', 0)
             seconds = validity.get('seconds', 0)
             validity_seconds = days * 86400 + hours * 3600 + minutes * 60 + seconds
-            validity_period = datetime.timedelta(seconds=validity_seconds)
-        if validity_period == datetime.timedelta(seconds=0):
+            validity_period = dt.timedelta(seconds=validity_seconds)
+        if validity_period == dt.timedelta(seconds=0):
             exc_msg = 'Validity period must be specified in the profile.'
             raise ValueError(exc_msg)
         return validity_period
@@ -251,11 +273,11 @@ class JSONCertRequestConverter:
 
         validity_period = JSONCertRequestConverter.validity_period_from_json(validity)
 
-        default_backdate = datetime.timedelta(hours=1)
+        default_backdate = dt.timedelta(hours=1)
 
-        builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC) - default_backdate)
+        builder = builder.not_valid_before(dt.datetime.now(dt.UTC) - default_backdate)
         return builder.not_valid_after(
-            datetime.datetime.now(datetime.UTC) + validity_period
+            dt.datetime.now(dt.UTC) + validity_period
         )
 
     @staticmethod
@@ -306,7 +328,7 @@ class JSONCertRequestCommandExtractor:
                 san_parts += san_values + ' ' if isinstance(san_values, str) else ''.join([f'{v} ' for v in san_values])
             else:
                 logger.debug('JSON Cert Request Command Extractor: Skipping SAN type: %s', san_type)
-        if san.get('critical', False):
+        if san_parts and san.get('critical', False):
             san_parts = 'critical, ' + san_parts
         return san_parts.strip()
 
@@ -328,7 +350,7 @@ class JSONCertRequestCommandExtractor:
                     else ''.join([f'IP:{v}, ' for v in san_values])
             else:
                 logger.debug('JSON Cert Request Command Extractor: Skipping SAN type: %s', san_type)
-        if san.get('critical', False):
+        if san_parts and san.get('critical', False):
             san_parts = 'critical, ' + san_parts
         return san_parts.rstrip(', ')
 
