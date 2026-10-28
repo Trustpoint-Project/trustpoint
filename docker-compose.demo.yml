@@ -55,7 +55,7 @@ services:
       - sftpgo_data:/srv/sftpgo
 
   webhook-echo:
-    image: mendhak/http-https-echo:42
+    image: mendhak/http-https-echo:43
     restart: unless-stopped
     ports:
       - "127.0.0.1:${WEBHOOK_ECHO_PORT:-8081}:8080"
