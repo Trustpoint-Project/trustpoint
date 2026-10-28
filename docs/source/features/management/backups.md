@@ -15,6 +15,17 @@ Available actions:
 - **Download (zip)** downloads selected backups as a zip archive.
 - **Delete** removes selected local backups.
 
+## Before upgrading
+
+Create a new local backup through **Management > Backups > Create Local Backup**
+before every upgrade, then download it using the row's **Download** action or the
+**Download Selected** archive actions. Keep the database payload and matching
+manifest sidecar together in a protected location outside the Trustpoint instance.
+Do not continue with the upgrade if creation or download fails.
+
+Database backups do not include the external software KEK, Django signing key, or
+HSM token. Preserve those separately as described in the [upgrade guide](upgrading.rst).
+
 ## SFTP backup
 
 SFTP backup stores backups on a remote server.

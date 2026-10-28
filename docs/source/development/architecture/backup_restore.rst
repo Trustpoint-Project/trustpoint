@@ -13,6 +13,9 @@ manifest records the Trustpoint version, database engine, active crypto backend
 kind, active app-secret backend kind, payload format, creation timestamp, and a
 SHA-256 digest of the exact payload bytes.
 
+For coordinated pre-upgrade snapshots and the application replacement procedure,
+see :doc:`../../features/management/upgrading`.
+
 Restore Contract
 ================
 

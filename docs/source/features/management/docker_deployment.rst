@@ -264,26 +264,10 @@ writable layer. Do not discard that container until recovery copies exist.
 Routine Updates
 ------------------
 
-Use a target release with a compatible database migration path. Take and verify
-recovery backups, update the release checkout, and retain the same Compose project,
-secret file, ``.env``, and volumes. For a source-built application:
-
-.. code-block:: bash
-
-   docker compose build trustpoint
-   docker compose stop trustpoint
-   docker compose up -d --no-deps --no-build --wait --wait-timeout 300 trustpoint
-   docker compose logs --tail 100 trustpoint
-
-For the worker configuration, build and stop both application services, then
-start web and worker together. Avoid running old workers against a schema being
-upgraded. Leave PostgreSQL and HSM services in place unless their upgrade is
-explicitly planned. Database migrations run during normal application startup.
-
-The key file is unchanged by builds or container recreation. Verify login,
-credential access, enrollment, and backups after startup. If migrations have run,
-returning to an old image alone is not a reliable rollback: restore the matching
-database and runtime state as well.
+Follow :doc:`upgrading` for the upgrade procedure, including database and key
+backups, source-built or published images, worker ordering, validation, and
+rollback. Keep the same Compose project, configuration, secret files, and runtime
+volumes. Rebuilding an image alone does not migrate an unsupported database.
 
 Pre-1.0 Installations
 ------------------------
