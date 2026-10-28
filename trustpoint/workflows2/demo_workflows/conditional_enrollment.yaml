@@ -1,0 +1,58 @@
+# Requires a CMP initialization request from any domain. Requests for the existing tls_client profile
+# are approved automatically; other profiles require an operator decision in Workflows > Approvals
+# within one hour. Rejection denies enrollment and timeout fails it. Other enabled enrollment
+# workflows must also permit issuance.
+
+schema: trustpoint.workflow.v2
+name: '[Demo] Conditional enrollment approval'
+enabled: true
+trigger:
+  on: cmp.initialization
+  sources:
+    trustpoint: true
+workflow:
+  start: choose_policy
+  steps:
+    choose_policy:
+      type: logic
+      title: Is this a TLS client request?
+      cases:
+        - when:
+            compare:
+              left: ${event.cmp.cert_profile}
+              op: '=='
+              right: tls_client
+          outcome: automatic
+      default: manual
+    review:
+      type: approval
+      title: Review other certificate profiles
+      timeout_seconds: 3600
+    accept:
+      type: set_status
+      title: Permit issuance
+      status: approved
+    deny:
+      type: set_status
+      title: Deny issuance
+      status: rejected
+    expire:
+      type: set_status
+      title: Approval expired
+      status: timed_out
+  flow:
+    - from: choose_policy
+      on: automatic
+      to: accept
+    - from: choose_policy
+      on: manual
+      to: review
+    - from: review
+      on: approved
+      to: accept
+    - from: review
+      on: rejected
+      to: deny
+    - from: review
+      on: timed_out
+      to: expire

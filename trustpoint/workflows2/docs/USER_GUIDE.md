@@ -97,6 +97,64 @@ workflow:
   flow: []
 ```
 
+## Demo workflows
+
+Explicit demo-data setup installs four editable `[Demo]` workflows through the
+existing `add_domains_and_devices` command. The setup wizard's demo-data option,
+`TP_INJECT_DEMO_DATA`, and `reset_db --add` all use this path. Normal initialization
+without demo data installs none. Setup imports YAML definitions only; it does not start executions. Repeating setup preserves existing definitions,
+including renamed, disabled, or edited examples.
+
+| Workflow | Initial state | Behavior |
+| --- | --- | --- |
+| Enrollment approval | Enabled | CMP initialization waits for approval; rejection denies enrollment and one hour without a decision times out. |
+| Conditional enrollment approval | Enabled | CMP initialization with `tls_client` is approved automatically; other profiles wait for approval. |
+| Issued certificate email | Disabled | Emails final certificate attributes after CMP initialization issuance. |
+| Final certificate webhook | Disabled | Posts final certificate attributes after CMP initialization issuance and branches on the HTTP response status. |
+
+Open **Workflows**, select a `[Demo]` definition, and inspect its YAML and flow
+graph. Each YAML file starts with comments explaining its inputs and behavior.
+The existing editor generates the graph layout automatically.
+
+Fixtures live directly in `workflows2/demo_workflows/*.yaml`. The loader imports
+the YAML files through the existing compiler; filenames provide stable workflow
+identities. All examples use `cmp.initialization` with `trustpoint: true`, so they
+apply across all domains. No manifest, placeholders, or editor changes are needed.
+
+To execute an example, use a device with CMP enrollment configured in any domain.
+Use the device's enrollment help for credentials and request commands. Request an
+application certificate using the existing `tls_client` profile. For conditional
+approval, request `tls_server` to take the manual branch instead. Normal device,
+authentication, CA, and profile checks still apply. Resolve pending approvals in
+the workflow approval queue, then use CMP polling as instructed by the response.
+The normal inline/worker execution setting applies; worker mode requires the
+existing `workflows2_worker` process.
+
+Both approval examples initially match the same CMP initialization requests. All
+matching workflows must permit issuance, so disable the manual approval example
+when trying the conditional example's automatic path on its own.
+
+For email, configure SMTP in Trustpoint and replace `operator@example.invalid`
+with a real recipient. For the webhook, replace the reserved `.invalid` URL with
+your JSON receiver. Enable the chosen definition and **Save & Compile** before
+submitting an enrollment. Email and webhook notifications run after the matching approval
+workflows have permitted issuance. No external mail or HTTP destination is contacted
+by the initial disabled examples.
+
+The email and webhook use the **final issued certificate after profile processing**.
+For example, a final subject containing `serialNumber=SN123456` produces
+`"subject_serial_number": "SN123456"` in the webhook body, even if the original CSR
+or stored device has a different value. If the final subject lacks this attribute,
+the body contains `"subject_serial_number": ""`. This is the subject serialNumber
+(OID 2.5.4.5), separate from the certificate's CA-assigned integer serial number.
+Use a profile that permits the requested subject serialNumber, such as the default
+`tls_client` profile, to preserve it through issuance.
+
+The webhook captures HTTP status in `vars.http_status`. A 2xx response finishes the
+workflow; other HTTP responses stop it with an explanatory message. Transport
+failures enter the engine's retryable error state. Both email and webhook run in
+`after_issuance`, so notification failure cannot undo issuance or block delivery.
+
 ## Effective enrollment certificate attributes
 
 The existing enrollment triggers support `trigger.phase: after_issuance`:

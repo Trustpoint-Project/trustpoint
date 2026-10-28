@@ -1,0 +1,40 @@
+# Requires a CMP initialization request from any domain. Pauses enrollment for an operator decision in
+# Workflows > Approvals. Approval permits issuance; rejection denies it; no decision within one hour
+# times out. Uses the domain CA and requested certificate profile.
+
+schema: trustpoint.workflow.v2
+name: '[Demo] Enrollment approval'
+enabled: true
+trigger:
+  on: cmp.initialization
+  sources:
+    trustpoint: true
+workflow:
+  start: review
+  steps:
+    review:
+      type: approval
+      title: Review certificate enrollment
+      timeout_seconds: 3600
+    accept:
+      type: set_status
+      title: Permit issuance
+      status: approved
+    deny:
+      type: set_status
+      title: Deny issuance
+      status: rejected
+    expire:
+      type: set_status
+      title: Approval expired
+      status: timed_out
+  flow:
+    - from: review
+      on: approved
+      to: accept
+    - from: review
+      on: rejected
+      to: deny
+    - from: review
+      on: timed_out
+      to: expire

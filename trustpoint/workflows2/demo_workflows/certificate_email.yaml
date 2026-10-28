@@ -1,0 +1,26 @@
+# Requires successful CMP initialization issuance from any domain. Sends the final certificate subject
+# common name and serialNumber by email. Configure SMTP in Trustpoint and replace the recipient below,
+# then enable and Save & Compile. Runs after issuance and cannot block certificate delivery.
+
+schema: trustpoint.workflow.v2
+name: '[Demo] Issued certificate email'
+enabled: false
+trigger:
+  on: cmp.initialization
+  phase: after_issuance
+  sources:
+    trustpoint: true
+workflow:
+  start: notify
+  steps:
+    notify:
+      type: email
+      title: Email issued certificate details
+      to: [operator@example.invalid]
+      subject: 'Certificate issued for ${event.device.common_name}'
+      body: |-
+        Final certificate common name: ${event.request.subject.common_name}
+        Final certificate subject serialNumber: ${event.request.subject.serial_number}
+        Device: ${event.device.common_name}
+        Profile: ${event.cmp.cert_profile}
+  flow: []
