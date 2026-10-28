@@ -13,7 +13,7 @@ from request.authorization import EstAuthorization, RestAuthorization
 from request.message_parser import EstMessageParser, RestMessageParser
 from request.message_responder import EstMessageResponder, RestMessageResponder
 from request.operation_processor.general import OperationProcessor
-from request.request_context import BaseCertificateRequestContext, BaseRequestContext
+from request.request_context import BaseCertificateRequestContext, BaseRequestContext, CmpCertificateRequestContext
 from request.request_validator.http_req import EstHttpRequestValidator, RestHttpRequestValidator
 from request.security_hardening import (
     authenticate_est_request,
@@ -35,9 +35,16 @@ def process_workflow_operation[Context: BaseRequestContext](
     context: Context,
     process: Callable[[Context], None],
 ) -> None:
-    """Preserve the request gate, then notify workflows after successful issuance."""
+    """Apply workflow decisions through each protocol's operation processor."""
     result = Workflow2Handler().handle(context)
-    if not result.should_stop:
+    # CMP must persist waiting and terminal workflow decisions as transactions
+    # so its responder can return a protocol result and support later polling.
+    cmp_certificate_request = (
+        isinstance(context, CmpCertificateRequestContext)
+        and context.protocol == 'cmp'
+        and context.cmp_body_type in {'ir', 'cr'}
+    )
+    if not result.should_stop or cmp_certificate_request:
         process(context)
         Workflow2CertificateRequestHandler().handle_issued(context)
 

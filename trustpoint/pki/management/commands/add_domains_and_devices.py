@@ -480,4 +480,9 @@ class Command(BaseCommand, CommandLoggingMixin):
                     except Exception as e:  # noqa: BLE001
                         self.log_and_stdout(f"Failed to create device '{device_name}': {e}", level='error')
 
+        # Install definitions last, after all demo objects have been created.
+        from workflows2.services.demo import install_demo_workflows
+
+        created_workflows = install_demo_workflows()
+        self.log_and_stdout(f'Created {created_workflows} demo workflows; existing definitions were preserved.')
         self.log_and_stdout('Process completed. All domains and devices have been added.')

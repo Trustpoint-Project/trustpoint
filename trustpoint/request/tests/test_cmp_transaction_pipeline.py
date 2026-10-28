@@ -13,6 +13,7 @@ from cmp.models import CmpTransactionModel
 from devices.models import DeviceModel
 from request.authorization.cmp import CmpPollAuthorization
 from request.cmp_transaction_state import CmpTransactionState
+from request.enrollment import process_workflow_operation
 from request.operation_processor.cmp_certificate_request import CmpCertificateRequestProcessor
 from request.operation_processor.cmp_poll import CmpPollProcessor
 from request.request_context import CmpCertificateRequestContext, CmpPollRequestContext
@@ -20,7 +21,50 @@ from workflows2.events.request_events import Events
 from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome
 from request.workflow2_issuance import Workflow2IssuanceDecision
+from request.workflows2_handler import Workflow2CertificateRequestHandler
 from workflows2.services.request_decision import Workflow2RequestDecision
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('body_type', ['ir', 'cr'])
+@pytest.mark.parametrize(
+    ('run_status', 'dispatch_status', 'transaction_status'),
+    [
+        (Workflow2Run.STATUS_AWAITING, 'blocked', CmpTransactionModel.Status.WAITING),
+        (Workflow2Run.STATUS_RUNNING, 'running', CmpTransactionModel.Status.WAITING),
+        (Workflow2Run.STATUS_REJECTED, 'terminal', CmpTransactionModel.Status.REJECTED),
+        (Workflow2Run.STATUS_CANCELLED, 'terminal', CmpTransactionModel.Status.CANCELLED),
+        (Workflow2Run.STATUS_STOPPED, 'terminal', CmpTransactionModel.Status.FAILED),
+    ],
+)
+def test_cmp_workflow_gate_persists_response_transaction(body_type, run_status, dispatch_status, transaction_status):
+    """A stopped workflow must reach CMP state processing without issuing a certificate."""
+    initialization = body_type == 'ir'
+    context = CmpCertificateRequestContext(
+        raw_message=Mock(body=b'cmp-request'),
+        protocol='cmp',
+        operation='initialization' if initialization else 'certification',
+        event=Events.cmp_initialization if initialization else Events.cmp_certification,
+        cmp_body_type=body_type,
+        cmp_transaction_id='workflow-gated-request',
+        cert_profile_str='domain_credential',
+    )
+    outcome = DispatchOutcome(status=dispatch_status, run=Mock(id='workflow-run', status=run_status), instances=[])
+    with (
+        patch.object(Workflow2CertificateRequestHandler, '_build_dispatch_request', return_value=Mock()),
+        patch('request.workflows2_handler.WorkflowDispatchService') as service,
+        patch('request.operation_processor.cmp_certificate_request.CertificateIssueProcessor') as issuer,
+    ):
+        service.return_value.emit_event_outcome.return_value = outcome
+        process_workflow_operation(context, CmpCertificateRequestProcessor().process_operation)
+
+    issuer.assert_not_called()
+    assert context.issued_certificate is None
+    assert context.cmp_transaction is not None
+    context.cmp_transaction.refresh_from_db()
+    assert context.cmp_transaction.status == transaction_status
+    if transaction_status == CmpTransactionModel.Status.WAITING:
+        assert context.cmp_transaction.backend_reference == 'workflow-run'
 
 
 @pytest.mark.django_db
