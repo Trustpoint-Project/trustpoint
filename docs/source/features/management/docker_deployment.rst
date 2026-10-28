@@ -96,8 +96,13 @@ On macOS, Docker Desktop may map host numeric IDs differently; verify guest
 ``www-data`` read access. Linux production ownership stays root:33/0440. Do not
 make the key world-readable to work around Desktop file sharing.
 
-Local, non-Docker development uses a separate generated key in the ignored
-``var/development/`` directory. That fallback is unavailable in production.
+Local, non-Docker development uses a separate generated Django signing key in
+ignored ``var/development/`` storage. With ``DEBUG=True`` and no explicit
+``TRUSTPOINT_SOFTWARE_KEK_FILE``, fresh software-backend initialization also
+creates ``var/development/software_kek`` atomically with mode ``0600``. It is
+reused across local commands and server restarts. If it goes missing after
+initialization, restore the original file; no replacement is generated. These
+development defaults are unavailable in Docker and non-debug deployments.
 
 Start, Stop, And Inspect
 ---------------------------

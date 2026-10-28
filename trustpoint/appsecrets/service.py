@@ -18,7 +18,8 @@ from typing import TYPE_CHECKING, Final, Protocol, cast
 import pkcs11
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.keywrap import InvalidUnwrap, aes_key_unwrap_with_padding, aes_key_wrap_with_padding
-from django.core.exceptions import ObjectDoesNotExist
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.db import DatabaseError, connection, transaction
 
 from appsecrets.models import (
@@ -28,6 +29,7 @@ from appsecrets.models import (
     AppSecretSoftwareConfigModel,
 )
 from crypto.local_development import ensure_local_software_backends
+from trustpoint.secret_key import development_software_kek
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -295,13 +297,23 @@ SOFTWARE_ENVELOPE_PAYLOAD_BYTES: Final[int] = 72  # 32-byte KEK fingerprint and 
 SOFTWARE_DEK_PREFIX: Final[bytes] = b'tpsec:software:aes256-kwp:v1:'
 
 
-def load_software_kek() -> bytes:
-    """Load exactly 256 bits of hexadecimal KEK material; never synthesize a key."""
-    path = os.environ.get('TRUSTPOINT_SOFTWARE_KEK_FILE', '/run/secrets/trustpoint_software_kek')
+def load_software_kek(*, allow_development_creation: bool = False) -> bytes:
+    """Load the KEK; only fresh local initialization may create a development file."""
+    path = os.environ.get('TRUSTPOINT_SOFTWARE_KEK_FILE')
     try:
+        if path is None:
+            if settings.DEBUG and not settings.DOCKER_CONTAINER:
+                path = str(
+                    development_software_kek(
+                        settings.REPO_ROOT / 'var' / 'development' / 'software_kek',
+                        allow_creation=allow_development_creation,
+                    )
+                )
+            else:
+                path = '/run/secrets/trustpoint_software_kek'
         with Path(path).open(encoding='ascii', newline='') as stream:
             value = stream.read(65)
-    except (OSError, UnicodeError) as exception:
+    except (OSError, UnicodeError, ImproperlyConfigured) as exception:
         msg = 'Software KEK file cannot be read. Set TRUSTPOINT_SOFTWARE_KEK_FILE to the original readable secret file.'
         raise AppSecretConfigurationError(msg) from exception
     if re.fullmatch(r'[0-9a-fA-F]{64}', value) is None:
@@ -360,8 +372,8 @@ class SoftwareAppSecretService(BaseAppSecretService):
 
     def ensure_backend_ready(self) -> None:
         """Serialize first initialization on the singleton; persist no plaintext keys."""
-        kek = load_software_kek()
         if _stored_dek_ready(self._config, AppSecretBackendKind.SOFTWARE):
+            load_software_kek()
             return
         with _initialization_transaction():
             backend = AppSecretBackendModel.objects.select_for_update().get(pk=self._config.backend_id)
@@ -373,6 +385,7 @@ class SoftwareAppSecretService(BaseAppSecretService):
                 if not backend.dek_initialized:
                     msg = 'Wrapped DEK exists without its initialization marker. Restore consistent database state.'
                     raise AppSecretConfigurationError(msg)
+                load_software_kek()
                 return
             if backend.dek_initialized or _setup_completed():
                 msg = (
@@ -380,6 +393,7 @@ class SoftwareAppSecretService(BaseAppSecretService):
                     'Restore the database; no key was generated.'
                 )
                 raise AppSecretConfigurationError(msg)
+            kek = load_software_kek(allow_development_creation=True)
             self._config.wrapped_dek = self.wrap_dek(kek, os.urandom(DEK_LENGTH_BYTES))
             self._config.save(update_fields=['wrapped_dek'])
             backend.dek_initialized = True
