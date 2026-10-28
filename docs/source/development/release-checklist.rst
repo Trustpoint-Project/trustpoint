@@ -11,7 +11,14 @@ Pre-release Preparations
   - Update dependencies if needed.
   - Pin versions for production stability in :code:`uv.lock`
 - Update documentation (:code:`README.md`, API docs, usage instructions) for new features. 
-- Ensure all new migrations are created, committed, tested locally
+- Ensure all new migrations are created, committed, tested locally.
+  Multiple migration files for the same release can be necessary to resolve
+  dependencies between apps. Squash only when the resulting graph remains acyclic.
+  For published migrations, keep the original files alongside squashed replacements
+  until deployed databases have completed the transition. For a fresh-install
+  baseline, remove replaced files only after updating all dependencies and removing
+  the squashed migration's ``replaces`` attribute.
+- Verify migrations on a fresh database and check for pending model changes.
 
 -------
 Release
