@@ -9,8 +9,7 @@ import zipfile
 from typing import Any, cast
 
 from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
@@ -29,9 +28,6 @@ from onboarding.models import (
 )
 from pki.models import IssuedCredentialModel
 from pki.models.ca import CaModel
-from pki.models.certificate import CertificateModel, RevokedCertificateModel
-from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from pki.services.revocation import revoke_certificate
 from request.gds_push import GdsPushService
 from request.gds_push.gds_push_service import GdsPushError
 from trustpoint.page_context import (
@@ -145,88 +141,6 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
             messages.error(request, f'Unexpected error: {e}')
 
         return self._redirect_to_help_page()
-
-    def _update_truststore_with_certificate(self, certificate_bytes: bytes) -> None:
-        """Update or create truststore with the new server certificate.
-
-        This method adds the new server certificate to the truststore WITHOUT removing
-        the old one immediately. This ensures that if something goes wrong, the old
-        certificate is still available for recovery.
-
-        Args:
-            certificate_bytes: DER-encoded certificate bytes
-        """
-        if self.object.onboarding_config is None:
-            msg = 'Onboarding config must exist for GDS Push devices'
-            raise ValueError(msg)
-        try:
-
-            cert = x509.load_der_x509_certificate(certificate_bytes, default_backend())
-
-            truststore = self.object.opc_ua_gds_push_config.opc_trust_store
-            if not truststore:
-                truststore = TruststoreModel.objects.create(
-                    unique_name=f'opc_server_{self.object.common_name}',
-                    intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
-                )
-                self.object.opc_ua_gds_push_config.opc_trust_store = truststore
-                self.object.opc_ua_gds_push_config.save(update_fields=['opc_trust_store'])
-
-            existing_certs = list(truststore.certificates.all())
-            cert_serial = cert.serial_number
-            cert_fingerprint = cert.fingerprint(hashes.SHA256())
-
-            cert_exists = False
-            for existing_cert_model in existing_certs:
-                existing_cert = existing_cert_model.get_certificate_serializer().as_crypto()
-                if (existing_cert.serial_number == cert_serial and
-                    existing_cert.fingerprint(hashes.SHA256()) == cert_fingerprint):
-                    cert_exists = True
-                    break
-
-            if not cert_exists:
-                for existing_cert_model in truststore.certificates.all():
-                    if not existing_cert_model.is_ca:
-                        revoke_certificate(
-                            existing_cert_model,
-                            reason=RevokedCertificateModel.ReasonCode.CESSATION,
-                            ca=None,
-                        )
-
-                truststore.truststoreordermodel_set.all().delete()
-
-                cert_model = CertificateModel.save_certificate(cert)
-
-                TruststoreOrderModel.objects.create(
-                    trust_store=truststore,
-                    certificate=cert_model,
-                    order=0
-                )
-
-                messages.info(
-                    self._get_request(),
-                    f'Updated truststore "{truststore.unique_name}" with new server certificate '
-                    f'(total: {truststore.certificates.count()} cert(s))'
-                )
-            else:
-                messages.info(
-                    self._get_request(),
-                    f'Server certificate already exists in truststore "{truststore.unique_name}"'
-                )
-
-        except Exception as e:  # noqa: BLE001
-            messages.warning(
-                self._get_request(),
-                f'Server certificate updated but failed to update truststore: {e}'
-            )
-
-    def _get_request(self) -> HttpRequest:
-        """Get the current request from view context.
-
-        Returns:
-            The current HttpRequest
-        """
-        return self.request
 
     def _redirect_to_help_page(self) -> HttpResponseRedirect:
         """Redirect back to the help page.

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import contextlib
-import datetime
+import datetime as dt
 import tempfile
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -270,7 +270,7 @@ class GdsPushService(LoggerMixin):
                 msg = f'Failed to load CRL for CA "{ca.unique_name}": {e}'
                 raise GdsPushError(msg) from e
 
-            now = datetime.datetime.now(tz=datetime.UTC)
+            now = dt.datetime.now(tz=dt.UTC)
             if crl_crypto.next_update_utc and crl_crypto.next_update_utc < now:
                 msg = (
                     f'CRL for CA "{ca.unique_name}" has expired. '
@@ -426,7 +426,7 @@ class GdsPushService(LoggerMixin):
         """
         issues = []
 
-        now = datetime.datetime.now(tz=datetime.UTC)
+        now = dt.datetime.now(tz=dt.UTC)
         if cert.not_valid_before_utc > now:
             issues.append(f'Certificate not yet valid (valid from: {cert.not_valid_before_utc.isoformat()})')
         if cert.not_valid_after_utc < now:

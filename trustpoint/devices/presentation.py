@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
@@ -26,7 +26,7 @@ def credential_health_display(
     record: DeviceModel,
     credential_type: IssuedCredentialModel.IssuedCredentialType,
     *,
-    as_of: datetime.datetime,
+    as_of: dt.datetime,
 ) -> dict[str, str]:
     """Render shared health facts while keeping presentation out of classification."""
     summary = device_credential_health(record, credential_type, as_of=as_of)
@@ -61,7 +61,7 @@ class DeviceHealthPresentationMixin:
     """Give list views a fixed health timestamp and identical credential badges."""
 
     @cached_property
-    def health_as_of(self) -> datetime.datetime:
+    def health_as_of(self) -> dt.datetime:
         """Use one instant for badge rendering, counts and SQL sorting."""
         return timezone.now()
 
@@ -83,7 +83,7 @@ def credential_expiry_display(record: IssuedCredentialModel | RemoteIssuedCreden
     cert = record.credential.certificate_or_error
     if cert.certificate_status != CertificateModel.CertificateStatus.OK:
         return str(cert.certificate_status.label)
-    remaining = cert.not_valid_after - datetime.datetime.now(datetime.UTC)
+    remaining = cert.not_valid_after - dt.datetime.now(dt.UTC)
     hours, remainder = divmod(remaining.seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     return f'{remaining.days} days, {hours}:{minutes:02d}:{seconds:02d}'

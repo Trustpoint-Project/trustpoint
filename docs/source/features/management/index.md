@@ -74,5 +74,7 @@ tls_settings
 backups
 notifications
 environment_configuration
+docker_deployment
+upgrading
 
 ```

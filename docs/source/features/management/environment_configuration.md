@@ -16,6 +16,66 @@ Unless stated otherwise, all variables are optional.
 |---|---|---|
 | `TRUSTPOINT_PHASE` | `auto`, `bootstrap`, `operational` | Controls whether Trustpoint determines the startup phase automatically, starts the setup wizard, or starts directly in operational mode. |
 
+The container entrypoint records privileged deployment paths and ports in a
+root-owned file at `/run/trustpoint/deployment.json` before starting the web
+application. Configure these through the deployment environment. The web
+application cannot override these settings through sudo or wizard state.
+
+Wizard handoff files retain their `operational.env` / `operational.pending.env`
+names but must contain JSON data. Do not shell-source them. Shell assignments,
+malformed JSON, and unsupported settings are rejected.
+
+Runtime switching exposes only the `--pending` and `--final` sudo actions. Both
+select the corresponding deployment-configured file; arbitrary file arguments
+are rejected. Wizard values and application environment variables are applied
+only after dropping privileges to `www-data`.
+
+The default application home and uv cache are `/run/trustpoint/home` and
+`/run/trustpoint/uv-cache`. Overrides require an existing root-controlled parent
+directory; these directories cannot be symlinks.
+
+The application code, virtual environment, dependency metadata, and documentation
+sources are root-owned and not writable by `www-data`. Translation catalogs are
+compiled during the image build. Writable application paths are limited to
+`trustpoint/media`, `trustpoint/collected_static`, `docker/trustpoint/nginx/tls`,
+and `docs/build`, plus separately configured runtime state outside the source tree.
+Documentation build locks are stored under `MEDIA_ROOT`. Mount additional code
+or configuration read-only to preserve this boundary.
+
+The privileged boundary has an isolated Linux regression test using real sudo
+rules and process identities. It replaces service operations with observations,
+so it does not start Trustpoint or require a database:
+
+```bash
+docker build -f tests/docker_security/Dockerfile -t trustpoint-runtime-boundary-test .
+docker run --rm --network=none trustpoint-runtime-boundary-test
+```
+
+## Django signing key
+
+Initialize the deployment's key once with `sudo python3 docker/init_secret.py`.
+The helper creates `secrets/django_secret_key` on the host with owner root, group
+33 (`www-data` in the image), and mode `0440`. Existing keys are never overwritten
+or silently repaired. Compose mounts the file read-only in web and worker.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DJANGO_SECRET_KEY_HOST_FILE` | `./secrets/django_secret_key` | Host source file for the Compose secret. |
+| `DJANGO_SECRET_KEY_FILE` | `/run/secrets/django_secret_key` | Mounted path read by production Django settings. |
+| `TRUSTPOINT_IMAGE` | `trustpointproject/trustpoint:latest` | Application image used by web and worker. |
+| `TRUSTPOINT_NETWORK_NAME` | `trustpoint-net` | Network name for the standard and worker configurations. |
+
+Production never generates a key and fails if the mounted file is missing,
+empty, or unreadable. A separate local-development key is cached under the ignored
+`var/development/` directory only when running non-Docker development settings.
+
+Keep the host key across upgrades. Import an existing installation's exact key
+with `sudo python3 docker/init_secret.py --import-from /path/to/saved-key` before
+replacing its containers. A conflicting existing destination is left unchanged
+and reported as an error. See the [Docker deployment guide](docker_deployment.rst)
+for fresh installation, upgrades, and recovery. Importing Django signing keys
+does not provide a migration path for pre-1.0 encrypted databases.
+
 ## Database
 
 | Variable | Default | Description |
@@ -23,9 +83,17 @@ Unless stated otherwise, all variables are optional.
 | `POSTGRES_DB` | `trustpoint_db` | PostgreSQL database name. |
 | `DATABASE_USER` | `admin` | PostgreSQL user. |
 | `DATABASE_PASSWORD` | `testing321` | PostgreSQL password. Change for production deployments. |
+| `DATABASE_PASSWORD_FILE` | unset | Path to a mounted database-password secret. Takes precedence over `DATABASE_PASSWORD`; startup fails if the configured file cannot be read. |
 | `DATABASE_HOST` | `postgres` | PostgreSQL hostname. |
 | `DATABASE_PORT` | `5432` | PostgreSQL port. |
 | `DATABASE_ENGINE` | `django.db.backends.postgresql` | Django database backend. |
+
+The setup wizard requires its database password to match either the mounted
+`DATABASE_PASSWORD_FILE` secret or `DATABASE_PASSWORD` supplied by the deployment.
+The operational handoff file stores connection settings and the secret-file path,
+but never the password itself. Keep the external credential available to the web
+container and workers across restarts. Supply or mount a replacement credential
+before applying a password change in the wizard.
 
 ## TLS and Network Configuration
 
@@ -116,3 +184,22 @@ Automatic setup can be used for automated testing and repeatable deployments.
 | `TP_INJECT_DEMO_DATA` | `false` | Inject example devices and certificates for development and demonstration environments. |
 
 When automatic setup is enabled, the TLS certificate is generated using the configured `TP_TLS_*` values.
+
+### Software database KEK (Trustpoint 1.0)
+
+Initialize the independent software KEK with `sudo python3 docker/init_secret.py --type kek`
+or provision both secrets using `--type all`. Compose mounts `secrets/trustpoint_software_kek`
+read-only at `/run/secrets/trustpoint_software_kek`. Set `TRUSTPOINT_SOFTWARE_KEK_HOST_FILE`
+to change the host source; `TRUSTPOINT_SOFTWARE_KEK_FILE` selects the application input.
+The input must contain exactly 64 hexadecimal characters, without whitespace.
+It is never derived from Django's signing key. Production startup never generates it.
+Preserve it separately alongside database backups: losing it may permanently prevent
+recovery of encrypted fields. PKCS#11-only deployments use the HSM KEK instead and
+must select the documented Compose overrides to omit the software-secret mount.
+Pre-1.0 encrypted database migration and key rotation are unsupported.
+
+For local development with `DEBUG=True` outside Docker, leaving
+`TRUSTPOINT_SOFTWARE_KEK_FILE` unset uses `var/development/software_kek`. A fresh
+backend creates this ignored, developer-owned file atomically with mode `0600`;
+later commands reuse it. A missing file in an initialized installation is never
+regenerated. Explicitly configured files must already exist, even in development.

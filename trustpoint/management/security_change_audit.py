@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -193,7 +193,7 @@ def _json_safe(value: Any) -> object:  # noqa: PLR0911
     """Convert persisted model values into deterministic JSON-safe audit values."""
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
-    if isinstance(value, (datetime.date, datetime.datetime, datetime.time)):
+    if isinstance(value, (dt.date, dt.datetime, dt.time)):
         return value.isoformat()
     if isinstance(value, (uuid.UUID, Decimal)):
         return str(value)

@@ -11,7 +11,7 @@ visible at the protocol orchestration boundary.
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import hmac as stdlib_hmac
 from typing import TYPE_CHECKING, Protocol, cast
 
@@ -792,7 +792,7 @@ def _validate_upstream_validity(builder: x509.CertificateBuilder, issued: x509.C
         if issued.not_valid_after_utc - issued.not_valid_before_utc > maximum_lifetime:
             msg = 'Upstream CA exceeded the validity period authorized by Trustpoint.'
             raise ValueError(msg)
-    now = datetime.datetime.now(datetime.UTC)
+    now = dt.datetime.now(dt.UTC)
     if not issued.not_valid_before_utc <= now <= issued.not_valid_after_utc:
         msg = 'Upstream-issued certificate is not currently valid.'
         raise ValueError(msg)

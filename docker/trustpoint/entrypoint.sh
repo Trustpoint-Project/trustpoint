@@ -1,31 +1,16 @@
 #!/bin/bash
 set -e  # Exit on error
 
+if [ "${1:-}" != "--validated" ] || [ "${_TRUSTPOINT_VALIDATED:-}" != "1" ]; then
+  exec /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py entrypoint
+fi
+shift
+
 ROLE="${TRUSTPOINT_SERVICE_ROLE:-web}"
 PHASE="${TRUSTPOINT_PHASE:-auto}"
 OPERATIONAL_ENV_FILE="${TRUSTPOINT_OPERATIONAL_ENV_FILE:-/var/lib/trustpoint/bootstrap/operational.env}"
 OPERATIONAL_READY_FILE="${TRUSTPOINT_OPERATIONAL_READY_FILE:-/var/lib/trustpoint/bootstrap/operational.ready}"
 WWW_DATA_HOME="${WWW_DATA_HOME:-/tmp/trustpoint-www-data-home}"
-
-load_operational_env() {
-  if [ -f "$OPERATIONAL_ENV_FILE" ]; then
-    set -a
-    # shellcheck source=/dev/null
-    . "$OPERATIONAL_ENV_FILE"
-    set +a
-  fi
-}
-
-if [ "$PHASE" = "auto" ]; then
-  if [ -f "$OPERATIONAL_ENV_FILE" ] && [ -f "$OPERATIONAL_READY_FILE" ]; then
-    load_operational_env
-    PHASE="operational"
-  else
-    PHASE="bootstrap"
-  fi
-elif [ "$PHASE" = "operational" ]; then
-  load_operational_env
-fi
 
 export TRUSTPOINT_PHASE="$PHASE"
 
@@ -46,15 +31,6 @@ if [ -z "${DJANGO_SETTINGS_MODULE:-}" ]; then
   fi
 fi
 
-# If already running as www-data, don't su (prevents password prompt)
-run_as_www_data() {
-  if [ "$(id -u)" = "0" ]; then
-    su -s /bin/bash www-data -c "export TRUSTPOINT_PHASE='${PHASE}'; export DJANGO_SETTINGS_MODULE='${DJANGO_SETTINGS_MODULE}'; $1"
-  else
-    bash -lc "export TRUSTPOINT_PHASE='${PHASE}'; export DJANGO_SETTINGS_MODULE='${DJANGO_SETTINGS_MODULE}'; $1"
-  fi
-}
-
 echo "=== Trustpoint role: ${ROLE} ==="
 echo "=== Trustpoint phase: ${PHASE} ==="
 echo "=== Django settings: ${DJANGO_SETTINGS_MODULE} ==="
@@ -64,7 +40,6 @@ BOOTSTRAP_STATE_DIR="$(dirname "$OPERATIONAL_ENV_FILE")"
 BOOTSTRAP_READY_DIR="$(dirname "$OPERATIONAL_READY_FILE")"
 BOOTSTRAP_DB_PATH="${TRUSTPOINT_BOOTSTRAP_DB_PATH:-/var/lib/trustpoint/bootstrap/bootstrap.sqlite3}"
 BOOTSTRAP_DB_DIR="$(dirname "$BOOTSTRAP_DB_PATH")"
-BOOTSTRAP_RUNTIME_ROOT="$(dirname "$BOOTSTRAP_DB_DIR")"
 
 bootstrap_sqlite_write_probe() {
   su -s /bin/bash www-data -c "python -c \"import sqlite3; p='${BOOTSTRAP_DB_PATH}'; con=sqlite3.connect(p); con.execute('CREATE TABLE IF NOT EXISTS trustpoint_bootstrap_write_probe (id integer primary key)'); con.execute('DROP TABLE trustpoint_bootstrap_write_probe'); con.commit(); con.close()\""
@@ -91,8 +66,8 @@ prepare_bootstrap_sqlite_storage() {
     return 0
   fi
 
-  chown www-data:www-data /var/log/trustpoint
-  chown www-data:www-data "$BOOTSTRAP_RUNTIME_ROOT" 2>/dev/null || true
+  chown root:root /var/log/trustpoint
+  chmod 755 /var/log/trustpoint
   chown -R www-data:www-data "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR" "$BOOTSTRAP_DB_DIR"
   chmod 750 "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR" "$BOOTSTRAP_DB_DIR"
 
@@ -128,7 +103,7 @@ fi
 
 wait_for_postgres() {
   echo "Waiting for PostgreSQL database..."
-  until pg_isready -h "$DATABASE_HOST" -p "$DATABASE_PORT" &>/dev/null; do
+  until /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app db-ready &>/dev/null; do
     sleep 1
   done
   echo "PostgreSQL database is available!"
@@ -146,19 +121,7 @@ start_gunicorn() {
   echo "Starting Gunicorn server..."
   mkdir -p "$WWW_DATA_HOME"
   chown www-data:www-data "$WWW_DATA_HOME"
-  su -s /bin/bash www-data -c "cd /var/www/html/trustpoint/trustpoint && \
-      export TRUSTPOINT_PHASE='${PHASE}' && \
-      export DJANGO_SETTINGS_MODULE='${DJANGO_SETTINGS_MODULE}' && \
-      export HOME='${WWW_DATA_HOME}' && \
-      /var/www/html/trustpoint/.venv/bin/gunicorn \
-      --bind 0.0.0.0:8000 \
-      --workers 4 \
-      --timeout 300 \
-      --limit-request-line 8190 \
-      --limit-request-field_size 65536 \
-      --user www-data \
-      --group www-data \
-      trustpoint.wsgi:application" > /var/log/trustpoint/gunicorn.log 2>&1 &
+  /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app web > /var/log/trustpoint/gunicorn.log 2>&1 &
   GUNICORN_PID=$!
   echo "Gunicorn started with PID $GUNICORN_PID"
 
@@ -183,38 +146,32 @@ if [ "$ROLE" = "worker" ]; then
     until [ -f "$OPERATIONAL_ENV_FILE" ] && [ -f "$OPERATIONAL_READY_FILE" ]; do
       sleep 5
     done
-    load_operational_env
-    PHASE="operational"
-    export TRUSTPOINT_PHASE="$PHASE"
-    export DJANGO_SETTINGS_MODULE="trustpoint.settings"
-    echo "=== Worker role received operational handoff ==="
+    exec /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py resume-worker
   fi
 
   wait_for_postgres
   echo "=== Starting Trustpoint WORKER role (no web stack) ==="
 
-  exec su -s /bin/bash www-data -c "export TRUSTPOINT_PHASE='${PHASE}' && \
-    export DJANGO_SETTINGS_MODULE='${DJANGO_SETTINGS_MODULE}' && \
-    uv run trustpoint/manage.py sync_security_config && \
-    uv run trustpoint/manage.py workflows2_worker \
-    --id '${WORKFLOWS2_WORKER_ID:-$(hostname)}' \
-    --lease '${WORKFLOWS2_WORKER_LEASE:-30}' \
-    --batch '${WORKFLOWS2_WORKER_BATCH:-10}' \
-    --sleep '${WORKFLOWS2_WORKER_SLEEP:-1}'"
+  /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app sync-security
+  exec /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app worker
 fi
 
 if [ "$PHASE" = "bootstrap" ]; then
   echo "=== Starting Trustpoint BOOTSTRAP web role ==="
-  run_as_www_data "uv run trustpoint/manage.py bootstrap_manager"
+  /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app bootstrap
   
   # Check if auto-setup was requested and trigger operational switch immediately
   AUTO_SETUP_MARKER="/var/lib/trustpoint/bootstrap/auto-setup.marker"
   if [ -f "$AUTO_SETUP_MARKER" ]; then
     echo "Auto-setup marker detected - triggering immediate switch to operational mode"
     if [ -f "/etc/trustpoint/wizard/switch_to_operational.sh" ]; then
-      sudo /etc/trustpoint/wizard/switch_to_operational.sh "$OPERATIONAL_ENV_FILE"
-      echo "Operational mode activated - container will now serve operational runtime"
-      exit 0
+      /etc/trustpoint/wizard/switch_to_operational.sh --final
+      echo "Operational mode activated - starting the web edge without restarting the container"
+      # The switch installed TLS and the operational upstream before nginx ran.
+      # Enable that configured site without copying the bootstrap upstream back.
+      ln -sf /etc/nginx/sites-available/trustpoint /etc/nginx/sites-enabled/trustpoint
+      nginx -t
+      start_nginx_foreground
     else
       echo "ERROR: switch_to_operational.sh not found, cannot auto-switch"
       exit 1
@@ -229,21 +186,15 @@ fi
 
 # ---------------- OPERATIONAL WEB ROLE ----------------
 wait_for_postgres
-run_as_www_data "uv run trustpoint/manage.py startup_manager"
+/usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app startup
 configure_web_edge
-
-echo "Starting cron service..."
-cron
 
 version=$(awk -F\" '/^version =/ { print $2 }' pyproject.toml)
 echo "Finished with initialisation"
 echo "Trustpoint version: $version"
 
 echo "Starting Django-Q2 qcluster worker..."
-su -s /bin/bash www-data -c "cd /var/www/html/trustpoint && \
-    export TRUSTPOINT_PHASE='${PHASE}' && \
-    export DJANGO_SETTINGS_MODULE='${DJANGO_SETTINGS_MODULE}' && \
-    uv run trustpoint/manage.py qcluster" > /var/log/trustpoint/qcluster.log 2>&1 &
+/usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app qcluster > /var/log/trustpoint/qcluster.log 2>&1 &
 QCLUSTER_PID=$!
 echo "Django-Q2 qcluster started with PID $QCLUSTER_PID"
 

@@ -7,7 +7,7 @@
 
 from unittest.mock import Mock, patch
 
-from appsecrets.service import AppSecretConfigurationError
+from appsecrets.service import AppSecretConfigurationError, SoftwareAppSecretService
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from setup_wizard.models import SetupWizardConfigModel
 from setup_wizard.operational_attach import (
@@ -231,7 +231,10 @@ def test_software_app_secret_decryptability_accepts_valid_dek() -> None:
 
     with patch(
         'setup_wizard.views.OperationalTargetInspector.inspect_app_secret_material',
-        return_value=OperationalAppSecretMaterial(backend_kind='software', raw_dek=b'a' * 32),
+        return_value=OperationalAppSecretMaterial(
+            backend_kind='software',
+            wrapped_dek=SoftwareAppSecretService.wrap_dek(bytes.fromhex('ab' * 32), b'a' * 32),
+        ),
     ):
         checks = app_secret_decryptability_checks(
             config_model=config_model,

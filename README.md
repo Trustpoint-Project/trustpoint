@@ -76,23 +76,27 @@ Trustpoint is designed to help you:
 
 ## Quickstart
 
-The fastest way to explore Trustpoint is the guided setup wizard on a **Linux host**.
+Deploy Trustpoint with **Docker Compose on a Linux host**. The web setup wizard configures the application.
 
 ### Prerequisites
 
 - Docker 20.10+
 - Docker Compose 2.32.4+
-- Git
+- Git and Python 3
 
 ### Start Trustpoint
 
 ```bash
 git clone https://github.com/Trustpoint-Project/trustpoint.git
 cd trustpoint
-./tp_wizard.sh
+cp .env.example .env
+# Set database credentials and TLS names in .env.
+sudo python3 docker/init_secret.py --type all
+docker compose up -d --build
 ```
 
-The wizard guides you through the Docker-based setup.
+The one-time initializer creates a private, installation-specific Django signing key.
+Keep `secrets/django_secret_key` and the Compose volumes when upgrading.
 
 
 

@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import os
 import re
 from pathlib import Path
@@ -138,14 +138,14 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
     @staticmethod
     def _get_first_and_last_entry_date(
         log_file_path: Path,
-    ) -> tuple[datetime.datetime | None, datetime.datetime | None]:
+    ) -> tuple[dt.datetime | None, dt.datetime | None]:
         log_file = log_file_path.read_text(encoding='utf-8', errors='backslashreplace')
 
         date_regex = re.compile(r'\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\b')
         matches = re.findall(date_regex, log_file)
         if matches:
-            first_date = datetime.datetime.strptime(matches[0], DATE_FORMAT).replace(tzinfo=datetime.UTC)
-            last_date = datetime.datetime.strptime(matches[-1], DATE_FORMAT).replace(tzinfo=datetime.UTC)
+            first_date = dt.datetime.strptime(matches[0], DATE_FORMAT).replace(tzinfo=dt.UTC)
+            last_date = dt.datetime.strptime(matches[-1], DATE_FORMAT).replace(tzinfo=dt.UTC)
         else:
             first_date = None
             last_date = None
@@ -153,7 +153,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
         return first_date, last_date
 
     @classmethod
-    def _get_log_file_data(cls, log_filename: str) -> dict[str, str | datetime.datetime | None]:
+    def _get_log_file_data(cls, log_filename: str) -> dict[str, str | dt.datetime | None]:
         try:
          log_file_path = _validate_log_filename(log_filename)
         except Http404:
@@ -167,20 +167,20 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
             'updated_at': last_date,
     }
 
-    def get_queryset(self) -> list[dict[str, str | datetime.datetime | None]]:  # type: ignore[override]
+    def get_queryset(self) -> list[dict[str, str | dt.datetime | None]]:  # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
         all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
 
         file_data_list = [self._get_log_file_data(log_file_name) for log_file_name in all_files]
 
-        queryset: list[dict[str, str | datetime.datetime | None]] = [
+        queryset: list[dict[str, str | dt.datetime | None]] = [
             data for data in file_data_list if data
         ]
 
-        def sort_key(item: dict[str, str | datetime.datetime | None]) -> datetime.datetime:
+        def sort_key(item: dict[str, str | dt.datetime | None]) -> dt.datetime:
             updated_at = item.get('updated_at')
-            if not isinstance(updated_at, datetime.datetime):
-                return datetime.datetime.min.replace(tzinfo=datetime.UTC)
+            if not isinstance(updated_at, dt.datetime):
+                return dt.datetime.min.replace(tzinfo=dt.UTC)
             return updated_at
 
         queryset.sort(key=sort_key, reverse=True)
@@ -337,7 +337,7 @@ class LoggingViewSet(viewsets.GenericViewSet[Any]):
                 files_info.append({
                     'name': filename,
                     'size': stat.st_size,
-                    'modified': datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC)
+                    'modified': dt.datetime.fromtimestamp(stat.st_mtime, tz=dt.UTC)
                 })
 
         serializer = self.get_serializer(files_info, many=True)

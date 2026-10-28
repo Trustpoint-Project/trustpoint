@@ -132,7 +132,7 @@ def test_certificate_python_sql_model_and_filter_parity(start, end, revoked, exp
         'not_yet_valid': 'NYV',
     }[expected]
     # The model property owns the present-time adapter; the service takes an explicit instant.
-    with patch('pki.models.certificate.datetime.datetime') as clock:
+    with patch('pki.models.certificate.dt.datetime') as clock:
         clock.now.return_value = NOW
         assert certificate.certificate_status == expected_status
     filter_value = 'ok' if expected in ('valid', 'expiring') else expected

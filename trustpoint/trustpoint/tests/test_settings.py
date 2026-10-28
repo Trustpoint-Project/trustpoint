@@ -20,11 +20,13 @@ def set_test_env(monkeypatch):
     monkeypatch.setenv('DATABASE_ENGINE', 'django.db.backends.postgresql')
     monkeypatch.setenv('DATABASE_USER', 'test_user')
     monkeypatch.setenv('DATABASE_PASSWORD', 'test_password')
+    monkeypatch.delenv('DATABASE_PASSWORD_FILE', raising=False)
     monkeypatch.setenv('DATABASE_HOST', 'localhost')
     monkeypatch.setenv('DATABASE_PORT', '5432')
     monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_DATABASE', 'postgresql')
     monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
     yield
+    monkeypatch.delenv('DATABASE_PASSWORD_FILE', raising=False)
     monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
     monkeypatch.delenv('TRUSTPOINT_OPERATIONAL_DATABASE', raising=False)
     importlib.reload(settings)
@@ -390,3 +392,21 @@ def test_mailers_smtp_security_overrides(monkeypatch: pytest.MonkeyPatch) -> Non
     options = settings.MAILERS['default']['OPTIONS']
     assert options['use_tls'] is False
     assert options['use_ssl'] is True
+
+
+def test_database_password_uses_mounted_secret_instead_of_inherited_default(monkeypatch, tmp_path):
+    """An explicitly configured mounted secret wins over container defaults."""
+    secret = tmp_path / 'mounted-db-password'
+    secret.write_text('mounted-test-password\n', encoding='utf-8')
+    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret))
+    monkeypatch.setenv('DATABASE_PASSWORD', 'inherited-default')
+    importlib.reload(settings)
+    assert settings.DATABASE_PASSWORD == 'mounted-test-password'
+    assert settings.DATABASES['default']['PASSWORD'] == 'mounted-test-password'
+
+
+def test_missing_mounted_database_secret_fails_closed(monkeypatch, tmp_path):
+    """A missing secret must not silently switch to an inherited password."""
+    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(tmp_path / 'missing-secret'))
+    with pytest.raises(FileNotFoundError):
+        importlib.reload(settings)

@@ -1,14 +1,28 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
+import django.db.models.deletion
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
 
+
     initial = True
 
     dependencies = [
+        ('pki', '0001_initial'),
     ]
 
     operations = [
+        migrations.CreateModel(
+            name='DiscoveryPort',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('port_number', models.PositiveIntegerField(unique=True)),
+                ('description', models.CharField(max_length=255)),
+            ],
+        ),
         migrations.CreateModel(
             name='DiscoveredDevice',
             fields=[
@@ -19,14 +33,7 @@ class Migration(migrations.Migration):
                 ('ssl_info', models.JSONField(blank=True, default=dict, null=True)),
                 ('last_seen', models.DateTimeField(auto_now=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-            ],
-        ),
-        migrations.CreateModel(
-            name='DiscoveryPort',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('port_number', models.PositiveIntegerField(unique=True)),
-                ('description', models.CharField(max_length=255)),
+                ('certificate_record', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='discovered_on_devices', to='pki.certificatemodel')),
             ],
         ),
     ]

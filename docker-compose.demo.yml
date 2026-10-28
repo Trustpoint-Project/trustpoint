@@ -1,0 +1,84 @@
+
+# Trustpoint Demo Services
+#
+# Optional local testing services:
+# - Mailpit: Email testing
+# - SFTPGo: SFTP testing
+# - Webhook Echo: HTTP webhook testing
+#
+# START:
+#   docker compose -p trustpoint-demo -f docker-compose.demo.yml up -d
+#
+# STOP:
+#   docker compose -p trustpoint-demo -f docker-compose.demo.yml down
+#
+# LOGS:
+#   docker compose -p trustpoint-demo -f docker-compose.demo.yml logs -f
+#
+# NETWORK:
+#   Uses the same network as Trustpoint.
+#   If the network does not exist yet, create it with:
+#     docker network create trustpoint-net
+#
+# ACCESS:
+# +--------------+-------------------------+---------------------------+
+# | Service      | From host (Mac)         | From Trustpoint           |
+# +--------------+-------------------------+---------------------------+
+# | Mailpit UI   | http://localhost:8025   | http://mailpit:8025       |
+# | Mailpit SMTP | localhost:1025          | mailpit:1025              |
+# | SFTPGo UI    | http://localhost:8080   | http://sftpgo:8080        |
+# | SFTPGo SFTP  | localhost:2222          | sftpgo:2022               |
+# | Webhook Echo | http://localhost:8081   | http://webhook-echo:8080  |
+# | Prometheus UI| http://localhost:9090   | http://prometheus:9090    |
+# +--------------+-------------------------+---------------------------+
+
+
+services:
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+
+  sftpgo:
+    image: drakkan/sftpgo:2.6.x-slim
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${SFTPGO_SFTP_PORT:-2222}:2022"
+      - "127.0.0.1:${SFTPGO_WEB_PORT:-8080}:8080"
+    environment:
+      SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN: "true"
+      SFTPGO_DEFAULT_ADMIN_USERNAME: "admin"
+      SFTPGO_DEFAULT_ADMIN_PASSWORD: "trustpoint-demo"
+    volumes:
+      - sftpgo_data:/srv/sftpgo
+
+  webhook-echo:
+    image: mendhak/http-https-echo:42
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEBHOOK_ECHO_PORT:-8081}:8080"
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - type: bind
+        source: ./docker/prometheus/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - prometheus_data:/prometheus
+
+volumes:
+  sftpgo_data:
+  prometheus_data:
+
+networks:
+  default:
+    external: true
+    name: "${TRUSTPOINT_NETWORK_NAME:-trustpoint-net}"

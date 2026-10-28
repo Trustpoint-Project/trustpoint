@@ -603,7 +603,7 @@
                                     {% if form.local_dev_pkcs11_handoff_available %}
                                         <p class="tp-backend-section-copy">
                                             {% blocktrans %}
-                                                Upload the exact PKCS#11 shared library Trustpoint should use for this installation. When a local tp_wizard SoftHSM handoff is available, you may leave this empty and Trustpoint will use its local proxy client for this setup session.
+                                                Upload the exact PKCS#11 shared library Trustpoint should use for this installation. When a local Docker Compose SoftHSM handoff is available, you may leave this empty and Trustpoint will use its local SoftHSM module for this setup session.
                                             {% endblocktrans %}
                                         </p>
                                     {% else %}

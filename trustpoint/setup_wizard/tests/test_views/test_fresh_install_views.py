@@ -195,6 +195,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         self.assertEqual(backend.backend_kind, AppSecretBackendKind.SOFTWARE)
 
     def test_configure_app_secret_backend_uses_pkcs11_by_default_for_hsm_crypto(self) -> None:
+        AppSecretBackendModel.objects.all().delete()
         with TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
             module_path = temp_root / 'libpkcs11.so'
