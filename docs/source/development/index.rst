@@ -210,10 +210,12 @@ cross-app dependencies; do not merge or delete them merely because numbers or
 version suffixes resemble each other. Test fresh installation and every supported
 forward-upgrade path separately.
 
-``reset_db`` is a destructive development helper. If you deliberately reset a
-throwaway database, use ``--keep-all-migrations`` to preserve tracked migrations.
-Without ``--no-user`` it creates ``admin`` / ``testing321``. It is not a normal
-installation, upgrade, or release verification command.
+``reset_db`` is a destructive development helper for a throwaway database. It
+preserves existing migration files by default, to recreate the current schema. ``--keep-all-migrations`` remains accepted for
+existing scripts. Only the explicit ``--initial-migrations`` option deletes and
+regenerates migration history; do not use it for the stable release baseline.
+Without ``--no-user`` the reset creates ``admin`` / ``testing321``. It is not a
+normal installation, upgrade, or release verification command.
 
 Optional demo and protocol fixtures
 ====================================

@@ -46,9 +46,21 @@ Enable **Use SFTP storage** and configure:
 | Username | SFTP user name. |
 | Authentication Method | Authentication method used for the SFTP connection. |
 | Password | Password for password-based authentication. |
+| SSH Private Key / Key Passphrase | PEM private key and optional passphrase for SSH-key authentication. |
 | Remote Directory | Directory on the SFTP server, for example `/upload/trustpoint/`. |
 
-Use **Save Settings** to store the SFTP configuration. Use **Reset Settings** to discard changes.
+Use **Save Settings** to store the SFTP configuration. Use **Reset Settings** to
+remove the saved configuration.
+
+Passwords, SSH private keys, and key passphrases are encrypted using the
+application-secret backend and are never displayed in the form. Leave a secret
+field blank to keep its value, supply a replacement to change it, or select its
+**Clear stored** checkbox to remove it. Required credentials cannot be cleared
+while that authentication method is enabled; disable SFTP storage or change
+authentication method first. Changing the method removes the stored credentials
+for the previous method. **Test Connection** uses these same choices without
+saving the configuration. Access to the backup page requires backup-management
+permission, including when only viewing settings.
 
 ## Notes
 

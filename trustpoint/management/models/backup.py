@@ -7,8 +7,11 @@ from __future__ import annotations
 from typing import Any
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxLengthValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+from util.encrypted_fields import EncryptedTextField
 
 
 class BackupOptions(models.Model):
@@ -34,22 +37,23 @@ class BackupOptions(models.Model):
         verbose_name=_('Authentication Method')
     )
 
-    # TODO (Dome): Storing passwords in plain text  # noqa: FIX002
-    password = models.CharField(
+    password = EncryptedTextField(
         max_length=128,
+        validators=[MaxLengthValidator(128)],
         blank=True,
         verbose_name=_('Password'),
-        help_text=_('Plain-text password for SFTP.')
+        help_text=_('Password for SFTP, encrypted in the database.')
     )
 
-    private_key = models.TextField(
+    private_key = EncryptedTextField(
         blank=True,
         verbose_name=_('SSH Private Key (PEM format)'),
         help_text=_('Paste the private key here (PEM).')
     )
 
-    key_passphrase = models.CharField(
+    key_passphrase = EncryptedTextField(
         max_length=128,
+        validators=[MaxLengthValidator(128)],
         blank=True,
         verbose_name=_('Key Passphrase'),
         help_text=_('Passphrase for the private key, if any.')

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import psycopg
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management import BaseCommand, call_command
+from django.core.management import BaseCommand, CommandError, call_command
 from django.db import connections
 
 from management.management.managepy_override import _add_copyright_headers, _check_migration_name_duplicates
@@ -29,8 +29,7 @@ class Command(BaseCommand):
     """Management command to reset the database and migrations."""
 
     help = (
-        'Resets the database by deleting current version migrations, dropping '
-        'the database, then running makemigrations and migrate. '
+        'Resets the configured database using the existing migrations. '
         'Creates a superuser unless --no-user is provided.'
     )
 
@@ -41,28 +40,37 @@ class Command(BaseCommand):
         parser.add_argument('--no-user', action='store_true', help='Skip superuser creation.')
         parser.add_argument(
             '--keep-all-migrations', action='store_true',
-            help='Use in CI environments, does not regenerate migrations.')
+            help='Compatibility option: migrations are preserved by default.')
         parser.add_argument(
             '--initial-migrations', action='store_true',
-            help='DO NOT USE! Breaks the DB of existing installations! Remove all migrations and create initial.')
+            help='Regenerate all initial migrations for a disposable development database; deletes migration history.')
 
     def handle(self, *_args: tuple[str], **options: dict[str, str]) -> None:
         """Executes the command."""
+        regenerate = bool(options.get('initial_migrations'))
+        if regenerate and options.get('keep_all_migrations'):
+            raise CommandError('--initial-migrations cannot be combined with --keep-all-migrations.')
+
         # Confirm database reset
         if not options.get('force'):
-            self.stdout.write('WARNING: This will delete the database and all migration files.')
+            warning = 'WARNING: This will delete the configured database.'
+            if regenerate:
+                warning += ' It will also delete and regenerate all migration files.'
+            self.stdout.write(warning)
             answer = input('Are you sure you want to continue? (y/N): ').strip().lower()
             if answer not in ('y', 'yes'):
                 self.stdout.write('Aborted.')
                 return
 
-        # Remove migration files
-        self.stdout.write('Removing migration files...')
-        keep_established = not options.get('initial_migrations', False)
-        do_makemigrations = not options.get('keep_all_migrations', False)
+        # Migration names do not identify disposable history: a versioned file
+        # can contain data conversion or be referenced by a squash's replaces.
+        do_makemigrations = regenerate
         base_path = Path(__file__).resolve().parent.parent.parent.parent
         if do_makemigrations:
-            self._remove_migration_files(base_path, keep_established=keep_established)
+            self.stdout.write('Removing migration files...')
+            self._remove_migration_files(base_path, keep_established=False)
+        else:
+            self.stdout.write('Keeping existing migration files.')
 
         # Reset database depending on engine
         engine = settings.DATABASES['default']['ENGINE']
@@ -136,9 +144,9 @@ class Command(BaseCommand):
                         except Exception as e:  # noqa: BLE001
                             self.stderr.write(f'Error removing {file}: {e}')
 
-    def _reset_sqlite(self, base_path: Path) -> None:
-        """Deletes the SQLite database file."""
-        db_path = base_path / 'db.sqlite3'
+    def _reset_sqlite(self, _base_path: Path) -> None:
+        """Delete the configured SQLite file, including a custom development path."""
+        db_path = Path(connections['default'].settings_dict['NAME'])
         if db_path.exists():
             try:
                 connections.close_all()

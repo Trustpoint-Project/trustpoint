@@ -19,6 +19,7 @@ from cryptography.x509.verification import VerificationError
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, RegexValidator
+from django.db.models import Model
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -592,8 +593,56 @@ class PrometheusConfigForm(forms.ModelForm['PrometheusConfig']):
         )
 
 
-class BackupOptionsForm(forms.ModelForm[BackupOptions]):
+class SecretTextarea(forms.Textarea):
+    """Accept multiline replacement keys without rendering stored or submitted secrets."""
+
+    def format_value(self, _value: Any) -> str | None:
+        """Never include a private key in a rendered textarea."""
+        return cast('str | None', super().format_value(None))
+
+
+class ReplacementSecretModelForm[ModelType: Model](forms.ModelForm[ModelType]):
+    """Keep blank secrets unchanged and offer explicit clearing without secret readback."""
+
+    secret_fields: ClassVar[tuple[str, ...]] = ()
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Snapshot saved secrets before model-form validation can mutate the instance."""
+        super().__init__(*args, **kwargs)
+        self._stored_secrets = {name: getattr(self.instance, name, '') for name in self.secret_fields}
+        for name in self.secret_fields:
+            self.initial[name] = ''
+            field = self.fields[name]
+            if isinstance(field, forms.CharField):
+                field.strip = False
+            field.help_text = _('Leave blank to keep the stored value, or enter a replacement.')
+            self.fields[f'clear_{name}'] = forms.BooleanField(
+                required=False,
+                label=_('Clear stored %(label)s') % {'label': str(field.label).lower()},
+                widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            )
+
+    def clean(self) -> dict[str, Any]:
+        """Resolve replacement/keep/clear choices before subclass authentication checks."""
+        cleaned: dict[str, Any] = super().clean() or {}
+        for name in self.secret_fields:
+            if name not in cleaned:
+                continue
+            replacement = cleaned[name]
+            if cleaned.get(f'clear_{name}'):
+                if replacement:
+                    self.add_error(name, _('Enter a replacement or clear the stored value, not both.'))
+                else:
+                    cleaned[name] = ''
+            elif not replacement:
+                cleaned[name] = self._stored_secrets[name]
+        return cleaned
+
+
+class BackupOptionsForm(ReplacementSecretModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""
+
+    secret_fields = ('password', 'private_key', 'key_passphrase')
 
     class Meta:
         """ModelForm Meta configuration for BackupOptions."""
@@ -616,13 +665,16 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             'user': forms.TextInput(attrs={'class': 'form-control'}),
             'auth_method': forms.Select(attrs={'class': 'form-select'}),
             'password': forms.PasswordInput(
-                attrs={'class': 'form-control'}, render_value=True
+                attrs={'class': 'form-control', 'autocomplete': 'new-password'}
             ),
-            'private_key': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
+            'private_key': SecretTextarea(attrs={'class': 'form-control', 'rows': 5, 'autocomplete': 'off'}),
             'key_passphrase': forms.PasswordInput(
-                attrs={'class': 'form-control'}, render_value=True
+                attrs={'class': 'form-control', 'autocomplete': 'new-password'}
             ),
             'remote_directory': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+        help_texts: ClassVar[dict[str, Any]] = {
+            'auth_method': _('Changing authentication method removes stored credentials for the previous method.'),
         }
 
     def clean(self) -> dict[str, Any]:
@@ -630,6 +682,12 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
         cleaned: dict[str, Any] = super().clean() or {}
         auth = cleaned.get('auth_method')
         enable_sftp = cleaned.get('enable_sftp_storage')
+
+        if auth and auth != self.instance.auth_method:
+            unused = ('private_key', 'key_passphrase') if auth == BackupOptions.AuthMethod.PASSWORD else ('password',)
+            for name in unused:
+                if not self.data.get(name):
+                    cleaned[name] = ''
 
         if enable_sftp:
             self._validate_sftp_fields(cleaned)
@@ -1041,11 +1099,12 @@ class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
         }
 
 
-class SmtpEmailConfigForm(forms.ModelForm[SmtpEmailConfig]):
+class SmtpEmailConfigForm(ReplacementSecretModelForm[SmtpEmailConfig]):
     """Form for managing SMTP email backend settings."""
 
     PORT_MIN: ClassVar[int] = 1
     PORT_MAX: ClassVar[int] = 65535
+    secret_fields = ('password',)
 
     class Meta:
         """Metadata for the SMTP email settings form."""
@@ -1077,7 +1136,6 @@ class SmtpEmailConfigForm(forms.ModelForm[SmtpEmailConfig]):
             ),
             'password': forms.PasswordInput(
                 attrs={'class': 'form-control', 'autocomplete': 'new-password', 'data-smtp-auth': 'password'},
-                render_value=True,
             ),
             'timeout_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
             'default_from_email': forms.EmailInput(attrs={'class': 'form-control'}),

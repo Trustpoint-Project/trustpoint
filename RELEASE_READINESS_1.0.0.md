@@ -19,7 +19,15 @@ adopted where they concern compatibility/documentation choices. Original securit
 findings and unexecuted checks remain recorded as evidence, rather than being
 marked resolved by a version or wording change.
 
-| Severity | Findings |
+**Integration-credential fix:** H7 and the related B3 backup-page disclosure are
+resolved in the current implementation changes. SMTP/SFTP secret fields now use
+application-secret encryption from the initial 1.0.0 schema; forms never render saved/submitted secrets and support keep/replace/
+explicit-clear behavior. Backup GET/POST access requires backup-management
+permission. The original findings below remain for traceability, with resolution
+notes; the table counts the original review, not currently open findings.
+
+
+| Severity | Findings at original review |
 | --- | ---: |
 | P0 — Release Blocker | 6 |
 | P1 — Should Fix Before 1.0 | 9 |
@@ -28,7 +36,7 @@ marked resolved by a version or wording change.
 
 The deployment and envelope-encryption work has substantial positive evidence: the current Dockerfile builds, isolated Compose setup/restart/recreation tests pass, secrets remain stable, concurrent PostgreSQL DEK initialization passes, and Behave passes with its required KEK configured. Ruff, mypy, Django system checks, migration drift checks, and shell checks pass. Dependency advisory scans found no known vulnerabilities in the scanned Python/runtime and JavaScript/production lock selections.
 
-These checks do not compensate for concrete authorization and trust-boundary defects. Authenticated users can bypass issuance/download permissions, backup settings expose credentials on GET, upstream CMP CA enrollment lacks server/message authentication, and SFTP does not authenticate its destination. Gunicorn also accepts connections from the container network while certificate authentication trusts HTTP headers.
+At the original reviewed commit, authorization and trust-boundary defects remained despite passing checks. They included issuance/download permission bypasses, backup-page credential disclosure, upstream CMP CA trust, SFTP host verification, and certificate-header trust on network-accessible Gunicorn. B3 is now fixed as described above; the other security findings have not been marked resolved by this integration-credential change.
 
 Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 108 Markdown/reStructuredText files, 19 feature files, deployment scripts, hidden tooling, workflows, migrations, frontend manifests, bundled assets, and test credentials. Repository-wide mechanical searches and documentation builds were combined with manual tracing of critical flows. This is a broad release audit, **not a claim that every line, binary, historical commit, or possible protocol interaction was exhaustively verified**. Findings distinguish runtime probes, source tracing, and outstanding verification.
 
@@ -52,9 +60,10 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 - **Verification:** an isolated view request with every user permission false returned HTTP 200, created a synthetic OTP record, and included the OTP in the response. ORM access was mocked. The public token-to-credential export path was traced through the login form, token mixin, and base download view.
 - **Recommended fix:** require `DOWNLOAD_CREDENTIALS` for OTP generation/cancellation, use POST with CSRF protection for these state changes, scope the selected credential as intended, and add a negative test spanning OTP creation through export.
 
-### B3 — RELEASE BLOCKER: backup settings disclose SFTP credentials to ordinary logged-in users
+### B3 — RELEASE BLOCKER (resolved): backup settings credential disclosure
 
 - **Severity:** P0.
+- **Resolution:** `BackupManageView` now checks `MANAGE_BACKUPS` for GET as well as POST. Stored/submitted secret values are never rendered, including invalid forms; blank edits preserve credentials, with explicit clearing controls. Actual low-privilege client GET returns 403; an authorized GET contains no saved password/key/passphrase. The original evidence below describes the audited baseline.
 - **Affected files:** `trustpoint/management/views/backup.py:101–156`, `trustpoint/management/forms.py:595–625`, `trustpoint/templates/management/backups/manage_backups.html:312–344`, `trustpoint/management/urls.py:95`.
 - **Problem:** `BackupManageView` checks `MANAGE_BACKUPS` only on POST. GET constructs a model form from the saved singleton. Password and key-passphrase widgets use `render_value=True`, and the private key is rendered in a textarea. The template includes these fields without a permission gate.
 - **Concrete consequence:** any logged-in web user can retrieve the configured backup password, SSH private key, and passphrase from the HTML, even if the navigation hides the page. This can expose the external backup account and its accessible backup history.
@@ -139,13 +148,15 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 - **Consequence:** contributors can run only six tests and believe the application is validated; a documented test selection also fails depending on external DNS. Test setup must explain the KEK required for encrypted fields.
 - **Fix:** document one complete test command and its database/secret prerequisites, include root utility tests in CI, replace live DNS in unit tests with controlled resolver results, and correct database/cwd instructions.
 
-### H7 — SMTP and backup credentials remain plaintext in the database
+### H7 — Resolved: SMTP and backup credentials encrypted at rest
 
-- **Severity:** P1.
-- **Affected files:** `trustpoint/management/models/backup.py:37–55`, `trustpoint/management/models/email.py:46`, `trustpoint/management/forms.py:595–625`, `trustpoint/util/encrypted_fields.py`.
-- **Problem:** SFTP password, private key, key passphrase, and persisted SMTP password use ordinary text fields despite the existing application-secret encryption service. The SFTP model explicitly calls its password plaintext.
-- **Consequence:** database snapshots/backups expose these external-service credentials without requiring the application's separate KEK. This is distinct from the remotely reachable HTML disclosure in B3; fixing B3 alone does not protect copies of the database.
-- **Fix:** use the established encrypted field/service abstraction, provide a safe migration for any supported baseline, keep credentials write-only in forms/APIs, and test recovery with the original KEK. Do not simply rename field types and assume existing plaintext rows will decrypt correctly.
+- **Original severity:** P1; fixed in the current changes.
+- **Affected files:** `trustpoint/management/models/backup.py`, `trustpoint/management/models/email.py`, `trustpoint/management/forms.py`, `trustpoint/management/migrations/0001_initial.py`, backup/SMTP templates, and integration-credential tests.
+- **Implementation:** SFTP password/private key/key passphrase and SMTP password use `EncryptedTextField` through the established application-secret service. Text columns safely fit ciphertext for maximum-length Unicode passwords. Existing input length limits remain validated.
+- **Baseline:** 1.0.0 is a fresh-install-only first stable release. Encrypted fields are defined directly in `0001_initial`; `0002_initial` adds cross-app relations. There is no legacy conversion, squash replacement, or development-database upgrade path. Empty schema creation does not initialize encryption keys.
+- **Forms/API:** existing and submitted secrets are never echoed. Blank fields retain stored values; replacements and explicit clear controls work for saves and unsaved connection/mail tests. Changing SFTP authentication removes obsolete credentials. The backup API serializer exposes only its existing nonsecret fields. B3's whole-view permission check is also fixed.
+- **Verification:** credential tests cover raw SQL ciphertext, recovery with the original KEK, wrong-key rejection, blank values, Unicode maximum lengths, multiline keys, secret non-disclosure, explicit clearing, authentication switching, and access denial. Fresh-schema tests verify encrypted migration fields and no encryption-key initialization. Historical migration tests have been replaced with first-stable baseline tests.
+- **Operational requirement:** start with a fresh database for 1.0.0 and retain its matching original key material for recovery. Development-era database states are unsupported.
 
 ### H8 — Scheduled health/security checks report success without performing checks
 
@@ -209,12 +220,12 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 | --- | --- | --- |
 | B1 | Management API role authorization | Deny mutations without action permission |
 | B2 | Exportable device private keys | Authorize OTP creation and cancellation |
-| B3 | External backup credentials | Protect GET and stop secret readback |
+| B3 (resolved) | External backup credentials | Whole-view permission check and replacement-only forms implemented |
 | B4 | Upstream CMP CA trust | Authenticate and bind replies before persistence |
 | B5 | External backup destination | Pin/verify SSH host identity |
 | B6 | mTLS proxy boundary | Restrict backend reachability and trust proxy proof |
 | H1 | Upstream CA/key integrity | Match keys, validate chains, commit atomically |
-| H7 | External-service credentials at rest | Encrypt through the established secret service |
+| H7 (resolved) | External-service credentials at rest | Encryption, atomic data conversion, and original-key recovery verified |
 | H8 | Operator security assurance | Implement/label checks and propagate failures |
 | H9/C4 | Distribution/release assurance | Verify notices and scan completion |
 
@@ -336,7 +347,8 @@ Dependency organization: the committed `uv.lock` provides a production version s
 
 ## Final 1.0 Checklist
 
-- [ ] Resolve B1–B6 and add negative authorization/trust-boundary regressions.
+- [x] Resolve B3 and H7 with encryption in the initial schema, replacement-only forms, and negative disclosure/access tests.
+- [ ] Resolve the remaining B1, B2, B4–B6 findings and add their authorization/trust-boundary regressions.
 - [ ] Resolve selected P1 findings and explicitly accept/document any deferred ones.
 - [x] Record the full application pytest result and triage all failures/skips; affected cases pass with corrected execution conditions.
 - [ ] Obtain a single green full application/root test invocation in the supported release environment, retaining the separate HSM/PostgreSQL/interoperability requirements.

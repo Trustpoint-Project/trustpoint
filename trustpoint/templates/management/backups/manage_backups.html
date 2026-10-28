@@ -295,6 +295,7 @@
                         <div class="mb-3">
                             {{ backup_options_form.auth_method.label_tag }}
                             {{ backup_options_form.auth_method }}
+                            <div class="form-text">{{ backup_options_form.auth_method.help_text }}</div>
 
                             {% if backup_options_form.auth_method.errors %}
                                 <div class="invalid-feedback d-block">
@@ -311,6 +312,11 @@
                         >
                             {{ backup_options_form.password.label_tag }}
                             {{ backup_options_form.password }}
+                            <div class="form-text">{{ backup_options_form.password.help_text }}</div>
+                            <div class="form-check mt-2">
+                                {{ backup_options_form.clear_password }}
+                                {{ backup_options_form.clear_password.label_tag }}
+                            </div>
 
                             {% if backup_options_form.password.errors %}
                                 <div class="invalid-feedback d-block">
@@ -327,6 +333,11 @@
                         >
                             {{ backup_options_form.private_key.label_tag }}
                             {{ backup_options_form.private_key }}
+                            <div class="form-text">{{ backup_options_form.private_key.help_text }}</div>
+                            <div class="form-check mt-2">
+                                {{ backup_options_form.clear_private_key }}
+                                {{ backup_options_form.clear_private_key.label_tag }}
+                            </div>
 
                             {% if backup_options_form.private_key.errors %}
                                 <div class="invalid-feedback d-block">
@@ -342,6 +353,11 @@
                         >
                             {{ backup_options_form.key_passphrase.label_tag }}
                             {{ backup_options_form.key_passphrase }}
+                            <div class="form-text">{{ backup_options_form.key_passphrase.help_text }}</div>
+                            <div class="form-check mt-2">
+                                {{ backup_options_form.clear_key_passphrase }}
+                                {{ backup_options_form.clear_key_passphrase.label_tag }}
+                            </div>
 
                             {% if backup_options_form.key_passphrase.errors %}
                                 <div class="invalid-feedback d-block">

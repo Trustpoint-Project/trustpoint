@@ -99,7 +99,7 @@ def create_db_backup(path: Path) -> str:
     return filename
 
 
-class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # type: ignore[type-arg,misc]
+class BackupManageView(UserPermissionRequiredMixin, SortableTableFromListMixin, LoggerMixin, ListView):  # type: ignore[type-arg,misc]
     """Display existing backups and handle backup-related actions.
 
     GET:
@@ -115,6 +115,7 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
         - reset_backup_settings: Deletes existing BackupOptions, reverting to defaults.
     """
     template_name = 'management/backups/manage_backups.html'
+    permission_required = AppPermissions.MANAGE_BACKUPS
     context_object_name = 'backup_files'
     paginate_by = 20
     default_sort_param = 'filename'

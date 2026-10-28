@@ -3,6 +3,7 @@
 
 import django.core.validators
 import management.models.security
+import util.encrypted_fields
 from django.db import migrations, models
 
 
@@ -64,9 +65,23 @@ class Migration(migrations.Migration):
                 ('port', models.PositiveIntegerField(blank=True, default=2222, verbose_name='Port')),
                 ('user', models.CharField(blank=True, max_length=128, verbose_name='Username')),
                 ('auth_method', models.CharField(choices=[('password', 'Password'), ('ssh_key', 'SSH Key')], default='password', max_length=10, verbose_name='Authentication Method')),
-                ('password', models.CharField(blank=True, help_text='Plain-text password for SFTP.', max_length=128, verbose_name='Password')),
-                ('private_key', models.TextField(blank=True, help_text='Paste the private key here (PEM).', verbose_name='SSH Private Key (PEM format)')),
-                ('key_passphrase', models.CharField(blank=True, help_text='Passphrase for the private key, if any.', max_length=128, verbose_name='Key Passphrase')),
+                ('password', util.encrypted_fields.EncryptedTextField(
+                blank=True,
+                help_text='Password for SFTP, encrypted in the database.',
+                max_length=128,
+                validators=[django.core.validators.MaxLengthValidator(128)],
+                verbose_name='Password',
+            )),
+                ('private_key', util.encrypted_fields.EncryptedTextField(
+                blank=True, help_text='Paste the private key here (PEM).', verbose_name='SSH Private Key (PEM format)'
+            )),
+                ('key_passphrase', util.encrypted_fields.EncryptedTextField(
+                blank=True,
+                help_text='Passphrase for the private key, if any.',
+                max_length=128,
+                validators=[django.core.validators.MaxLengthValidator(128)],
+                verbose_name='Key Passphrase',
+            )),
                 ('remote_directory', models.CharField(blank=True, default='/upload/trustpoint/', help_text='Remote directory (e.g. /backups/) where files should be uploaded. Trailing slash is optional.', max_length=512, verbose_name='Remote Directory')),
             ],
             options={
@@ -218,7 +233,9 @@ class Migration(migrations.Migration):
                 ('use_tls', models.BooleanField(default=True)),
                 ('use_ssl', models.BooleanField(default=False)),
                 ('username', models.CharField(blank=True, max_length=255)),
-                ('password', models.CharField(blank=True, max_length=1024)),
+                ('password', util.encrypted_fields.EncryptedTextField(
+                blank=True, max_length=1024, validators=[django.core.validators.MaxLengthValidator(1024)]
+            )),
                 ('timeout_seconds', models.PositiveIntegerField(default=10)),
                 ('default_from_email', models.EmailField(default='no-reply.trustpoint@localhost', max_length=254)),
                 ('last_updated', models.DateTimeField(auto_now=True)),

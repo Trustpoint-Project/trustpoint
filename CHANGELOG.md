@@ -24,6 +24,8 @@ data is optional and must not be injected into an instance holding real data.
   using imported material or generated keys with EST/CMP certificate acquisition.
 - Software and PKCS#11 cryptographic backends; application-secret envelope encryption
   using a database-held wrapped DEK and a separately retained software/HSM KEK.
+- SMTP and SFTP credentials encrypted at rest, with replacement-only secret fields
+  and explicit controls for clearing stored credentials.
 - Device/agent management, OPC UA GDS Push, workflow approvals, webhooks, mail,
   notifications, and operational logging/metrics.
 
