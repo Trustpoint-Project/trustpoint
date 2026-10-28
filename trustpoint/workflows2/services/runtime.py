@@ -677,7 +677,3 @@ class WorkflowRuntimeService:
         run.finalized = WorkflowRunTransitionService.is_finalized(run.status)
         run.save(update_fields=['status', 'finalized', 'updated_at'])
         CmpTransactionState.sync_from_workflow2_run(run=run)
-
-    @staticmethod
-    def _derive_run_status(statuses: list[str]) -> str:
-        return WorkflowRunTransitionService.derive_status(statuses)

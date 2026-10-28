@@ -157,7 +157,7 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
                 request,
                 gettext('The user will be required to change their password at their next login.'),
             )
-            return redirect(request.path)
+            return self._redirect_to_profile()
 
         if request.POST.get('form_name') == 'unblock_failed_login':
             self.object = self.get_object()
@@ -171,7 +171,7 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
                     update_fields=['is_active', 'failed_login_attempts', 'blocked_by_failed_logins'],
                 )
                 messages.success(request, gettext('The user has been unblocked and can log in again.'))
-            return redirect(request.path)
+            return self._redirect_to_profile()
 
         return super().post(request, *args, **kwargs)
 
@@ -183,7 +183,13 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
         timezone.activate(user.timezone)
         if self.object.pk == user.pk:
             return redirect('home:index')
-        return redirect(self.request.path)
+        return self._redirect_to_profile()
+
+    def _redirect_to_profile(self) -> HttpResponse:
+        """Return to a named profile route without using the request path."""
+        if self.object.pk == self.request.user.pk:
+            return redirect('users:profile')
+        return redirect('users:user-profile', pk=self.object.pk)
 
 
 class UserProfileDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, forms.Form]):

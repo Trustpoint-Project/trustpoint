@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -27,7 +27,7 @@ from pki.util.x509 import CertificateVerifier
 if TYPE_CHECKING:
     import ipaddress
 
-ONE_DAY = datetime.timedelta(days=1)
+ONE_DAY = dt.timedelta(days=1)
 MIN_CERTIFICATE_CHAIN_LENGTH = 2
 IPV4_VERSION = 4
 
@@ -186,7 +186,7 @@ class TlsServerCredentialGenerator:
 
     def generate_tls_server_credential(self) -> CredentialSerializer:
         """Generate a self-signed TLS credential for use by the Trustpoint server."""
-        one_day = datetime.timedelta(1, 0, 0)
+        one_day = dt.timedelta(1, 0, 0)
         private_key = ec.generate_private_key(curve=ec.SECP256R1())
         public_key = private_key.public_key()
         builder = x509.CertificateBuilder()
@@ -204,8 +204,8 @@ class TlsServerCredentialGenerator:
                 ]
             )
         )
-        builder = builder.not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
-        builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * 365))
+        builder = builder.not_valid_before(dt.datetime.now(tz=dt.UTC) - one_day)
+        builder = builder.not_valid_after(dt.datetime.now(tz=dt.UTC) + (one_day * 365))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
 

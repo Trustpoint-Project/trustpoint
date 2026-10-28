@@ -156,7 +156,7 @@ digraph model_graph {
   
   
     <TR><TD ALIGN="LEFT" BORDER="0">
-    <FONT COLOR="#7B7B7B" FACE="Roboto">raw_dek</FONT>
+    <FONT COLOR="#7B7B7B" FACE="Roboto">wrapped_dek</FONT>
     </TD><TD ALIGN="LEFT">
     <FONT COLOR="#7B7B7B" FACE="Roboto">BinaryField</FONT>
     </TD></TR>

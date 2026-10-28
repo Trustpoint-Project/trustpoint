@@ -80,7 +80,7 @@
             "related_to": "appsecrets.AppSecretBackendModel"
           },
           {
-            "name": "raw_dek",
+            "name": "wrapped_dek",
             "type": "BinaryField"
           }
         ],

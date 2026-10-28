@@ -17,7 +17,7 @@ from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 
 if TYPE_CHECKING:
-    import datetime
+    import datetime as dt
 
     from pki.models import CaModel
 
@@ -125,7 +125,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         crl_pem: str,
         *,
         set_active: bool = True,
-        next_update_delta: datetime.timedelta | None = None,
+        next_update_delta: dt.timedelta | None = None,
     ) -> CrlModel:
         """Creates a new CRL from PEM data.
 

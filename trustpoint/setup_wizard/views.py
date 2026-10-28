@@ -43,10 +43,11 @@ from appsecrets.models import (
     AppSecretPkcs11ConfigModel,
 )
 from appsecrets.service import (
-    DEK_LENGTH_BYTES,
     AppSecretConfigurationError,
     Pkcs11AppSecretService,
+    SoftwareAppSecretService,
     clear_app_secret_cache,
+    load_software_kek,
 )
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
@@ -624,7 +625,7 @@ def _persist_local_dev_pkcs11_config_if_available(
     current_config_path: str,
     current_config_exists: bool,
 ) -> None:
-    """Persist the local-dev PKCS#11 provider config when tp_wizard exposed one."""
+    """Persist the local-dev PKCS#11 provider config when Docker Compose exposed one."""
     if current_staged_config is not None or not local_dev_pkcs11_config_available():
         return
 
@@ -2911,6 +2912,15 @@ def _build_staged_pkcs11_app_secret_config(
     )
 
 
+def _software_dek_is_decryptable(wrapped_dek: bytes) -> bool:
+    """Validate the target software envelope without generating or persisting keys."""
+    try:
+        SoftwareAppSecretService.unwrap_dek(load_software_kek(), wrapped_dek)
+    except AppSecretConfigurationError:
+        return False
+    return True
+
+
 def app_secret_decryptability_checks(  # noqa: PLR0911
     *,
     config_model: SetupWizardConfigModel,
@@ -2952,13 +2962,13 @@ def app_secret_decryptability_checks(  # noqa: PLR0911
         )
 
     if material.backend_kind == BackendKind.SOFTWARE.value:
-        if len(material.raw_dek) == DEK_LENGTH_BYTES:
+        if _software_dek_is_decryptable(material.wrapped_dek):
             return (
                 CompatibilityCheck(
                     code='appsecret.decryptability_ok',
                     label='Application Secrets',
                     severity=CompatibilitySeverity.INFO,
-                    message='The target software app-secret DEK is present and has the expected length.',
+                    message='The target software app-secret DEK can be unwrapped with the configured KEK.',
                 ),
             )
         return (
@@ -2966,7 +2976,8 @@ def app_secret_decryptability_checks(  # noqa: PLR0911
                 code='appsecret.decryptability_failed',
                 label='Application Secrets',
                 severity=CompatibilitySeverity.ERROR,
-                message='The target software app-secret DEK is missing or has an invalid length.',
+                message=('The target software app-secret DEK cannot be unwrapped. '
+                         'Restore the original KEK and intact database.'),
             ),
         )
 

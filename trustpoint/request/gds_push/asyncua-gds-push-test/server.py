@@ -287,7 +287,7 @@ class PushState:
                     swapped.append((directory, backup))
                     replacement.rename(directory)
                 if self.trust_store is not None:
-                    await self.trust_store.load()  # type: ignore[no-untyped-call]
+                    await self.trust_store.load()
             except Exception:
                 for directory, backup in reversed(swapped):
                     if directory.exists():
@@ -296,7 +296,7 @@ class PushState:
                         directory.rmdir()
                     backup.rename(directory)
                 if self.trust_store is not None:
-                    await self.trust_store.load()  # type: ignore[no-untyped-call]
+                    await self.trust_store.load()
                 raise
         LOG.info('Installed TrustList and reloaded certificate validation')
 
@@ -380,7 +380,7 @@ async def main() -> None:
     await server.load_private_key(str(state.key))
     trust_store = TrustStore([state.trust], [state.trusted_crls, state.issuer_crls])
     state.trust_store = trust_store
-    await trust_store.load()  # type: ignore[no-untyped-call]
+    await trust_store.load()
     # No trust-on-first-use or optional validation: explicitly trusted peer cert required.
     server.set_certificate_validator(
         CertificateValidator(

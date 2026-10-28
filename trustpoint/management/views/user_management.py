@@ -48,24 +48,6 @@ def _reset_user_otp(user: TrustpointUser) -> None:
         device.delete()
 
 
-def _is_last_admin(user: TrustpointUser) -> bool:
-    """Return True if the given user is the only remaining admin.
-
-    Used to prevent accidental lock-out by deleting or downgrading the
-    sole admin account.
-
-    Args:
-        user: The TrustpointUser instance to check.
-
-    Returns:
-        True when the user has the ADMIN role and no other admin exists.
-    """
-    return (
-        user.role.name == BuiltinRole.ADMIN
-        and get_user_model().objects.filter(role__name=BuiltinRole.ADMIN).count() == 1
-    )
-
-
 class UserContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the User Management -> Management page."""
 

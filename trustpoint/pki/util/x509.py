@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import itertools
 import logging
 import urllib.parse
@@ -169,7 +169,7 @@ class CertificateGenerator:
         Returns:
             Tuple of (certificate, private_key).
         """
-        one_day = datetime.timedelta(1, 0, 0)
+        one_day = dt.timedelta(1, 0, 0)
         if private_key is None:
             private_key = rsa.generate_private_key(
                 public_exponent=65537,
@@ -208,8 +208,8 @@ class CertificateGenerator:
                 ]
             )
         )
-        builder = builder.not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
-        builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * validity_days))
+        builder = builder.not_valid_before(dt.datetime.now(tz=dt.UTC) - one_day)
+        builder = builder.not_valid_after(dt.datetime.now(tz=dt.UTC) + (one_day * validity_days))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
         is_root_ca = issuer_private_key == private_key
@@ -274,11 +274,11 @@ class CertificateGenerator:
         Returns:
             Tuple of (certificate, private_key).
         """
-        one_day = datetime.timedelta(1, 0, 0)
+        one_day = dt.timedelta(1, 0, 0)
         if private_key is None:
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        not_valid_before = datetime.datetime.now(tz=datetime.UTC) - one_day
+        not_valid_before = dt.datetime.now(tz=dt.UTC) - one_day
         not_valid_after = not_valid_before + (one_day * validity_days)
 
         public_key = private_key.public_key()
@@ -516,20 +516,6 @@ class CertificateVerifier:
         )
 
     @staticmethod
-    def _check_rsa_key_size(certificate: x509.Certificate) -> None:
-        """Compatibility adapter for checking RSA keys against the shared policy."""
-        policy = CertificateVerifier._active_cryptographic_policy()
-        if isinstance(certificate.public_key(), rsa.RSAPublicKey):
-            enforce_cryptographic_policy(policy, key=public_key_facts(certificate.public_key()))
-
-    @staticmethod
-    def _check_ecc_curve(certificate: x509.Certificate) -> None:
-        """Compatibility adapter for checking ECC keys against the shared policy."""
-        policy = CertificateVerifier._active_cryptographic_policy()
-        if isinstance(certificate.public_key(), ec.EllipticCurvePublicKey):
-            enforce_cryptographic_policy(policy, key=public_key_facts(certificate.public_key()))
-
-    @staticmethod
     def _check_ca_key_usage(
         certificate: x509.Certificate,
         required_key_usage: x509.KeyUsage | None = None
@@ -603,7 +589,7 @@ class CertificateVerifier:
         subject: str,
         trusted_roots: list[x509.Certificate] | None = None,
         untrusted_intermediates: list[x509.Certificate] | None = None,
-        verification_time: datetime.datetime | None = None
+        verification_time: dt.datetime | None = None
     ) -> list[x509.Certificate]:
         """Verifies a server's TLS certificate against a trusted certificate store.
 
@@ -648,7 +634,7 @@ class CertificateVerifier:
         trust_store = Store(trusted_roots)
 
         if verification_time is None:
-            verification_time = datetime.datetime.now(UTC)
+            verification_time = dt.datetime.now(UTC)
 
         try:
             identity: x509.DNSName | x509.IPAddress = x509.IPAddress(ip_address(subject))
@@ -821,7 +807,7 @@ class CertificateVerifier:
         cert: x509.Certificate,
         trusted_roots: list[x509.Certificate] | None = None,
         untrusted_intermediates: list[x509.Certificate] | None = None,
-        verification_time: datetime.datetime | None = None,
+        verification_time: dt.datetime | None = None,
         required_key_usage: x509.KeyUsage | None = None,
     ) -> list[x509.Certificate]:
         """Verifies a CA certificate against a trusted certificate store.
@@ -868,7 +854,7 @@ class CertificateVerifier:
         CertificateVerifier._check_security_policy(cert)
 
         if verification_time is None:
-            verification_time = datetime.datetime.now(UTC)
+            verification_time = dt.datetime.now(UTC)
 
         # Validate validity period
         not_before = cert.not_valid_before_utc

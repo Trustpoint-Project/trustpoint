@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
@@ -73,13 +73,13 @@ def generate_empty_crl(
         err_msg = f'CRL: Hash algo must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
         raise TypeError(err_msg)
 
-    crl_issued_at = datetime.datetime.now(datetime.UTC)
+    crl_issued_at = dt.datetime.now(dt.UTC)
     ca_subject = ca_cert.subject
 
     crl_builder = x509.CertificateRevocationListBuilder(
         issuer_name=ca_subject,
         last_update=crl_issued_at,
-        next_update=crl_issued_at + datetime.timedelta(hours=crl_validity_hours),
+        next_update=crl_issued_at + dt.timedelta(hours=crl_validity_hours),
     )
     crl_builder = crl_builder.add_extension(x509.CRLNumber(crl_number), critical=False)
 
@@ -121,7 +121,7 @@ def generate_crl_with_revoked_certs(
     crl_builder = x509.CertificateRevocationListBuilder(
         issuer_name=ca_subject,
         last_update=crl_issued_at,
-        next_update=crl_issued_at + datetime.timedelta(hours=crl_validity_hours),
+        next_update=crl_issued_at + dt.timedelta(hours=crl_validity_hours),
     )
     crl_builder = crl_builder.add_extension(x509.CRLNumber(next_crl_number), critical=False)
 

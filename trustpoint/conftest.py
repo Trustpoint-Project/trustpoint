@@ -4,6 +4,7 @@
 """pytest configuration for the tests in the PKI app."""
 import base64
 import uuid
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -18,7 +19,7 @@ from django.test.client import RequestFactory
 from trustpoint_core.serializer import CredentialSerializer
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel, AppSecretSoftwareConfigModel
-from appsecrets.service import clear_app_secret_cache
+from appsecrets.service import SoftwareAppSecretService, clear_app_secret_cache
 from crypto.application.private_keys import generate_managed_signing_private_key
 from crypto.domain.specs import RsaKeySpec
 from devices.models import (
@@ -45,6 +46,27 @@ def _is_db_less_django_simple_test(request: pytest.FixtureRequest) -> bool:
     if not isinstance(test_cls, type):
         return False
     return issubclass(test_cls, SimpleTestCase) and not issubclass(test_cls, TransactionTestCase)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Declare dynamically requested DB access before pytest-django selects databases.
+
+    Without collection markers, a standalone pure-test module can make pytest-
+    django select no test database while our autouse fixtures still request db.
+    That must never cause fixtures to access the developer's application DB.
+    """
+    test_root = Path(__file__).resolve().parent
+    for item in items:
+        if not Path(str(item.fspath)).is_relative_to(test_root):
+            continue
+        if '/trustpoint/tests/test_settings.py' in str(item.fspath):
+            continue
+        test_cls = getattr(item, 'cls', None)
+        if isinstance(test_cls, type) and issubclass(test_cls, SimpleTestCase):
+            if not issubclass(test_cls, TransactionTestCase):
+                continue
+        if item.get_closest_marker('django_db') is None:
+            item.add_marker(pytest.mark.django_db)
 
 
 @pytest.fixture(autouse=True)
@@ -95,7 +117,7 @@ def complete_setup_wizard_by_default(monkeypatch: pytest.MonkeyPatch, request: p
 
 
 @pytest.fixture(autouse=True)
-def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest) -> None:
+def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest, tmp_path_factory: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide a development app-secret backend for tests that save encrypted model fields."""
     if _is_db_less_django_simple_test(request):
         return
@@ -112,8 +134,13 @@ def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest) -> No
     backend.backend_kind = AppSecretBackendKind.SOFTWARE
     backend.save()
     config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
-    config.raw_dek = b'a' * 32
+    key_file = tmp_path_factory.mktemp('software-kek') / 'key'
+    key_file.write_text('ab' * 32)
+    monkeypatch.setenv('TRUSTPOINT_SOFTWARE_KEK_FILE', str(key_file))
+    config.wrapped_dek = SoftwareAppSecretService.wrap_dek(bytes.fromhex('ab' * 32), b'a' * 32)
     config.save()
+    backend.dek_initialized = True
+    backend.save(update_fields=['dek_initialized'])
     clear_app_secret_cache()
 
 

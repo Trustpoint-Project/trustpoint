@@ -26,3 +26,30 @@ temp.txt
 **/hsm_pin.txt
 **/db_user.txt
 **/db_password.txt
+
+# Local environment files must be injected at runtime, never baked into images.
+**/.env
+**/.env.*
+!**/.env.example
+
+# Runtime credentials, uploads, backups, and generated TLS files.
+trustpoint/media/
+trustpoint/collected_static/
+docker/trustpoint/nginx/tls/
+trustpoint/request/gds_push/asyncua-gds-push-test/state/
+ca_workspace/
+
+# Local tooling and generated artifacts.
+**/.aws/
+**/.ssh/
+**/.idea/
+**/.tox/
+**/node_modules/
+**/__pycache__/
+**/.coverage*
+htmlcov/
+docs/.building
+docs/_build/
+
+# Deployment-provided secret files
+/secrets/

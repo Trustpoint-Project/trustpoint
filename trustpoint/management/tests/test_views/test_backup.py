@@ -112,7 +112,7 @@ class CreateDbBackupTest(TestCase):
         self.backup_dir = Path(self.temp_dir.name)
 
     @patch('management.views.backup.call_command')
-    @patch('management.views.backup.datetime')
+    @patch('management.views.backup.dt')
     def test_create_db_backup_success(self, mock_datetime: MagicMock, mock_call_command: MagicMock) -> None:
         """Test successful database backup creation."""
         mock_now = Mock()

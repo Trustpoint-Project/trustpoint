@@ -100,22 +100,15 @@ EOF
 
 main() {
   local token_serial user_pin so_pin
-  local user_pin_missing_before=false
-
   ensure_dirs
-  if [[ ! -s "${USER_PIN_FILE}" ]]; then
-    user_pin_missing_before=true
+  ensure_config
+  token_serial="$(token_serial_for_label)"
+  if [[ -n "${token_serial}" && ( ! -s "${USER_PIN_FILE}" || ! -s "${SO_PIN_FILE}" ) ]]; then
+    log "Existing token PIN files are missing. Restore the original PIN files; the token was left unchanged."
+    exit 1
   fi
   ensure_pin_file "${USER_PIN_FILE}"
   ensure_pin_file "${SO_PIN_FILE}"
-  ensure_config
-
-  token_serial="$(token_serial_for_label)"
-  if [[ -n "${token_serial}" && "${user_pin_missing_before}" == "true" ]]; then
-    log "Existing local/dev token has no matching user PIN file; reinitializing token '${TOKEN_LABEL}'"
-    SOFTHSM2_CONF="${SOFTHSM2_CONF}" softhsm2-util --delete-token --serial "${token_serial}" >/dev/null
-    token_serial=""
-  fi
 
   if [[ -z "${token_serial}" ]]; then
     log "Initializing SoftHSM token '${TOKEN_LABEL}'"
