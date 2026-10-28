@@ -7,7 +7,7 @@ Test Report
 Release evidence must identify the tested commit/image, environment, command,
 result, skipped cases, and retained logs. A workflow badge is a moving branch
 status, not evidence that a particular release passed every check. Record the
-final candidate results alongside the release notes and use
+exact release results alongside the release notes and use
 :doc:`../release-checklist` for the remaining acceptance scenarios.
 
 Automated suites
@@ -74,7 +74,7 @@ In particular:
 Acceptance and release record
 =============================
 
-For each candidate, record:
+For each release, record:
 
 * the exact commit, package version, image digest, platform, and configuration;
 * counts of passed/failed/skipped tests, including why integration cases skipped;
@@ -83,6 +83,6 @@ For each candidate, record:
 * real client/provider/server combinations exercised;
 * unresolved defects, accepted limitations, and maintainer approval.
 
-See :doc:`../../release_notes` for the candidate's compatibility boundary and
+See :doc:`../../release_notes` for the release compatibility baseline and
 :doc:`../../features/capabilities` for limitations. This page does not announce
 acceptance, infer end-user approval, or mark unexecuted release checks as passed.

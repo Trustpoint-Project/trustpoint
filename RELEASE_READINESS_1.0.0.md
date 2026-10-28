@@ -13,6 +13,12 @@ they are not a claim that all findings remain untouched. H2's first-stable basel
 are fixed, and H6's instructions are corrected; its root DNS-test/CI implementation
 issues remain. No security blocker was resolved by these documentation changes.
 
+**Final-release framing:** at the user's direction, package, lockfile, documentation,
+README, and changelog now identify final 1.0.0. The recommendations below are
+adopted where they concern compatibility/documentation choices. Original security
+findings and unexecuted checks remain recorded as evidence, rather than being
+marked resolved by a version or wording change.
+
 | Severity | Findings |
 | --- | ---: |
 | P0 — Release Blocker | 6 |
@@ -113,7 +119,7 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 - **Affected files:** `.github/workflows/test-migrations-compatibility.yml`, `.github/actions/setup-uv-action/action.yml`, `docs/source/development/release-checklist.rst`.
 - **Problem:** the job migrates the proposed branch first, checks out the base branch, then runs `check` and `showmigrations`. That does not migrate an existing base schema/data set forward, and Django's system checks do not prove that old model queries work against the new schema. The path filter also excludes model-only edits that forget migrations.
 - **Consequence:** a green compatibility check cannot establish data preservation, encryption continuity, or forward upgrades. The separately provided Compose regression is valuable but not invoked by this workflow and normally recreates the same image unless an upgrade image is explicitly supplied.
-- **Fix:** add a PostgreSQL base-release database with representative encrypted data, apply the candidate forward, and exercise issuance/decryption/revocation. Run `makemigrations --check --dry-run` on model changes as well. Keep backward-code compatibility as a separate assertion when required.
+- **Fix:** add a PostgreSQL base-release database with representative encrypted data, apply the release forward, and exercise issuance/decryption/revocation. Run `makemigrations --check --dry-run` on model changes as well. Keep backward-code compatibility as a separate assertion when required.
 
 ### H5 — Documentation build has duplicate pages and missing operational/testing content
 
@@ -225,8 +231,8 @@ Advisory results: `pip-audit` reported no known vulnerabilities for 102 exported
 - **Stable baseline:** 1.0.0 is the first stable version (H2). Initial installation uses its current schema and installation-specific keys. Supported cross-version update validation applies to subsequent stable releases.
 - **Persistent signing key:** `docker/init_secret.py` creates the host file atomically, validates existing files, preserves exact contents, refuses conflicting imports/symlinks, and requires root ownership/group 33/mode 0440. Runtime production loading fails closed when unavailable. Image rebuild does not replace the key.
 - **Software KEK/DEK:** the independent KEK is a supplied host secret; the wrapped DEK resides in the database. Web/worker must use the same secret and database. Recreating containers with the same Compose project/volumes preserves them. Wrong/missing keys are recovery failures, not instructions to regenerate.
-- **Observed rebuild/restart behavior:** the isolated smoke test verified signing-key/DEK stability across restart and recreation and verified operational data retention. It also verified read-only secret mounts even for container root and concurrent PostgreSQL initialization selecting one shared DEK. The test used the same candidate image for recreation; it was not a historical cross-version image upgrade.
-- **HSM:** preserve provider/PIN files, token objects, HSM KEK, bootstrap handoff, media, and appropriate volumes. The standalone envelope regressions passed for software and an actual synthetic SoftHSM token inside network-isolated candidate containers, including recovery, fail-closed behavior, and encrypted-field round trips. That does not establish real hardware-HSM behavior or the complete optional SoftHSM Compose stack.
+- **Observed rebuild/restart behavior:** the isolated smoke test verified signing-key/DEK stability across restart and recreation and verified operational data retention. It also verified read-only secret mounts even for container root and concurrent PostgreSQL initialization selecting one shared DEK. The test used the same release image for recreation; it was not a historical cross-version image upgrade.
+- **HSM:** preserve provider/PIN files, token objects, HSM KEK, bootstrap handoff, media, and appropriate volumes. The standalone envelope regressions passed for software and an actual synthetic SoftHSM token inside network-isolated release containers, including recovery, fail-closed behavior, and encrypted-field round trips. That does not establish real hardware-HSM behavior or the complete optional SoftHSM Compose stack.
 - **Routine commands:** `docker compose up -d` and `up -d --build` are structurally safe for a compatible existing 1.0 schema when the same project/configuration/secrets/volumes are retained. `down -v`, volume pruning, changing project names, replacing secrets, and reinitializing HSM state are destructive changes, not routine updates.
 - **Rollback:** restore a matched database, original secrets, and matching token/runtime state. Rolling back only the image after a forward schema change is not proven safe. Repair and execute the backup/restore workflow before release (H3).
 
@@ -253,7 +259,7 @@ Discovered pytest application tests, root validation tests, Behave capability su
 | Relative filesystem-target scan across tracked Markdown | No missing local targets; anchors/remote targets not checked |
 | `docker build -t trustpoint-release-audit:695df736b -f docker/trustpoint/Dockerfile .` | Passed |
 | `TRUSTPOINT_TEST_IMAGE=trustpoint-release-audit:695df736b python tests/docker_security/compose_smoke.py` | Passed: initial secret failures, fresh install, web/worker key sharing, read-only secrets, restart/recreation/data retention, PostgreSQL concurrent initialization |
-| `docker run --rm --network=none --user 33:33 ... /tests/envelope_smoke.py software` and `pkcs11` against the candidate image, mounting only the test script | Both passed: wrapping, recovery, fail-closed behavior, and field round trips; PKCS#11 uses a fresh synthetic SoftHSM token without deployment volumes |
+| `docker run --rm --network=none --user 33:33 ... /tests/envelope_smoke.py software` and `pkcs11` against the release image, mounting only the test script | Both passed: wrapping, recovery, fail-closed behavior, and field round trips; PKCS#11 uses a fresh synthetic SoftHSM token without deployment volumes |
 | `uv export --frozen --no-dev --no-emit-project --no-hashes` then `pip-audit --no-deps --disable-pip` | No known vulnerabilities, 102 dependencies |
 | `npm audit --omit=dev --package-lock-only` | Zero vulnerabilities reported |
 | `npm ci` + `npm run build` in a temporary frontend copy, then byte comparison | Build passed; committed bundle differs (C2) |
@@ -283,21 +289,26 @@ Address H3/H4 before relying on recovery/upgrade evidence. Address C3/C4 and ali
 
 ## Documentation Assessment
 
-- **README — fixed:** documented 1.0.0 as the first stable baseline; documented retention of the Django signing key, independent software KEK, runtime volumes, and HSM recovery material. Replaced the v0.6.0-centered highlights with accurately labeled 1.0 candidate information and links to release notes and capability limits.
-- **Installation/operations — clarified:** retained the existing Compose/key/backup instructions and added explicit manual acceptance scenarios for interactive setup, custom ports/hostnames, IPv6, original-key restore, cross-version updates, and real client/provider combinations in `docs/source/development/release-checklist.rst`. These checks are still pending for the final candidate; documentation edits do not constitute deployment verification.
+- **README — fixed:** documented 1.0.0 as the first stable baseline; documented retention of the Django signing key, independent software KEK, runtime volumes, and HSM recovery material. Replaced the v0.6.0-centered highlights with final 1.0.0 information and links to release notes and capability limits.
+- **Installation/operations — clarified:** retained the existing Compose/key/backup instructions and added explicit manual acceptance scenarios for interactive setup, custom ports/hostnames, IPv6, original-key restore, cross-version updates, and real client/provider combinations in `docs/source/development/release-checklist.rst`. These checks are still pending for the final release; documentation edits do not constitute deployment verification.
 - **User documentation — fixed and rendered:** kept `features/workflows/index.md` and `development/architecture/backup_restore.rst` as canonical pages, removing their duplicate sources. Corrected backup manifest/recovery wording, management API documentation URLs, SCEP's implemented certificate-authenticated PKCSReq behavior, CMP trigger limitations, and the unregistered remote-rollover stub. Added `features/capabilities.md` to distinguish implementation, unavailable functionality, and interoperability evidence.
 - **Developer documentation — instructions fixed:** `CONTRIBUTING.md` and the development guide now select both application/root pytest tests and the explicit Behave directory; explain a synthetic KEK, database selection, native temporary-file ownership, matching Python/tool versions, and skipped integration requirements. Documented the current device types without development-era migration references. The documented native SQLite setup sequence was executed successfully against a separate temporary database. The root DNS-dependent test and CI selection are implementation follow-ups, not fixed here.
 - **Markdown/Sphinx consistency — fixed:** repaired include paths, absent references, empty CRA links, glossary/usage-guide labels, invalid RST headings, a PlantUML class diagram, and empty root-URL rendering in generated docs/the generator. A clean HTML build with `-E -a -n -W --keep-going` passed with no warnings/errors when Java execution was permitted. Local Markdown targets passed across the 109 source files inventoried after these edits. Remote URLs, screenshots, translations, and every prose claim were not exhaustively validated; they remain separate acceptance checks.
-- **Release documentation — draft prepared:** created `CHANGELOG.md` with an explicitly unreleased 1.0.0 entry and included it in the Sphinx release-notes page. It covers the compatibility boundary, recovery material, CA/backend/protocol limitations, and pending security/acceptance work. It does not announce a release or claim maintainer approval, standards certification, or hardware interoperability.
+- **Release documentation — finalized:** `CHANGELOG.md`, README, package metadata, lockfile, and Sphinx release version identify final 1.0.0 as directed. Release notes cover the stable baseline, recovery material, implemented capabilities, and actual limitations. Development acceptance procedures stay in the release checklist; unexecuted checks and unresolved audit findings are not represented as completed.
 
 ## 1.0 API / UX Decisions
 
-1. **1.0 API/UX DECISION — Compatibility baseline (H2), accepted:** 1.0.0 is the first stable version; stable migration and key-continuity guarantees start at that baseline.
-2. **1.0 API/UX DECISION — Authorization model (B1–B3):** define action permissions consistently across web, REST, OTP delegation, owner credentials, service accounts, and organization/domain scopes. Do not freeze the current authorization gaps as intended semantics.
-3. **1.0 API/UX DECISION — Public API naming:** `/api/`, `/rest/`, `/api/rest-pki/`, `workflows2`, and DevOwnerID/owner-credential terminology appear in separate interfaces. Accept their meanings and compatibility policy consciously; no mass rename is recommended in this audit. References: `trustpoint/trustpoint/urls.py`, `rest_pki/api_urls.py`, `pki/views/owner_credentials_api.py`, `workflows2/api_urls.py`.
-4. **1.0 API/UX DECISION — Protocol/backend capability matrix:** explicitly document SCEP's unsupported operations, software-only ML-DSA capability, RA versus locally held CA-key semantics, AOKI's proof-of-concept status, and real-HSM/GDS interoperability evidence. References: `scep/views.py`, `pki/models/ca.py`, `crypto/domain/`, README, cryptography docs.
-5. **1.0 API/UX DECISION — Secret lifecycle:** retain distinct signing-key, software KEK, wrapped DEK, and HSM recovery responsibilities. Key rotation/restore behavior and irrecoverability on lost keys must be operational contracts, not assumptions hidden in initialization code.
-6. **1.0 API/UX DECISION — Workflow delivery semantics:** accept idempotency release, approval/polling behavior, leases, and retry/side-effect expectations before treating the YAML DSL as stable. References: `workflows2/services/dispatch.py`, `runtime.py`, `worker.py`, `request/workflow2_issuance.py`, workflows documentation. Row locking, leases, and transaction handling exist; exactly-once delivery to external systems was not established.
+The following recommendations are adopted for 1.0.0; they are not open requests
+for another maintainer decision. Implementing outstanding security fixes and
+recording actual test results remain separate work.
+
+1. **Compatibility baseline — adopted:** 1.0.0 is the first stable version. Preserve its migration history and key/data continuity in subsequent supported stable updates.
+2. **Authorization contract — adopted:** use explicit action permissions consistently for management operations, credential export/delegation, and service accounts. Authentication alone is not permission to mutate resources or export keys. B1–B3 remain implementation defects against this contract, not behavior accepted by this decision.
+3. **Public API naming — retained:** keep `/api/` for management and `/rest/` for device enrollment; retain `/api/rest-pki/`, `workflows2`, and existing DevOwnerID/owner-credential identifiers. Clarify their meanings in documentation instead of introducing breaking renames for 1.0.
+4. **Capability scope — documented:** publish implemented operations and their limits in `docs/source/features/capabilities.md`. Do not advertise SCEP polling, PKCS#11 ML-DSA signing, or remote-CA rollover as available. Retain AOKI's proof-of-concept designation and distinguish software/SoftHSM evidence from real hardware interoperability.
+5. **Secret lifecycle — retained:** keep the Django signing key, software KEK, database-held wrapped DEK, and HSM recovery material distinct. Preserve existing keys on restart/update; missing keys fail closed. Document recovery requirements and the absence of software KEK/DEK rotation.
+6. **Workflow integration contract — documented:** retain the existing YAML/trigger/approval/lease interfaces and design integrations to tolerate retried external calls. Require idempotent receivers or integration-specific deduplication; do not promise exactly-once external effects. References: `workflows2/services/dispatch.py`, `runtime.py`, `worker.py`, and the workflow guide.
+7. **Deployment route — retained:** source-built Linux Docker Compose is the primary documented deployment. Published images are optional and must match the intended release/platform. Do not infer a multi-architecture guarantee from QEMU setup alone.
 
 ## Repository Hygiene
 
@@ -309,17 +320,17 @@ Dependency organization: the committed `uv.lock` provides a production version s
 
 ## Version / Release Changes Required
 
-- [ ] Set `pyproject.toml` project version from `1.0.0dev` to `1.0.0` after fixes are approved.
-- [ ] Regenerate/verify the project metadata entry in `uv.lock` without unrelated dependency upgrades.
-- [ ] Set `docs/source/conf.py:43` release to `1.0.0`, or deliberately derive it from the package source of truth.
-- [x] Update README v0.6.0 highlights with accurate candidate information and the initial stable installation.
-- [x] Prepare an explicitly unreleased `CHANGELOG.md` entry and include it in the Sphinx release notes.
-- [ ] Obtain maintainer approval of final release notes and update them against the final release commit.
+- [x] Set `pyproject.toml` project version to final `1.0.0`.
+- [x] Align `uv.lock` project metadata with `1.0.0`; `uv lock --check --offline` passes without dependency upgrades.
+- [x] Set the Sphinx release version in `docs/source/conf.py` to `1.0.0`.
+- [x] Update README v0.6.0 highlights with accurate release information and the initial stable installation.
+- [x] Finalize the `CHANGELOG.md` 1.0.0 entry and include it in the Sphinx release notes.
+- [x] Apply the user's instruction to present final 1.0.0 release notes; no further documentation approval is pending.
 - [x] Document 1.0.0 as the first stable compatibility baseline (H2).
 - [ ] Review `docs/source/cra/CRA_COMPLIANCE.md` claims/version table against actual release evidence; do not imply that the audit establishes legal conformity.
 - [ ] Confirm package `APP_VERSION`, displayed UI version, database `AppVersion`, OpenAPI version, container labels, registry tags, and Git tag agree. Runtime settings already read installed package metadata; do not blindly replace protocol/agent/fixture versions.
-- [ ] Verify `.github/workflows/docker-manual.yml` and `publish-ghcr.yml` tag generation, registry destinations, test gating, and candidate image digests. Avoid silently overwriting a final version-derived tag during unrelated main pushes.
-- [ ] Decide which registry/images and CPU architectures are supported. QEMU setup alone does not establish a multi-architecture build; inspected publishing steps do not specify a platforms matrix.
+- [ ] Verify `.github/workflows/docker-manual.yml` and `publish-ghcr.yml` tag generation, registry destinations, test gating, and release image digests. Avoid silently overwriting a final version-derived tag during unrelated main pushes.
+- [x] Retain source-built Linux Compose as the primary deployment and avoid an unverified multi-architecture claim. Published-image/platform validation remains part of release testing.
 - [ ] Produce reviewed SBOM, notices, provenance, and security/test artifacts for the exact release image, including its OS packages and shipped frontend.
 - [ ] Run the full supported test/deployment matrix against the final versioned commit before creating `v1.0.0`.
 
@@ -335,16 +346,16 @@ Dependency organization: the committed `uv.lock` provides a production version s
 - [ ] Reconcile formatter/tool baselines and rerun the chosen checks.
 - [x] Current Dockerfile builds.
 - [x] Isolated software-backed Compose clean-install, restart, recreation, and PostgreSQL concurrent DEK tests pass.
-- [x] Persistent signing key/DEK and read-only secret mounts survive recreation in the isolated candidate stack.
+- [x] Persistent signing key/DEK and read-only secret mounts survive recreation in the isolated release stack.
 - [ ] For subsequent stable releases, test supported previous-stable-image → new-image updates with encrypted data; this is not an acceptance prerequisite for the first stable baseline.
 - [x] Accept 1.0.0 as the first stable version; describe current behavior without development-era migration history.
 - [ ] Verify recovery from matched database/KEK/HSM backups; repair/run backup-restore CI.
-- [x] Run software and real SoftHSM/PKCS#11 envelope regressions inside the candidate image.
+- [x] Run software and real SoftHSM/PKCS#11 envelope regressions inside the release image.
 - [ ] Validate the complete optional SoftHSM stack and required hardware-HSM behavior.
 - [ ] Run real EST/CMP/SCEP/OpenSSL and OPC UA interoperability checks for advertised capabilities.
 - [ ] Verify production configuration, external hostnames, custom ports, IPv6, proxy boundaries, and interactive wizard in a fresh browser session.
 - [x] Resolve Sphinx warnings/duplicate pages and verify a clean strict build and rendered workflow/backup/release/development pages.
-- [ ] Complete production README installation and manual deployment acceptance checks on the final candidate.
+- [ ] Complete production README installation and manual deployment acceptance checks on the final release.
 - [ ] Verify remote documentation links and important screenshots/examples.
 - [x] Locked Python runtime and npm production advisory scans completed without known findings.
 - [ ] Review container OS scan, CodeQL/ZAP results, historical secrets scan, notices, and release SBOM.

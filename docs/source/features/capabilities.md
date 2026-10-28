@@ -1,10 +1,9 @@
 # Capabilities and limitations
 
-This page describes paths implemented in the 1.0 development candidate. Availability
-depends on the active security preset, certificate profiles, backend capabilities,
-and device/domain configuration. An implemented path does not establish production
-security approval or interoperability with every client. See the
-[release notes](../release_notes.md) for compatibility and remaining release checks.
+This page describes Trustpoint 1.0.0, the first stable release. Availability depends
+on the active security preset, certificate profiles, backend capabilities, and
+device/domain configuration. See the [release notes](../release_notes.md) for
+installation, compatibility, recovery requirements, and known limitations.
 
 ## Enrollment and lifecycle interfaces
 
@@ -14,7 +13,7 @@ security approval or interoperability with every client. See the
 | [CMP](apis/cmp.md) | Configured initialization/certification, revocation, certificate confirmation, and workflow-related polling paths. | Check the operation and protection algorithms supported by the specific endpoint; upstream CA/RA behavior needs separate validation. |
 | [SCEP](apis/scep.md) | `GetCACaps`, `GetCACert`, initial enrollment, certificate-authenticated renewal, and transaction retries. | No `GetNextCACert`, `GetCert`, `GetCRL`, `CertPoll`, or asynchronous `PENDING`; no workflow approval/polling integration. |
 | [REST enrollment](apis/rest.md) | Trustpoint-specific device enrollment/re-enrollment under `/rest/`. | Distinct from resource administration under `/api/`; not a standardized substitute for EST/CMP/SCEP. |
-| [Management API](apis/rest_api.rst) | Resource/configuration endpoints under `/api/`; schema at `/schema/`, UI at `/swagger/` or `/redoc/`. | Check the individual action's authentication/permission contract and the outstanding release-readiness findings. |
+| [Management API](apis/rest_api.rst) | Resource/configuration endpoints under `/api/`; schema at `/schema/`, UI at `/swagger/` or `/redoc/`. | Consult the individual action's authentication and permission requirements. |
 | [Manual/browser delivery](devices/index.md) | Operator-driven issuance and delivery of stored credentials in supported export formats. | Export needs stored, exportable key material. A CSR-only request does not give Trustpoint the device's private key. |
 | [AOKI](aoki/index.md) | Experimental zero-touch onboarding path. | Proof of concept; do not describe it as generally validated production onboarding. |
 | [OPC UA GDS Push](../development/architecture/device_lifecycle.md) and [agents](devices/agents.md) | GDS Push certificate/trust-list operations and agent workflows. | GDS Push and agents are separate integrations. Validate real target-server security, credentials, algorithms, and certificate deployment/reconnection. |
@@ -42,7 +41,7 @@ idempotency plan; do not assume exactly-once delivery.
 ## Release deployment validation
 
 Use the [release checklist](../development/release-checklist.rst) to record actual
-results for the final candidate. Software Compose restart/recreation tests,
+results for the exact release version and image. Software Compose restart/recreation tests,
 standalone SoftHSM envelope tests, supported cross-version update tests, and hardware-HSM
 interoperability are different checks. Complete interactive setup, custom
 ports/hostnames/IPv6, original-key restore, and intended real client/server tests

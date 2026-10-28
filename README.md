@@ -279,15 +279,13 @@ See the **[Trustpoint documentation](https://trustpoint.readthedocs.io/en/latest
 | [Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) | Published Trustpoint container images |
 | [Releases](https://github.com/Trustpoint-Project/trustpoint/releases) | Release notes and project milestones |
 
-## Preparing Trustpoint 1.0
+## Trustpoint 1.0.0
 
-The current checkout is a development candidate for 1.0.0. Its
-[release notes](CHANGELOG.md) describe initial installation, deployment and
-key-recovery requirements, and outstanding release validation. The
+Trustpoint 1.0.0 is the first stable release. The [release notes](CHANGELOG.md)
+describe its capabilities, installation, key-recovery requirements, and known
+limitations. See the
 [capability and limitations guide](https://trustpoint.readthedocs.io/en/latest/features/capabilities.html)
-distinguishes implemented paths from unavailable functionality and checks that
-must be completed for the intended deployment. These descriptions do not certify
-interoperability with every client or PKCS#11 provider.
+for available operations and backend-specific deployment requirements.
 
 See **[GitHub Releases](https://github.com/Trustpoint-Project/trustpoint/releases)**
 for published version notes.

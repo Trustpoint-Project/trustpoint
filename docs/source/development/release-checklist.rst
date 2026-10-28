@@ -7,8 +7,8 @@ Pre-release Preparations
 ------------------------
 - Update version number in :code:`pyproject.toml` and :code:`docs/source/conf.py` files.
 - Update :code:`CHANGELOG.md` with new features, fixes, and improvements.
-  Keep the 1.0 entry marked unreleased until the release is approved; it is also
-  included in :doc:`../release_notes`.
+  The final 1.0.0 entry is included in :doc:`../release_notes`. For subsequent
+  releases, add a versioned entry describing changes from the stable baseline.
 - Review :code:`pyproject.toml`
   - Update dependencies if needed.
   - Pin versions for production stability in :code:`uv.lock`
@@ -96,7 +96,7 @@ Manual Deployment Acceptance
 
 Record the image digest/commit, Compose file selection, host platform, and actual
 result for each scenario. These are outstanding acceptance checks until a result
-is recorded for the final candidate; documentation updates do not mark them passed.
+is recorded for the release version and image; documentation updates do not mark them passed.
 Use isolated installations and synthetic data. Never reset an existing deployment
 to perform a release smoke test.
 

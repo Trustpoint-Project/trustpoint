@@ -1,9 +1,8 @@
 # Changelog
 
-## 1.0.0 — Unreleased
+## 1.0.0
 
-These are release-candidate notes. The package version remains `1.0.0dev`; this
-document does not announce a published release or completion of release validation.
+Trustpoint 1.0.0 is the first stable release of the platform.
 
 ### Initial installation
 
@@ -16,7 +15,7 @@ Use the Linux Docker Compose deployment and complete the setup wizard. Automatic
 setup and demo data are intended for disposable testing/demo environments; demo
 data is optional and must not be injected into an instance holding real data.
 
-### Capabilities in the candidate
+### Capabilities
 
 - EST, CMP, SCEP, and Trustpoint-specific REST enrollment paths, with authentication
   and certificate-profile choices determined by device/domain/security policy.
@@ -28,10 +27,9 @@ data is optional and must not be injected into an instance holding real data.
 - Device/agent management, OPC UA GDS Push, workflow approvals, webhooks, mail,
   notifications, and operational logging/metrics.
 
-This inventory describes implemented paths. It is not a security approval,
-standards-conformance certification, or a guarantee that every client/provider
-combination works. The documentation's capability guide lists limitations and
-validation requirements.
+Protocol and backend availability depends on the configured security policy,
+profiles, and provider mechanisms. The capability guide documents these
+requirements and limitations.
 
 ### Recovery and compatible updates
 
@@ -53,7 +51,7 @@ container recreation is not evidence of cross-version database compatibility.
 Do not use `docker compose down -v`, volume pruning, or token reinitialization for
 routine updates.
 
-### Known limitations and release validation
+### Known limitations
 
 - AOKI remains a proof of concept.
 - SCEP does not implement `GetNextCACert`, `GetCert`, `GetCRL`, `CertPoll`, or
@@ -62,16 +60,4 @@ routine updates.
 - ML-DSA key generation/signing is available through the software backend;
   PKCS#11 ML-DSA key generation/signing is not implemented.
 - Local-CA rollover does not automatically distribute replacement trust to every
-  device. The separate remote-CA rollover strategy is a stub, not an available
-  rollover method.
-- The release-readiness audit identified unresolved security and release-process
-  findings. These documentation changes do not resolve them or make this candidate
-  ready for production release.
-
-Before tagging, maintainers must review the remaining audit findings and attach
-results for the final versioned commit: clean install and interactive wizard;
-custom ports/hostnames/IPv6; backup restore with retained keys; relevant hardware-HSM and real OPC UA/client
-interoperability; complete automated suites; security scans; and shipped-artifact
-notices/SBOM/provenance. A backend being implemented is not evidence that its
-hardware deployment was tested.
-
+  device. Remote-CA rollover is not available.
