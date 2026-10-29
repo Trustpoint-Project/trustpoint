@@ -21,6 +21,10 @@ Pre-release Preparations
   baseline, remove replaced files only after updating all dependencies and removing
   the squashed migration's ``replaces`` attribute.
 - Verify migrations on a fresh database and check for pending model changes.
+- Review ``THIRD_PARTY_LICENSES/README.md`` and its remaining provenance items.
+  Run ``npm ci`` and ``npm run check`` in ``trustpoint/workflows2/frontend``.
+  Keep complete notices with the distribution. Review the release image's SBOM,
+  logo rights and applicable source obligations.
 
 -------
 Release

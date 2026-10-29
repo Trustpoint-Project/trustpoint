@@ -12,6 +12,12 @@ on:
       - "**/requirements*.txt"
       - "**/Pipfile.lock"
       - "**/uv.lock"
+      - "trustpoint/workflows2/frontend/**"
+      - "trustpoint/static/**"
+      - "THIRD_PARTY_LICENSES/**"
+      - "docs/source/LICENSE*"
+      - "docs/source/*.jar"
+      - "docker/trustpoint/Dockerfile"
 
 jobs:
   check-licenses:
@@ -24,6 +30,17 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Verify bundled frontend and notices
+        working-directory: trustpoint/workflows2/frontend
+        run: |
+          npm ci
+          npm run check
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action

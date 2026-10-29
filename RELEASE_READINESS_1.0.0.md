@@ -159,13 +159,15 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 - **Operational requirement:** start with a fresh database for 1.0.0 and retain its matching original key material for recovery. Development-era database states are unsupported.
 
 
-### H9 — Bundled frontend/third-party attribution needs a release review
+### H9 — Attribution tooling and notices added; provenance review remains
 
-- **Severity:** P1; requires human licensing/attribution verification.
-- **Affected files:** `trustpoint/workflows2/frontend/build.mjs` (`legalComments: 'none'`), `trustpoint/workflows2/frontend/package-lock.json`, `trustpoint/static/js/workflows2/editor_bundle.js`, `trustpoint/static/js/theme.js`, `trustpoint/static/js/bootstrap.bundle.min.js`, `trustpoint/static/js/chart.js`, `THIRD_PARTY_LICENSES/`, `docker/trustpoint/Dockerfile`.
-- **Problem:** the shipped editor bundles third-party JavaScript with legal comments removed, and no corresponding CodeMirror/YAML notice inventory was found among tracked license files. The copied Django theme identifies BSD-3-Clause but does not include its complete license text there. The current third-party notice directory covers qrcode only. Python-license CI scans the runtime environment, not the JavaScript bundle or all container OS packages/assets.
-- **Consequence:** the public distribution's attribution completeness cannot be established from the current repository checks. This is an evidence gap, not a definitive legal finding that a particular license has been violated.
-- **Fix:** have maintainers verify required notices for actual shipped bundles, copied source, fonts, diagrams/JAR, logos, and container components; retain/extract notices during builds and distribute them with artifacts. Historical copyright years alone are not defects. MIT project licensing, contributor certification, a font OFL, and a PlantUML license are already present.
+- **Original severity:** P1. Missing frontend notices and distribution tooling are fixed; remaining provenance/source-obligation review stays open.
+- **Implementation:** the workflow editor retains legal comments and generates full notices for 18 direct/transitive packages from actual esbuild inputs. Missing license files fail the build. Full upstream license texts now accompany Bootstrap/Popper, Bootstrap Icons (including fonts and SVG sprite), Chart.js/@kurkle/color, adapted Django theme, and the pinned uv binary. Existing Quicksand OFL and PlantUML MIT notices are inventoried; the JAR's own runtime acknowledgements are retained.
+- **Distribution:** Docker copies `THIRD_PARTY_LICENSES` and ships generated editor notices beside the JavaScript. Collected Python package notices remain as static license texts; there is no container exporter, hash manifest, or supplemental-version enforcement.
+- **Regression prevention:** one frontend CI check compares rebuilt JavaScript and generated notices against committed files. Existing Python license checks remain. The release checklist points to the notice inventory and remaining review requirements.
+- **Verification:** local frontend rebuild/check passes. Bootstrap's vendored bundle matches its tagged upstream artifact after removing comments/whitespace. The earlier container-reporting machinery has been removed in favor of copying the notice files directly.
+- **Binary package review:** the existing arm64 image has 223 installed Debian packages, all with readable copyright files. Primary terms of all 17 directly installed apt packages and CPython/uv notice locations are documented in `THIRD_PARTY_LICENSES/README.md`. Two upstream common-license references use incorrect filenames, although the corresponding texts are present. Exact corresponding-source availability for GPL/LGPL components and the static uv dependency notice inventory remain unverified; no source archive was published. This is a version-specific image snapshot, not a guarantee for later apt resolutions.
+- **Remaining evidence:** The unused ministry logo was removed at the maintainer's direction. Externally supplied branding and third-party diagram/screenshot content still need provenance confirmation. The PlantUML runtime credits identify embedded components that still require a complete upstream-source license review. The actual release image still needs matching-source distribution and static binary dependency attribution review. These gaps are recorded in `THIRD_PARTY_LICENSES/README.md`; successful automated checks do not establish these rights.
 
 ## P2 — Good 1.0 Cleanup
 
@@ -220,7 +222,7 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 | H1 | Upstream CA/key integrity | Match keys, validate chains, commit atomically |
 | H7 (resolved) | External-service credentials at rest | Encryption, atomic data conversion, and original-key recovery verified |
 | H8 — resolved | Operator security assurance | Removed placeholder health/vulnerability checks; aggregate failures raise `CommandError` |
-| H9/C4 | Distribution/release assurance | Verify notices and scan completion |
+| H9/C4 | Distribution/release assurance | Notices/tooling added; verify remaining provenance, source obligations and scan completion |
 
 No real deployment secrets were printed or copied into this report. The tracked-file secret-marker search found test keys/fixtures and synthetic examples, not a confirmed live API/cloud credential. Many PEM/private-key/PKCS#12 fixtures are intentionally tracked under `tests/data`; never reuse these identities in production. Local `.env`, credential files, databases, logs, and `secrets/` exist but are ignored rather than tracked. This was not a full-history entropy/credential scan, and a clean marker search is not a guarantee that no historical secret exists.
 
