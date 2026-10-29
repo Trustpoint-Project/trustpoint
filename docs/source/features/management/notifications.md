@@ -1,5 +1,10 @@
 # Notifications
 
+Scheduled checks cover configured certificate, device, backup, log, and policy
+conditions. Automated system-health assessment and vulnerability scanning are
+unavailable. If a check fails to execute, the remaining checks still run and the
+overall task reports failure to its caller.
+
 When notifications are enabled, failed EST, CMP and REST requests handled by the
 shared request response path create a warning immediately. SCEP malformed messages
 and CertRep failures also create warnings, including protocol failures returned

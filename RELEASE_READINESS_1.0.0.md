@@ -158,13 +158,6 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 - **Verification:** credential tests cover raw SQL ciphertext, recovery with the original KEK, wrong-key rejection, blank values, Unicode maximum lengths, multiline keys, secret non-disclosure, explicit clearing, authentication switching, and access denial. Fresh-schema tests verify encrypted migration fields and no encryption-key initialization. Historical migration tests have been replaced with first-stable baseline tests.
 - **Operational requirement:** start with a fresh database for 1.0.0 and retain its matching original key material for recovery. Development-era database states are unsupported.
 
-### H8 — Scheduled health/security checks report success without performing checks
-
-- **Severity:** P1.
-- **Affected files:** `trustpoint/management/management/commands/check_for_security_vulnerabilities.py:36–40`, `check_system_health.py:20,40–44`, `run_all_notifications.py`, `execute_all_notifications.py`.
-- **Problem:** vulnerability detection is hardcoded false and system health true. Both commands print successful completion and are included in the notification runner. `run_all_notifications` collects failures but returns normally, allowing the outer command to announce success even when checks failed. `check_system_health` also performs a database write during module import.
-- **Consequence:** operators and automation receive misleading assurance from nonfunctional checks, and command failure does not reliably reach the scheduler/caller.
-- **Fix:** implement narrowly defined checks or explicitly mark/remove unavailable checks; raise a command error for aggregate failures after completing independent checks. Move import-time database access into execution.
 
 ### H9 — Bundled frontend/third-party attribution needs a release review
 
@@ -226,7 +219,7 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 | B6 | mTLS proxy boundary | Restrict backend reachability and trust proxy proof |
 | H1 | Upstream CA/key integrity | Match keys, validate chains, commit atomically |
 | H7 (resolved) | External-service credentials at rest | Encryption, atomic data conversion, and original-key recovery verified |
-| H8 | Operator security assurance | Implement/label checks and propagate failures |
+| H8 — resolved | Operator security assurance | Removed placeholder health/vulnerability checks; aggregate failures raise `CommandError` |
 | H9/C4 | Distribution/release assurance | Verify notices and scan completion |
 
 No real deployment secrets were printed or copied into this report. The tracked-file secret-marker search found test keys/fixtures and synthetic examples, not a confirmed live API/cloud credential. Many PEM/private-key/PKCS#12 fixtures are intentionally tracked under `tests/data`; never reuse these identities in production. Local `.env`, credential files, databases, logs, and `secrets/` exist but are ignored rather than tracked. This was not a full-history entropy/credential scan, and a clean marker search is not a guarantee that no historical secret exists.

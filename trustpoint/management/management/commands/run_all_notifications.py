@@ -35,10 +35,8 @@ class Command(BaseCommand):
 
         commands_to_run = [
             'trustpoint_setup_notifications',
-            'check_system_health',
             'check_log_size',
             'check_backup_age',
-            'check_for_security_vulnerabilities',
             'check_certificate_validity',
             'check_issuing_ca_validity',
             'check_crl_validity',
@@ -69,8 +67,6 @@ class Command(BaseCommand):
                 failed_commands.append(command)
 
         if failed_commands:
-            self.stdout.write(
-                self.style.ERROR(f'Failed commands: {", ".join(failed_commands)}')
-            )
-        else:
-            self.stdout.write(self.style.SUCCESS('All notification checks completed successfully.'))
+            message = f'Failed notification checks: {", ".join(failed_commands)}'
+            raise CommandError(message)
+        self.stdout.write(self.style.SUCCESS('All notification checks completed successfully.'))
