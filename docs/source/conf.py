@@ -63,18 +63,18 @@ source_suffix = {
 # -- Markdown configuration  ------------------------------------------------
 
 myst_enable_extensions = [
-    'strikethrough',   # Enables ~~strikethrough~~ syntax
-    'tasklist',        # Enables - [ ] and - [x] checkboxes
-    'linkify',         # Turns URLs (like [www.example.com](https://www.example.com)) into clickable links
-    'gfm_autolink',    # Replicates GitHub's advanced literal URL parsing rules
-    'alert',           # Enables GitHub-style blockquote callouts (> [!NOTE], > [!WARNING])
-    'attrs_block',     # Allows block-level attributes (e.g., {#id .class key=val} or {.text-center})
-    'colon_fence',     # Enables ::: directive syntax for better extension integration
+    'strikethrough',  # Enables ~~strikethrough~~ syntax
+    'tasklist',  # Enables - [ ] and - [x] checkboxes
+    'linkify',  # Turns URLs (like [www.example.com](https://www.example.com)) into clickable links
+    'gfm_autolink',  # Replicates GitHub's advanced literal URL parsing rules
+    'alert',  # Enables GitHub-style blockquote callouts (> [!NOTE], > [!WARNING])
+    'attrs_block',  # Allows block-level attributes (e.g., {#id .class key=val} or {.text-center})
+    'colon_fence',  # Enables ::: directive syntax for better extension integration
 ]
 
 # Mirror GitHub Markdown behavior
 myst_strikethrough_single_tilde = True  # Allows single tilde (~strikethrough~) support
-myst_heading_anchors = 4                # Generates slug anchors for H1-H4 headers (e.g., #my-header)
+myst_heading_anchors = 4  # Generates slug anchors for H1-H4 headers (e.g., #my-header)
 
 # Do NOT add 'mermaid' to myst_fence_as_directive - it causes HTML escaping issues
 # Instead, use the {mermaid} directive syntax in Markdown files
@@ -120,13 +120,7 @@ if BUILD_AUTODOCS:
 
 # -- Templates and exclusions -----------------------------------------------
 templates_path = ['_templates']  # Custom templates directory
-exclude_patterns = [
-    '_build',
-    '_templates',
-    '.venv',
-    '../.venv',
-    '../../trustpoint/.venv'
-]
+exclude_patterns = ['_build', '_templates', '.venv', '../.venv', '../../trustpoint/.venv']
 
 # -- Mermaid Configuration --------------------------------------------------
 # Configure Mermaid diagram rendering
@@ -136,12 +130,8 @@ mermaid_version = '11.4.0'  # Use stable version
 mermaid_init_config = {
     'startOnLoad': True,
     'theme': 'default',
-    'flowchart': {
-        'useMaxWidth': True,
-        'htmlLabels': True,
-        'curve': 'basis'
-    },
-    'securityLevel': 'loose'
+    'flowchart': {'useMaxWidth': True, 'htmlLabels': True, 'curve': 'basis'},
+    'securityLevel': 'loose',
 }
 
 # Use 'raw' format for HTML output (client-side rendering)

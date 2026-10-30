@@ -128,7 +128,8 @@ class SmtpEmailConfig(models.Model):
                 'This is a test email from Trustpoint.\n\n'
                 'If you received this message, Trustpoint can talk to the configured SMTP server.\n\n'
                 'Sent at: %(timestamp)s'
-            ) % {'timestamp': timezone.now().isoformat()},
+            )
+            % {'timestamp': timezone.now().isoformat()},
             from_email=self.default_from_email,
             to=[recipient],
         )
