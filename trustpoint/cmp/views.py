@@ -134,6 +134,8 @@ class CmpRequestView(LoggerMixin, View):
             process_workflow_operation(ctx, self._process_authorized_operation)
         except Exception:
             self.logger.exception('Error processing CMP request')
+            if ctx.error_details is None:
+                ctx.error('Error processing CMP request.', http_status=400)
 
         try:
             CmpMessageResponder.build_response(ctx)

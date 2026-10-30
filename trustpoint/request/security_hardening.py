@@ -551,10 +551,21 @@ def record_cmp_response_nonce(context: CmpBaseRequestContext) -> None:
     tx.save(update_fields=['last_server_nonce', 'last_client_nonce', 'updated_at'])
 
 
-def _certconf_hash_algorithm(context: CmpCertConfRequestContext) -> hashes.HashAlgorithm:
-    if not context.cert_hash_algorithm_oid:
-        return hashes.SHA256()
-    algorithm = HashAlgorithm.from_dotted_string(context.cert_hash_algorithm_oid)
+def _certconf_hash_algorithm(
+    context: CmpCertConfRequestContext, certificate: x509.Certificate,
+) -> hashes.HashAlgorithm:
+    """Use hashAlg or the issued certificate's signature digest (RFC 9480 Section 2.10)."""
+    if context.cert_hash_algorithm_oid:
+        algorithm = HashAlgorithm.from_dotted_string(context.cert_hash_algorithm_oid)
+    else:
+        signature_hash = certificate.signature_hash_algorithm
+        if signature_hash is None:
+            msg = 'certConf hashAlg is required for certificates whose signature algorithm has no implicit hash.'
+            raise ValueError(msg)
+        if not isinstance(signature_hash, tuple(_CERTCONF_ALLOWED_DIGESTS.values())):
+            msg = 'certConf hash algorithm is not permitted.'
+            raise ValueError(msg)
+        return signature_hash
     factory = _CERTCONF_ALLOWED_DIGESTS.get(algorithm)
     if factory is None:
         msg = 'certConf hash algorithm is not permitted.'
@@ -586,7 +597,7 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
         raise ValueError(msg)
 
     certificate = final_certificate.get_certificate_serializer().as_crypto()
-    digest = hashes.Hash(_certconf_hash_algorithm(context))
+    digest = hashes.Hash(_certconf_hash_algorithm(context, certificate))
     digest.update(certificate.public_bytes(serialization.Encoding.DER))
     if not stdlib_hmac.compare_digest(digest.finalize(), context.cert_hash):
         msg = 'certConf certHash does not match the certificate issued in this transaction.'
