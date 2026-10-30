@@ -301,6 +301,18 @@ Address H3/H4 before relying on recovery/upgrade evidence. Address C3 and execut
 
 ## Documentation Assessment
 
+**CRA mapping review (2026-10-30):** corrected `CRA_COMPLIANCE.md` to distinguish
+verified 1.0.0 metadata and source artefacts from unverified publication, hosted
+runs, support duration and formal assessment. Recovery timings are unmeasured
+targets; configured provenance steps are distinguished from verified release
+attestations. Removed the misattributed Article 15 update-trigger reference.
+The risk register's summary conflicts with its individual entries
+(six Low/three Medium); the mapping records that inconsistency without changing
+risk ratings or declaring acceptance. Source inventory confirms 26 threats,
+nine risks and 25 controls, not control effectiveness. Completing this document
+review does not establish legal conformity, close security findings, or approve
+the release.
+
 - **README — fixed:** documented 1.0.0 as the first stable baseline; documented retention of the Django signing key, independent software KEK, runtime volumes, and HSM recovery material. Replaced the v0.6.0-centered highlights with final 1.0.0 information and links to release notes and capability limits.
 - **Installation/operations — clarified:** retained the existing Compose/key/backup instructions and added explicit manual acceptance scenarios for interactive setup, custom ports/hostnames, IPv6, original-key restore, cross-version updates, and real client/provider combinations in `docs/source/development/release-checklist.rst`. These checks are still pending for the final release; documentation edits do not constitute deployment verification.
 - **User documentation — fixed and rendered:** kept `features/workflows/index.md` and `development/architecture/backup_restore.rst` as canonical pages, removing their duplicate sources. Corrected backup manifest/recovery wording, management API documentation URLs, SCEP's implemented certificate-authenticated PKCSReq behavior, CMP trigger limitations, and the unregistered remote-rollover stub. Added `features/capabilities.md` to distinguish implementation, unavailable functionality, and interoperability evidence.
@@ -339,7 +351,7 @@ Dependency organization: the committed `uv.lock` provides a production version s
 - [x] Finalize the `CHANGELOG.md` 1.0.0 entry and include it in the Sphinx release notes.
 - [x] Apply the user's instruction to present final 1.0.0 release notes; no further documentation approval is pending.
 - [x] Document 1.0.0 as the first stable compatibility baseline (H2).
-- [ ] Review `docs/source/cra/CRA_COMPLIANCE.md` claims/version table against actual release evidence; do not imply that the audit establishes legal conformity.
+- [x] Review `docs/source/cra/CRA_COMPLIANCE.md` claims/version table against actual release evidence; keep legal conformity, maintainer risk acceptance and unverified release artefacts explicitly outside the review result.
 - [ ] Confirm package `APP_VERSION`, displayed UI version, database `AppVersion`, OpenAPI version, container labels, registry tags, and Git tag agree. Runtime settings already read installed package metadata; do not blindly replace protocol/agent/fixture versions.
 - [ ] Verify `.github/workflows/docker-manual.yml` and `publish-ghcr.yml` tag generation, registry destinations, test gating, and release image digests. Avoid silently overwriting a final version-derived tag during unrelated main pushes.
 - [x] Retain source-built Linux Compose as the primary deployment and avoid an unverified multi-architecture claim. Published-image/platform validation remains part of release testing.
