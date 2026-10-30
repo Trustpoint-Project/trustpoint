@@ -173,12 +173,13 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 
 ## P2 — Good 1.0 Cleanup
 
-### C1 — Local hooks, CI tools, and documented formatting disagree
+### C1 — Resolved: shared tool environment and changed-file formatting policy
 
-- **Severity:** P2.
-- **Files:** `.pre-commit-config.yaml`, `pyproject.toml`, `.github/workflows/ruff.yml`, `docs/source/development/index.rst`.
-- **Problem/consequence:** hooks pin Ruff `0.9.4` and mypy `1.15.0`, versus project Ruff `0.17.3` and mypy `2.4.0`. CI runs lint but not format; `ruff format --check .` reports 558 files requiring formatting. Hook isolation can also omit Django/runtime typing dependencies. Contributors get inconsistent results.
-- **Fix:** align versions/environments, decide the intended format baseline, and make checks reflect that decision. Do not mix a repository-wide mechanical reformat into security fixes.
+- **Original severity:** P2.
+- **Files:** `.pre-commit-config.yaml`, `pyproject.toml`, `.github/workflows/ruff.yml`, `.github/workflows/mypy.yml`, contributor/developer and CI documentation.
+- **Implementation:** local Ruff/mypy hooks use `language: system` and `uv run --frozen`, sharing the project pins and lockfile, runtime dependencies and Django typing support with CI. Both lint and mypy check the complete project rather than an incomplete filename subset. No separate hook tool versions remain.
+- **Formatting decision:** pre-commit checks staged Python files; Ruff CI checks added/modified/renamed Python files in pull requests, respecting project exclusions. Deleted files and empty change sets are skipped. Existing untouched formatting debt is explicitly deferred; repository-wide formatting remains a diagnostic, not a passing release requirement. No mechanical repository reformat was performed.
+- **Verification:** the pre-commit configuration validates, and actual local lint/mypy/formatter hooks pass. Repository-wide lint and mypy pass (609 sources). The CI file-selection command was exercised with added/modified/renamed/deleted/untouched files, filenames containing spaces, and an empty change set. Original evidence: the audit's full formatter check reported 558 files requiring formatting; that historical backlog is not represented as fixed.
 
 ### C2 — Committed editor bundle is not reproduced by the documented build
 
@@ -293,7 +294,7 @@ Local evidence logs are under `/tmp/trustpoint-release-*` (pytest, Ruff, format,
 
 The repository has substantial CI breadth: pytest, Behave capability matrices, mypy, Ruff, shellcheck, CodeQL, Docker Compose/auto-setup, OpenSSL enrollment endpoints, backup/restore, migration compatibility, copyright/license checks, SBOM generation, attestations, and ZAP. This audit inspected definitions; it did not fetch the current hosted run status or branch-protection settings.
 
-Address H3/H4 before relying on recovery/upgrade evidence. Address C3/C4 and align the written release checklist with actual gates. The pytest and coverage workflow selections now include root utility tests (H6). Add format and documentation warning gates once their baselines are repaired. Run the secret-persistence and PostgreSQL concurrency regressions in CI rather than relying only on their documented manual commands. Actions largely use version tags, not immutable commit SHAs; consider reviewed SHA pinning, but no unsupported assertion is made that a particular action tag is obsolete or compromised. The optional comprehensive report workflow still targets `master`/a special report branch, unlike normal `main` CI.
+Address H3/H4 before relying on recovery/upgrade evidence. Address C3/C4 and align the written release checklist with actual gates. The pytest and coverage workflow selections now include root utility tests (H6). Formatting is gated on changed Python files under C1; the existing Read the Docs build treats warnings as failures under H5. Run the secret-persistence and PostgreSQL concurrency regressions in CI rather than relying only on their documented manual commands. Actions largely use version tags, not immutable commit SHAs; consider reviewed SHA pinning, but no unsupported assertion is made that a particular action tag is obsolete or compromised. The optional comprehensive report workflow still targets `master`/a special report branch, unlike normal `main` CI.
 
 ## Documentation Assessment
 
@@ -352,7 +353,7 @@ Dependency organization: the committed `uv.lock` provides a production version s
 - [x] Fix the root utility test's live-DNS dependency and include it in pytest and coverage CI.
 - [x] Behave passes with the documented required secret configuration.
 - [x] Ruff lint, mypy, Django system checks, migration drift check, and shellcheck pass locally.
-- [ ] Reconcile formatter/tool baselines and rerun the chosen checks.
+- [x] Reconcile formatter/tool environments, adopt changed-file formatting, and rerun the chosen checks.
 - [x] Current Dockerfile builds.
 - [x] Isolated software-backed Compose clean-install, restart, recreation, and PostgreSQL concurrent DEK tests pass.
 - [x] Persistent signing key/DEK and read-only secret mounts survive recreation in the isolated release stack.

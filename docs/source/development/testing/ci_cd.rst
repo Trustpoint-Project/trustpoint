@@ -158,7 +158,8 @@ mypy Pipeline
 =============
 
 We use :term:`mypy` for static type checking in python.
-This pipeline is actually really short because it just sets up :term:`uv` from :ref:`composite_setup_action` and then runs :term:`mypy`.
+This pipeline sets up :term:`uv` through :ref:`composite_setup_action` and runs
+``uv run --frozen mypy .`` in the locked project environment, matching the local hook.
 
 .. literalinclude:: ../../../../.github/workflows/mypy.yml
     :language: yaml
@@ -169,8 +170,11 @@ Ruff Pipeline
 =============
 
 Also, the :term:`ruff` action is nearly as short as the :ref:`mypy_pipeline`.
-It runs ``ruff check .``. It does not run the formatter or upload a separate
-report; use the development guide's formatter check locally.
+It runs ``uv run --frozen ruff check .`` across the repository. On pull requests,
+it also runs the Ruff formatter in check mode on added or modified Python files,
+honoring project exclusions. Pre-commit checks staged Python files using the same
+locked tools. Untouched legacy formatting is deferred to a separate cleanup;
+there is no repository-wide format gate.
 
 .. literalinclude:: ../../../../.github/workflows/ruff.yml
     :language: yaml

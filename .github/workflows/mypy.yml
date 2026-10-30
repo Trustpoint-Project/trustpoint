@@ -21,4 +21,4 @@ jobs:
         uses: ./.github/actions/setup-uv-action
 
       - name: Run MyPy
-        run: uv run mypy .
+        run: uv run --frozen mypy .

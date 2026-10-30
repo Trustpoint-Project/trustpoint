@@ -39,8 +39,8 @@ Please refer to our [Security Policy](SECURITY.md) for instructions on how to re
    # From the repository root, after configuring test secrets:
    uv run pytest trustpoint/ tests/
    uv run trustpoint/manage.py behave trustpoint/features/
-   uv run mypy .
-   uv run ruff check .
+   uv run --frozen mypy .
+   uv run --frozen ruff check .
    ```
 
    Follow the [development setup and test-secret instructions](docs/source/development/index.rst).
@@ -75,13 +75,19 @@ Please follow the guidelines which include:
 
 ### Linting and Type Checking
 Before submitting your pull request, ensure your code passes:
-- **Ruff linting**: `uv run ruff check .`
-- **MyPy type checking**: `uv run mypy .`
+- **Ruff linting**: `uv run --frozen ruff check .`
+- **MyPy type checking**: `uv run --frozen mypy .`
 
-Use tools from the locked project environment. The pre-commit hooks currently pin
-older Ruff/mypy versions than the project. `uv run ruff format --check .` checks
-formatting without editing files; the existing formatting baseline still needs
-cleanup, so report its result separately from linting.
+Use tools from the locked project environment. The local Ruff/mypy hooks and CI
+run the same repository-wide checks with `uv run --frozen`, including Django and
+runtime typing dependencies. Run `uv sync --frozen` before using the hooks.
+
+Format new or edited Python files with `uv run --frozen ruff format path/to/file.py`.
+Pre-commit checks staged Python files; Ruff CI checks Python files changed by the
+pull request. Both honor the project's Ruff exclusions. Untouched legacy files
+remain outside the formatting gate, so `ruff format --check .` is a backlog
+assessment rather than a required passing check. Keep repository-wide formatting
+cleanup separate from functional and security changes.
 
 ## Testing Policy
 

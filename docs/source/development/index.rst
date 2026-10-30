@@ -183,20 +183,26 @@ regressions are documented in :doc:`release-checklist`.
 Quality checks and migrations
 =============================
 
-Use the versions locked by the project environment (currently Ruff 0.17.3 and mypy
-2.4.0), rather than assuming older pre-commit hook versions reproduce CI:
+Local pre-commit hooks and CI use the same project environment via
+``uv run --frozen``, with Ruff and mypy versions pinned in ``pyproject.toml`` and
+``uv.lock``. This includes Django/runtime typing dependencies instead of using
+isolated hook environments. Initialize the
+environment with ``uv sync --frozen`` before running hooks:
 
 .. code-block:: bash
 
-   uv run ruff check .
-   uv run ruff format --check .
-   uv run mypy .
+   uv run --frozen ruff check .
+   uv run --frozen mypy .
    uv run trustpoint/manage.py check
    uv run trustpoint/manage.py makemigrations --check --dry-run
 
-``ruff format .`` applies formatting when you intend to edit files. The current
-repository has formatting differences; do not silently treat a failed formatter
-check as success. Pre-commit tool pins currently differ from the project versions.
+Format new or edited Python files with ``uv run --frozen ruff format path/to/file.py``.
+Pre-commit checks staged Python files; Ruff CI checks Python files changed by a
+pull request. Both honor the project's Ruff exclusions. Repository-wide lint and
+mypy remain required. Untouched legacy files are outside the formatting gate:
+``uv run --frozen ruff format --check .`` assesses the remaining backlog and is
+expected to fail until a separate formatting cleanup is completed. Do not mix
+that repository-wide reformat into functional or security fixes.
 
 After intentional model changes, create and inspect migrations:
 

@@ -17,9 +17,19 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action
 
       - name: Run Ruff Linting
-        run: uv run ruff check .
+        run: uv run --frozen ruff check .
+
+      - name: Check formatting of Python files changed by the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          FORMAT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff --name-only --diff-filter=ACMR -z "$FORMAT_BASE_SHA" HEAD -- '*.py' '*.pyi' |
+            xargs -0 -r uv run --frozen ruff format --check --force-exclude --
