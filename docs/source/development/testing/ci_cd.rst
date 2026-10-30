@@ -130,7 +130,9 @@ Codecov Pipeline
 
 We are using `Codecov <https://about.codecov.io/>`_ for analyzing our pytest code coverage and showing this with a badge.
 This workflow is also setting up :term:`uv` as in :ref:`composite_setup_action`
-and using it to run pytest with a coverage report which will be uploaded to codecov in the next step.
+and using it to run pytest with a coverage report. Coverage XML and JUnit results are retained as artifacts,
+including for fork pull requests where Codecov upload is skipped. There is no
+numeric coverage threshold enforced by this workflow.
 
 .. literalinclude:: ../../../../.github/workflows/codecov-upload.yml
     :language: yaml
@@ -197,13 +199,21 @@ The analysis is configured with a custom CodeQL configuration file and runs on a
 ZAP Pipeline
 ============
 
-We use `OWASP ZAP <https://www.zaproxy.org/>`_ (Zed Attack Proxy) for automated security scanning of the web application.
-This pipeline performs baseline security scans on both HTTP and HTTPS endpoints of the running Trustpoint application.
-It starts the application using Docker Compose, runs ZAP scans on ports 80 (HTTP) and 443 (HTTPS), and uploads the scan reports as artifacts.
-The final step counts ``FAIL-NEW`` and ``WARN-NEW`` entries in available reports.
-Scan steps currently allow errors, and absent reports are not rejected by that
-final step. Inspect scan completion and artifacts before treating a green job as
-security evidence. It is not an authenticated operational-coverage guarantee.
+We use `OWASP ZAP <https://www.zaproxy.org/>`_ for an unauthenticated baseline
+against a disposable deployment built from the checkout. Automatic setup must
+complete, an administrator must exist, and the operational login endpoint must
+respond before HTTP and HTTPS scans start.
+
+Each scan retains its exit status, log, and JSON/Markdown/HTML reports. Both scans
+are attempted independently. The final checker rejects missing, empty, malformed
+or out-of-scope report evidence and scanner errors/timeouts. Medium/high alerts
+and configured ZAP FAIL results fail the job; informational/low alerts are
+reported without failing the baseline. Reports are uploaded even when validation
+fails, and missing artifacts are an error.
+
+This workflow does not authenticate the spider or establish protected-page
+coverage. Record authenticated operational scan coverage separately as required
+by :doc:`../release-checklist`; a successful baseline is not that evidence.
 
 .. literalinclude:: ../../../../.github/workflows/zap.yml
     :language: yaml

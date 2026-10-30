@@ -31,12 +31,21 @@ Release
 -------
 - GitHub Workflow Checks:
 
-  - Code coverage threshold maintained ( >85%).
+  - Review the generated coverage report and coverage regressions. CI retains
+    ``coverage.xml`` and test results; no numeric coverage threshold is enforced.
   - Docker build passes.
   - All feature test pass
   - All unit test pass
   - Strict documentation build passes, including rendered-page review:
     ``uv run sphinx-build -b html -n -W --keep-going docs/source docs/build/html``.
+  - ZAP's unauthenticated operational baseline completes for both HTTP and HTTPS
+    with nonempty JSON/Markdown/HTML reports. Scan errors, missing/malformed
+    evidence, medium/high alerts and configured ZAP FAIL results fail the job.
+    Informational/low alerts are reported without failing the baseline.
+  - Review authenticated operational coverage separately: record the image/commit,
+    test role, login method, protected pages/API paths reached, and
+    findings/dispositions. Confirm the scanner remains logged in. A green baseline
+    covers public/login pages and does not satisfy this authenticated review.
   - SBOM generation passes
   - Code linter (:code:`ruff` and :code:`mypy`) tests pass
   - No new deprecations from Django or libraries in test logs.
