@@ -45,7 +45,9 @@ def _certificate(digest: hashes.HashAlgorithm | None) -> x509.Certificate:
 
 
 def _confirmation(
-    certificate: x509.Certificate, digest: hashes.HashAlgorithm, algorithm_oid: str | None = None,
+    certificate: x509.Certificate,
+    digest: hashes.HashAlgorithm,
+    algorithm_oid: str | None = None,
 ) -> tuple[CmpCertConfRequestContext, Mock]:
     message = rfc4210.PKIMessage()
     header = message['header']
@@ -56,7 +58,8 @@ def _confirmation(
     header['senderNonce'] = b'client-nonce'
     header['recipNonce'] = b'server-nonce'
     message['header'] = CmpPkiHeaderBuilding._prepare_protection_algorithm_pbm(
-        header, hmac_algorithm=HmacAlgorithm.HMAC_SHA256,
+        header,
+        hmac_algorithm=HmacAlgorithm.HMAC_SHA256,
     )
     cert_hash = certificate.fingerprint(digest)
     message['body']['certConf'][0]['certHash'] = cert_hash
