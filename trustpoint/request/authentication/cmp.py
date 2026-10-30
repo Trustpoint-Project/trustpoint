@@ -792,6 +792,17 @@ class CmpCertConfAuthentication(CmpAuthenticationBase):
             issued_cred.domain.unique_name if issued_cred.domain else 'unknown',
         )
 
+        # AOKI devices trust the DevOwner root, which may be independent of the
+        # issuing CA. Protect pkiConf with the same domain DevOwnerID as the IP.
+        # Domains without a DevOwnerID retain the issuing-CA signer fallback.
+        from aoki.views import AokiServiceMixin  # noqa: PLC0415 - avoid the request/view import cycle
+
+        owner_credential = AokiServiceMixin.get_domain_based_owner_credential(issued_cred.domain)
+        if owner_credential is not None:
+            context.owner_credential = owner_credential
+            context.is_aoki = True
+            self.logger.info('certConf: using domain DevOwnerID to protect the pkiConf response.')
+
     def _resolve_certconf_hash_algorithm(self, context: CmpCertConfRequestContext) -> hashes.HashAlgorithm:
         """Resolve the confirmation digest through the shared allowlist."""
         return cert_conf.resolve_certconf_hash_algorithm(context.cert_hash_algorithm_oid)

@@ -494,3 +494,23 @@ ZAP scan of every role/API. Enrollment issuance, hardware HSM, external TLS edge
 and every deployment variant were not rerun by this hardening task.
 See `docs/source/development/security-response-headers.rst` for policy details,
 asset regeneration and deployment-specific settings.
+
+## AOKI certificate-confirmation extension — 2026-10-30
+
+Integrated the behavior from upstream commit
+[`7b2b1b9f59d6ff88ffad72feb8726f78215c18dc`](https://github.com/Trustpoint-Project/trustpoint/commit/7b2b1b9f59d6ff88ffad72feb8726f78215c18dc),
+adapted to the current shared certConf hash-validation helper. After resolving the
+issued credential, CMP certConf authentication selects the resolved domain's
+DevOwnerID and marks the context as AOKI. The existing responder then uses that
+credential for the pkiConf header and signature, matching the initial response's
+DevOwner trust anchor even when the issuing CA is independent. Domains without
+a DevOwnerID retain the existing issuing-CA fallback. The context's `is_aoki`
+flag is declared explicitly for typing and serialization.
+
+Validation: 230 tests passed across CMP authentication/responses, AOKI, general
+authentication and request contexts. Regression cases verify domain-based owner
+resolution, missing-owner/domain fallback, and the credential supplied to the
+pkiConf header builder and signer. Focused Ruff and mypy checks pass. A real
+external BRS/device transaction was not run; this evidence does not claim hardware
+interoperability. These changes are in the working tree and have not been
+committed or deployed by this task.

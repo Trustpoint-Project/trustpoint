@@ -209,6 +209,7 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
     # Server-side fields
     parsed_message: PKIMessage | None = None
     cmp_shared_secret: str | None = None
+    is_aoki: bool = False
     error_code: PKIFailureInfo | None = None
     error_details: str | None = None
     implicit_confirm: bool = False
