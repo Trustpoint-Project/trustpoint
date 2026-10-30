@@ -170,8 +170,8 @@ permission to create them. Do not disable test-database isolation. Tests that
 start local HTTP, CMP, or OPC UA servers require loopback socket access. On macOS,
 use the native temporary directory if ``/tmp`` inherits a group that differs from
 your process group; the secret-initializer tests check ownership as well as content.
-Some root URL-validation tests currently depend on external DNS, so record resolver
-failures rather than treating them as a clean test pass.
+Root URL-validation unit tests use controlled DNS results and do not require
+external DNS. Both the pytest and coverage CI workflows select ``trustpoint/ tests/``.
 
 SQLite cannot test PostgreSQL row locks. Run the concurrency suite against an
 isolated PostgreSQL database as part of release validation. Real PKCS#11 tests need

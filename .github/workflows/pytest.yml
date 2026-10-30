@@ -31,7 +31,7 @@ jobs:
           --md-report-color never \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
-          trustpoint/ 
+          trustpoint/ tests/
 
       - name: Display Summary in GitHub Actions even if tests fail
         if: always()
