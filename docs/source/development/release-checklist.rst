@@ -61,6 +61,30 @@ Post-Release
   - Update the README.md on the Docker Hub if required
 - Update `Trustpoint website <https://trustpoint.campus-schwarzwald.de/en/>`_ with release information.
 
+Version Identity
+----------------
+
+Before creating the release tag, check the installed package, runtime
+``APP_VERSION``, UI footer, database ``AppVersion`` after normal startup, and
+generated OpenAPI ``info.version`` against ``pyproject.toml`` and ``uv.lock``.
+For 1.0.0 these values are ``1.0.0``; the UI display/link and canonical Git and
+registry release tags use the ``v1.0.0`` prefix convention.
+
+Both image publishers check project/lockfile agreement and reject Git tags that
+do not match ``v<package-version>`` before building or publishing. Stable version
+aliases are emitted only for matching Git-tag refs. Main/tag builds may update
+``latest``; other branches receive commit tags. The OCI label
+``org.opencontainers.image.version`` explicitly contains the raw package version
+rather than a moving tag such as ``latest``.
+
+Once the tagged images exist, inspect the actual registry manifests/configs and
+confirm the Git commit, image digest, OCI version/revision labels and running
+application agree. A configured workflow or local metadata check does not prove
+that final publication has occurred. The companion PostgreSQL image uses the
+Trustpoint release tag for the deployment bundle; its PostgreSQL server version
+remains independent. Do not replace protocol, agent, dependency or fixture
+versions merely because they differ from the application version.
+
 Docker Deployment Validation
 ----------------------------
 

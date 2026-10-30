@@ -193,7 +193,8 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 - **Severity:** P2.
 - **Files:** `.github/workflows/main-ci-cd.yml` (build job), `docker/trustpoint/Dockerfile`, `.github/workflows/docker-manual.yml`, `.github/workflows/publish-ghcr.yml`.
 - **Problem/consequence:** the message-gated main pipeline uses `docker build ... --file Dockerfile`, but the tracked application Dockerfile is under `docker/trustpoint/`. A matching `build:` commit therefore activates a broken job. Other publishing workflows use the correct path, leaving multiple inconsistent release routes.
-- **Fix:** remove or repair the obsolete job, choose the supported registry/release path, require tests before release publishing, and assert tag/metadata agreement. The GHCR workflow can publish version-derived tags on main pushes independently of release validation.
+- **Fix:** remove or repair the obsolete job, choose the supported registry/release path, require tests before release publishing, and assert tag/metadata agreement.
+- **Version follow-up:** GHCR and manual publishers now guard project/lockfile/Git-tag agreement, emit stable version aliases only on matching Git-tag refs, and explicitly label images with the package version. Branch builds still publish moving/commit tags. The obsolete main job and broader release test gating remain separate unresolved C3 work.
 
 ### C4 — Scan evidence now fails closed; authenticated release coverage remains explicit
 
@@ -344,6 +345,23 @@ Dependency organization: the committed `uv.lock` provides a production version s
 
 ## Version / Release Changes Required
 
+**Version identity review (2026-10-30; source `2953fb01e`):**
+
+| Surface | Observed / configured value | Evidence limit |
+| --- | --- | --- |
+| Package and runtime | Declared and installed package, lockfile entry and `APP_VERSION`: `1.0.0` | Verified in this local environment |
+| UI | Registered context processor renders the actual footer fragment as `v1.0.0`, linking to release tag `v1.0.0` | Browser/deployed-image verification remains separate |
+| Database | Read-only local SQLite query: `AppVersion` row 1 is `1.0.0`; operational startup synchronizes from runtime metadata | Does not establish a production/PostgreSQL instance's state |
+| OpenAPI | Generated schema `info.version` is `1.0.0` | Generation also reports existing custom-authentication/serializer schema warnings; this is a version check, not a clean-schema assertion |
+| Container labels | Both publishers explicitly set `org.opencontainers.image.version` from the checked package version (`1.0.0`) | Source configuration verified; newly published image labels not yet inspected |
+| Registry / Git tags | Canonical release tag is `v1.0.0`; both workflows reject mismatched tag refs, and branches publish moving/commit tags rather than stable version aliases | No matching remote Git tag was returned; GHCR and Docker Hub `v1.0.0` manifest reads returned not found |
+
+Both workflow version guards were exercised for matching/mismatched refs and
+lockfile drift; YAML/shell checks pass. The 36 existing initialization/startup
+command tests pass. No Git tag, registry artefact or database record was created
+or rewritten to force agreement. Agent, protocol, dependency and fixture versions
+retain their own meanings.
+
 - [x] Set `pyproject.toml` project version to final `1.0.0`.
 - [x] Align `uv.lock` project metadata with `1.0.0`; `uv lock --check --offline` passes without dependency upgrades.
 - [x] Set the Sphinx release version in `docs/source/conf.py` to `1.0.0`.
@@ -352,7 +370,9 @@ Dependency organization: the committed `uv.lock` provides a production version s
 - [x] Apply the user's instruction to present final 1.0.0 release notes; no further documentation approval is pending.
 - [x] Document 1.0.0 as the first stable compatibility baseline (H2).
 - [x] Review `docs/source/cra/CRA_COMPLIANCE.md` claims/version table against actual release evidence; keep legal conformity, maintainer risk acceptance and unverified release artefacts explicitly outside the review result.
-- [ ] Confirm package `APP_VERSION`, displayed UI version, database `AppVersion`, OpenAPI version, container labels, registry tags, and Git tag agree. Runtime settings already read installed package metadata; do not blindly replace protocol/agent/fixture versions.
+- [x] Confirm declared/installed package version, runtime `APP_VERSION`, rendered UI version, local database `AppVersion` and generated OpenAPI version agree on `1.0.0` (display/release links use `v1.0.0`).
+- [x] Make publishing version identity explicit: reject project/lockfile or Git-tag mismatches before publishing, set OCI version labels to the raw package version, and emit stable version tags only from matching Git-tag refs.
+- [ ] Confirm the final published `v1.0.0` Git tag, registry tags, image digests and OCI labels agree with the running release. On 2026-10-30, the remote Git lookup returned no `v1.0.0` tag and public GHCR/Docker Hub manifest lookups returned “not found”; this final-artifact check cannot yet be marked complete.
 - [ ] Verify `.github/workflows/docker-manual.yml` and `publish-ghcr.yml` tag generation, registry destinations, test gating, and release image digests. Avoid silently overwriting a final version-derived tag during unrelated main pushes.
 - [x] Retain source-built Linux Compose as the primary deployment and avoid an unverified multi-architecture claim. Published-image/platform validation remains part of release testing.
 - [ ] Produce reviewed SBOM, notices, provenance, and security/test artifacts for the exact release image, including its OS packages and shipped frontend.
