@@ -47,6 +47,7 @@ from .views.prometheus import prometheus_metrics_view
 
 last_modified_date = timezone.now()
 
+
 @extend_schema_view(
     post=extend_schema(
         tags=['auth'],
@@ -90,10 +91,8 @@ urlpatterns += [
     path('', base.IndexView.as_view()),
     path('discovery/', include('discovery.urls')),
     path('workflows2/', include('workflows2.urls', namespace='workflows2')),
-
     # Web UI Routes
     path('agents/', include('agents.urls', namespace='agents')),
-
     # API URLs
     path('api/', include('devices.api_urls')),
     path('api/', include('pki.api_urls')),
@@ -102,10 +101,8 @@ urlpatterns += [
     path('api/', include('rest_pki.api_urls')),
     path('api/', include('agents.api_urls')),
     path('api/', include('workflows2.api_urls')),
-
     path('api/token/', ServiceAccountTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
-
     # Swagger & Redoc
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
     path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

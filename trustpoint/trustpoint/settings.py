@@ -133,15 +133,14 @@ def _configured_trustpoint_phase() -> str:
         if DOCKER_CONTAINER:
             return (
                 TRUSTPOINT_PHASE_OPERATIONAL
-                if TRUSTPOINT_AUTO_OPERATIONAL_ENV_FILE.is_file()
-                and TRUSTPOINT_AUTO_OPERATIONAL_READY_FILE.is_file()
+                if TRUSTPOINT_AUTO_OPERATIONAL_ENV_FILE.is_file() and TRUSTPOINT_AUTO_OPERATIONAL_READY_FILE.is_file()
                 else TRUSTPOINT_PHASE_BOOTSTRAP
             )
         return TRUSTPOINT_PHASE_OPERATIONAL
     if configured_phase not in TRUSTPOINT_VALID_PHASES:
         msg = (
-            f"Invalid TRUSTPOINT_PHASE={configured_phase!r}. "
-            f"Expected one of: {', '.join(sorted({*TRUSTPOINT_VALID_PHASES, TRUSTPOINT_PHASE_AUTO}))}."
+            f'Invalid TRUSTPOINT_PHASE={configured_phase!r}. '
+            f'Expected one of: {", ".join(sorted({*TRUSTPOINT_VALID_PHASES, TRUSTPOINT_PHASE_AUTO}))}.'
         )
         raise RuntimeError(msg)
     return configured_phase
@@ -277,7 +276,8 @@ POSTGRES_DB = os.environ.get('POSTGRES_DB', 'trustpoint_db')
 _DATABASE_USER_FILE = os.getenv('DATABASE_USER_FILE')
 DATABASE_USER = (
     Path(_DATABASE_USER_FILE).read_text(encoding='utf-8').strip()
-    if _DATABASE_USER_FILE else os.environ.get('DATABASE_USER', 'admin')
+    if _DATABASE_USER_FILE
+    else os.environ.get('DATABASE_USER', 'admin')
 )
 _DATABASE_PASSWORD_FILE = os.getenv('DATABASE_PASSWORD_FILE')
 if _DATABASE_PASSWORD_FILE:
@@ -287,10 +287,14 @@ if _DATABASE_PASSWORD_FILE:
 else:
     DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD', 'testing321')
 _DEFAULT_OPERATIONAL_DATABASE = 'postgresql' if DOCKER_CONTAINER else 'sqlite'
-TRUSTPOINT_OPERATIONAL_DATABASE = os.environ.get(
-    'TRUSTPOINT_OPERATIONAL_DATABASE',
-    _DEFAULT_OPERATIONAL_DATABASE,
-).strip().lower()
+TRUSTPOINT_OPERATIONAL_DATABASE = (
+    os.environ.get(
+        'TRUSTPOINT_OPERATIONAL_DATABASE',
+        _DEFAULT_OPERATIONAL_DATABASE,
+    )
+    .strip()
+    .lower()
+)
 TRUSTPOINT_LOCAL_SOFTWARE_BACKEND_NAME = os.environ.get(
     'TRUSTPOINT_LOCAL_SOFTWARE_BACKEND_NAME',
     'trustpoint-software-demo-testing-backend',
@@ -362,12 +366,12 @@ if _email_host:
         'OPTIONS': {
             'host': _email_host,
             'port': _email_port,
-            'use_tls': (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (
-                _email_port == _SMTP_TLS_PORT
-            ),
-            'use_ssl': (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (
-                _email_port == _SMTP_SSL_PORT
-            ),
+            'use_tls': (_use_tls_env.lower() in ('1', 'true', 'yes'))
+            if _use_tls_env
+            else (_email_port == _SMTP_TLS_PORT),
+            'use_ssl': (_use_ssl_env.lower() in ('1', 'true', 'yes'))
+            if _use_ssl_env
+            else (_email_port == _SMTP_SSL_PORT),
             'username': os.getenv('EMAIL_HOST_USER', ''),
             'password': os.getenv('EMAIL_HOST_PASSWORD', ''),
             'timeout': int(os.getenv('EMAIL_TIMEOUT', '10')),
@@ -523,9 +527,7 @@ MIDDLEWARE = [
 
 if TRUSTPOINT_IS_BOOTSTRAP:
     MIDDLEWARE = [
-        middleware
-        for middleware in MIDDLEWARE
-        if middleware != 'trustpoint.middleware.Workflow2InlineDrainMiddleware'
+        middleware for middleware in MIDDLEWARE if middleware != 'trustpoint.middleware.Workflow2InlineDrainMiddleware'
     ]
 
 TEMPLATE_CONTEXT_PROCESSORS = [
@@ -574,7 +576,7 @@ AUTHENTICATION_BACKENDS = [
     'users.authentication.ServiceAccountBackend',  # Service account authentication
     'users.management_backend.TrustpointModelBackend',
     'users.authentication.ClientCertificateBackend',  # TLS client certificate sessions
-    'django.contrib.auth.backends.ModelBackend',    # Default Django authentication
+    'django.contrib.auth.backends.ModelBackend',  # Default Django authentication
 ]
 
 # Only these direct peers may assert TLS client identity. They must overwrite the
@@ -633,7 +635,7 @@ elif TRUSTPOINT_OPERATIONAL_DATABASE == 'sqlite':
     }
 else:
     msg = (
-        f"Invalid TRUSTPOINT_OPERATIONAL_DATABASE={TRUSTPOINT_OPERATIONAL_DATABASE!r}. "
+        f'Invalid TRUSTPOINT_OPERATIONAL_DATABASE={TRUSTPOINT_OPERATIONAL_DATABASE!r}. '
         "Expected 'postgresql' or 'sqlite'."
     )
     raise RuntimeError(msg)
@@ -694,6 +696,7 @@ LOGGING = {
 
 # Custome user model
 AUTH_USER_MODEL = 'users.TrustpointUser'
+
 
 # User interface config defaults
 class UIConfig:
@@ -795,17 +798,14 @@ if _configured_pkcs11_module_path:
 elif _file_pkcs11_module_path:
     HSM_DEFAULT_PKCS11_MODULE_PATH = Path(_file_pkcs11_module_path)
 else:
-    HSM_DEFAULT_PKCS11_MODULE_PATH = (
-        _first_existing_path(
-            # current local/dev default in the Trustpoint container
-            Path('/usr/lib/libpkcs11-proxy.so.0'),
-            # direct local SoftHSM fallback
-            Path('/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so'),
-            # final fallback if a library is mounted into the HSM root
-            HSM_LIB_DIR / 'libpkcs11.so',
-        )
-        or (HSM_LIB_DIR / 'libpkcs11.so')
-    )
+    HSM_DEFAULT_PKCS11_MODULE_PATH = _first_existing_path(
+        # current local/dev default in the Trustpoint container
+        Path('/usr/lib/libpkcs11-proxy.so.0'),
+        # direct local SoftHSM fallback
+        Path('/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so'),
+        # final fallback if a library is mounted into the HSM root
+        HSM_LIB_DIR / 'libpkcs11.so',
+    ) or (HSM_LIB_DIR / 'libpkcs11.so')
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     for directory in (HSM_CONFIG_DIR, HSM_LIB_DIR, HSM_TOKEN_DIR):

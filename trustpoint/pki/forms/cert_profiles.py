@@ -81,11 +81,13 @@ def check_validity_days_against_security_config(total_days: float) -> None:
             _(
                 'The requested certificate validity of %(req_days).1f days exceeds the maximum of '
                 '%(max_days)d days permitted by the active security policy.'
-            ) % {
+            )
+            % {
                 'req_days': total_days,
                 'max_days': max_days,
             }
         )
+
 
 class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel]):
     """Form for creating or updating Certificate Profiles.
@@ -103,7 +105,7 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
         """Meta information for the CertProfileConfigForm."""
 
         model = CertificateProfileModel
-        fields: ClassVar[list[str]] = ['unique_name', 'profile_json','is_default']
+        fields: ClassVar[list[str]] = ['unique_name', 'profile_json', 'is_default']
 
     def clean_unique_name(self) -> str:
         """Validates the unique name to ensure it is not already in use.
@@ -165,6 +167,7 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
         """Raise ValidationError if the profile's validity exceeds the security policy limit."""
         total_days = CertProfileConfigForm._validity_total_days(validated)
         check_validity_days_against_security_config(total_days)
+
 
 class ProfileBasedFormFieldBuilder(LoggerMixin):
     """Django form field builder that leverages JSONProfileVerifier.
@@ -228,7 +231,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
         This leverages JSONProfileVerifier.get_sample_request() to understand
         the profile structure, eliminating manual parsing.
         """
-        sample_request = self.profile # Use the normalized profile for field generation
+        sample_request = self.profile  # Use the normalized profile for field generation
 
         self._build_fields_from_sample(sample_request)
 
@@ -269,7 +272,9 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                     required = False
                 self.fields['crl_distribution_point_uris'] = forms.CharField(
                     label=_('CRL Distribution Point URLs (comma separated)'),
-                    initial=', '.join(value or []), required=required, disabled=not mutable,
+                    initial=', '.join(value or []),
+                    required=required,
+                    disabled=not mutable,
                     widget=forms.TextInput(attrs={'class': 'form-control'}),
                 )
 
@@ -308,7 +313,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                     disabled=not is_mutable,
                     widget=forms.TextInput(attrs={'class': 'form-control'}),
                     min_length=2,
-                    max_length=2
+                    max_length=2,
                 )
             else:
                 self.fields[field_name] = forms.CharField(
@@ -316,7 +321,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                     label=mark_safe(display_label),  # noqa: S308
                     initial=initial_value,
                     disabled=not is_mutable,
-                    widget=forms.TextInput(attrs={'class': 'form-control'})
+                    widget=forms.TextInput(attrs={'class': 'form-control'}),
                 )
 
     def _build_all_san_fields(self, profile_san: dict[str, Any]) -> None:
@@ -346,7 +351,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 label=mark_safe(display_label),  # noqa: S308
                 initial=initial_value,
                 disabled=not is_mutable,
-                widget=forms.TextInput(attrs={'class': 'form-control'})
+                widget=forms.TextInput(attrs={'class': 'form-control'}),
             )
 
     def _build_subject_fields_from_sample(self, subject: dict[str, Any]) -> None:
@@ -364,9 +369,8 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 field_value = field_spec.get('value', field_spec.get('default', ''))
             else:
                 is_required = field_name in profile_subject.get('required', [])
-                is_mutable = (
-                    field_name in profile_subject.get('mutable', [])
-                    or field_name not in profile_subject.get('value', {})
+                is_mutable = field_name in profile_subject.get('mutable', []) or field_name not in profile_subject.get(
+                    'value', {}
                 )
                 is_changeme = isinstance(sample_value, str) and sample_value.startswith('CHANGEME_')
                 field_value = '' if is_changeme else sample_value
@@ -386,7 +390,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                     disabled=not is_mutable,
                     widget=forms.TextInput(attrs={'class': 'form-control'}),
                     min_length=2,
-                    max_length=2
+                    max_length=2,
                 )
             else:
                 self.fields[field_name] = forms.CharField(
@@ -394,7 +398,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                     label=mark_safe(display_label),  # noqa: S308
                     initial=initial_value,
                     disabled=not is_mutable,
-                    widget=forms.TextInput(attrs={'class': 'form-control'})
+                    widget=forms.TextInput(attrs={'class': 'form-control'}),
                 )
 
     def _build_san_fields_from_sample(self, san: dict[str, Any]) -> None:
@@ -416,9 +420,10 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             else:
                 is_required = field_name in profile_san.get('required', []) if isinstance(profile_san, dict) else False
                 is_mutable = (
-                    field_name in profile_san.get('mutable', [])
-                    or field_name not in profile_san.get('value', {})
-                ) if isinstance(profile_san, dict) else True
+                    (field_name in profile_san.get('mutable', []) or field_name not in profile_san.get('value', {}))
+                    if isinstance(profile_san, dict)
+                    else True
+                )
                 is_changeme = isinstance(sample_value, str) and sample_value.startswith('CHANGEME_')
                 if is_changeme:
                     field_value = ''
@@ -439,7 +444,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 label=mark_safe(display_label),  # noqa: S308
                 initial=initial_value,
                 disabled=not is_mutable,
-                widget=forms.TextInput(attrs={'class': 'form-control'})
+                widget=forms.TextInput(attrs={'class': 'form-control'}),
             )
 
     def _build_validity_fields_from_sample(self, validity: dict[str, Any]) -> None:
@@ -487,7 +492,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 label=mark_safe(display_label),  # noqa: S308
                 initial=initial_value,
                 disabled=not is_mutable,
-                widget=forms.NumberInput(attrs={'class': 'form-control'})
+                widget=forms.NumberInput(attrs={'class': 'form-control'}),
             )
 
 
@@ -554,7 +559,8 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
                 crl_field.initial = ', '.join(initial_crl['uris'])
 
     def get_certificate_builder(
-        self, request_context: BaseRequestContext | None = None,
+        self,
+        request_context: BaseRequestContext | None = None,
     ) -> CertificateBuilder:
         """Build a CertificateBuilder from the form data.
 
