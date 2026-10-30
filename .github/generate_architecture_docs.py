@@ -46,7 +46,7 @@ def get_installed_apps() -> list[str]:
         if (
             not app.startswith(('django.', 'rest_framework', 'drf_', 'crispy', 'dbbackup', 'django_'))
             and app != 'trustpoint_core'
-        ):  # External dependency  # noqa: E501
+        ):  # External dependency
             app_label = app.split('.')[0]
             trustpoint_apps.append(app_label)
     return trustpoint_apps
