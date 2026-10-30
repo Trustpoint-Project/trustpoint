@@ -42,7 +42,7 @@ Actors
 
 First, we define all needed actors to be as specific as needed.
 
-.. _Trustpoint-Actors-Table:
+.. _trustpoint-actors-table:
 
 .. csv-table:: Trustpoint Actors
    :header: "ID", "Name", "Description"
@@ -137,7 +137,7 @@ Features To Be Tested
 This chapter lists all needed requirements of Trustpoint, e.g. creating certificates.
 These requirements are now front-end requirements as well as user experience.
 This is also the main difference between chapter :ref:`test-items-functions` and this chapter.
-The `table of all actors <Trustpoint-Actors-Table>`_ is still used though.
+The :ref:`table of all actors <trustpoint-actors-table>` is still used though.
 
 .. csv-table:: Features To Be Tested
    :header: "Name (Identifier)", "Title", "Description", "Component(s)", "Importance"
@@ -593,7 +593,7 @@ run it on a production system and then check all other requirements manually or 
 
 For now, we have the idea of using our `docker_compose_r_005`_ to build and start the trustpoint container as well as the postgres container.
 After this, we check if the startpage is visible and returns a `200` code.
-This test is executed inside a `GitHub actions pipeline <docker_compose_action_r_005>`_.
+This test is executed inside a :ref:`GitHub Actions pipeline <docker_compose_action_r_005>`.
 
 .. _docker_compose_r_005:
 

@@ -43,6 +43,9 @@ author = 'Trustpoint Project'
 release = '1.0.0'  # Project version
 
 # -- General configuration --------------------------------------------------
+
+# Report unresolved references in local and Read the Docs builds.
+nitpicky = True
 extensions = [
     'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
     'sphinx.ext.viewcode',  # Adds links to highlighted source code

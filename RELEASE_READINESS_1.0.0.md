@@ -130,10 +130,11 @@ Review breadth: inventory of 1,871 tracked files, including 1,069 Python files, 
 - **Consequence:** a green compatibility check cannot establish data preservation, encryption continuity, or forward upgrades. The separately provided Compose regression is valuable but not invoked by this workflow and normally recreates the same image unless an upgrade image is explicitly supplied.
 - **Fix:** add a PostgreSQL base-release database with representative encrypted data, apply the release forward, and exercise issuance/decryption/revocation. Run `makemigrations --check --dry-run` on model changes as well. Keep backward-code compatibility as a separate assertion when required.
 
-### H5 — Documentation build has duplicate pages and missing operational/testing content
+### H5 — Resolved: documentation sources, references, and strict CI build
 
-- **Severity:** P1.
-- **Follow-up status:** documentation defects resolved; a clean strict HTML build now passes. Original evidence below is retained as the audit baseline.
+- **Original severity:** P1.
+- **Follow-up status:** duplicate docnames and missing includes/diagrams are resolved. A clean strict HTML build passes with zero warnings. The existing Read the Docs configuration now enables `sphinx.fail_on_warning`, and `docs/source/conf.py` enables nitpicky references for hosted and local builds. No duplicate GitHub documentation workflow is needed. Rendered-page inspection also identified and repaired two test-plan links that incorrectly pointed to filenames instead of internal targets. Original evidence below is retained as the audit baseline.
+- **Verification:** clean `sphinx-build -E -a -b html -n -W --keep-going` passes with zero warnings. Local links, anchors and image targets resolve across all 84 generated HTML pages; workflow, deployment, backup and testing content is present. Remote URLs and browser layout were not exhaustively tested.
 - **Affected files:** `docs/source/features/workflows/index.md` and `index.rst`; `docs/source/development/architecture/backup_restore.md` and `backup_restore.rst`; `docs/source/development/testing/ci_cd.rst`; `docs/source/development/testing/test_plan.rst`; `docs/source/development/architecture/index.md:129`.
 - **Problem:** the HTML build with nitpicky references produced **63 warnings**, including duplicate document names, a nonexistent architecture overview, missing PlantUML diagrams, and missing source includes whose paths point under `docs/.github` or `docs/trustpoint` instead of the repository root. One include still names `r_013_feature_test.yml`, which is absent.
 - **Consequence:** rendered docs can omit intended workflow/backup instructions and testing evidence while the build still succeeds. Which duplicate source is selected must not determine release documentation accidentally.

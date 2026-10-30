@@ -29,9 +29,10 @@ The pipelines automate various tasks such as testing, building, and deploying.
 Overview
 ========
 
-GitHub Actions are used to manage automated workflows.
+GitHub Actions and Read the Docs manage the automated workflows.
 Below is an overview of the key workflows included in the project:
 
+- **Documentation Pipeline**: Builds HTML with strict references and treats warnings as failures.
 - **Behave Pipeline**: Runs :term:`behave` tests and uploads the results.
 - **Codecov Pipeline**: Runs unit tests via pytest and uploads the test coverage. |codecov-badge|
 - **CodeQL Pipeline**: Runs CodeQL security analysis on the codebase. |codeql-badge|
@@ -79,6 +80,23 @@ At the time of writing this, that action may be faster than uv's own action beca
 With ``run_migrations=true``, the action provisions a synthetic software KEK for
 the job and resets its disposable database while preserving tracked migrations.
 That destructive setup is for isolated CI, not an installation or upgrade recipe.
+
+======================
+Documentation Pipeline
+======================
+
+Read the Docs builds and publishes the documentation using the repository's
+``.readthedocs.yaml`` configuration. It installs the frozen documentation
+dependencies with uv and provides Java/PlantUML and Graphviz for diagrams.
+``sphinx.fail_on_warning: true`` makes documentation warnings fail the hosted
+build, and ``nitpicky = True`` in ``docs/source/conf.py`` enables unresolved
+reference warnings for both hosted and local builds. No database reset is required.
+Pull-request previews and build-status reporting depend on the Read the Docs
+project's integration settings.
+
+.. literalinclude:: ../../../../.readthedocs.yaml
+    :language: yaml
+    :caption: Read the Docs configuration
 
 ===============
 Behave Pipeline
