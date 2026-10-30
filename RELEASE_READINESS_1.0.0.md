@@ -514,3 +514,53 @@ pkiConf header builder and signer. Focused Ruff and mypy checks pass. A real
 external BRS/device transaction was not run; this evidence does not claim hardware
 interoperability. These changes are in the working tree and have not been
 committed or deployed by this task.
+
+
+## PR #997 CSP browser compatibility correction — 2026-10-30
+
+Confirmed the hosted failure in run `41039279963`, job `124007769209`, and reproduced
+it in Linux Chromium using Playwright 1.64.1 / Chromium Headless Shell 156.0.8078.4.
+The failing line 70 is the **second** content assertion, after undo/redo. Initial
+CodeMirror creation, typing and textarea synchronization succeeded. There were no
+console warning/errors, page errors or CSP violations. The synthetic lowercase
+`ControlOrMeta+Shift+z` chord matched undo on Linux: the 26-character draft became
+25 characters after undo, then 10 characters after the purported redo. This was an
+incorrect test interaction, not a blocked script or asynchronous editor initialization.
+
+The locked editor dependencies are CodeMirror 6.0.2, `@codemirror/view` 6.43.15,
+`@codemirror/commands` 6.11.1, `@codemirror/state` 6.7.6 and `@codemirror/lang-yaml`
+6.1.3. No application code, dependency versions or CSP directives changed.
+
+Changes:
+
+- Use `Ctrl+Y` on Linux/Windows and `Meta+Shift+Z` on macOS. Require observable undo
+  and exact restoration of the submitted YAML, as well as rendered content.
+- Replace the fixed 300 ms wait and immediate DOM assertions with condition-based
+  Playwright assertions for initial content, editor focus, overlay placement,
+  editing, history, paste and guide/documentation readiness.
+- Save redacted console/page-error/CSP diagnostics and non-sensitive editor state
+  to `browser.json`, including on failure. Add Node tests for redaction and bounded
+  message sizes; no traces or form/request bodies are collected.
+- Gate independent ZAP scans and evidence checking on deployment readiness with
+  `!cancelled()`, so browser failures remain blocking without skipping ZAP. Skip
+  both scans/checking when deployment readiness fails. No `continue-on-error`,
+  finding suppression or threshold changes were added.
+
+Verification: the complete browser compatibility test passes on Linux and macOS
+Chromium with zero console warning/errors, page errors or CSP violations. A negative
+run restoring the old shortcut still fails at the specific redo assertion and
+produces useful redacted diagnostics. Two Node redaction tests and 41 existing CSP /
+ZAP-report-policy tests pass. Workflow YAML parsing, ShellCheck and frontend bundle
+reproducibility checks pass.
+
+Both actual ZAP 2.17.0 baselines completed against an isolated operational deployment:
+HTTP has 4 low / 9 informational alerts; HTTPS has 5 low / 12 informational alerts;
+both have **zero medium/high** alerts and scanner exit 2 (warnings). All expected
+exit/JSON/Markdown/HTML/log files exist, and `.github/check_zap_reports.py` passes on
+that evidence. The report checker and scan arguments are unchanged. Docker Desktop
+uses the application container's network namespace for the same localhost targets.
+Raw evidence is retained locally in ignored `var/pr997-csp/`, including Linux/macOS
+browser reports, the deliberately failing browser report and both complete ZAP
+report sets. The existing user deployment and data were not changed. A hosted rerun
+of the patched revision has not been performed; these working-tree changes have
+not been committed or pushed by this task.

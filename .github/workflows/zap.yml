@@ -40,6 +40,7 @@ jobs:
         run: docker compose up -d --build --wait --wait-timeout 300 postgres trustpoint
 
       - name: Require completed setup and operational login endpoint
+        id: readiness
         run: |
           for attempt in {1..60}; do
             echo "Checking operational readiness ($attempt/60)"
@@ -65,9 +66,14 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/csp-browser" --no-audit --no-fund playwright@1.64.1
           "$RUNNER_TEMP/csp-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+          node --test tests/docker_security/browser_diagnostics.test.cjs
           NODE_PATH="$RUNNER_TEMP/csp-browser/node_modules" node tests/docker_security/csp_browser.cjs
 
+      # Browser/header failures remain blocking, but must not skip the independent
+      # scans and turn their absence into misleading report-integrity failures.
       - name: Run independent HTTP and HTTPS baselines
+        id: zap_baselines
+        if: ${{ !cancelled() && steps.readiness.outcome == 'success' }}
         run: |
           docker pull ghcr.io/zaproxy/zaproxy:stable
           for protocol in http https; do
@@ -82,7 +88,7 @@ jobs:
           done
 
       - name: Check scan completion, report integrity and finding policy
-        if: always()
+        if: ${{ !cancelled() && steps.readiness.outcome == 'success' }}
         run: python3 .github/check_zap_reports.py reports/zap
 
       - name: Upload ZAP evidence even on failure

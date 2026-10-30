@@ -2,26 +2,28 @@
 // Run against a disposable operational deployment; requires Playwright via NODE_PATH.
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
+const { expect: playwrightExpect } = require('playwright/test');
+const expect = playwrightExpect.configure({ timeout: 15_000 });
+const { captureDiagnostics, createSanitizer } = require('./browser_diagnostics.cjs');
 
 (async () => {
     const origin = process.env.TP_CSP_ORIGIN || 'https://localhost';
     assert(process.env.TP_CSP_USERNAME && process.env.TP_CSP_PASSWORD, 'Provide disposable test credentials');
     const browser = await chromium.launch({ headless: true });
+    let diagnostics;
+    let page;
+    let failure;
     try {
         const context = await browser.newContext({ ignoreHTTPSErrors: true });
-        await context.addInitScript(() => {
-            window.cspViolations = [];
-            document.addEventListener('securitypolicyviolation', event => {
-                window.cspViolations.push(`${event.effectiveDirective}: ${event.blockedURI}`);
-            });
-        });
-        const page = await context.newPage();
-        const errors = [];
-        page.on('pageerror', error => errors.push(error.message));
+        diagnostics = await captureDiagnostics(
+            context, process.env.TP_CSP_REPORT_DIR || 'reports/zap',
+            [process.env.TP_CSP_PASSWORD, process.env.TP_CSP_USERNAME],
+        );
+        page = await context.newPage();
         async function clean(path) {
-            await page.waitForTimeout(300); // Include asynchronous CSP violation events.
-            assert.deepEqual(await page.evaluate(() => window.cspViolations), [], path);
-            assert.deepEqual(errors, [], path);
+            // Page-specific readiness assertions below must finish first. There
+            // is no fixed delay that could hide a slow or blocked dependency.
+            diagnostics.clean(path);
             console.log(`${path}: browser CSP and JavaScript checks OK`);
         }
         async function visit(path) {
@@ -32,7 +34,7 @@ const { chromium } = require('playwright');
         await visit('/users/login/');
         const before = await page.locator('html').getAttribute('data-bs-theme');
         await page.locator('.theme-toggle').click();
-        assert.notEqual(await page.locator('html').getAttribute('data-bs-theme'), before);
+        await expect(page.locator('html')).not.toHaveAttribute('data-bs-theme', before);
         await clean('/users/login/');
         await page.locator('[name=username]').fill(process.env.TP_CSP_USERNAME);
         await page.locator('[name=password]').fill(process.env.TP_CSP_PASSWORD);
@@ -40,6 +42,7 @@ const { chromium } = require('playwright');
             page.waitForURL('**/home/dashboard/'),
             page.locator('button[type=submit]').click(),
         ]);
+        await diagnostics.rememberCookies();
         const session = (await context.cookies()).find(cookie => cookie.name === 'sessionid');
         assert(session?.secure && session.httpOnly, 'Docker session cookie must be Secure and HttpOnly');
         await page.locator('#dashboard-refresh').click();
@@ -54,39 +57,68 @@ const { chromium } = require('playwright');
         await visit('/pki/cas/');
         await clean('/pki/cas/');
         await visit('/workflows2/definitions/new/');
-        await page.locator('.cm-content').waitFor();
+        const editor = page.locator('.cm-content');
+        const textarea = page.locator('#id_yaml_text');
+        const initialYaml = await textarea.inputValue();
+        assert(initialYaml.trim(), 'The workflow editor must load the initial YAML');
+        await expect(editor).toBeVisible();
+        await expect(editor.locator('.cm-line').first()).toHaveText(initialYaml.split('\n')[0]);
+        await diagnostics.editorState(page, 'initialized', initialYaml);
         await page.locator('[data-node-id]').first().dispatchEvent('dblclick');
         const overlay = page.locator('.wf2-graph-floating-card').first();
-        await overlay.waitFor();
-        assert(await overlay.evaluate(el => el.style.left.endsWith('px') && el.style.top.endsWith('px')));
+        await expect(overlay).toBeVisible();
+        await expect.poll(() => overlay.evaluate(el => el.style.left.endsWith('px') && el.style.top.endsWith('px'))).toBe(true);
         await page.keyboard.press('Escape');
-        await page.locator('.cm-content').click();
+        await editor.click();
+        await expect(editor).toBeFocused();
         await page.keyboard.press('ControlOrMeta+A');
-        await page.keyboard.type('version: 1\nname: csp-test\n');
-        const editor = page.locator('.cm-content');
-        assert((await editor.innerText()).includes('name: csp-test'));
+        const draft = 'version: 1\nname: csp-test\n';
+        await page.keyboard.type(draft);
+        await expect(textarea, 'Typing must update the submitted YAML').toHaveValue(draft);
+        await expect(editor).toContainText('name: csp-test');
+        await diagnostics.editorState(page, 'typed', draft);
         await page.keyboard.press('ControlOrMeta+z');
-        await page.keyboard.press('ControlOrMeta+Shift+z');
-        assert((await editor.innerText()).includes('name: csp-test'));
+        await expect(textarea, 'Undo must change the document').not.toHaveValue(draft);
+        await diagnostics.editorState(page, 'undone', draft);
+        // CodeMirror uses Cmd+Shift+Z on macOS and Ctrl+Y on Linux/Windows.
+        // A synthetic Shift+lowercase-z can instead match the undo binding.
+        await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+y');
+        await expect(textarea, 'Redo must restore the complete document').toHaveValue(draft);
+        await expect(editor).toContainText('name: csp-test');
+        await diagnostics.editorState(page, 'redone', draft);
         await editor.evaluate(element => {
             const clipboardData = new DataTransfer();
             clipboardData.setData('text/plain', '# CSP paste');
             element.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
         });
-        assert((await editor.innerText()).includes('# CSP paste'));
+        await expect(textarea).toHaveValue(draft + '# CSP paste');
+        await expect(editor).toContainText('# CSP paste');
+        await diagnostics.editorState(page, 'pasted', draft + '# CSP paste');
         await page.locator('#wf2-open-guide').click();
-        assert(await page.locator('body').evaluate(el => el.classList.contains('wf2-guide-open')));
+        await expect(page.locator('body')).toHaveClass(/wf2-guide-open/);
         await clean('/workflows2/definitions/new/');
         await visit('/swagger/');
-        await page.locator('.swagger-ui .info').waitFor();
+        await expect(page.locator('.swagger-ui .info')).toBeVisible();
         await clean('/swagger/');
         await visit('/redoc/');
-        await page.locator('#redoc-container h1').first().waitFor();
+        await expect(page.locator('#redoc-container h1').first()).toBeVisible();
         // Exercise the local search worker, whose blob permission is scoped to ReDoc.
         const search = page.locator('input[type=search], input[placeholder*="Search"]');
         await search.first().fill('certificate');
+        await expect(search.first()).toHaveValue('certificate');
         await clean('/redoc/');
+    } catch (error) {
+        failure = error;
+        if (page && diagnostics) {
+            await diagnostics.editorState(page, 'failure', 'version: 1\nname: csp-test\n').catch(() => {});
+        }
+        throw error;
     } finally {
+        if (diagnostics) diagnostics.save(failure);
         await browser.close();
     }
-})().catch(error => { console.error(error); process.exitCode = 1; });
+})().catch(error => {
+    const sanitize = createSanitizer([process.env.TP_CSP_PASSWORD, process.env.TP_CSP_USERNAME]);
+    console.error(sanitize(error.stack || error.message));
+    process.exitCode = 1;
+});
