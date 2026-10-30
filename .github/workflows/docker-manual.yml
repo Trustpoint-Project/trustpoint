@@ -1,6 +1,13 @@
 name: CI/CD / Docker Manual Build
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to publish (for example v1.0.0); blank builds the selected ref'
+        required: false
+        default: ''
+        type: string
 
 jobs:
 
@@ -13,17 +20,21 @@ jobs:
       artifact-metadata: write
     env:
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-      GITHUB_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag != '' && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
 
       - name: Verify package version and Git release tag
         id: get_version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           python3 - <<'PYTHON'
           import os
+          import subprocess
           import tomllib
           from pathlib import Path
 
@@ -33,12 +44,19 @@ jobs:
           if locked != version:
               raise SystemExit('Project version and uv.lock disagree')
           tag = f'v{version}'
-          ref = os.environ['GITHUB_REF']
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          ref = f'refs/tags/{release_tag}' if release_tag else os.environ['GITHUB_REF']
           if ref.startswith('refs/tags/') and ref != f'refs/tags/{tag}':
               raise SystemExit(f'Git release tag must match package version: expected {tag}')
+          revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          is_release = ref.startswith('refs/tags/')
+          publish_latest = is_release or ref == 'refs/heads/main'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'package_version={version}\nversion={tag}\n')
-          print(f'Package version: {version}; release tag: {tag}')
+              output.write(f'revision={revision}\n')
+              output.write(f'is_release={str(is_release).lower()}\n')
+              output.write(f'publish_latest={str(publish_latest).lower()}\n')
+          print(f'Package version: {version}; source ref: {ref}; commit: {revision}')
           PYTHON
 
       - name: Set up QEMU
@@ -61,11 +79,12 @@ jobs:
           images: docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
           flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' }}
-            type=raw,value=${{ steps.get_version.outputs.version }},enable=${{ github.ref_type == 'tag' }}
-            type=sha,format=long
+            type=raw,value=latest,enable=${{ steps.get_version.outputs.publish_latest == 'true' }}
+            type=raw,value=${{ steps.get_version.outputs.version }},enable=${{ steps.get_version.outputs.is_release == 'true' }}
+            type=raw,value=sha-${{ steps.get_version.outputs.revision }}
           labels: |
             org.opencontainers.image.version=${{ steps.get_version.outputs.package_version }}
+            org.opencontainers.image.revision=${{ steps.get_version.outputs.revision }}
 
       - name: Generate Docker metadata for postgres
         id: meta-postgres
@@ -74,11 +93,12 @@ jobs:
           images: docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/postgres
           flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' }}
-            type=raw,value=${{ steps.get_version.outputs.version }},enable=${{ github.ref_type == 'tag' }}
-            type=sha,format=long
+            type=raw,value=latest,enable=${{ steps.get_version.outputs.publish_latest == 'true' }}
+            type=raw,value=${{ steps.get_version.outputs.version }},enable=${{ steps.get_version.outputs.is_release == 'true' }}
+            type=raw,value=sha-${{ steps.get_version.outputs.revision }}
           labels: |
             org.opencontainers.image.version=${{ steps.get_version.outputs.package_version }}
+            org.opencontainers.image.revision=${{ steps.get_version.outputs.revision }}
 
       - name: Build and push trustpoint image
         id: push-trustpoint
