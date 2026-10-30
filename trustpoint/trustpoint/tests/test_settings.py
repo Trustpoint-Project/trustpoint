@@ -32,6 +32,12 @@ def set_test_env(monkeypatch):
     importlib.reload(settings)
 
 
+def test_secure_cookie_defaults_follow_container_mode():
+    """Docker UI cookies require TLS while direct native HTTP stays usable."""
+    assert settings.SESSION_COOKIE_SECURE is settings.DOCKER_CONTAINER
+    assert settings.CSRF_COOKIE_SECURE is settings.DOCKER_CONTAINER
+
+
 def test_debug_setting():
     """Ensure DEBUG tracks the configured container mode."""
     assert settings.DEBUG is (not settings.DOCKER_CONTAINER), 'DEBUG should be the inverse of DOCKER_CONTAINER.'

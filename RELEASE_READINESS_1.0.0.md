@@ -410,3 +410,87 @@ retain their own meanings.
 - [ ] Create the release tag only after the blockers are fixed and the release evidence is complete.
 
 **Would you tag the current commit as Trustpoint v1.0.0? No.** The verified permission/credential-disclosure paths and the traced upstream/SSH/proxy trust failures are unacceptable in a public PKI release, even though deployment persistence and many automated checks pass. Fix those boundaries, establish the upgrade contract, and rerun the final release matrix before tagging.
+
+## CSP and ZAP release hardening — 2026-10-30
+
+The patched working tree based on `c0ba27657cd1be80ebbc6929bb2fafc60a1af71c`
+was built and tested in disposable Docker Desktop arm64 containers with synthetic
+credentials, isolated networks and volumes. The application image was
+`sha256:e09b44e54db75ca7946ee0a768e8d0860ae47aef68606a7f43c3999a933f04d6`.
+These results supplement the earlier audit limitations above.
+
+Changes:
+
+- Enforced Django CSP covers login, bootstrap/setup, operational pages, redirects,
+  CSRF failures and production errors. Trusted inline scripts/styles use fresh
+  request nonces. Inline handlers/layouts were moved to explicit actions and CSS;
+  neither `unsafe-inline` nor `unsafe-eval` is allowed.
+- CodeMirror receives its style nonce; graph overlays use CSSOM. Ordinary typing
+  uses editor transactions to avoid Chromium copying syntax colors into native
+  inline formatting. Undo/redo and paste were exercised.
+- Swagger/ReDoc use self-hosted assets. The reproducible ReDoc bundle initializes
+  its nonce before style loading and uses a local branding image; its license is
+  retained. Only ReDoc permits a local blob search worker.
+- Nginx preserves the exact Django CSP once and supplies restrictive CSP/security
+  headers on its own redirects, static files and errors. HTTP enrollment locations
+  inherit all sanitized proxy assertions; partial overrides previously discarded
+  server-level TLS identity/protocol header sanitization.
+- Docker session/CSRF cookies are Secure. Native HTTP development and HTTP CRL,
+  CMP and SCEP routing remain supported. No global HTTPS redirect, HSTS policy,
+  CSP resource wildcard, scanner suppression or threshold relaxation was added.
+- CI adds deployed header/routing and authenticated Chromium checks. Pytest CI
+  checks the reproducibility of the bundled ReDoc asset against installed dependencies.
+
+Final independent ZAP results (`ghcr.io/zaproxy/zaproxy:stable`, ZAP 2.17.0,
+image digest `sha256:030d3df57735dacbb83464854758e674dd9ad01d79d12a129a8e58b1fd384238`):
+
+| Target | Medium | High | Low | Informational | Scanner exit |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| HTTP | 0 | 0 | 4 | 9 | 2 |
+| HTTPS | 0 | 0 | 5 | 12 | 2 |
+
+Both scans used the workflow's unchanged `zap-baseline.py -t <origin> -a -T 5`
+commands and JSON/Markdown/HTML outputs. Docker Desktop required
+`--network container:trustpoint-zap-release-app` in place of Linux runner host
+networking; both scanners still targeted `http://localhost` / `https://localhost`.
+Exit 2 represents warnings; `.github/check_zap_reports.py` accepted both complete
+reports and found no medium/high or configured FAIL results. Rules 10038 (missing
+CSP) and 10055 (CSP weaknesses) are absent. No rules were excluded or downgraded.
+
+Residual alerts remain visible for release review:
+
+| Rule | Disposition |
+| --- | --- |
+| 10010: cookie without HttpOnly | The evidence is `csrftoken`, read by existing JavaScript CSRF helpers. Session cookies remain HttpOnly. |
+| 10035: missing HSTS (HTTPS only) | Deployment-specific: enable at a permanent, trusted TLS edge after reviewing host/subdomain scope. Self-signed bootstrap and direct HTTP development remain supported. |
+| 10063: Permissions-Policy missing | Low-priority browser capability restriction remains unset; no threshold change or suppression. |
+| 90004: COEP/CORP missing | Additional cross-origin isolation headers remain unset. COOP remains Django's `same-origin`. |
+| 10027: suspicious comments | Informational matches in ordinary static JavaScript comments, including references to Django admin and user-controlled attributes; no secret disclosure was identified in those instances. |
+| 10031: user-controllable HTML attribute | Informational login-form reflection. Django escaping remains active; a regression test verifies injected markup stays escaped. |
+| 10049, 10094, 10109, 10111, 10112, 90005 | Informational cache behavior, nonce/token Base64, modern application/authentication/session detection and missing scanner request Fetch Metadata headers. Full instances remain in the reports. |
+
+Validation: 246 tests and 11 subtests passed across security/middleware/settings,
+ZAP evidence policy, Nginx inheritance, users and Docker setup tests. The final
+focused suite, including cookie defaults and escaped login reflection, passed 90 tests.
+Authenticated Chromium checks passed for theme switching, login, dashboard,
+notification filtering, CA pages, workflow overlays/editing/undo/redo/paste,
+Swagger and ReDoc search, with zero CSP violations or JavaScript errors.
+A separate bootstrap container passed authenticated setup chooser, fresh-install
+admin, connect-existing database and restore database page checks. Deployed
+HTTP/HTTPS headers, HTTP enrollment error paths and `nginx -t` passed.
+The strict Sphinx build, focused Ruff/mypy checks and frontend bundle checks passed.
+
+Local raw evidence is retained under the ignored
+`var/release-security-1.0.0/` directory: `zap/` contains both complete report sets,
+logs and exit codes; accompanying logs record browser, bootstrap, header, test,
+typing, documentation and image-build checks. `evidence.json` records scan scope
+and `source-sha256.json` records the reviewed working-tree files.
+
+Hosted GitHub Actions was not dispatched: the available GitHub authentication was
+invalid and these changes are unpublished. Local execution of the workflow's scan
+commands is verified; a green hosted run of the patched revision remains a release
+check. The browser smoke test is targeted functional coverage, not an authenticated
+ZAP scan of every role/API. Enrollment issuance, hardware HSM, external TLS edges
+and every deployment variant were not rerun by this hardening task.
+See `docs/source/development/security-response-headers.rst` for policy details,
+asset regeneration and deployment-specific settings.

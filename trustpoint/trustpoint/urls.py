@@ -25,6 +25,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from django.utils import timezone
+from django.views.decorators.csp import csp_override
 from django.views.decorators.http import last_modified
 from django.views.decorators.vary import vary_on_cookie
 from django.views.i18n import JavaScriptCatalog
@@ -108,5 +109,9 @@ urlpatterns += [
     # Swagger & Redoc
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
     path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path(
+        'redoc/',
+        csp_override(settings.REDOC_CSP)(SpectacularRedocView.as_view(url_name='schema')),
+        name='redoc',
+    ),
 ]

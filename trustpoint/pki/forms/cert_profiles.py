@@ -296,7 +296,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             display_label = self.SUBJECT_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
             if is_required:
-                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+                display_label += ' <span class="badge bg-danger text-white">Required</span>'
 
             initial_value = field_value or ''
 
@@ -337,7 +337,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             display_label = self.SAN_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
             if is_required:
-                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+                display_label += ' <span class="badge bg-danger text-white">Required</span>'
 
             initial_value = field_value or ''
 
@@ -374,7 +374,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             display_label = self.SUBJECT_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
             if is_required:
-                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+                display_label += ' <span class="badge bg-danger text-white">Required</span>'
 
             initial_value = field_value or ''
 
@@ -430,7 +430,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             display_label = self.SAN_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
             if is_required:
-                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+                display_label += ' <span class="badge bg-danger text-white">Required</span>'
 
             initial_value = field_value or ''
 
@@ -478,7 +478,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             display_label = self.VALIDITY_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
             if is_required:
-                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+                display_label += ' <span class="badge bg-danger text-white">Required</span>'
 
             initial_value = field_value if field_value is not None else 0
 

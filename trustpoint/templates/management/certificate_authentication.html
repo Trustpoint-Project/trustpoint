@@ -2,12 +2,12 @@
 {% load i18n %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+<div class="tp-full-height-card card" >
     <div class="card-header">
         <h1>{% trans 'Configure Certificate Authentication' %}</h1>
     </div>
 
-    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
+    <div class="tp-scroll-body card-body text-start" >
         {{ form.non_field_errors }}
         {% if form.action.errors %}<div class="alert alert-danger">{% trans 'Choose a valid management CA action.' %}</div>{% endif %}
         {% if form.root_ca_id.errors or form.issuing_ca_id.errors %}

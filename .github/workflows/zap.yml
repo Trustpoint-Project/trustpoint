@@ -55,6 +55,18 @@ jobs:
           echo '::error::Operational setup/login did not become ready'
           exit 1
 
+      - name: Check deployed security headers and HTTP enrollment routing
+        run: python3 tests/docker_security/check_response_headers.py --insecure
+
+      - name: Check CSP compatibility in Chromium
+        env:
+          TP_CSP_USERNAME: zap-admin
+          TP_CSP_PASSWORD: synthetic-zap-ci-password-321
+        run: |
+          npm install --prefix "$RUNNER_TEMP/csp-browser" --no-audit --no-fund playwright@1.64.1
+          "$RUNNER_TEMP/csp-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+          NODE_PATH="$RUNNER_TEMP/csp-browser/node_modules" node tests/docker_security/csp_browser.cjs
+
       - name: Run independent HTTP and HTTPS baselines
         run: |
           docker pull ghcr.io/zaproxy/zaproxy:stable

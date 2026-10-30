@@ -456,9 +456,9 @@ class CmpRevocationStrategy(HelpPageStrategy):
             '(e.g., certificate-<strong>1</strong>.pem, key-<strong>1</strong>.pem).'
             '</div>'
             '<label for="cred-number-input" class="form-label">Credential Number</label>'
-            '<input type="number" id="cred-number-input" class="form-control mb-3" '
-            f'value="{cred}" min="1" style="max-width: 200px;" '
-            'onchange="updateRevocationCommand()">\n'
+            '<input type="number" id="cred-number-input" class="form-control mb-3 tp-credential-number" '
+            f'value="{cred}" min="1" '
+            'data-tp-change="revocation-command">\n'
             '<p class="text-muted">This number will be used in the file names: '
             'certificate-<span id="cred-display-1">' + str(cred) + '</span>.pem, '
             'key-<span id="cred-display-2">' + str(cred) + '</span>.pem, '
@@ -478,7 +478,7 @@ class CmpRevocationStrategy(HelpPageStrategy):
 
         reason_options_html = (
             '<select id="revreason-select" class="form-select mb-3" '
-            'onchange="updateRevocationCommand()">\n'
+            'data-tp-change="revocation-command">\n'
         )
         for reason_code in RevokedCertificateModel.ReasonCode:
             reason_options_html += f'  <option value="{reason_code.name.lower()}">{reason_code.label}</option>\n'
@@ -880,10 +880,13 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
             'expired': _non_lazy('Expired - replace it to enroll'),
             'none': _non_lazy('Not set - generate a challenge'),
         }
+        reset_label = (
+            _non_lazy('Generate challengePassword') if state == 'none' else _non_lazy('Replace challengePassword')
+        )
         reset_html = (
             '<form method="post" action="" id="replace-scep-challenge-form">CSRF_TOKEN_PLACEHOLDER'
             '<button type="submit" class="btn btn-outline-secondary w-100">'
-            f'{_non_lazy("Replace challengePassword")}</button>'
+            f'{reset_label}</button>'
             '</form>'
         )
 
@@ -923,11 +926,11 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
             profile_url = f'{scep_base}/{name}/'
             profile_sections.append(
                 self._build_profile_section(
-                    common_name=device.common_name,
+                    device=device,
                     profile_url=profile_url,
                     name=name,
                     index=index,
-                    device_id=device.pk,
+                    challenge_state=state,
                 )
             )
         sections_tail = [
@@ -962,28 +965,41 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
 
     @staticmethod
     def _build_profile_section(
-        common_name: str,
+        device: DeviceModel,
         profile_url: str,
         name: str,
         index: int,
-        device_id: int,
+        *,
+        challenge_state: str,
     ) -> HelpSection:
         """Enrollment and renewal commands for one certificate profile."""
+        if challenge_state == 'active':
+            config_row = HelpRow(
+                _non_lazy('OpenSSL Configuration'),
+                format_html(
+                    '<a href="{}" class="btn btn-primary">{}</a>',
+                    reverse('devices:scep_config_download', kwargs={'pk': device.pk}),
+                    _non_lazy('Download scep.cnf'),
+                ),
+                ValueRenderType.HTML,
+            )
+        else:
+            guidance = {
+                'none': _non_lazy('Generate a challengePassword above before downloading scep.cnf.'),
+                'expired': _non_lazy('Replace the expired challengePassword above before downloading scep.cnf.'),
+                'consumed': _non_lazy(
+                    'Initial enrollment is complete. Use the renewal commands with the issued certificate.'
+                ),
+            }
+            config_row = HelpRow(
+                _non_lazy('OpenSSL Configuration'),
+                guidance[challenge_state],
+                ValueRenderType.PLAIN,
+            )
         return HelpSection(
             _non_lazy(f'Certificate Request for the {name} profile'),
             [
-                HelpRow(
-                    _non_lazy('OpenSSL Configuration'),
-                    format_html(
-                        '<a href="{}" class="btn btn-primary">{}</a>',
-                        reverse(
-                            'devices:scep_config_download',
-                            kwargs={'pk': device_id},
-                        ),
-                        _non_lazy('Download scep.cnf'),
-                    ),
-                    ValueRenderType.HTML,
-                ),
+                config_row,
                 HelpRow(
                     _non_lazy('Generate key and CSR'),
                     (
@@ -1008,7 +1024,7 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
                     (
                         'openssl req -new -newkey rsa:2048 -noenc '
                         '-keyout newkey.pem -out newreq.pem '
-                        f'-subj "/CN={common_name}" -sha256'
+                        f'-subj "/CN={device.common_name}" -sha256'
                     ),
                     ValueRenderType.CODE,
                 ),
@@ -1791,7 +1807,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         discover_server_url = reverse('devices:devices_discover_server', kwargs={'pk': device.pk})
 
         discover_html = (
-            '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
+            '<form method="post" action="' + discover_server_url + '" class="d-inline">'
             'CSRF_TOKEN_PLACEHOLDER'
             '<button type="submit" class="btn btn-info">Discover Server</button>'
             '</form>'
@@ -1804,7 +1820,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             update_cert_url = reverse('devices:devices_update_server_certificate', kwargs={'pk': device.pk})
 
             trustlist_html = (
-                '<form method="post" action="' + update_trustlist_url + '" style="display: inline;">'
+                '<form method="post" action="' + update_trustlist_url + '" class="d-inline">'
                 'CSRF_TOKEN_PLACEHOLDER'
                 '<button type="submit" class="btn btn-primary">Update Trustlist</button>'
                 '</form>'
@@ -1813,7 +1829,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             )
 
             cert_html = (
-                '<form method="post" action="' + update_cert_url + '" style="display: inline;">'
+                '<form method="post" action="' + update_cert_url + '" class="d-inline">'
                 'CSRF_TOKEN_PLACEHOLDER'
                 '<button type="submit" class="btn btn-primary">Update Server Certificate</button>'
                 '</form>'
@@ -1869,7 +1885,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         Returns:
             Tuple of (hierarchy_html, has_missing_crl).
         """
-        hierarchy_html = '<div style="font-family: monospace;"><strong>Certificate Authority Hierarchy:</strong><br>'
+        hierarchy_html = '<div class="font-monospace"><strong>Certificate Authority Hierarchy:</strong><br>'
 
         has_missing_crl = False
         for idx, ca in enumerate(ca_chain):
@@ -2072,9 +2088,9 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             f'  </label>'
             '</div>'
             f'<label for="{interval_id}" class="form-label mt-2">Renewal Interval (hours)</label>'
-            f'<input type="number" class="form-control" id="{interval_id}" '
+            f'<input type="number" class="form-control tp-credential-number" id="{interval_id}" '
             f'       name="{interval_field}" min="1" value="{interval}" '
-            '       style="max-width: 200px;">'
+            '       >'
             '<div class="form-text text-muted">'
             f'  {description}'
             '</div>'
@@ -2574,7 +2590,7 @@ def _build_aoki_demo_section(request: Any) -> HelpSection:
             )
 
     setup_html = SafeString(
-        f'<form method="post" action="{setup_url}" style="display:inline;">'
+        f'<form method="post" action="{setup_url}" class="d-inline">'
         f'CSRF_TOKEN_PLACEHOLDER'
         f'<button type="submit" class="btn btn-primary mb-3">'
         f'Run aoki_setup_idevid_test_env</button>'

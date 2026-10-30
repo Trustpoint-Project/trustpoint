@@ -7,6 +7,7 @@ Python dependency versions.
 
 | Distributed component | Files | License text / origin |
 | --- | --- | --- |
+| ReDoc 2.0.0 from installed drf-yasg, with CSP nonce and local-logo substitutions | `trustpoint/static/js/redoc-csp.min.js` | Adjacent `redoc-csp.min.js.NOTICES.txt`; reproduce with `uv run python tests/scripts/build_redoc_csp.py` |
 | Workflow editor: CodeMirror, Lezer, YAML and transitive browser dependencies | `trustpoint/static/js/workflows2/editor_bundle.js` | Adjacent `editor_bundle.js.NOTICES.txt`, generated from esbuild inputs and installed package license files; exact versions appear in that notice |
 | Bootstrap 5.3.2, including CSS and JavaScript | `trustpoint/static/css/bootstrap.min.css`, `trustpoint/static/js/bootstrap.bundle.min.js` | [MIT](vendor/bootstrap-5.3.2.txt), [upstream tag](https://github.com/twbs/bootstrap/blob/v5.3.2/LICENSE) |
 | Popper 2.11.8, included by Bootstrap's bundle | `trustpoint/static/js/bootstrap.bundle.min.js` | [MIT](vendor/popper-2.11.8.txt), [upstream tag](https://github.com/floating-ui/floating-ui/blob/v2.11.8/LICENSE.md) |

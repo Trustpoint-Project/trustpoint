@@ -10,7 +10,9 @@
         <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
         <link rel="icon" href="{% static 'img/trustpoint_favicon.png' %}">
         {% block head %}{% endblock head %}
-    </head>
+        <script src="{% static 'js/ui-actions.js' %}" defer></script>
+    <link rel="stylesheet" href="{% static 'css/ui-layout.css' %}">
+</head>
 
     <body id="bs-override" class="body-users">
         <header class="tp-page-header tp-page-header-users navbar border-bottom border-body">

@@ -20,10 +20,11 @@ def config(monkeypatch):
     return value
 
 
-def test_placeholder_commands_are_unavailable():
+def test_removed_commands_are_unavailable():
     commands = get_commands()
     assert 'check_system_health' not in commands
     assert 'check_for_security_vulnerabilities' not in commands
+    assert 'check_onboarding_failed_devices' not in commands
 
 
 def test_runner_completes_supported_checks(config, monkeypatch):
@@ -34,13 +35,14 @@ def test_runner_completes_supported_checks(config, monkeypatch):
     names = [item.args[0] for item in run.call_args_list]
     assert 'check_system_health' not in names
     assert 'check_for_security_vulnerabilities' not in names
+    assert 'check_onboarding_failed_devices' not in names
     assert 'check_certificate_validity' in names
     assert 'check_tls_certificate_validity' in names
     assert 'All notification checks completed successfully.' in output.getvalue()
 
 
 @pytest.mark.parametrize('error', [CommandError('failed'), RuntimeError('failed')])
-def test_runner_continues_then_raises_aggregate_error(config, monkeypatch, error):
+def test_runner_continues_then_raises_aggregate_error(config, monkeypatch, error, caplog):
     attempted = []
 
     def check(name):
@@ -53,6 +55,7 @@ def test_runner_continues_then_raises_aggregate_error(config, monkeypatch, error
     with pytest.raises(CommandError, match='check_backup_age, check_certificate_validity'):
         call_command('run_all_notifications', stdout=output)
     assert attempted[-1] == 'check_tls_certificate_validity'
+    assert any(record.exc_info and 'check_backup_age' in record.getMessage() for record in caplog.records)
     assert 'All notification checks completed successfully.' not in output.getvalue()
 
 

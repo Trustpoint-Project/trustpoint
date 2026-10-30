@@ -66,6 +66,7 @@ Welcome to Trustpoint's documentation!
    development/auto_restore
    development/sbom
    development/pipeline
+   development/security-response-headers
    development/release-checklist
    development/testing/test_plan
    development/testing/ci_cd

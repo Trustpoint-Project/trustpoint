@@ -6,7 +6,7 @@
 {% block head %}
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
 
-    <style>
+    <style nonce="{{ csp_nonce }}">
         .tp-crl-tabs {
             display: flex;
             flex-wrap: wrap;
@@ -449,7 +449,7 @@
             <button
                 type="button"
                 class="btn btn-secondary"
-                onclick="history.back()"
+                data-tp-action="back"
             >
                 {% trans 'Back' %}
             </button>

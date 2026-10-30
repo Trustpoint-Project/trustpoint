@@ -767,3 +767,6 @@ body.wf2-graph-expanded {
     flex: 1 1 auto;
   }
 }
+
+/* Preserve the fallback textarea layout under the strict CSP. */
+#id_yaml_text { white-space: pre; tab-size: 2; }

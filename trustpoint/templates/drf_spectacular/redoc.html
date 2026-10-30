@@ -1,0 +1,27 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+  <head>
+    {% block head %}
+    <title>{{ title|default:"Redoc" }}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style nonce="{{ csp_nonce }}">
+      {# Redoc doesn't change outer page styles. #}
+      body { margin: 0; padding: 0; }
+    </style>
+    {% endblock head %}
+  </head>
+  <body>
+    {% block body %}
+    <div id="redoc-container"></div>
+    <script nonce="{{ csp_nonce }}">window.__webpack_nonce__ = "{{ csp_nonce }}";</script>
+    <script nonce="{{ csp_nonce }}" src="{% static 'js/redoc-csp.min.js' %}"></script>
+    <script nonce="{{ csp_nonce }}">
+      const redocSettings = {{ settings|default:"{}"|safe }};
+      redocSettings.nonce = "{{ csp_nonce }}";
+      Redoc.init("{{ schema_url }}", redocSettings, document.getElementById('redoc-container'));
+    </script>
+    {% endblock body %}
+  </body>
+</html>

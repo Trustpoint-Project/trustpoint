@@ -176,6 +176,6 @@
   </div>
 </aside>
 
-<script defer src="{% static 'js/workflows2/editor_bundle.js' %}"></script>
+<script nonce="{{ csp_nonce }}" id="workflow-editor-script" defer src="{% static 'js/workflows2/editor_bundle.js' %}"></script>
 
 {% endblock %}

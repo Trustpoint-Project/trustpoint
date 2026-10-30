@@ -141,7 +141,7 @@
             </div>
     </div></div>
 </div>
-{% if import_form.errors %}<script>document.addEventListener('DOMContentLoaded', () => new bootstrap.Modal(document.getElementById('truststore-import')).show());</script>{% endif %}
+{% if import_form.errors %}<script nonce="{{ csp_nonce }}">document.addEventListener('DOMContentLoaded', () => new bootstrap.Modal(document.getElementById('truststore-import')).show());</script>{% endif %}
 {% endif %}
 <script src="{% static 'js/management/tls_external_csr.js' %}"></script>
 {% endblock content %}

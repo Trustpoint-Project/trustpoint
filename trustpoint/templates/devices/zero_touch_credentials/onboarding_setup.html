@@ -63,7 +63,7 @@
                                     <label class="form-label">{% trans 'Suggested pattern (from DevOwnerID references):' %}</label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" value="{{ suggested_pattern }}" readonly id="suggested-pattern">
-                                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('id_serial_number_pattern').value = document.getElementById('suggested-pattern').value; document.getElementById('id_serial_number_pattern').removeAttribute('readonly');">
+                                        <button type="button" class="btn btn-outline-primary" data-tp-action="suggest-pattern">
                                             {% trans 'Use this pattern' %}
                                         </button>
                                     </div>
@@ -84,7 +84,7 @@
                                 </small>
                             </div>
 
-                            <div id="regex-options" class="mb-3" style="display: none;">
+                            <div id="regex-options" class="tp-initially-hidden mb-3" >
                                 <label class="form-label">{% trans 'Generated Regex Variations:' %}</label>
                                 <ul class="list-group cursor" id="regex-list"></ul>
                             </div>

@@ -106,7 +106,7 @@
     <span>{% trans "Container metrics are only updated when the page is refreshed." %}</span>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function () {
     const uptimeElement = document.getElementById('uptime-value');
     const startedAtTs = Number("{{ started_time_ts }}");
@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-<style>
+<style nonce="{{ csp_nonce }}">
   [data-bs-theme="light"] .metric-card {
     border: 1px solid #d0d7de;
     background: #f8f9fa;

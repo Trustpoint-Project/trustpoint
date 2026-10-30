@@ -22,7 +22,7 @@
         </p>
     </div>
 
-    <div class="card-body text-start" style="overflow-y: auto; flex: 1 1 auto; min-height: 0;">
+    <div class="tp-scroll-flex card-body text-start" >
         <form
             id="profile-form"
             method="post"
@@ -167,7 +167,7 @@
 {# Account Security                                             #}
 {# ============================================================ #}
 {% if can_manage_account_security %}
-<div class="card" id="account-security" style="height: min(70vh, 720px); min-height: 360px; display: flex; flex-direction: column;">
+<div class="tp-security-card card" id="account-security" >
     <div class="card-header">
         <h1>{% blocktranslate with username=object.username %}User Profile: {{ username }}{% endblocktranslate %}</h1>
         <h1 class="mb-1">
@@ -179,7 +179,7 @@
         </p>
     </div>
 
-    <div class="card-body text-start" style="overflow-y: auto; flex: 1 1 auto; min-height: 0;">
+    <div class="tp-scroll-flex card-body text-start" >
 
         {# --- Authentication State --- #}
         {% if failed_login_blocked or can_unblock_failed_login %}
