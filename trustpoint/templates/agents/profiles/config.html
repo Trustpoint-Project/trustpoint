@@ -201,7 +201,7 @@
 {% if json_valid %}
     {{ profile_json|json_script:"json-data" }}
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
         document.addEventListener('DOMContentLoaded', function () {
             const jsonData = document.getElementById('json-data');
             const jsonEditor = document.getElementById('json-editor');

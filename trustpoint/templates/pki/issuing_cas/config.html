@@ -275,7 +275,7 @@
                     <div>
                         <form method="post"
                             action="{% url 'pki:issuing_cas-request-cert-est' pk=issuing_ca.pk %}"
-                            style="display: inline;">
+                             class="tp-inline-form">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm btn-primary">
                                 {% trans 'Request CA Certificate via EST' %}
@@ -299,7 +299,7 @@
                     <div>
                         <form method="post"
                             action="{% url 'pki:issuing_cas-request-cert-cmp' pk=issuing_ca.pk %}"
-                            style="display: inline;">
+                             class="tp-inline-form">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm btn-primary">
                                 {% trans 'Request CA Certificate via CMP' %}
@@ -423,7 +423,7 @@
                             <button type="submit" class="btn btn-primary">{% trans 'Save CRL Settings' %}</button>
                         </form>
 
-                        <script>
+                        <script nonce="{{ csp_nonce }}">
                             document.addEventListener('DOMContentLoaded', function() {
                                 const enableCheckbox = document.getElementById('id_crl_cycle_enabled');
                                 const intervalField = document.getElementById('form-field-crl_cycle_interval_hours');
@@ -455,7 +455,7 @@
         </div>
 
         <div class="card-footer d-flex">
-            <button type="button" class="btn btn-secondary" onclick="history.back()">{% trans 'Back' %}</button>
+            <button type="button" class="btn btn-secondary" data-tp-action="back">{% trans 'Back' %}</button>
         </div>
     </div>
 

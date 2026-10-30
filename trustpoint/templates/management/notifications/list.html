@@ -80,7 +80,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-cri"
-                            onclick="toggleFilterType('CRI')"
+                            data-tp-action="filter-type" data-tp-value="CRI"
                         >
                             <svg
                                 class="icon me-1"
@@ -97,7 +97,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-war"
-                            onclick="toggleFilterType('WAR')"
+                            data-tp-action="filter-type" data-tp-value="WAR"
                         >
                             <svg
                                 class="icon me-1"
@@ -114,7 +114,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-inf"
-                            onclick="toggleFilterType('INF')"
+                            data-tp-action="filter-type" data-tp-value="INF"
                         >
                             <svg
                                 class="icon me-1"
@@ -131,7 +131,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-set"
-                            onclick="toggleFilterType('SET')"
+                            data-tp-action="filter-type" data-tp-value="SET"
                         >
                             <svg
                                 class="icon me-1"
@@ -157,7 +157,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-s"
-                            onclick="toggleFilterSource('S')"
+                            data-tp-action="filter-source" data-tp-value="S"
                         >
                             <svg
                                 class="icon me-1"
@@ -174,7 +174,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-d"
-                            onclick="toggleFilterSource('D')"
+                            data-tp-action="filter-source" data-tp-value="D"
                         >
                             <svg
                                 class="icon me-1"
@@ -191,7 +191,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-e"
-                            onclick="toggleFilterSource('E')"
+                            data-tp-action="filter-source" data-tp-value="E"
                         >
                             <svg
                                 class="icon me-1"
@@ -208,7 +208,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-i"
-                            onclick="toggleFilterSource('I')"
+                            data-tp-action="filter-source" data-tp-value="I"
                         >
                             <svg
                                 class="icon me-1"
@@ -225,7 +225,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-c"
-                            onclick="toggleFilterSource('C')"
+                            data-tp-action="filter-source" data-tp-value="C"
                         >
                             <svg
                                 class="icon me-1"
@@ -251,7 +251,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-today"
-                            onclick="setDateRange('today')"
+                            data-tp-action="date-range" data-tp-value="today"
                         >
                             {% trans 'Today' %}
                         </button>
@@ -259,7 +259,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-last7days"
-                            onclick="setDateRange('last7days')"
+                            data-tp-action="date-range" data-tp-value="last7days"
                         >
                             {% trans 'Last 7 Days' %}
                         </button>
@@ -267,7 +267,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-last30days"
-                            onclick="setDateRange('last30days')"
+                            data-tp-action="date-range" data-tp-value="last30days"
                         >
                             {% trans 'Last 30 Days' %}
                         </button>
@@ -275,7 +275,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-secondary filter-button filter-button-all"
-                            onclick="setDateRange('all')"
+                            data-tp-action="date-range" data-tp-value="all"
                         >
                             {% trans 'All' %}
                         </button>
@@ -326,7 +326,7 @@
                                 <a
                                     href="#"
                                     class="text-decoration-none text-body"
-                                    onclick="updateQueryParam(event, 'sort', 'notification_type')"
+                                    data-tp-action="query" data-tp-param="sort" data-tp-value="notification_type"
                                 >
                                     {% trans 'Type' %}
                                 </a>
@@ -336,7 +336,7 @@
                                 <a
                                     href="#"
                                     class="text-decoration-none text-body"
-                                    onclick="updateQueryParam(event, 'sort', 'notification_source')"
+                                    data-tp-action="query" data-tp-param="sort" data-tp-value="notification_source"
                                 >
                                     {% trans 'Source' %}
                                 </a>
@@ -350,7 +350,7 @@
                                 <a
                                     href="#"
                                     class="text-decoration-none text-body"
-                                    onclick="updateQueryParam(event, 'sort', 'created_at')"
+                                    data-tp-action="query" data-tp-param="sort" data-tp-value="created_at"
                                 >
                                     {% trans 'Created at' %}
                                 </a>
@@ -421,7 +421,7 @@
 </div>
 
 
-<script>
+<script nonce="{{ csp_nonce }}">
     let selectedNotificationTypes = ['CRI', 'WAR', 'INF', 'SET'];
     let selectedNotificationSources = ['S', 'D', 'E', 'I', 'C'];
     let selectedDateRange = 'all';

@@ -123,9 +123,7 @@ class CmpRequestView(LoggerMixin, View):
             authenticate_cmp_request(ctx)
             validate_cmp_proof_of_possession(ctx)
 
-            CmpAuthorization(
-                ['initialization', 'certification', 'revocation', 'certconf']
-            ).authorize(ctx)
+            CmpAuthorization(['initialization', 'certification', 'revocation', 'certconf']).authorize(ctx)
 
             # Only persist a follow-up nonce after both authentication and
             # authorization succeeded, otherwise an attacker could burn a nonce.
@@ -134,6 +132,8 @@ class CmpRequestView(LoggerMixin, View):
             process_workflow_operation(ctx, self._process_authorized_operation)
         except Exception:
             self.logger.exception('Error processing CMP request')
+            if ctx.error_details is None:
+                ctx.error('Error processing CMP request.', http_status=400)
 
         try:
             CmpMessageResponder.build_response(ctx)

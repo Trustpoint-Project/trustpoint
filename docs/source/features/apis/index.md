@@ -10,7 +10,7 @@ Certificate enrollment and lifecycle management using industry-standard PKI prot
 
 | Protocol | Base URL | Purpose | Standard |
 |----------|----------|---------|----------|
-| **CMP** | `/.well-known/cmp/` | Full-featured PKI protocol | RFC 4210, RFC 9480 |
+| **CMP** | `/.well-known/cmp/` | Configured certificate lifecycle operations | RFC 4210, RFC 9480 |
 | **EST** | `/.well-known/est/` | Simple enrollment over TLS | RFC 7030 |
 | **SCEP** | `/.well-known/scep/` | Certificate enrollment and renewal for devices and legacy systems | RFC 8894 |
 | **REST PKI** | `/rest/` | JSON-based enrollment (Trustpoint-specific) | Custom |
@@ -43,7 +43,7 @@ The Management API uses JWT (JSON Web Tokens) for human-user authentication:
 # Obtain access token
 curl -X POST https://trustpoint.example.com/api/token/ \
   -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "password"}'
+  -d '{"username": "<api-enabled-user>", "password": "<your-password>"}'
 
 # Use token in requests
 curl -X GET https://trustpoint.example.com/api/domains/ \
@@ -57,7 +57,13 @@ See the dedicated [Service Accounts guide](service_accounts.md) for setup and to
 
 The complete API specification is available in **OpenAPI (Swagger)** format:
 
-- **Swagger UI**: `https://<trustpoint-host>/api/schema/swagger-ui/`
+- **Schema**: `https://<trustpoint-host>/schema/`
+- **Swagger UI**: `https://<trustpoint-host>/swagger/`
+- **ReDoc**: `https://<trustpoint-host>/redoc/`
+
+Authentication does not by itself grant every administrative action. Consult
+the endpoint's permission requirements and the
+[capability and limitations guide](../capabilities.md) before integration.
 
 ---
 

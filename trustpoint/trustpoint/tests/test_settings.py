@@ -32,6 +32,12 @@ def set_test_env(monkeypatch):
     importlib.reload(settings)
 
 
+def test_secure_cookie_defaults_follow_container_mode():
+    """Docker UI cookies require TLS while direct native HTTP stays usable."""
+    assert settings.SESSION_COOKIE_SECURE is settings.DOCKER_CONTAINER
+    assert settings.CSRF_COOKIE_SECURE is settings.DOCKER_CONTAINER
+
+
 def test_debug_setting():
     """Ensure DEBUG tracks the configured container mode."""
     assert settings.DEBUG is (not settings.DOCKER_CONTAINER), 'DEBUG should be the inverse of DOCKER_CONTAINER.'
@@ -191,11 +197,14 @@ def test_env_value_reads_docker_secret_file(monkeypatch, tmp_path):
     monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
     monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret_file))
 
-    assert settings._env_value(
-        'DATABASE_PASSWORD',
-        'testing321',
-        file_var='DATABASE_PASSWORD_FILE',
-    ) == 'secret-password'
+    assert (
+        settings._env_value(
+            'DATABASE_PASSWORD',
+            'testing321',
+            file_var='DATABASE_PASSWORD_FILE',
+        )
+        == 'secret-password'
+    )
 
 
 def test_env_value_falls_back_when_secret_file_is_unreadable(monkeypatch, tmp_path):
@@ -204,11 +213,14 @@ def test_env_value_falls_back_when_secret_file_is_unreadable(monkeypatch, tmp_pa
     monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
     monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(missing_file))
 
-    assert settings._env_value(
-        'DATABASE_PASSWORD',
-        'testing321',
-        file_var='DATABASE_PASSWORD_FILE',
-    ) == 'testing321'
+    assert (
+        settings._env_value(
+            'DATABASE_PASSWORD',
+            'testing321',
+            file_var='DATABASE_PASSWORD_FILE',
+        )
+        == 'testing321'
+    )
 
 
 def test_database_settings(monkeypatch):
@@ -256,6 +268,7 @@ def test_bootstrap_database_settings(monkeypatch, tmp_path):
     assert databases['default']['NAME'] == str(bootstrap_db)
     assert 'trustpoint.middleware.Workflow2InlineDrainMiddleware' not in settings.MIDDLEWARE
 
+
 def test_secret_key():
     """Ensure the secret key is defined."""
     assert settings.SECRET_KEY is not None, 'SECRET_KEY must be defined.'
@@ -288,7 +301,6 @@ def test_installed_apps():
         assert app in installed_app_labels, f'App {app} should be in INSTALLED_APPS.'
 
 
-
 def test_logging_configuration():
     """Ensure logging configuration is properly configured."""
     logging_config = settings.LOGGING
@@ -297,9 +309,7 @@ def test_logging_configuration():
     assert 'formatters' in logging_config, 'Logging configuration must include formatters.'
 
     expected_log_file_path = os.path.abspath(str(settings.LOG_FILE_PATH))
-    actual_log_file_path = os.path.abspath(
-        logging_config['handlers']['rotatingFile']['filename']
-    )
+    actual_log_file_path = os.path.abspath(logging_config['handlers']['rotatingFile']['filename'])
 
     assert actual_log_file_path == expected_log_file_path, (
         f'Log file path should match the defined value in settings. '
@@ -327,7 +337,7 @@ def test_public_paths():
         '/crl',
         '/setup-wizard',
         '/devices/browser',
-        '/prometheus/'
+        '/prometheus/',
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
@@ -360,7 +370,10 @@ def test_mailers_defaults_to_console(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.parametrize(('port', 'use_tls', 'use_ssl'), [(587, True, False), (465, False, True), (1025, False, False)])
 def test_mailers_smtp_environment(
-    monkeypatch: pytest.MonkeyPatch, port: int, use_tls: bool, use_ssl: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    port: int,
+    use_tls: bool,
+    use_ssl: bool,
 ) -> None:
     """SMTP environment variables retain their port-based security defaults."""
     monkeypatch.setenv('EMAIL_HOST', 'smtp.example.com')
@@ -375,8 +388,13 @@ def test_mailers_smtp_environment(
     assert settings.MAILERS['default'] == {
         'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
         'OPTIONS': {
-            'host': 'smtp.example.com', 'port': port, 'username': 'mailer', 'password': 'secret',
-            'use_tls': use_tls, 'use_ssl': use_ssl, 'timeout': 15,
+            'host': 'smtp.example.com',
+            'port': port,
+            'username': 'mailer',
+            'password': 'secret',
+            'use_tls': use_tls,
+            'use_ssl': use_ssl,
+            'timeout': 15,
         },
     }
 

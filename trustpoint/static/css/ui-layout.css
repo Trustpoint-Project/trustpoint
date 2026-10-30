@@ -1,0 +1,46 @@
+/* Copyright (c) 2026 The Trustpoint Project Authors. SPDX-License-Identifier: MIT */
+/* Layouts formerly embedded in HTML attributes; compatible with strict CSP. */
+.tp-domain-selector { width: auto; min-width: 200px; }
+.tp-scroll-list { max-height: 200px; overflow-y: auto; }
+.tp-cursor-pointer { cursor: pointer; }
+.tp-filter-menu { min-width: 22rem; }
+.tp-table-scroll { overflow-x: auto; width: 100%; }
+.tp-empty-icon { font-size: 4rem; color: var(--bs-secondary); }
+.tp-health-bar { height: 18px; background: #6c757d22 }
+.tp-detail-card { display: flex; flex-direction: column; height: calc(100vh - 120px); }
+.tp-scroll-grow { overflow-y: auto; flex-grow: 1; }
+.tp-detail-label { width: 35%; }
+.tp-full-height-card { max-height: 100%; display: flex; flex-direction: column; }
+.tp-scroll-body { overflow: auto; flex-grow: 1; }
+.tp-file-icon { width: 48px; }
+.tp-avatar-size { width: 2rem; height: 2rem; min-width: 2rem; }
+.tp-scroll-flex { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.tp-security-card { height: min(70vh, 720px); min-height: 360px; display: flex; flex-direction: column; }
+.tp-scroll-body-limited { overflow: auto; flex-grow: 1; max-height: 90%; }
+.tp-confirmation-label { width: 40%; }
+.tp-copy-container { position: relative; }
+.tp-copy-middle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; }
+.tp-copy-top { position: absolute; right: 10px; top: 10px; background: none; border: none; cursor: pointer; }
+.tp-inline-form { display: inline; }
+.tp-credential-stack { display: flex; flex-direction: column; gap: 20px; max-height: 100%; }
+.tp-half-height-card { max-height: 50%; display: flex; flex-direction: column; }
+.tp-scroll-fill { overflow-y: auto; flex: 1; }
+.tp-list-spacing { margin-top: 10px; }
+.tp-initially-hidden { display: none; }
+.tp-method-card { max-width: 400px; width: 100%; }
+.tp-method-link { max-width: 250px; margin-left: auto; margin-right: auto; }
+.tp-validity-warning { color:#795500;background:#fffde7; border:1px solid #ffc107; }
+.tp-credential-number { max-width: 200px; }
+.tp-profile-empty { padding:20px; text-align:center; color:#888; }
+.tp-profile-description { background:#f8f9fa; padding:10px; border-radius:6px; margin-bottom:16px; border:1px solid #e9ecef; color:#555; font-size:13px; line-height:1.4; }
+.tp-profile-fields { display:flex; flex-direction:column; gap:16px; }
+.tp-profile-flags { display:flex; gap:24px; padding:4px 0; }
+.tp-profile-checkbox { display:flex; align-items:center; gap:8px; cursor:pointer; }
+.tp-profile-label { font-weight:500; }
+.tp-profile-children { max-height:400px; overflow-y:auto; padding-right:5px; }
+.tp-profile-child-heading { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.tp-profile-child-label { margin:0; }
+.tp-profile-mutable { font-weight:normal; font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer; }
+.tp-profile-radio { display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0; }
+.tp-profile-radio-muted { display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0; color:#888; }
+.tp-profile-radios { display:flex; flex-direction:column; gap:2px; }

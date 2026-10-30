@@ -205,6 +205,10 @@
                   </label>
                   {{ smtp_email_form.password }}
                   <div class="form-text">{{ smtp_email_form.password.help_text }}</div>
+                  <div class="form-check mt-2">
+                    {{ smtp_email_form.clear_password }}
+                    {{ smtp_email_form.clear_password.label_tag }}
+                  </div>
                   {% if smtp_email_form.password.errors %}
                     <div class="invalid-feedback d-block">{{ smtp_email_form.password.errors.0 }}</div>
                   {% endif %}
@@ -276,7 +280,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
     var STORAGE_KEY = 'settings_tab_active';
     var DEFAULT_TAB = 'panel-security';

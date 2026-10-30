@@ -2,12 +2,12 @@
 {% load i18n crispy_forms_filters %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+<div class="tp-full-height-card card" >
     <div class="card-header">
         <h1>{% trans 'Certificate Based Authentication' %}: {{ object.username }}</h1>
     </div>
 
-    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
+    <div class="tp-scroll-body card-body text-start" >
         <div class="table-responsive">
             <table class="table align-middle">
                 <thead>
@@ -76,7 +76,7 @@
     </div>
 </div>
 {% if certificate_authentication_enabled %}
-<script>
+<script nonce="{{ csp_nonce }}">
 document.getElementById('client-certificate-form').addEventListener('submit', async function (event) {
     event.preventDefault();
     const button = this.querySelector('button[type="submit"]');

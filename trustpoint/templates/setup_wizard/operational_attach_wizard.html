@@ -409,7 +409,7 @@
     </section>
 
     {% if is_attach_summary %}
-        <script>
+        <script nonce="{{ csp_nonce }}">
             (() => {
                 const form = document.querySelector('[data-summary-submit-form]');
                 const card = document.querySelector('[data-summary-submit-card]');

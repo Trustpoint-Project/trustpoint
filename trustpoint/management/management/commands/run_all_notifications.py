@@ -5,12 +5,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand
 
 from management.models import NotificationConfig
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -28,23 +31,18 @@ class Command(BaseCommand):
         notification_config = NotificationConfig.get()
 
         if not notification_config.enabled:
-            self.stdout.write(
-                self.style.WARNING('Notifications are disabled. Enable them in Management > Settings.')
-            )
+            self.stdout.write(self.style.WARNING('Notifications are disabled. Enable them in Management > Settings.'))
             return
 
         commands_to_run = [
             'trustpoint_setup_notifications',
-            'check_system_health',
             'check_log_size',
             'check_backup_age',
-            'check_for_security_vulnerabilities',
             'check_certificate_validity',
             'check_issuing_ca_validity',
             'check_crl_validity',
             'check_domain_issuing_ca',
             'check_non_onboarded_devices',
-            'check_onboarding_failed_devices',
             'check_revoked_device_certificates',
             'check_for_not_permitted_signature_algorithms',
             'check_for_insufficient_key_length',
@@ -62,15 +60,15 @@ class Command(BaseCommand):
                 call_command(command)
                 self.stdout.write(self.style.SUCCESS(f'Successfully completed {command}.'))
             except CommandError:
+                logger.exception('Notification check %s failed.', command)
                 self.stdout.write(self.style.ERROR(f'CommandError while running {command}'))
                 failed_commands.append(command)
-            except Exception:  # noqa: BLE001  # one failing check must not stop the rest
+            except Exception:  # one failing check must not stop the rest
+                logger.exception('Notification check %s failed.', command)
                 self.stdout.write(self.style.ERROR(f'Unexpected error while running {command}'))
                 failed_commands.append(command)
 
         if failed_commands:
-            self.stdout.write(
-                self.style.ERROR(f'Failed commands: {", ".join(failed_commands)}')
-            )
-        else:
-            self.stdout.write(self.style.SUCCESS('All notification checks completed successfully.'))
+            message = f'Failed notification checks: {", ".join(failed_commands)}'
+            raise CommandError(message)
+        self.stdout.write(self.style.SUCCESS('All notification checks completed successfully.'))

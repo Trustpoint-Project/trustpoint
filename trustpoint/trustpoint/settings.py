@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import django_stubs_ext
+from django.utils.csp import CSP
 from django.utils.translation import gettext_lazy as _
 
 from trustpoint.secret_key import development_secret_key, load_secret_key
@@ -132,15 +133,14 @@ def _configured_trustpoint_phase() -> str:
         if DOCKER_CONTAINER:
             return (
                 TRUSTPOINT_PHASE_OPERATIONAL
-                if TRUSTPOINT_AUTO_OPERATIONAL_ENV_FILE.is_file()
-                and TRUSTPOINT_AUTO_OPERATIONAL_READY_FILE.is_file()
+                if TRUSTPOINT_AUTO_OPERATIONAL_ENV_FILE.is_file() and TRUSTPOINT_AUTO_OPERATIONAL_READY_FILE.is_file()
                 else TRUSTPOINT_PHASE_BOOTSTRAP
             )
         return TRUSTPOINT_PHASE_OPERATIONAL
     if configured_phase not in TRUSTPOINT_VALID_PHASES:
         msg = (
-            f"Invalid TRUSTPOINT_PHASE={configured_phase!r}. "
-            f"Expected one of: {', '.join(sorted({*TRUSTPOINT_VALID_PHASES, TRUSTPOINT_PHASE_AUTO}))}."
+            f'Invalid TRUSTPOINT_PHASE={configured_phase!r}. '
+            f'Expected one of: {", ".join(sorted({*TRUSTPOINT_VALID_PHASES, TRUSTPOINT_PHASE_AUTO}))}.'
         )
         raise RuntimeError(msg)
     return configured_phase
@@ -169,6 +169,10 @@ DEVELOPMENT_ENV = DEBUG
 
 # Reverse proxy SSL header settings
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Docker serves the browser UI over TLS; direct local development supports HTTP.
+SESSION_COOKIE_SECURE = DOCKER_CONTAINER
+CSRF_COOKIE_SECURE = DOCKER_CONTAINER
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
@@ -272,7 +276,8 @@ POSTGRES_DB = os.environ.get('POSTGRES_DB', 'trustpoint_db')
 _DATABASE_USER_FILE = os.getenv('DATABASE_USER_FILE')
 DATABASE_USER = (
     Path(_DATABASE_USER_FILE).read_text(encoding='utf-8').strip()
-    if _DATABASE_USER_FILE else os.environ.get('DATABASE_USER', 'admin')
+    if _DATABASE_USER_FILE
+    else os.environ.get('DATABASE_USER', 'admin')
 )
 _DATABASE_PASSWORD_FILE = os.getenv('DATABASE_PASSWORD_FILE')
 if _DATABASE_PASSWORD_FILE:
@@ -282,10 +287,14 @@ if _DATABASE_PASSWORD_FILE:
 else:
     DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD', 'testing321')
 _DEFAULT_OPERATIONAL_DATABASE = 'postgresql' if DOCKER_CONTAINER else 'sqlite'
-TRUSTPOINT_OPERATIONAL_DATABASE = os.environ.get(
-    'TRUSTPOINT_OPERATIONAL_DATABASE',
-    _DEFAULT_OPERATIONAL_DATABASE,
-).strip().lower()
+TRUSTPOINT_OPERATIONAL_DATABASE = (
+    os.environ.get(
+        'TRUSTPOINT_OPERATIONAL_DATABASE',
+        _DEFAULT_OPERATIONAL_DATABASE,
+    )
+    .strip()
+    .lower()
+)
 TRUSTPOINT_LOCAL_SOFTWARE_BACKEND_NAME = os.environ.get(
     'TRUSTPOINT_LOCAL_SOFTWARE_BACKEND_NAME',
     'trustpoint-software-demo-testing-backend',
@@ -357,12 +366,12 @@ if _email_host:
         'OPTIONS': {
             'host': _email_host,
             'port': _email_port,
-            'use_tls': (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (
-                _email_port == _SMTP_TLS_PORT
-            ),
-            'use_ssl': (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (
-                _email_port == _SMTP_SSL_PORT
-            ),
+            'use_tls': (_use_tls_env.lower() in ('1', 'true', 'yes'))
+            if _use_tls_env
+            else (_email_port == _SMTP_TLS_PORT),
+            'use_ssl': (_use_ssl_env.lower() in ('1', 'true', 'yes'))
+            if _use_ssl_env
+            else (_email_port == _SMTP_SSL_PORT),
             'username': os.getenv('EMAIL_HOST_USER', ''),
             'password': os.getenv('EMAIL_HOST_PASSWORD', ''),
             'timeout': int(os.getenv('EMAIL_TIMEOUT', '10')),
@@ -471,7 +480,30 @@ MIGRATION_MODULES: dict[str, str | None] = {}
 if TRUSTPOINT_IS_OPERATIONAL and TRUSTPOINT_PHASE_CONFIGURED:
     MIGRATION_MODULES['setup_wizard'] = None
 
+# Apply CSP outside redirect/authentication middleware, including error responses.
+# Keep HTTP enrollment/CRL support: do not force upgrade-insecure-requests here.
+SECURE_CSP: dict[str, list[str]] = {
+    'default-src': [CSP.NONE],
+    'script-src': [CSP.SELF, CSP.NONCE],
+    'script-src-attr': [CSP.NONE],
+    'style-src': [CSP.SELF, CSP.NONCE],
+    'style-src-attr': [CSP.NONE],
+    'img-src': [CSP.SELF, 'data:'],
+    'font-src': [CSP.SELF],
+    'connect-src': [CSP.SELF],
+    'base-uri': [CSP.NONE],
+    'object-src': [CSP.NONE],
+    'frame-ancestors': [CSP.NONE],
+    'form-action': [CSP.SELF],
+}
+
+# ReDoc's search index runs in a local blob worker; scope that permission to
+# the documentation view. The self-hosted bundle initializes its style nonce.
+REDOC_CSP: dict[str, list[str]] = {**SECURE_CSP, 'worker-src': [CSP.SELF, 'blob:']}
+
 MIDDLEWARE = [
+    'django.middleware.csp.ContentSecurityPolicyMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -490,20 +522,18 @@ MIDDLEWARE = [
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 if TRUSTPOINT_IS_BOOTSTRAP:
     MIDDLEWARE = [
-        middleware
-        for middleware in MIDDLEWARE
-        if middleware != 'trustpoint.middleware.Workflow2InlineDrainMiddleware'
+        middleware for middleware in MIDDLEWARE if middleware != 'trustpoint.middleware.Workflow2InlineDrainMiddleware'
     ]
 
 TEMPLATE_CONTEXT_PROCESSORS = [
     'django.template.context_processors.debug',
     'django.template.context_processors.request',
+    'django.template.context_processors.csp',
     'django.contrib.auth.context_processors.auth',
     'django.contrib.messages.context_processors.messages',
     'trustpoint.settings.app_version',
@@ -546,7 +576,7 @@ AUTHENTICATION_BACKENDS = [
     'users.authentication.ServiceAccountBackend',  # Service account authentication
     'users.management_backend.TrustpointModelBackend',
     'users.authentication.ClientCertificateBackend',  # TLS client certificate sessions
-    'django.contrib.auth.backends.ModelBackend',    # Default Django authentication
+    'django.contrib.auth.backends.ModelBackend',  # Default Django authentication
 ]
 
 # Only these direct peers may assert TLS client identity. They must overwrite the
@@ -605,7 +635,7 @@ elif TRUSTPOINT_OPERATIONAL_DATABASE == 'sqlite':
     }
 else:
     msg = (
-        f"Invalid TRUSTPOINT_OPERATIONAL_DATABASE={TRUSTPOINT_OPERATIONAL_DATABASE!r}. "
+        f'Invalid TRUSTPOINT_OPERATIONAL_DATABASE={TRUSTPOINT_OPERATIONAL_DATABASE!r}. '
         "Expected 'postgresql' or 'sqlite'."
     )
     raise RuntimeError(msg)
@@ -667,6 +697,7 @@ LOGGING = {
 # Custome user model
 AUTH_USER_MODEL = 'users.TrustpointUser'
 
+
 # User interface config defaults
 class UIConfig:
     """User interface configuration defaults."""
@@ -692,6 +723,9 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
+    # Reuse the self-hosted distributions shipped by the installed drf-yasg.
+    'SWAGGER_UI_DIST': '/static/drf-yasg/swagger-ui-dist',
+    'SWAGGER_UI_FAVICON_HREF': '/static/img/trustpoint_favicon.png',
     'TITLE': 'Trustpoint APIs',
     'DESCRIPTION': 'API documentation for Trustpoint project',
     'VERSION': APP_VERSION,
@@ -764,17 +798,14 @@ if _configured_pkcs11_module_path:
 elif _file_pkcs11_module_path:
     HSM_DEFAULT_PKCS11_MODULE_PATH = Path(_file_pkcs11_module_path)
 else:
-    HSM_DEFAULT_PKCS11_MODULE_PATH = (
-        _first_existing_path(
-            # current local/dev default in the Trustpoint container
-            Path('/usr/lib/libpkcs11-proxy.so.0'),
-            # direct local SoftHSM fallback
-            Path('/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so'),
-            # final fallback if a library is mounted into the HSM root
-            HSM_LIB_DIR / 'libpkcs11.so',
-        )
-        or (HSM_LIB_DIR / 'libpkcs11.so')
-    )
+    HSM_DEFAULT_PKCS11_MODULE_PATH = _first_existing_path(
+        # current local/dev default in the Trustpoint container
+        Path('/usr/lib/libpkcs11-proxy.so.0'),
+        # direct local SoftHSM fallback
+        Path('/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so'),
+        # final fallback if a library is mounted into the HSM root
+        HSM_LIB_DIR / 'libpkcs11.so',
+    ) or (HSM_LIB_DIR / 'libpkcs11.so')
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     for directory in (HSM_CONFIG_DIR, HSM_LIB_DIR, HSM_TOKEN_DIR):

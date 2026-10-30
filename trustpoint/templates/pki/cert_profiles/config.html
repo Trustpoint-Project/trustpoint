@@ -83,7 +83,7 @@
 {% include "pki/cert_profiles/includes/profile-builder-sidebar.html" %}
 {% if json_valid %}
     {{ profile_json|json_script:"json-data" }}
-    <script>
+    <script nonce="{{ csp_nonce }}">
         const data = JSON.parse(document.getElementById("json-data").textContent);
         document.getElementById("json-editor").textContent = JSON.stringify(data, null, 2);
     </script>

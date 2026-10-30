@@ -258,7 +258,7 @@
 {# ================================================================ #}
 {# Copy CSR                                                        #}
 {# ================================================================ #}
-<script>
+<script nonce="{{ csp_nonce }}">
     const copyButton = document.getElementById('copy-csr-button');
     const csrField = document.getElementById('id_csr_pem');
 

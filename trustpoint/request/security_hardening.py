@@ -129,18 +129,12 @@ def validate_cmp_pbm_parameters(context: CmpBaseRequestContext) -> None:
 
     salt = decoded_pbm['salt'].asOctets()
     if not CMP_PBM_MIN_SALT_BYTES <= len(salt) <= CMP_PBM_MAX_SALT_BYTES:
-        msg = (
-            f'CMP PBM salt length must be between {CMP_PBM_MIN_SALT_BYTES} and '
-            f'{CMP_PBM_MAX_SALT_BYTES} bytes.'
-        )
+        msg = f'CMP PBM salt length must be between {CMP_PBM_MIN_SALT_BYTES} and {CMP_PBM_MAX_SALT_BYTES} bytes.'
         raise ValueError(msg)
 
     iteration_count = int(decoded_pbm['iterationCount'])
     if not CMP_PBM_MIN_ITERATIONS <= iteration_count <= CMP_PBM_MAX_ITERATIONS:
-        msg = (
-            f'CMP PBM iterationCount must be between {CMP_PBM_MIN_ITERATIONS} and '
-            f'{CMP_PBM_MAX_ITERATIONS}.'
-        )
+        msg = f'CMP PBM iterationCount must be between {CMP_PBM_MIN_ITERATIONS} and {CMP_PBM_MAX_ITERATIONS}.'
         raise ValueError(msg)
 
     owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
@@ -387,7 +381,7 @@ def _is_configured_cmp_ra_sender(context: CmpCertificateRequestContext) -> bool:
     return False
 
 
-def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # noqa: C901
+def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None:  # noqa: C901
     """Verify CRMF signature PoP for IR/CR requests.
 
     TP-TA-06: device authentication is not proof of possession of the newly
@@ -414,9 +408,9 @@ def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # 
 
     popo_name = popo.getName()
     if popo_name == 'raVerified':
-        if (
-            context.device is not None and context.device.can_assert_cmp_ra_verified
-        ) or _is_configured_cmp_ra_sender(context):
+        if (context.device is not None and context.device.can_assert_cmp_ra_verified) or _is_configured_cmp_ra_sender(
+            context
+        ):
             return
         msg = 'Downstream raVerified ProofOfPossession is not permitted.'
         raise ValueError(msg)
@@ -428,9 +422,7 @@ def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None: # 
     signed_object = signing_key['poposkInput'] if signing_key['poposkInput'].hasValue() else cert_req_msg['certReq']
     signed_bytes = encoder.encode(signed_object)
     signature = signing_key['signature'].asOctets()
-    algorithm = AlgorithmIdentifier.from_dotted_string(
-        signing_key['algorithmIdentifier']['algorithm'].prettyPrint()
-    )
+    algorithm = AlgorithmIdentifier.from_dotted_string(signing_key['algorithmIdentifier']['algorithm'].prettyPrint())
 
     cert_request = context.cert_requested
     if not isinstance(cert_request, x509.CertificateBuilder):
@@ -551,10 +543,22 @@ def record_cmp_response_nonce(context: CmpBaseRequestContext) -> None:
     tx.save(update_fields=['last_server_nonce', 'last_client_nonce', 'updated_at'])
 
 
-def _certconf_hash_algorithm(context: CmpCertConfRequestContext) -> hashes.HashAlgorithm:
-    if not context.cert_hash_algorithm_oid:
-        return hashes.SHA256()
-    algorithm = HashAlgorithm.from_dotted_string(context.cert_hash_algorithm_oid)
+def _certconf_hash_algorithm(
+    context: CmpCertConfRequestContext,
+    certificate: x509.Certificate,
+) -> hashes.HashAlgorithm:
+    """Use hashAlg or the issued certificate's signature digest (RFC 9480 Section 2.10)."""
+    if context.cert_hash_algorithm_oid:
+        algorithm = HashAlgorithm.from_dotted_string(context.cert_hash_algorithm_oid)
+    else:
+        signature_hash = certificate.signature_hash_algorithm
+        if signature_hash is None:
+            msg = 'certConf hashAlg is required for certificates whose signature algorithm has no implicit hash.'
+            raise ValueError(msg)
+        if not isinstance(signature_hash, tuple(_CERTCONF_ALLOWED_DIGESTS.values())):
+            msg = 'certConf hash algorithm is not permitted.'
+            raise ValueError(msg)
+        return signature_hash
     factory = _CERTCONF_ALLOWED_DIGESTS.get(algorithm)
     if factory is None:
         msg = 'certConf hash algorithm is not permitted.'
@@ -586,7 +590,7 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
         raise ValueError(msg)
 
     certificate = final_certificate.get_certificate_serializer().as_crypto()
-    digest = hashes.Hash(_certconf_hash_algorithm(context))
+    digest = hashes.Hash(_certconf_hash_algorithm(context, certificate))
     digest.update(certificate.public_bytes(serialization.Encoding.DER))
     if not stdlib_hmac.compare_digest(digest.finalize(), context.cert_hash):
         msg = 'certConf certHash does not match the certificate issued in this transaction.'
@@ -839,7 +843,9 @@ def validate_upstream_issuance_result(context: BaseCertificateRequestContext) ->
         msg = 'Upstream issuing truststore is not configured.'
         raise ValueError(msg)
     _verify_chain_to_truststore(
-        issued_certificate, _load_trust_anchors(truststore), context.issued_certificate_chain or [],
+        issued_certificate,
+        _load_trust_anchors(truststore),
+        context.issued_certificate_chain or [],
     )
     _validate_profile_preservation(context, issued_certificate)
 
@@ -858,7 +864,8 @@ def process_certificate_operation_atomically(
     """Run issuance and post-issuance validation in one database transaction."""
     issuing_ca = context.domain.issuing_ca if context.domain is not None else None
     if issuing_ca is not None and issuing_ca.ca_type in {
-        CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA,
+        CaModel.CaTypeChoice.REMOTE_EST_RA,
+        CaModel.CaTypeChoice.REMOTE_CMP_RA,
     }:
         # The remote processor validates the response before atomically saving it.
         # Holding a transaction across HTTP can deadlock a CA on this database.

@@ -14,11 +14,9 @@ only when that release explicitly supports the installed database schema and
 key-protection format. These instructions describe the mechanics of an upgrade;
 they do not establish compatibility between arbitrary releases.
 
-Migration of encrypted databases from pre-1.0 releases to the 1.0 envelope-encryption
-architecture is unsupported. A fresh installation uses a fresh database; retaining
-old volumes or importing Django's signing key does not convert encrypted data.
-Keep the old installation and its recovery material until a supported migration
-path exists.
+Trustpoint 1.0.0 is the first stable version and the compatibility baseline.
+For subsequent releases, follow the explicitly supported update paths in their
+release notes and retain the installation's original keys and persistent state.
 
 Keep The Deployment Identity And State
 --------------------------------------

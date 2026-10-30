@@ -72,6 +72,7 @@ USER www-data
 RUN uv sync --no-install-project --no-dev --group docs --group docker --python-preference only-system
 
 COPY --chown=www-data:www-data README.md LICENSE ./
+COPY --chown=www-data:www-data THIRD_PARTY_LICENSES/ ./THIRD_PARTY_LICENSES/
 COPY --chown=www-data:www-data trustpoint/ ./trustpoint/
 COPY --chown=www-data:www-data docker/trustpoint/ ./docker/trustpoint/
 # Keep the in-app documentation builder available without copying local builds.

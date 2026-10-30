@@ -1,6 +1,6 @@
 [project]
 name = "trustpoint"
-version = "1.0.0dev"
+version = "1.0.0"
 description = "Trustpoint Server Software"
 authors = [{ name = "Trustpoint-Project" }]
 requires-python = ">=3.13.0"
@@ -68,7 +68,7 @@ dev = [
     "allure-behave>=2.14.3",
     "allure-pytest>=2.14.3",
     "pytest-asyncio>=1.3.0",
-    "mypy==2.4.0",
+    "mypy==2.4.1",
 ]
 # For building docs
 docs = [
@@ -125,7 +125,7 @@ ignore = [
     # TODO(AlexHx8472): We should use this in the future:
     "TD003",
 ]
-    exclude = ["**/migrations/*", "**/manage.py", "**/tests/*", "trustpoint/management/management/commands/check_onboarding_failed_devices.py", "trustpoint/pki/management/commands/add_domains_and_devices.py", "trustpoint/pki/management/commands/base_commands.py", "trustpoint/pki/management/commands/create_and_validate_test_certs.py", "trustpoint/pki/management/commands/create_ca_issuer_setup.py", "trustpoint/pki/management/commands/create_multiple_test_issuing_cas.py", "trustpoint/pki/management/commands/create_protocol_test_env.py", "trustpoint/pki/management/commands/create_ra_setup.py", "trustpoint/pki/management/commands/create_test_long_chain_p12.py", "trustpoint/pki/management/commands/reset_db.py", "trustpoint/pki/management/commands/runserver_with_qcluster.py", "**/features/*", "**/conftest.py"]
+    exclude = ["**/migrations/*", "**/manage.py", "**/tests/*", "trustpoint/pki/management/commands/add_domains_and_devices.py", "trustpoint/pki/management/commands/base_commands.py", "trustpoint/pki/management/commands/create_and_validate_test_certs.py", "trustpoint/pki/management/commands/create_ca_issuer_setup.py", "trustpoint/pki/management/commands/create_multiple_test_issuing_cas.py", "trustpoint/pki/management/commands/create_protocol_test_env.py", "trustpoint/pki/management/commands/create_ra_setup.py", "trustpoint/pki/management/commands/create_test_long_chain_p12.py", "trustpoint/pki/management/commands/reset_db.py", "trustpoint/pki/management/commands/runserver_with_qcluster.py", "**/features/*", "**/conftest.py"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/**.py" = ["S101"]

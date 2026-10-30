@@ -25,6 +25,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from django.utils import timezone
+from django.views.decorators.csp import csp_override
 from django.views.decorators.http import last_modified
 from django.views.decorators.vary import vary_on_cookie
 from django.views.i18n import JavaScriptCatalog
@@ -45,6 +46,7 @@ from .views import base
 from .views.prometheus import prometheus_metrics_view
 
 last_modified_date = timezone.now()
+
 
 @extend_schema_view(
     post=extend_schema(
@@ -89,10 +91,8 @@ urlpatterns += [
     path('', base.IndexView.as_view()),
     path('discovery/', include('discovery.urls')),
     path('workflows2/', include('workflows2.urls', namespace='workflows2')),
-
     # Web UI Routes
     path('agents/', include('agents.urls', namespace='agents')),
-
     # API URLs
     path('api/', include('devices.api_urls')),
     path('api/', include('pki.api_urls')),
@@ -101,12 +101,14 @@ urlpatterns += [
     path('api/', include('rest_pki.api_urls')),
     path('api/', include('agents.api_urls')),
     path('api/', include('workflows2.api_urls')),
-
     path('api/token/', ServiceAccountTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
-
     # Swagger & Redoc
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
     path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path(
+        'redoc/',
+        csp_override(settings.REDOC_CSP)(SpectacularRedocView.as_view(url_name='schema')),
+        name='redoc',
+    ),
 ]

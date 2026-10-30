@@ -1,14 +1,25 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.4
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: Ruff lint (locked project environment)
+        entry: uv run --frozen ruff check .
+        language: system
+        pass_filenames: false
+        always_run: true
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
-    hooks:
+      - id: ruff-format
+        name: Ruff format (changed Python files)
+        entry: uv run --frozen ruff format --check --force-exclude --
+        language: system
+        types_or: [python, pyi]
+
       - id: mypy
+        name: mypy (locked project environment)
+        entry: uv run --frozen mypy .
+        language: system
+        pass_filenames: false
+        always_run: true
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

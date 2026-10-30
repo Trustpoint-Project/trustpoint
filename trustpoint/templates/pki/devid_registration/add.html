@@ -110,8 +110,8 @@
 
                             <div
                                 id="regex-options"
-                                class="mb-0"
-                                style="display: none;"
+                                class="tp-initially-hidden mb-0"
+
                             >
                                 <label class="form-label">
                                     {% trans 'Generated Regex Variations' %}
@@ -157,7 +157,7 @@
             <button
                 type="button"
                 class="btn btn-secondary"
-                onclick="history.back()"
+                data-tp-action="back"
             >
                 {% trans 'Back' %}
             </button>

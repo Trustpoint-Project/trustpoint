@@ -70,6 +70,13 @@ Deploy Trustpoint with **Docker Compose on a Linux host**. The web setup wizard 
 
 ### Start Trustpoint
 
+> [!IMPORTANT]
+> Trustpoint 1.0.0 is the first stable version. Start with a fresh database and
+> installation-specific secrets. Preserve the database, keys, and runtime state
+> for subsequent updates and recovery.
+> See the [1.0 release notes](CHANGELOG.md) and
+> [upgrade guide](https://trustpoint.readthedocs.io/en/latest/features/management/upgrading.html).
+
 ```bash
 git clone https://github.com/Trustpoint-Project/trustpoint.git
 cd trustpoint
@@ -79,8 +86,13 @@ sudo python3 docker/init_secret.py --type all
 docker compose up -d --build
 ```
 
-The one-time initializer creates a private, installation-specific Django signing key.
-Keep `secrets/django_secret_key` and the Compose volumes when upgrading.
+The one-time initializer creates an installation-specific Django signing key and
+an independent software database key-encryption key (KEK). Preserve
+`secrets/django_secret_key`, `secrets/trustpoint_software_kek`, `.env`, and all
+deployment volumes when updating a compatible 1.0 installation. A database backup
+alone cannot recover encrypted credentials. PKCS#11 installations instead need
+their original HSM KEK/token, provider configuration, and authentication material;
+SoftHSM also needs its token/configuration volumes and original PIN files.
 
 
 
@@ -267,23 +279,16 @@ See the **[Trustpoint documentation](https://trustpoint.readthedocs.io/en/latest
 | [Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) | Published Trustpoint container images |
 | [Releases](https://github.com/Trustpoint-Project/trustpoint/releases) | Release notes and project milestones |
 
-## Release highlights — v0.6.0
+## Trustpoint 1.0.0
 
-Trustpoint v0.6.0 introduced major capabilities for machine identity automation and industrial deployment, including:
+Trustpoint 1.0.0 is the first stable release. The [release notes](CHANGELOG.md)
+describe its capabilities, installation, key-recovery requirements, and known
+limitations. See the
+[capability and limitations guide](https://trustpoint.readthedocs.io/en/latest/features/capabilities.html)
+for available operations and backend-specific deployment requirements.
 
-- Trustpoint Agent v1
-- PKCS#11 HSM integration
-- CA rollover
-- users, roles, and organizations
-- audit logging
-- REST APIs and headless integration
-- Prometheus metrics
-- certificate discovery
-- mDNS support
-- redesigned workflow capabilities
-- improved automated setup and deployment
-
-See **[GitHub Releases](https://github.com/Trustpoint-Project/trustpoint/releases)** for the complete changelog.
+See **[GitHub Releases](https://github.com/Trustpoint-Project/trustpoint/releases)**
+for published version notes.
 
 ## Development
 

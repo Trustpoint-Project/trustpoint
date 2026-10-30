@@ -1109,7 +1109,7 @@
     {# TLS Mode Switching                                           #}
     {# ============================================================ #}
     {% if form.tls_mode %}
-        <script>
+        <script nonce="{{ csp_nonce }}">
             (() => {
                 const radios = document.querySelectorAll('input[name="tls_mode"]');
                 const panels = document.querySelectorAll('[data-tls-mode]');
@@ -1138,7 +1138,7 @@
     {# Summary Submit Loading State                                 #}
     {# ============================================================ #}
     {% if is_summary_step %}
-        <script>
+        <script nonce="{{ csp_nonce }}">
             (() => {
                 const form = document.querySelector(
                     '[data-summary-submit-form]'
@@ -1168,7 +1168,7 @@
     {# Enter-Key Submit Behavior                                    #}
     {# ============================================================ #}
     {% else %}
-        <script>
+        <script nonce="{{ csp_nonce }}">
             (() => {
                 const form = document.querySelector('#setup-form');
                 const applyBtn = document.querySelector(

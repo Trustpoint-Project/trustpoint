@@ -30,6 +30,7 @@ Welcome to Trustpoint's documentation!
    :caption: Features
 
    features/apis/index
+   features/capabilities
 
    features/aoki/index
    features/aoki/mdns
@@ -65,9 +66,15 @@ Welcome to Trustpoint's documentation!
    development/auto_restore
    development/sbom
    development/pipeline
+   development/security-response-headers
    development/release-checklist
-   development/rest_api
    development/testing/test_plan
    development/testing/ci_cd
    development/testing/test_report
    development/trustpoint_view_design_guidelines
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Release Notes
+
+   release_notes

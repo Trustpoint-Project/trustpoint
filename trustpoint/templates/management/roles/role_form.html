@@ -234,7 +234,7 @@
         </form>
 
         {% if not is_modification_protected %}
-            <script>
+            <script nonce="{{ csp_nonce }}">
                 (function () {
                     const checkbox = document.getElementById(
                         '{{ form.grants_superuser.id_for_label }}'

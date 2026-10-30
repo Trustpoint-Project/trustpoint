@@ -1,375 +1,295 @@
 .. _trustpoint_dev_env_setup:
 
 ========================================
-Trustpoint Development environment setup
+Trustpoint Development Environment Setup
 ========================================
 
-------------
-Installation
-------------
-
-Trustpoint uses the Python Django framework.
-
-We are using `uv <https://docs.astral.sh/uv/>`_ to manage different python versions and dependencies.
-
-Please note that the current version is in **development status** and
-still subject to **major changes**. Our aim is to make an operational
-version of the software available quickly in order to receive as much
-feedback as possible from users.
-
-^^^^^^^^^^
-Install uv
-^^^^^^^^^^
-
-You should use uv to create a virtual environment
-and to manage the dependencies (instead of pip directly).
-
-Check out the official documentation for the `installer <https://docs.astral.sh/uv/getting-started/installation>`_.
-
-In simple cases, installing uv is as straightforward as:
-
-.. code:: shell
-
-   pip install uv
-
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Install dependencies with uv
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you have an existing virtual environment,
-e.g. through using ``python3 -m venv``, exit the virtual environment
-(that is make sure you are not in the environment).
-You can usually exit it with:
-
-.. code:: shell
-
-   deactivate
-
-Then, remove any virtual environment you may have set up, e.g. ``.venv/ directory``.
-
-Finally, install everything through uv:
-
-.. code:: shell
-
-   cd /path/to/trustpoint/
-   uv sync
-
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-Activating the environment
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-It is generally not required to manually activate the virtual environment,
-just start your command with ``uv run`` instead of ``python``.
-However, if you do want to activate the environment manually, you can do so using
-
-.. code:: shell
-
-   source .venv/bin/activate
-
------
-Usage
------
-
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Setting up the DB and SuperUser
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The development server supports a PostgreSQL database by default.
-The connection settings can be configured in the ``settings.py`` file.
-If the configured database is not available, the server will fall back
-to a built-in SQLite database.
-
-Next, it is required to migrate (creating the required tables) and create a superuser.
-The superuser credentials ``admin``/``testing321`` can later be used to access the
-Trustpoint user interface at localhost:8000.
-
-.. code:: bash
-
-   cd trustpoint
-   uv run manage.py reset_db
-
-Finally, compile the translation strings for non-English language support:
-
-.. code:: bash
-
-   uv run manage.py compilemsg -l de
-
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Running the development server
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code:: bash
-
-   uv run manage.py runserver
-
-You can then access the GUI through localhost:8000.
-
-You can also specify a different port by appending it to the command, e.g.:
-
-.. code:: bash
-
-   uv run manage.py runserver 0.0.0.0:8080
-
-Alternatively, use the following command to run a development HTTPS
-server (self-signed certificate).
-
-.. code:: bash
-
-   uv run manage.py runserver_plus 0.0.0.0:443 --cert-file ../tests/data/x509/https_server.crt --key-file ../tests/data/x509/https_server.pem
-
-A self-signed TLS server certificate is already provided in the test data directory.
-The command also stores this certificate as the active TLS credential in the database
-(needed e.g. for the TLS trust-store download on the device help pages) and starts the
-Django-Q2 qcluster (see below).
-If you need to regenerate it (e.g., with different IP addresses or hostnames),
-use the following command:
-
-.. code:: bash
-
-   uv run manage.py create_tls_certs
-
-Note: The command generates a certificate with predefined IP addresses (127.0.0.1, 192.168.88.10)
-and hostnames (localhost, trustpoint.local). Modify the command source code to customize these values.
-
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Running development server with background task worker
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-For testing features that require background task processing (e.g., cyclic CRL generation),
-``runserver_plus`` starts the Django-Q2 qcluster together with the HTTPS development server
-and stops it again when the server exits:
-
-.. code:: bash
-
-   uv run manage.py runserver_plus 0.0.0.0:443 --cert-file ../tests/data/x509/https_server.crt --key-file ../tests/data/x509/https_server.pem
-
-For plain HTTP, ``runserver_with_qcluster`` does the same with the standard development server:
-
-.. code:: bash
-
-   uv run manage.py runserver_with_qcluster
-
-Both commands accept ``--no-qcluster`` to skip the worker, for example if you run it separately.
-Note that the worker is not restarted when the code reloads.
-
-Alternatively, you can start the standard server and the worker separately in different terminals:
-
-.. code:: bash
-
-   # Terminal 1: Start the development server
-   uv run manage.py runserver
-
-   # Terminal 2: Start the Django-Q2 worker
-   uv run manage.py qcluster
-
-^^^^^^^^^^
-Logging in
-^^^^^^^^^^
-
-Browsing to any page should redirect you to the login page. The login
-page can be accessed directly via `/users/login/`.
-
-Use the username and password which you previously provided through the
-**createsuperuser** command.
-
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Management commands for testing and development purposes
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code:: bash
-
-   uv run manage.py reset_db
-
-Clears the database and restores Trustpoint to the initial state.
-
-.. code:: bash
-
-   uv run manage.py add_domains_and_devices
-
-Populates the database with an example CA, domain and device instances.
-
-.. code:: bash
-
-   uv run manage.py create_protocol_test_env --output ../var/protocol_test_env.json
-
-Creates one issuing CA, domain and device pair per enrollment protocol and writes the
-resulting credentials as JSON. Because Trustpoint requires the end entity key to match
-the signature suite of the issuing CA, each protocol uses a different algorithm:
-EST uses EC P-256, CMP uses ML-DSA-65 and REST uses RSA-2048. Every domain contains one
-device that requires onboarding and one that does not.
-
-Combined with a running HTTPS server, the endpoints can then be exercised with:
-
-.. code:: bash
-
-   tests/scripts/test_protocol_endpoints.sh \
-      --host 127.0.0.1:443 \
-      --env-file var/protocol_test_env.json \
-      --tls-cert tests/data/x509/https_server.crt
-
-The ML-DSA CMP test requires OpenSSL 3.5 or newer.
-
-.. code:: bash
-
-   uv run manage.py makemsg -l de
-   uv run manage.py makemsg -l de -d djangojs
-
-Makes the translation (.po) files from translatable strings. gettext
-must be installed on your system.
-
-.. code:: bash
-
-   uv run manage.py compilemsg -l de
-
-Compiles the translation files (.po) to binary (.mo) files actually used
-by Django.
-
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Building auto documentation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Run the commands on this page from the repository root unless a command explicitly
+changes directory. Native development uses Django's development server; production
+uses the Linux Docker Compose deployment described in
+:doc:`../features/management/docker_deployment`.
+
+Python and dependencies
+=======================
+
+``pyproject.toml`` requires Python 3.13 or newer. The current Docker image and the
+shared CI setup action use Python 3.14; use that interpreter when reproducing
+release behavior. The checked-in ``uv.lock`` selects dependency versions.
+
+Install uv, then create or synchronize the project environment:
 
 .. code-block:: bash
 
-   uv sync --group docs
-   cd ../docs
-   sphinx-apidoc -f -e -o ./source ../trustpoint /*/migrations/*
-   make html
-   open build/html/index.html
+   python3 -m pip install uv
+   uv sync --locked --python 3.14
 
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Adding dependencies to the project
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+If you already use another environment, deactivate it before synchronizing this
+project. ``uv run`` selects the project's environment without manual activation.
+Do not delete an existing environment or change dependency versions just to run a
+check. To use another supported interpreter, select it explicitly and record that
+choice in test results.
 
-Dependencies generally required for the project can be added using the
-following:
+Local database and application setup
+====================================
 
-.. code:: shell
+Normal non-Docker development defaults to SQLite at ``trustpoint/db.sqlite3``.
+PostgreSQL is selected explicitly; there is no automatic fallback from an
+unavailable PostgreSQL server to SQLite. Production Docker deployments use
+PostgreSQL.
 
-   uv add <name-of-package>
+For a fresh local SQLite database:
 
-Dependencies that are only required in development, use the following to
-add in within the dev section:
+.. code-block:: bash
 
-.. code:: shell
+   export TRUSTPOINT_OPERATIONAL_DATABASE=sqlite
+   uv run trustpoint/manage.py migrate
+   uv run trustpoint/manage.py create_organization
+   uv run trustpoint/manage.py create_builtin_groups
+   uv run trustpoint/manage.py create_default_cert_profiles
+   uv run trustpoint/manage.py create_default_agent_profile_definitions
+   uv run trustpoint/manage.py seed_discovery_ports
+   uv run trustpoint/manage.py sync_security_config
+   uv run trustpoint/manage.py createsuperuser
 
-   uv add <name-of-package> --dev
+Choose your own superuser credentials when prompted. To use a different local
+SQLite file, set ``TRUSTPOINT_OPERATIONAL_SQLITE_PATH`` before running commands.
+Never point local development or destructive test commands at a production database.
 
-------------
-Testing & CI
-------------
+Local development KEK
+---------------------
 
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Using the ruff linter and formatter
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+With the default debug-only SQLite settings, no manual KEK provisioning is
+required before using ``runserver``. The software backend creates
+``var/development/software_kek`` when it is first initialized during development
+use, then reuses that file. Initialization is lazy: starting ``runserver`` alone
+does not guarantee that a crypto backend has already been requested. Other
+management commands that use the backend can also trigger first initialization.
+Django's separate signing key is stored under ``var/development/`` as well.
 
-For linting everything in the current directory use:
+If ``TRUSTPOINT_SOFTWARE_KEK_FILE`` is set, that file takes precedence and must
+already exist; the application does not generate it. An initialized database
+never receives a replacement KEK when its original file is missing. Preserve the
+original keys with any database you want to reuse.
 
-.. code:: shell
+Docker secret provisioning
+--------------------------
 
-   uv run ruff check . --output-format=concise
+Docker and non-debug deployments do not use automatic development-key creation.
+Use the existing host-side initializer before starting Compose:
 
-For active formatting everything in the current directory use:
+.. code-block:: bash
 
-.. code:: shell
+   sudo python3 docker/init_secret.py --type all
 
-   uv run ruff format .
+This provisions ``secrets/django_secret_key`` and
+``secrets/trustpoint_software_kek`` for the software-backed Compose deployment.
+``--type kek`` provisions only the software KEK; ``--type django`` (the default)
+provisions only Django's signing key. PKCS#11-only deployments need the Django
+key and their configured HSM recovery material, rather than a software KEK.
+The helper preserves valid existing files and rejects invalid contents,
+permissions, or conflicting material instead of overwriting them. Its default
+ownership/mode is root:33/0440 for the container's ``www-data`` group. See
+:doc:`../features/management/docker_deployment` for mounts and recovery details.
 
-For type checking, we use :term:`mypy`:
+PostgreSQL development
+----------------------
 
-.. code:: shell
+For PostgreSQL development, create a separate database and role first, then set
+``TRUSTPOINT_OPERATIONAL_DATABASE=postgresql``, ``POSTGRES_DB``, ``DATABASE_USER``,
+``DATABASE_PASSWORD`` (or ``DATABASE_PASSWORD_FILE``), ``DATABASE_HOST``, and
+``DATABASE_PORT``. Use an independent software KEK or a configured PKCS#11 provider.
+For a disposable native test database only, setting
+``TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND=true`` permits local software
+backend initialization. Do not carry that setting into a production environment.
+See :doc:`../features/management/environment_configuration` for deployment settings.
 
-   uv run mypy .
+Development server and background work
+======================================
 
-^^^^^^^^^^^^^^^^^^^^^^^^^
-Running pytest unit tests
-^^^^^^^^^^^^^^^^^^^^^^^^^
+.. code-block:: bash
 
-Trustpoint uses pytest to run self-contained tests, either unit tests
-or integration tests that do not involve a request-response cycle:
+   uv run trustpoint/manage.py runserver 127.0.0.1:8000
 
-.. code:: shell
+Open ``http://127.0.0.1:8000/users/login/`` and use the superuser credentials you
+created. For development HTTPS, use an unprivileged port and the public test
+fixture credentials:
 
-   uv run pytest
+.. code-block:: bash
 
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Running BDD tests with behave
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   uv run trustpoint/manage.py runserver_plus 127.0.0.1:8443 \
+     --cert-file tests/data/x509/https_server.crt \
+     --key-file tests/data/x509/https_server.pem
 
-Trustpoint uses behave to run BDD tests. The tests are located in the
-``features/`` directory:
+These committed keys and certificates are public test fixtures, never production
+identities. ``runserver_plus`` also prepares the active development TLS credential
+and starts Django-Q2. ``runserver_with_qcluster`` provides an HTTP server with that
+worker. Both accept ``--no-qcluster`` when you run a separate worker:
 
-.. code:: shell
+.. code-block:: bash
 
-   uv run manage.py behave
+   # In another terminal, with the same database and KEK configuration:
+   uv run trustpoint/manage.py qcluster
 
----------------------------
-Before committing checklist
----------------------------
+The worker is not restarted automatically when server code reloads. Workflow
+execution has its own inline/worker configuration; see
+:doc:`../features/workflows/index`.
 
-Before pushing your changes, ensure the following:
+Tests and test secrets
+======================
 
-1. **Format your code** with ruff:
+Application pytest tests live under ``trustpoint/``; root utility tests live under
+``tests/``. Include both directories. Behave capability scenarios live under
+``trustpoint/features/`` and run through Django's management command.
 
-   .. code:: shell
+For an explicit reusable test KEK, use ``docker/init_secret.py`` rather than a
+separate key-generation script. The example below selects an independent test
+file and makes it readable by your native user's group instead of container group
+33. It requires sudo to create the root-owned file:
 
-      uv run ruff format .
+.. code-block:: bash
 
-2. **Lint your code** with ruff:
+   export TRUSTPOINT_OPERATIONAL_DATABASE=sqlite
+   export TRUSTPOINT_SOFTWARE_KEK_FILE="$PWD/var/development/test-software-kek"
+   sudo python3 docker/init_secret.py --type kek \
+     --path "$TRUSTPOINT_SOFTWARE_KEK_FILE" --group-id "$(id -g)"
 
-   .. code:: shell
+This explicit setup is separate from ``runserver``'s automatic development
+initialization. Keep the same file for commands that share encrypted test data;
+do not select a deployment's real KEK. An existing file with different ownership
+or permissions is rejected, not silently repaired.
 
-      uv run ruff check . --output-format=concise
+Run both suites from the same shell so they receive that configuration:
 
-3. **Check type annotations** with mypy:
+.. code-block:: bash
 
-   .. code:: shell
+   uv run pytest trustpoint/ tests/
+   uv run trustpoint/manage.py behave trustpoint/features/
 
-      uv run mypy .
+Django test runners create separate test databases; PostgreSQL test roles need
+permission to create them. Do not disable test-database isolation. Tests that
+start local HTTP, CMP, or OPC UA servers require loopback socket access. On macOS,
+use the native temporary directory if ``/tmp`` inherits a group that differs from
+your process group; the secret-initializer tests check ownership as well as content.
+Root URL-validation unit tests use controlled DNS results and do not require
+external DNS. Both the pytest and coverage CI workflows select ``trustpoint/ tests/``.
 
-4. **Run all tests**:
+SQLite cannot test PostgreSQL row locks. Run the concurrency suite against an
+isolated PostgreSQL database as part of release validation. Real PKCS#11 tests need
+a configured reachable provider; real GDS workflow tests require
+``RUN_GDS_INTEGRATION=1`` and their local server prerequisites. Inspect skipped-test
+reasons rather than counting them as passes. Deployment and key-persistence
+regressions are documented in :doc:`release-checklist`.
 
-   .. code:: shell
+Quality checks and migrations
+=============================
 
-      uv run pytest
+Local pre-commit hooks and CI use the same project environment via
+``uv run --frozen``, with Ruff and mypy versions pinned in ``pyproject.toml`` and
+``uv.lock``. This includes Django/runtime typing dependencies instead of using
+isolated hook environments. Initialize the
+environment with ``uv sync --frozen`` before running hooks:
 
-5. **Run migrations** if you modified models:
+.. code-block:: bash
 
-   .. code:: shell
+   uv run --frozen ruff check .
+   uv run --frozen mypy .
+   uv run trustpoint/manage.py check
+   uv run trustpoint/manage.py makemigrations --check --dry-run
 
-      cd trustpoint
-      uv run manage.py makemigrations
+Format new or edited Python files with ``uv run --frozen ruff format path/to/file.py``.
+Pre-commit checks staged Python files; Ruff CI checks Python files changed by a
+pull request. Both honor the project's Ruff exclusions. Repository-wide lint and
+mypy remain required. Untouched legacy files are outside the formatting gate:
+``uv run --frozen ruff format --check .`` assesses the remaining backlog and is
+expected to fail until a separate formatting cleanup is completed. Do not mix
+that repository-wide reformat into functional or security fixes.
 
-6. **Check for merge conflicts** in migration files:
+After intentional model changes, create and inspect migrations:
 
-   .. code:: shell
+.. code-block:: bash
 
-      git status
+   uv run trustpoint/manage.py makemigrations
+   uv run trustpoint/manage.py migrate
 
-   If there are duplicate migrations (e.g., multiple ``0003_tp_v0_5_0_dev1.py`` files),
-   combine them before committing.
+Keep published migration history. Multiple migrations can be necessary to resolve
+cross-app dependencies; do not merge or delete them merely because numbers or
+version suffixes resemble each other. Test fresh installation and every supported
+forward-upgrade path separately.
 
-7. **Verify database state** by running:
+``reset_db`` is a destructive development helper for a throwaway database. It
+preserves existing migration files by default, to recreate the current schema. ``--keep-all-migrations`` remains accepted for
+existing scripts. Only the explicit ``--initial-migrations`` option deletes and
+regenerates migration history; do not use it for the stable release baseline.
+Without ``--no-user`` the reset creates ``admin`` / ``testing321``. It is not a
+normal installation, upgrade, or release verification command.
 
-   .. code:: shell
+Optional demo and protocol fixtures
+====================================
 
-      cd trustpoint
-      uv run manage.py reset_db
+The following management commands prepare data for local development:
 
-   This ensures your changes work with a fresh database.
+.. list-table:: Development data commands
+   :header-rows: 1
+   :widths: 35 65
 
---------------------
+   * - Command
+     - Purpose
+   * - ``add_domains_and_devices``
+     - Populate demo domains and devices, create test issuing CAs when needed,
+       and import IDevID truststores.
+   * - ``create_protocol_test_env``
+     - Prepare enrollment-protocol fixtures and export their connection details
+       and synthetic credentials as JSON.
+
+After local setup, populate a disposable development instance with demo data:
+
+.. code-block:: bash
+
+   uv run trustpoint/manage.py add_domains_and_devices
+
+Use a disposable development instance, never one holding real devices or keys.
+To prepare protocol endpoint fixtures and exercise a running local HTTPS server:
+
+.. code-block:: bash
+
+   uv run trustpoint/manage.py create_protocol_test_env --output var/protocol_test_env.json
+   bash tests/scripts/test_protocol_endpoints.sh \
+     --host 127.0.0.1:8443 \
+     --env-file var/protocol_test_env.json \
+     --tls-cert tests/data/x509/https_server.crt
+
+The CMP ML-DSA case needs OpenSSL 3.5 or newer. Generated protocol configuration
+contains synthetic enrollment credentials; keep it private and outside Git.
+For complete RA fixture setup, follow the enrollment-endpoints workflow included
+in :doc:`testing/ci_cd`.
+
+Translations and documentation
+==============================
+
+Install gettext for translation commands and Java plus Graphviz for the bundled
+PlantUML renderer. The docs environment uses the project's locked dependencies:
+
+.. code-block:: bash
+
+   uv run trustpoint/manage.py makemsg -l de
+   uv run trustpoint/manage.py makemsg -l de -d djangojs
+   uv run trustpoint/manage.py compilemsg -l de
+   uv sync --locked --group docs
+   uv run sphinx-build -b html -n -W --keep-going docs/source docs/build/html
+
+Open ``docs/build/html/index.html`` after the build succeeds. A successful build
+with warnings is not the same as passing this strict check. Renderer execution
+and local test-server ports may need to be permitted by your execution environment.
+Do not regenerate autodoc sources over maintained user guides.
+
+To rebuild the workflow editor, see :doc:`../features/workflows/index`.
+To add dependencies, use ``uv add <package>`` for runtime imports and
+``uv add --dev <package>`` for development-only tools; review both ``pyproject.toml``
+and ``uv.lock`` before committing.
+
 Editor configuration
---------------------
+====================
 
-We recommend using Visual Studio Code as the editor for Trustpoint development.
-To ensure the recommended settings are correctly loaded,
-please ensure that you open the project via the ``.code-workspace`` file:
-
-.. code:: shell
-
-   code .vscode/trustpoint.code-workspace
-
-Alternatively, use "File -> Open Workspace from File..." in the menu bar.
-
-Please place project-specific settings in the ``trustpoint.code-workspace`` file.
-The ``.vscode/settings.json`` file is ignored by git and is intended for user-specific configuration.
+The optional VS Code workspace is ``.vscode/trustpoint.code-workspace``. Open it with
+``code .vscode/trustpoint.code-workspace``. Keep personal editor configuration in
+ignored local settings; the workspace is not required to run the commands above.

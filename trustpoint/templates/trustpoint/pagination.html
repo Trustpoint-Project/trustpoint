@@ -4,10 +4,10 @@
   <ul class="pagination">
     {% if page_obj.has_previous %}
     <li class="page-item">
-      <a class="page-link" href="#" onclick="updateQueryParam(event, 'page{{ page_param }}', '1')">« First</a>
+      <a class="page-link" href="#" data-tp-action="query" data-tp-param="page{{ page_param }}" data-tp-value="1">« First</a>
     </li>
     <li class="page-item">
-      <a class="page-link" href="#" onclick="updateQueryParam(event, 'page{{ page_param }}', '{{ page_obj.previous_page_number }}')">
+      <a class="page-link" href="#" data-tp-action="query" data-tp-param="page{{ page_param }}" data-tp-value="{{ page_obj.previous_page_number }}">
         Previous</a>
     </li>
     {% endif %}
@@ -20,11 +20,11 @@
 
     {% if page_obj.has_next %}
     <li class="page-item">
-      <a class="page-link" href="#" onclick="updateQueryParam(event, 'page{{ page_param }}', '{{ page_obj.next_page_number }}')">
+      <a class="page-link" href="#" data-tp-action="query" data-tp-param="page{{ page_param }}" data-tp-value="{{ page_obj.next_page_number }}">
         Next</a>
     </li>
     <li class="page-item">
-      <a class="page-link" href="#" onclick="updateQueryParam(event, 'page{{ page_param }}', '{{ page_obj.paginator.num_pages }}')">
+      <a class="page-link" href="#" data-tp-action="query" data-tp-param="page{{ page_param }}" data-tp-value="{{ page_obj.paginator.num_pages }}">
         Last »</a>
     </li>
     {% endif %}

@@ -85,7 +85,7 @@
     </form>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     document.getElementById('id_cert_profile_select').addEventListener('change', function() {
         const selectedPk = this.value;
         const url = new URL(window.location.href);

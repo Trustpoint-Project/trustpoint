@@ -8,7 +8,7 @@
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
     <script src="{% static 'js/help_cert_params.js' %}"></script>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
         function updateRevocationCommand() {
             const selectedReason = document.getElementById('revreason-select');
             const credNumberInput = document.getElementById('cred-number-input');
@@ -244,7 +244,7 @@
 </div>
 
 
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function () {
         var windowsCheckbox = document.getElementById('showWindowsCommands');
 

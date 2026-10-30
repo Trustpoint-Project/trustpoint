@@ -238,13 +238,15 @@ Detailed error information is provided in the PKIStatusInfo structure within the
 
 ## Integration with Trustpoint Workflows
 
-CMP requests can trigger Trustpoint Workflow2 approval processes for:
+The registered CMP request triggers are `cmp.initialization`, `cmp.certification`,
+and `cmp.certconf`. Initialization/certification workflows can gate issuance and
+use CMP transaction/polling handling while waiting for approval. Certificate
+confirmation has its own trigger.
 
-- Certificate issuance
-- Certificate renewal
-- Certificate revocation
-
-Workflows allow automated or manual approval based on configurable policies.
+There is no registered CMP revocation-request trigger. A `certificate.revoked`
+lifecycle event reports a revocation; it is not a pre-revocation approval gate.
+See the [workflow guide](../workflows/index.md) for the available triggers and
+their exact request/response behavior.
 
 ## Further Reading
 

@@ -19,6 +19,7 @@ from cryptography.x509.verification import VerificationError
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, RegexValidator
+from django.db.models import Model
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -96,8 +97,12 @@ class TlsExternalCsrCertificateForm(forms.Form):
     certificate = forms.FileField(label=_('Issued TLS Certificate (.pem, .der, .cer)'))
 
     def __init__(
-        self, *args: Any, credential: CredentialModel, csr: x509.CertificateSigningRequest,
-        truststore: TruststoreModel, **kwargs: Any,
+        self,
+        *args: Any,
+        credential: CredentialModel,
+        csr: x509.CertificateSigningRequest,
+        truststore: TruststoreModel,
+        **kwargs: Any,
     ) -> None:
         """Bind validation to the session's pending key and CSR."""
         super().__init__(*args, **kwargs)
@@ -110,7 +115,8 @@ class TlsExternalCsrCertificateForm(forms.Form):
         """Validate identity and perform full TLS path validation."""
         try:
             data = uploads.read_credential_upload(
-                self.cleaned_data['certificate'], kind=uploads.CredentialFileKind.CERTIFICATE,
+                self.cleaned_data['certificate'],
+                kind=uploads.CredentialFileKind.CERTIFICATE,
             )
         except uploads.CredentialUploadError as exc:
             if exc.code == uploads.CredentialUploadErrorCode.TOO_LARGE:
@@ -132,7 +138,8 @@ class TlsExternalCsrCertificateForm(forms.Form):
         if sorted(map(repr, expected_san)) != sorted(map(repr, actual_san)):
             raise forms.ValidationError(_('The certificate SANs must exactly match the generated CSR.'))
         identity = next(
-            (str(name.value) for name in expected_san if isinstance(name, (x509.DNSName, x509.IPAddress))), None,
+            (str(name.value) for name in expected_san if isinstance(name, (x509.DNSName, x509.IPAddress))),
+            None,
         )
         if identity is None:
             raise forms.ValidationError(_('A DNS name or IP address SAN is required for management TLS.'))
@@ -191,12 +198,10 @@ class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
         help_texts: ClassVar[dict[str, Any]] = {
             'api_credential_expiry_days': _('Leave empty to keep API credentials valid indefinitely.'),
             'idle_timeout_minutes': _(
-                'Users are logged out after this period without activity. '
-                'Allowed range: 15 minutes to 30 days.',
+                'Users are logged out after this period without activity. Allowed range: 15 minutes to 30 days.',
             ),
             'failed_login_attempts': _(
-                'Leave empty to disable blocking. '
-                'Successful login resets the consecutive failure count.',
+                'Leave empty to disable blocking. Successful login resets the consecutive failure count.',
             ),
         }
 
@@ -218,7 +223,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         AutoGenPkiFeature: ['auto_gen_pki'],
     }
 
-    def __init__(self, *args: Any, **kwargs: Any)-> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the SecurityConfigForm."""
         super().__init__(*args, **kwargs)
 
@@ -259,17 +264,17 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 'permitted_cmp_hmac_algorithms',
                 Field('auto_gen_pki', wrapper_class='form-check form-switch'),
                 HTML(
-                    "{% load i18n %}"
-                    "{% if form.instance.auto_gen_pki %}"
+                    '{% load i18n %}'
+                    '{% if form.instance.auto_gen_pki %}'
                     '<p class="form-text mt-0 mb-3">'
                     '<a href="{% url \'pki:issuing_cas-add-method_select\' %}">'
                     "{% trans 'Create an auto-generated PKI' %}"
                     '</a></p>'
-                    "{% endif %}"
+                    '{% endif %}'
                 ),
                 Field('allow_imported_private_keys', wrapper_class='form-check form-switch'),
                 'permitted_no_onboarding_pki_protocols',
-                'permitted_onboarding_protocols'
+                'permitted_onboarding_protocols',
             ),
         )
 
@@ -309,9 +314,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         (4096, '4096'),
         (8192, '8192'),
     ]
-    rsa_minimum_key_size = forms.ChoiceField(
-        choices=RSA_KEY_CHOICES, required=False, widget=forms.Select()
-    )
+    rsa_minimum_key_size = forms.ChoiceField(choices=RSA_KEY_CHOICES, required=False, widget=forms.Select())
 
     permitted_cmp_hmac_algorithms = forms.MultipleChoiceField(
         choices=SecurityConfig.CmpHmacAlgorithmChoices.choices,
@@ -334,11 +337,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         ),
     )
     permitted_onboarding_protocols = forms.MultipleChoiceField(
-        choices=[
-            (c.value, c.label)
-            for c in OnboardingProtocol
-            if c is not OnboardingProtocol.BRSKI
-        ],
+        choices=[(c.value, c.label) for c in OnboardingProtocol if c is not OnboardingProtocol.BRSKI],
         widget=forms.CheckboxSelectMultiple,
         required=False,
         help_text=_(
@@ -349,15 +348,22 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
     class Meta:
         """Meta configuration for SecurityConfigForm."""
+
         model = SecurityConfig
         fields: ClassVar[list[str]] = [
             'security_mode',
-            'rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days',
-            'credential_ttl_seconds', 'allow_user_defined_device_secrets', 'auto_gen_pki',
-            'allow_ca_issuance', 'allow_self_signed_ca',
-            'allow_imported_private_keys', 'permitted_cmp_hmac_algorithms',
+            'rsa_minimum_key_size',
+            'max_cert_validity_days',
+            'max_crl_validity_days',
+            'credential_ttl_seconds',
+            'allow_user_defined_device_secrets',
+            'auto_gen_pki',
+            'allow_ca_issuance',
+            'allow_self_signed_ca',
+            'allow_imported_private_keys',
+            'permitted_cmp_hmac_algorithms',
             'permitted_no_onboarding_pki_protocols',
-            'permitted_onboarding_protocols'
+            'permitted_onboarding_protocols',
         ]
 
     @staticmethod
@@ -412,7 +418,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
     def _validate_mode_constraints(self, cleaned: dict[str, Any], mode: str) -> None:
         """Validate that submitted values comply with the given security mode defaults."""
-        defaults = SecurityConfig._MODE_DEFAULTS[mode]   # noqa: SLF001
+        defaults = SecurityConfig._MODE_DEFAULTS[mode]  # noqa: SLF001
 
         for field in ['max_cert_validity_days', 'max_crl_validity_days', 'credential_ttl_seconds']:
             val = cleaned.get(field)
@@ -479,6 +485,7 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
 
     class Meta:
         """Meta configuration for NotificationConfigForm."""
+
         model = NotificationConfig
         fields: ClassVar[list[str]] = [
             'enabled',
@@ -487,18 +494,12 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
             'crl_expiry_warning_days',
         ]
         widgets: ClassVar[dict[str, Any]] = {
-            'enabled': forms.CheckboxInput(
-                attrs={'class': 'form-check-input'}
-            ),
-            'cert_expiry_warning_days': forms.NumberInput(
-                attrs={'class': 'form-control', 'min': '1', 'max': '365'}
-            ),
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'cert_expiry_warning_days': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '365'}),
             'issuing_ca_expiry_warning_days': forms.NumberInput(
                 attrs={'class': 'form-control', 'min': '1', 'max': '365'}
             ),
-            'crl_expiry_warning_days': forms.NumberInput(
-                attrs={'class': 'form-control', 'min': '1', 'max': '365'}
-            ),
+            'crl_expiry_warning_days': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '365'}),
         }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -524,11 +525,11 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
         """Validate cert_expiry_warning_days field."""
         cert_expiry = self.cleaned_data.get('cert_expiry_warning_days')
         if cert_expiry is not None and (
-            cert_expiry < self.MIN_EXPIRY_WARNING_DAYS or
-            cert_expiry > self.MAX_EXPIRY_WARNING_DAYS
+            cert_expiry < self.MIN_EXPIRY_WARNING_DAYS or cert_expiry > self.MAX_EXPIRY_WARNING_DAYS
         ):
             raise ValidationError(
-                _('Value must be between %(min)d and %(max)d days.') % {
+                _('Value must be between %(min)d and %(max)d days.')
+                % {
                     'min': self.MIN_EXPIRY_WARNING_DAYS,
                     'max': self.MAX_EXPIRY_WARNING_DAYS,
                 }
@@ -539,11 +540,11 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
         """Validate issuing_ca_expiry_warning_days field."""
         ca_expiry = self.cleaned_data.get('issuing_ca_expiry_warning_days')
         if ca_expiry is not None and (
-            ca_expiry < self.MIN_EXPIRY_WARNING_DAYS or
-            ca_expiry > self.MAX_EXPIRY_WARNING_DAYS
+            ca_expiry < self.MIN_EXPIRY_WARNING_DAYS or ca_expiry > self.MAX_EXPIRY_WARNING_DAYS
         ):
             raise ValidationError(
-                _('Value must be between %(min)d and %(max)d days.') % {
+                _('Value must be between %(min)d and %(max)d days.')
+                % {
                     'min': self.MIN_EXPIRY_WARNING_DAYS,
                     'max': self.MAX_EXPIRY_WARNING_DAYS,
                 }
@@ -554,11 +555,11 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
         """Validate crl_expiry_warning_days field."""
         crl_expiry = self.cleaned_data.get('crl_expiry_warning_days')
         if crl_expiry is not None and (
-            crl_expiry < self.MIN_EXPIRY_WARNING_DAYS or
-            crl_expiry > self.MAX_EXPIRY_WARNING_DAYS
+            crl_expiry < self.MIN_EXPIRY_WARNING_DAYS or crl_expiry > self.MAX_EXPIRY_WARNING_DAYS
         ):
             raise ValidationError(
-                _('Value must be between %(min)d and %(max)d days.') % {
+                _('Value must be between %(min)d and %(max)d days.')
+                % {
                     'min': self.MIN_EXPIRY_WARNING_DAYS,
                     'max': self.MAX_EXPIRY_WARNING_DAYS,
                 }
@@ -592,11 +593,60 @@ class PrometheusConfigForm(forms.ModelForm['PrometheusConfig']):
         )
 
 
-class BackupOptionsForm(forms.ModelForm[BackupOptions]):
+class SecretTextarea(forms.Textarea):
+    """Accept multiline replacement keys without rendering stored or submitted secrets."""
+
+    def format_value(self, _value: Any) -> str | None:
+        """Never include a private key in a rendered textarea."""
+        return cast('str | None', super().format_value(None))
+
+
+class ReplacementSecretModelForm[ModelType: Model](forms.ModelForm[ModelType]):
+    """Keep blank secrets unchanged and offer explicit clearing without secret readback."""
+
+    secret_fields: ClassVar[tuple[str, ...]] = ()
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Snapshot saved secrets before model-form validation can mutate the instance."""
+        super().__init__(*args, **kwargs)
+        self._stored_secrets = {name: getattr(self.instance, name, '') for name in self.secret_fields}
+        for name in self.secret_fields:
+            self.initial[name] = ''
+            field = self.fields[name]
+            if isinstance(field, forms.CharField):
+                field.strip = False
+            field.help_text = _('Leave blank to keep the stored value, or enter a replacement.')
+            self.fields[f'clear_{name}'] = forms.BooleanField(
+                required=False,
+                label=_('Clear stored %(label)s') % {'label': str(field.label).lower()},
+                widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            )
+
+    def clean(self) -> dict[str, Any]:
+        """Resolve replacement/keep/clear choices before subclass authentication checks."""
+        cleaned: dict[str, Any] = super().clean() or {}
+        for name in self.secret_fields:
+            if name not in cleaned:
+                continue
+            replacement = cleaned[name]
+            if cleaned.get(f'clear_{name}'):
+                if replacement:
+                    self.add_error(name, _('Enter a replacement or clear the stored value, not both.'))
+                else:
+                    cleaned[name] = ''
+            elif not replacement:
+                cleaned[name] = self._stored_secrets[name]
+        return cleaned
+
+
+class BackupOptionsForm(ReplacementSecretModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""
+
+    secret_fields = ('password', 'private_key', 'key_passphrase')
 
     class Meta:
         """ModelForm Meta configuration for BackupOptions."""
+
         model = BackupOptions
         fields: ClassVar[list[str]] = [
             'enable_sftp_storage',
@@ -615,14 +665,13 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             'port': forms.NumberInput(attrs={'class': 'form-control'}),
             'user': forms.TextInput(attrs={'class': 'form-control'}),
             'auth_method': forms.Select(attrs={'class': 'form-select'}),
-            'password': forms.PasswordInput(
-                attrs={'class': 'form-control'}, render_value=True
-            ),
-            'private_key': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
-            'key_passphrase': forms.PasswordInput(
-                attrs={'class': 'form-control'}, render_value=True
-            ),
+            'password': forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
+            'private_key': SecretTextarea(attrs={'class': 'form-control', 'rows': 5, 'autocomplete': 'off'}),
+            'key_passphrase': forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
             'remote_directory': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+        help_texts: ClassVar[dict[str, Any]] = {
+            'auth_method': _('Changing authentication method removes stored credentials for the previous method.'),
         }
 
     def clean(self) -> dict[str, Any]:
@@ -630,6 +679,12 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
         cleaned: dict[str, Any] = super().clean() or {}
         auth = cleaned.get('auth_method')
         enable_sftp = cleaned.get('enable_sftp_storage')
+
+        if auth and auth != self.instance.auth_method:
+            unused = ('private_key', 'key_passphrase') if auth == BackupOptions.AuthMethod.PASSWORD else ('password',)
+            for name in unused:
+                if not self.data.get(name):
+                    cleaned[name] = ''
 
         if enable_sftp:
             self._validate_sftp_fields(cleaned)
@@ -653,8 +708,7 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
 
         if missing_fields:
             self.add_error(
-                None,
-                f"The following fields are required when SFTP storage is enabled: {', '.join(missing_fields)}."
+                None, f'The following fields are required when SFTP storage is enabled: {", ".join(missing_fields)}.'
             )
 
     def _validate_authentication_fields(self, cleaned: dict[str, Any], auth: Any) -> None:
@@ -672,10 +726,12 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
         if not pwd:
             self.add_error('password', 'Password is required when using password authentication.')
         if key or cleaned.get('key_passphrase', '').strip():
-            self.add_error('private_key',
-                           'Private key and passphrase must be empty when using password authentication.')
-            self.add_error('key_passphrase',
-                           'Private key and passphrase must be empty when using password authentication.')
+            self.add_error(
+                'private_key', 'Private key and passphrase must be empty when using password authentication.'
+            )
+            self.add_error(
+                'key_passphrase', 'Private key and passphrase must be empty when using password authentication.'
+            )
 
     def _validate_ssh_key_authentication(self, pwd: str, key: str) -> None:
         """Validate fields for SSH key authentication."""
@@ -683,6 +739,7 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             self.add_error('private_key', 'Private key is required when using SSH Key authentication.')
         if pwd:
             self.add_error('password', 'Password must be empty when using SSH key authentication.')
+
 
 class IPv4AddressForm(forms.Form):
     """A form for selecting and updating an IPv4 address.
@@ -694,9 +751,7 @@ class IPv4AddressForm(forms.Form):
         ipv4_address: A choice field for selecting the IPv4 address.
     """
 
-    ipv4_address = forms.ChoiceField(
-        label='Update IPv4 Address'
-    )
+    ipv4_address = forms.ChoiceField(label='Update IPv4 Address')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the IPv4AddressForm."""
@@ -710,6 +765,7 @@ class IPv4AddressForm(forms.Form):
 
         ipv4_field = cast('forms.ChoiceField', self.fields['ipv4_address'])
         ipv4_field.choices = [(ip, ip) for ip in san_ips]
+
 
 class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
     """Form for importing an TLS-Server Credential using a PKCS#12 file.
@@ -731,13 +787,15 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         required=False,
     )
     domain_name = forms.CharField(
-        label=_('Domain-Name'), initial='localhost', required=False,
-            validators=[
-              RegexValidator(
-                  regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
-                  message='Enter a valid domain name (e.g. example.com).'
-              )
-        ]
+        label=_('Domain-Name'),
+        initial='localhost',
+        required=False,
+        validators=[
+            RegexValidator(
+                regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
+                message='Enter a valid domain name (e.g. example.com).',
+            )
+        ],
     )
 
     def _raise_validation_error(self, message: str) -> NoReturn:
@@ -747,7 +805,8 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
     def _read_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, Any, Any]:
         """Read bounded PKCS#12 data and retain the TLS form's remaining fields."""
         raw = read_pkcs12_upload(
-            cleaned_data.get('pkcs12_file'), missing_message='No PKCS#12 file was uploaded.',
+            cleaned_data.get('pkcs12_file'),
+            missing_message='No PKCS#12 file was uploaded.',
         )
         return raw, cleaned_data.get('pkcs12_password'), cleaned_data.get('domain_name')
 
@@ -755,9 +814,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         """Encode a PKCS#12 password using shared input validation."""
         return encode_credential_password(pkcs12_password, pkcs12=True)
 
-    def _parse_and_save_credential(
-        self, pkcs12_raw: bytes, pkcs12_password: bytes | None, domain_name: Any
-    ) -> None:
+    def _parse_and_save_credential(self, pkcs12_raw: bytes, pkcs12_password: bytes | None, domain_name: Any) -> None:
         """Parse PKCS#12 data and save credential."""
         try:
             tls_credential_serializer = parse_pkcs12(pkcs12_raw, pkcs12_password)
@@ -778,10 +835,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             untrusted_intermediates = tls_credential_serializer.additional_certificates or []
 
             CertificateVerifier.verify_server_cert(
-                certificate,
-                domain_name,
-                trusted_roots=trusted_roots,
-                untrusted_intermediates=untrusted_intermediates
+                certificate, domain_name, trusted_roots=trusted_roots, untrusted_intermediates=untrusted_intermediates
             )
             self.saved_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=tls_credential_serializer,
@@ -818,6 +872,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         """Return the saved credential."""
         return self.saved_credential
 
+
 class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     """Form for importing a TLS-Server Credential using separate files.
 
@@ -843,13 +898,15 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         required=False,
     )
     domain_name = forms.CharField(
-        label=_('Domain-Name'), initial='localhost', required=False,
-            validators=[
-              RegexValidator(
-                  regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
-                  message='Enter a valid domain name (e.g. example.com).'
-              )
-        ]
+        label=_('Domain-Name'),
+        initial='localhost',
+        required=False,
+        validators=[
+            RegexValidator(
+                regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
+                message='Enter a valid domain name (e.g. example.com).',
+            )
+        ],
     )
 
     def clean_private_key_file(self) -> bytes:
@@ -889,13 +946,13 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         private_key_serializer: Any,
         tls_certificate_serializer: Any,
         tls_certificate_chain_serializer: Any,
-        domain_name: str
+        domain_name: str,
     ) -> None:
         """Create credential from serializers, verify, and save."""
         credential_serializer = CredentialSerializer.from_serializers(
             private_key_serializer=private_key_serializer,
             certificate_serializer=tls_certificate_serializer,
-            certificate_collection_serializer=tls_certificate_chain_serializer
+            certificate_collection_serializer=tls_certificate_chain_serializer,
         )
 
         certificate = credential_serializer.certificate
@@ -910,10 +967,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         untrusted_intermediates = credential_serializer.additional_certificates or []
 
         CertificateVerifier.verify_server_cert(
-            certificate,
-            domain_name,
-            trusted_roots=trusted_roots,
-            untrusted_intermediates=untrusted_intermediates
+            certificate, domain_name, trusted_roots=trusted_roots, untrusted_intermediates=untrusted_intermediates
         )
 
         self.saved_credential = CredentialModel.save_credential_serializer(
@@ -955,10 +1009,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             private_key_password_bytes = self._encode_private_key_password(private_key_password)
             private_key_serializer = self._parse_private_key(private_key_bytes, private_key_password_bytes)
             self._create_and_save_credential(
-                private_key_serializer,
-                tls_certificate_serializer,
-                tls_certificate_chain_serializer,
-                domain_name
+                private_key_serializer, tls_certificate_serializer, tls_certificate_chain_serializer, domain_name
             )
         except ValidationError:
             raise
@@ -1041,11 +1092,12 @@ class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
         }
 
 
-class SmtpEmailConfigForm(forms.ModelForm[SmtpEmailConfig]):
+class SmtpEmailConfigForm(ReplacementSecretModelForm[SmtpEmailConfig]):
     """Form for managing SMTP email backend settings."""
 
     PORT_MIN: ClassVar[int] = 1
     PORT_MAX: ClassVar[int] = 65535
+    secret_fields = ('password',)
 
     class Meta:
         """Metadata for the SMTP email settings form."""
@@ -1077,7 +1129,6 @@ class SmtpEmailConfigForm(forms.ModelForm[SmtpEmailConfig]):
             ),
             'password': forms.PasswordInput(
                 attrs={'class': 'form-control', 'autocomplete': 'new-password', 'data-smtp-auth': 'password'},
-                render_value=True,
             ),
             'timeout_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
             'default_from_email': forms.EmailInput(attrs={'class': 'form-control'}),
@@ -1185,6 +1236,7 @@ class LoggingConfigForm(forms.Form):
             },
         )
 
+
 class CertificateAuthenticationEnabledForm(forms.Form):
     """Save the certificate authentication switch for the displayed management CA."""
 
@@ -1284,13 +1336,15 @@ class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):
 
         if len(content) > MAX_PASSWORD_LIST_BYTES:
             raise ValidationError(
-                _('The password list must not exceed 10 MiB after decompression.'), code='file_too_large',
+                _('The password list must not exceed 10 MiB after decompression.'),
+                code='file_too_large',
             )
         try:
             text = content.decode('utf-8')
         except UnicodeDecodeError as exc:
             raise ValidationError(
-                _('The password list must contain UTF-8 text.'), code='invalid_encoding',
+                _('The password list must contain UTF-8 text.'),
+                code='invalid_encoding',
             ) from exc
 
         passwords = [line.strip() for line in text.split('\n') if line.strip()]
@@ -1298,7 +1352,8 @@ class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):
             raise ValidationError(_('The password list must contain at least one password.'), code='empty_list')
         if any(password != password.lower() or not password.isprintable() for password in passwords):
             raise ValidationError(
-                _('Use one lowercase password per line, without control characters.'), code='invalid_password_list',
+                _('Use one lowercase password per line, without control characters.'),
+                code='invalid_password_list',
             )
         return cast('UploadedFile[Any]', upload)
 
@@ -1307,7 +1362,8 @@ class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):
         cleaned = super().clean() or {}
         if cleaned.get('restore_default_list') and cleaned.get('common_password_list'):
             self.add_error(
-                'common_password_list', _('Choose either an upload or restoring the Django default list.'),
+                'common_password_list',
+                _('Choose either an upload or restoring the Django default list.'),
             )
         return cleaned
 

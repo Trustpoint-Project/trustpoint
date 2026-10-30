@@ -45,7 +45,7 @@
                         – {% trans "Soon" %}
                     </span>
                 {% elif cert.days_left <= 31 %}
-                    <span class="badge bg-warning text-dark" style="color:#795500;background:#fffde7; border:1px solid #ffc107;">
+                    <span class="tp-validity-warning badge bg-warning text-dark" >
                         {{ cert.days_left }} {% trans "days" %}
                         – {% trans "Month" %}
                     </span>

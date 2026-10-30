@@ -591,7 +591,7 @@ function renderApplyNodeOverlay({ graph, layout, viewport, catalog, node }) {
     .join('');
 
   return `
-    <div class="wf2-graph-floating-card wf2-graph-floating-node wf2-graph-overlay-shell" style="left:${left}px; top:${top}px; width:${fitted.width}px; height:${fitted.height}px; max-width:${fitted.maxWidth}px; max-height:${fitted.maxHeight}px;">
+    <div class="wf2-graph-floating-card wf2-graph-floating-node wf2-graph-overlay-shell" data-overlay-left="${left}" data-overlay-top="${top}" data-overlay-width="${fitted.width}" data-overlay-height="${fitted.height}" data-overlay-max-width="${fitted.maxWidth}" data-overlay-max-height="${fitted.maxHeight}">
       <div class="wf2-graph-floating-header">
         <div>
           <div class="wf2-graph-floating-kicker">Apply editor</div>
@@ -754,7 +754,7 @@ function renderTriggerNodeOverlay({ layout, viewport, catalog, node }) {
     .join('');
 
   return `
-    <div class="wf2-graph-floating-card wf2-graph-floating-node wf2-graph-overlay-shell" style="left:${left}px; top:${top}px; width:${fitted.width}px; height:${fitted.height}px; max-width:${fitted.maxWidth}px; max-height:${fitted.maxHeight}px;">
+    <div class="wf2-graph-floating-card wf2-graph-floating-node wf2-graph-overlay-shell" data-overlay-left="${left}" data-overlay-top="${top}" data-overlay-width="${fitted.width}" data-overlay-height="${fitted.height}" data-overlay-max-width="${fitted.maxWidth}" data-overlay-max-height="${fitted.maxHeight}">
       <div class="wf2-graph-floating-header">
         <div>
           <div class="wf2-graph-floating-kicker">Trigger editor</div>
@@ -863,7 +863,7 @@ function renderVirtualNodeOverlay({ layout, viewport, node }) {
   });
 
   return `
-    <div class="wf2-graph-floating-card wf2-graph-floating-node wf2-graph-overlay-shell" style="left:${left}px; top:${top}px; width:${fitted.width}px; height:${fitted.height}px; max-width:${fitted.maxWidth}px; max-height:${fitted.maxHeight}px;">
+    <div class="wf2-graph-floating-card wf2-graph-floating-node wf2-graph-overlay-shell" data-overlay-left="${left}" data-overlay-top="${top}" data-overlay-width="${fitted.width}" data-overlay-height="${fitted.height}" data-overlay-max-width="${fitted.maxWidth}" data-overlay-max-height="${fitted.maxHeight}">
       <div class="wf2-graph-floating-header">
         <div>
           <div class="wf2-graph-floating-kicker">Virtual target</div>
@@ -1011,7 +1011,7 @@ export function renderGraphStepEditorOverlay({
   });
 
   return `
-    <div class="wf2-graph-floating-card wf2-graph-floating-node wf2-graph-overlay-shell" style="left:${left}px; top:${top}px; width:${fitted.width}px; height:${fitted.height}px; max-width:${fitted.maxWidth}px; max-height:${fitted.maxHeight}px;">
+    <div class="wf2-graph-floating-card wf2-graph-floating-node wf2-graph-overlay-shell" data-overlay-left="${left}" data-overlay-top="${top}" data-overlay-width="${fitted.width}" data-overlay-height="${fitted.height}" data-overlay-max-width="${fitted.maxWidth}" data-overlay-max-height="${fitted.maxHeight}">
       <div class="wf2-graph-floating-header">
         <div>
           <div class="wf2-graph-floating-kicker">Step editor</div>

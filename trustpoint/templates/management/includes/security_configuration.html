@@ -201,7 +201,7 @@
 
 <script src="{% static 'js/settings.js' %}"></script>
 
-<script type="text/javascript">
+<script nonce="{{ csp_nonce }}" type="text/javascript">
 
     const securityConfigurations = {{ notification_configurations_json|safe }};
 

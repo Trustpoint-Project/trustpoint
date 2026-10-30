@@ -7,10 +7,20 @@ separate Key Encryption Key (KEK). Only the wrapped DEK and non-secret metadata
 are persisted in the database. Django's ``SECRET_KEY`` signs Django data and is
 independent of both encryption keys.
 
-This is a fresh-installation architecture. Migration of encrypted databases from
-pre-1.0 releases is unsupported. The schema transition refuses databases with
-pre-existing application-secret key material instead of discarding their keys.
-Do not bypass that check with fake migrations.
+Trustpoint 1.0.0 is the first stable version and defines this encryption format.
+Initialize each installation with its own keys and preserve them alongside its
+database recovery material.
+
+SMTP And Backup Credentials
+---------------------------
+
+Saved SMTP passwords and SFTP passwords, SSH private keys, and key passphrases
+use the same application-secret envelope encryption as other encrypted fields.
+The initial 1.0.0 schema defines these fields as encrypted from the start.
+Creating an empty database does not initialize an encryption backend or generate
+keys. There is no conversion or upgrade path from development-era databases;
+1.0.0 requires a fresh installation. For recovery, retain the database and its
+matching original software KEK or HSM recovery material.
 
 Software Backend
 -------------------

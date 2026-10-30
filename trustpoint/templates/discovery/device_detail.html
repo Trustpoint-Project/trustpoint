@@ -2,12 +2,12 @@
 {% load i18n static internationalization_tags %}
 
 {% block content %}
-<div class="card" style="display: flex; flex-direction: column; height: calc(100vh - 120px);">
+<div class="tp-detail-card card" >
     <div class="card-header">
         <h1>{% trans "Device Details" %}: {{ device.ip_address }}</h1>
     </div>
 
-    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1;">
+    <div class="tp-scroll-grow card-body text-start" >
         <div class="row g-4">
             <!-- Network Info Card -->
             <div class="col-md-6">
@@ -19,7 +19,7 @@
                         <table class="table table-sm mb-0">
                             <tbody>
                                 <tr>
-                                    <td class="text-muted fw-semibold" style="width: 35%;">{% trans "IP Address" %}:</td>
+                                    <td class="tp-detail-label text-muted fw-semibold" >{% trans "IP Address" %}:</td>
                                     <td>{{ device.ip_address }}</td>
                                 </tr>
                                 <tr>
@@ -87,7 +87,7 @@
 
     <div class="card-footer d-flex justify-content-between align-items-center">
         <div class="tp-card-btn-footer m-1">
-            <button type="button" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
+            <button type="button" class="btn btn-secondary" data-tp-action="back">{% trans 'Back' %}</button>
             <a href="{% url 'discovery:device_list' %}" class="btn btn-secondary">{% trans 'To Discovery Dashboard' %}</a>
         </div>
     </div>

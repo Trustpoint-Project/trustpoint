@@ -2,12 +2,12 @@
 {% load i18n %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+<div class="tp-full-height-card card" >
     <div class="card-header">
         <h1>{% trans 'User Authentication' %}</h1>
     </div>
 
-    <div class="card-body text-start" style="overflow: auto; flex-grow: 1;">
+    <div class="tp-scroll-body card-body text-start" >
         {{ form.non_field_errors }}
         {% if form.issuing_ca_id.errors %}
             <div class="alert alert-danger">{% trans 'Reload the page and try again.' %}</div>
@@ -53,7 +53,7 @@
                                 {% csrf_token %}
                                 {{ form.issuing_ca_id }}
                                 <div class="form-check form-switch mb-0">
-                                    <input class="form-check-input" type="checkbox" role="switch" id="certificate-enabled" name="enabled" onchange="this.form.requestSubmit()"{% if management_ca_complete and form.enabled.value %} checked{% endif %}{% if not management_ca_complete %} disabled{% endif %}>
+                                    <input class="form-check-input" type="checkbox" role="switch" id="certificate-enabled" name="enabled" data-tp-change="submit"{% if management_ca_complete and form.enabled.value %} checked{% endif %}{% if not management_ca_complete %} disabled{% endif %}>
                                     <label class="visually-hidden" for="certificate-enabled">{% trans 'Enable certificate authentication' %}</label>
                                 </div>
                             </form>

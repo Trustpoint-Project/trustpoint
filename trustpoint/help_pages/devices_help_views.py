@@ -104,12 +104,15 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
 
     def uses_onboarding_credential(self) -> bool:
         """Return whether this help page uses an onboarding password or shared secret."""
-        return isinstance(self.strategy, (
-            OnboardingDomainCredentialCmpSharedSecretStrategy,
-            OnboardingDomainCredentialEstUsernamePasswordStrategy,
-            OnboardingDomainCredentialRestUsernamePasswordStrategy,
-            AgentSetupProfileStrategy,
-        ))
+        return isinstance(
+            self.strategy,
+            (
+                OnboardingDomainCredentialCmpSharedSecretStrategy,
+                OnboardingDomainCredentialEstUsernamePasswordStrategy,
+                OnboardingDomainCredentialRestUsernamePasswordStrategy,
+                AgentSetupProfileStrategy,
+            ),
+        )
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
         """Rotate an expired onboarding credential and restart its configured lifetime."""
@@ -133,8 +136,11 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
                 credential_field = 'est_password'
             else:
                 raise Http404(_('No renewable onboarding credential is configured for this device.'))
-            if (config.onboarding_status != OnboardingStatus.ONBOARDED
-                and config.is_credential_expired() and getattr(config, credential_field)):
+            if (
+                config.onboarding_status != OnboardingStatus.ONBOARDED
+                and config.is_credential_expired()
+                and getattr(config, credential_field)
+            ):
                 try:
                     assign_secret(config, credential_field, device=self.object, actor=request.user)
                 except ValidationError:
@@ -246,9 +252,7 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
 
         onboarding_config = self.object.onboarding_config
         context['credential_expired'] = bool(
-            self.uses_onboarding_credential()
-            and onboarding_config
-            and onboarding_config.is_credential_expired()
+            self.uses_onboarding_credential() and onboarding_config and onboarding_config.is_credential_expired()
         )
         context['can_renew_credential'] = self.request.user.has_perm(AppPermissions.MANAGE_DEVICES)
         context['help_page'] = HelpPage(heading=heading, sections=sections)
@@ -297,13 +301,20 @@ def _build_cert_profile_sections(
                 verifier.get_sample_request(), verifier.get_editable_fields(), partial(build_command, name)
             )
         except (
-            json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError, AttributeError, TypeError
+            json.JSONDecodeError,
+            PydanticValidationError,
+            ProfileValidationError,
+            ValueError,
+            AttributeError,
+            TypeError,
         ) as e:
             err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
             parameter_rows.extend(build_cert_parameter_rows(name, None, hidden=hidden))
-            profile_sections.append(HelpSection(
-                title, [HelpRow(command_row_key, err_msg, ValueRenderType.PLAIN)], css_id=name, hidden=hidden
-            ))
+            profile_sections.append(
+                HelpSection(
+                    title, [HelpRow(command_row_key, err_msg, ValueRenderType.PLAIN)], css_id=name, hidden=hidden
+                )
+            )
             continue
 
         parameter_rows.extend(build_cert_parameter_rows(name, template, hidden=hidden))
@@ -405,19 +416,14 @@ class CmpRevocationStrategy(HelpPageStrategy):
         base = help_context.host_cmp_path
 
         app_credentials = IssuedCredentialModel.objects.filter(
-            device=device,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
+            device=device, issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
         ).select_related('credential__certificate', 'domain')
 
         credential_rows = []
         for app_cred in app_credentials:
             cert = app_cred.credential.certificate_or_error
             cert_url = reverse('pki:certificate-detail', kwargs={'pk': cert.pk})
-            credential_link = format_html(
-                '<a href="{}" target="_blank">{}</a>',
-                cert_url,
-                app_cred.common_name
-            )
+            credential_link = format_html('<a href="{}" target="_blank">{}</a>', cert_url, app_cred.common_name)
             credential_rows.append(
                 HelpRow(
                     _non_lazy(f'Credential #{app_cred.id}'),
@@ -456,9 +462,9 @@ class CmpRevocationStrategy(HelpPageStrategy):
             '(e.g., certificate-<strong>1</strong>.pem, key-<strong>1</strong>.pem).'
             '</div>'
             '<label for="cred-number-input" class="form-label">Credential Number</label>'
-            '<input type="number" id="cred-number-input" class="form-control mb-3" '
-            f'value="{cred}" min="1" style="max-width: 200px;" '
-            'onchange="updateRevocationCommand()">\n'
+            '<input type="number" id="cred-number-input" class="form-control mb-3 tp-credential-number" '
+            f'value="{cred}" min="1" '
+            'data-tp-change="revocation-command">\n'
             '<p class="text-muted">This number will be used in the file names: '
             'certificate-<span id="cred-display-1">' + str(cred) + '</span>.pem, '
             'key-<span id="cred-display-2">' + str(cred) + '</span>.pem, '
@@ -477,8 +483,7 @@ class CmpRevocationStrategy(HelpPageStrategy):
         )
 
         reason_options_html = (
-            '<select id="revreason-select" class="form-select mb-3" '
-            'onchange="updateRevocationCommand()">\n'
+            '<select id="revreason-select" class="form-select mb-3" data-tp-change="revocation-command">\n'
         )
         for reason_code in RevokedCertificateModel.ReasonCode:
             reason_options_html += f'  <option value="{reason_code.name.lower()}">{reason_code.label}</option>\n'
@@ -624,9 +629,7 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
                 cred_number=cred,
             )
 
-            windows_install_cmd = (
-                f'certutil -addstore -f "MY" certificate-{cred}.pem'
-            )
+            windows_install_cmd = f'certutil -addstore -f "MY" certificate-{cred}.pem'
 
             return HelpSection(
                 title,
@@ -637,7 +640,6 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
                         value=curl_cmd,
                         value_render_type=ValueRenderType.CODE,
                     ),
-
                     # Linux-specific post-processing
                     HelpRow(
                         _non_lazy('Convert certificate to PEM (Linux/OpenSSL)'),
@@ -645,7 +647,6 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
                         value_render_type=ValueRenderType.CODE,
                         css_class='platform-linux',
                     ),
-
                     # Windows-specific post-processing
                     HelpRow(
                         _non_lazy('Convert certificate to PEM (Windows, certutil & OpenSSL)'),
@@ -653,12 +654,12 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
                         value_render_type=ValueRenderType.CODE,
                         css_class='platform-windows',
                     ),
-        HelpRow(
-            _non_lazy('Install certificate into Windows store (certutil)'),
-            value=windows_install_cmd,
-            value_render_type=ValueRenderType.CODE,
-            css_class='platform-windows',
-        ),
+                    HelpRow(
+                        _non_lazy('Install certificate into Windows store (certutil)'),
+                        value=windows_install_cmd,
+                        value_render_type=ValueRenderType.CODE,
+                        css_class='platform-windows',
+                    ),
                 ],
                 css_id=cert_profile_name,
             )
@@ -724,7 +725,10 @@ def _build_webui_attribute_rows(profile: dict[str, Any], help_context: HelpConte
             '<div class="table-responsive"><table class="table table-sm mb-0">'
             '<thead><tr><th scope="col">{}</th><th scope="col">{}</th><th scope="col">{}</th></tr></thead>'
             '<tbody>{}</tbody></table></div>',
-            _non_lazy('Attribute'), _non_lazy('Requirement'), _non_lazy('Profile Value / Default'), table_rows,
+            _non_lazy('Attribute'),
+            _non_lazy('Requirement'),
+            _non_lazy('Profile Value / Default'),
+            table_rows,
         )
         rows.append(HelpRow(heading, table, ValueRenderType.HTML))
     return rows
@@ -736,38 +740,44 @@ def _build_webui_profile_sections(
     """Build exact enrollment values for each allowed application profile."""
     sections = []
     if not help_context.allowed_app_profiles:
-        return [HelpSection(
-            _non_lazy('Device WebUI Configuration'),
-            build_profile_select_section(app_cert_profiles=[]).rows,
-        )]
+        return [
+            HelpSection(
+                _non_lazy('Device WebUI Configuration'),
+                build_profile_select_section(app_cert_profiles=[]).rows,
+            )
+        ]
     for index, profile in enumerate(help_context.allowed_app_profiles):
         name = profile.alias or profile.certificate_profile.unique_name
         try:
             attribute_rows = _build_webui_attribute_rows(profile.certificate_profile.profile, help_context)
         except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as error:
-            attribute_rows = [HelpRow(
-                _non_lazy('Certificate Profile Requirements'),
-                _non_lazy('The certificate profile requirements could not be displayed: ') + str(error),
-                ValueRenderType.PLAIN,
-            )]
-        sections.append(HelpSection(
-            _non_lazy('Device WebUI Configuration'),
-            [
-                *build_profile_select_section(
-                    app_cert_profiles=help_context.allowed_app_profiles,
-                    select_id=f'cert-profile-select-{index}',
-                    selected_profile=name,
-                ).rows,
-                HelpRow(_non_lazy('Certificate Request URL'), f'{base}/{name}/{operation}', ValueRenderType.CODE),
+            attribute_rows = [
                 HelpRow(
-                    _non_lazy('Required Public Key Type'), str(help_context.public_key_info), ValueRenderType.CODE
-                ),
-                *authentication_rows,
-                *attribute_rows,
-            ],
-            css_id=name,
-            hidden=index > 0,
-        ))
+                    _non_lazy('Certificate Profile Requirements'),
+                    _non_lazy('The certificate profile requirements could not be displayed: ') + str(error),
+                    ValueRenderType.PLAIN,
+                )
+            ]
+        sections.append(
+            HelpSection(
+                _non_lazy('Device WebUI Configuration'),
+                [
+                    *build_profile_select_section(
+                        app_cert_profiles=help_context.allowed_app_profiles,
+                        select_id=f'cert-profile-select-{index}',
+                        selected_profile=name,
+                    ).rows,
+                    HelpRow(_non_lazy('Certificate Request URL'), f'{base}/{name}/{operation}', ValueRenderType.CODE),
+                    HelpRow(
+                        _non_lazy('Required Public Key Type'), str(help_context.public_key_info), ValueRenderType.CODE
+                    ),
+                    *authentication_rows,
+                    *attribute_rows,
+                ],
+                css_id=name,
+                hidden=index > 0,
+            )
+        )
     return sections
 
 
@@ -778,23 +788,47 @@ def _build_webui_ca_trust_store_section(help_context: HelpContext) -> HelpSectio
         raise Http404(_('No domain is configured for this device.'))
     heading = _non_lazy('Download CA Trust-Store')
     if not domain.issuing_ca:
-        return HelpSection(heading, [HelpRow(
-            heading, _non_lazy('No issuing CA is configured for this domain.'), ValueRenderType.PLAIN,
-        )])
+        return HelpSection(
+            heading,
+            [
+                HelpRow(
+                    heading,
+                    _non_lazy('No issuing CA is configured for this domain.'),
+                    ValueRenderType.PLAIN,
+                )
+            ],
+        )
     credential = domain.issuing_ca.credential
     root = credential.get_last_in_chain() if credential else None
     if root is None:
-        return HelpSection(heading, [HelpRow(
-            heading, _non_lazy('The CA trust-store is unavailable.'), ValueRenderType.PLAIN,
-        )])
-    url = reverse('pki:certificate-file-download-file-name', kwargs={
-        'file_format': 'pem', 'pk': root.pk, 'file_name': 'ca-trust-store.pem',
-    })
-    return HelpSection(heading, [HelpRow(
+        return HelpSection(
+            heading,
+            [
+                HelpRow(
+                    heading,
+                    _non_lazy('The CA trust-store is unavailable.'),
+                    ValueRenderType.PLAIN,
+                )
+            ],
+        )
+    url = reverse(
+        'pki:certificate-file-download-file-name',
+        kwargs={
+            'file_format': 'pem',
+            'pk': root.pk,
+            'file_name': 'ca-trust-store.pem',
+        },
+    )
+    return HelpSection(
         heading,
-        format_html('<a href="{}" class="btn btn-primary w-100">{}</a>', url, heading),
-        ValueRenderType.HTML,
-    )])
+        [
+            HelpRow(
+                heading,
+                format_html('<a href="{}" class="btn btn-primary w-100">{}</a>', url, heading),
+                ValueRenderType.HTML,
+            )
+        ],
+    )
 
 
 class NoOnboardingEstWebUiStrategy(HelpPageStrategy):
@@ -807,10 +841,15 @@ class NoOnboardingEstWebUiStrategy(HelpPageStrategy):
         if not config or not config.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
             raise Http404(_('EST username and password is not enabled for this no-onboarding device.'))
         sections = [
-            *_build_webui_profile_sections(help_context, help_context.host_est_path, 'simpleenroll', [
-                HelpRow(_non_lazy('EST Username'), device.common_name, ValueRenderType.CODE),
-                HelpRow(_non_lazy('EST Password'), config.est_password, ValueRenderType.CODE),
-            ]),
+            *_build_webui_profile_sections(
+                help_context,
+                help_context.host_est_path,
+                'simpleenroll',
+                [
+                    HelpRow(_non_lazy('EST Username'), device.common_name, ValueRenderType.CODE),
+                    HelpRow(_non_lazy('EST Password'), config.est_password, ValueRenderType.CODE),
+                ],
+            ),
             _build_webui_ca_trust_store_section(help_context),
             build_tls_trust_store_section(),
         ]
@@ -827,10 +866,15 @@ class NoOnboardingCmpWebUiStrategy(HelpPageStrategy):
         if not config or not config.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
             raise Http404(_('CMP shared secret is not enabled for this no-onboarding device.'))
         sections = [
-            *_build_webui_profile_sections(help_context, help_context.host_cmp_path, 'certification', [
-                HelpRow(_non_lazy('Key Identifier (KID)'), str(device.pk), ValueRenderType.CODE),
-                HelpRow(_non_lazy('CMP Shared Secret'), config.cmp_shared_secret, ValueRenderType.CODE),
-            ]),
+            *_build_webui_profile_sections(
+                help_context,
+                help_context.host_cmp_path,
+                'certification',
+                [
+                    HelpRow(_non_lazy('Key Identifier (KID)'), str(device.pk), ValueRenderType.CODE),
+                    HelpRow(_non_lazy('CMP Shared Secret'), config.cmp_shared_secret, ValueRenderType.CODE),
+                ],
+            ),
             _build_webui_ca_trust_store_section(help_context),
         ]
         return sections, _non_lazy('Help - Issue Application Certificates using CMP with WebUI')
@@ -880,10 +924,13 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
             'expired': _non_lazy('Expired - replace it to enroll'),
             'none': _non_lazy('Not set - generate a challenge'),
         }
+        reset_label = (
+            _non_lazy('Generate challengePassword') if state == 'none' else _non_lazy('Replace challengePassword')
+        )
         reset_html = (
             '<form method="post" action="" id="replace-scep-challenge-form">CSRF_TOKEN_PLACEHOLDER'
             '<button type="submit" class="btn btn-outline-secondary w-100">'
-            f'{_non_lazy("Replace challengePassword")}</button>'
+            f'{reset_label}</button>'
             '</form>'
         )
 
@@ -923,11 +970,11 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
             profile_url = f'{scep_base}/{name}/'
             profile_sections.append(
                 self._build_profile_section(
-                    common_name=device.common_name,
+                    device=device,
                     profile_url=profile_url,
                     name=name,
                     index=index,
-                    device_id=device.pk,
+                    challenge_state=state,
                 )
             )
         sections_tail = [
@@ -962,35 +1009,44 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
 
     @staticmethod
     def _build_profile_section(
-        common_name: str,
+        device: DeviceModel,
         profile_url: str,
         name: str,
         index: int,
-        device_id: int,
+        *,
+        challenge_state: str,
     ) -> HelpSection:
         """Enrollment and renewal commands for one certificate profile."""
+        if challenge_state == 'active':
+            config_row = HelpRow(
+                _non_lazy('OpenSSL Configuration'),
+                format_html(
+                    '<a href="{}" class="btn btn-primary">{}</a>',
+                    reverse('devices:scep_config_download', kwargs={'pk': device.pk}),
+                    _non_lazy('Download scep.cnf'),
+                ),
+                ValueRenderType.HTML,
+            )
+        else:
+            guidance = {
+                'none': _non_lazy('Generate a challengePassword above before downloading scep.cnf.'),
+                'expired': _non_lazy('Replace the expired challengePassword above before downloading scep.cnf.'),
+                'consumed': _non_lazy(
+                    'Initial enrollment is complete. Use the renewal commands with the issued certificate.'
+                ),
+            }
+            config_row = HelpRow(
+                _non_lazy('OpenSSL Configuration'),
+                guidance[challenge_state],
+                ValueRenderType.PLAIN,
+            )
         return HelpSection(
             _non_lazy(f'Certificate Request for the {name} profile'),
             [
-                HelpRow(
-                    _non_lazy('OpenSSL Configuration'),
-                    format_html(
-                        '<a href="{}" class="btn btn-primary">{}</a>',
-                        reverse(
-                            'devices:scep_config_download',
-                            kwargs={'pk': device_id},
-                        ),
-                        _non_lazy('Download scep.cnf'),
-                    ),
-                    ValueRenderType.HTML,
-                ),
+                config_row,
                 HelpRow(
                     _non_lazy('Generate key and CSR'),
-                    (
-                        'openssl req -new -newkey rsa:2048 -noenc '
-                        '-keyout key.pem -out req.pem '
-                        '-config scep.cnf -sha256'
-                    ),
+                    ('openssl req -new -newkey rsa:2048 -noenc -keyout key.pem -out req.pem -config scep.cnf -sha256'),
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -1008,7 +1064,7 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
                     (
                         'openssl req -new -newkey rsa:2048 -noenc '
                         '-keyout newkey.pem -out newreq.pem '
-                        f'-subj "/CN={common_name}" -sha256'
+                        f'-subj "/CN={device.common_name}" -sha256'
                     ),
                     ValueRenderType.CODE,
                 ),
@@ -1027,6 +1083,7 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
             css_id=name,
             hidden=index > 0,
         )
+
 
 class DeviceNoOnboardingScepHelpView(BaseHelpView):
     """Help view for no-onboarding SCEP for generic device abstractions."""
@@ -1064,9 +1121,7 @@ class DownloadScepConfigView(
 
         config = device.no_onboarding_config
 
-        if config is None or not config.has_pki_protocol(
-            NoOnboardingPkiProtocol.SCEP
-        ):
+        if config is None or not config.has_pki_protocol(NoOnboardingPkiProtocol.SCEP):
             raise Http404(_('SCEP is not enabled for this device.'))
 
         if not config.can_authorize_scep_enrollment():
@@ -1791,7 +1846,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         discover_server_url = reverse('devices:devices_discover_server', kwargs={'pk': device.pk})
 
         discover_html = (
-            '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
+            '<form method="post" action="' + discover_server_url + '" class="d-inline">'
             'CSRF_TOKEN_PLACEHOLDER'
             '<button type="submit" class="btn btn-info">Discover Server</button>'
             '</form>'
@@ -1804,7 +1859,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             update_cert_url = reverse('devices:devices_update_server_certificate', kwargs={'pk': device.pk})
 
             trustlist_html = (
-                '<form method="post" action="' + update_trustlist_url + '" style="display: inline;">'
+                '<form method="post" action="' + update_trustlist_url + '" class="d-inline">'
                 'CSRF_TOKEN_PLACEHOLDER'
                 '<button type="submit" class="btn btn-primary">Update Trustlist</button>'
                 '</form>'
@@ -1813,7 +1868,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             )
 
             cert_html = (
-                '<form method="post" action="' + update_cert_url + '" style="display: inline;">'
+                '<form method="post" action="' + update_cert_url + '" class="d-inline">'
                 'CSRF_TOKEN_PLACEHOLDER'
                 '<button type="submit" class="btn btn-primary">Update Server Certificate</button>'
                 '</form>'
@@ -1869,7 +1924,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         Returns:
             Tuple of (hierarchy_html, has_missing_crl).
         """
-        hierarchy_html = '<div style="font-family: monospace;"><strong>Certificate Authority Hierarchy:</strong><br>'
+        hierarchy_html = '<div class="font-monospace"><strong>Certificate Authority Hierarchy:</strong><br>'
 
         has_missing_crl = False
         for idx, ca in enumerate(ca_chain):
@@ -2004,7 +2059,10 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         )
 
     def _build_renewal_settings_section(
-        self, device: DeviceModel, *, domain_credential: bool = False,
+        self,
+        device: DeviceModel,
+        *,
+        domain_credential: bool = False,
     ) -> HelpSection:
         """Render the shared periodic renewal form for server updates or domain credentials.
 
@@ -2072,9 +2130,9 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             f'  </label>'
             '</div>'
             f'<label for="{interval_id}" class="form-label mt-2">Renewal Interval (hours)</label>'
-            f'<input type="number" class="form-control" id="{interval_id}" '
+            f'<input type="number" class="form-control tp-credential-number" id="{interval_id}" '
             f'       name="{interval_field}" min="1" value="{interval}" '
-            '       style="max-width: 200px;">'
+            '       >'
             '<div class="form-text text-muted">'
             f'  {description}'
             '</div>'
@@ -2574,7 +2632,7 @@ def _build_aoki_demo_section(request: Any) -> HelpSection:
             )
 
     setup_html = SafeString(
-        f'<form method="post" action="{setup_url}" style="display:inline;">'
+        f'<form method="post" action="{setup_url}" class="d-inline">'
         f'CSRF_TOKEN_PLACEHOLDER'
         f'<button type="submit" class="btn btn-primary mb-3">'
         f'Run aoki_setup_idevid_test_env</button>'
@@ -2736,9 +2794,7 @@ class AgentSetupProfileStrategy(HelpPageStrategy):
             ],
         )
 
-        return [summary], _non_lazy(
-            'Help - Issue a Domain Credential for Agent'
-        )
+        return [summary], _non_lazy('Help - Issue a Domain Credential for Agent')
 
 
 class AgentDomainCredentialHelpView(BaseHelpView):
@@ -2773,6 +2829,7 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
             raise Http404(_('No domain is configured for this device.'))
 
         from agents.models import TrustpointAgent  # noqa: PLC0415
+
         agent = TrustpointAgent.objects.filter(device=device).first()
         if not agent:
             raise Http404(_('No agent found for this device.'))
@@ -2823,6 +2880,7 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         filled_bytes = json.dumps(raw, indent=2).encode('utf-8')
 
         import io  # noqa: PLC0415
+
         return FileResponse(  # type: ignore[return-value]
             io.BytesIO(filled_bytes),
             as_attachment=True,
@@ -2849,6 +2907,7 @@ class AgentSetupScriptDownloadView(PageContextMixin, DetailView[DeviceModel]):
             script_bytes = fh.read()
 
         import io  # noqa: PLC0415
+
         return FileResponse(  # type: ignore[return-value]
             io.BytesIO(script_bytes),
             as_attachment=True,

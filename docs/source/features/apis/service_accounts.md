@@ -18,17 +18,23 @@ These users are meant for programmatic access only and should not be used for hu
 You can create a service account from the management UI or from the command line:
 
 ```bash
-uv run trustpoint/manage.py create_service_account my_integration --role Default
+uv run trustpoint/manage.py create_service_account my_integration
 ```
 
 The command creates a service account and emits a client ID and secret once. Save the secret immediately because it is not retrievable later.
 
+The default role is **Service Account**. Initialize built-in groups during setup
+before running the command. To select another existing role, pass
+`--role '<role-name>'` and review its permissions; `Default` is not a built-in role.
+
 ## Request an access token
 
 Use the OAuth 2.0 client credentials grant against the token endpoint:
+replace the hostname and CA-bundle path below with your deployment's values.
 
 ```bash
-curl -X POST http://localhost/api/token/ \
+curl -X POST 'https://<trustpoint-host>/api/token/' \
+  --cacert /path/to/trustpoint-server-ca.pem \
   -H 'Content-Type: application/json' \
   -d '{
     "grant_type": "client_credentials",
@@ -52,7 +58,8 @@ The response is a JWT token payload similar to:
 Include the access token in the `Authorization` header for protected API requests:
 
 ```bash
-curl -H 'Authorization: Bearer <access_token>' http://localhost/api/devices/
+curl --cacert /path/to/trustpoint-server-ca.pem \
+  -H 'Authorization: Bearer <access_token>' 'https://<trustpoint-host>/api/devices/'
 ```
 
 ## Security notes

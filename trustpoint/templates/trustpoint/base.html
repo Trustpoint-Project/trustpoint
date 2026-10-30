@@ -39,7 +39,9 @@
         >
 
         {% block head %}{% endblock head %}
-    </head>
+        <script src="{% static 'js/ui-actions.js' %}" defer></script>
+    <link rel="stylesheet" href="{% static 'css/ui-layout.css' %}">
+</head>
 
     <body id="bs-override">
         <div class="tp-content-wrapper">
@@ -498,8 +500,8 @@
                             >
                                 <div class="d-flex align-items-center gap-2 text-truncate">
                                     <span
-                                        class="tp-user-avatar d-inline-flex align-items-center justify-content-center flex-shrink-0 rounded-circle bg-primary-subtle text-primary fw-bold small"
-                                        style="width: 2rem; height: 2rem; min-width: 2rem;"
+                                        class="tp-avatar-size tp-user-avatar d-inline-flex align-items-center justify-content-center flex-shrink-0 rounded-circle bg-primary-subtle text-primary fw-bold small"
+
                                         aria-hidden="true"
                                     >
                                         {{ request.user.profile_initials }}

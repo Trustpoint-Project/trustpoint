@@ -18,12 +18,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Extract version from pyproject.toml
+      - name: Verify package version and Git release tag
         id: get_version
         run: |
-          VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          echo "version=v${VERSION}" >> $GITHUB_OUTPUT
-          echo "Extracted version: v${VERSION}"
+          python3 - <<'PYTHON'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path('pyproject.toml').read_text())['project']['version']
+          packages = tomllib.loads(Path('uv.lock').read_text())['package']
+          locked = next(package['version'] for package in packages if package['name'] == 'trustpoint')
+          if locked != version:
+              raise SystemExit('Project version and uv.lock disagree')
+          tag = f'v{version}'
+          ref = os.environ['GITHUB_REF']
+          if ref.startswith('refs/tags/') and ref != f'refs/tags/{tag}':
+              raise SystemExit(f'Git release tag must match package version: expected {tag}')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'package_version={version}\nversion={tag}\n')
+          print(f'Package version: {version}; release tag: {tag}')
+          PYTHON
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -42,20 +57,26 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
+          flavor: latest=false
           tags: |
-            type=raw,value=latest
-            type=raw,value=${{ steps.get_version.outputs.version }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' }}
+            type=raw,value=${{ steps.get_version.outputs.version }},enable=${{ github.ref_type == 'tag' }}
             type=sha,format=long
+          labels: |
+            org.opencontainers.image.version=${{ steps.get_version.outputs.package_version }}
 
       - name: Generate Docker metadata for postgres
         id: meta-postgres
         uses: docker/metadata-action@v6
         with:
           images: ${{ secrets.DOCKER_HUB_USERNAME }}/postgres
+          flavor: latest=false
           tags: |
-            type=raw,value=latest
-            type=raw,value=${{ steps.get_version.outputs.version }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' }}
+            type=raw,value=${{ steps.get_version.outputs.version }},enable=${{ github.ref_type == 'tag' }}
             type=sha,format=long
+          labels: |
+            org.opencontainers.image.version=${{ steps.get_version.outputs.package_version }}
 
       - name: Build and push trustpoint image
         id: push-trustpoint

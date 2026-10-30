@@ -2,9 +2,9 @@ name: Security / ZAP Baseline Scan
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
   release:
     types: [published]
@@ -12,6 +12,7 @@ on:
 jobs:
   zap-baseline:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       actions: read
@@ -20,106 +21,85 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
-      - name: Setup .env file
-        run: cp .env.example .env
-
-      - name: Initialize deployment signing key
-        run: sudo python3 docker/init_secret.py --type all
-
-      - name: Start Trustpoint via docker-compose
+      - name: Configure disposable operational deployment
         run: |
-          docker compose -f docker-compose.yml up -d
-          # give the app time to start
-          sleep 60
+          cp .env.example .env
+          cat >> .env <<'ENV'
 
-      - name: OWASP ZAP Baseline Scan (HTTP)
-        uses: zaproxy/action-baseline@v0.15.0
-        continue-on-error: true
-        id: zap-scan-http
-        with:
-          target: "http://localhost:80"
-          fail_action: false
-          cmd_options: "-a"
-          allow_issue_writing: false
+          TP_AUTO_SETUP=true
+          TP_ADMIN_USERNAME=zap-admin
+          TP_ADMIN_PASSWORD=synthetic-zap-ci-password-321
+          TP_INJECT_DEMO_DATA=false
+          ENV
+          sudo python3 docker/init_secret.py --type all
+          rm -rf reports/zap
+          mkdir -p reports/zap
+          chmod a+w reports/zap
 
-      - name: Rename HTTP Reports
-        if: always()
+      - name: Start Trustpoint from this checkout
+        run: docker compose up -d --build --wait --wait-timeout 300 postgres trustpoint
+
+      - name: Require completed setup and operational login endpoint
+        id: readiness
         run: |
-          mv report_json.json report_http_json.json || true
-          mv report_md.md report_http_md.md || true
-          mv report_html.html report_http_html.html || true
+          for attempt in {1..60}; do
+            echo "Checking operational readiness ($attempt/60)"
+            if docker compose exec -T --user www-data -e TRUSTPOINT_PHASE=operational trustpoint \
+              .venv/bin/python trustpoint/manage.py shell -c \
+              "from setup_wizard.models import SetupWizardCompletedModel; from django.contrib.auth import get_user_model; assert SetupWizardCompletedModel.objects.filter(pk=1, setup_completed_at__isnull=False).exists(); assert get_user_model().objects.filter(username='zap-admin', is_superuser=True).exists()" \
+              > reports/zap/readiness.log 2>&1 &&
+              [ "$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' https://localhost/users/login/)" = 200 ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::Operational setup/login did not become ready'
+          exit 1
 
-      - name: OWASP ZAP Baseline Scan (HTTPS)
-        uses: zaproxy/action-baseline@v0.15.0
-        continue-on-error: true
-        id: zap-scan-https
-        with:
-          target: "https://localhost:443"
-          fail_action: false
-          cmd_options: "-a"
-          allow_issue_writing: false
+      - name: Check deployed security headers and HTTP enrollment routing
+        run: python3 tests/docker_security/check_response_headers.py --insecure
 
-      - name: Rename HTTPS Reports
-        if: always()
+      - name: Check CSP compatibility in Chromium
+        env:
+          TP_CSP_USERNAME: zap-admin
+          TP_CSP_PASSWORD: synthetic-zap-ci-password-321
         run: |
-          mv report_json.json report_https_json.json || true
-          mv report_md.md report_https_md.md || true
-          mv report_html.html report_https_html.html || true
+          npm install --prefix "$RUNNER_TEMP/csp-browser" --no-audit --no-fund playwright@1.64.1
+          "$RUNNER_TEMP/csp-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+          node --test tests/docker_security/browser_diagnostics.test.cjs
+          NODE_PATH="$RUNNER_TEMP/csp-browser/node_modules" node tests/docker_security/csp_browser.cjs
 
-      - name: Upload ZAP Scan Reports
+      # Browser/header failures remain blocking, but must not skip the independent
+      # scans and turn their absence into misleading report-integrity failures.
+      - name: Run independent HTTP and HTTPS baselines
+        id: zap_baselines
+        if: ${{ !cancelled() && steps.readiness.outcome == 'success' }}
+        run: |
+          docker pull ghcr.io/zaproxy/zaproxy:stable
+          for protocol in http https; do
+            status=0
+            timeout 600 docker run --rm --network host \
+              -v "$PWD/reports/zap:/zap/wrk:rw" \
+              ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+              -t "$protocol://localhost" -a -T 5 \
+              -J "$protocol.json" -w "$protocol.md" -r "$protocol.html" \
+              > "reports/zap/$protocol.log" 2>&1 || status=$?
+            printf '%s\n' "$status" > "reports/zap/$protocol.exit"
+          done
+
+      - name: Check scan completion, report integrity and finding policy
+        if: ${{ !cancelled() && steps.readiness.outcome == 'success' }}
+        run: python3 .github/check_zap_reports.py reports/zap
+
+      - name: Upload ZAP evidence even on failure
         uses: actions/upload-artifact@v7
         if: always()
         with:
           name: zap-reports
-          path: |
-            report_http_json.json
-            report_http_md.md
-            report_http_html.html
-            report_https_json.json
-            report_https_md.md
-            report_https_html.html
+          path: reports/zap/
+          if-no-files-found: error
           retention-days: 30
 
-      - name: Check ZAP Scan Results
+      - name: Cleanup disposable deployment
         if: always()
-        run: |
-          TOTAL_WARN=0
-          TOTAL_FAIL=0
-          
-          # Check HTTP scan results
-          if [ -f report_http_md.md ]; then
-            HTTP_WARN=$(grep -o "WARN-NEW" report_http_md.md | wc -l || echo "0")
-            HTTP_FAIL=$(grep -o "FAIL-NEW" report_http_md.md | wc -l || echo "0")
-            echo "HTTP Scan Results:"
-            echo "  Warnings: $HTTP_WARN"
-            echo "  Failures: $HTTP_FAIL"
-            TOTAL_WARN=$((TOTAL_WARN + HTTP_WARN))
-            TOTAL_FAIL=$((TOTAL_FAIL + HTTP_FAIL))
-          fi
-          
-          # Check HTTPS scan results
-          if [ -f report_https_md.md ]; then
-            HTTPS_WARN=$(grep -o "WARN-NEW" report_https_md.md | wc -l || echo "0")
-            HTTPS_FAIL=$(grep -o "FAIL-NEW" report_https_md.md | wc -l || echo "0")
-            echo "HTTPS Scan Results:"
-            echo "  Warnings: $HTTPS_WARN"
-            echo "  Failures: $HTTPS_FAIL"
-            TOTAL_WARN=$((TOTAL_WARN + HTTPS_WARN))
-            TOTAL_FAIL=$((TOTAL_FAIL + HTTPS_FAIL))
-          fi
-          
-          echo ""
-          echo "Total Results:"
-          echo "  Warnings: $TOTAL_WARN"
-          echo "  Failures: $TOTAL_FAIL"
-          
-          if [ "$TOTAL_FAIL" -gt 0 ]; then
-            echo "::error::ZAP found $TOTAL_FAIL high/medium severity issues across HTTP and HTTPS"
-            exit 1
-          elif [ "$TOTAL_WARN" -gt 0 ]; then
-            echo "::warning::ZAP found $TOTAL_WARN warnings (low severity) across HTTP and HTTPS"
-          fi
-
-      - name: Cleanup
-        if: always()
-        run: docker compose -f docker-compose.yml down
+        run: docker compose down -v --remove-orphans

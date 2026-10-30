@@ -11,9 +11,12 @@ from typing import Any, ClassVar
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.core.mail.handler import MailersHandler
+from django.core.validators import MaxLengthValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+from util.encrypted_fields import EncryptedTextField
 
 
 class _TestMailers(MailersHandler):
@@ -43,7 +46,7 @@ class SmtpEmailConfig(models.Model):
     use_tls = models.BooleanField(default=True)
     use_ssl = models.BooleanField(default=False)
     username = models.CharField(max_length=255, blank=True)
-    password = models.CharField(max_length=1024, blank=True)
+    password = EncryptedTextField(max_length=1024, blank=True, validators=[MaxLengthValidator(1024)])
     timeout_seconds = models.PositiveIntegerField(default=10)
     default_from_email = models.EmailField(default='no-reply.trustpoint@localhost')
     last_updated = models.DateTimeField(auto_now=True)
@@ -125,7 +128,8 @@ class SmtpEmailConfig(models.Model):
                 'This is a test email from Trustpoint.\n\n'
                 'If you received this message, Trustpoint can talk to the configured SMTP server.\n\n'
                 'Sent at: %(timestamp)s'
-            ) % {'timestamp': timezone.now().isoformat()},
+            )
+            % {'timestamp': timezone.now().isoformat()},
             from_email=self.default_from_email,
             to=[recipient],
         )
