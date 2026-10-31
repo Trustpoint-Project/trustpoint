@@ -261,6 +261,17 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         """Apply CMP protection and write the encoded certificate response."""
         if context.implicit_confirm:
             pki_message = cls._grant_implicit_confirm(pki_message)
+        elif isinstance(context.cmp_transaction, CmpTransactionModel):
+            deadline = context.cmp_transaction.confirmation_deadline
+            if deadline is not None:
+                header = pki_message['header']
+                header['messageTime'] = header['messageTime'].clone(
+                    dt.datetime.now(dt.UTC).strftime('%Y%m%d%H%M%SZ'),
+                )
+                entry = header['generalInfo'].componentType.clone()
+                entry['infoType'] = '1.3.6.1.5.5.7.4.14'  # id-it-confirmWaitTime
+                entry['infoValue'] = encoder.encode(useful.GeneralizedTime(deadline.strftime('%Y%m%d%H%M%SZ')))
+                header['generalInfo'].append(entry)
         if context.cmp_shared_secret:
             pki_message = cls._add_protection_shared_secret(pki_message=pki_message, context=context)
         else:

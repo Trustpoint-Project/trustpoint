@@ -369,6 +369,18 @@ def assign_secret(  # noqa: PLR0913 - Operator and device identify the audited a
     actor: Any = None,
 ) -> str:
     """Audit rejected replacements after rolling back their attempted changes."""
+    if config.pk and field == 'cmp_shared_secret':
+        from cmp.confirmation import expire_confirmation  # noqa: PLC0415 - Avoid model initialization cycles.
+
+        device_filter = 'onboarding_config_id' if _is_onboarding_config(config) else 'no_onboarding_config_id'
+        overdue = _cmp_transaction_model().objects.filter(
+            **{f'device__{device_filter}': config.pk},
+            status='issued', implicit_confirm=False, confirmed_at__isnull=True,
+            confirmation_deadline__lte=timezone.now(),
+        ).values_list('pk', flat=True)
+        for transaction_pk in overdue:
+            expire_confirmation(transaction_pk)
+        config.refresh_from_db()
     try:
         return _assign_secret(config, field, custom=custom, value=value, device=device, actor=actor)
     except ValidationError:
@@ -385,6 +397,25 @@ def assign_secret(  # noqa: PLR0913 - Operator and device identify the audited a
                 },
             )
         raise
+
+
+@transaction.atomic
+def invalidate_onboarding_secrets(config: OnboardingConfigModel) -> None:
+    """Invalidate bootstrap material after failed onboarding without completing it.
+
+    This internal lifecycle transition deliberately bypasses replacement policy:
+    outstanding transactions must not prevent invalidation on a timeout. The
+    row lock and version increments still invalidate in-flight secret proofs.
+    """
+    fresh = _onboarding_config_model().objects.select_for_update().get(pk=config.pk)
+    _onboarding_config_model().objects.filter(pk=fresh.pk).update(
+        cmp_shared_secret='',
+        est_password='',
+        credential_expires_at=None,
+        cmp_secret_version=fresh.cmp_secret_version + bool(fresh.cmp_shared_secret),
+        est_password_version=fresh.est_password_version + bool(fresh.est_password),
+    )
+    config.refresh_from_db()
 
 
 @transaction.atomic

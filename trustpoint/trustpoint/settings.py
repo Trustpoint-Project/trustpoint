@@ -750,6 +750,9 @@ Q_CLUSTER = {
     'orm': 'default',
 }
 
+TRUSTPOINT_CMP_CONFIRMATION_TIMEOUT_SECONDS = int(os.getenv('TRUSTPOINT_CMP_CONFIRMATION_TIMEOUT_SECONDS', '300'))
+TRUSTPOINT_CMP_CONFIRMATION_TIMEOUT_POLICY = os.getenv('TRUSTPOINT_CMP_CONFIRMATION_TIMEOUT_POLICY', 'revoke')
+
 
 # HSM storage root:
 # - local/dev defaults to <repo-root>/var/hsm
