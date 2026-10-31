@@ -26,6 +26,8 @@ from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, SignatureSuite
 
+from cmp.confirmation import require_awaiting_confirmation
+from cmp.models import CmpTransactionModel
 from cmp.util import PKI_STATUS_REJECTION, cmp_hmac_algorithm
 from devices.secrets import retire_onboarding_secrets
 from management.models import SecurityConfig
@@ -57,7 +59,6 @@ from request.request_context import (
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 
-    from cmp.models import CmpTransactionModel
     from pki.models import TruststoreModel
 
 
@@ -470,7 +471,7 @@ def _verify_cmp_pop_signature(
 
 
 def validate_cmp_transaction_freshness(context: CmpBaseRequestContext) -> CmpTransactionModel | None:
-    """Validate transaction and nonce continuity without mutating state.
+    """Validate transaction and nonce continuity, expiring overdue confirmations.
 
     TP-TA-03: stateful follow-up messages require transactionID plus the
     expected recipNonce and a fresh senderNonce.
@@ -578,6 +579,8 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
     if tx is None:
         msg = 'certConf is not bound to an issued CMP transaction.'
         raise ValueError(msg)
+    if isinstance(tx, CmpTransactionModel):
+        require_awaiting_confirmation(tx)
     final_certificate = tx.final_certificate
     if final_certificate is None:
         msg = 'certConf is not bound to an issued CMP transaction.'

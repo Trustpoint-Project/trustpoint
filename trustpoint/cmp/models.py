@@ -152,6 +152,12 @@ class CmpTransactionModel(models.Model):
     created_at = models.DateTimeField(verbose_name=_('Created At'), default=timezone.now)
     updated_at = models.DateTimeField(verbose_name=_('Updated At'), auto_now=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmation_deadline = models.DateTimeField(null=True, blank=True, db_index=True)
+    confirmation_timeout_policy = models.CharField(
+        max_length=16,
+        choices=[('revoke', _('Revoke')), ('log', _('Log rejection'))],
+        default='revoke',
+    )
     finalized_at = models.DateTimeField(verbose_name=_('Finalized At'), null=True, blank=True)
 
     class Meta:
