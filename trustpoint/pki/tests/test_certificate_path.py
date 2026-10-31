@@ -169,7 +169,10 @@ def test_rejects_unsupported_directory_name_constraints(root, verify_path):
     intermediate_key = _key()
     permitted_dn = x509.DirectoryName(x509.Name([x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, 'allowed')]))
     intermediate = _issue(
-        intermediate_key, anchor, root_key, ca=True,
+        intermediate_key,
+        anchor,
+        root_key,
+        ca=True,
         extensions=[(x509.NameConstraints([permitted_dn], None), True)],
     )
     leaf = _issue(_key(), intermediate, intermediate_key)
