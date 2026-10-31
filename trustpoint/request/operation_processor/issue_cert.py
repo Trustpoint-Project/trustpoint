@@ -8,7 +8,6 @@ import re
 from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography import x509
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
 
@@ -31,6 +30,7 @@ from pki.models import CaModel, IssuedCredentialModel
 from pki.models.ca_rollover import CaRolloverState
 from pki.models.credential import CredentialModel
 from pki.services.ca_rollover import CaRolloverService
+from pki.util.certificate_path import validate_issued_certificate_path
 from pki.util.keys import is_supported_public_key
 from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
 from request.clients.cmp_client import CmpClient, CmpClientError
@@ -85,11 +85,14 @@ def _as_authority_key_identifier_public_key(
         return public_key
 
     # Check for ML-DSA keys
-    if mldsa and isinstance(public_key, (
-        mldsa.MLDSA44PublicKey,
-        mldsa.MLDSA65PublicKey,
-        mldsa.MLDSA87PublicKey,
-    )):
+    if mldsa and isinstance(
+        public_key,
+        (
+            mldsa.MLDSA44PublicKey,
+            mldsa.MLDSA65PublicKey,
+            mldsa.MLDSA87PublicKey,
+        ),
+    ):
         return public_key
 
     err_msg = f'Unsupported issuer public key type for AuthorityKeyIdentifier: {type(public_key)}.'
@@ -119,9 +122,9 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
 
             # Remote Issuing CAs
             if issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
-                processor: (
-                    LocalCaCertificateIssueProcessor | RemoteCaCertificateIssueProcessor
-                ) = LocalCaCertificateIssueProcessor()
+                processor: LocalCaCertificateIssueProcessor | RemoteCaCertificateIssueProcessor = (
+                    LocalCaCertificateIssueProcessor()
+                )
                 return processor.process_operation(context)
             if issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_CMP:
                 processor = LocalCaCertificateIssueProcessor()
@@ -141,15 +144,17 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         raise ValueError(exc_msg)
 
     @staticmethod
-    def _get_credential_type_for_template(context: BaseCertificateRequestContext
-            ) -> tuple[IssuedCredentialModel.IssuedCredentialType, str]:
+    def _get_credential_type_for_template(
+        context: BaseCertificateRequestContext,
+    ) -> tuple[IssuedCredentialModel.IssuedCredentialType, str]:
         """Map certificate template to issued credential type."""
         if context.certificate_profile_model is None:
             exc_msg = 'Certificate profile model is required but not set in context.'
             raise ValueError(exc_msg)
 
-        profile_display_name = (context.certificate_profile_model.display_name
-                                or context.certificate_profile_model.unique_name)
+        profile_display_name = (
+            context.certificate_profile_model.display_name or context.certificate_profile_model.unique_name
+        )
 
         domain_cred_profile_name = 'domain_credential'
         if context.domain is not None:
@@ -159,6 +164,7 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
             return (IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL, profile_display_name)
 
         return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, profile_display_name)
+
 
 class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
     """Operation processor for issuing certificates via a local CA."""
@@ -181,9 +187,8 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         return f'http://{TlsSettings.get_first_ipv4_address()}{port_str}/crl/{ca_id}'
 
     def _save_credential(
-            self, context: BaseCertificateRequestContext,
-            signed_cert: x509.Certificate, issuing_credential: CredentialModel
-        ) -> None:
+        self, context: BaseCertificateRequestContext, signed_cert: x509.Certificate, issuing_credential: CredentialModel
+    ) -> None:
         """Save the issued credential to the database and associate it with the device."""
         context.domain = cast('DomainModel', context.domain)
         context.device = cast('DeviceModel', context.device)
@@ -200,7 +205,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
                 additional_certificates=[
                     issuing_credential.get_certificate(),
                     *issuing_credential.get_certificate_chain(),
-                ]
+                ],
             )
             issued_credential = saver.save_credential(
                 credential,
@@ -208,7 +213,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
                 credential_type,
                 cert_profile_disp_name,
             )
-        else: # keyless credential - standard for EST and CMP requests
+        else:  # keyless credential - standard for EST and CMP requests
             issued_credential = saver.save_keyless_credential(
                 signed_cert,
                 [
@@ -270,14 +275,14 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         ca = context.domain.get_issuing_ca_or_value_error()
 
         active_rollover = CaRolloverService.get_active_rollover(ca)
-        if (active_rollover
+        if (
+            active_rollover
             and active_rollover.state == CaRolloverState.TRANSITION
             and active_rollover.new_issuing_ca
-            and active_rollover.new_issuing_ca.credential):
+            and active_rollover.new_issuing_ca.credential
+        ):
             ca = active_rollover.new_issuing_ca
-            self.logger.info(
-                'Using new CA for certificate signing (rollover in TRANSITION state)'
-            )
+            self.logger.info('Using new CA for certificate signing (rollover in TRANSITION state)')
 
         public_key = cert_req._public_key if isinstance(cert_req, x509.CertificateBuilder) else cert_req.public_key()  # noqa: SLF001
 
@@ -306,8 +311,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
 
             if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
                 err_msg = (
-                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
-                    f'but found {type(hash_algorithm)}'
+                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
                 )
                 raise TypeError(err_msg)
 
@@ -316,16 +320,12 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             exc_msg = 'The certificate request has not been validated against a profile.'
             raise ValueError(exc_msg)
 
-        certificate_builder = certificate_builder.issuer_name(
-            issuing_credential.get_certificate().subject
-        )
+        certificate_builder = certificate_builder.issuer_name(issuing_credential.get_certificate().subject)
 
         certificate_builder = certificate_builder.serial_number(x509.random_serial_number())
         certificate_builder = certificate_builder.public_key(public_key)
 
-        issuer_public_key = _as_authority_key_identifier_public_key(
-            issuing_credential.get_certificate().public_key()
-        )
+        issuer_public_key = _as_authority_key_identifier_public_key(issuing_credential.get_certificate().public_key())
 
         default_extensions = {
             x509.BasicConstraints: (x509.BasicConstraints(ca=False, path_length=None), False),
@@ -348,17 +348,25 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
                 False,
             ),
             x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),
-            x509.CRLDistributionPoints: (x509.CRLDistributionPoints([
-                x509.DistributionPoint(
-                    full_name=[x509.UniformResourceIdentifier(
-                        self._get_crl_distribution_point_url(context, ca.id)
-                    )], relative_name=None, reasons=None, crl_issuer=None
+            x509.CRLDistributionPoints: (
+                x509.CRLDistributionPoints(
+                    [
+                        x509.DistributionPoint(
+                            full_name=[
+                                x509.UniformResourceIdentifier(self._get_crl_distribution_point_url(context, ca.id))
+                            ],
+                            relative_name=None,
+                            reasons=None,
+                            crl_issuer=None,
+                        ),
+                    ]
                 ),
-            ]), False),
+                False,
+            ),
         }
 
         for ext, critical in default_extensions.values():
-            with contextlib.suppress(ValueError): # extension already present
+            with contextlib.suppress(ValueError):  # extension already present
                 certificate_builder = certificate_builder.add_extension(ext, critical)
 
         issuer_private_key = issuing_credential.get_private_key()
@@ -441,7 +449,10 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         _, profile_display_name = self._get_credential_type_for_template(context)
         with transaction.atomic():
             CredentialSaver(device=context.device, domain=context.domain).save_remote_keyless_credential(
-                certificate, issuer_path, common_name, profile_display_name,
+                certificate,
+                issuer_path,
+                common_name,
+                profile_display_name,
             )
             if isinstance(context, CmpCertificateRequestContext):
                 context.issuer_credential = self._get_keyless_issuer_credential(issuer_path)
@@ -564,10 +575,7 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         context.issued_certificate = issued_cert
         context.issued_certificate_chain = ca_chain
         self._save_validated_remote_credential(context, ca_chain)
-        self.logger.info(
-            'Successfully issued certificate via remote EST CA: %s',
-            issuing_ca.unique_name
-        )
+        self.logger.info('Successfully issued certificate via remote EST CA: %s', issuing_ca.unique_name)
 
         domain_name = context.domain.unique_name if context.domain else 'unknown'
         device_name = context.device.common_name if context.device else 'unknown'
@@ -646,27 +654,7 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             exc_msg = 'Issued certificate is a CA certificate, which is not allowed.'
             raise ValueError(exc_msg)
 
-        trusted = {cert.fingerprint(hashes.SHA256()) for cert in ca_chain}
-        pool = [*ca_chain, *extra_certs]
-        current = issued_cert
-        path: list[x509.Certificate] = []
-        for _ in range(len(pool) + 1):
-            issuer = None
-            for candidate in pool:
-                try:
-                    current.verify_directly_issued_by(candidate)
-                except (InvalidSignature, ValueError, TypeError):
-                    continue
-                issuer = candidate
-                break
-            if issuer is None:
-                break
-            path.append(issuer)
-            if issuer.fingerprint(hashes.SHA256()) in trusted:
-                return path
-            current = issuer
-        exc_msg = 'Issued certificate does not chain to the configured upstream CA truststore.'
-        raise ValueError(exc_msg)
+        return validate_issued_certificate_path(issued_cert, ca_chain, extra_certs)[1:]
 
     @staticmethod
     def _get_keyless_issuer_credential(issuer_path: list[x509.Certificate]) -> CredentialModel:
@@ -680,7 +668,9 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         if existing is not None:
             return existing
         return CredentialModel.save_keyless_credential(
-            issuer, chain, CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            issuer,
+            chain,
+            CredentialModel.CredentialTypeChoice.ISSUING_CA,
         )
 
     @staticmethod
@@ -689,7 +679,9 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         if not cert_profile:
             return remote_path
         return re.sub(
-            r'^(/\.well-known/cmp/p/[^/~]+)/(certification/?)$', rf'\1/{cert_profile}/\2', remote_path,
+            r'^(/\.well-known/cmp/p/[^/~]+)/(certification/?)$',
+            rf'\1/{cert_profile}/\2',
+            remote_path,
         )
 
     def _build_cmp_request_message(
@@ -711,14 +703,19 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         subject = builder._subject_name  # noqa: SLF001
         # The profile-validated builder carries no key; the device key lives in the original request.
         cert_req = context.cert_requested
-        public_key = cert_req._public_key if isinstance(cert_req, x509.CertificateBuilder) else (  # noqa: SLF001
-            cert_req.public_key() if cert_req is not None else None
+        public_key = (
+            cert_req._public_key  # noqa: SLF001
+            if isinstance(cert_req, x509.CertificateBuilder)
+            else (cert_req.public_key() if cert_req is not None else None)
         )
         if subject is None or public_key is None:
             exc_msg = 'Certificate request must contain a subject and a public key.'
             raise ValueError(exc_msg)
-        extensions = [ext for ext in builder._extensions  # noqa: SLF001
-                      if not isinstance(ext.value, x509.CRLDistributionPoints)]
+        extensions = [
+            ext
+            for ext in builder._extensions  # noqa: SLF001
+            if not isinstance(ext.value, x509.CRLDistributionPoints)
+        ]
 
         no_onboarding_config = issuing_ca.no_onboarding_config
         if no_onboarding_config is None or not ca_chain:

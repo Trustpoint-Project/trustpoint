@@ -43,6 +43,13 @@ flowchart LR
 - `X-SSL-Client-Verify`: Verification status
 - `X-SSL-Client-S-DN`: Client certificate subject DN
 
+Upstream EST/CMP certificates undergo shared path validation before storage,
+including CA signing permissions, validity, path length, name constraints and
+critical extensions. Configured truststore entries are explicit CA trust anchors;
+response certificates cannot add trust. Unsupported certificate-policy constraints
+fail closed. Profile checks separately bind the issued key, identity and extensions
+to the authorized request; path validation does not fetch CRLs or OCSP responses.
+
 ## Authentication Mechanisms
 
 ### Web UI Authentication
