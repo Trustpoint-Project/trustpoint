@@ -4,19 +4,17 @@
 """Regression tests for bounded explicit CMP confirmation and bootstrap lifetime."""
 
 from datetime import timedelta
-from importlib import import_module
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django.apps import apps
+from django.db import connection
 from django.utils import timezone
 from pyasn1.codec.der import decoder
 from pyasn1_modules import rfc4210
 from trustpoint_core.oid import HmacAlgorithm
 
-from cmp.confirmation import expire_confirmation, expire_due_confirmations
+from cmp.confirmation import expire_confirmation, expire_due_confirmations, initialize_confirmation_expiry
 from cmp.models import CmpTransactionModel
 from devices.secrets import assign_secret
 from management.models import SecurityConfig
@@ -246,8 +244,7 @@ def test_upgrade_backfills_legacy_deadline_and_installs_recurring_sweep(pending_
     record, _ = pending_confirmation
     record.confirmation_deadline = None
     record.save(update_fields=['confirmation_deadline'])
-    migration = import_module('cmp.migrations.0002_confirmation_deadline')
-    migration.install_expiry(apps, SimpleNamespace(connection=SimpleNamespace(alias='default')))
+    initialize_confirmation_expiry()
     record.refresh_from_db()
     assert timezone.now() + timedelta(seconds=290) < record.confirmation_deadline
     scheduled = Schedule.objects.get(name='cmp-expire-confirmations')
@@ -255,6 +252,23 @@ def test_upgrade_backfills_legacy_deadline_and_installs_recurring_sweep(pending_
     assert scheduled.schedule_type == Schedule.MINUTES
     assert scheduled.minutes == 1
     assert scheduled.repeats == -1
+    original_deadline = record.confirmation_deadline
+    original_next_run = scheduled.next_run
+    initialize_confirmation_expiry()
+    record.refresh_from_db()
+    scheduled.refresh_from_db()
+    assert record.confirmation_deadline == original_deadline
+    assert scheduled.next_run == original_next_run
+
+
+def test_setup_skips_partial_or_rolled_back_schema(pending_confirmation):
+    record, _ = pending_confirmation
+    record.confirmation_deadline = None
+    record.save(update_fields=['confirmation_deadline'])
+    with patch.object(connection.introspection, 'get_table_description', return_value=[]):
+        initialize_confirmation_expiry()
+    record.refresh_from_db()
+    assert record.confirmation_deadline is None
 
 
 @pytest.mark.parametrize('implicit', [False, True])

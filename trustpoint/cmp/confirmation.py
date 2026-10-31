@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.db import transaction
+from django.db import connections, transaction
 from django.utils import timezone
 
 from cmp.models import CmpTransactionModel
@@ -23,8 +23,47 @@ from pki.services.revocation import revoke_certificate
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from datetime import datetime
+    from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def initialize_confirmation_expiry(*, using: str = 'default', **_kwargs: Any) -> None:
+    """Backfill missing deadlines and install cleanup after migrations, idempotently."""
+    from django_q.models import Schedule  # noqa: PLC0415
+
+    # post_migrate also runs after partial migrations and rollbacks. Only
+    # initialize once both tables support the current application models.
+    connection = connections[using]
+    tables = set(connection.introspection.table_names())
+    with connection.cursor() as cursor:
+        for model in (CmpTransactionModel, Schedule):
+            metadata = model._meta  # noqa: SLF001 - Django's public model metadata API.
+            if metadata.db_table not in tables:
+                return
+            columns = {
+                field.name for field in connection.introspection.get_table_description(cursor, metadata.db_table)
+            }
+            if not {field.column for field in metadata.local_fields} <= columns:
+                return
+
+    with transaction.atomic(using=using):
+        CmpTransactionModel.objects.using(using).filter(
+            status=CmpTransactionModel.Status.ISSUED,
+            implicit_confirm=False,
+            confirmed_at__isnull=True,
+            confirmation_deadline__isnull=True,
+        ).update(confirmation_deadline=timezone.now() + timedelta(seconds=300))
+        Schedule.objects.using(using).get_or_create(
+            name='cmp-expire-confirmations',
+            defaults={
+                'func': 'cmp.confirmation.expire_due_confirmations',
+                'schedule_type': Schedule.MINUTES,
+                'minutes': 1,
+                'repeats': -1,
+                'next_run': timezone.now(),
+            },
+        )
 
 
 def start_confirmation_wait(record: CmpTransactionModel) -> None:
