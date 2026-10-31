@@ -79,6 +79,21 @@ flowchart LR
 
 **Endpoints:** `/.well-known/cmp/<domain>/`
 
+#### Explicit CMP certificate confirmation
+
+CMP responses advertise a persisted confirmation deadline; retries do not extend
+it. `TRUSTPOINT_CMP_CONFIRMATION_TIMEOUT_SECONDS` defaults to `300` (must be positive).
+`TRUSTPOINT_CMP_CONFIRMATION_TIMEOUT_POLICY` selects `revoke` (default) or `log`
+(retain the certificate), as allowed by
+[RFC 9483 §4.1.1](https://www.rfc-editor.org/rfc/rfc9483.html#section-4.1.1).
+Expiry rejects the transaction and invalidates initialization bootstrap secrets,
+leaving onboarding pending. Late confirmations are rejected.
+
+Apply migrations before deployment; existing pending confirmations receive a
+five-minute grace period. Cleanup runs every minute through Django-Q (`qcluster`
+with scheduling enabled), or run `python trustpoint/manage.py expire_cmp_confirmations`
+from an external scheduler. Transaction lookups and secret rotation also trigger cleanup.
+
 ### Other Protocols
 
 - **AOKI:** Protocol-specific bootstrap credentials

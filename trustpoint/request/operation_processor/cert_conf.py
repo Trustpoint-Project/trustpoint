@@ -6,6 +6,12 @@
 from django.db import transaction
 from django.utils import timezone
 
+from cmp.confirmation import (
+    confirmation_is_due,
+    expire_confirmation,
+    locked_confirmation,
+    require_awaiting_confirmation,
+)
 from cmp.models import CmpTransactionModel
 from cmp.util import PKI_STATUS_REJECTION, PKIFailureInfo
 from request.request_context import BaseRequestContext, CmpCertConfRequestContext
@@ -24,8 +30,8 @@ class CertConfProcessor(AbstractOperationProcessor, LoggerMixin):
     * **Accepted** (``cert_conf_status == 0`` or absent): no CA operation is
       required — the :class:`~request.message_responder.cmp.CmpPkiConfResponder`
       sends the pkiConf reply.
-    * **Rejected** (``cert_conf_status == 2``): the CA MUST revoke the
-      just-issued certificate per RFC 9483 §5.1.2.  The authorization step is
+    * **Rejected** (``cert_conf_status == 2``): Trustpoint's rejection policy revokes the
+      just-issued certificate. The authorization step is
       responsible for setting ``context.credential_to_revoke`` prior to
       reaching this processor.
     """
@@ -36,6 +42,20 @@ class CertConfProcessor(AbstractOperationProcessor, LoggerMixin):
             exc_msg = 'CertConfProcessor requires a CmpCertConfRequestContext.'
             raise TypeError(exc_msg)
 
+        if isinstance(context.cmp_transaction, CmpTransactionModel):
+            transaction_pk = context.cmp_transaction.pk
+            if confirmation_is_due(context.cmp_transaction, timezone.now()):
+                expire_confirmation(transaction_pk)
+            with locked_confirmation(transaction_pk) as (record, _config):
+                require_awaiting_confirmation(record)
+                context.cmp_transaction = record
+                self._process_confirmation(context)
+            return
+
+        self._process_confirmation(context)
+
+    def _process_confirmation(self, context: CmpCertConfRequestContext) -> None:
+        """Apply an authenticated confirmation while its transaction is locked."""
         if context.cert_conf_status != PKI_STATUS_REJECTION:
             self.logger.info(
                 'certConf received for certReqId=%s — status accepted. No CA operation required.',
@@ -47,10 +67,7 @@ class CertConfProcessor(AbstractOperationProcessor, LoggerMixin):
             return
 
         if context.credential_to_revoke is None:
-            exc_msg = (
-                'certConf rejection received but credential_to_revoke is not set. '
-                'Cannot revoke certificate.'
-            )
+            exc_msg = 'certConf rejection received but credential_to_revoke is not set. Cannot revoke certificate.'
             self.logger.error(exc_msg)
             context.error(exc_msg, http_status=500, cmp_code=PKIFailureInfo.SYSTEM_FAILURE)
             raise ValueError(exc_msg)
