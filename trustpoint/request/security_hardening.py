@@ -16,7 +16,6 @@ import hmac as stdlib_hmac
 from typing import TYPE_CHECKING, Protocol, cast
 
 from cryptography import x509
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, mldsa, padding, rsa
 from django.conf import settings
@@ -34,6 +33,7 @@ from management.models import SecurityConfig
 from onboarding.enums import OnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from onboarding.models import OnboardingConfigModel
 from pki.models import CaModel, IssuedCredentialModel
+from pki.util.certificate_path import validate_issued_certificate_path
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from request.authentication.base import ClientCertificateAuthentication, IDevIDAuthentication
 from request.authentication.cmp import (
@@ -724,30 +724,7 @@ def _verify_chain_to_truststore(
     trust_anchors: list[x509.Certificate],
     intermediates: list[x509.Certificate],
 ) -> None:
-    trusted = {cert.fingerprint(hashes.SHA256()) for cert in trust_anchors}
-    pool = [*trust_anchors, *intermediates]
-    current = leaf
-    seen: set[bytes] = set()
-    for _ in range(len(pool) + 1):
-        current_fp = current.fingerprint(hashes.SHA256())
-        if current_fp in seen:
-            break
-        seen.add(current_fp)
-        issuer = None
-        for candidate in pool:
-            try:
-                current.verify_directly_issued_by(candidate)
-            except (InvalidSignature, ValueError, TypeError):
-                continue
-            issuer = candidate
-            break
-        if issuer is None:
-            break
-        if issuer.fingerprint(hashes.SHA256()) in trusted:
-            return
-        current = issuer
-    msg = 'Upstream-issued certificate does not chain to the configured issuing truststore.'
-    raise ValueError(msg)
+    validate_issued_certificate_path(leaf, trust_anchors, intermediates)
 
 
 def _validate_profile_preservation(context: BaseCertificateRequestContext, issued: x509.Certificate) -> None:

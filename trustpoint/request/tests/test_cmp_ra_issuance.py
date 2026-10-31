@@ -26,6 +26,20 @@ def _name(cn: str) -> x509.Name:
     return x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, cn)])
 
 
+def _ca_key_usage() -> x509.KeyUsage:
+    return x509.KeyUsage(
+        digital_signature=True,
+        content_commitment=False,
+        key_encipherment=False,
+        data_encipherment=False,
+        key_agreement=False,
+        key_cert_sign=True,
+        crl_sign=True,
+        encipher_only=False,
+        decipher_only=False,
+    )
+
+
 def _make_ca(cn: str = 'Upstream Root') -> tuple[ec.EllipticCurvePrivateKey, x509.Certificate]:
     key = ec.generate_private_key(ec.SECP256R1())
     now = datetime.now(UTC)
@@ -38,6 +52,7 @@ def _make_ca(cn: str = 'Upstream Root') -> tuple[ec.EllipticCurvePrivateKey, x50
         .not_valid_before(now - timedelta(days=1))
         .not_valid_after(now + timedelta(days=30))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(_ca_key_usage(), critical=True)
         .sign(key, hashes.SHA256())
     )
     return key, cert
@@ -62,17 +77,21 @@ def _issue(
         .not_valid_before(now - timedelta(days=1))
         .not_valid_after(now + timedelta(days=10))
         .add_extension(x509.BasicConstraints(ca=is_ca, path_length=None), critical=True)
+        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
     )
     if dns_names is not None:
         builder = builder.add_extension(
-            x509.SubjectAlternativeName([x509.DNSName(name) for name in dns_names]), critical=False,
+            x509.SubjectAlternativeName([x509.DNSName(name) for name in dns_names]),
+            critical=False,
         )
     return builder.sign(ca_key, hashes.SHA256())
 
 
 def _truststore(*certs: x509.Certificate) -> Mock:
-    entries = [Mock(certificate=Mock(get_certificate_serializer=Mock(return_value=Mock(as_crypto=Mock(return_value=c)))))
-               for c in certs]
+    entries = [
+        Mock(certificate=Mock(get_certificate_serializer=Mock(return_value=Mock(as_crypto=Mock(return_value=c)))))
+        for c in certs
+    ]
     store = Mock()
     store.truststoreordermodel_set.order_by.return_value = entries
     return store
@@ -83,9 +102,15 @@ class _Env:
         self.ca_key, self.ca_cert = _make_ca()
         self.device_key = ec.generate_private_key(ec.SECP256R1())
         self.device_pub = self.device_key.public_key()
-        self.ca = Mock(unique_name='ra', remote_host='cmp.example.test', remote_port=8443, remote_path='/cmp/x',
-                       cmp_sender_kid=42,
-                       ca_type=CaModel.CaTypeChoice.REMOTE_CMP_RA, chain_truststore=None)
+        self.ca = Mock(
+            unique_name='ra',
+            remote_host='cmp.example.test',
+            remote_port=8443,
+            remote_path='/cmp/x',
+            cmp_sender_kid=42,
+            ca_type=CaModel.CaTypeChoice.REMOTE_CMP_RA,
+            chain_truststore=None,
+        )
         self.ca.no_onboarding_config = Mock(cmp_shared_secret='s3cret', trust_store=_truststore(self.ca_cert))  # noqa: S106
         builder = (
             x509.CertificateBuilder()
@@ -103,12 +128,18 @@ class _Env:
     def run(self, client_result: object = None, side_effect: Exception | None = None) -> Mock:
         if client_result is None:
             client_result = (_issue(self.ca_key, self.ca_cert, self.device_pub), [])
-        with patch(f'{PATCH_BASE}.CmpClient') as client_class, patch(f'{PATCH_BASE}.CredentialSaver') as saver, patch(
-            f'{PATCH_BASE}.AuditLog.create_entry'
-        ), patch.object(
-            RemoteCaCertificateIssueProcessor, '_get_keyless_issuer_credential', return_value=Mock(name='issuer'),
-        ), patch.object(
-            RemoteCaCertificateIssueProcessor, '_get_credential_type_for_template', return_value=(None, 'Profile')
+        with (
+            patch(f'{PATCH_BASE}.CmpClient') as client_class,
+            patch(f'{PATCH_BASE}.CredentialSaver') as saver,
+            patch(f'{PATCH_BASE}.AuditLog.create_entry'),
+            patch.object(
+                RemoteCaCertificateIssueProcessor,
+                '_get_keyless_issuer_credential',
+                return_value=Mock(name='issuer'),
+            ),
+            patch.object(
+                RemoteCaCertificateIssueProcessor, '_get_credential_type_for_template', return_value=(None, 'Profile')
+            ),
         ):
             client_class.return_value.send_and_extract_certificate.side_effect = side_effect
             client_class.return_value.send_and_extract_certificate.return_value = client_result
@@ -127,16 +158,22 @@ def _sent(env: _Env) -> tuple[CmpCertificateRequestContext, object, dict]:
 
 def test_upstream_path_gets_profile_for_trustpoint_style_paths() -> None:
     path = RemoteCaCertificateIssueProcessor._upstream_cmp_path  # noqa: SLF001
-    assert path('/.well-known/cmp/p/dom/certification', 'tls_server') == '/.well-known/cmp/p/dom/tls_server/certification'
+    assert (
+        path('/.well-known/cmp/p/dom/certification', 'tls_server') == '/.well-known/cmp/p/dom/tls_server/certification'
+    )
     assert path('/cmp/x', 'tls_server') == '/cmp/x'
     assert path('/.well-known/cmp/p/dom/certification', None) == '/.well-known/cmp/p/dom/certification'
 
 
 def test_builder_ra_verified_pop_without_private_key() -> None:
-    context = CmpCertificateRequestContext(request_data={
-        'subject': _name('x'), 'public_key': ec.generate_private_key(ec.SECP256R1()).public_key(),
-        'recipient_name': 'CN=ca', 'proof_of_possession': 'ra_verified',
-    })
+    context = CmpCertificateRequestContext(
+        request_data={
+            'subject': _name('x'),
+            'public_key': ec.generate_private_key(ec.SECP256R1()).public_key(),
+            'recipient_name': 'CN=ca',
+            'proof_of_possession': 'ra_verified',
+        }
+    )
     CmpMessageBuilder().build(context)
     body = context.parsed_message['body']
     assert body.getName() == 'cr'
@@ -146,9 +183,14 @@ def test_builder_ra_verified_pop_without_private_key() -> None:
 
 def test_builder_signature_pop_unchanged() -> None:
     key = ec.generate_private_key(ec.SECP256R1())
-    context = CmpCertificateRequestContext(request_data={
-        'subject': _name('x'), 'public_key': key.public_key(), 'private_key': key, 'recipient_name': 'CN=ca',
-    })
+    context = CmpCertificateRequestContext(
+        request_data={
+            'subject': _name('x'),
+            'public_key': key.public_key(),
+            'private_key': key,
+            'recipient_name': 'CN=ca',
+        }
+    )
     CmpMessageBuilder().build(context)
     assert context.parsed_message['body']['cr'][0]['popo'].getName() == 'signature'
 
@@ -163,7 +205,10 @@ def test_upstream_request_is_always_cr_with_shared_secret(body_type: str) -> Non
     assert message['body']['cr'][0]['popo'].getName() == 'raVerified'
     assert kwargs == {'add_shared_secret_protection': True}
     assert (upstream.cmp_server_host, upstream.cmp_server_port, upstream.cmp_server_path) == (
-        'cmp.example.test', 8443, '/cmp/x')
+        'cmp.example.test',
+        8443,
+        '/cmp/x',
+    )
     assert upstream.cmp_shared_secret == 's3cret'  # noqa: S105
 
 
@@ -198,14 +243,50 @@ def test_success_accepts_intermediate_from_extra_certs() -> None:
     # Re-sign the intermediate with the root so it chains.
     now = datetime.now(UTC)
     inter_cert = (
-        x509.CertificateBuilder().subject_name(inter_cert.subject).issuer_name(env.ca_cert.subject)
-        .public_key(inter_key.public_key()).serial_number(x509.random_serial_number())
-        .not_valid_before(now).not_valid_after(now + timedelta(days=5))
+        x509.CertificateBuilder()
+        .subject_name(inter_cert.subject)
+        .issuer_name(env.ca_cert.subject)
+        .public_key(inter_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + timedelta(days=5))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(_ca_key_usage(), critical=True)
         .sign(env.ca_key, hashes.SHA256())
     )
     env.run((_issue(inter_key, inter_cert, env.device_pub), [inter_cert]))
     assert env.context.issued_certificate is not None
+
+
+def test_non_ca_signer_is_rejected_before_persistence() -> None:
+    env = _Env()
+    attacker_key = ec.generate_private_key(ec.SECP256R1())
+    attacker_certificate = _issue(env.ca_key, env.ca_cert, attacker_key.public_key())
+    forged = _issue(attacker_key, attacker_certificate, env.device_pub)
+    with pytest.raises(ValueError, match='does not chain'):
+        env.run((forged, [attacker_certificate]))
+    env.saver.return_value.save_remote_keyless_credential.assert_not_called()
+    assert env.context.issued_certificate is None
+
+
+def test_est_ra_rejects_non_ca_signer_before_persistence() -> None:
+    env = _Env()
+    attacker_key = ec.generate_private_key(ec.SECP256R1())
+    attacker_certificate = _issue(env.ca_key, env.ca_cert, attacker_key.public_key())
+    forged = _issue(attacker_key, attacker_certificate, env.device_pub)
+    env.ca.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
+    env.ca.chain_truststore = _truststore(env.ca_cert, attacker_certificate)
+    env.ca.est_username = 'est-device'
+    env.context.cert_requested = (
+        x509.CertificateSigningRequestBuilder()
+        .subject_name(_name('validated-device'))
+        .sign(env.device_key, hashes.SHA256())
+    )
+    with patch(f'{PATCH_BASE}.EstClient') as client, patch(f'{PATCH_BASE}.CredentialSaver') as saver:
+        client.return_value.simple_enroll.return_value = forged
+        with pytest.raises(ValueError, match='does not chain'):
+            RemoteCaCertificateIssueProcessor(ca_type='est').process_operation(env.context)
+    saver.assert_not_called()
 
 
 def test_mismatching_public_key_is_rejected() -> None:
@@ -272,12 +353,16 @@ def test_incomplete_configuration_is_rejected(attribute: str) -> None:
 def test_upstream_ca_owns_crl_distribution_points() -> None:
     """Do not forward the RA profile's CRL URL as an upstream certificate request extension."""
     env = _Env()
-    ra_crl = x509.CRLDistributionPoints([
-        x509.DistributionPoint(
-            full_name=[x509.UniformResourceIdentifier('http://ra.example.test/crl/42')],
-            relative_name=None, reasons=None, crl_issuer=None,
-        ),
-    ])
+    ra_crl = x509.CRLDistributionPoints(
+        [
+            x509.DistributionPoint(
+                full_name=[x509.UniformResourceIdentifier('http://ra.example.test/crl/42')],
+                relative_name=None,
+                reasons=None,
+                crl_issuer=None,
+            ),
+        ]
+    )
     builder = env.context.cert_requested_profile_validated
     assert builder is not None
     builder = builder.add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
@@ -291,7 +376,8 @@ def test_upstream_ca_owns_crl_distribution_points() -> None:
     parsed = CmpCertificateBodyValidation()._cert_template_to_builder(template)  # noqa: SLF001
     extensions = parsed._extensions  # noqa: SLF001
     assert [(extension.value, extension.critical) for extension in extensions] == [
-        (extension.value, extension.critical) for extension in builder._extensions  # noqa: SLF001
+        (extension.value, extension.critical)
+        for extension in builder._extensions  # noqa: SLF001
     ]
     assert parsed._subject_name == _name('validated-device')  # noqa: SLF001
     # The downstream profile is unchanged; its CRL URL belongs only to the RA's local policy.
