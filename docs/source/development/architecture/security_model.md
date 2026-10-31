@@ -86,6 +86,12 @@ to the authorized request; path validation does not fetch CRLs or OCSP responses
 
 **Endpoints:** `/.well-known/cmp/<domain>/`
 
+Upstream CMP transactions currently use PBM shared-secret protection. Replies
+must authenticate and match the request's transaction ID, nonces, operation and
+certificate request ID before status handling or certificate extraction. PBM work
+is bounded; unprotected replies and unsupported protection modes are rejected.
+TLS certificate verification remains disabled for these upstream connections.
+
 #### Explicit CMP certificate confirmation
 
 CMP responses advertise a persisted confirmation deadline; retries do not extend
