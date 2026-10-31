@@ -704,9 +704,8 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         # The profile-validated builder carries no key; the device key lives in the original request.
         cert_req = context.cert_requested
         public_key = (
-            cert_req._public_key
+            cert_req._public_key  # noqa: SLF001
             if isinstance(cert_req, x509.CertificateBuilder)
-            # noqa: SLF001
             else (cert_req.public_key() if cert_req is not None else None)
         )
         if subject is None or public_key is None:

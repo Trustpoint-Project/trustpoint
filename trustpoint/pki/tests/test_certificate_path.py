@@ -90,11 +90,11 @@ def root():
 
 @pytest.fixture(params=['general-ra', 'cmp-ra'])
 def verify_path(request):
-    def verify(leaf, anchors, intermediates):
+    def verify(leaf, anchors, intermediates) -> None:
         if request.param == 'general-ra':
             _verify_chain_to_truststore(leaf, anchors, intermediates)
         else:
-            return RemoteCaCertificateIssueProcessor._validate_cmp_issued_certificate(
+            RemoteCaCertificateIssueProcessor._validate_cmp_issued_certificate(
                 leaf,
                 intermediates,
                 anchors,
