@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """CMP-owned transaction persistence for delayed delivery and polling."""
+
 from __future__ import annotations
 
 from django.db import models

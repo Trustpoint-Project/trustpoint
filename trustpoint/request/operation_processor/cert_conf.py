@@ -67,10 +67,7 @@ class CertConfProcessor(AbstractOperationProcessor, LoggerMixin):
             return
 
         if context.credential_to_revoke is None:
-            exc_msg = (
-                'certConf rejection received but credential_to_revoke is not set. '
-                'Cannot revoke certificate.'
-            )
+            exc_msg = 'certConf rejection received but credential_to_revoke is not set. Cannot revoke certificate.'
             self.logger.error(exc_msg)
             context.error(exc_msg, http_status=500, cmp_code=PKIFailureInfo.SYSTEM_FAILURE)
             raise ValueError(exc_msg)

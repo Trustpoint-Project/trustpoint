@@ -373,11 +373,17 @@ def assign_secret(  # noqa: PLR0913 - Operator and device identify the audited a
         from cmp.confirmation import expire_confirmation  # noqa: PLC0415 - Avoid model initialization cycles.
 
         device_filter = 'onboarding_config_id' if _is_onboarding_config(config) else 'no_onboarding_config_id'
-        overdue = _cmp_transaction_model().objects.filter(
-            **{f'device__{device_filter}': config.pk},
-            status='issued', implicit_confirm=False, confirmed_at__isnull=True,
-            confirmation_deadline__lte=timezone.now(),
-        ).values_list('pk', flat=True)
+        overdue = (
+            _cmp_transaction_model()
+            .objects.filter(
+                **{f'device__{device_filter}': config.pk},
+                status='issued',
+                implicit_confirm=False,
+                confirmed_at__isnull=True,
+                confirmation_deadline__lte=timezone.now(),
+            )
+            .values_list('pk', flat=True)
+        )
         for transaction_pk in overdue:
             expire_confirmation(transaction_pk)
         config.refresh_from_db()

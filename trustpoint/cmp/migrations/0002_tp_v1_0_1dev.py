@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('cmp', '0001_initial'),
     ]
@@ -19,6 +18,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cmptransactionmodel',
             name='confirmation_timeout_policy',
-            field=models.CharField(choices=[('revoke', 'Revoke'), ('log', 'Log rejection')], default='revoke', max_length=16),
+            field=models.CharField(
+                choices=[('revoke', 'Revoke'), ('log', 'Log rejection')], default='revoke', max_length=16
+            ),
         ),
     ]
