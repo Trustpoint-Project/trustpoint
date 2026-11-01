@@ -27,7 +27,7 @@ from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, SignatureSui
 
 from cmp.confirmation import require_awaiting_confirmation
 from cmp.models import CmpTransactionModel
-from cmp.util import PKI_STATUS_REJECTION, cmp_hmac_algorithm
+from cmp.util import PKI_STATUS_REJECTION, NameParser, cmp_hmac_algorithm
 from devices.secrets import retire_onboarding_secrets
 from management.models import SecurityConfig
 from onboarding.enums import OnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
@@ -44,6 +44,7 @@ from request.authentication.cmp import (
     CmpSignatureBasedRevocationAuthentication,
 )
 from request.authentication.est import ReenrollmentAuthentication, UsernamePasswordAuthentication
+from request.cmp_key_update import validate_key_update_followup, validate_key_update_identity
 from request.cmp_transaction_state import CmpTransactionState
 from request.request_context import (
     BaseCertificateRequestContext,
@@ -279,7 +280,7 @@ def _require_active_issued_signer(context: CmpBaseRequestContext, *, domain_only
         raise ValueError(msg)
 
 
-def authenticate_cmp_request(  # noqa: C901, PLR0912
+def authenticate_cmp_request(  # noqa: C901, PLR0911, PLR0912, PLR0915
     context: CmpBaseRequestContext,
 ) -> None:
     """Authenticate CMP using an operation-bound mechanism.
@@ -295,6 +296,11 @@ def authenticate_cmp_request(  # noqa: C901, PLR0912
     pbm = _is_pbm(context)
 
     if isinstance(context, CmpPollRequestContext):
+        tx = CmpTransactionState.get_by_transaction_id(str(context.cmp_transaction_id or ''))
+        if tx is not None and tx.operation == 'keyupdate':
+            _authenticate_key_update_signer(context)
+            validate_key_update_followup(context, tx)
+            return
         if pbm:
             CmpSharedSecretAuthentication().authenticate(context)
             _reject_retired_onboarding_secret(context)
@@ -323,6 +329,12 @@ def authenticate_cmp_request(  # noqa: C901, PLR0912
         msg = 'Unsupported CMP context for authentication.'
         raise TypeError(msg)
 
+    if context.operation == 'keyupdate':
+        _authenticate_key_update_signer(context)
+        context.cmp_key_update_authenticated = True
+        validate_key_update_identity(context)
+        return
+
     if context.operation == 'initialization':
         if pbm:
             CmpSharedSecretAuthentication().authenticate(context)
@@ -346,6 +358,38 @@ def authenticate_cmp_request(  # noqa: C901, PLR0912
 
     msg = f'Unsupported CMP authentication operation: {context.operation}.'
     raise ValueError(msg)
+
+
+def _authenticate_key_update_signer(context: CmpBaseRequestContext) -> None:
+    """Authenticate an active issued application or domain certificate for an update."""
+    if _is_pbm(context):
+        msg = 'CMP key update requires signature-based protection.'
+        raise ValueError(msg)
+    signer, _ = _extract_cmp_signer(context)
+    context.client_certificate = signer
+    ClientCertificateAuthentication(domain_credential_only=False).authenticate(context)
+    if context.device is None:
+        msg = 'CMP key update signer has no device.'
+        raise ValueError(msg)
+    context.domain = context.domain or context.device.domain
+    _verify_declared_signature_algorithm(context, signer)
+    _require_active_issued_signer(context, domain_only=False)
+    message = cast('rfc4210.PKIMessage', context.parsed_message)
+    sender = message['header']['sender']
+    if sender.getName() != 'directoryName' or NameParser.parse_name(sender['directoryName']) != signer.subject:
+        msg = 'CMP key update sender must match the protection certificate subject.'
+        raise ValueError(msg)
+    try:
+        usage = signer.extensions.get_extension_for_class(x509.KeyUsage).value
+    except x509.ExtensionNotFound:
+        usage = None
+    if usage is not None and not usage.digital_signature:
+        msg = 'CMP key update signer must permit digitalSignature.'
+        raise ValueError(msg)
+    CmpSignatureBasedRevocationAuthentication()._verify_protection_signature(  # noqa: SLF001
+        context.parsed_message,
+        signer,
+    )
 
 
 def _is_configured_cmp_ra_sender(context: CmpCertificateRequestContext) -> bool:
@@ -390,7 +434,7 @@ def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None:  #
     """
     if not isinstance(context, CmpCertificateRequestContext):
         return
-    if context.cmp_body_type not in {'ir', 'cr'}:
+    if context.cmp_body_type not in {'ir', 'cr', 'kur'}:
         return
     if not isinstance(context.parsed_message, rfc4210.PKIMessage):
         msg = 'CMP message is missing or invalid.'
@@ -409,6 +453,9 @@ def validate_cmp_proof_of_possession(context: CmpBaseRequestContext) -> None:  #
 
     popo_name = popo.getName()
     if popo_name == 'raVerified':
+        if context.cmp_body_type == 'kur':
+            msg = 'CMP key update requires signature ProofOfPossession for the requested key.'
+            raise ValueError(msg)
         if (context.device is not None and context.device.can_assert_cmp_ra_verified) or _is_configured_cmp_ra_sender(
             context
         ):
@@ -602,6 +649,11 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
     context.device = tx.device
     context.domain = tx.domain
     context.cmp_transaction = tx
+
+    if tx.operation == 'keyupdate':
+        _authenticate_key_update_signer(context)
+        validate_key_update_followup(context, tx)
+        return
 
     if _is_pbm(context):
         device = tx.device

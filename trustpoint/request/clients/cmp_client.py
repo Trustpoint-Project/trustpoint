@@ -640,10 +640,10 @@ class CmpClient(LoggerMixin):
         response_message: PKIMessage,
         raw_response: bytes,
     ) -> tuple[x509.Certificate, list[x509.Certificate]]:
-        """Extract the issued certificate and chain from a CP/IP response.
+        """Extract the issued certificate and chain from a CP/IP/KUP response.
 
         Args:
-            response_message: The parsed PKI response message (CP or IP).
+            response_message: The parsed PKI response message (CP, IP, or KUP).
             raw_response: The raw DER bytes of the complete response.
 
         Returns:
@@ -656,8 +656,8 @@ class CmpClient(LoggerMixin):
             body = response_message['body']
             body_name = body.getName()
 
-            if body_name not in ['cp', 'ip']:
-                msg = f'Expected CP or IP response, got: {body_name}'
+            if body_name not in ['cp', 'ip', 'kup']:
+                msg = f'Expected CP, IP, or KUP response, got: {body_name}'
                 self._raise_cmp_client_error(msg)
 
             cert_response_msg = body[body_name]

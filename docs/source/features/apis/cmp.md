@@ -7,7 +7,8 @@ Certificate Management Protocol (CMP) is a standard PKI protocol defined in RFC 
 Trustpoint implements CMP endpoints that allow devices and clients to:
 
 - Request initial certificates (Initialization Request - IR)
-- Request certificate updates (Key Update Request - KUR / Certificate Request - CR)
+- Request additional certificates (Certificate Request - CR)
+- Update valid certificates (Key Update Request - KUR / Key Update Response - KUP)
 - Confirm certificate acceptance (Certificate Confirm - certConf)
 - Revoke certificates (Revocation Request - RR)
 
@@ -21,7 +22,30 @@ https://<trustpoint-host>/.well-known/cmp/
 
 ## URL Structure
 
-Trustpoint supports flexible CMP URL structures according to RFC 9480 Section 3.3:
+RFC 9480 Section 3.3 and RFC 9483 Section 6.1 define the following URI shapes:
+
+```
+/.well-known/cmp
+/.well-known/cmp/<operation>
+/.well-known/cmp/p/<name>
+/.well-known/cmp/p/<name>/<operation>
+```
+
+`<name>` is one path segment whose meaning is configured by the server. Trustpoint
+can encode a domain and profile in that segment as `<domain>~<cert_profile>`.
+For example, the standard form for a key update is:
+
+```
+POST /.well-known/cmp/p/production~tls_server/keyupdate
+```
+
+The HTTP operation label is `keyupdate`, while the request and response bodies are
+`kur` and `kup`. Send `pollReq` and `certConf` to the same enrollment endpoint,
+including its `/keyupdate` suffix. Operation labels are optional; when absent,
+Trustpoint infers the operation from the CMP body.
+
+Trustpoint accepts the routes below. Separate domain and profile path segments
+are compatibility extensions beyond the standard URI shapes above.
 
 ### Basic Endpoints
 
@@ -61,7 +85,7 @@ POST /.well-known/cmp/p/<domain>~<cert_profile>/<operation>
 |-----------|-------------|----------|---------|
 | `domain` | The Trustpoint domain name | No | `production`, `iot_domain` |
 | `cert_profile` | Certificate profile identifier | No | `device_cert`, `server_cert` |
-| `operation` | CMP operation type | No | `ir`, `cr`, `kur`, `rr` |
+| `operation` | HTTP operation label | No | `initialization`, `certification`, `keyupdate`, `revocation` |
 
 **Special domain values:**
 - `.` or `_` represents an empty domain segment (default domain)
@@ -70,11 +94,13 @@ POST /.well-known/cmp/p/<domain>~<cert_profile>/<operation>
 
 | Operation | Description | RFC Reference |
 |-----------|-------------|---------------|
-| `ir` | Initialization Request - Request initial certificate | RFC 4210 Section 5.1.1 |
-| `cr` | Certificate Request - Request certificate | RFC 4210 Section 5.1.2 |
-| `kur` | Key Update Request - Update certificate with new key | RFC 4210 Section 5.1.8 |
-| `rr` | Revocation Request - Revoke a certificate | RFC 4210 Section 5.1.11 |
-| `certConf` | Certificate Confirmation - Confirm receipt of certificate | RFC 4210 Section 5.1.13 |
+| `initialization` | Initialization Request / Response (`ir` / `ip`) | RFC 9483 Section 4.1.1 |
+| `certification` | Certificate Request / Response (`cr` / `cp`) | RFC 9483 Section 4.1.2 |
+| `keyupdate` | Key Update Request / Response (`kur` / `kup`) | RFC 9483 Section 4.1.3 |
+| `revocation` | Revocation Request / Response (`rr` / `rp`) | RFC 9483 Section 4.2 |
+
+`certConf` and `pollReq` are follow-up message bodies, not separate HTTP operation
+labels. Use the endpoint of the original enrollment operation for both.
 
 ## Request Format
 
@@ -192,10 +218,24 @@ openssl cmp \
 
 ### Example 3: Key Update Request
 
+Use the certificate being updated to sign the request. It must be active, issued by
+the addressed CA, and associated with the authenticated device and domain. The
+requested subject and SAN must preserve the existing identity; the selected
+certificate profile must preserve that identity as well. The optional CRMF
+`oldCertID` control must identify the signing certificate. PBM-protected key
+updates are rejected.
+
+The HTTP operation label is `keyupdate`; `kur` and `kup` are CMP body types.
+The response uses `kup`, including `waiting` and authenticated request rejection
+responses. Send subsequent polling and confirmation messages to the same endpoint,
+using the original signing certificate. Both implicit and explicit confirmation
+are supported. Successful updates leave the old certificate valid until its normal
+expiry or an explicit revocation.
+
 ```bash
 openssl cmp \
   -cmd kur \
-  -server https://trustpoint.example.com/.well-known/cmp/p/production/kur \
+  -server https://trustpoint.example.com/.well-known/cmp/p/production~tls_server/keyupdate \
   -cert current_cert.pem \
   -key current_key.pem \
   -newkey new_key.pem \
@@ -207,7 +247,7 @@ openssl cmp \
 ```bash
 openssl cmp \
   -cmd rr \
-  -server https://trustpoint.example.com/.well-known/cmp/p/production/rr \
+  -server https://trustpoint.example.com/.well-known/cmp/p/production/revocation \
   -cert cert_to_revoke.pem \
   -key cert_key.pem
 ```
@@ -239,7 +279,7 @@ Detailed error information is provided in the PKIStatusInfo structure within the
 ## Integration with Trustpoint Workflows
 
 The registered CMP request triggers are `cmp.initialization`, `cmp.certification`,
-and `cmp.certconf`. Initialization/certification workflows can gate issuance and
+`cmp.keyupdate`, and `cmp.certconf`. Enrollment and key update workflows can gate issuance and
 use CMP transaction/polling handling while waiting for approval. Certificate
 confirmation has its own trigger.
 

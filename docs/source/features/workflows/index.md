@@ -53,7 +53,7 @@ The built-in registry exposes these production triggers:
 | --- | --- | --- |
 | Device lifecycle | `device.created`, `device.updated`, `device.deleted` | `event.device`, `event.source`; updates also contain `before`, `after`, and `changes` under `device`. |
 | Certificate lifecycle | `certificate.issued`, `certificate.revoked` | `event.certificate`, `event.device`, `event.source`. |
-| CMP requests | `cmp.initialization`, `cmp.certification`, `cmp.certconf` | `event.cmp`, `event.device`, `event.source`. |
+| CMP requests | `cmp.initialization`, `cmp.certification`, `cmp.keyupdate`, `cmp.certconf` | `event.cmp`, `event.device`, `event.source`. |
 | EST enrollment | `est.simpleenroll`, `est.simplereenroll` | `event.est`, `event.device`, `event.source`. |
 | REST enrollment | `rest.enroll`, `rest.reenroll` | `event.rest`, `event.device`, `event.source`. |
 
@@ -256,7 +256,7 @@ failures enter the engine's retryable error state. Both email and webhook run in
 
 The existing enrollment triggers support `trigger.phase: after_issuance`:
 
-- `cmp.initialization` and `cmp.certification`
+- `cmp.initialization`, `cmp.certification`, and `cmp.keyupdate`
 - `est.simpleenroll` and `est.simplereenroll`
 - `rest.enroll` and `rest.reenroll` (including enrollment through the management API)
 
