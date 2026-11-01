@@ -195,7 +195,7 @@ class TestRequestContext:
             'raw_message', 'parsed_message', 'operation', 'protocol',
             'cert_profile_str', 'est_encoding',
             'domain_str', 'domain', 'device', 'certificate_profile_model', 'cert_requested',
-            'est_username', 'est_password',
+            'est_username', 'est_password', 'est_channel_binding_verified',
             'client_certificate', 'client_intermediate_certificate',
             'cert_requested_profile_validated', 'issued_certificate',
             'csr_strict',

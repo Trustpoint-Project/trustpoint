@@ -9,7 +9,7 @@ Trustpoint implements EST endpoints that allow devices and clients to:
 - Retrieve CA certificates (`/cacerts`)
 - Enroll for new certificates (`/simpleenroll`)
 - Re-enroll existing certificates (`/simplereenroll`)
-- Query CSR attributes (`/csrattrs`) - Not currently supported
+- Query profile-based CSR attributes (`/csrattrs`)
 
 ## Base URL
 
@@ -27,14 +27,22 @@ Trustpoint supports flexible EST URL structures with optional domain and certifi
 
 ```
 GET  /.well-known/est/cacerts
+GET  /.well-known/est/csrattrs
 POST /.well-known/est/simpleenroll
 POST /.well-known/est/simplereenroll
 ```
+
+The unlabeled `/cacerts` endpoint returns the combined CA certificate chains for
+all active domains with an issuing CA, including prepared rollover chains.
+Certificates shared by multiple chains are included once. If no CA certificates
+are available, it returns `503 Service Unavailable`.
+Both default and domain-specific `/cacerts` URLs accept an optional trailing slash.
 
 ### With Certificate Profile Only
 
 ```
 GET  /.well-known/est/~<cert_profile>/cacerts
+GET  /.well-known/est/~<cert_profile>/csrattrs
 POST /.well-known/est/~<cert_profile>/simpleenroll
 POST /.well-known/est/~<cert_profile>/simplereenroll
 ```
@@ -43,6 +51,7 @@ POST /.well-known/est/~<cert_profile>/simplereenroll
 
 ```
 GET  /.well-known/est/<domain>/cacerts
+GET  /.well-known/est/<domain>/csrattrs
 POST /.well-known/est/<domain>/simpleenroll
 POST /.well-known/est/<domain>/simplereenroll
 ```
@@ -51,6 +60,7 @@ POST /.well-known/est/<domain>/simplereenroll
 
 ```
 GET  /.well-known/est/<domain>/<cert_profile>/cacerts
+GET  /.well-known/est/<domain>/<cert_profile>/csrattrs
 POST /.well-known/est/<domain>/<cert_profile>/simpleenroll
 POST /.well-known/est/<domain>/<cert_profile>/simplereenroll
 ```
@@ -201,6 +211,89 @@ curl -X POST \
 ```
 
 ---
+
+### 4. Get CSR Attributes
+
+**Endpoint:** `GET /csrattrs`, `GET /~<cert_profile>/csrattrs`,
+`GET /<domain>/csrattrs`, or `GET /<domain>/<cert_profile>/csrattrs`.
+All forms accept an optional trailing slash. No client authentication is required.
+
+**Response:** `200 OK`, with `Content-Type: application/csrattrs` and a
+Base64-encoded DER `CsrAttrs` sequence, following
+[RFC 7030 section 4.5](https://www.rfc-editor.org/rfc/rfc7030#section-4.5),
+[RFC 8951](https://www.rfc-editor.org/rfc/rfc8951), and the extension-value encoding
+clarification in [RFC 9908 section 3.2](https://www.rfc-editor.org/rfc/rfc9908#section-3.2).
+The response does not use the deprecated `Content-Transfer-Encoding` header.
+
+Domain-scoped requests select an allowed profile by its alias or unique name.
+Omitting the profile selects the domain credential profile. Profile-only requests
+select a profile by its unique name. Unknown or inactive domains and unavailable
+domain profiles return `404`.
+
+The response advertises subject OIDs for required fields that have no
+server-supplied default. Literal profile extension values are encoded in one
+`extensionRequest` Attribute whose value is an X.509 `Extensions` sequence.
+Extensions containing templates or client-supplied values are omitted from that
+sequence. If only such extensions are present, the response requests
+`extensionRequest` by OID without supplying values.
+
+The unlabeled endpoint has no selected profile and returns the empty sequence
+(`MAA=`). Profiles without additional requirements also return an empty sequence.
+The response does not enumerate alternative algorithms from the security policy
+or require the client to use the CA's key algorithm.
+Enrollment continues to enforce its existing profile and security policy checks.
+
+**Example:**
+
+```bash
+curl --cacert trustpoint_ca.pem \
+  https://trustpoint.example.com/.well-known/est/production/tls_client/csrattrs \
+  | openssl base64 -d -A | openssl asn1parse -inform DER
+```
+
+## TLS Channel Binding
+
+For `/simpleenroll` and `/simplereenroll`, Trustpoint verifies the optional
+`challengePassword` CSR attribute as the Base64-encoded `tls-unique` of the
+connection submitting the request, as specified in
+[RFC 7030 section 3.5](https://www.rfc-editor.org/rfc/rfc7030#section-3.5).
+Verification follows CSR signature validation and precedes authentication,
+authorization and issuance. Duplicate attributes, multiple values, malformed
+encodings, missing transport data and mismatches return `400`.
+
+Binding is optional by default. Set `TRUSTPOINT_EST_REQUIRE_CHANNEL_BINDING=true`
+to require it for every EST enrollment request. `/csrattrs` then advertises the
+`challengePassword` OID (`1.2.840.113549.1.9.7`), including on the unlabeled URL.
+Clients must complete the TLS handshake before signing the CSR and submit it on
+that same connection. Retrying on a new connection requires signing a new CSR
+with the new binding value; the key pair can be reused.
+
+The Docker image builds and loads an nginx module that obtains the first
+Finished message from the client-facing TLS 1.2 handshake, including resumed
+sessions. It requires Extended Master Secret and refuses renegotiated sessions.
+nginx overwrites `X-EST-TLS-Unique`, `X-EST-TLS-Unique-Supported`, and
+`X-EST-TLS-Protocol` before proxying requests, and clears these assertions on HTTP.
+Rebuild the Docker image to install the module when upgrading an existing image.
+
+Proxy assertions are enabled by `TRUSTPOINT_EST_TRUST_PROXY_CHANNEL_BINDING`
+(default: true in Docker, false otherwise) and accepted only from
+`TRUSTPOINT_TRUSTED_PROXY_IPS`. Custom TLS proxies need equivalent connection-based
+assertions and header sanitization. The HTTPS development server obtains the
+binding from Werkzeug's actual TLS socket and never lets headers override it.
+That native path is restricted to development mode: Python's public SSL API
+cannot verify EMS negotiation or detect renegotiation, so production uses the
+nginx module's stricter checks.
+
+`tls-unique` is undefined for TLS 1.3. Requests supplying `challengePassword` over
+TLS 1.3 are rejected; unbound TLS 1.3 requests continue to work when binding is
+optional. Deployments requiring binding must use TLS 1.2. The `tls-exporter`
+mechanism from [RFC 9266](https://www.rfc-editor.org/rfc/rfc9266) is not silently
+substituted for the RFC 7030 HTTPS EST binding.
+
+Binding applies to the client-facing TLS connection. The current EST RA client
+forwards the original CSR unchanged; an upstream EST server that verifies binding
+will reject that CSR because its connection has a different binding. A separate
+upstream RA proof-of-possession mechanism is needed for this deployment.
 
 ## Authentication
 

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Unit tests for PKI message parser components."""
+
 from unittest.mock import MagicMock, Mock, patch
 
 import base64
@@ -27,7 +28,12 @@ from request.message_parser.cmp import (
     CmpPkiMessageParsing,
 )
 from request.message_parser.cmp import CmpCertConfBodyValidation, CmpPkiMessageParsing
-from request.message_parser.est import EstAuthorizationHeaderParsing, EstCsrSignatureVerification, EstPkiMessageParsing
+from request.message_parser.est import (
+    EstAuthorizationHeaderParsing,
+    EstChannelBindingVerification,
+    EstCsrSignatureVerification,
+    EstPkiMessageParsing,
+)
 from request.message_parser.rfc9480 import CertStatus, PKIBody
 from request.request_context import (
     BaseCertificateRequestContext,
@@ -157,7 +163,6 @@ class TestEstPkiMessageParsing:
                 assert False, 'Expected ValueError to be raised'
             except ValueError as e:
                 assert 'Failed to parse the CSR.' in str(e)
-
 
 
 class TestEstCsrSignatureVerification:
@@ -376,8 +381,9 @@ class TestDomainParsing:
 
         parser = DomainParsing()
 
-        with patch.object(parser, '_extract_requested_domain',
-                          side_effect=ValueError("Domain 'missing.domain.com' does not exist.")):
+        with patch.object(
+            parser, '_extract_requested_domain', side_effect=ValueError("Domain 'missing.domain.com' does not exist.")
+        ):
             try:
                 parser.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'
@@ -424,7 +430,6 @@ class TestCertProfileParsing:
         ret_value = parser.parse(mock_context)
 
         assert not ret_value
-
 
     def test_parse_cert_profile_str_success(self):
         """Test successful certificate profile string parsing."""
@@ -492,8 +497,10 @@ class TestCmpPkiMessageParsing:
 
         parser = CmpPkiMessageParsing()
 
-        with patch('request.message_parser.cmp.ber_decoder.decode', return_value=(mock_pki_message, None)), \
-             patch.object(parser, '_extract_signer_certificate'):
+        with (
+            patch('request.message_parser.cmp.ber_decoder.decode', return_value=(mock_pki_message, None)),
+            patch.object(parser, '_extract_signer_certificate'),
+        ):
             parser.parse(mock_context)
 
         assert mock_context.parsed_message == mock_pki_message
@@ -823,8 +830,10 @@ class TestCmpCertConfBodyValidation:
 
         cert_status = CertStatusStub()
 
-        with patch.object(parser, '_extract_single_cert_status', return_value=cert_status), \
-             pytest.raises(ValueError, match='certHash is REQUIRED in CertStatus for CMP 2000'):
+        with (
+            patch.object(parser, '_extract_single_cert_status', return_value=cert_status),
+            pytest.raises(ValueError, match='certHash is REQUIRED in CertStatus for CMP 2000'),
+        ):
             parser.parse_certconf_body(context, pki_body)
 
     def test_parse_certconf_body_allows_missing_cert_hash_for_cmp2021(self):
@@ -845,10 +854,12 @@ class TestCmpCertConfBodyValidation:
 
         cert_status = CertStatusStub()
 
-        with patch.object(parser, '_extract_single_cert_status', return_value=cert_status), \
-             patch.object(parser, '_parse_cert_req_id', return_value=0), \
-             patch.object(parser, '_parse_cert_conf_status'), \
-             patch.object(parser, '_parse_cert_hash_algorithm_oid', return_value=None):
+        with (
+            patch.object(parser, '_extract_single_cert_status', return_value=cert_status),
+            patch.object(parser, '_parse_cert_req_id', return_value=0),
+            patch.object(parser, '_parse_cert_conf_status'),
+            patch.object(parser, '_parse_cert_hash_algorithm_oid', return_value=None),
+        ):
             parser.parse_certconf_body(context, pki_body)
 
         assert context.cert_hash is None
@@ -894,23 +905,27 @@ class TestEstMessageParser:
         """Test EstMessageParser initialization."""
         parser = EstMessageParser()
 
-        assert len(parser.components) == 5
+        assert len(parser.components) == 6
         assert isinstance(parser.components[0], EstAuthorizationHeaderParsing)
         assert isinstance(parser.components[1], EstPkiMessageParsing)
         assert isinstance(parser.components[2], DomainParsing)
         assert isinstance(parser.components[3], CertProfileParsing)
         assert isinstance(parser.components[4], EstCsrSignatureVerification)
+        assert isinstance(parser.components[5], EstChannelBindingVerification)
 
     def test_parse_delegation(self):
         """Test that parse method delegates to all components."""
         parser = EstMessageParser()
         mock_context = Mock(spec=EstCertificateRequestContext)
 
-        with patch.object(parser.components[0], 'parse') as mock_parse1, \
-             patch.object(parser.components[1], 'parse') as mock_parse2, \
-             patch.object(parser.components[2], 'parse') as mock_parse3, \
-             patch.object(parser.components[3], 'parse') as mock_parse4, \
-             patch.object(parser.components[4], 'parse') as mock_parse5:
+        with (
+            patch.object(parser.components[0], 'parse') as mock_parse1,
+            patch.object(parser.components[1], 'parse') as mock_parse2,
+            patch.object(parser.components[2], 'parse') as mock_parse3,
+            patch.object(parser.components[3], 'parse') as mock_parse4,
+            patch.object(parser.components[4], 'parse') as mock_parse5,
+            patch.object(parser.components[5], 'parse') as mock_parse6,
+        ):
             parser.parse(mock_context)
 
             mock_parse1.assert_called_once_with(mock_context)
@@ -918,16 +933,19 @@ class TestEstMessageParser:
             mock_parse3.assert_called_once_with(mock_context)
             mock_parse4.assert_called_once_with(mock_context)
             mock_parse5.assert_called_once_with(mock_context)
+            mock_parse6.assert_called_once_with(mock_context)
 
     def test_parse_component_failure_stops_execution(self):
         """Test that component failure stops execution of subsequent components."""
         parser = EstMessageParser()
         mock_context = Mock()
 
-        with patch.object(parser.components[0], 'parse') as mock_parse1, \
-                patch.object(parser.components[1], 'parse', side_effect=ValueError('Test error')) as mock_parse2, \
-                patch.object(parser.components[2], 'parse') as mock_parse3, \
-                patch.object(parser.components[3], 'parse') as mock_parse4:
+        with (
+            patch.object(parser.components[0], 'parse') as mock_parse1,
+            patch.object(parser.components[1], 'parse', side_effect=ValueError('Test error')) as mock_parse2,
+            patch.object(parser.components[2], 'parse') as mock_parse3,
+            patch.object(parser.components[3], 'parse') as mock_parse4,
+        ):
             try:
                 parser.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'
