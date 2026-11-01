@@ -90,6 +90,29 @@ jobs:
             --port "${TRUSTPOINT_HOST##*:}" \
             --output "${ENV_FILE}"
 
+      - name: Register HTTPS certificate for profile URL templates
+        run: |
+          uv run trustpoint/manage.py shell <<'PY'
+          import os
+          from pathlib import Path
+          from cryptography import x509
+          from cryptography.hazmat.primitives.serialization import load_pem_private_key
+          from trustpoint_core.serializer import CredentialSerializer
+          from pki.models.credential import CredentialModel
+          from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+
+          serializer = CredentialSerializer(
+              private_key=load_pem_private_key(Path(os.environ['TLS_KEY']).read_bytes(), password=None),
+              certificate=x509.load_pem_x509_certificate(Path(os.environ['TLS_CERT']).read_bytes()),
+              additional_certificates=[],
+          )
+          credential = CredentialModel.save_credential_serializer(
+              credential_serializer=serializer,
+              credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+          )
+          ActiveTrustpointTlsServerCredentialModel.objects.update_or_create(pk=1, defaults={'credential': credential})
+          PY
+
       - name: Start Trustpoint HTTPS development server
         run: |
           mkdir -p reports
@@ -110,6 +133,22 @@ jobs:
           echo "Server did not become ready in time." >&2
           cat reports/server.log >&2
           exit 1
+
+      - name: Test EST CA certificates and CSR attributes over HTTPS
+        env:
+          EST_DISCOVERY_BASE_URL: https://${{ env.TRUSTPOINT_HOST }}
+        run: |
+          uv run pytest tests/test_est_discovery.py -v \
+            -o md_report=false \
+            --junitxml=reports/est-discovery.xml
+
+      - name: Test EST TLS channel binding over HTTPS
+        env:
+          EST_DISCOVERY_BASE_URL: https://${{ env.TRUSTPOINT_HOST }}
+        run: |
+          uv run pytest tests/test_est_channel_binding_https.py -v \
+            -o md_report=false \
+            --junitxml=reports/est-channel-binding.xml
 
       - name: Test CMP, EST, REST and RA enrollment
         run: |
