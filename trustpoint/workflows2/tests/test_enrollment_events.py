@@ -56,8 +56,11 @@ def certificate_factory():
             ]
         name = x509.Name(subject)
         builder = (
-            x509.CertificateBuilder().subject_name(name).issuer_name(name)
-            .public_key(key.public_key()).serial_number(999)
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(name)
+            .public_key(key.public_key())
+            .serial_number(999)
             .not_valid_before(datetime.now(UTC))
             .not_valid_after(datetime.now(UTC) + timedelta(days=1))
         )
@@ -77,11 +80,13 @@ def make_context(protocol, operation, certificate, csr):
     }[protocol]
     extra = {'cmp_transaction_id': 'abcd'} if protocol == 'cmp' else {}
     return context_type(
-        protocol=protocol, operation=operation,
+        protocol=protocol,
+        operation=operation,
         raw_message=RequestFactory().post('/enroll', data=b'original request', content_type='application/octet-stream'),
         device=SimpleNamespace(id=44, common_name='stored-device', serial_number='234567'),
         domain=SimpleNamespace(id=1, get_issuing_ca_or_value_error=lambda: SimpleNamespace(id=4)),
-        cert_profile_str='domain_credential', cert_requested=csr,
+        cert_profile_str='domain_credential',
+        cert_requested=csr,
         issued_certificate=certificate,
         **extra,
     )
@@ -89,24 +94,45 @@ def make_context(protocol, operation, certificate, csr):
 
 @pytest.fixture
 def enrollment_context(certificate_factory):
-    csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
-        x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, 'raw-client-serial'),
-    ])).add_extension(x509.SubjectAlternativeName([
-        x509.DNSName('raw.example.com'),
-    ]), critical=False).sign(certificate_factory.key, hashes.SHA256())
+    csr = (
+        x509.CertificateSigningRequestBuilder()
+        .subject_name(
+            x509.Name(
+                [
+                    x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, 'raw-client-serial'),
+                ]
+            )
+        )
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName('raw.example.com'),
+                ]
+            ),
+            critical=False,
+        )
+        .sign(certificate_factory.key, hashes.SHA256())
+    )
     return make_context('cmp', 'initialization', certificate_factory(), csr)
 
 
 def test_snapshot_absent_attributes_and_repeated_rdns(certificate_factory):
-    certificate = certificate_factory(subject=[
-        x509.NameAttribute(x509.NameOID.COMMON_NAME, 'first'),
-        x509.NameAttribute(x509.NameOID.COMMON_NAME, 'second'),
-    ])
+    certificate = certificate_factory(
+        subject=[
+            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'first'),
+            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'second'),
+        ]
+    )
     snapshot = build_enrollment_request_snapshot(certificate)
     assert snapshot == {
         'subject': {
-            'common_name': 'first', 'serial_number': None, 'organization': None,
-            'organizational_unit': None, 'country': None, 'state_or_province': None, 'locality': None,
+            'common_name': 'first',
+            'serial_number': None,
+            'organization': None,
+            'organizational_unit': None,
+            'country': None,
+            'state_or_province': None,
+            'locality': None,
         },
         'subject_alternative_names': {'dns_names': [], 'ip_addresses': [], 'uris': [], 'email_addresses': []},
     }
@@ -115,32 +141,64 @@ def test_snapshot_absent_attributes_and_repeated_rdns(certificate_factory):
 
 def test_snapshot_all_subject_fields_and_sans(certificate_factory):
     subject = [
-        x509.NameAttribute(oid, value) for oid, value in (
-            (x509.NameOID.COMMON_NAME, 'effective-device'), (x509.NameOID.SERIAL_NUMBER, 'SN123456'),
-            (x509.NameOID.ORGANIZATION_NAME, 'Example'), (x509.NameOID.ORGANIZATIONAL_UNIT_NAME, 'Devices'),
-            (x509.NameOID.COUNTRY_NAME, 'DE'), (x509.NameOID.STATE_OR_PROVINCE_NAME, 'BW'),
+        x509.NameAttribute(oid, value)
+        for oid, value in (
+            (x509.NameOID.COMMON_NAME, 'effective-device'),
+            (x509.NameOID.SERIAL_NUMBER, 'SN123456'),
+            (x509.NameOID.ORGANIZATION_NAME, 'Example'),
+            (x509.NameOID.ORGANIZATIONAL_UNIT_NAME, 'Devices'),
+            (x509.NameOID.COUNTRY_NAME, 'DE'),
+            (x509.NameOID.STATE_OR_PROVINCE_NAME, 'BW'),
             (x509.NameOID.LOCALITY_NAME, 'Stuttgart'),
         )
     ]
-    snapshot = build_enrollment_request_snapshot(certificate_factory(subject=subject, sans=[
-        x509.DNSName('plc.example.com'), x509.IPAddress(ip_address('192.168.1.10')),
-        x509.IPAddress(ip_address('2001:0db8:0000::1')), x509.UniformResourceIdentifier('urn:example:plc'),
-        x509.RFC822Name('plc@example.com'), x509.RegisteredID(x509.ObjectIdentifier('1.2.3.4')),
-    ]))
-    assert list(snapshot['subject'].values()) == ['effective-device', 'SN123456', 'Example', 'Devices', 'DE', 'BW', 'Stuttgart']
+    snapshot = build_enrollment_request_snapshot(
+        certificate_factory(
+            subject=subject,
+            sans=[
+                x509.DNSName('plc.example.com'),
+                x509.IPAddress(ip_address('192.168.1.10')),
+                x509.IPAddress(ip_address('2001:0db8:0000::1')),
+                x509.UniformResourceIdentifier('urn:example:plc'),
+                x509.RFC822Name('plc@example.com'),
+                x509.RegisteredID(x509.ObjectIdentifier('1.2.3.4')),
+            ],
+        )
+    )
+    assert list(snapshot['subject'].values()) == [
+        'effective-device',
+        'SN123456',
+        'Example',
+        'Devices',
+        'DE',
+        'BW',
+        'Stuttgart',
+    ]
     assert snapshot['subject_alternative_names'] == {
-        'dns_names': ['plc.example.com'], 'ip_addresses': ['192.168.1.10', '2001:db8::1'],
-        'uris': ['urn:example:plc'], 'email_addresses': ['plc@example.com'],
+        'dns_names': ['plc.example.com'],
+        'ip_addresses': ['192.168.1.10', '2001:db8::1'],
+        'uris': ['urn:example:plc'],
+        'email_addresses': ['plc@example.com'],
     }
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize(('protocol', 'operation'), [
-    ('cmp', 'initialization'), ('cmp', 'certification'),
-    ('est', 'simpleenroll'), ('est', 'simplereenroll'), ('rest', 'enroll'), ('rest', 'reenroll'),
-])
+@pytest.mark.parametrize(
+    ('protocol', 'operation'),
+    [
+        ('cmp', 'initialization'),
+        ('cmp', 'certification'),
+        ('cmp', 'keyupdate'),
+        ('est', 'simpleenroll'),
+        ('est', 'simplereenroll'),
+        ('rest', 'enroll'),
+        ('rest', 'reenroll'),
+    ],
+)
 def test_protocol_parity_and_snapshot_before_commit(protocol, operation, enrollment_context):
-    context = make_context(protocol, operation, enrollment_context.issued_certificate, enrollment_context.cert_requested)
+    context = make_context(
+        protocol, operation, enrollment_context.issued_certificate, enrollment_context.cert_requested
+    )
     handler = Workflow2CertificateRequestHandler()
     with patch('request.workflows2_handler.WorkflowDispatchService') as service:
         with TestCase.captureOnCommitCallbacks(execute=True):
@@ -173,9 +231,13 @@ def test_failed_or_rolled_back_issuance_never_notifies(enrollment_context):
 
 @pytest.mark.django_db
 def test_processing_failure_and_workflow_stop_never_notify(enrollment_context):
-    with patch('request.enrollment.Workflow2Handler') as gate, patch.object(
-        Workflow2CertificateRequestHandler, 'handle_issued',
-    ) as notify:
+    with (
+        patch('request.enrollment.Workflow2Handler') as gate,
+        patch.object(
+            Workflow2CertificateRequestHandler,
+            'handle_issued',
+        ) as notify,
+    ):
         gate.return_value.handle.return_value = Workflow2HandleResult.stop_processing()
         process = Mock()
         process_workflow_operation(enrollment_context, process)
@@ -211,7 +273,7 @@ def test_malformed_certificate_snapshot_logs_and_skips_notification(enrollment_c
 
 def workflow_yaml(*, phase='after_issuance'):
     phase_line = f'  phase: {phase}\n' if phase else ''
-    return f'''schema: trustpoint.workflow.v2
+    return f"""schema: trustpoint.workflow.v2
 name: CMP Effective Subject Serial Number Webhook
 enabled: true
 trigger:
@@ -237,7 +299,7 @@ workflow:
         missing_organization: ${{event.request.subject.organization}}
         operation: ${{event.cmp.operation}}
   flow: []
-'''
+"""
 
 
 @pytest.mark.parametrize('phase', ['unknown', 'null', '[]'])
@@ -250,20 +312,24 @@ def test_compiler_restricts_phase_to_enrollment_and_rejects_post_success_approva
     with pytest.raises(CompileError, match='only supported'):
         compile_workflow_yaml(workflow_yaml().replace('cmp.initialization', 'device.created'))
     with pytest.raises(CompileError, match='Approval is not available'):
-        compile_workflow_yaml(workflow_yaml().split('workflow:')[0] + '''workflow:
+        compile_workflow_yaml(
+            workflow_yaml().split('workflow:')[0]
+            + """workflow:
   start: approve
   steps:
     approve:
       type: approval
       approved_outcome: approved
       rejected_outcome: rejected
-''')
+"""
+        )
 
 
 def test_documented_effective_serial_workflow_compiles():
     guide = (Path(__file__).resolve().parents[3] / 'docs/source/features/workflows/index.md').read_text()
     example = next(
-        block.split('```')[0] for block in guide.split('```yaml\n')[1:]
+        block.split('```')[0]
+        for block in guide.split('```yaml\n')[1:]
         if 'name: CMP Effective Subject Serial Number Webhook' in block.split('```')[0]
     )
     ir = compile_workflow_yaml(example)
@@ -278,8 +344,12 @@ def test_inline_webhook_failure_is_recorded_without_changing_issuance(enrollment
     text = workflow_yaml()
     ir = compile_workflow_yaml(text)
     Workflow2Definition.objects.create(
-        name=ir['name'], enabled=True, trigger_on=ir['trigger']['on'],
-        yaml_text=text, ir_json=ir, ir_hash=ir['meta']['ir_hash'],
+        name=ir['name'],
+        enabled=True,
+        trigger_on=ir['trigger']['on'],
+        yaml_text=text,
+        ir_json=ir,
+        ir_hash=ir['meta']['ir_hash'],
     )
     receiver = Mock()
     receiver.request.side_effect = RuntimeError('receiver unavailable')
@@ -304,14 +374,21 @@ def test_delayed_persisted_event_forwards_original_serial_to_controlled_receiver
         text = workflow_yaml(phase=phase)
         ir = compile_workflow_yaml(text)
         Workflow2Definition.objects.create(
-            name=ir['name'], enabled=True, trigger_on=ir['trigger']['on'],
-            yaml_text=text, ir_json=ir, ir_hash=ir['meta']['ir_hash'],
+            name=ir['name'],
+            enabled=True,
+            trigger_on=ir['trigger']['on'],
+            yaml_text=text,
+            ir_json=ir,
+            ir_hash=ir['meta']['ir_hash'],
         )
     handler = Workflow2CertificateRequestHandler()
     # Select only legacy workflows before issuance, without executing them.
     dispatch = handler._build_dispatch_request(enrollment_context)
     matched = WorkflowDispatchService()._select_definitions(
-        on=dispatch.on, event=dispatch.event, source=dispatch.source, initial_vars={},
+        on=dispatch.on,
+        event=dispatch.event,
+        source=dispatch.source,
+        initial_vars={},
     )
     assert len(matched) == 1
     assert 'phase' not in matched[0].ir_json['trigger']
@@ -331,8 +408,10 @@ def test_delayed_persisted_event_forwards_original_serial_to_controlled_receiver
     worker = Workflow2DbWorker(runtime=runtime, worker_id='enrollment-test', heartbeat_enabled=False)
     worker.tick()
     assert receiver.request.call_args.kwargs['body'] == {
-        'effective_subject_serial_number': 'SN123456', 'stored_device_serial_number': '234567',
-        'missing_organization': '', 'operation': 'initialization',
+        'effective_subject_serial_number': 'SN123456',
+        'stored_device_serial_number': '234567',
+        'missing_organization': '',
+        'operation': 'initialization',
     }
     instance.refresh_from_db()
     assert instance.status == Workflow2Instance.STATUS_FINISHED
@@ -361,37 +440,59 @@ def test_cmp_webhook_delivers_to_local_http_receiver(enrollment_context):
             cfg.mode = WorkflowExecutionConfig.Mode.WORKER
             cfg.save()
             text = workflow_yaml().replace(
-                'https://example.invalid/cmp-audit', f'http://127.0.0.1:{server.server_port}/cmp-audit',
+                'https://example.invalid/cmp-audit',
+                f'http://127.0.0.1:{server.server_port}/cmp-audit',
             )
             ir = compile_workflow_yaml(text)
             Workflow2Definition.objects.create(
-                name=ir['name'], enabled=True, trigger_on=ir['trigger']['on'],
-                yaml_text=text, ir_json=ir, ir_hash=ir['meta']['ir_hash'],
+                name=ir['name'],
+                enabled=True,
+                trigger_on=ir['trigger']['on'],
+                yaml_text=text,
+                ir_json=ir,
+                ir_hash=ir['meta']['ir_hash'],
             )
             with TestCase.captureOnCommitCallbacks(execute=True):
                 Workflow2CertificateRequestHandler().handle_issued(enrollment_context)
             worker = Workflow2DbWorker(
                 runtime=WorkflowRuntimeService(executor=WorkflowExecutor()),
-                worker_id='local-http-test', heartbeat_enabled=False,
+                worker_id='local-http-test',
+                heartbeat_enabled=False,
             )
             worker.tick()
-            assert received == [{
-                'effective_subject_serial_number': 'SN123456', 'stored_device_serial_number': '234567',
-                'missing_organization': '', 'operation': 'initialization',
-            }]
+            assert received == [
+                {
+                    'effective_subject_serial_number': 'SN123456',
+                    'stored_device_serial_number': '234567',
+                    'missing_organization': '',
+                    'operation': 'initialization',
+                }
+            ]
         finally:
             server.shutdown()
             thread.join(timeout=5)
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize(('protocol', 'operation'), [
-    ('cmp', 'initialization'), ('cmp', 'certification'),
-    ('est', 'simpleenroll'), ('est', 'simplereenroll'), ('rest', 'enroll'), ('rest', 'reenroll'),
-])
+@pytest.mark.parametrize(
+    ('protocol', 'operation'),
+    [
+        ('cmp', 'initialization'),
+        ('cmp', 'certification'),
+        ('cmp', 'keyupdate'),
+        ('est', 'simpleenroll'),
+        ('est', 'simplereenroll'),
+        ('rest', 'enroll'),
+        ('rest', 'reenroll'),
+    ],
+)
 @pytest.mark.parametrize('remove_serial', [False, True])
 def test_actual_profile_processing_and_issuance_snapshot(
-    protocol, operation, remove_serial, device_instance, enrollment_context,
+    protocol,
+    operation,
+    remove_serial,
+    device_instance,
+    enrollment_context,
 ):
     """Real profile validation and signing supply the post-success snapshot."""
     profile = {
@@ -408,12 +509,16 @@ def test_actual_profile_processing_and_issuance_snapshot(
     context.device.save(update_fields=['serial_number'])
     context.domain = device_instance['domain']
     context.certificate_profile_model = CertificateProfileModel.objects.create(
-        unique_name='workflow_effective', profile_json=json.dumps(profile),
+        unique_name='workflow_effective',
+        profile_json=json.dumps(profile),
     )
     ProfileValidator.validate(context)
-    with patch('request.enrollment.Workflow2Handler') as gate, patch(
-        'request.workflows2_handler.WorkflowDispatchService',
-    ) as service:
+    with (
+        patch('request.enrollment.Workflow2Handler') as gate,
+        patch(
+            'request.workflows2_handler.WorkflowDispatchService',
+        ) as service,
+    ):
         gate.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         with TestCase.captureOnCommitCallbacks(execute=True):
             process_workflow_operation(context, LocalCaCertificateIssueProcessor().process_operation)
@@ -429,11 +534,18 @@ def test_actual_profile_processing_and_issuance_snapshot(
 def test_cmp_poll_completion_notifies_with_original_replayed_context(enrollment_context):
     """The approval/poll path captures the effective certificate after finalization."""
     context = CmpPollRequestContext(cmp_transaction=SimpleNamespace(pk=1))
-    with patch.object(CmpCertificateRequestProcessor, 'build_replay_context', return_value=enrollment_context), patch(
-        'request.operation_processor.cmp_poll.CertificateIssueProcessor.process_operation',
-    ), patch.object(CmpCertificateRequestProcessor, 'mark_transaction_issued'), patch.object(
-        CmpCertificateRequestProcessor, 'populate_success_context',
-    ), patch('request.workflows2_handler.WorkflowDispatchService') as service:
+    with (
+        patch.object(CmpCertificateRequestProcessor, 'build_replay_context', return_value=enrollment_context),
+        patch(
+            'request.operation_processor.cmp_poll.CertificateIssueProcessor.process_operation',
+        ),
+        patch.object(CmpCertificateRequestProcessor, 'mark_transaction_issued'),
+        patch.object(
+            CmpCertificateRequestProcessor,
+            'populate_success_context',
+        ),
+        patch('request.workflows2_handler.WorkflowDispatchService') as service,
+    ):
         with TestCase.captureOnCommitCallbacks(execute=True):
             CmpPollProcessor()._finalize_transaction(context)
     event = service.return_value.emit_event.call_args.kwargs['event']
