@@ -49,15 +49,13 @@ class TestCmpClient:
             cmp_server_host='example.com',
             cmp_server_port=443,
             cmp_server_path='/pkix/certification',
-            cmp_shared_secret='test_secret'
+            cmp_shared_secret='test_secret',
         )
 
     @pytest.fixture
     def minimal_context(self) -> CmpBaseRequestContext:
         """Create a minimal valid CMP base request context."""
-        return CmpBaseRequestContext(
-            cmp_server_host='example.com'
-        )
+        return CmpBaseRequestContext(cmp_server_host='example.com')
 
     def test_init_valid_context(self, valid_context: CmpBaseRequestContext) -> None:
         """Test initialization with a valid context."""
@@ -97,9 +95,7 @@ class TestCmpClient:
     def test_build_url_non_default_port(self) -> None:
         """Test URL building with non-default port."""
         context = CmpBaseRequestContext(
-            cmp_server_host='example.com',
-            cmp_server_port=8443,
-            cmp_server_path='/custom/path'
+            cmp_server_host='example.com', cmp_server_port=8443, cmp_server_path='/custom/path'
         )
         client = CmpClient(context)
         url = client._build_url()
@@ -107,16 +103,15 @@ class TestCmpClient:
 
     def test_build_url_no_path(self) -> None:
         """Test URL building with no custom path."""
-        context = CmpBaseRequestContext(
-            cmp_server_host='example.com',
-            cmp_server_port=8080
-        )
+        context = CmpBaseRequestContext(cmp_server_host='example.com', cmp_server_port=8080)
         client = CmpClient(context)
         url = client._build_url()
         assert url == 'https://example.com:8080None'
 
     @patch('request.clients.cmp_client.encoder.encode')
-    def test_add_protection_shared_secret_missing_secret(self, mock_encode, minimal_context: CmpBaseRequestContext) -> None:
+    def test_add_protection_shared_secret_missing_secret(
+        self, mock_encode, minimal_context: CmpBaseRequestContext
+    ) -> None:
         """Test adding protection fails when shared secret is missing."""
         client = CmpClient(minimal_context)
         pki_message = Mock()
@@ -125,24 +120,26 @@ class TestCmpClient:
             client._add_protection_shared_secret(pki_message)
 
     @patch('request.clients.cmp_client.encoder.encode')
-    def test_add_protection_shared_secret_invalid_algorithm(self, mock_encode, valid_context: CmpBaseRequestContext) -> None:
+    def test_add_protection_shared_secret_invalid_algorithm(
+        self, mock_encode, valid_context: CmpBaseRequestContext
+    ) -> None:
         """Test adding protection fails with unsupported algorithm."""
         client = CmpClient(valid_context)
-        
+
         # Create a mock that supports item access
         class MockPKIMessage(dict):
             def __getitem__(self, key):
                 if key == 'header':
                     return {'protectionAlg': {'parameters': 'dummy'}}
                 return super().__getitem__(key)
-        
+
         pki_message = MockPKIMessage()
 
         # Mock the PBM parameter decoding
         class MockPBM(dict):
             def getName(self):
                 return 'pbmParameter'
-            
+
             def __getitem__(self, key):
                 if key == 'salt':
                     return b'salt123'
@@ -153,7 +150,7 @@ class TestCmpClient:
                 elif key == 'mac':
                     return {'algorithm': Mock(prettyPrint=Mock(return_value='1.2.3.4.5'))}
                 return super().__getitem__(key)
-        
+
         mock_pbm = MockPBM()
 
         with patch('request.clients.cmp_client.decoder.decode') as mock_decode:
@@ -172,11 +169,19 @@ class TestCmpClient:
         mock_message = Mock()
         mock_message.__getitem__ = Mock(return_value=mock_body)
 
-        with patch('request.clients.cmp_client.decoder.decode') as mock_decode:
+        with (
+            patch('request.clients.cmp_client.decoder.decode') as mock_decode,
+            patch.object(
+                client,
+                '_validate_response',
+            ) as validate,
+        ):
             mock_decode.return_value = (mock_message, None)
 
-            result = client._parse_response(b'dummy_data')
+            request = Mock()
+            result = client._parse_response(b'dummy_data', request)
             assert result == mock_message
+            validate.assert_called_once_with(mock_message, request)
 
     def test_parse_response_error(self, valid_context: CmpBaseRequestContext) -> None:
         """Test parsing a CMP error response."""
@@ -187,7 +192,7 @@ class TestCmpClient:
         mock_status_string.hasValue.return_value = True
         mock_status_string.__len__ = Mock(return_value=1)
         mock_status_string.getComponentByPosition.return_value = 'Test error'
-        
+
         class MockPKIStatus(dict):
             def __getitem__(self, key):
                 if key == 'status':
@@ -195,24 +200,32 @@ class TestCmpClient:
                 elif key == 'statusString':
                     return mock_status_string
                 return super().__getitem__(key)
-        
+
         mock_pki_status = MockPKIStatus()
-        
+
         mock_error = Mock()
         mock_error.__getitem__ = Mock(return_value=mock_pki_status)
-        
+
         mock_body = Mock()
         mock_body.getName.return_value = 'error'
         mock_body.__getitem__ = Mock(return_value=mock_error)
-        
+
         mock_message = Mock()
         mock_message.__getitem__ = Mock(return_value=mock_body)
 
-        with patch('request.clients.cmp_client.decoder.decode') as mock_decode:
+        with (
+            patch('request.clients.cmp_client.decoder.decode') as mock_decode,
+            patch.object(
+                client,
+                '_validate_response',
+            ) as validate,
+        ):
             mock_decode.return_value = (mock_message, None)
 
+            request = Mock()
             with pytest.raises(CmpClientError, match='CMP server returned error status 1: Test error'):
-                client._parse_response(b'dummy_data')
+                client._parse_response(b'dummy_data', request)
+            validate.assert_called_once_with(mock_message, request)
 
     def test_parse_der_tlv_simple(self, valid_context: CmpBaseRequestContext) -> None:
         """Test parsing a simple DER TLV element."""
@@ -304,9 +317,7 @@ class TestCmpClient:
         assert issued_cert == _der(0x30, b'issued')
         assert extra_certs == []
 
-    def test_extract_certs_from_raw_response_raw_certificate_choice(
-        self, valid_context: CmpBaseRequestContext
-    ) -> None:
+    def test_extract_certs_from_raw_response_raw_certificate_choice(self, valid_context: CmpBaseRequestContext) -> None:
         """Test the fallback for an unexpected CertOrEncCert tag."""
         client = CmpClient(valid_context)
         raw_response = _raw_cmp_response()
@@ -318,9 +329,7 @@ class TestCmpClient:
         assert extracted_cert == issued_cert
         assert extra_certs == []
 
-    def test_extract_extra_certs_handles_non_sequence_wrapper(
-        self, valid_context: CmpBaseRequestContext
-    ) -> None:
+    def test_extract_extra_certs_handles_non_sequence_wrapper(self, valid_context: CmpBaseRequestContext) -> None:
         """Test extraction of an extra certificate from a non-SEQUENCE wrapper."""
         client = CmpClient(valid_context)
         extra_cert = _der(0xA0, b'extra')
@@ -330,9 +339,7 @@ class TestCmpClient:
 
         assert extracted == [extra_cert]
 
-    def test_extract_extra_certs_ignores_other_trailing_tlv(
-        self, valid_context: CmpBaseRequestContext
-    ) -> None:
+    def test_extract_extra_certs_ignores_other_trailing_tlv(self, valid_context: CmpBaseRequestContext) -> None:
         """Test that unrelated fields after the body are ignored."""
         client = CmpClient(valid_context)
         ignored_tlv = _der(0x30, b'ignored')
@@ -443,11 +450,14 @@ class TestCmpClient:
 
     @patch('request.clients.cmp_client.requests.post')
     @patch('request.clients.cmp_client.encoder.encode')
-    def test_send_pki_message_request_exception(self, mock_encode, mock_post, valid_context: CmpBaseRequestContext) -> None:
+    def test_send_pki_message_request_exception(
+        self, mock_encode, mock_post, valid_context: CmpBaseRequestContext
+    ) -> None:
         """Test sending PKI message fails with request exception."""
         client = CmpClient(valid_context)
 
         import requests
+
         mock_post.side_effect = requests.exceptions.Timeout('Connection timed out')
 
         mock_pki_message = Mock()
@@ -482,7 +492,9 @@ class TestCmpClient:
 
     @patch.object(CmpClient, 'send_pki_message')
     @patch.object(CmpClient, '_extract_issued_certificate')
-    def test_send_and_extract_certificate_with_protection(self, mock_extract, mock_send, valid_context: CmpBaseRequestContext) -> None:
+    def test_send_and_extract_certificate_with_protection(
+        self, mock_extract, mock_send, valid_context: CmpBaseRequestContext
+    ) -> None:
         """Test sending and extracting certificate with shared secret protection."""
         client = CmpClient(valid_context)
 
@@ -512,13 +524,13 @@ class TestCmpClient:
         mock_status = Mock()
         mock_status.__getitem__ = Mock(return_value=0)  # status = 0 (accepted)
         mock_cert_response.__getitem__ = Mock(return_value=mock_status)
-        
+
         mock_body = Mock()
         mock_body.getName.return_value = 'cp'
         mock_cert_rep_message = Mock()
         mock_cert_rep_message.__getitem__ = Mock(return_value=[mock_cert_response])
         mock_body.__getitem__ = Mock(return_value=mock_cert_rep_message)
-        
+
         mock_message = Mock()
         mock_message.__getitem__ = Mock(return_value=mock_body)
 
@@ -548,13 +560,13 @@ class TestCmpClient:
         mock_status.__getitem__ = Mock(return_value=1)  # status = 1 (rejected)
         mock_status.get = Mock(return_value='Rejected')
         mock_cert_response.__getitem__ = Mock(return_value=mock_status)
-        
+
         mock_body = Mock()
         mock_body.getName.return_value = 'cp'
         mock_cert_rep_message = Mock()
         mock_cert_rep_message.__getitem__ = Mock(return_value=[mock_cert_response])
         mock_body.__getitem__ = Mock(return_value=mock_cert_rep_message)
-        
+
         mock_message = Mock()
         mock_message.__getitem__ = Mock(return_value=mock_body)
 
@@ -582,7 +594,7 @@ class TestCmpClient:
         mock_cert_rep_message = Mock()
         mock_cert_rep_message.__getitem__ = Mock(return_value=[])
         mock_body.__getitem__ = Mock(return_value=mock_cert_rep_message)
-        
+
         mock_message = Mock()
         mock_message.__getitem__ = Mock(return_value=mock_body)
 

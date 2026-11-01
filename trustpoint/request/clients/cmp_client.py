@@ -10,12 +10,16 @@ This client enables Trustpoint to communicate with external CMP servers in two m
 
 from __future__ import annotations
 
+import hmac as stdlib_hmac
 from typing import TYPE_CHECKING
 
 import requests
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
+from django.conf import settings
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
+from pyasn1.error import PyAsn1Error  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 
@@ -31,6 +35,27 @@ if TYPE_CHECKING:
 # Constants for RFC 9483 compliance
 DEFAULT_CMP_PORT = 443
 DEFAULT_CMP_TIMEOUT = 30
+MAX_CMP_RESPONSE_BYTES = 131_072
+_MINIMUM_NONCE_BYTES = 16
+_PBM_OID = '1.2.840.113533.7.66.13'
+_PBM_HASHES: dict[str, type[hashes.HashAlgorithm]] = {
+    '2.16.840.1.101.3.4.2.1': hashes.SHA256,
+    '2.16.840.1.101.3.4.2.2': hashes.SHA384,
+    '2.16.840.1.101.3.4.2.3': hashes.SHA512,
+    '2.16.840.1.101.3.4.2.8': hashes.SHA3_256,
+    '2.16.840.1.101.3.4.2.9': hashes.SHA3_384,
+    '2.16.840.1.101.3.4.2.10': hashes.SHA3_512,
+}
+_RESPONSE_BODY_TYPES = {
+    'ir': {'ip'},
+    'cr': {'cp'},
+    'kur': {'kup'},
+    'p10cr': {'cp'},
+    'rr': {'rp'},
+    'genm': {'genp'},
+    'certConf': {'pkiconf'},
+    'pollReq': {'pollRep', 'ip', 'cp', 'kup'},
+}
 
 # DER tag bytes used in CMP response parsing
 _DER_TAG_SEQUENCE = 0x30
@@ -57,6 +82,7 @@ class CmpClient(LoggerMixin):
 
     The client works with complete rfc4210.PKIMessage objects, allowing full control
     over the CMP protocol interaction.
+    Upstream transactions currently require shared-secret PBM protection.
     """
 
     def __init__(self, context: CmpBaseRequestContext, timeout: int = DEFAULT_CMP_TIMEOUT) -> None:
@@ -170,20 +196,186 @@ class CmpClient(LoggerMixin):
 
         return pki_message
 
-    def _parse_response(self, response_data: bytes) -> PKIMessage:
-        """Parse the CMP server response.
+    @staticmethod
+    def _validate_response_binding(response: PKIMessage, request: PKIMessage) -> None:
+        """Bind a response to the outstanding request before consuming its contents."""
+        header = response['header']
+        request_header = request['header']
+        if int(header['pvno']) not in {2, 3}:
+            msg = 'Unsupported CMP response version.'
+            raise CmpClientError(msg)
+        for name in ('transactionID', 'senderNonce'):
+            if not request_header[name].hasValue() or len(request_header[name].asOctets()) < _MINIMUM_NONCE_BYTES:
+                msg = f'CMP request requires at least 128 bits of {name} for response binding.'
+                raise CmpClientError(msg)
+        if not header['transactionID'].hasValue() or not stdlib_hmac.compare_digest(
+            header['transactionID'].asOctets(),
+            request_header['transactionID'].asOctets(),
+        ):
+            msg = 'CMP response transactionID does not match the request.'
+            raise CmpClientError(msg)
+        if not header['recipNonce'].hasValue() or not stdlib_hmac.compare_digest(
+            header['recipNonce'].asOctets(),
+            request_header['senderNonce'].asOctets(),
+        ):
+            msg = 'CMP response recipNonce does not match the request senderNonce.'
+            raise CmpClientError(msg)
+        if not header['senderNonce'].hasValue() or len(header['senderNonce'].asOctets()) < _MINIMUM_NONCE_BYTES:
+            msg = 'CMP response senderNonce must contain at least 128 bits.'
+            raise CmpClientError(msg)
+        for name in ('senderNonce', 'recipNonce'):
+            if request_header[name].hasValue() and stdlib_hmac.compare_digest(
+                header['senderNonce'].asOctets(),
+                request_header[name].asOctets(),
+            ):
+                msg = 'CMP response senderNonce is not fresh.'
+                raise CmpClientError(msg)
+
+    @staticmethod
+    def _validate_response_body(response: PKIMessage, request: PKIMessage) -> None:
+        """Require the expected operation response and matching certificate request IDs."""
+        request_type = request['body'].getName()
+        response_type = response['body'].getName()
+        if request_type not in _RESPONSE_BODY_TYPES:
+            msg = f'Unsupported outbound CMP request type: {request_type}.'
+            raise CmpClientError(msg)
+        if response_type == 'error':
+            return
+        if response_type not in _RESPONSE_BODY_TYPES[request_type]:
+            msg = f'Unexpected CMP response body {response_type} for request {request_type}.'
+            raise CmpClientError(msg)
+        if response_type == 'pollRep':
+            poll_requests = request['body']['pollReq']
+            poll_responses = response['body']['pollRep']
+            if [int(item['certReqId']) for item in poll_responses] != [
+                int(item['certReqId']) for item in poll_requests
+            ]:
+                msg = 'CMP pollRep certReqId does not match the poll request.'
+                raise CmpClientError(msg)
+        if response_type in {'ip', 'cp', 'kup'}:
+            CmpClient._validate_certificate_response_id(response, request)
+
+    @staticmethod
+    def _validate_certificate_response_id(response: PKIMessage, request: PKIMessage) -> None:
+        """Require the one requested certificate rather than accepting the first result."""
+        responses = response['body'][response['body'].getName()]['response']
+        if len(responses) != 1:
+            msg = 'Exactly one CMP certificate response is required.'
+            raise CmpClientError(msg)
+        request_type = request['body'].getName()
+        expected_ids: list[int] | None = None
+        if request_type in {'ir', 'cr', 'kur'}:
+            expected_ids = [int(item['certReq']['certReqId']) for item in request['body'][request_type]]
+        elif request_type == 'pollReq':
+            expected_ids = [int(item['certReqId']) for item in request['body']['pollReq']]
+        elif request_type == 'p10cr':
+            expected_ids = [-1]
+        if expected_ids is not None and expected_ids != [int(responses[0]['certReqId'])]:
+            msg = 'CMP response certReqId does not match the request.'
+            raise CmpClientError(msg)
+
+    def _verify_response_protection(self, response: PKIMessage, request: PKIMessage) -> None:
+        """Authenticate the supported PBM transactions, with bounded untrusted parameters."""
+        if not response['header']['protectionAlg'].hasValue() or not response['protection'].hasValue():
+            msg = 'CMP response is missing message protection.'
+            raise CmpClientError(msg)
+        if (
+            not request['header']['protectionAlg'].hasValue()
+            or str(request['header']['protectionAlg']['algorithm']) != _PBM_OID
+            or str(response['header']['protectionAlg']['algorithm']) != _PBM_OID
+        ):
+            msg = 'Only PBM-protected upstream CMP transactions are supported; protection must not change.'
+            raise CmpClientError(msg)
+        if not self.context.cmp_shared_secret:
+            msg = 'CMP shared secret is required to authenticate the response.'
+            raise CmpClientError(msg)
+        salt, iterations, factory, mac_hash = self._response_pbm_parameters(response)
+        key = self.context.cmp_shared_secret.encode() + salt
+        for _ in range(iterations):
+            digest = hashes.Hash(factory())
+            digest.update(key)
+            key = digest.finalize()
+        protected = rfc4210.ProtectedPart()
+        protected['header'] = response['header']
+        protected['infoValue'] = response['body']
+        verifier = hmac.HMAC(key, mac_hash)
+        verifier.update(encoder.encode(protected))
+        if len(response['protection']) % 8:
+            msg = 'CMP response protection must contain complete octets.'
+            raise CmpClientError(msg)
+        try:
+            verifier.verify(response['protection'].asOctets())
+        except InvalidSignature as exc:
+            msg = 'CMP response message protection verification failed.'
+            raise CmpClientError(msg) from exc
+
+    @staticmethod
+    def _response_pbm_parameters(
+        response: PKIMessage,
+    ) -> tuple[bytes, int, type[hashes.HashAlgorithm], hashes.HashAlgorithm]:
+        """Validate untrusted PBM parameters before performing key derivation."""
+        parameters = response['header']['protectionAlg']['parameters']
+        pbm, remainder = decoder.decode(parameters.asOctets(), asn1Spec=rfc4210.PBMParameter())
+        if remainder:
+            msg = 'Unexpected trailing data in CMP response PBM parameters.'
+            raise CmpClientError(msg)
+        salt = pbm['salt'].asOctets()
+        iterations = int(pbm['iterationCount'])
+        if not (
+            int(getattr(settings, 'TRUSTPOINT_CMP_PBM_MIN_SALT_BYTES', 8))
+            <= len(salt)
+            <= int(getattr(settings, 'TRUSTPOINT_CMP_PBM_MAX_SALT_BYTES', 64))
+            and int(getattr(settings, 'TRUSTPOINT_CMP_PBM_MIN_ITERATIONS', 1))
+            <= iterations
+            <= int(getattr(settings, 'TRUSTPOINT_CMP_PBM_MAX_ITERATIONS', 100_000))
+        ):
+            msg = 'CMP response PBM salt length or iterationCount is outside permitted bounds.'
+            raise CmpClientError(msg)
+        factory = _PBM_HASHES.get(str(pbm['owf']['algorithm']))
+        mac_hash = cmp_hmac_algorithm(str(pbm['mac']['algorithm'])).hash_algorithm.hash_algorithm()
+        if factory is None or not isinstance(mac_hash, tuple(_PBM_HASHES.values())):
+            msg = 'CMP response PBM hash or MAC algorithm is not permitted.'
+            raise CmpClientError(msg)
+        for name in ('owf', 'mac'):
+            algorithm_parameters = pbm[name]['parameters']
+            if algorithm_parameters.hasValue() and algorithm_parameters.asOctets() != b'\x05\x00':
+                msg = f'Invalid CMP response PBM {name} algorithm parameters.'
+                raise CmpClientError(msg)
+        return salt, iterations, factory, mac_hash
+
+    def _validate_response(self, response: PKIMessage, request: PKIMessage) -> None:
+        """Validate response binding and protection before interpreting status or certificates."""
+        self._validate_response_binding(response, request)
+        self._verify_response_protection(response, request)
+        self._validate_response_body(response, request)
+
+    def _parse_response(self, response_data: bytes, request: PKIMessage | bytes) -> PKIMessage:
+        """Parse and authenticate a response to the supplied outbound request.
 
         Args:
             response_data: Raw response data from the server.
+            request: The outstanding request or its immutable transmitted DER bytes.
 
         Returns:
             The parsed PKI message.
 
         Raises:
-            CmpClientError: If the response cannot be parsed.
+            CmpClientError: If the response is malformed, unauthenticated, or not bound to the request.
         """
         try:
-            pki_message, _ = decoder.decode(response_data, asn1Spec=rfc4210.PKIMessage())
+            if len(response_data) > MAX_CMP_RESPONSE_BYTES:
+                msg = 'CMP response exceeds the maximum permitted size.'
+                raise CmpClientError(msg)
+            pki_message, remainder = decoder.decode(response_data, asn1Spec=rfc4210.PKIMessage())
+            if remainder:
+                msg = 'Unexpected trailing data in CMP response.'
+                raise CmpClientError(msg)
+            if isinstance(request, bytes):
+                request, request_remainder = decoder.decode(request, asn1Spec=rfc4210.PKIMessage())
+                if request_remainder:
+                    msg = 'Unexpected trailing data in outbound CMP request.'
+                    raise CmpClientError(msg)
+            self._validate_response(pki_message, request)
 
             body = pki_message['body']
             body_name = body.getName()
@@ -200,7 +392,7 @@ class CmpClient(LoggerMixin):
                 msg = f'CMP server returned error status {status_value}: {status_string}'
                 raise CmpClientError(msg)
 
-        except (ValueError, TypeError, KeyError) as e:
+        except (PyAsn1Error, ValueError, TypeError, KeyError) as e:
             msg = f'Failed to parse CMP server response: {e!s}'
             raise CmpClientError(msg) from e
         else:
@@ -278,7 +470,10 @@ class CmpClient(LoggerMixin):
         msg_val_end = msg_hdr + msg_vlen
         self.logger.debug(
             'PKIMessage: tag=0x%02x, hdr=%d, vlen=%d, total=%d',
-            msg_tag, msg_hdr, msg_vlen, msg_hdr + msg_vlen,
+            msg_tag,
+            msg_hdr,
+            msg_vlen,
+            msg_hdr + msg_vlen,
         )
         return msg_val_start, msg_val_end
 
@@ -296,7 +491,11 @@ class CmpClient(LoggerMixin):
         body_end = pos + b_total
         self.logger.debug(
             'Body: tag=0x%02x, hdr=%d, vlen=%d, total=%d at offset %d',
-            b_tag, b_hdr, b_vlen, b_total, pos,
+            b_tag,
+            b_hdr,
+            b_vlen,
+            b_total,
+            pos,
         )
         return body_val_start, body_end
 
@@ -308,7 +507,10 @@ class CmpClient(LoggerMixin):
         crm_val_end = body_val_start + crm_hdr + crm_vlen
         self.logger.debug(
             'CertRepMessage: tag=0x%02x, hdr=%d, vlen=%d at offset %d',
-            crm_tag, crm_hdr, crm_vlen, body_val_start,
+            crm_tag,
+            crm_hdr,
+            crm_vlen,
+            body_val_start,
         )
         return crm_val_start, crm_val_end
 
@@ -328,7 +530,10 @@ class CmpClient(LoggerMixin):
         resp_tag, resp_hdr, resp_vlen, _ = tlv(raw_data, resp_val_start)
         self.logger.debug(
             'Response SEQUENCE OF: tag=0x%02x, hdr=%d, vlen=%d at offset %d',
-            resp_tag, resp_hdr, resp_vlen, resp_val_start,
+            resp_tag,
+            resp_hdr,
+            resp_vlen,
+            resp_val_start,
         )
 
         cr_tag, cr_hdr, _, cr_total = tlv(raw_data, resp_val_start + resp_hdr)
@@ -336,7 +541,10 @@ class CmpClient(LoggerMixin):
         cr_val_end = resp_val_start + resp_hdr + cr_total
         self.logger.debug(
             'CertResponse: tag=0x%02x, hdr=%d, total=%d at offset %d',
-            cr_tag, cr_hdr, cr_total, resp_val_start + resp_hdr,
+            cr_tag,
+            cr_hdr,
+            cr_total,
+            resp_val_start + resp_hdr,
         )
         return cr_val_start, cr_val_end
 
@@ -367,13 +575,18 @@ class CmpClient(LoggerMixin):
         ckp_val_start_inner = ckp_val_start + ckp_hdr
         self.logger.debug(
             'certifiedKeyPair: tag=0x%02x, hdr=%d, vlen=%d at offset %d',
-            ckp_tag, ckp_hdr, ckp_vlen, ckp_val_start,
+            ckp_tag,
+            ckp_hdr,
+            ckp_vlen,
+            ckp_val_start,
         )
 
         coec_tag, coec_hdr, _, coec_total = tlv(raw_data, ckp_val_start_inner)
         self.logger.debug(
             'CertOrEncCert: tag=0x%02x, total=%d at offset %d, first 20 bytes: %s',
-            coec_tag, coec_total, ckp_val_start_inner,
+            coec_tag,
+            coec_total,
+            ckp_val_start_inner,
             raw_data[ckp_val_start_inner : ckp_val_start_inner + 20].hex(),
         )
         if coec_tag == _DER_TAG_CONTEXT_0:
@@ -381,7 +594,9 @@ class CmpClient(LoggerMixin):
             inner_tag, _, _, inner_total = tlv(raw_data, inner_start)
             self.logger.debug(
                 'Inner cert: tag=0x%02x, total=%d at offset %d',
-                inner_tag, inner_total, inner_start,
+                inner_tag,
+                inner_total,
+                inner_start,
             )
             issued_cert_der = bytes(raw_data[inner_start : inner_start + inner_total])
         else:
@@ -389,7 +604,8 @@ class CmpClient(LoggerMixin):
             issued_cert_der = bytes(raw_data[ckp_val_start_inner : ckp_val_start_inner + coec_total])
         self.logger.debug(
             'Issued cert DER: %d bytes, first 20: %s',
-            len(issued_cert_der), issued_cert_der[:20].hex(),
+            len(issued_cert_der),
+            issued_cert_der[:20].hex(),
         )
         return issued_cert_der
 
@@ -506,6 +722,7 @@ class CmpClient(LoggerMixin):
         if add_shared_secret_protection:
             pki_message = self._add_protection_shared_secret(pki_message)
 
+        # Retain the transmitted DER as the immutable response-binding snapshot.
         request_data = encoder.encode(pki_message)
 
         headers = {
@@ -513,8 +730,7 @@ class CmpClient(LoggerMixin):
             'Accept': 'application/pkixcmp',
         }
 
-        # TODO (FHK): We may want to allow TLS server validation in the future  # noqa: FIX002
-        # although we verify the Issuing CA cert with CMP
+        # Authentication is provided by request-bound CMP message protection.
         try:
             response = requests.post(
                 url,
@@ -525,13 +741,11 @@ class CmpClient(LoggerMixin):
             )
 
             if response.status_code != 200:  # noqa: PLR2004
-                msg = (
-                    f'CMP server returned error status {response.status_code}: {response.text}'
-                )
+                msg = f'CMP server returned error status {response.status_code}: {response.text}'
                 raise CmpClientError(msg)
 
             raw_response = response.content
-            response_message = self._parse_response(raw_response)
+            response_message = self._parse_response(raw_response, request_data)
 
         except requests.exceptions.RequestException as e:
             msg = f'Failed to communicate with CMP server: {e!s}'
@@ -539,7 +753,6 @@ class CmpClient(LoggerMixin):
         else:
             self.logger.info('Successfully received CMP response')
             return response_message, raw_response
-
 
     def send_and_extract_certificate(
         self,
