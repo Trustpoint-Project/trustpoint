@@ -7,35 +7,16 @@ from __future__ import annotations
 
 import csv
 from io import StringIO
-from threading import Event
-from unittest.mock import Mock, patch, sentinel
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.urls import reverse
 
-from discovery.models import DiscoveredDevice, DiscoveryPort
-from discovery.scanner import OTScanner
-from discovery.views import ScanManager
+from discovery.models import DiscoveredDevice, DiscoveryPort, DiscoveryScan
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def reset_scan_manager() -> None:
-    """Reset singleton scan state around each test."""
-    ScanManager.is_running = False
-    ScanManager.stop_pending = False
-    ScanManager.start_ip = '10.100.13.1'
-    ScanManager.end_ip = '10.100.13.254'
-    ScanManager.scanner_instance = None
-    yield
-    ScanManager.is_running = False
-    ScanManager.stop_pending = False
-    ScanManager.start_ip = '10.100.13.1'
-    ScanManager.end_ip = '10.100.13.254'
-    ScanManager.scanner_instance = None
 
 
 @pytest.fixture
@@ -47,173 +28,6 @@ def authenticated_client(client):
     user.role.permissions.add(manage_discovery_perm)
     client.force_login(user)
     return client
-
-
-class TestScanManager:
-    """Tests for the discovery scan state manager."""
-
-    def test_begin_scan_initializes_state_and_scanner(self) -> None:
-        """Starting a scan should capture IPs and create a scanner instance."""
-        assert ScanManager.begin_scan('192.168.1.10', '192.168.1.20') is True
-
-        state = ScanManager.get_state()
-        assert state == {
-            'scan_running': True,
-            'stop_pending': False,
-            'start_ip': '192.168.1.10',
-            'end_ip': '192.168.1.20',
-        }
-        assert isinstance(ScanManager.scanner_instance, OTScanner)
-        assert ScanManager.scanner_instance.target_ports == []
-
-    def test_begin_scan_rejects_second_concurrent_request(self) -> None:
-        """Only one scan may be active at a time."""
-        assert ScanManager.begin_scan('192.168.1.10', '192.168.1.20') is True
-        assert ScanManager.begin_scan('192.168.1.30', '192.168.1.40') is False
-
-        state = ScanManager.get_state()
-        assert state['start_ip'] == '192.168.1.10'
-        assert state['end_ip'] == '192.168.1.20'
-
-    def test_request_stop_marks_pending_and_sets_scanner_event(self) -> None:
-        """Stopping a scan should flip state and signal the active scanner."""
-        scanner = OTScanner(target_ports=[])
-        ScanManager.is_running = True
-        ScanManager.scanner_instance = scanner
-
-        ScanManager.request_stop()
-
-        state = ScanManager.get_state()
-        assert state['stop_pending'] is True
-        assert scanner.stop_requested.is_set() is True
-
-    def test_end_scan_resets_state(self) -> None:
-        """Ending a scan should clear all shared state."""
-        ScanManager.is_running = True
-        ScanManager.stop_pending = True
-        ScanManager.scanner_instance = OTScanner(target_ports=[443])
-
-        ScanManager.end_scan()
-
-        assert ScanManager.get_state() == {
-            'scan_running': False,
-            'stop_pending': False,
-            'start_ip': '10.100.13.1',
-            'end_ip': '10.100.13.254',
-        }
-        assert ScanManager.scanner_instance is None
-
-
-class TestRunScanInBackground:
-    """Tests for the background scan orchestration."""
-
-    def test_run_scan_in_background_persists_discovered_devices(self) -> None:
-        """Background scans should update the discovery inventory from scanner results."""
-        DiscoveryPort.objects.create(port_number=443, description='HTTPS')
-        DiscoveryPort.objects.create(port_number=502, description='Modbus')
-        scanner = Mock()
-        scanner.stop_requested = Event()
-        scanner.target_ports = []
-        scanner.scan_network.return_value = [
-            {
-                'ip': '192.168.1.50',
-                'hostname': 'plc-50.local',
-                'ports': [443, 502],
-                'ssl_info': {'ssl_open': True, 'is_self_signed': False},
-            }
-        ]
-        ScanManager.is_running = True
-        ScanManager.scanner_instance = scanner
-
-        ScanManager.run_scan_in_background('192.168.1.1', '192.168.1.100')
-
-        scanner.scan_network.assert_called_once_with('192.168.1.1', '192.168.1.100')
-        assert scanner.target_ports == [443, 502]
-        device = DiscoveredDevice.objects.get(ip_address='192.168.1.50')
-        assert device.hostname == 'plc-50.local'
-        assert device.open_ports == [443, 502]
-        assert device.ssl_info == {'ssl_open': True, 'is_self_signed': False}
-        assert ScanManager.get_state()['scan_running'] is False
-
-    def test_run_scan_in_background_saves_certificate_and_removes_raw_cert_object(self) -> None:
-        """Certificate-bearing results should save the certificate and drop the raw object."""
-        DiscoveryPort.objects.create(port_number=443, description='HTTPS')
-        scanner = Mock()
-        scanner.stop_requested = Event()
-        scanner.target_ports = []
-        scanner.scan_network.return_value = [
-            {
-                'ip': '192.168.1.60',
-                'hostname': 'plc-60.local',
-                'ports': [443],
-                'ssl_info': {
-                    'ssl_open': True,
-                    'issuer': 'CN=issuer',
-                    'subject': 'CN=subject',
-                    'cert_object': sentinel.cert_object,
-                },
-            }
-        ]
-        ScanManager.scanner_instance = scanner
-
-        with (
-            patch(
-                'discovery.views.CertificateModel.save_certificate', return_value=sentinel.saved_certificate
-            ) as mock_save_certificate,
-            patch('discovery.views.DiscoveredDevice.objects.update_or_create') as mock_update_or_create,
-        ):
-            ScanManager.run_scan_in_background('192.168.1.1', '192.168.1.100')
-
-        mock_save_certificate.assert_called_once_with(sentinel.cert_object)
-        mock_update_or_create.assert_called_once_with(
-            ip_address='192.168.1.60',
-            defaults={
-                'hostname': 'plc-60.local',
-                'open_ports': [443],
-                'ssl_info': {
-                    'ssl_open': True,
-                    'issuer': 'CN=issuer',
-                    'subject': 'CN=subject',
-                },
-                'certificate_record': sentinel.saved_certificate,
-            },
-        )
-
-    def test_run_scan_in_background_skips_database_writes_when_stop_is_requested(self) -> None:
-        """No inventory updates should occur after a stop request is observed."""
-        DiscoveryPort.objects.create(port_number=443, description='HTTPS')
-        scanner = Mock()
-        scanner.stop_requested = Event()
-        scanner.stop_requested.set()
-        scanner.scan_network.return_value = [
-            {'ip': '192.168.1.61', 'hostname': 'ignored', 'ports': [443], 'ssl_info': {'ssl_open': True}}
-        ]
-        ScanManager.scanner_instance = scanner
-
-        with patch('discovery.views.DiscoveredDevice.objects.update_or_create') as mock_update_or_create:
-            ScanManager.run_scan_in_background('192.168.1.1', '192.168.1.100')
-
-        mock_update_or_create.assert_not_called()
-
-    def test_run_scan_in_background_resets_state_when_scanner_raises(self) -> None:
-        """Shared scan state should be cleared even if scanning crashes."""
-        scanner = Mock()
-        scanner.stop_requested = Event()
-        scanner.scan_network.side_effect = RuntimeError('scanner failed')
-        ScanManager.is_running = True
-        ScanManager.stop_pending = True
-        ScanManager.scanner_instance = scanner
-
-        with pytest.raises(RuntimeError, match='scanner failed'):
-            ScanManager.run_scan_in_background('192.168.1.1', '192.168.1.100')
-
-        assert ScanManager.get_state() == {
-            'scan_running': False,
-            'stop_pending': False,
-            'start_ip': '10.100.13.1',
-            'end_ip': '10.100.13.254',
-        }
-        assert ScanManager.scanner_instance is None
 
 
 class TestDiscoveryViews:
@@ -235,10 +49,13 @@ class TestDiscoveryViews:
             open_ports=[22],
             ssl_info={},
         )
-        ScanManager.is_running = True
-        ScanManager.stop_pending = True
-        ScanManager.start_ip = '192.168.1.1'
-        ScanManager.end_ip = '192.168.1.254'
+        DiscoveryScan.objects.create(
+            pk=1,
+            is_running=True,
+            stop_pending=True,
+            start_ip='192.168.1.1',
+            end_ip='192.168.1.254',
+        )
 
         response = authenticated_client.get(reverse('discovery:device_list'))
 
@@ -251,39 +68,37 @@ class TestDiscoveryViews:
         assert response.context['page_category'] == 'tools'
         assert response.context['page_name'] == 'discovery'
 
-    def test_start_scan_launches_background_thread_when_not_running(self, authenticated_client) -> None:
-        """Posting to start should spawn the background worker when the manager accepts it."""
-        with (
-            patch('discovery.views.ScanManager.begin_scan', return_value=True) as mock_begin_scan,
-            patch('discovery.views.threading.Thread') as mock_thread_cls,
-        ):
+    def test_start_scan_enqueues_background_job(self, authenticated_client) -> None:
+        """The web process reserves a shared scan and queues work without starting a thread."""
+        with patch('discovery.services.async_task') as enqueue:
             response = authenticated_client.post(
                 reverse('discovery:start_scan'),
                 {'start_ip': '192.168.1.1', 'end_ip': '192.168.1.254'},
             )
-
         assert response.status_code == 302
-        assert response.url == reverse('discovery:device_list')
-        mock_begin_scan.assert_called_once_with('192.168.1.1', '192.168.1.254')
-        mock_thread_cls.assert_called_once_with(
-            target=ScanManager.run_scan_in_background,
-            args=('192.168.1.1', '192.168.1.254'),
-        )
-        assert mock_thread_cls.return_value.daemon is True
-        mock_thread_cls.return_value.start.assert_called_once_with()
+        state = DiscoveryScan.objects.get(pk=1)
+        assert state.is_running
+        assert state.started_at is None
+        assert state.start_ip == '192.168.1.1'
+        assert state.end_ip == '192.168.1.254'
+        assert enqueue.call_args.args == ('discovery.tasks.run_scan', str(state.scan_id))
 
-    def test_start_scan_does_not_launch_thread_when_scan_is_already_running(self, authenticated_client) -> None:
-        """Posting to start should not create another worker if one is already running."""
-        with (
-            patch('discovery.views.ScanManager.begin_scan', return_value=False) as mock_begin_scan,
-            patch('discovery.views.threading.Thread') as mock_thread_cls,
-        ):
+    def test_start_scan_does_not_enqueue_another_running_scan(self, authenticated_client) -> None:
+        """A scan started by another web process blocks a second enqueue."""
+        DiscoveryScan.objects.create(pk=1, is_running=True)
+        with patch('discovery.services.async_task') as enqueue:
             response = authenticated_client.post(reverse('discovery:start_scan'))
-
         assert response.status_code == 302
-        assert response.url == reverse('discovery:device_list')
-        mock_begin_scan.assert_called_once_with('10.100.13.1', '10.100.13.254')
-        mock_thread_cls.assert_not_called()
+        enqueue.assert_not_called()
+
+    @pytest.mark.parametrize('start,end', [('invalid', '192.168.1.2'), ('192.168.1.2', '192.168.1.1')])
+    def test_invalid_scan_range_is_not_queued(self, authenticated_client, start, end) -> None:
+        """Invalid addresses and reversed ranges fail before reserving a scan."""
+        with patch('discovery.services.async_task') as enqueue:
+            response = authenticated_client.post(reverse('discovery:start_scan'), {'start_ip': start, 'end_ip': end})
+        assert response.status_code == 302
+        assert not DiscoveryScan.objects.filter(is_running=True).exists()
+        enqueue.assert_not_called()
 
     def test_stop_scan_requests_shutdown_and_redirects(self, authenticated_client) -> None:
         """Stopping a scan should delegate to the manager and redirect back to the dashboard."""

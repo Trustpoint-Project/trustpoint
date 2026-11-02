@@ -165,8 +165,8 @@ class TestOTScanner:
             patch.object(scanner, '_get_ips_from_range', return_value=['.10', '.11', '.12', '.13']),
             patch('discovery.scanner.concurrent.futures.ThreadPoolExecutor', return_value=executor),
             patch(
-                'discovery.scanner.concurrent.futures.as_completed',
-                return_value=[future_ok, future_none, future_cancelled, future_error],
+                'discovery.scanner.concurrent.futures.wait',
+                return_value=({future_ok, future_none, future_cancelled, future_error}, set()),
             ),
         ):
             results = scanner.scan_network('192.168.10.10', '192.168.10.13')
@@ -184,14 +184,14 @@ class TestOTScanner:
         executor.__exit__.return_value = False
         executor.submit.return_value = future
 
-        def stopped_iterator(_future_map: dict[Mock, str]):
+        def stopped_wait(*args, **kwargs):
             scanner.stop_requested.set()
-            yield future
+            return {future}, set()
 
         with (
             patch.object(scanner, '_get_ips_from_range', return_value=['192.168.10.10']),
             patch('discovery.scanner.concurrent.futures.ThreadPoolExecutor', return_value=executor),
-            patch('discovery.scanner.concurrent.futures.as_completed', side_effect=stopped_iterator),
+            patch('discovery.scanner.concurrent.futures.wait', side_effect=stopped_wait),
         ):
             results = scanner.scan_network('192.168.10.10', '192.168.10.10')
 
@@ -215,3 +215,22 @@ class TestOTScanner:
             assert scanner.scan_network('192.168.10.10', '192.168.10.10') == []
 
         assert scanner.stop_requested.is_set() is False
+
+    def test_shared_cancellation_is_polled_while_no_probe_completes(self) -> None:
+        """Cancellation must not wait for a blocked host to produce a result."""
+        scanner = OTScanner(target_ports=[443])
+        future = Mock()
+        executor = MagicMock()
+        executor.__enter__.return_value = executor
+        executor.submit.return_value = future
+        should_stop = Mock(side_effect=[False, True])
+        with (
+            patch.object(scanner, '_get_ips_from_range', return_value=['192.168.10.10']),
+            patch('discovery.scanner.concurrent.futures.ThreadPoolExecutor', return_value=executor),
+            patch('discovery.scanner.concurrent.futures.wait', return_value=(set(), {future})) as wait,
+        ):
+            assert scanner.scan_network('192.168.10.10', '192.168.10.10', should_stop=should_stop) == []
+        assert wait.call_count == 2
+        assert scanner.stop_requested.is_set()
+        executor.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
+        future.result.assert_not_called()
