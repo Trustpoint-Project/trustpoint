@@ -2812,12 +2812,13 @@ class AgentDomainCredentialHelpView(BaseHelpView):
         return context
 
 
-class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
+class AgentSetupProfileDownloadView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
     """Generate and serve a pre-filled agent_setup.json for an agent device."""
 
     http_method_names = ('get',)
     model = DeviceModel
     context_object_name = 'device'
+    permission_required = AppPermissions.DOWNLOAD_CREDENTIALS
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
