@@ -138,7 +138,7 @@ def enroll_owner_credential_est(
     signed_csr = csr_signer.get_signed_csr()
 
     est_client = EstClient(context)
-    issued_cert = est_client.simple_enroll(signed_csr)
+    issued_cert, _ = est_client.simple_enroll(signed_csr)
 
     cert_model = CertificateModel.save_certificate(issued_cert)
     signing_credential.certificate = cert_model

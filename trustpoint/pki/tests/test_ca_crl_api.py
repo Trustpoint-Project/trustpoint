@@ -528,7 +528,7 @@ def test_upstream_ca_enrollment(api, ca, lab_config, protocol):
         if protocol == 'est'
         else 'pki.services.ca_enrollment.CmpClient.send_and_extract_certificate'
     )
-    upstream_result = cert if protocol == 'est' else (cert, [ca.get_certificate()])
+    upstream_result = (cert, [ca.get_certificate()])
     enrollment_data = {
         'common_name': 'New CA',
         'organization_name': 'Example',

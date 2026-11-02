@@ -86,8 +86,9 @@ class TestEstClient:
         data = pkcs7.PKCS7SignatureBuilder().set_data(b'issued').add_signer(
             certificate, key, hashes.SHA256()
         ).sign(serialization.Encoding.DER, [])
-        result = EstClient(client_context())._parse_response(base64.b64encode(data), 'application/pkcs7-mime')
+        result, chain = EstClient(client_context())._parse_response(base64.b64encode(data), 'application/pkcs7-mime')
         assert result.subject == certificate.subject
+        assert chain == []
 
     def test_parse_response_returns_leaf_regardless_of_pkcs7_order(self) -> None:
         ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -102,8 +103,9 @@ class TestEstClient:
         )
         _, leaf, _ = certificate_and_csr()
         data = pkcs7.serialize_certificates([ca_cert, leaf], serialization.Encoding.DER)
-        result = EstClient(client_context())._parse_response(base64.b64encode(data), 'application/pkcs7-mime')
+        result, chain = EstClient(client_context())._parse_response(base64.b64encode(data), 'application/pkcs7-mime')
         assert result.subject == leaf.subject
+        assert chain == [ca_cert]
 
     def test_prepare_auth_prefers_mtls_then_basic_then_none(self) -> None:
         mtls = EstClient(client_context(est_client_cert_pem='CERT', est_client_key_pem='KEY'))
@@ -152,8 +154,9 @@ class TestEstClient:
         with patch.object(client, '_prepare_ca_bundle', return_value=ca_path), patch.object(
             client, '_prepare_auth', return_value=(('alice', 'synthetic-password'), None, [auth_path])
         ):
-            result = client.simple_enroll(csr)
+            result, chain = client.simple_enroll(csr)
         assert result.subject == certificate.subject
+        assert chain == []
         post.assert_called_once()
         assert post.call_args.kwargs['timeout'] == 7
         assert not Path(ca_path).exists() and not Path(auth_path).exists()
