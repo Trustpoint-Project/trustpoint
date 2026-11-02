@@ -266,19 +266,6 @@ class EstUsernamePasswordCommandBuilderTests(SimpleTestCase):
         assert 'certutil -f -decode certificate-1.p7c certificate-1.p7b' in cmd
         assert 'openssl pkcs7 -inform DER -in certificate-1.p7b -print_certs -out certificate-1.pem' in cmd
 
-    def test_get_curl_enroll_windows_command(self) -> None:
-        """Test Windows-friendly EST curl command."""
-        cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_windows_command(
-            est_username='device-1',
-            est_password='secret-value',
-            host='https://example.test/.well-known/est/domain/app/simpleenroll',
-            cred_number=5,
-        )
-
-        assert cmd.startswith('curl.exe --user "device-1:secret-value" ^')
-        assert '--data-binary "@csr-5.der"' in cmd
-        assert '-o certificate-5.p7c' in cmd
-
     def test_get_domain_credential_est_commands(self) -> None:
         """Test EST username/password domain credential command helpers."""
         csr_cmd = EstUsernamePasswordCommandBuilder.get_domain_credential_profile_command()

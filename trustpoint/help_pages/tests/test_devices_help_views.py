@@ -471,6 +471,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategyTests(TestCase):
         mock_onboarding.est_username = 'testuser'
         mock_onboarding.est_password = 'testpass'
         mock_device.onboarding_config = mock_onboarding
+        mock_device.common_name = 'testuser'
 
         mock_domain = Mock()
         mock_domain.public_key_info = 'RSA 2048'

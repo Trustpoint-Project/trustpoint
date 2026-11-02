@@ -3,6 +3,8 @@
 
 """This module contains cli commands which are displayed in the help pages."""
 
+import re
+from shlex import quote
 from typing import Any
 
 from django.utils.translation import gettext as _
@@ -11,6 +13,11 @@ from trustpoint_core import oid
 from devices.views import NamedCurveMissingForEccErrorMsg
 from pki.util.cert_req_converter import JSONCertRequestCommandExtractor
 from trustpoint.settings import DOCKER_CONTAINER
+
+
+def escape_shell_double_quotes(value: str) -> str:
+    """Escape literal text inside shell double quotes, including interactive history expansion."""
+    return re.sub(r'([\\"$`])', r'\\\1', value).replace('!', '"\'!\'"')
 
 
 class KeyGenCommandBuilder:
@@ -71,18 +78,22 @@ class CmpSharedSecretCommandBuilder:
         Returns:
             The constructed command.
         """
-        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        profile_subject_entries = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        )
         profile_validity_days = JSONCertRequestCommandExtractor.sample_request_to_openssl_days(sample_request)
-        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_cmp_sans(sample_request)
+        profile_sans = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_cmp_sans(sample_request)
+        )
         sans_line = f'-sans "{profile_sans}" \\\n' if profile_sans else ''
 
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
             '-tls_used \\\n'
-            f'-server {host} \\\n'
+            f'-server {quote(host)} \\\n'
             f'-ref {pk} \\\n'
-            f'-secret pass:{shared_secret} \\\n'
+            f'-secret {quote("pass:" + shared_secret)} \\\n'
             f'-subject "{profile_subject_entries}" \\\n'
             f'-days {profile_validity_days} \\\n'
             f'{sans_line}'
@@ -110,7 +121,7 @@ class CmpSharedSecretCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd rr \\\n'
-            f'-server {host} \\\n'
+            f'-server {quote(host)} \\\n'
             f'-cert certificate-{cred_number}.pem \\\n'
             f'-key key-{cred_number}.pem \\\n'
             f'-oldcert certificate-{cred_number}.pem \\\n'
@@ -135,9 +146,9 @@ class CmpSharedSecretCommandBuilder:
             'openssl cmp \\\n'
             '-cmd ir \\\n'
             '-tls_used \\\n'
-            f'-server {host} \\\n'
+            f'-server {quote(host)} \\\n'
             f'-ref {pk} \\\n'
-            f'-secret pass:{shared_secret} \\\n'
+            f'-secret {quote("pass:" + shared_secret)} \\\n'
             f'-subject "/CN=Trustpoint-Domain-Credential" \\\n'
             '-days 10 \\\n'
             '-newkey domain-credential-key.pem \\\n'
@@ -165,8 +176,12 @@ class EstUsernamePasswordCommandBuilder:
         Returns:
             The constructed command.
         """
-        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
-        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
+        profile_subject_entries = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        )
+        profile_sans = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
+        )
 
         sans_line = f'-addext "subjectAltName = {profile_sans}" \\\n' if profile_sans else ''
 
@@ -195,37 +210,12 @@ class EstUsernamePasswordCommandBuilder:
         """
         return (
             'curl \\\n'
-            f'--user "{est_username}:{est_password}" \\\n'
+            f'--user "{escape_shell_double_quotes(est_username + ":" + est_password)}" \\\n'
             '--cacert trustpoint-tls-trust-store.pem \\\n'
             '--header "Content-Type: application/pkcs10" \\\n'
             f'--data-binary "@csr-{cred_number}.der" \\\n'
             f'-o certificate-{cred_number}.p7c \\\n'
-            f'{host}'
-        )
-
-    @staticmethod
-    def get_curl_enroll_windows_command(est_username: str, est_password: str, host: str, cred_number: int) -> str:
-        """Get the Windows cmd.exe-friendly curl enroll command.
-
-        This variant uses ``curl.exe`` and caret (``^``) line continuations so that the
-        multi-line command can be copied directly into a Windows ``cmd`` prompt.
-
-        Args:
-            est_username: The EST username to use.
-            est_password:The EST password to use.
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./est/...
-            cred_number: The credential number - counter of issued credentials.
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            f'curl.exe --user "{est_username}:{est_password}" ^\n'
-            f'  --cacert trustpoint-tls-trust-store.pem ^\n'
-            '  --header "Content-Type: application/pkcs10" ^\n'
-            f'  --data-binary "@csr-{cred_number}.der" ^\n'
-            f'  -o certificate-{cred_number}.p7c ^\n'
-            f'  {host}'
+            f'{quote(host)}'
         )
 
     @staticmethod
@@ -298,12 +288,12 @@ class EstUsernamePasswordCommandBuilder:
             The constructed command.
         """
         return (
-            f'curl --user "{est_username}:{est_password}" \\\n'
+            f'curl --user "{escape_shell_double_quotes(est_username + ":" + est_password)}" \\\n'
             f'--cacert trustpoint-tls-trust-store.pem \\\n'
             '--header "Content-Type: application/pkcs10" \\\n'
             f'--data-binary "@csr-domain-credential.der" \\\n'
             f'-o domain-credential-certificate.p7c \\\n'
-            f'{host}'
+            f'{quote(host)}'
         )
 
     @staticmethod
@@ -337,9 +327,13 @@ class CmpClientCertificateCommandBuilder:
         Returns:
             The constructed command.
         """
-        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        profile_subject_entries = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        )
         profile_validity_days = JSONCertRequestCommandExtractor.sample_request_to_openssl_days(sample_request)
-        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_cmp_sans(sample_request)
+        profile_sans = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_cmp_sans(sample_request)
+        )
         sans_line = f'-sans "{profile_sans}" \\\n' if profile_sans else ''
 
         return (
@@ -347,7 +341,7 @@ class CmpClientCertificateCommandBuilder:
             '-cmd cr \\\n'
             '-tls_used \\\n'
             '-trusted domain-credential-full-chain.pem \\\n'
-            f'-server {host} \\\n'
+            f'-server {quote(host)} \\\n'
             '-cert domain-credential-certificate.pem \\\n'
             '-key domain-credential-key.pem \\\n'
             f'-subject "{profile_subject_entries}" \\\n'
@@ -372,7 +366,7 @@ class CmpClientCertificateCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd ir \\\n'
-            f'-server {host} \\\n'
+            f'-server {quote(host)} \\\n'
             '-tls_used \\\n'
             '-cert idevid.pem \\\n'
             '-key idevid.key \\\n'
@@ -424,7 +418,7 @@ class EstClientCertificateCommandBuilder:
             '--header "Content-Type: application/pkcs10" \\\n'
             f'--data-binary "@csr-{cred_number}.der" \\\n'
             f'-o certificate-{cred_number}.p7c \\\n'
-            f'{host}'
+            f'{quote(host)}'
         )
 
     @staticmethod
@@ -461,7 +455,7 @@ class EstClientCertificateCommandBuilder:
             '--header "Content-Type: application/pkcs10" \\\n'
             '--data-binary "@domain_credential_csr.der" \\\n'
             '-o certificate.der \\\n'
-            f'{host}'
+            f'{quote(host)}'
         )
 
     @staticmethod
@@ -485,7 +479,7 @@ class EstClientCertificateCommandBuilder:
         """
         return (
             'curl -X GET \\\n'
-            f'"{host}" \\\n'
+            f'"{escape_shell_double_quotes(host)}" \\\n'
             '--cacert server_cert.pem \\\n'
             '-H "Accept: application/pkcs7-mime" \\\n'
             '| base64 --decode > cacerts.p7b'
@@ -519,7 +513,7 @@ class AokiCmpIDevIDCommandBuilder:
         return (
             'openssl cmp \\\n'
             '  -cmd ir \\\n'
-            f'  -server {host} \\\n'
+            f'  -server {quote(host)} \\\n'
             '  -cert idevid.pem \\\n'
             '  -key idevid_pk.pem \\\n'
             '  -extracerts idevid_ca.pem \\\n'
@@ -543,7 +537,7 @@ class AokiEstIDevIDCommandBuilder:
             f'  --key idevid_pk.pem \\\n'
             f'  --cacert ownerid_ca.pem \\\n'
             f'  -o aoki_init_response.json \\\n'
-            f'{host}/aoki/init'
+            f'{quote(host + "/aoki/init")}'
         )
 
     @staticmethod
@@ -601,7 +595,7 @@ class AokiEstIDevIDCommandBuilder:
             f'  --header "Content-Type: application/pkcs10" \\\n'
             f'  --data-binary "@domain_credential.der" \\\n'
             f'  -o domain_certificate.p7c \\\n'
-            f'{host}'
+            f'{quote(host)}'
         )
 
 
@@ -619,8 +613,12 @@ class RestUsernamePasswordCommandBuilder:
         Returns:
             The constructed command.
         """
-        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
-        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
+        profile_subject_entries = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        )
+        profile_sans = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
+        )
         sans_line = f'-addext "subjectAltName = {profile_sans}" \\\n' if profile_sans else ''
 
         return (
@@ -646,12 +644,12 @@ class RestUsernamePasswordCommandBuilder:
             The constructed command.
         """
         return (
-            f'curl --user "{rest_username}:{rest_password}" \\\n'
+            f'curl --user "{escape_shell_double_quotes(rest_username + ":" + rest_password)}" \\\n'
             '--cacert trustpoint-tls-trust-store.pem \\\n'
             '--header "Content-Type: application/json" \\\n'
             f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
             f'-o certificate-{cred_number}.json \\\n'
-            f'{host}'
+            f'{quote(host)}'
         )
 
     @staticmethod
@@ -696,12 +694,12 @@ class RestUsernamePasswordCommandBuilder:
             The constructed command.
         """
         return (
-            f'curl --user "{rest_username}:{rest_password}" \\\n'
+            f'curl --user "{escape_shell_double_quotes(rest_username + ":" + rest_password)}" \\\n'
             '--cacert trustpoint-tls-trust-store.pem \\\n'
             '--header "Content-Type: application/json" \\\n'
             '--data-binary @<(jq -n --arg csr "$(cat csr-domain-credential.pem)" \'{csr: $csr}\') \\\n'
             '-o domain-credential-certificate.json \\\n'
-            f'{host}'
+            f'{quote(host)}'
         )
 
     @staticmethod
@@ -728,8 +726,12 @@ class RestClientCertificateCommandBuilder:
         Returns:
             The constructed command.
         """
-        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
-        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
+        profile_subject_entries = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        )
+        profile_sans = escape_shell_double_quotes(
+            JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
+        )
         sans_line = f'-addext "subjectAltName = {profile_sans}" \\\n' if profile_sans else ''
 
         return (
@@ -772,7 +774,7 @@ class RestClientCertificateCommandBuilder:
                 '--header "SSL-CLIENT-CERT: ${CERT_HEADER}" \\\n'
                 f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
                 f'-o certificate-{cred_number}.json \\\n'
-                f'{host}'
+                f'{quote(host)}'
             )
         return (
             'curl \\\n'
@@ -782,7 +784,7 @@ class RestClientCertificateCommandBuilder:
             '--header "Content-Type: application/json" \\\n'
             f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
             f'-o certificate-{cred_number}.json \\\n'
-            f'{host}'
+            f'{quote(host)}'
         )
 
     @staticmethod
@@ -811,7 +813,7 @@ class RestClientCertificateCommandBuilder:
                 '--header "SSL-CLIENT-CERT: ${CERT_HEADER}" \\\n'
                 f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
                 f'-o certificate-{cred_number}.json \\\n'
-                f'{host}'
+                f'{quote(host)}'
             )
         return (
             'curl \\\n'
@@ -821,7 +823,7 @@ class RestClientCertificateCommandBuilder:
             '--header "Content-Type: application/json" \\\n'
             f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
             f'-o certificate-{cred_number}.json \\\n'
-            f'{host}'
+            f'{quote(host)}'
         )
 
     @staticmethod
