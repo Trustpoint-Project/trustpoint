@@ -20,7 +20,7 @@ from management.models import SecurityConfig
 from pki.models import IssuedCredentialModel
 from request.message_builder.cmp import CmpPkiHeaderBuilding
 from request.message_responder.cmp import CmpGeneralResponder
-from request.operation_processor.cmp_general import CA_CERTS_OID, CmpGeneralProcessor
+from request.operation_processor.cmp_general import CA_CERTS_OID
 from request.request_context import CmpGeneralRequestContext
 from request.tests.test_cmp_key_update import _assert_signature, _sign
 
