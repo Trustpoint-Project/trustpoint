@@ -8,21 +8,24 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
 import pytest
+from asgiref.sync import async_to_sync
 from asyncua import ua
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ObjectIdentifier
+from django.db import IntegrityError
 
 from devices.models import DeviceModel
 from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
-from pki.models import CaModel, TruststoreModel
+from pki.models import CaModel, CertificateModel, TruststoreModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import TruststoreOrderModel
 from pki.tests.credential_helpers import issue_test_credential
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 from request.gds_push.gds_push_service import GdsPushError, GdsPushService
+from request.tests.test_est_client import certificate_and_csr
 
 
 @pytest.fixture
@@ -138,6 +141,49 @@ def mock_domain_credential(mock_opc_device):
 
 class TestGdsPushService:
     """Test cases for GdsPushService."""
+
+    @pytest.mark.parametrize('failure', ['missing_server', 'missing_ca', 'malformed_ca', 'insert', None])
+    def test_truststore_replacement_is_atomic(self, mock_opc_device, mock_truststore, failure):
+        """Keep the old entries and revocation state when replacement fails."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service.server_truststore = mock_truststore
+        original_entries = list(mock_truststore.truststoreordermodel_set.values_list('certificate_id', 'order'))
+        old_certificate_id = original_entries[0][0]
+        _, server_certificate, _ = certificate_and_csr()
+        _, ca_certificate, _ = certificate_and_csr()
+        if failure != 'missing_server':
+            server_model = CertificateModel.save_certificate(server_certificate)
+        if failure != 'missing_ca':
+            ca_model = CertificateModel.save_certificate(ca_certificate)
+        server_der = server_certificate.public_bytes(serialization.Encoding.DER)
+        ca_der = ca_certificate.public_bytes(serialization.Encoding.DER)
+        if failure == 'malformed_ca':
+            ca_der = b'invalid certificate'
+
+        create_order = TruststoreOrderModel.objects.create
+
+        def insert_order(**kwargs):
+            if failure == 'insert' and kwargs['order'] == 1:
+                raise IntegrityError('replacement insert failed')
+            return create_order(**kwargs)
+
+        with patch.object(TruststoreOrderModel.objects, 'create', side_effect=insert_order) as create:
+            if failure is None:
+                async_to_sync(service._update_truststore_with_new_certificate)(server_der, [ca_der])
+            else:
+                with pytest.raises(GdsPushError, match='Failed to update truststore'):
+                    async_to_sync(service._update_truststore_with_new_certificate)(server_der, [ca_der])
+
+        if failure == 'insert':
+            assert create.call_count == 2
+        entries = list(mock_truststore.truststoreordermodel_set.values_list('certificate_id', 'order'))
+        revoked = RevokedCertificateModel.objects.filter(certificate_id=old_certificate_id).exists()
+        if failure is None:
+            assert entries == [(server_model.pk, 0), (ca_model.pk, 1)]
+            assert revoked
+        else:
+            assert entries == original_entries
+            assert not revoked
 
     def test_init_insecure_mode(self, mock_opc_device):
         """Test initialization in insecure mode."""

@@ -19,6 +19,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509 import KeyUsage
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID
+from django.db import transaction
 
 from pki.models import CertificateModel, IssuedCredentialModel, TruststoreOrderModel
 from pki.models.certificate import RevokedCertificateModel
@@ -1293,84 +1294,66 @@ class GdsPushService(LoggerMixin):
             raise GdsPushError(msg)
 
         try:
-            self.logger.info(
-                'Updating truststore "%s" with new server certificate + %d CA cert(s)',
-                self.server_truststore.unique_name,
-                len(issuer_chain)
+            await sync_to_async(self._replace_truststore_certificates)(
+                self.server_truststore, server_cert_der, issuer_chain
             )
-
-            server_truststore = self.server_truststore
-
-            device = await sync_to_async(lambda: self.device)()
-            domain = await sync_to_async(lambda: device.domain)()
-            if domain is None:
-                msg = 'Device has no domain'
-                self._raise_gds_push_error(msg)
-            ca = await sync_to_async(lambda: domain.issuing_ca)()
-
-            try:
-                old_server_order = await sync_to_async(
-                    lambda: server_truststore.truststoreordermodel_set.get(order=0)
-                )()
-                old_server_cert = await sync_to_async(lambda: old_server_order.certificate)()
-
-                revoked = await sync_to_async(revoke_certificate)(
-                    old_server_cert,
-                    reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
-                    ca=ca,
-                )
-                if revoked:
-                    self.logger.info('Revoked old server certificate: %s', old_server_cert.common_name)
-                else:
-                    self.logger.info('Old server certificate already revoked: %s', old_server_cert.common_name)
-            except TruststoreOrderModel.DoesNotExist:
-                self.logger.debug('No old server certificate found in truststore to revoke')
-
-
-            await sync_to_async(self.server_truststore.truststoreordermodel_set.all().delete)()
-            self.logger.debug('Cleared existing certificates from truststore')
-
-            server_cert_crypto = x509.load_der_x509_certificate(server_cert_der)
-            server_cert_fingerprint = server_cert_crypto.fingerprint(hashes.SHA256()).hex()
-
-            server_cert_model = await sync_to_async(
-                CertificateModel.get_cert_by_sha256_fingerprint
-            )(server_cert_fingerprint)
-            if server_cert_model is None:
-                msg = f'Server certificate not found in database (fingerprint: {server_cert_fingerprint})'
-                self._raise_gds_push_error(msg)
-
-            await sync_to_async(TruststoreOrderModel.objects.create)(
-                trust_store=self.server_truststore,
-                certificate=server_cert_model,
-                order=0
-            )
-            self.logger.debug('Added server certificate to truststore')
-
-            for idx, ca_cert_der in enumerate(issuer_chain, start=1):
-                ca_cert_crypto = x509.load_der_x509_certificate(ca_cert_der)
-                ca_cert_fingerprint = ca_cert_crypto.fingerprint(hashes.SHA256()).hex()
-
-                ca_cert_model = await sync_to_async(
-                    CertificateModel.get_cert_by_sha256_fingerprint
-                )(ca_cert_fingerprint)
-                if ca_cert_model is None:
-                    msg = f'CA certificate not found in database (fingerprint: {ca_cert_fingerprint})'
-                    self._raise_gds_push_error(msg)
-
-                await sync_to_async(TruststoreOrderModel.objects.create)(
-                    trust_store=self.server_truststore,
-                    certificate=ca_cert_model,
-                    order=idx
-                )
-                self.logger.debug('Added CA certificate %d to truststore', idx)
-
-            self.logger.info(
-                'Updated truststore "%s" with %d certificate(s)',
-                self.server_truststore.unique_name,
-                1 + len(issuer_chain)
-            )
-
         except Exception as e:
             msg = f'Failed to update truststore: {e}'
             raise GdsPushError(msg) from e
+
+    @transaction.atomic
+    def _replace_truststore_certificates(
+        self,
+        server_truststore: TruststoreModel,
+        server_cert_der: bytes,
+        issuer_chain: list[bytes],
+    ) -> None:
+        """Resolve every replacement before atomically revoking and replacing the old entries."""
+        self.logger.info(
+            'Updating truststore "%s" with new server certificate + %d CA cert(s)',
+            server_truststore.unique_name,
+            len(issuer_chain),
+        )
+        certificates = []
+        for idx, certificate_der in enumerate([server_cert_der, *issuer_chain]):
+            certificate = x509.load_der_x509_certificate(certificate_der)
+            fingerprint = certificate.fingerprint(hashes.SHA256()).hex()
+            certificate_model = CertificateModel.get_cert_by_sha256_fingerprint(fingerprint)
+            if certificate_model is None:
+                label = 'Server' if idx == 0 else 'CA'
+                msg = f'{label} certificate not found in database (fingerprint: {fingerprint})'
+                self._raise_gds_push_error(msg)
+            certificates.append(certificate_model)
+
+        domain = self.device.domain
+        if domain is None:
+            msg = 'Device has no domain'
+            self._raise_gds_push_error(msg)
+        ca = domain.issuing_ca
+
+        try:
+            old_server_cert = server_truststore.truststoreordermodel_set.get(order=0).certificate
+            revoked = revoke_certificate(
+                old_server_cert,
+                reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
+                ca=ca,
+            )
+            if revoked:
+                self.logger.info('Revoked old server certificate: %s', old_server_cert.common_name)
+            else:
+                self.logger.info('Old server certificate already revoked: %s', old_server_cert.common_name)
+        except TruststoreOrderModel.DoesNotExist:
+            self.logger.debug('No old server certificate found in truststore to revoke')
+
+        server_truststore.truststoreordermodel_set.all().delete()
+        for idx, certificate_model in enumerate(certificates):
+            TruststoreOrderModel.objects.create(
+                trust_store=server_truststore,
+                certificate=certificate_model,
+                order=idx,
+            )
+        self.logger.info(
+            'Updated truststore "%s" with %d certificate(s)',
+            server_truststore.unique_name,
+            len(certificates),
+        )
