@@ -186,8 +186,10 @@ class SftpClient:
             # Ensure remote directory exists (mkdir -p behavior)
             remote_dir = PurePosixPath(remote_path).parent
             if str(remote_dir) not in ('', '.'):
-                path_accum = PurePosixPath(remote_dir.parts[0])
-                for part in remote_dir.parts[1:]:
+                path_accum = PurePosixPath(remote_dir.anchor)
+                for part in remote_dir.parts:
+                    if part == remote_dir.anchor:
+                        continue
                     path_accum /= part
                     try:
                         sftp.stat(str(path_accum))

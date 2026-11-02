@@ -8,8 +8,10 @@ import ipaddress
 import tarfile
 import zipfile
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
+import yaml
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -246,12 +248,21 @@ def test_downloads_require_authentication(leaf):
     )
 
 
-def test_existing_write_validation_is_preserved(api, leaf):
-    """Richer read schemas do not bypass the existing write field constraints."""
-    response = api.patch(f'/api/certificates/{leaf.pk}/', {'common_name': 'x' * 257}, format='json')
-    assert response.status_code == 400
-    assert 'common_name' in response.data
+@pytest.mark.parametrize('method', ['post', 'put', 'patch'])
+def test_unsupported_certificate_writes_return_method_not_allowed(api, leaf, method):
+    """Creation and updates return 405 without changing stored certificates."""
+    count = CertificateModel.objects.count()
+    url = '/api/certificates/' if method == 'post' else f'/api/certificates/{leaf.pk}/'
+    response = getattr(api, method)(url, {'common_name': 'updated'}, format='json')
+    assert response.status_code == 405
+    assert CertificateModel.objects.count() == count
     assert CertificateModel.objects.get(pk=leaf.pk).common_name == 'shared-name'
+
+
+def test_certificate_deletion_remains_supported(api, leaf):
+    """Removing unsupported writes preserves the existing deletion action."""
+    assert api.delete(f'/api/certificates/{leaf.pk}/').status_code == 204
+    assert not CertificateModel.objects.filter(pk=leaf.pk).exists()
 
 
 def test_certificate_openapi_contract():
@@ -261,10 +272,20 @@ def test_certificate_openapi_contract():
 
     schema = SchemaGenerator(patterns=[path('api/', include('pki.api_urls'))]).get_schema(public=True)
     paths = schema['paths']
+    assert set(paths['/api/certificates/']) == {'get'}
+    assert set(paths['/api/certificates/{id}/']) == {'get', 'delete'}
     assert 'get' in paths['/api/certificates/{id}/download/']
     assert 'post' in paths['/api/certificates/download/']
     assert 'CertificateDetail' in schema['components']['schemas']
     assert reverse('pki:certificate-download', kwargs={'pk': 12}) == '/pki/certificates/download/12'
+
+
+def test_bundled_certificate_schema_omits_unsupported_writes():
+    """The published documentation must not advertise unavailable certificate writes."""
+    schema_file = Path(__file__).resolve().parents[3] / 'docs/source/_static/trustpoint-openapi-swagger.yaml'
+    schema = yaml.safe_load(schema_file.read_text())
+    assert set(schema['paths']['/api/certificates/']) == {'get'}
+    assert set(schema['paths']['/api/certificates/{id}/']) == {'get', 'delete'}
 
 
 def test_duplicate_common_names_have_distinct_archive_files(api, leaf, issuing_ca_instance):

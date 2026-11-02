@@ -11,7 +11,9 @@ from typing import TYPE_CHECKING, Any
 from django.contrib.auth import authenticate
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import serializers, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -23,11 +25,11 @@ if TYPE_CHECKING:
 
 class TokenObtainRequestSerializer(serializers.Serializer[Any]):
     """Serializer for token request - supports both authentication methods."""
+
     username = serializers.CharField(required=False, help_text='Username (for human users)')
     password = serializers.CharField(required=False, help_text='Password (for human users)')
     grant_type = serializers.CharField(
-        required=False,
-        help_text='Grant type (use "client_credentials" for service accounts)'
+        required=False, help_text='Grant type (use "client_credentials" for service accounts)'
     )
     client_id = serializers.CharField(required=False, help_text='Client ID (for service accounts)')
     client_secret = serializers.CharField(required=False, help_text='Client secret (for service accounts)')
@@ -35,13 +37,25 @@ class TokenObtainRequestSerializer(serializers.Serializer[Any]):
 
 class TokenObtainResponseSerializer(serializers.Serializer[Any]):
     """Serializer for token response."""
+
     access = serializers.CharField(help_text='JWT access token')
     refresh = serializers.CharField(required=False, help_text='JWT refresh token (only for username/password)')
     token_type = serializers.CharField(required=False, help_text='Token type (only for service accounts)')
     expires_in = serializers.IntegerField(
-        required=False,
-        help_text='Token expiration in seconds (only for service accounts)'
+        required=False, help_text='Token expiration in seconds (only for service accounts)'
     )
+
+
+class HumanUserTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Authenticate once and require permission to use the REST API."""
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, str]:
+        """Check API access on the user authenticated by Simple JWT."""
+        data = super().validate(attrs)
+        if self.user is None or not self.user.has_perm('users.use_rest_api'):
+            msg = 'User is not permitted to use the REST API.'
+            raise PermissionDenied(msg)
+        return data
 
 
 @extend_schema_view(
@@ -134,6 +148,8 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
         }
     """
 
+    serializer_class = HumanUserTokenObtainPairSerializer
+
     def post(self, request: Request, *args: tuple[Any, ...], **kwargs: dict[str, Any]) -> Response:
         """Handle token request for both human users and service accounts."""
         data = request.data
@@ -172,24 +188,9 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
                 )
             return self._handle_service_account(request, client_id, client_secret)
 
-        user = authenticate(
-            request=request,
-            username=data.get('username'),
-            password=data.get('password'),
-        )
-        if user is not None and not user.has_perm('users.use_rest_api'):
-            return Response(
-                {
-                    'detail': 'User is not permitted to use the REST API.',
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         return super().post(request, *args, **kwargs)
 
-    def _handle_service_account(
-        self, request: Request, client_id: str, client_secret: str
-    ) -> Response:
+    def _handle_service_account(self, request: Request, client_id: str, client_secret: str) -> Response:
         """Handle OAuth 2.0 client credentials grant for service accounts."""
         user = authenticate(request=request, client_id=client_id, secret=client_secret)
 
