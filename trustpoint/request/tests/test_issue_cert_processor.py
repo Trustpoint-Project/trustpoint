@@ -191,6 +191,39 @@ def test_local_certificate_issue_rejects_disabled_domain(device_instance: dict[s
         LocalCaCertificateIssueProcessor().process_operation(context)
 
 
+@pytest.mark.parametrize('ca_type, protocol', [
+    (CaModel.CaTypeChoice.REMOTE_EST_RA, 'est'),
+    (CaModel.CaTypeChoice.REMOTE_CMP_RA, 'cmp'),
+])
+@pytest.mark.parametrize('direct', [False, True])
+@pytest.mark.parametrize('is_active', [False, True])
+def test_remote_certificate_issue_checks_domain_before_forwarding(
+    ca_type: str,
+    protocol: str,
+    direct: bool,
+    is_active: bool,
+    device_instance: dict[str, object],
+) -> None:
+    """Reject disabled domains before forwarding through either issuance entry point."""
+    _, _, csr = certificate_and_csr()
+    domain = device_instance['domain']
+    domain.is_active = is_active
+    domain.issuing_ca.ca_type = ca_type
+    context = CmpCertificateRequestContext(
+        device=device_instance['device'], domain=domain, cert_requested=csr,
+    )
+    processor = RemoteCaCertificateIssueProcessor(ca_type=protocol) if direct else CertificateIssueProcessor()
+
+    with patch.object(RemoteCaCertificateIssueProcessor, f'_process_{protocol}_enrollment') as forward:
+        if is_active:
+            processor.process_operation(context)
+            forward.assert_called_once_with(context)
+        else:
+            with pytest.raises(ValueError, match='currently disabled'):
+                processor.process_operation(context)
+            forward.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ('attribute', 'message'),
     [

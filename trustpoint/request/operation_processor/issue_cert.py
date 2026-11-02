@@ -117,6 +117,8 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
             exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
             raise TypeError(exc_msg)
 
+        self._validate_domain_active(context)
+
         if context.domain and context.domain.issuing_ca:
             issuing_ca = context.domain.issuing_ca
 
@@ -142,6 +144,13 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
 
         exc_msg = 'No suitable operation processor found for certificate issuance.'
         raise ValueError(exc_msg)
+
+    @staticmethod
+    def _validate_domain_active(context: BaseCertificateRequestContext) -> None:
+        """Reject disabled domains for shared and direct issuance calls."""
+        if context.domain is not None and not context.domain.is_active:
+            exc_msg = f'Cannot issue certificate: Domain "{context.domain.unique_name}" is currently disabled.'
+            raise ValueError(exc_msg)
 
     @staticmethod
     def _get_credential_type_for_template(
@@ -264,9 +273,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         if not context.domain:
             exc_msg = 'Domain must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)
-        if not context.domain.is_active:
-            exc_msg = f'Cannot issue certificate: Domain "{context.domain.unique_name}" is currently disabled.'
-            raise ValueError(exc_msg)
+        self._validate_domain_active(context)
         if not context.cert_requested:
             exc_msg = 'Certificate request must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)
@@ -415,6 +422,8 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         if not context.domain:
             exc_msg = 'Domain must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)
+
+        self._validate_domain_active(context)
 
         if not context.domain.issuing_ca:
             exc_msg = 'Domain must have an associated issuing CA.'
