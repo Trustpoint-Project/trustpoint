@@ -4,11 +4,13 @@
 """Django backup view."""
 
 import datetime as dt
-import io
 import tarfile
 import zipfile
+from contextlib import ExitStack
 from pathlib import Path
-from typing import Any, ClassVar
+from shutil import copyfileobj
+from tempfile import TemporaryFile
+from typing import Any, BinaryIO, ClassVar
 from uuid import uuid4
 
 from django.conf import settings
@@ -16,7 +18,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
@@ -24,7 +26,6 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import BasePermission
-from trustpoint_core.archiver import ArchiveFormat
 
 from management.backup_artifacts import backup_manifest_path
 from management.forms import BackupOptionsForm
@@ -33,7 +34,6 @@ from management.serializer.backup import BackupSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import SortableTableFromListMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
-from util.archives import archive_named_files
 from util.sftp import SftpClient, SftpError
 
 
@@ -334,7 +334,7 @@ class BackupFileDownloadView(UserPermissionRequiredMixin, View):
             return f'{filename.removesuffix(".dump.gz")}.zip'
         return f'{filename}.zip'
 
-    def get(self, _request: Any, filename: str) -> HttpResponse:
+    def get(self, _request: Any, filename: str) -> FileResponse:
         """Return the requested backup file as an attachment.
 
         If the backup manifest sidecar exists, the response is a ZIP bundle containing both the database dump and the
@@ -345,7 +345,7 @@ class BackupFileDownloadView(UserPermissionRequiredMixin, View):
             filename: Name of the backup file to download.
 
         Returns:
-            An HttpResponse with the file contents.
+            A FileResponse streaming the file contents.
 
         Raises:
             Http404: If the requested file does not exist.
@@ -358,21 +358,25 @@ class BackupFileDownloadView(UserPermissionRequiredMixin, View):
 
         manifest_path = backup_manifest_path(file_path)
         if manifest_path.is_file():
-            buffer = io.BytesIO()
-            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_archive:
-                zip_archive.write(file_path, arcname=filename)
-                zip_archive.write(manifest_path, arcname=manifest_path.name)
-            buffer.seek(0)
+            with ExitStack() as stack:
+                output = stack.enter_context(TemporaryFile())
+                _build_zip_backup_artifact(filename, file_path, manifest_path, output)
+                output.seek(0)
+                response = FileResponse(
+                    output,
+                    as_attachment=True,
+                    filename=self._bundle_filename(filename),
+                    content_type='application/zip',
+                )
+                stack.pop_all()  # FileResponse owns the open file until the response closes.
+                return response
 
-            bundle_filename = self._bundle_filename(filename)
-            response = HttpResponse(buffer.read(), content_type='application/zip')
-            response['Content-Disposition'] = f'attachment; filename="{bundle_filename}"'
-            return response
-
-        content = file_path.read_bytes()
-        response = HttpResponse(content, content_type='application/octet-stream')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
+        return FileResponse(
+            file_path.open('rb'),
+            as_attachment=True,
+            filename=filename,
+            content_type='application/octet-stream',
+        )
 
 
 def _backup_artifact_filename(filename: str, archive_format: str) -> str:
@@ -396,24 +400,20 @@ def _backup_payload_paths(backup_dir: Path, filename: str) -> tuple[Path, Path |
     return path, manifest_path if manifest_path.is_file() else None
 
 
-def _build_zip_backup_artifact(filename: str, path: Path, manifest_path: Path | None) -> tuple[str, bytes]:
-    """Build one self-contained ZIP artifact for a backup payload."""
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_archive:
+def _build_zip_backup_artifact(filename: str, path: Path, manifest_path: Path | None, output: BinaryIO) -> None:
+    """Write one self-contained ZIP artifact to the supplied file."""
+    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zip_archive:
         zip_archive.write(path, arcname=filename)
         if manifest_path is not None:
             zip_archive.write(manifest_path, arcname=manifest_path.name)
-    return _backup_artifact_filename(filename, 'zip'), buffer.getvalue()
 
 
-def _build_tar_gz_backup_artifact(filename: str, path: Path, manifest_path: Path | None) -> tuple[str, bytes]:
-    """Build one self-contained tar.gz artifact for a backup payload."""
-    buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode='w:gz') as tar_archive:
+def _build_tar_gz_backup_artifact(filename: str, path: Path, manifest_path: Path | None, output: BinaryIO) -> None:
+    """Write one self-contained tar.gz artifact to the supplied file."""
+    with tarfile.open(fileobj=output, mode='w:gz') as tar_archive:
         tar_archive.add(path, arcname=filename)
         if manifest_path is not None:
             tar_archive.add(manifest_path, arcname=manifest_path.name)
-    return _backup_artifact_filename(filename, 'tar.gz'), buffer.getvalue()
 
 
 class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
@@ -421,7 +421,7 @@ class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
 
     permission_required = AppPermissions.MANAGE_BACKUPS
 
-    def post(self, request: Any, archive_format: str) -> HttpResponse:
+    def post(self, request: Any, archive_format: str) -> FileResponse | HttpResponse:
         """Bundle selected backups into an archive.
 
         Args:
@@ -429,7 +429,7 @@ class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
             archive_format: Either 'zip' or 'tar.gz'.
 
         Returns:
-            An HttpResponse containing the archive.
+            A FileResponse streaming the archive, or a redirect for an empty selection.
 
         Raises:
             Redirect to management:backups with an error if no valid files are selected.
@@ -440,28 +440,44 @@ class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
             return redirect('management:backups')
 
         backup_dir: Path = settings.BACKUP_FILE_PATH
-        backup_artifacts: list[tuple[str, bytes]] = []
-        for filename in filenames:
-            payload_paths = _backup_payload_paths(backup_dir, filename)
-            if payload_paths is None:
-                continue
-            path, manifest_path = payload_paths
-            if archive_format.lower() == 'zip':
-                backup_artifacts.append(_build_zip_backup_artifact(filename, path, manifest_path))
-            else:
-                backup_artifacts.append(_build_tar_gz_backup_artifact(filename, path, manifest_path))
-
-        if not backup_artifacts:
-            messages.error(request, 'No valid files to download.')
-            return redirect('management:backups')
-
         ext = archive_format.lower()
-        selected_format = ArchiveFormat.ZIP if ext == 'zip' else ArchiveFormat.TAR_GZ
-        archive_bytes = archive_named_files(backup_artifacts, selected_format)
-        archive_name = f'backups.{ext}'
-        response = HttpResponse(archive_bytes, content_type='application/octet-stream')
-        response['Content-Disposition'] = f'attachment; filename={archive_name}'
-        return response
+        with ExitStack() as stack:
+            output = stack.enter_context(TemporaryFile())
+            has_files = False
+            with zipfile.ZipFile(output, 'w') if ext == 'zip' else tarfile.open(fileobj=output, mode='w:gz') as archive:
+                for filename in filenames:
+                    payload_paths = _backup_payload_paths(backup_dir, filename)
+                    if payload_paths is None:
+                        continue
+                    path, manifest_path = payload_paths
+                    with TemporaryFile() as artifact:
+                        artifact_name = _backup_artifact_filename(filename, 'zip' if ext == 'zip' else 'tar.gz')
+                        if isinstance(archive, zipfile.ZipFile):
+                            _build_zip_backup_artifact(filename, path, manifest_path, artifact)
+                            artifact.seek(0)
+                            with archive.open(artifact_name, 'w', force_zip64=True) as member:
+                                copyfileobj(artifact, member)
+                        else:
+                            _build_tar_gz_backup_artifact(filename, path, manifest_path, artifact)
+                            info = tarfile.TarInfo(artifact_name)
+                            info.size = artifact.tell()
+                            artifact.seek(0)
+                            archive.addfile(info, artifact)
+                    has_files = True
+
+            if not has_files:
+                messages.error(request, 'No valid files to download.')
+                return redirect('management:backups')
+
+            output.seek(0)
+            response = FileResponse(
+                output,
+                as_attachment=True,
+                filename=f'backups.{ext}',
+                content_type='application/octet-stream',
+            )
+            stack.pop_all()  # FileResponse owns the open file until the response closes.
+            return response
 
 
 class BackupFilesDeleteMultipleView(UserPermissionRequiredMixin, View, LoggerMixin):

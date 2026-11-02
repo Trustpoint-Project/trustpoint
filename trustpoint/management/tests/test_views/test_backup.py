@@ -605,7 +605,9 @@ class BackupFileDownloadViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertIn('attachment', response['Content-Disposition'])
-        self.assertEqual(response.content, b'test content')
+        self.assertTrue(response.streaming)
+        self.assertEqual(b''.join(response.streaming_content), b'test content')
+        self.assertTrue(response.closed)
 
     @patch('management.views.backup.settings')
     def test_download_existing_file_with_manifest_returns_bundle(self, mock_settings: MagicMock) -> None:
@@ -624,13 +626,15 @@ class BackupFileDownloadViewTest(TestCase):
         self.assertEqual(response['Content-Type'], 'application/zip')
         self.assertIn('backup_test.zip', response['Content-Disposition'])
 
-        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        self.assertTrue(response.streaming)
+        with zipfile.ZipFile(io.BytesIO(b''.join(response.streaming_content))) as archive:
             self.assertEqual(
                 set(archive.namelist()),
                 {'backup_test.dump.gz', 'backup_test.dump.gz.manifest.json'},
             )
             self.assertEqual(archive.read('backup_test.dump.gz'), b'test content')
             self.assertEqual(archive.read('backup_test.dump.gz.manifest.json'), b'{"manifest_version":1}')
+        self.assertTrue(response.closed)
 
     @patch('management.views.backup.settings')
     def test_download_nonexistent_file(self, mock_settings: MagicMock) -> None:
@@ -689,7 +693,8 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertIn('backups.zip', response['Content-Disposition'])
-        with zipfile.ZipFile(io.BytesIO(response.content)) as outer_archive:
+        self.assertTrue(response.streaming)
+        with zipfile.ZipFile(io.BytesIO(b''.join(response.streaming_content))) as outer_archive:
             self.assertEqual(set(outer_archive.namelist()), {'backup_1.zip', 'backup_2.zip'})
             with zipfile.ZipFile(io.BytesIO(outer_archive.read('backup_1.zip'))) as artifact:
                 self.assertEqual(set(artifact.namelist()), {'backup_1.dump.gz', 'backup_1.dump.gz.manifest.json'})
@@ -713,7 +718,8 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertIn('backups.tar.gz', response['Content-Disposition'])
-        with tarfile.open(fileobj=io.BytesIO(response.content), mode='r:gz') as outer_archive:
+        self.assertTrue(response.streaming)
+        with tarfile.open(fileobj=io.BytesIO(b''.join(response.streaming_content)), mode='r:gz') as outer_archive:
             self.assertEqual(
                 {member.name for member in outer_archive.getmembers()}, {'backup_1.tar.gz', 'backup_2.tar.gz'}
             )
