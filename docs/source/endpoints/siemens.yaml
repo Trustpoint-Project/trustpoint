@@ -1,0 +1,402 @@
+vendor: Siemens
+vendor_id: siemens
+sources:
+- id: siemens-cert-tia
+  type: vendor_documentation
+  title: Using Certificates with TIA Portal, Entry ID 109769068 V2.1
+  url: https://support.industry.siemens.com/cs/attachments/109769068/109769068_UsingCertificatesWithTIAPortal_DOC_V2_1_en.pdf
+  notes: Siemens documents certificate management for S7-1500 CPUs with TIA Portal from CPU firmware V2.0.
+    GDS Push is supported for the OPC UA server from firmware V2.9 and for the web server from firmware
+    V3.0.
+- id: siemens-s71500-comm
+  type: vendor_documentation
+  title: SIMATIC S7-1500 Communication Function Manual
+  url: https://support.industry.siemens.com/cs/attachments/59192925/s71500_communication_function_manual_en-US_en-US.pdf
+  notes: Siemens documents that S7-1500 supports OPC UA GDS Push from firmware V2.9 and currently supports
+    push management only, not pull management.
+devices:
+- product_family: SIMATIC S7-1500
+  model: CPU 1511-1 PN
+  hardware_revisions:
+  - unspecified
+  device_type: PLC
+  inventory_firmware_versions:
+  - '2.5'
+  - 2.5.0
+  - 2.9.4
+  firmware:
+  - versions:
+    - 2.9.4
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are at or above V2.9, for which Siemens documents OPC UA
+        GDS Push support on S7-1500 CPUs. For firmware V2.9.x, the documented GDS Push use is the OPC
+        UA server certificate.
+  - versions:
+    - '2.5'
+    - 2.5.0
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are below V2.9; Siemens documents S7-1500 OPC UA GDS Push
+        support starting with V2.9.
+- product_family: SIMATIC S7-1500
+  model: CPU 1511C-1 PN
+  hardware_revisions:
+  - unspecified
+  device_type: PLC
+  inventory_firmware_versions:
+  - 2.1.0
+  - 2.5.0
+  - 2.8.3
+  - 2.9.4
+  firmware:
+  - versions:
+    - 2.9.4
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are at or above V2.9, for which Siemens documents OPC UA
+        GDS Push support on S7-1500 CPUs. For firmware V2.9.x, the documented GDS Push use is the OPC
+        UA server certificate.
+  - versions:
+    - 2.1.0
+    - 2.5.0
+    - 2.8.3
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are below V2.9; Siemens documents S7-1500 OPC UA GDS Push
+        support starting with V2.9.
+- product_family: SIMATIC S7-1500
+  model: CPU 1515-2 PN
+  hardware_revisions:
+  - unspecified
+  device_type: PLC
+  inventory_firmware_versions:
+  - 2.0.1
+  - 2.5.0
+  - 2.5.2
+  - 4.1.2
+  firmware:
+  - versions:
+    - 4.1.2
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are at or above V2.9, for which Siemens documents OPC UA
+        GDS Push support on S7-1500 CPUs. For firmware V3.0 and later, Siemens also documents GDS Push
+        for the CPU web-server certificate.
+  - versions:
+    - 2.0.1
+    - 2.5.0
+    - 2.5.2
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are below V2.9; Siemens documents S7-1500 OPC UA GDS Push
+        support starting with V2.9.
+- product_family: SIMATIC S7-1500
+  model: CPU 1516-3 PN/DP
+  hardware_revisions:
+  - unspecified
+  device_type: PLC
+  inventory_firmware_versions:
+  - 2.1.0
+  - 2.5.0
+  - '2.8'
+  - 3.0.3
+  firmware:
+  - versions:
+    - 3.0.3
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are at or above V2.9, for which Siemens documents OPC UA
+        GDS Push support on S7-1500 CPUs. For firmware V3.0 and later, Siemens also documents GDS Push
+        for the CPU web-server certificate.
+  - versions:
+    - 2.1.0
+    - 2.5.0
+    - '2.8'
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are below V2.9; Siemens documents S7-1500 OPC UA GDS Push
+        support starting with V2.9.
+- product_family: SIMATIC S7-1500
+  model: CPU 1517-3 PN/DP
+  hardware_revisions:
+  - unspecified
+  device_type: PLC
+  inventory_firmware_versions:
+  - 2.1.4
+  - 2.5.2
+  - 3.0.3
+  - 3.1.5
+  firmware:
+  - versions:
+    - 3.0.3
+    - 3.1.5
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are at or above V2.9, for which Siemens documents OPC UA
+        GDS Push support on S7-1500 CPUs. For firmware V3.0 and later, Siemens also documents GDS Push
+        for the CPU web-server certificate.
+  - versions:
+    - 2.1.4
+    - 2.5.2
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are below V2.9; Siemens documents S7-1500 OPC UA GDS Push
+        support starting with V2.9.
+- product_family: SIMATIC S7-1500
+  model: CPU 1518-4 PN/DP
+  hardware_revisions:
+  - unspecified
+  device_type: PLC
+  inventory_firmware_versions:
+  - 3.1.6
+  firmware:
+  - versions:
+    - 3.1.6
+    certificate_protocols:
+      est: false
+      cmp: false
+      scep: false
+      acme: false
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TIA Portal
+      agent_possible: false
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - siemens-cert-tia
+      - siemens-s71500-comm
+      notes: These inventory firmware versions are at or above V2.9, for which Siemens documents OPC UA
+        GDS Push support on S7-1500 CPUs. For firmware V3.0 and later, Siemens also documents GDS Push
+        for the CPU web-server certificate.
