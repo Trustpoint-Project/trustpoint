@@ -40,8 +40,10 @@ def enrollment_request(request, rf, rsa_private_key, settings):
     def post(prefix='', *, authenticated=True, suffix=''):
         path = f'/.well-known/est/{prefix}{operation}{suffix}'
         http_request = rf.post(
-            path, data=base64.b64encode(csr.public_bytes(Encoding.DER)),
-            content_type='application/pkcs10', **(headers if authenticated else {}),
+            path,
+            data=base64.b64encode(csr.public_bytes(Encoding.DER)),
+            content_type='application/pkcs10',
+            **(headers if authenticated else {}),
         )
         match = resolve(path)
         return match.func(http_request, *match.args, **match.kwargs)

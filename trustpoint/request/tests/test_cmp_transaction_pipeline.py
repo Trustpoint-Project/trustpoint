@@ -248,12 +248,15 @@ def test_cmp_certificate_request_processor_hydrates_existing_issued_transaction(
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize('status', [
-    CmpTransactionModel.Status.PROCESSING,
-    CmpTransactionModel.Status.WAITING,
-    CmpTransactionModel.Status.ISSUED,
-    CmpTransactionModel.Status.REJECTED,
-])
+@pytest.mark.parametrize(
+    'status',
+    [
+        CmpTransactionModel.Status.PROCESSING,
+        CmpTransactionModel.Status.WAITING,
+        CmpTransactionModel.Status.ISSUED,
+        CmpTransactionModel.Status.REJECTED,
+    ],
+)
 def test_cmp_concurrent_retry_reuses_transaction_without_issuing(status: str) -> None:
     """A worker losing the insert race must reuse the winner's state."""
     transaction_record = CmpTransactionModel.objects.create(

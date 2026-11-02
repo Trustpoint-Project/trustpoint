@@ -83,9 +83,12 @@ class TestEstClient:
 
     def test_parse_response_returns_first_certificate(self) -> None:
         key, certificate, _ = certificate_and_csr()
-        data = pkcs7.PKCS7SignatureBuilder().set_data(b'issued').add_signer(
-            certificate, key, hashes.SHA256()
-        ).sign(serialization.Encoding.DER, [])
+        data = (
+            pkcs7.PKCS7SignatureBuilder()
+            .set_data(b'issued')
+            .add_signer(certificate, key, hashes.SHA256())
+            .sign(serialization.Encoding.DER, [])
+        )
         result, chain = EstClient(client_context())._parse_response(base64.b64encode(data), 'application/pkcs7-mime')
         assert result.subject == certificate.subject
         assert chain == []
@@ -95,9 +98,13 @@ class TestEstClient:
         ca_name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'est-ca')])
         now = datetime.datetime.now(datetime.UTC)
         ca_cert = (
-            x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name)
-            .public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
-            .not_valid_before(now).not_valid_after(now + datetime.timedelta(days=1))
+            x509.CertificateBuilder()
+            .subject_name(ca_name)
+            .issuer_name(ca_name)
+            .public_key(ca_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now)
+            .not_valid_after(now + datetime.timedelta(days=1))
             .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
             .sign(ca_key, hashes.SHA256())
         )
@@ -142,17 +149,23 @@ class TestEstClient:
     @patch('request.clients.est_client.requests.post')
     def test_simple_enroll_success_and_cleanup(self, post: Mock) -> None:
         key, certificate, csr = certificate_and_csr()
-        response_data = pkcs7.PKCS7SignatureBuilder().set_data(b'issued').add_signer(
-            certificate, key, hashes.SHA256()
-        ).sign(serialization.Encoding.DER, [])
-        response = Mock(status_code=200, content=base64.b64encode(response_data), headers={'Content-Type': 'application/pkcs7-mime'})
+        response_data = (
+            pkcs7.PKCS7SignatureBuilder()
+            .set_data(b'issued')
+            .add_signer(certificate, key, hashes.SHA256())
+            .sign(serialization.Encoding.DER, [])
+        )
+        response = Mock(
+            status_code=200, content=base64.b64encode(response_data), headers={'Content-Type': 'application/pkcs7-mime'}
+        )
         post.return_value = response
         ca_path = tempfile.NamedTemporaryFile(delete=False).name
         auth_path = tempfile.NamedTemporaryFile(delete=False).name
         context = client_context(est_username='alice', est_password='synthetic-password')
         client = EstClient(context, timeout=7)
-        with patch.object(client, '_prepare_ca_bundle', return_value=ca_path), patch.object(
-            client, '_prepare_auth', return_value=(('alice', 'synthetic-password'), None, [auth_path])
+        with (
+            patch.object(client, '_prepare_ca_bundle', return_value=ca_path),
+            patch.object(client, '_prepare_auth', return_value=(('alice', 'synthetic-password'), None, [auth_path])),
         ):
             result, chain = client.simple_enroll(csr)
         assert result.subject == certificate.subject
@@ -167,21 +180,28 @@ class TestEstClient:
         for response in [Mock(status_code=500, text='server failure')]:
             post.return_value = response
             client = EstClient(client_context())
-            with patch.object(client, '_prepare_ca_bundle', side_effect=lambda: tempfile.NamedTemporaryFile(delete=False).name):
+            with patch.object(
+                client, '_prepare_ca_bundle', side_effect=lambda: tempfile.NamedTemporaryFile(delete=False).name
+            ):
                 with pytest.raises(EstClientError, match='returned error status 500'):
                     client.simple_enroll(csr)
         post.side_effect = __import__('requests').exceptions.Timeout('timed out')
         client = EstClient(client_context())
-        with patch.object(client, '_prepare_ca_bundle', side_effect=lambda: tempfile.NamedTemporaryFile(delete=False).name):
+        with patch.object(
+            client, '_prepare_ca_bundle', side_effect=lambda: tempfile.NamedTemporaryFile(delete=False).name
+        ):
             with pytest.raises(EstClientError, match='Failed to communicate'):
                 client.simple_enroll(csr)
 
     @patch('request.clients.est_client.requests.get')
     def test_get_ca_certs_success_and_http_error(self, get: Mock) -> None:
         key, certificate, _ = certificate_and_csr()
-        response_data = pkcs7.PKCS7SignatureBuilder().set_data(b'cas').add_signer(
-            certificate, key, hashes.SHA256()
-        ).sign(serialization.Encoding.DER, [])
+        response_data = (
+            pkcs7.PKCS7SignatureBuilder()
+            .set_data(b'cas')
+            .add_signer(certificate, key, hashes.SHA256())
+            .sign(serialization.Encoding.DER, [])
+        )
         get.return_value = Mock(status_code=200, content=base64.b64encode(response_data), text='')
         result = EstClient(client_context()).get_ca_certs()
         assert len(result) == 1 and result[0].subject == certificate.subject

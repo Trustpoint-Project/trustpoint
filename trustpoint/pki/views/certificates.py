@@ -70,7 +70,8 @@ class CertificatesContextMixin(PageContextMixin):
 
 
 class CertificateTableView(
-    ExportMixin, CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]):
+    ExportMixin, CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]
+):
     """Certificate Table View."""
 
     model = CertificateModel
@@ -85,9 +86,12 @@ class CertificateTableView(
         return ExportConfig.from_model(
             CertificateModel,
             include=[
-                'common_name', 'serial_number',
-                'not_valid_before', 'not_valid_after',
-                'spki_algorithm', 'sha256_fingerprint',
+                'common_name',
+                'serial_number',
+                'not_valid_before',
+                'not_valid_after',
+                'spki_algorithm',
+                'sha256_fingerprint',
             ],
             labels={
                 'not_valid_before': 'Not Valid Before',
@@ -126,18 +130,14 @@ class CertificateTableView(
         """Return the annotated base queryset used by the certificates table."""
         now = timezone.now()
         conditions = certificate_health_conditions(as_of=now, expiry_days=0)
-        return (
-            CertificateModel.objects
-            .select_related('revoked_certificate')
-            .annotate(
-                certificate_status_sort=Case(
-                    When(conditions['revoked'], then=Value(3)),
-                    When(conditions['not_yet_valid'], then=Value(4)),
-                    When(conditions['expired'], then=Value(2)),
-                    default=Value(0),
-                    output_field=IntegerField(),
-                ),
-            )
+        return CertificateModel.objects.select_related('revoked_certificate').annotate(
+            certificate_status_sort=Case(
+                When(conditions['revoked'], then=Value(3)),
+                When(conditions['not_yet_valid'], then=Value(4)),
+                When(conditions['expired'], then=Value(2)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
         )
 
     def get_queryset(self) -> QuerySet[CertificateModel]:
@@ -177,16 +177,12 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
 
     def get_queryset(self) -> QuerySet[CertificateModel]:
         """Return the queryset with relations eagerly loaded for the detail template."""
-        return (
-            CertificateModel.objects
-            .select_related(
-                'subject_alternative_name_extension__subject_alt_name',
-            )
-            .prefetch_related(
-                'subject',
-                'issuer',
-                'subject_alternative_name_extension__subject_alt_name__ip_addresses',
-            )
+        return CertificateModel.objects.select_related(
+            'subject_alternative_name_extension__subject_alt_name',
+        ).prefetch_related(
+            'subject',
+            'issuer',
+            'subject_alternative_name_extension__subject_alt_name__ip_addresses',
         )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -204,27 +200,30 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
         subject_entries = []
         for entry in cert.subject.all():
             name = OID_MAP.get(entry.oid)
-            subject_entries.append({
-                'oid': entry.oid,
-                'name': name,
-                'value': entry.value,
-            })
+            subject_entries.append(
+                {
+                    'oid': entry.oid,
+                    'name': name,
+                    'value': entry.value,
+                }
+            )
         context['subject_entries'] = subject_entries
         issuer_entries = []
         for entry in cert.issuer.all():
             name = OID_MAP.get(entry.oid)
-            issuer_entries.append({
-                'oid': entry.oid,
-                'name': name,
-                'value': entry.value,
-            })
+            issuer_entries.append(
+                {
+                    'oid': entry.oid,
+                    'name': name,
+                    'value': entry.value,
+                }
+            )
         context['issuer_entries'] = issuer_entries
         ip_addresses = []
         san_ext = getattr(cert, 'subject_alternative_name_extension', None)
         if san_ext and getattr(san_ext, 'subject_alt_name', None):
             ip_addresses = [
-                str(entry).split(':', 1)[-1].strip()
-                for entry in san_ext.subject_alt_name.ip_addresses.all()
+                str(entry).split(':', 1)[-1].strip() for entry in san_ext.subject_alt_name.ip_addresses.all()
             ]
         context['ip_addresses'] = ip_addresses
 
@@ -458,13 +457,14 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
 
         return response
 
+
 @extend_schema(tags=['Certificate'])
 @extend_schema_view(
     retrieve=extend_schema(description='Retrieve a single certificate by id.'),
     create=extend_schema(description='Create a certificate.'),
     update=extend_schema(description='Update an existing certificate.'),
     partial_update=extend_schema(description='Partially update an existing certificate.'),
-    destroy=extend_schema(description='Delete a certificate.')
+    destroy=extend_schema(description='Delete a certificate.'),
 )
 class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
     """ViewSet for managing Certificate instances.
@@ -491,8 +491,9 @@ class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
             return CertificateSummarySerializer
         return CertificateSerializer
 
-    def _download_certificates(self, request: Request, certificate: CertificateModel,
-                               *, include_chain: bool) -> list[CertificateModel]:
+    def _download_certificates(
+        self, request: Request, certificate: CertificateModel, *, include_chain: bool
+    ) -> list[CertificateModel]:
         """Check permissions for every certificate included in an export."""
         try:
             certificates = [certificate, *certificate_chain(certificate)] if include_chain else [certificate]
@@ -516,13 +517,15 @@ class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
         options.is_valid(raise_exception=True)
         file_format = CertificateFormat(options.validated_data['file_format'])
         certificates = self._download_certificates(
-            request, certificate, include_chain=options.validated_data['include_chain'])
+            request, certificate, include_chain=options.validated_data['include_chain']
+        )
         if len(certificates) > 1:
             if file_format == CertificateFormat.DER:
                 msg = 'DER contains one certificate. Use PEM or PKCS#7 for a chain, or download an archive.'
                 raise ValidationError({'file_format': msg})
             data = CertificateCollectionSerializer(
-                [item.get_certificate_serializer().as_crypto() for item in certificates]).as_format(file_format)
+                [item.get_certificate_serializer().as_crypto() for item in certificates]
+            ).as_format(file_format)
         else:
             data = certificate.get_certificate_serializer().as_format(file_format)
         response = HttpResponse(data, content_type=file_format.mime_type)
@@ -547,13 +550,18 @@ class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
             raise NotFound(msg)
         selected: dict[int, CertificateModel] = {}
         for pk in ids:
-            for certificate in self._download_certificates(request, certificates[pk],
-                                                           include_chain=values['include_chain']):
+            for certificate in self._download_certificates(
+                request, certificates[pk], include_chain=values['include_chain']
+            ):
                 selected.setdefault(certificate.pk, certificate)
         file_format = CertificateFormat(values['file_format'])
         archive_format = ArchiveFormat(values['archive_format'])
-        contents = {certificate_filename(item, file_format.file_extension):
-                    item.get_certificate_serializer().as_format(file_format) for item in selected.values()}
+        contents = {
+            certificate_filename(item, file_format.file_extension): item.get_certificate_serializer().as_format(
+                file_format
+            )
+            for item in selected.values()
+        }
         response = HttpResponse(Archiver.archive(contents, archive_format), content_type=archive_format.mime_type)
         response['Content-Disposition'] = f'attachment; filename="certificates{archive_format.file_extension}"'
         return response

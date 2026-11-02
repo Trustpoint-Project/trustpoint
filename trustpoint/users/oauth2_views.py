@@ -23,11 +23,11 @@ if TYPE_CHECKING:
 
 class TokenObtainRequestSerializer(serializers.Serializer[Any]):
     """Serializer for token request - supports both authentication methods."""
+
     username = serializers.CharField(required=False, help_text='Username (for human users)')
     password = serializers.CharField(required=False, help_text='Password (for human users)')
     grant_type = serializers.CharField(
-        required=False,
-        help_text='Grant type (use "client_credentials" for service accounts)'
+        required=False, help_text='Grant type (use "client_credentials" for service accounts)'
     )
     client_id = serializers.CharField(required=False, help_text='Client ID (for service accounts)')
     client_secret = serializers.CharField(required=False, help_text='Client secret (for service accounts)')
@@ -35,12 +35,12 @@ class TokenObtainRequestSerializer(serializers.Serializer[Any]):
 
 class TokenObtainResponseSerializer(serializers.Serializer[Any]):
     """Serializer for token response."""
+
     access = serializers.CharField(help_text='JWT access token')
     refresh = serializers.CharField(required=False, help_text='JWT refresh token (only for username/password)')
     token_type = serializers.CharField(required=False, help_text='Token type (only for service accounts)')
     expires_in = serializers.IntegerField(
-        required=False,
-        help_text='Token expiration in seconds (only for service accounts)'
+        required=False, help_text='Token expiration in seconds (only for service accounts)'
     )
 
 
@@ -187,9 +187,7 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
 
         return super().post(request, *args, **kwargs)
 
-    def _handle_service_account(
-        self, request: Request, client_id: str, client_secret: str
-    ) -> Response:
+    def _handle_service_account(self, request: Request, client_id: str, client_secret: str) -> Response:
         """Handle OAuth 2.0 client credentials grant for service accounts."""
         user = authenticate(request=request, client_id=client_id, secret=client_secret)
 

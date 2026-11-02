@@ -121,7 +121,9 @@ def test_implicit_certconf_rejection_resolves_transaction_credential(digest_type
     SecurityConfig.objects.create()
     certificate = _certificate(digest_type())
     credential = CredentialModel.save_keyless_credential(
-        certificate, [], CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
+        certificate,
+        [],
+        CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
     )
     issued = IssuedCredentialModel.objects.create(
         common_name='CMP confirmation',
@@ -156,7 +158,9 @@ def test_certconf_requires_explicit_digest_for_eddsa() -> None:
     assert isinstance(_certconf_hash_algorithm(context, certificate), hashes.SHA512)
 
 
-@pytest.mark.parametrize('algorithm_oid', [HashAlgorithm.SHA1.dotted_string, HashAlgorithm.MD5.dotted_string, '1.2.3.4'])
+@pytest.mark.parametrize(
+    'algorithm_oid', [HashAlgorithm.SHA1.dotted_string, HashAlgorithm.MD5.dotted_string, '1.2.3.4']
+)
 def test_certconf_rejects_disallowed_digest(algorithm_oid: str) -> None:
     """An explicit weak digest must not bypass the confirmation allowlist."""
     context = CmpCertConfRequestContext(cert_hash_algorithm_oid=algorithm_oid)

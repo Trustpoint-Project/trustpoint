@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Dispatch workflow runs from incoming events using inline or worker execution."""
+
 from __future__ import annotations
 
 import time
@@ -412,7 +413,8 @@ class WorkflowDispatchService:
 
             trig = ir.get('trigger', {}) if isinstance(ir, dict) else {}
             if on in Triggers.ENROLLMENT and trig.get('phase', 'before_issuance') != event.get(
-                'phase', 'before_issuance',
+                'phase',
+                'before_issuance',
             ):
                 continue
             sources = trig.get('sources', {}) if isinstance(trig, dict) else {}

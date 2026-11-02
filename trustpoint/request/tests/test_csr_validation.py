@@ -116,12 +116,14 @@ def test_est_wrapped_base64_through_http_validation(rf, signed_csr, newline, jun
     """HTTP validation accepts wrapped CSRs but still rejects non-whitespace junk."""
     der = signed_csr.public_bytes(Encoding.DER)
     body = base64.encodebytes(der).replace(b'\n', newline) + junk
-    context = EstCertificateRequestContext(raw_message=rf.post(
-        '/.well-known/est/domain/tls_server/simpleenroll',
-        data=body,
-        content_type='application/pkcs10',
-        HTTP_CONTENT_TRANSFER_ENCODING='base64',
-    ))
+    context = EstCertificateRequestContext(
+        raw_message=rf.post(
+            '/.well-known/est/domain/tls_server/simpleenroll',
+            data=body,
+            content_type='application/pkcs10',
+            HTTP_CONTENT_TRANSFER_ENCODING='base64',
+        )
+    )
     if junk:
         with pytest.raises(ValueError, match='Invalid base64 encoding in message'):
             EstHttpRequestValidator().validate(context)

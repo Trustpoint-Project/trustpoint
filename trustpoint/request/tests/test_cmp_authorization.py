@@ -192,7 +192,9 @@ class TestCmpCertConfAuthorization:
         """Rejection requires an issued credential for the transaction certificate."""
         cert_hash = b'\xde\xad\xbe\xef' * 8
         ctx = CmpCertConfRequestContext(
-            operation='certconf', cert_conf_status=2, cert_hash=cert_hash,
+            operation='certconf',
+            cert_conf_status=2,
+            cert_hash=cert_hash,
             cmp_transaction=Mock(final_certificate=Mock()),
         )
 
@@ -208,7 +210,9 @@ class TestCmpCertConfAuthorization:
         """Rejection with a matching certHash populates context.credential_to_revoke."""
         cert_hash = bytes.fromhex('aa' * 32)
         ctx = CmpCertConfRequestContext(
-            operation='certconf', cert_conf_status=2, cert_hash=cert_hash,
+            operation='certconf',
+            cert_conf_status=2,
+            cert_hash=cert_hash,
             cmp_transaction=Mock(final_certificate=Mock()),
         )
 
@@ -226,7 +230,10 @@ class TestCmpCertConfAuthorization:
     def test_rejection_requires_transaction_certificate(self, transaction) -> None:
         """A hash alone must never select the credential to revoke."""
         ctx = CmpCertConfRequestContext(
-            operation='certconf', cert_conf_status=2, cert_hash=b'hash', cmp_transaction=transaction,
+            operation='certconf',
+            cert_conf_status=2,
+            cert_hash=b'hash',
+            cmp_transaction=transaction,
         )
         with pytest.raises(ValueError, match='not bound to an issued CMP transaction'):
             CmpCertConfAuthorization().authorize(ctx)

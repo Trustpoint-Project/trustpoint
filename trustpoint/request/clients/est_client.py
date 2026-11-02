@@ -101,11 +101,7 @@ class EstClient(LoggerMixin):
 
         content_type = 'application/pkcs10'
 
-        self.logger.debug(
-            'Prepared CSR: %d bytes DER, %d bytes base64-encoded',
-            len(csr_der),
-            len(csr_b64)
-        )
+        self.logger.debug('Prepared CSR: %d bytes DER, %d bytes base64-encoded', len(csr_der), len(csr_b64))
 
         return csr_b64, content_type
 
@@ -152,10 +148,7 @@ class EstClient(LoggerMixin):
             msg = f'Failed to parse EST server response: {e!s}'
             raise EstClientError(msg) from e
         else:
-            self.logger.info(
-                'Successfully parsed issued certificate: %s',
-                issued_cert.subject.rfc4514_string()
-            )
+            self.logger.info('Successfully parsed issued certificate: %s', issued_cert.subject.rfc4514_string())
             return issued_cert, [cert for cert in certificates if cert != issued_cert]
 
     def _write_temp_pem(self, content: str | bytes, suffix: str = '.pem') -> str:
@@ -244,9 +237,7 @@ class EstClient(LoggerMixin):
             )
 
             if response.status_code != 200:  # noqa: PLR2004
-                msg = (
-                    f'EST server returned error status {response.status_code}: {response.text}'
-                )
+                msg = f'EST server returned error status {response.status_code}: {response.text}'
                 raise EstClientError(msg)
 
             content_type_header = response.headers.get('Content-Type', '')
