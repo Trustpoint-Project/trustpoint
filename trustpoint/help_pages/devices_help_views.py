@@ -73,7 +73,7 @@ from trustpoint.page_context import (
     DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY,
     PageContextMixin,
 )
-from trustpoint.views.base import UserPermissionRequiredMixin
+from trustpoint.views.base import SuperuserRequiredMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
@@ -2659,7 +2659,7 @@ def _build_aoki_demo_section(request: Any) -> HelpSection:
     )
 
 
-class AokiSetupDemoEnvView(PageContextMixin, View):
+class AokiSetupDemoEnvView(SuperuserRequiredMixin, PageContextMixin, View):
     """POST view that runs the ``aoki_setup_idevid_test_env`` management command."""
 
     http_method_names = ('post',)
@@ -2688,7 +2688,7 @@ class AokiSetupDemoEnvView(PageContextMixin, View):
         return HttpResponseRedirect(cmp_url)
 
 
-class AokiDemoDownloadView(PageContextMixin, View):
+class AokiDemoDownloadView(SuperuserRequiredMixin, PageContextMixin, View):
     """Serve a single file from the AOKI demo certificate directory for download."""
 
     http_method_names = ('get',)
