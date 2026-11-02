@@ -202,6 +202,7 @@ class EstBaseRequestContext(HttpBaseRequestContext):
     est_encoding: str | None = None
     est_username: str | None = None
     est_password: str | None = None
+    est_channel_binding_verified: bool = False
 
     # Client-side fields
     est_server_host: str | None = None

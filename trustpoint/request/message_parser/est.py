@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: MIT
 
 """Provides classes for parsing EST PKI messages."""
+
 import contextlib
 
 from cryptography import x509
 
+from est.channel_binding import verify_est_channel_binding
 from pki.services.csr import decode_base64_csr, load_csr, validate_csr_size
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
@@ -56,8 +58,9 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
             with contextlib.suppress(IndexError, AttributeError):
                 cn_value = csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
                 subject_cn = cn_value if isinstance(cn_value, str) else cn_value.decode('utf-8')
-            self.logger.info('EST PKI message parsing successful: %s format, subject CN: %s',
-                             context.est_encoding, subject_cn)
+            self.logger.info(
+                'EST PKI message parsing successful: %s format, subject CN: %s', context.est_encoding, subject_cn
+            )
         except Exception as exc:
             error_message = 'Failed to parse the CSR.'
             self.logger.exception('EST PKI message parsing failed')
@@ -70,9 +73,7 @@ class EstCsrSignatureVerification(CsrSignatureVerification):
 
     context_type = EstCertificateRequestContext
     protocol = 'EST'
-    missing_csr_message = (
-        'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
-    )
+    missing_csr_message = 'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
     invalid_csr_message = (
         'CSR signature verification only supports EST requests with CertificateSigningRequest objects.'
     )
@@ -90,3 +91,15 @@ class EstMessageParser(CompositeParsing):
         self.add(DomainParsing())
         self.add(CertProfileParsing())
         self.add(EstCsrSignatureVerification())
+        self.add(EstChannelBindingVerification())
+
+
+class EstChannelBindingVerification(ParsingComponent):
+    """Link a signature-verified CSR to the TLS session used to submit it."""
+
+    def parse(self, context: BaseRequestContext) -> None:
+        """Verify a supplied binding even when server policy does not require it."""
+        if not isinstance(context, EstCertificateRequestContext):
+            msg = 'EstChannelBindingVerification requires an EstCertificateRequestContext.'
+            raise TypeError(msg)
+        verify_est_channel_binding(context)

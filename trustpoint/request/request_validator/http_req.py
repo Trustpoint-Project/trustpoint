@@ -9,12 +9,16 @@ import ipaddress
 import itertools
 import urllib.parse
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from cryptography import x509
 from django.conf import settings
 
 from request.request_context import HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest
 
 
 class ValidationComponent(ABC):
@@ -43,6 +47,9 @@ class TrustedProxyHeadersValidation(ValidationComponent, LoggerMixin):
             'HTTP_SSL_CLIENT_CERT',
             'HTTP_X_FORWARDED_FOR',
             'HTTP_X_REAL_IP',
+            'HTTP_X_EST_TLS_UNIQUE',
+            'HTTP_X_EST_TLS_UNIQUE_SUPPORTED',
+            'HTTP_X_EST_TLS_PROTOCOL',
         }
 
     @staticmethod
@@ -69,6 +76,12 @@ class TrustedProxyHeadersValidation(ValidationComponent, LoggerMixin):
         meta = context.raw_message.META
         if not self._has_sensitive_headers(meta):
             return
+
+        self.validate_request_peer(context.raw_message)
+
+    def validate_request_peer(self, request: 'HttpRequest') -> None:
+        """Require an explicitly trusted TCP peer for proxy assertions."""
+        meta = request.META
 
         remote_addr = str(meta.get('REMOTE_ADDR') or '').strip()
         if not remote_addr:
@@ -161,7 +174,7 @@ class AcceptHeaderValidation(ValidationComponent, LoggerMixin):
         if not any(allowed_type in accepted_types for allowed_type in self.allowed_content_types):
             msg = (
                 f"The provided 'Accept' header '{accept_header}' does not match any of the allowed types: "
-                f"{', '.join(self.allowed_content_types)}."
+                f'{", ".join(self.allowed_content_types)}.'
             )
             raise ValueError(msg)
 
@@ -206,9 +219,8 @@ class IntermediateCertificatesValidation(ValidationComponent, LoggerMixin):
 
         intermediate_cas: list[x509.Certificate] = []
         for i in itertools.count():
-            ca = (
-                context.raw_message.META.get(f'HTTP_SSL_CLIENT_CERT_CHAIN_{i}')
-                or context.raw_message.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
+            ca = context.raw_message.META.get(f'HTTP_SSL_CLIENT_CERT_CHAIN_{i}') or context.raw_message.META.get(
+                f'SSL_CLIENT_CERT_CHAIN_{i}'
             )
             if not ca:
                 break

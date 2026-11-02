@@ -22,6 +22,7 @@ RUN apt-get update && \
         sudo \
         apt-utils \
         nginx \
+        nginx-dev \
         gettext \
         locales \
         git \
@@ -35,6 +36,24 @@ RUN apt-get update && \
         ca-certificates \
         gnupg && \
     rm -rf /var/lib/apt/lists/*
+
+# Build against the source headers shipped with the installed Debian nginx.
+# --with-compat preserves the packaged binary's dynamic-module ABI. Keep the
+# load directive outside the site file so wizard site switches retain it.
+COPY docker/trustpoint/nginx/tls-binding/ /tmp/trustpoint-tls-binding/
+RUN cd /usr/share/nginx/src && \
+    ./configure --with-compat --with-http_ssl_module \
+        --add-dynamic-module=/tmp/trustpoint-tls-binding && \
+    make -f objs/Makefile modules && \
+    install -d -m 755 /usr/lib/nginx/modules /etc/nginx/modules-enabled && \
+    install -m 644 objs/ngx_http_trustpoint_tls_binding_module.so /usr/lib/nginx/modules/ && \
+    printf '%s\n' 'load_module /usr/lib/nginx/modules/ngx_http_trustpoint_tls_binding_module.so;' \
+        > /etc/nginx/modules-enabled/50-trustpoint-tls-binding.conf && \
+    printf '%s\n' 'include /etc/nginx/modules-enabled/*.conf;' \
+        'error_log stderr;' 'events {}' 'http {}' \
+        > /tmp/trustpoint-nginx-module-check.conf && \
+    nginx -t -c /tmp/trustpoint-nginx-module-check.conf && \
+    rm -rf /tmp/trustpoint-tls-binding /tmp/trustpoint-nginx-module-check.conf
 
 # Create stable PKCS#11 module paths so provider-profile bootstrap and
 # local/dev configuration can rely on predictable values.
