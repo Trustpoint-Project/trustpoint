@@ -164,9 +164,7 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
         cert_hash_hex: str = context.cert_hash.hex().upper()
         transaction = context.cmp_transaction
         if transaction is None or transaction.final_certificate is None:
-            self._raise_authorization_error(
-                'certConf rejection is not bound to an issued CMP transaction.', context
-            )
+            self._raise_authorization_error('certConf rejection is not bound to an issued CMP transaction.', context)
         cert_model = (
             IssuedCredentialModel.objects.filter(credential__certificate=transaction.final_certificate)
             .select_related('domain', 'device', 'credential__certificate')

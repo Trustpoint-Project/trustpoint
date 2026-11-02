@@ -298,9 +298,13 @@ def test_est_ra_preserves_response_intermediate_and_saves_verified_path(trusted)
     inter_key, _ = _make_ca('Intermediate')
     now = datetime.now(UTC)
     intermediate = (
-        x509.CertificateBuilder().subject_name(_name('Intermediate')).issuer_name(env.ca_cert.subject)
-        .public_key(inter_key.public_key()).serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(days=1)).not_valid_after(now + timedelta(days=5))
+        x509.CertificateBuilder()
+        .subject_name(_name('Intermediate'))
+        .issuer_name(env.ca_cert.subject)
+        .public_key(inter_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=5))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
         .add_extension(_ca_key_usage(), critical=True)
         .sign(env.ca_key, hashes.SHA256())
@@ -314,22 +318,28 @@ def test_est_ra_preserves_response_intermediate_and_saves_verified_path(trusted)
         anchor.public_bytes(serialization.Encoding.PEM)
     )
     env.context.cert_requested = (
-        x509.CertificateSigningRequestBuilder().subject_name(_name('validated-device'))
+        x509.CertificateSigningRequestBuilder()
+        .subject_name(_name('validated-device'))
         .sign(env.device_key, hashes.SHA256())
     )
     response = Mock(
         status_code=200,
         headers={'Content-Type': 'application/pkcs7-mime'},
-        content=base64.b64encode(pkcs7.serialize_certificates(
-            [env.ca_cert, leaf, intermediate], serialization.Encoding.DER,
-        )),
+        content=base64.b64encode(
+            pkcs7.serialize_certificates(
+                [env.ca_cert, leaf, intermediate],
+                serialization.Encoding.DER,
+            )
+        ),
     )
     with (
         patch('request.clients.est_client.requests.post', return_value=response),
         patch(f'{PATCH_BASE}.CredentialSaver') as saver,
         patch(f'{PATCH_BASE}.AuditLog.create_entry'),
         patch.object(RemoteCaCertificateIssueProcessor, '_get_keyless_issuer_credential', return_value=Mock()),
-        patch.object(RemoteCaCertificateIssueProcessor, '_get_credential_type_for_template', return_value=(None, 'Profile')),
+        patch.object(
+            RemoteCaCertificateIssueProcessor, '_get_credential_type_for_template', return_value=(None, 'Profile')
+        ),
     ):
         processor = RemoteCaCertificateIssueProcessor(ca_type='est')
         if not trusted:
