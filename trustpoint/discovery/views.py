@@ -24,6 +24,7 @@ from .scanner import OTScanner
 
 class ScanManager:
     """Thread-safe state manager for the network scanner."""
+
     _lock = threading.Lock()
 
     is_running = False

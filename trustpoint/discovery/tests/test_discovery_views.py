@@ -157,7 +157,9 @@ class TestRunScanInBackground:
         ScanManager.scanner_instance = scanner
 
         with (
-            patch('discovery.views.CertificateModel.save_certificate', return_value=sentinel.saved_certificate) as mock_save_certificate,
+            patch(
+                'discovery.views.CertificateModel.save_certificate', return_value=sentinel.saved_certificate
+            ) as mock_save_certificate,
             patch('discovery.views.DiscoveredDevice.objects.update_or_create') as mock_update_or_create,
         ):
             ScanManager.run_scan_in_background('192.168.1.1', '192.168.1.100')
