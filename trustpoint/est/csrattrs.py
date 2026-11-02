@@ -3,7 +3,7 @@
 
 """Encode profile-based EST CSR attributes (RFC 7030, RFC 8951, RFC 9908)."""
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from cryptography import x509
 from pyasn1.codec.der import encoder  # type: ignore[import-untyped]
@@ -18,7 +18,7 @@ from pki.util.cert_req_converter import JSONCertRequestConverter
 EXTENSION_REQUEST_OID = '1.2.840.113549.1.9.14'
 
 
-class AttrOrOID(univ.Choice):
+class AttrOrOID(univ.Choice):  # type: ignore[misc]  # pyasn1 does not provide type information.
     """An attribute identifier or an attribute with supplied values."""
 
     componentType: ClassVar = namedtype.NamedTypes(  # noqa: N815 - pyasn1 schema API.
@@ -27,7 +27,7 @@ class AttrOrOID(univ.Choice):
     )
 
 
-class CsrAttrs(univ.SequenceOf):
+class CsrAttrs(univ.SequenceOf):  # type: ignore[misc]  # pyasn1 does not provide type information.
     """The DER sequence carried by application/csrattrs."""
 
     componentType: ClassVar = AttrOrOID()  # noqa: N815 - pyasn1 schema API.
@@ -57,7 +57,7 @@ def build_csrattrs(profile: dict[str, Any] | None = None, *, require_channel_bin
         item['oid'] = univ.ObjectIdentifier(CHALLENGE_PASSWORD_OID)
         attributes.append(item)
     if profile is None:
-        return encoder.encode(attributes)
+        return cast('bytes', encoder.encode(attributes))
 
     verifier = JSONProfileVerifier(profile)
     subject_oids = {
@@ -92,4 +92,4 @@ def build_csrattrs(profile: dict[str, Any] | None = None, *, require_channel_bin
         item = AttrOrOID()
         item['oid'] = univ.ObjectIdentifier(EXTENSION_REQUEST_OID)
         attributes.append(item)
-    return encoder.encode(attributes)
+    return cast('bytes', encoder.encode(attributes))

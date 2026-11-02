@@ -6,6 +6,8 @@
 import base64
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
+from cryptography import x509
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 from django.utils.decorators import method_decorator
@@ -25,7 +27,7 @@ from trustpoint.logger import LoggerMixin
 from workflows2.events.request_events import Events
 
 if TYPE_CHECKING:
-    from pki.models.credential import CredentialModel
+    from pki.models.ca import CaModel
 
 
 class UsernamePasswordAuthenticationError(Exception):
@@ -133,23 +135,44 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
     """View to handle the EST /cacerts endpoint."""
 
     @staticmethod
+    def _get_ca_chain(ca: 'CaModel') -> CertificateCollectionSerializer:
+        """Read local credentials or the public upstream chain of a keyless RA."""
+        if ca.credential is not None:
+            return ca.credential.get_credential_serializer().get_full_chain_as_serializer()
+        certificate = ca.get_certificate()
+        if certificate is None:
+            msg = 'The configured CA has no certificate available.'
+            raise ValueError(msg)
+        certificates = [certificate]
+        candidates = (
+            ca.chain_truststore.get_certificate_collection_serializer().as_crypto() if ca.chain_truststore else []
+        )
+        # An RA truststore can also contain upstream TLS authentication material.
+        # Only include certificates that actually issue the advertised CA chain.
+        for current in certificates:
+            for candidate in candidates:
+                if candidate in certificates:
+                    continue
+                try:
+                    if not candidate.extensions.get_extension_for_class(x509.BasicConstraints).value.ca:
+                        continue
+                    current.verify_directly_issued_by(candidate)
+                except (InvalidSignature, ValueError, UnsupportedAlgorithm, x509.ExtensionNotFound):
+                    continue
+                certificates.append(candidate)
+        return CertificateCollectionSerializer(certificates)
+
+    @staticmethod
     def _get_domain_ca_chain(domain: DomainModel) -> CertificateCollectionSerializer:
         """Include the current CA chain and any prepared rollover chain."""
         if domain.issuing_ca is None:
             msg = 'The requested domain has no issuing CA configured'
             raise ValueError(msg)
-        credential = cast('CredentialModel', domain.issuing_ca.credential).get_credential_serializer()
-        chain = credential.get_full_chain_as_serializer()
+        chain = EstCACertsView._get_ca_chain(domain.issuing_ca)
         rollover = CaRolloverService.get_active_rollover(domain.issuing_ca)
-        if (
-            rollover
-            and rollover.state == CaRolloverState.PREPARATION
-            and rollover.new_issuing_ca
-            and rollover.new_issuing_ca.credential
-        ):
-            new_credential = rollover.new_issuing_ca.credential.get_credential_serializer()
+        if rollover and rollover.state == CaRolloverState.PREPARATION and rollover.new_issuing_ca:
             chain = CertificateCollectionSerializer(
-                chain.as_crypto() + new_credential.get_full_chain_as_serializer().as_crypto()
+                chain.as_crypto() + EstCACertsView._get_ca_chain(rollover.new_issuing_ca).as_crypto()
             )
         return chain
 
