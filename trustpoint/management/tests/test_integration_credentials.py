@@ -15,6 +15,7 @@ from django.urls import reverse
 
 from appsecrets.service import CIPHERTEXT_PREFIX, clear_app_secret_cache
 from management.forms import BackupOptionsForm, SmtpEmailConfigForm
+from management.tests.ssh_helpers import SFTP_HOST_KEY
 from management.models import BackupOptions, SmtpEmailConfig
 from management.serializer.backup import BackupSerializer
 
@@ -32,6 +33,7 @@ def backup_data(**overrides):
     return {
         'enable_sftp_storage': True,
         'host': 'backup.example.com',
+        'host_key': SFTP_HOST_KEY,
         'port': 22,
         'user': 'backup',
         'auth_method': BackupOptions.AuthMethod.PASSWORD,
@@ -44,6 +46,7 @@ def smtp_data(**overrides):
     return {
         'enabled': True,
         'host': 'smtp.example.com',
+        'host_key': SFTP_HOST_KEY,
         'port': 587,
         'use_tls': True,
         'username': 'mailer',
@@ -257,7 +260,7 @@ def test_backup_get_requires_permission_and_never_discloses_secrets(client):
     assert response.status_code == 200
     for secret in ('saved-backup-secret', 'saved-ssh-key', 'saved-key-passphrase'):
         assert secret.encode() not in response.content
-    assert set(BackupSerializer(backup).data) == {'id', 'remote_directory'}
+    assert set(BackupSerializer(backup).data) == {'id', 'remote_directory', 'host_key'}
 
 
 def test_smtp_settings_page_does_not_render_saved_password(client):

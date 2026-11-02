@@ -13,6 +13,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from util.encrypted_fields import EncryptedTextField
+from util.ssh import validate_ssh_host_key
 
 
 class BackupOptions(models.Model):
@@ -30,6 +31,13 @@ class BackupOptions(models.Model):
     enable_sftp_storage = models.BooleanField(default=False, verbose_name=_('Use SFTP storage'))
 
     host = models.CharField(max_length=255, verbose_name=_('Host'), blank=True)
+    host_key = models.TextField(
+        blank=True,
+        default='',
+        validators=[validate_ssh_host_key],
+        verbose_name=_('Server host public key'),
+        help_text=_('Verified OpenSSH server public key (key type and Base64 data, with an optional comment).'),
+    )
     port = models.PositiveIntegerField(default=2222, verbose_name=_('Port'), blank=True)
     user = models.CharField(max_length=128, verbose_name=_('Username'), blank=True)
 

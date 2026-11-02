@@ -42,12 +42,33 @@ Enable **Use SFTP storage** and configure:
 | Setting | Description |
 |---|---|
 | Host | SFTP server hostname or IP address. |
+| Server host public key | Independently verified server public key in OpenSSH format. |
 | Port | SFTP port, usually `22` or `2222`. |
 | Username | SFTP user name. |
 | Authentication Method | Authentication method used for the SFTP connection. |
 | Password | Password for password-based authentication. |
 | SSH Private Key / Key Passphrase | PEM private key and optional passphrase for SSH-key authentication. |
 | Remote Directory | Directory on the SFTP server, for example `/upload/trustpoint/`. |
+
+### Trust the SFTP server
+
+Enter the server's verified public host key in **Server host public key**. Obtain
+it from the server administrator and verify its fingerprint through a trusted
+channel. Use OpenSSH public-key format (key type, Base64 data, and an optional
+comment), without a hostname prefix. For example, replace the placeholder:
+
+```text
+ssh-ed25519 <base64-encoded-public-host-key> backup-server
+```
+
+The public key is stored with the connection settings in `BackupOptions`. It is
+not a secret and is stored unencrypted. Trustpoint pins the connection to this
+key and rejects missing or changed keys before sending authentication
+credentials. Keys are never learned automatically from a connection.
+
+**Test Connection** uses the entered host key without saving it. Existing
+installations must enter a verified key before their next SFTP connection. When
+rotating a server key, verify the replacement independently before saving it.
 
 Use **Save Settings** to store the SFTP configuration. Use **Reset Settings** to
 remove the saved configuration.

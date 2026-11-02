@@ -651,6 +651,7 @@ class BackupOptionsForm(ReplacementSecretModelForm[BackupOptions]):
         fields: ClassVar[list[str]] = [
             'enable_sftp_storage',
             'host',
+            'host_key',
             'port',
             'user',
             'auth_method',
@@ -662,6 +663,7 @@ class BackupOptionsForm(ReplacementSecretModelForm[BackupOptions]):
         widgets: ClassVar[dict[str, Any]] = {
             'enable_sftp_storage': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
             'host': forms.TextInput(attrs={'class': 'form-control'}),
+            'host_key': forms.Textarea(attrs={'class': 'form-control font-monospace', 'rows': 3}),
             'port': forms.NumberInput(attrs={'class': 'form-control'}),
             'user': forms.TextInput(attrs={'class': 'form-control'}),
             'auth_method': forms.Select(attrs={'class': 'form-select'}),
@@ -701,6 +703,8 @@ class BackupOptionsForm(ReplacementSecretModelForm[BackupOptions]):
 
         if not host:
             missing_fields.append('Host')
+        if not cleaned.get('host_key', '').strip():
+            self.add_error('host_key', _('A verified server host public key is required for SFTP.'))
         if not user:
             missing_fields.append('Username')
         if not remote_directory:

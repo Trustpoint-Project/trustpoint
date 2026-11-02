@@ -2,9 +2,12 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for the BackupOptionsForm."""
+
 from django.test import TestCase
 from management.forms import BackupOptionsForm
+from management.tests.ssh_helpers import SFTP_HOST_KEY
 from management.models import BackupOptions
+
 
 class BackupOptionsFormTest(TestCase):
     """Test suite for the BackupOptionsForm."""
@@ -14,6 +17,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': 'localhost',
+            'host_key': SFTP_HOST_KEY,
             'port': 22,
             'user': 'user',
             'auth_method': BackupOptions.AuthMethod.PASSWORD,
@@ -28,6 +32,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': 'localhost',
+            'host_key': SFTP_HOST_KEY,
             'port': 22,
             'user': 'user',
             'auth_method': BackupOptions.AuthMethod.SSH_KEY,
@@ -42,6 +47,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': '',
+            'host_key': SFTP_HOST_KEY,
             'port': 22,
             'user': '',
             'auth_method': BackupOptions.AuthMethod.PASSWORD,
@@ -57,6 +63,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': 'localhost',
+            'host_key': SFTP_HOST_KEY,
             'port': 22,
             'user': 'user',
             'auth_method': BackupOptions.AuthMethod.PASSWORD,
@@ -73,6 +80,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': 'localhost',
+            'host_key': SFTP_HOST_KEY,
             'port': 22,
             'user': 'user',
             'auth_method': BackupOptions.AuthMethod.SSH_KEY,

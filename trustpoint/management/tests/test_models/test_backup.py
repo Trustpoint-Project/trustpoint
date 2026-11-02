@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for the BackupOptions model."""
+
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from management.forms import BackupOptionsForm
+from management.tests.ssh_helpers import SFTP_HOST_KEY
 from management.models import BackupOptions
 
 
@@ -14,32 +16,18 @@ class BackupOptionsModelTest(TestCase):
 
     def test_singleton_creation(self) -> None:
         """Test that attempts to create more than one BackupOptions instance."""
-        BackupOptions.objects.create(
-            host='localhost',
-            port=22,
-            user='user',
-            enable_sftp_storage=True
-        )
+        BackupOptions.objects.create(host='localhost', port=22, user='user', enable_sftp_storage=True)
         with self.assertRaises(ValidationError):
-            BackupOptions.objects.create(
-                host='remote',
-                port=22,
-                user='another_user',
-                enable_sftp_storage=False
-            )
+            BackupOptions.objects.create(host='remote', port=22, user='another_user', enable_sftp_storage=False)
 
     def test_singleton_save_overwrite(self) -> None:
         """Test that saving an existing BackupOptions instance overwrites its values."""
-        instance = BackupOptions.objects.create(
-            host='localhost',
-            port=22,
-            user='user',
-            enable_sftp_storage=True
-        )
+        instance = BackupOptions.objects.create(host='localhost', port=22, user='user', enable_sftp_storage=True)
         instance.host = 'updated_host'
         instance.save()
         self.assertEqual(BackupOptions.objects.count(), 1)
         self.assertEqual(BackupOptions.objects.first().host, 'updated_host')
+
 
 class BackupOptionsFormTest(TestCase):
     """Test suite for the BackupOptionsForm, ensuring validation logic."""
@@ -50,6 +38,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': '',
+            'host_key': SFTP_HOST_KEY,
             'port': 2222,
             'user': '',
             'auth_method': '',
@@ -68,6 +57,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': 'localhost',
+            'host_key': SFTP_HOST_KEY,
             'port': 22,
             'user': 'user',
             'auth_method': BackupOptions.AuthMethod.PASSWORD,
@@ -83,6 +73,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': 'localhost',
+            'host_key': SFTP_HOST_KEY,
             'port': 22,
             'user': 'user',
             'auth_method': BackupOptions.AuthMethod.SSH_KEY,
@@ -98,6 +89,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': 'localhost',
+            'host_key': SFTP_HOST_KEY,
             'port': 22,
             'user': 'user',
             'auth_method': BackupOptions.AuthMethod.PASSWORD,
@@ -113,6 +105,7 @@ class BackupOptionsFormTest(TestCase):
         form_data = {
             'enable_sftp_storage': True,
             'host': 'localhost',
+            'host_key': SFTP_HOST_KEY,
             'port': 22,
             'user': 'user',
             'auth_method': BackupOptions.AuthMethod.SSH_KEY,
@@ -122,5 +115,3 @@ class BackupOptionsFormTest(TestCase):
         form = BackupOptionsForm(data=form_data)
 
         assert form.is_valid()
-
-

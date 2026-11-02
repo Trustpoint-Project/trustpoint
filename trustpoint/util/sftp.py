@@ -5,13 +5,17 @@
 """Wrapper around Paramiko SFTP functionality and related exceptions."""
 
 import io
-import socket
+from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 import paramiko
+from django.core.exceptions import ValidationError
 
 from management.models import BackupOptions
+from util.ssh import parse_ssh_host_key
+
+SSH_DEFAULT_PORT = 22
 
 
 class SftpError(Exception):
@@ -23,7 +27,7 @@ class SftpClient:
 
     If instantiated without overrides, reads settings from BackupOptions(pk=1).
     Optionally, an overrides dict can supply:
-      host, port, user, auth_method, password, private_key, key_passphrase,
+      host, host_key, port, user, auth_method, password, private_key, key_passphrase,
       local_storage, remote_directory.
     """
 
@@ -46,6 +50,7 @@ class SftpClient:
             return default
 
         self.host: str = _get('host', '') or ''
+        self.host_key: str = _get('host_key', '') or ''
         self.port: int = _get('port', default=2222) or 2222
         self.username: str = _get('user', '') or ''
         self.auth_method: str = _get('auth_method', '') or ''
@@ -60,16 +65,10 @@ class SftpClient:
             if self.auth_method not in valid_methods:
                 msg = f'Invalid auth_method: {self.auth_method}'
                 raise SftpError(msg)
-            if (
-                self.auth_method == BackupOptions.AuthMethod.PASSWORD
-                and not self.password
-            ):
+            if self.auth_method == BackupOptions.AuthMethod.PASSWORD and not self.password:
                 msg = 'Password is required for password authentication.'
                 raise SftpError(msg)
-            if (
-                self.auth_method == BackupOptions.AuthMethod.SSH_KEY
-                and not (self.private_key_text or '').strip()
-            ):
+            if self.auth_method == BackupOptions.AuthMethod.SSH_KEY and not (self.private_key_text or '').strip():
                 msg = 'Private key is required for SSH-key authentication.'
                 raise SftpError(msg)
 
@@ -88,18 +87,16 @@ class SftpClient:
 
         try:
             key_stream = io.StringIO(self.private_key_text)
-            return paramiko.RSAKey.from_private_key(
-                key_stream, password=self.passphrase or None
-            )
+            return paramiko.RSAKey.from_private_key(key_stream, password=self.passphrase or None)
         except paramiko.SSHException as e:
             msg = f'Failed to load private key: {e}'
             raise SftpError(msg) from e
 
-    def _connect_sftp(self) -> tuple[paramiko.Transport, paramiko.SFTPClient]:
-        """Establish an SFTP connection and return the Transport and SFTPClient.
+    def _connect_sftp(self) -> tuple[paramiko.SSHClient, paramiko.SFTPClient]:
+        """Verify the pinned server key, then authenticate and open SFTP.
 
         Returns:
-            A tuple of (Transport, SFTPClient).
+            A tuple of (SSHClient, SFTPClient), both owned by the caller.
 
         Raises:
             SftpError: If no auth_method is set or authentication/SSH errors occur.
@@ -108,28 +105,45 @@ class SftpClient:
             msg = 'No SFTP configured; cannot connect.'
             raise SftpError(msg)
 
+        if not self.host_key.strip():
+            msg = 'A trusted SFTP server host public key is required.'
+            raise SftpError(msg)
         try:
-            transport = paramiko.Transport((self.host, self.port))
-            if self.auth_method == BackupOptions.AuthMethod.PASSWORD:
-                transport.connect(username=self.username, password=self.password)
-            else:
-                pkey = self._load_private_key()
-                transport.connect(username=self.username, pkey=pkey)
+            server_key = parse_ssh_host_key(self.host_key)
+        except ValidationError as exc:
+            msg = 'Invalid SFTP server host public key.'
+            raise SftpError(msg) from exc
 
-            sftp = paramiko.SFTPClient.from_transport(transport)
-            if sftp is None:
-                transport.close()
-                msg = 'Authentication failed.'
-                raise SftpError(msg)
-            return transport, sftp  # noqa: TRY300
+        pkey = self._load_private_key() if self.auth_method == BackupOptions.AuthMethod.SSH_KEY else None
+        try:
+            with ExitStack() as stack:
+                ssh = stack.enter_context(paramiko.SSHClient())
+                host_name = self.host if self.port == SSH_DEFAULT_PORT else f'[{self.host}]:{self.port}'
+                ssh.get_host_keys().add(host_name, server_key.get_name(), server_key)
+                ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+                ssh.connect(
+                    hostname=self.host,
+                    port=self.port,
+                    username=self.username,
+                    password=self.password if self.auth_method == BackupOptions.AuthMethod.PASSWORD else None,
+                    pkey=pkey,
+                    allow_agent=False,
+                    look_for_keys=False,
+                )
+                sftp = ssh.open_sftp()
+                if sftp is None:
+                    msg = 'Authentication failed.'
+                    raise SftpError(msg)
+                stack.pop_all()  # The caller closes the connected SSH client.
+                return ssh, sftp
 
         except paramiko.AuthenticationException as e:
             msg = 'Authentication failed.'
             raise SftpError(msg) from e
-        except paramiko.SSHException as e:
+        except (paramiko.SSHException, paramiko.hostkeys.InvalidHostKey, UnicodeError) as e:
             msg = f'SSH error: {e}'
             raise SftpError(msg) from e
-        except (socket.gaierror, OSError) as e:
+        except OSError as e:
             msg = f'Could not connect to {self.host}:{self.port} - {e}'
             raise SftpError(msg) from e
 
@@ -139,13 +153,13 @@ class SftpClient:
         Raises:
             SftpError: If no auth_method, authentication fails, or any SSH error.
         """
-        transport: paramiko.Transport | None = None
+        ssh: paramiko.SSHClient | None = None
         try:
-            transport, sftp = self._connect_sftp()
+            ssh, sftp = self._connect_sftp()
             sftp.close()
         finally:
-            if transport and transport.is_active():
-                transport.close()
+            if ssh is not None:
+                ssh.close()
 
     def upload_file(self, local_filepath: Path, remote_path: str) -> None:  # noqa: C901
         """Upload a single local file to the remote_path via SFTP.
@@ -165,9 +179,9 @@ class SftpClient:
             msg = f'Local file does not exist: {local_filepath}'
             raise SftpError(msg)
 
-        transport: paramiko.Transport | None = None
+        ssh: paramiko.SSHClient | None = None
         try:
-            transport, sftp = self._connect_sftp()
+            ssh, sftp = self._connect_sftp()
 
             # Ensure remote directory exists (mkdir -p behavior)
             remote_dir = PurePosixPath(remote_path).parent
@@ -198,5 +212,5 @@ class SftpClient:
             msg = f'Upload failed: {e}'
             raise SftpError(msg) from e
         finally:
-            if transport and transport.is_active():
-                transport.close()
+            if ssh is not None:
+                ssh.close()

@@ -212,6 +212,7 @@ class BackupManageView(UserPermissionRequiredMixin, SortableTableFromListMixin, 
 
         overrides = {
             'host': opts.host,
+            'host_key': opts.host_key,
             'port': opts.port,
             'user': opts.user,
             'auth_method': opts.auth_method,
@@ -256,6 +257,7 @@ class BackupManageView(UserPermissionRequiredMixin, SortableTableFromListMixin, 
             cd = form.cleaned_data
             overrides = {
                 'host': cd['host'],
+                'host_key': cd.get('host_key', ''),
                 'port': cd['port'],
                 'user': cd['user'],
                 'auth_method': cd['auth_method'],
