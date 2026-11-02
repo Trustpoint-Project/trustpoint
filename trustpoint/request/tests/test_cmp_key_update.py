@@ -54,10 +54,13 @@ def _sign(message, certificate, private_key):
 def _kur(certificate, old_key, *, implicit=True, subject=None, bad_pop=False, old_id=None, extensions=None):
     new_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     context = CmpCertificateRequestContext(
-        protocol='cmp', operation='keyupdate',
+        protocol='cmp',
+        operation='keyupdate',
         request_data={
             'subject': subject if subject is not None else certificate.subject,
-            'public_key': new_key.public_key(), 'private_key': new_key, 'extensions': extensions,
+            'public_key': new_key.public_key(),
+            'private_key': new_key,
+            'extensions': extensions,
             'recipient_name': certificate.issuer.rfc4514_string(),
         },
     )
@@ -83,10 +86,7 @@ def _kur(certificate, old_key, *, implicit=True, subject=None, bad_pop=False, ol
 
 def _post(message, issued, *, operation='keyupdate', path=None):
     if path is None:
-        path = (
-            f'/.well-known/cmp/p/{issued.domain.unique_name}~'
-            f'{issued.issued_using_cert_profile}/{operation}'
-        )
+        path = f'/.well-known/cmp/p/{issued.domain.unique_name}~{issued.issued_using_cert_profile}/{operation}'
     request = RequestFactory().post(path, encoder.encode(message), content_type='application/pkixcmp')
     match = resolve(path)
     response = match.func(request, *match.args, **match.kwargs)
@@ -101,7 +101,10 @@ def _assert_signature(message, certificate):
     protected['header'] = message['header']
     protected['infoValue'] = message['body']
     certificate.public_key().verify(
-        message['protection'].asOctets(), encoder.encode(protected), padding.PKCS1v15(), hashes.SHA256(),
+        message['protection'].asOctets(),
+        encoder.encode(protected),
+        padding.PKCS1v15(),
+        hashes.SHA256(),
     )
 
 
@@ -115,9 +118,11 @@ def test_key_update_issues_kup_and_confirms(update_material, implicit, old_id):
     assert int(response['body']['kup']['response'][0]['status']['status']) == 0
     assert not response['body']['kup']['caPubs'].hasValue()
     cert_value = response['body']['kup']['response'][0]['certifiedKeyPair']['certOrEncCert']['certificate']
-    new_cert = x509.load_der_x509_certificate(encoder.encode(
-        cert_value.clone(tagSet=rfc4210.CMPCertificate().tagSet, cloneValueFlag=True),
-    ))
+    new_cert = x509.load_der_x509_certificate(
+        encoder.encode(
+            cert_value.clone(tagSet=rfc4210.CMPCertificate().tagSet, cloneValueFlag=True),
+        )
+    )
     assert new_cert.subject == certificate.subject
     assert new_cert.public_key().public_numbers() == new_key.public_key().public_numbers()
     assert new_cert.serial_number != certificate.serial_number
@@ -148,22 +153,28 @@ def test_key_update_issues_kup_and_confirms(update_material, implicit, old_id):
 def test_key_update_rejects_invalid_request_without_issuance(update_material, failure):
     issued, certificate, key = update_material
     subject = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'different')]) if failure == 'subject' else None
-    message, _ = _kur(certificate, key, subject=subject, bad_pop=failure == 'pop', old_id=1 if failure == 'old_id' else None)
+    message, _ = _kur(
+        certificate, key, subject=subject, bad_pop=failure == 'pop', old_id=1 if failure == 'old_id' else None
+    )
     if failure == 'signature':
         message['protection'] = message['protection'].clone(value=univ.BitString.fromOctetString(b'invalid'))
     with patch('request.operation_processor.cmp_certificate_request.CertificateIssueProcessor') as issuer:
         response = _post(message, issued)
     issuer.assert_not_called()
     assert response['body'].getName() == ('error' if failure == 'signature' else 'kup')
-    assert not CmpTransactionModel.objects.filter(transaction_id=message['header']['transactionID'].asOctets().hex()).exists()
+    assert not CmpTransactionModel.objects.filter(
+        transaction_id=message['header']['transactionID'].asOctets().hex()
+    ).exists()
 
 
 def test_key_update_parser_infers_operation_and_verifies_pop(update_material):
     issued, certificate, key = update_material
     message, _ = _kur(certificate, key)
     context = CmpCertificateRequestContext(
-        protocol='cmp', raw_message=Mock(body=encoder.encode(message)),
-        domain_str=issued.domain.unique_name, cert_profile_str='domain_credential',
+        protocol='cmp',
+        raw_message=Mock(body=encoder.encode(message)),
+        domain_str=issued.domain.unique_name,
+        cert_profile_str='domain_credential',
     )
     context = CmpMessageParser().parse(context)
     assert context.operation == 'keyupdate'
@@ -188,8 +199,11 @@ def test_key_update_delayed_delivery_returns_kup(update_material, implicit):
     def wait(context, process):
         context.workflow2_outcome = Mock(run=Mock(id=uuid.uuid4(), status='awaiting'))
         from request.workflow2_issuance import Workflow2IssuanceDecision
-        with patch('request.operation_processor.cmp_certificate_request.get_workflow2_issuance_decision',
-                   return_value=Workflow2IssuanceDecision.WAIT):
+
+        with patch(
+            'request.operation_processor.cmp_certificate_request.get_workflow2_issuance_decision',
+            return_value=Workflow2IssuanceDecision.WAIT,
+        ):
             process(context)
 
     with patch('cmp.views.process_workflow_operation', side_effect=wait):
@@ -225,22 +239,32 @@ def test_key_update_rejects_inactive_signers_and_identity_changes(update_materia
     issued, certificate, key = update_material
     extensions = None
     if invalid == 'san':
-        extensions = [x509.Extension(x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME, False,
-                                     x509.SubjectAlternativeName([x509.DNSName('new.example')]))]
+        extensions = [
+            x509.Extension(
+                x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
+                False,
+                x509.SubjectAlternativeName([x509.DNSName('new.example')]),
+            )
+        ]
     message, _ = _kur(certificate, key, extensions=extensions)
     context = CmpCertificateRequestContext(
-        protocol='cmp', raw_message=Mock(body=encoder.encode(message)),
-        domain_str=issued.domain.unique_name, cert_profile_str='domain_credential',
+        protocol='cmp',
+        raw_message=Mock(body=encoder.encode(message)),
+        domain_str=issued.domain.unique_name,
+        cert_profile_str='domain_credential',
     )
     context = CmpMessageParser().parse(context)
     if invalid in ('revoked', 'expired'):
-        with patch('pki.models.credential.CredentialModel.is_valid_issued_credential',
-                   return_value=(False, invalid)), pytest.raises(ValueError, match=invalid):
+        with (
+            patch('pki.models.credential.CredentialModel.is_valid_issued_credential', return_value=(False, invalid)),
+            pytest.raises(ValueError, match=invalid),
+        ):
             authenticate_cmp_request(context)
     elif invalid == 'pbm':
         context.parsed_message['header']['protectionAlg']['algorithm'] = '1.2.840.113533.7.66.13'
         # Exercise the operation-specific check independently of PBM parameter parsing.
         from request.security_hardening import _authenticate_key_update_signer
+
         with pytest.raises(ValueError, match='signature-based'):
             _authenticate_key_update_signer(context)
     elif invalid == 'profile':
@@ -249,6 +273,7 @@ def test_key_update_rejects_inactive_signers_and_identity_changes(update_materia
             x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'changed-by-profile')]),
         )
         from request.cmp_key_update import validate_key_update_identity
+
         with pytest.raises(ValueError, match='subject'):
             validate_key_update_identity(context, profile_validated=True)
     else:
@@ -258,17 +283,22 @@ def test_key_update_rejects_inactive_signers_and_identity_changes(update_materia
 
 def test_application_certificate_can_update_itself(cmp_device_without_onboarding, rsa_private_key):
     from pki.tests.credential_helpers import issue_test_credential
+
     SecurityConfig.objects.get_or_create()
     device = cmp_device_without_onboarding['device']
     device.serial_number = 'SN-CMP-NO'
     device.save(update_fields=['serial_number'])
     issued = issue_test_credential(
-        device, 'tls_server', common_name='server.example',
+        device,
+        'tls_server',
+        common_name='server.example',
         public_key=rsa_private_key.public_key(),
         extensions=[(x509.SubjectAlternativeName([x509.DNSName('server.example')]), False)],
         profile_data={
-            'type': 'cert_profile', 'subj': {'allow': '*'},
-            'ext': {'san': {'dns_names': ['server.example']}}, 'validity': {'days': 10},
+            'type': 'cert_profile',
+            'subj': {'allow': '*'},
+            'ext': {'san': {'dns_names': ['server.example']}},
+            'validity': {'days': 10},
         },
     )
     certificate = issued.credential.get_certificate()
@@ -279,6 +309,7 @@ def test_application_certificate_can_update_itself(cmp_device_without_onboarding
     assert int(response['body']['kup']['response'][0]['status']['status']) == 0
     # Certificate extraction also understands KUP's body tag.
     from request.clients.cmp_client import CmpClient
+
     client = CmpClient(CmpCertificateRequestContext(cmp_server_host='unused.example'))
     replacement, _ = client._extract_issued_certificate(response, encoder.encode(response))
     assert replacement.subject == certificate.subject
@@ -289,25 +320,33 @@ def test_key_update_cannot_cross_domains(update_material, domain_instance):
     issued, certificate, key = update_material
     message, _ = _kur(certificate, key)
     context = CmpCertificateRequestContext(
-        protocol='cmp', raw_message=Mock(body=encoder.encode(message)),
-        domain_str=issued.domain.unique_name, cert_profile_str='domain_credential',
+        protocol='cmp',
+        raw_message=Mock(body=encoder.encode(message)),
+        domain_str=issued.domain.unique_name,
+        cert_profile_str='domain_credential',
     )
     context = CmpMessageParser().parse(context)
     # An unrelated domain cannot become the target of an update signed by this credential.
     from pki.models.domain import DomainModel
-    context.domain = DomainModel.objects.create(unique_name='unrelated-update-domain', issuing_ca=issued.domain.issuing_ca)
+
+    context.domain = DomainModel.objects.create(
+        unique_name='unrelated-update-domain', issuing_ca=issued.domain.issuing_ca
+    )
     with pytest.raises(ValueError, match='different domain'):
         authenticate_cmp_request(context)
 
 
-@pytest.mark.parametrize('layout', [
-    '/.well-known/cmp/p/{domain}/{profile}/keyupdate',
-    '/.well-known/cmp/p/{domain}/{profile}/keyupdate/',
-    '/.well-known/cmp/p/{domain}~{profile}/keyupdate',
-    '/.well-known/cmp/p/{domain}/keyupdate',
-    '/.well-known/cmp/p/~{profile}/keyupdate',
-    '/.well-known/cmp/p/{domain}/{profile}',
-])
+@pytest.mark.parametrize(
+    'layout',
+    [
+        '/.well-known/cmp/p/{domain}/{profile}/keyupdate',
+        '/.well-known/cmp/p/{domain}/{profile}/keyupdate/',
+        '/.well-known/cmp/p/{domain}~{profile}/keyupdate',
+        '/.well-known/cmp/p/{domain}/keyupdate',
+        '/.well-known/cmp/p/~{profile}/keyupdate',
+        '/.well-known/cmp/p/{domain}/{profile}',
+    ],
+)
 def test_key_update_http_paths(update_material, layout):
     """Resolve actual URLs, including the RFC 9483 HTTP keyupdate operation label."""
     issued, certificate, key = update_material
@@ -316,4 +355,3 @@ def test_key_update_http_paths(update_material, layout):
     response = _post(message, issued, path=path)
     assert response['body'].getName() == 'kup'
     assert int(response['body']['kup']['response'][0]['status']['status']) == 0
-

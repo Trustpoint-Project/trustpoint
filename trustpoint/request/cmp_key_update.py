@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 
 
 def validate_key_update_identity(
-    context: CmpCertificateRequestContext, *, profile_validated: bool = False,
+    context: CmpCertificateRequestContext,
+    *,
+    profile_validated: bool = False,
 ) -> None:
     """Require the old certificate's identity in both the request and issued template."""
     certificate = context.client_certificate
@@ -41,7 +43,8 @@ def validate_key_update_identity(
     subject = builder._subject_name  # noqa: SLF001 - cryptography exposes no builder getters.
     extensions = builder._extensions  # noqa: SLF001
     san = next(
-        (extension.value for extension in extensions if isinstance(extension.value, x509.SubjectAlternativeName)), None,
+        (extension.value for extension in extensions if isinstance(extension.value, x509.SubjectAlternativeName)),
+        None,
     )
     try:
         old_san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
@@ -77,8 +80,10 @@ def _validate_old_cert_id(context: CmpCertificateRequestContext, certificate: x5
         if remainder or old_id['issuer'].getName() != 'directoryName':
             msg = 'Invalid CMP oldCertID.'
             raise ValueError(msg)
-        if (int(old_id['serialNumber']) != certificate.serial_number
-                or NameParser.parse_name(old_id['issuer']['directoryName']) != certificate.issuer):
+        if (
+            int(old_id['serialNumber']) != certificate.serial_number
+            or NameParser.parse_name(old_id['issuer']['directoryName']) != certificate.issuer
+        ):
             msg = 'CMP oldCertID does not identify the protection certificate.'
             raise ValueError(msg)
 
