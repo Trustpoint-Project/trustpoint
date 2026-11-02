@@ -71,7 +71,7 @@ def test_success_reuses_pending_key_and_preserves_role_specific_updates(enrollme
     ):
         builder.return_value.get_csr.return_value = csr
         signer.return_value.get_signed_csr.return_value = csr
-        client.return_value.simple_enroll.return_value = certificate
+        client.return_value.simple_enroll.return_value = (certificate, [])
         enroll_owner_credential_est(
             context, owner, pending, logger=logging.getLogger(__name__), domain_credential=domain
         )

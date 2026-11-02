@@ -77,7 +77,7 @@ class EstCaEnrollmentService(LoggerMixin):
 
         # Send the re-signed CSR to the remote EST server
         est_client = EstClient(context)
-        issued_cert = est_client.simple_enroll(signed_csr)
+        issued_cert, _ = est_client.simple_enroll(signed_csr)
 
         cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode('utf-8')
         cert_obj = x509.load_pem_x509_certificate(cert_pem.encode())

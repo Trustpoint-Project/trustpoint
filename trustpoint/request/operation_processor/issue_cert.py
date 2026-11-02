@@ -117,6 +117,8 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
             exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
             raise TypeError(exc_msg)
 
+        self._validate_domain_active(context)
+
         if context.domain and context.domain.issuing_ca:
             issuing_ca = context.domain.issuing_ca
 
@@ -142,6 +144,13 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
 
         exc_msg = 'No suitable operation processor found for certificate issuance.'
         raise ValueError(exc_msg)
+
+    @staticmethod
+    def _validate_domain_active(context: BaseCertificateRequestContext) -> None:
+        """Reject disabled domains for shared and direct issuance calls."""
+        if context.domain is not None and not context.domain.is_active:
+            exc_msg = f'Cannot issue certificate: Domain "{context.domain.unique_name}" is currently disabled.'
+            raise ValueError(exc_msg)
 
     @staticmethod
     def _get_credential_type_for_template(
@@ -264,9 +273,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         if not context.domain:
             exc_msg = 'Domain must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)
-        if not context.domain.is_active:
-            exc_msg = f'Cannot issue certificate: Domain "{context.domain.unique_name}" is currently disabled.'
-            raise ValueError(exc_msg)
+        self._validate_domain_active(context)
         if not context.cert_requested:
             exc_msg = 'Certificate request must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)
@@ -416,6 +423,8 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             exc_msg = 'Domain must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)
 
+        self._validate_domain_active(context)
+
         if not context.domain.issuing_ca:
             exc_msg = 'Domain must have an associated issuing CA.'
             raise ValueError(exc_msg)
@@ -558,7 +567,7 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
 
         est_client = EstClient(est_context)
         try:
-            issued_cert = est_client.simple_enroll(csr)
+            issued_cert, extra_certs = est_client.simple_enroll(csr)
         except Exception as e:
             exc_msg = f'EST enrollment failed: {e!s}'
             raise ValueError(exc_msg) from e
@@ -572,9 +581,10 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             for cert in issuing_ca.chain_truststore.truststoreordermodel_set.order_by('order')
         ]
 
+        issuer_path = validate_issued_certificate_path(issued_cert, ca_chain, extra_certs)[1:]
         context.issued_certificate = issued_cert
-        context.issued_certificate_chain = ca_chain
-        self._save_validated_remote_credential(context, ca_chain)
+        context.issued_certificate_chain = issuer_path
+        self._save_validated_remote_credential(context, issuer_path)
         self.logger.info('Successfully issued certificate via remote EST CA: %s', issuing_ca.unique_name)
 
         domain_name = context.domain.unique_name if context.domain else 'unknown'

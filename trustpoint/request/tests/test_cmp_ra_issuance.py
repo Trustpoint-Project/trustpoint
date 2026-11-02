@@ -3,6 +3,7 @@
 
 """Tests for synchronous certificate issuance through a remote CMP CA (Trustpoint as RA)."""
 
+import base64
 from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
 
@@ -10,6 +11,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import pkcs7
 from pyasn1.codec.der.encoder import encode as der_encode
 
 from pki.models import CaModel
@@ -283,10 +285,74 @@ def test_est_ra_rejects_non_ca_signer_before_persistence() -> None:
         .sign(env.device_key, hashes.SHA256())
     )
     with patch(f'{PATCH_BASE}.EstClient') as client, patch(f'{PATCH_BASE}.CredentialSaver') as saver:
-        client.return_value.simple_enroll.return_value = forged
+        client.return_value.simple_enroll.return_value = (forged, [])
         with pytest.raises(ValueError, match='does not chain'):
             RemoteCaCertificateIssueProcessor(ca_type='est').process_operation(env.context)
     saver.assert_not_called()
+
+
+@pytest.mark.parametrize('trusted', [True, False])
+def test_est_ra_preserves_response_intermediate_and_saves_verified_path(trusted) -> None:
+    """Use the response intermediate without trusting a root supplied by the response."""
+    env = _Env()
+    inter_key, _ = _make_ca('Intermediate')
+    now = datetime.now(UTC)
+    intermediate = (
+        x509.CertificateBuilder()
+        .subject_name(_name('Intermediate'))
+        .issuer_name(env.ca_cert.subject)
+        .public_key(inter_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=5))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(_ca_key_usage(), critical=True)
+        .sign(env.ca_key, hashes.SHA256())
+    )
+    leaf = _issue(inter_key, intermediate, env.device_pub)
+    _, other_root = _make_ca('Untrusted Root')
+    anchor = env.ca_cert if trusted else other_root
+    env.ca.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
+    env.ca.chain_truststore = _truststore(anchor)
+    env.ca.no_onboarding_config.trust_store.get_certificate_collection_serializer.return_value.as_pem.return_value = (
+        anchor.public_bytes(serialization.Encoding.PEM)
+    )
+    env.context.cert_requested = (
+        x509.CertificateSigningRequestBuilder()
+        .subject_name(_name('validated-device'))
+        .sign(env.device_key, hashes.SHA256())
+    )
+    response = Mock(
+        status_code=200,
+        headers={'Content-Type': 'application/pkcs7-mime'},
+        content=base64.b64encode(
+            pkcs7.serialize_certificates(
+                [env.ca_cert, leaf, intermediate],
+                serialization.Encoding.DER,
+            )
+        ),
+    )
+    with (
+        patch('request.clients.est_client.requests.post', return_value=response),
+        patch(f'{PATCH_BASE}.CredentialSaver') as saver,
+        patch(f'{PATCH_BASE}.AuditLog.create_entry'),
+        patch.object(RemoteCaCertificateIssueProcessor, '_get_keyless_issuer_credential', return_value=Mock()),
+        patch.object(
+            RemoteCaCertificateIssueProcessor, '_get_credential_type_for_template', return_value=(None, 'Profile')
+        ),
+    ):
+        processor = RemoteCaCertificateIssueProcessor(ca_type='est')
+        if not trusted:
+            with pytest.raises(ValueError, match='does not chain'):
+                processor.process_operation(env.context)
+            saver.assert_not_called()
+            return
+        processor.process_operation(env.context)
+
+    assert env.context.issued_certificate == leaf
+    assert env.context.issued_certificate_chain == [intermediate, env.ca_cert]
+    saved = saver.return_value.save_remote_keyless_credential.call_args.args
+    assert saved[:2] == (leaf, [intermediate, env.ca_cert])
 
 
 def test_mismatching_public_key_is_rejected() -> None:
