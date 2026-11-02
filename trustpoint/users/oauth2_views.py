@@ -9,15 +9,21 @@ import base64
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import update_last_login
+from django.db import transaction
+from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import serializers, status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.response import Response
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.serializers import TokenObtainSerializer
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import TrustpointUser
+from management.models import PasswordPolicy
+
+from .models import MAX_TOKEN_LENGTH, TrustpointUser, UserOTPDevice
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
@@ -28,6 +34,12 @@ class TokenObtainRequestSerializer(serializers.Serializer[Any]):
 
     username = serializers.CharField(required=False, help_text='Username (for human users)')
     password = serializers.CharField(required=False, help_text='Password (for human users)')
+    otp = serializers.CharField(
+        required=False,
+        write_only=True,
+        max_length=MAX_TOKEN_LENGTH,
+        help_text='Authenticator or recovery code, required for human login when OTP is enabled.',
+    )
     grant_type = serializers.CharField(
         required=False, help_text='Grant type (use "client_credentials" for service accounts)'
     )
@@ -46,16 +58,36 @@ class TokenObtainResponseSerializer(serializers.Serializer[Any]):
     )
 
 
-class HumanUserTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Authenticate once and require permission to use the REST API."""
+class HumanUserTokenObtainPairSerializer(TokenObtainSerializer):
+    """Authenticate once and check API access and OTP before creating tokens."""
 
+    otp = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=MAX_TOKEN_LENGTH)
+
+    @sensitive_variables()
     def validate(self, attrs: dict[str, Any]) -> dict[str, str]:
-        """Check API access on the user authenticated by Simple JWT."""
-        data = super().validate(attrs)
+        """Use the existing locked OTP verifier, retaining failed-attempt throttling."""
+        super().validate(attrs)
         if self.user is None or not self.user.has_perm('users.use_rest_api'):
             msg = 'User is not permitted to use the REST API.'
             raise PermissionDenied(msg)
-        return data
+
+        if PasswordPolicy.is_otp_required():
+            otp = attrs.get('otp', '')
+            with transaction.atomic():
+                device = UserOTPDevice.objects.select_for_update().filter(user=self.user, confirmed=True).first()
+                verified = device is not None and bool(otp) and device.verify_token(otp)
+            # Raise after committing so invalid codes cannot roll back throttling.
+            if device is None:
+                msg = 'Set up OTP in the web interface before requesting API tokens.'
+                raise AuthenticationFailed(msg, code='otp_not_configured')
+            if not verified:
+                msg = 'A valid authenticator code or unused recovery code is required.'
+                raise AuthenticationFailed(msg, code='otp_invalid')
+
+        refresh = RefreshToken.for_user(self.user)
+        if api_settings.UPDATE_LAST_LOGIN:
+            update_last_login(TrustpointUser, self.user)
+        return {'refresh': str(refresh), 'access': str(refresh.access_token)}
 
 
 @extend_schema_view(
@@ -67,7 +99,8 @@ class HumanUserTokenObtainPairSerializer(TokenObtainPairSerializer):
         description=(
             'Obtain a JWT access token for API authentication. '
             'Supports two authentication methods:\n\n'
-            '1. **Human Users**: Use username and password to get access and refresh tokens.\n'
+            '1. **Human Users**: Use username and password, plus otp when required by policy, '
+            'to get access and refresh tokens. Enroll an authenticator through the web UI first.\n'
             '2. **Service Accounts**: Use OAuth 2.0 client credentials grant to get an access token.'
         ),
         examples=[
@@ -76,9 +109,10 @@ class HumanUserTokenObtainPairSerializer(TokenObtainPairSerializer):
                 value={
                     'username': 'admin',
                     'password': 'your_password',
+                    'otp': '012345',
                 },
                 request_only=True,
-                description='Authenticate using username and password (for human users)',
+                description='Human login; omit otp when the global OTP requirement is disabled.',
             ),
             OpenApiExample(
                 'Service Account Authentication',

@@ -18,6 +18,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
+from management.models import PasswordPolicy
 from users.authentication import ServiceAccountBackend
 from users.middleware import ServiceAccountMiddleware
 from users.models import BuiltinRole, ServiceAccountCredential, TrustpointUser
@@ -397,11 +398,15 @@ class TestServiceAccountConfiguration:
 class TestServiceAccountAPI:
     """Tests for service account API authentication."""
 
+    @pytest.mark.parametrize('require_otp', [False, True])
     def test_api_authentication_with_service_account(
-        self, service_credential: tuple[ServiceAccountCredential, str]
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
+        require_otp: bool,
     ) -> None:
         """Test API authentication using service account credentials via OAuth 2.0."""
         credential, secret = service_credential
+        PasswordPolicy.objects.update_or_create(pk=1, defaults={'require_otp': require_otp})
         client = APIClient()
 
         # Use OAuth 2.0 client credentials grant

@@ -2317,6 +2317,11 @@ components:
         password:
           type: string
           writeOnly: true
+        otp:
+          type: string
+          writeOnly: true
+          maxLength: 64
+          description: Authenticator or unused recovery code, required for human login when OTP is enabled.
         access:
           type: string
           readOnly: true

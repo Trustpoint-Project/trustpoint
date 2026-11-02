@@ -34,6 +34,12 @@ When OTP is enabled:
 
 OTP applies to the **password login flow**. Certificate-based authentication is handled separately.
 
+Human users requesting management API tokens must also provide an `otp` string
+when OTP is required. They must first enroll an authenticator through the web UI.
+The API accepts authenticator codes and unused recovery codes. Service-account
+client credentials and refresh-token requests do not require OTP. Enabling OTP
+does not invalidate existing tokens.
+
 ## Certificate-Based Authentication
 
 Trustpoint can authenticate users with TLS client certificates.
