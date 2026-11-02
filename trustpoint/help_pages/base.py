@@ -230,7 +230,9 @@ def build_issuing_ca_cert_section(domain: DomainModel) -> HelpSection:
     if not issuing_ca:
         err_msg = 'Issuing CA not configured'
         raise ValueError(err_msg)
-    issuing_ca_pk = issuing_ca.pk
+    certificate = issuing_ca.ca_certificate_model
+    if certificate is None:
+        raise Http404(_('Issuing CA certificate is missing.'))
 
     download_issuing_ca_cert_row = HelpRow(
         key=_non_lazy('Download Issuing CA Certificate'),
@@ -238,7 +240,7 @@ def build_issuing_ca_cert_section(domain: DomainModel) -> HelpSection:
             '<a href="{}" class="btn btn-primary w-100">{}</a>',
             reverse(
                 'pki:certificate-file-download-file-name',
-                kwargs={'file_format': 'pem', 'pk': issuing_ca_pk, 'file_name': 'issuing_ca_cert.pem'},
+                kwargs={'file_format': 'pem', 'pk': certificate.pk, 'file_name': 'issuing_ca_cert.pem'},
             ),
             _non_lazy('Download Issuing CA Certificate'),
         ),
