@@ -12,7 +12,7 @@ from pki.services.csr import decode_base64_csr, load_csr, validate_csr_size
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
-from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
+from .base import CompositeParsing, DomainParsing, ParsingComponent
 from .csr import CsrSignatureVerification
 from .http import BasicAuthHeaderParsing
 
@@ -89,7 +89,6 @@ class EstMessageParser(CompositeParsing):
         self.add(EstAuthorizationHeaderParsing())
         self.add(EstPkiMessageParsing())
         self.add(DomainParsing())
-        self.add(CertProfileParsing())
         self.add(EstCsrSignatureVerification())
         self.add(EstChannelBindingVerification())
 
