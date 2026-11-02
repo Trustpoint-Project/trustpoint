@@ -570,30 +570,31 @@ class GdsPushService(LoggerMixin):
 
             client_cert_chain_pem = await self._build_client_certificate_chain()
 
-            with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as f:
-                f.write(client_cert_chain_pem)
-                client_cert_path = f.name
+            with tempfile.TemporaryDirectory() as temp_dir:
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', dir=temp_dir, delete=False) as f:
+                    f.write(client_cert_chain_pem)
+                    client_cert_path = f.name
 
-            with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as f:
-                f.write(client_key_pem)
-                client_key_path = f.name
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', dir=temp_dir, delete=False) as f:
+                    f.write(client_key_pem)
+                    client_key_path = f.name
 
-            with tempfile.NamedTemporaryFile(mode='wb', suffix='.der', delete=False) as f:
-                f.write(server_cert_der)
-                server_cert_path = f.name
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.der', dir=temp_dir, delete=False) as f:
+                    f.write(server_cert_der)
+                    server_cert_path = f.name
 
-            client = Client(self.server_url)
-            client.application_uri = application_uri
+                client = Client(self.server_url)
+                client.application_uri = application_uri
 
-            self.logger.info('Setting security policy: Basic256Sha256')
+                self.logger.info('Setting security policy: Basic256Sha256')
 
-            await client.set_security(
-                security_policies.SecurityPolicyBasic256Sha256,
-                certificate=client_cert_path,
-                private_key=client_key_path,
-                server_certificate=server_cert_path,
-                mode=ua.MessageSecurityMode.SignAndEncrypt
-            )
+                await client.set_security(
+                    security_policies.SecurityPolicyBasic256Sha256,
+                    certificate=client_cert_path,
+                    private_key=client_key_path,
+                    server_certificate=server_cert_path,
+                    mode=ua.MessageSecurityMode.SignAndEncrypt
+                )
 
             if hasattr(self.device, 'opc_ua_gds_push_config'):
                 opc_user = self.device.opc_ua_gds_push_config.opc_user

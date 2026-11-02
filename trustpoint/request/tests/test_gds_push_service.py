@@ -4,6 +4,7 @@
 """Tests for GDS Push service."""
 
 import datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
@@ -1424,14 +1425,24 @@ class TestGdsPushServiceAdditionalCoverage:
         }]
 
     @pytest.mark.asyncio
-    async def test_create_secure_client_sets_credentials_and_security_payload(self, mock_opc_device):
-        """Configure the client with the certificate chain, key, URI, and user."""
+    @pytest.mark.parametrize('security_fails', [False, True])
+    async def test_create_secure_client_sets_credentials_and_security_payload(self, mock_opc_device, security_fails):
+        """Load security files and remove them on both success and failure."""
         service = GdsPushService(mock_opc_device, insecure=True)
         service.device.opc_ua_gds_push_config.opc_user = 'opc-user'
         service.device.opc_ua_gds_push_config.opc_password = 'opc-password'
         client = Mock()
         client.set_security = AsyncMock()
         certificate = Mock()
+
+        async def load_security_files(*args, **kwargs):
+            assert Path(kwargs['certificate']).read_bytes() == b'client-chain'
+            assert Path(kwargs['private_key']).read_bytes() == b'private-key'
+            assert Path(kwargs['server_certificate']).read_bytes() == b'server-cert'
+            if security_fails:
+                raise RuntimeError('security setup failed')
+
+        client.set_security.side_effect = load_security_files
 
         with patch('request.gds_push.gds_push_service.Client', return_value=client), \
              patch.object(service, '_get_client_credentials', new_callable=AsyncMock,
@@ -1441,16 +1452,24 @@ class TestGdsPushServiceAdditionalCoverage:
              patch.object(service, '_extract_application_uri', return_value='urn:test:app'), \
              patch.object(service, '_build_client_certificate_chain', new_callable=AsyncMock,
                           return_value=b'client-chain'):
-            result = await service._create_secure_client()
+            if security_fails:
+                with pytest.raises(GdsPushError, match='security setup failed'):
+                    await service._create_secure_client()
+            else:
+                assert await service._create_secure_client() is client
 
-        assert result is client
         assert client.application_uri == 'urn:test:app'
-        client.set_user.assert_called_once_with('opc-user')
-        client.set_password.assert_called_once_with('opc-password')
+        if not security_fails:
+            client.set_user.assert_called_once_with('opc-user')
+            client.set_password.assert_called_once_with('opc-password')
         client.set_security.assert_awaited_once()
         security_args = client.set_security.await_args.kwargs
         assert security_args['mode'] == ua.MessageSecurityMode.SignAndEncrypt
         assert security_args['server_certificate'].endswith('.der')
+        paths = [Path(security_args[name]) for name in ('certificate', 'private_key', 'server_certificate')]
+        assert all(not path.exists() for path in paths)
+        assert len({path.parent for path in paths}) == 1
+        assert not paths[0].parent.exists()
 
     @pytest.mark.asyncio
     async def test_update_server_certificate_logs_certificate_mismatch(self, mock_opc_device):

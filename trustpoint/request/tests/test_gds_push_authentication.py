@@ -89,7 +89,6 @@ async def test_secure_client_with_optional_user_credentials(username, password):
         patch.object(service, '_get_server_certificate', AsyncMock(return_value=b'server-certificate')),
         patch.object(service, '_extract_application_uri', return_value='urn:test'),
         patch.object(service, '_build_client_certificate_chain', AsyncMock(return_value=b'client-certificate')),
-        patch(f'{module}.tempfile.NamedTemporaryFile'),
         patch(f'{module}.Client', return_value=client),
     ):
         assert await service._create_secure_client() is client
