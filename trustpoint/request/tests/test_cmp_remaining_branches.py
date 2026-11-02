@@ -94,23 +94,6 @@ class TestCmpAuthorizationRemainingBranches:
             CmpRevocationAuthorization().authorize(context)
         assert context.credential_to_revoke is target
 
-    def test_certconf_rejects_unsupported_declared_hash(self) -> None:
-        context = CmpCertConfRequestContext(
-            operation='certconf', cert_conf_status=2, cert_hash=b'hash',
-            cert_hash_algorithm_oid='1.2.3.4',
-        )
-        with pytest.raises(ValueError, match='unsupported'):
-            CmpCertConfAuthorization().authorize(context)
-        assert context.http_response_status == 403
-
-    def test_certconf_rejects_disallowed_hash(self) -> None:
-        context = CmpCertConfRequestContext(
-            operation='certconf', cert_conf_status=2, cert_hash=b'hash',
-            cert_hash_algorithm_oid=HashAlgorithm.MD5.dotted_string,
-        )
-        with pytest.raises(ValueError, match='not permitted'):
-            CmpCertConfAuthorization().authorize(context)
-
     def test_poll_rejects_cert_id_and_domain_mismatches(self) -> None:
         context = CmpPollRequestContext(
             cmp_body_type='pollReq', cmp_transaction_id='tx', poll_cert_req_id=9,
