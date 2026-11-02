@@ -192,8 +192,9 @@ def test_cmp_pending_detail_distinguishes_awaiting_and_processing_runs() -> None
 
 
 @pytest.mark.django_db
-def test_cmp_certificate_request_processor_rejects_transaction_reuse() -> None:
-    CmpTransactionModel.objects.create(
+@pytest.mark.parametrize('lost_insert_race', [False, True])
+def test_cmp_certificate_request_processor_rejects_transaction_reuse(lost_insert_race: bool) -> None:
+    transaction_record = CmpTransactionModel.objects.create(
         transaction_id='reused',
         operation='initialization',
         request_body_type='ir',
@@ -208,8 +209,16 @@ def test_cmp_certificate_request_processor_rejects_transaction_reuse() -> None:
         cmp_transaction_id='REUSED',
     )
 
-    with pytest.raises(ValueError, match='already in use'):
-        CmpCertificateRequestProcessor().process_operation(context)
+    processor = CmpCertificateRequestProcessor()
+    with (
+        patch.object(
+            processor,
+            '_get_existing_transaction',
+            side_effect=[None, transaction_record] if lost_insert_race else [transaction_record],
+        ),
+        pytest.raises(ValueError, match='already in use'),
+    ):
+        processor.process_operation(context)
 
 
 @pytest.mark.django_db
@@ -236,6 +245,53 @@ def test_cmp_certificate_request_processor_hydrates_existing_issued_transaction(
 
     assert context.cmp_transaction == transaction_record
     populate.assert_called_once_with(context, transaction_record)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('status', [
+    CmpTransactionModel.Status.PROCESSING,
+    CmpTransactionModel.Status.WAITING,
+    CmpTransactionModel.Status.ISSUED,
+    CmpTransactionModel.Status.REJECTED,
+])
+def test_cmp_concurrent_retry_reuses_transaction_without_issuing(status: str) -> None:
+    """A worker losing the insert race must reuse the winner's state."""
+    transaction_record = CmpTransactionModel.objects.create(
+        transaction_id='concurrent-retry',
+        operation='certification',
+        request_body_type='cr',
+        request_der=b'same-request',
+        status=status,
+        implicit_confirm=True,
+        cert_profile='tls_client',
+    )
+    context = CmpCertificateRequestContext(
+        raw_message=Mock(body=b'same-request'),
+        protocol='cmp',
+        operation='certification',
+        cmp_body_type='cr',
+        cmp_transaction_id='concurrent-retry',
+    )
+    processor = CmpCertificateRequestProcessor()
+    with (
+        # Both workers missed the first lookup; the winner has now inserted its row.
+        patch.object(processor, '_get_existing_transaction', side_effect=[None, transaction_record]),
+        patch.object(processor, 'populate_success_context') as populate,
+        patch('request.operation_processor.cmp_certificate_request.CertificateIssueProcessor') as issuer,
+    ):
+        processor.process_operation(context)
+
+    issuer.assert_not_called()
+    assert context.cmp_transaction == transaction_record
+    assert context.cert_profile_str == 'tls_client'
+    assert context.implicit_confirm is True
+    transaction_record.refresh_from_db()
+    assert transaction_record.status == status
+    assert CmpTransactionModel.objects.filter(transaction_id='concurrent-retry').count() == 1
+    if status == CmpTransactionModel.Status.ISSUED:
+        populate.assert_called_once_with(context, transaction_record)
+    else:
+        populate.assert_not_called()
 
 
 def test_cmp_certificate_request_processor_delegates_wrong_context_protocol_and_operation() -> None:
