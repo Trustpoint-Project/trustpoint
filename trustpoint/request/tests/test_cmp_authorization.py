@@ -492,4 +492,4 @@ class TestCmpAuthorization:
         """Default allowed operations include certificate updates."""
         auth = CmpAuthorization()
         op_comp = next(c for c in auth.components if isinstance(c, CmpOperationAuthorization))
-        assert set(op_comp.allowed_operations) == {'certification', 'initialization', 'keyupdate'}
+        assert set(op_comp.allowed_operations) == {'certification', 'initialization', 'keyupdate', 'getcacerts'}

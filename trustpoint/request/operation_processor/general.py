@@ -12,6 +12,7 @@ from request.request_context import (
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
     CmpCertificateRequestContext,
+    CmpGeneralRequestContext,
     CmpPollRequestContext,
 )
 from trustpoint.logger import LoggerMixin
@@ -19,6 +20,7 @@ from trustpoint.logger import LoggerMixin
 from .base import AbstractOperationProcessor
 from .cert_conf import CertConfProcessor
 from .cmp_certificate_request import CmpCertificateRequestProcessor
+from .cmp_general import CmpGeneralProcessor
 from .cmp_poll import CmpPollProcessor
 from .issue_cert import CertificateIssueProcessor
 from .revoke_cert import CertificateRevocationProcessor
@@ -32,10 +34,12 @@ class OperationProcessor(AbstractOperationProcessor, LoggerMixin):
         with secret_use(context):
             self._process_operation(context)
 
-    def _process_operation(self, context: BaseRequestContext) -> None:
+    def _process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901 - Protocol operation dispatch.
         """Process the requested operation."""
         processor_instance: AbstractOperationProcessor
-        if isinstance(context, CmpPollRequestContext):
+        if isinstance(context, CmpGeneralRequestContext):
+            processor_instance = CmpGeneralProcessor()
+        elif isinstance(context, CmpPollRequestContext):
             processor_instance = CmpPollProcessor()
         elif isinstance(context, CmpCertConfRequestContext):
             processor_instance = CertConfProcessor()

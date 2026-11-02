@@ -23,6 +23,7 @@ from request.request_context import (
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
     CmpCertificateRequestContext,
+    CmpGeneralRequestContext,
     CmpPollRequestContext,
     CmpRevocationRequestContext,
 )
@@ -756,6 +757,9 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                 context = context.narrow(CmpCertConfRequestContext)
                 CmpCertConfBodyValidation().parse_certconf_body(context, pki_body)
                 context.event = Events.cmp_certconf
+            elif body_type == 'genm':
+                context = context.narrow(CmpGeneralRequestContext)
+                context.event = None
 
             self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
 
@@ -768,7 +772,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
     def _validate_body_type_supported(self, body_type: str) -> None:
         """Validate that the CMP body type is supported by the request pipeline."""
-        if body_type not in ('ir', 'cr', 'kur', 'rr', 'certConf', 'pollReq'):
+        if body_type not in ('ir', 'cr', 'kur', 'rr', 'certConf', 'pollReq', 'genm'):
             err_msg = f'Unsupported CMP body type: {body_type}'
             self._raise_value_error(err_msg)
 
@@ -778,16 +782,16 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         Note: certConf shares the same endpoint as the original enrollment
         operation (RFC 9483 Section 6.1).
         """
-        if body_type == 'ir':
-            return 'initialization'
-        if body_type == 'cr':
-            return 'certification'
-        if body_type == 'kur':
-            return 'keyupdate'
-        if body_type == 'rr':
-            return 'revocation'
-        if body_type == 'certConf':
-            return 'certconf'
+        operations = {
+            'ir': 'initialization',
+            'cr': 'certification',
+            'kur': 'keyupdate',
+            'rr': 'revocation',
+            'certConf': 'certconf',
+            'genm': 'getcacerts',
+        }
+        if body_type in operations:
+            return operations[body_type]
         err_msg = f'Unsupported CMP body type: {body_type}'
         self._raise_value_error(err_msg)
         return ''
@@ -804,6 +808,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             'keyupdate': ('kur', 'certConf'),
             'revocation': ('rr',),
             'certconf': ('certConf',),
+            'getcacerts': ('genm',),
         }
         expected = expected_body_types.get(operation)
         if expected is None:

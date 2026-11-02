@@ -24,6 +24,8 @@
 # In each case a TLS server certificate (profile "tls_server") is requested.
 # With --cmp-key-update-only, update the two existing CMP application certificates
 # using their original signing credentials and newly generated keys.
+# With --cmp-ca-certs-only, use those application credentials to retrieve and
+# verify the domain CA chain through signed CMP general messages.
 #
 # Additionally the EST RA and CMP RA domains are tested: Trustpoint acts as registration
 # authority and forwards the request to the upstream CA domain of the same instance.
@@ -35,16 +37,19 @@ ENV_FILE=""
 TLS_CERT=""
 WORK_DIR=""
 CMP_KEY_UPDATE_ONLY=false
+CMP_CA_CERTS_ONLY=false
 
 usage() {
     cat <<'EOF'
-Usage: test_protocol_endpoints.sh --env-file <json> --tls-cert <pem> [--host <host:port>] [--work-dir <dir>] [--cmp-key-update-only]
+Usage: test_protocol_endpoints.sh --env-file <json> --tls-cert <pem> [--host <host:port>] [--work-dir <dir>]
+                                  [--cmp-key-update-only | --cmp-ca-certs-only]
 
   --env-file   JSON file written by the create_protocol_test_env management command.
   --tls-cert   PEM file used as curl/openssl trust anchor for the Trustpoint HTTPS server.
   --host       Host and port of the Trustpoint server (default: 127.0.0.1:443).
   --work-dir   Directory for generated keys and certificates (default: a temporary directory).
   --cmp-key-update-only  Update existing CMP application certificates in --work-dir; requires a completed enrollment run.
+  --cmp-ca-certs-only    Retrieve the CA chain using each existing CMP application certificate in --work-dir.
 EOF
 }
 
@@ -55,10 +60,16 @@ while [[ $# -gt 0 ]]; do
         --tls-cert) TLS_CERT="$2"; shift 2 ;;
         --work-dir) WORK_DIR="$2"; shift 2 ;;
         --cmp-key-update-only) CMP_KEY_UPDATE_ONLY=true; shift ;;
+        --cmp-ca-certs-only) CMP_CA_CERTS_ONLY=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
 done
+
+if [[ "${CMP_KEY_UPDATE_ONLY}" == true && "${CMP_CA_CERTS_ONLY}" == true ]]; then
+    echo 'Choose only one CMP-only test mode.' >&2
+    exit 2
+fi
 
 if [[ -z "${ENV_FILE}" || -z "${TLS_CERT}" ]]; then
     usage >&2
@@ -363,6 +374,63 @@ test_cmp_no_onboarding() {
     assert_tls_server_cert "${p}-cert.pem" 'CMP / no onboarding' "${ca}" "${algorithm}"
 }
 
+test_cmp_ca_certificates() {
+    local source="$1" label="$2" p="${1}-ca-certs"
+    local domain ca artifact role cn
+    domain="$(proto_field cmp domain)"
+    ca="$(proto_field cmp ca)"
+
+    log "CMP CA certificate retrieval (${label})"
+
+    for artifact in "${source}-cert.pem" "${source}-key.pem" "${source}-full-chain.pem"; do
+        if [[ ! -s "${artifact}" ]]; then
+            fail "CMP CA retrieval / ${label}: missing enrollment artifact ${artifact}"
+            return 1
+        fi
+    done
+    if ! openssl cmp -cmd genm -infotype caCerts \
+        -tls_used -tls_trusted "${TLS_CERT}" \
+        -trusted "${source}-full-chain.pem" \
+        -server "${BASE_URL}/.well-known/cmp/p/${domain}/getcacerts" \
+        -cert "${source}-cert.pem" -key "${source}-key.pem" \
+        -cacertsout "${p}.pem"; then
+        fail "CMP CA retrieval / ${label}"
+        return 1
+    fi
+    if [[ ! -s "${p}.pem" ]]; then
+        fail "CMP CA retrieval / ${label}: no CA certificates were returned"
+        return 1
+    fi
+
+    # Compare the returned issuing CA and root with the independently obtained
+    # enrollment chain, then verify the application's chain using the retrieved CAs.
+    for role in issuer root; do
+        cn="${ca}"
+        if [[ "${role}" == root ]]; then
+            cn="${ca}-root"
+        fi
+        extract_cert_by_cn "${p}.pem" "${cn}" "${p}-${role}.pem" \
+            || { fail "CMP CA retrieval / ${label}: missing ${role} certificate"; return 1; }
+        extract_cert_by_cn "${source}-full-chain.pem" "${cn}" "${p}-expected-${role}.pem" \
+            || { fail "CMP CA retrieval / ${label}: missing reference ${role} certificate"; return 1; }
+        openssl x509 -in "${p}-${role}.pem" -outform DER -out "${p}-${role}.der" \
+            || { fail "CMP CA retrieval / ${label}: invalid ${role} certificate"; return 1; }
+        openssl x509 -in "${p}-expected-${role}.pem" -outform DER -out "${p}-expected-${role}.der" \
+            || { fail "CMP CA retrieval / ${label}: invalid reference ${role} certificate"; return 1; }
+        if ! cmp -s "${p}-${role}.der" "${p}-expected-${role}.der"; then
+            fail "CMP CA retrieval / ${label}: returned ${role} differs from the enrollment CA"
+            return 1
+        fi
+        if ! openssl x509 -in "${p}-${role}.pem" -noout -ext basicConstraints | grep -q 'CA:TRUE'; then
+            fail "CMP CA retrieval / ${label}: ${role} is not a CA certificate"
+            return 1
+        fi
+    done
+    openssl verify -CAfile "${p}-expected-root.pem" -untrusted "${p}.pem" "${source}-cert.pem" \
+        || { fail "CMP CA retrieval / ${label}: retrieved CA chain cannot verify the enrolled certificate"; return 1; }
+    echo "PASS: CMP CA retrieval / ${label}: verified issuing CA and root certificate"
+}
+
 test_cmp_key_update() {
     local source="$1" label="$2" p="${1}-kur"
     local domain ca algorithm old_serial new_serial old_subject new_subject artifact
@@ -569,7 +637,10 @@ echo "Using $(openssl version)"
 echo "Working directory: ${WORK_DIR}"
 
 # Every test is allowed to fail so that all protocols are exercised in a single run.
-if [[ "${CMP_KEY_UPDATE_ONLY}" == true ]]; then
+if [[ "${CMP_CA_CERTS_ONLY}" == true ]]; then
+    test_cmp_ca_certificates cmp-no 'no onboarding' || true
+    test_cmp_ca_certificates cmp-ob 'onboarded' || true
+elif [[ "${CMP_KEY_UPDATE_ONLY}" == true ]]; then
     test_cmp_key_update cmp-no 'no onboarding' || true
     test_cmp_key_update cmp-ob 'onboarded' || true
 else

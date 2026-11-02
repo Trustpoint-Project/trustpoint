@@ -339,6 +339,7 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
             ('initialization', 'ir'),
             ('certification', 'cr'),
             ('keyupdate', 'kur'),
+            ('getcacerts', 'genm'),
         }:
             if context.operation == 'keyupdate':
                 validate_key_update_identity(cast('CmpCertificateRequestContext', context), profile_validated=True)
@@ -371,18 +372,18 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
 
 class CmpAuthorization(CompositeAuthorization):
-    """Composite authorization handler for EST requests."""
+    """Composite authorization handler for CMP requests."""
 
     def __init__(self, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
-            allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
+            allowed_operations: Allowed CMP operations; defaults to enrollment, key update, and CA retrieval.
         """
         super().__init__()
 
         if allowed_operations is None:
-            allowed_operations = ['certification', 'initialization', 'keyupdate']
+            allowed_operations = ['certification', 'initialization', 'keyupdate', 'getcacerts']
 
         self.add(ProtocolAuthorization(['cmp']))
         self.add(CmpPollAuthorization())
