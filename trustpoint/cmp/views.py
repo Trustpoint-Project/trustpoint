@@ -123,7 +123,7 @@ class CmpRequestView(LoggerMixin, View):
             authenticate_cmp_request(ctx)
             validate_cmp_proof_of_possession(ctx)
 
-            CmpAuthorization(['initialization', 'certification', 'revocation', 'certconf']).authorize(ctx)
+            CmpAuthorization(['initialization', 'certification', 'keyupdate', 'revocation', 'certconf']).authorize(ctx)
 
             # Only persist a follow-up nonce after both authentication and
             # authorization succeeded, otherwise an attacker could burn a nonce.

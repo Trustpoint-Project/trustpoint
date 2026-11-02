@@ -42,7 +42,7 @@ def process_workflow_operation[Context: BaseRequestContext](
     cmp_certificate_request = (
         isinstance(context, CmpCertificateRequestContext)
         and context.protocol == 'cmp'
-        and context.cmp_body_type in {'ir', 'cr'}
+        and context.cmp_body_type in {'ir', 'cr', 'kur'}
     )
     if not result.should_stop or cmp_certificate_request:
         process(context)

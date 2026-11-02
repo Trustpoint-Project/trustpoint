@@ -180,7 +180,7 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
                 cert_req_msg.setComponentByName('popo', pop, verifyConstraints=False)
 
             pki_body = rfc4210.PKIBody()
-            body_choice = 'ir' if use_ir else 'cr'
+            body_choice = 'kur' if context.operation == 'keyupdate' else ('ir' if use_ir else 'cr')
 
             body_idx = pki_body.componentType.getPositionByName(body_choice)
             cert_req_messages = pki_body.componentType.getTypeByPosition(body_idx).clone()
@@ -192,7 +192,7 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
 
             self.logger.info(
                 'PKI body (%s) built successfully',
-                'IR' if use_ir else 'CR',
+                body_choice.upper(),
             )
 
         except Exception as e:
@@ -240,11 +240,14 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
                 ec.ECDSA(hashes.SHA256()),
             )
             algorithm_oid = AlgorithmIdentifier.ECDSA_SHA256.dotted_string
-        elif mldsa and isinstance(private_key, (
-            mldsa.MLDSA44PrivateKey,
-            mldsa.MLDSA65PrivateKey,
-            mldsa.MLDSA87PrivateKey,
-        )):
+        elif mldsa and isinstance(
+            private_key,
+            (
+                mldsa.MLDSA44PrivateKey,
+                mldsa.MLDSA65PrivateKey,
+                mldsa.MLDSA87PrivateKey,
+            ),
+        ):
             signature = private_key.sign(encoded_cert_request)
             if isinstance(private_key, mldsa.MLDSA44PrivateKey):
                 algorithm_oid = AlgorithmIdentifier.ML_DSA_44.dotted_string
@@ -264,7 +267,6 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
 
         binary_signature = f'{int.from_bytes(signature, byteorder="big"):b}'.zfill(len(signature) * 8)
         popo_signing_key['signature'] = univ.BitString(binary_signature)
-
 
         pop = rfc4211.ProofOfPossession()
         sig_idx = pop.componentType.getPositionByName('signature')
@@ -339,10 +341,12 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
             prepare_protection: bool = request_data.get('prepare_shared_secret_protection', False)
             if prepare_protection:
                 hmac_algorithm: HmacAlgorithm = request_data.get(
-                    'hmac_algorithm', HmacAlgorithm.HMAC_SHA256,
+                    'hmac_algorithm',
+                    HmacAlgorithm.HMAC_SHA256,
                 )
                 header = self._prepare_protection_algorithm_pbm(
-                    header, hmac_algorithm=hmac_algorithm,
+                    header,
+                    hmac_algorithm=hmac_algorithm,
                 )
 
             validated['_pki_header'] = header
@@ -416,11 +420,10 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
         owf_der = encoder.encode(owf)
 
         iteration_count_bytes = iteration_count.to_bytes(
-            (iteration_count.bit_length() + 7) // 8 or 1, 'big',
+            (iteration_count.bit_length() + 7) // 8 or 1,
+            'big',
         )
-        iteration_count_der = (
-            bytes([0x02]) + bytes([len(iteration_count_bytes)]) + iteration_count_bytes
-        )
+        iteration_count_der = bytes([0x02]) + bytes([len(iteration_count_bytes)]) + iteration_count_bytes
 
         mac_alg = rfc5280.AlgorithmIdentifier()
         mac_alg['algorithm'] = univ.ObjectIdentifier(hmac_algorithm.dotted_string)
@@ -429,7 +432,10 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
         pbm_der = (
             bytes([0x30])
             + bytes([len(salt_der + owf_der + iteration_count_der + mac_der)])
-            + salt_der + owf_der + iteration_count_der + mac_der
+            + salt_der
+            + owf_der
+            + iteration_count_der
+            + mac_der
         )
 
         prot_alg_idx = header.componentType.getPositionByName('protectionAlg')

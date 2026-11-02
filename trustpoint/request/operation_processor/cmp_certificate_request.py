@@ -48,7 +48,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         if context.protocol != 'cmp':
             CertificateIssueProcessor().process_operation(context)
             return
-        if context.cmp_body_type not in {'ir', 'cr'}:
+        if context.cmp_body_type not in {'ir', 'cr', 'kur'}:
             CertificateIssueProcessor().process_operation(context)
             return
 

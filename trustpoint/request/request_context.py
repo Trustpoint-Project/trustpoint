@@ -287,7 +287,9 @@ class EstRevocationRequestContext(EstBaseRequestContext, BaseRevocationRequestCo
 
 @dataclass(kw_only=True)
 class CmpCertificateRequestContext(CmpBaseRequestContext, BaseCertificateRequestContext):
-    """CMP context for certificate enrollment requests (IR/CR)."""
+    """CMP context for certificate enrollment requests (IR/CR/KUR)."""
+
+    cmp_key_update_authenticated: bool = False
 
 
 @dataclass(kw_only=True)

@@ -119,6 +119,15 @@ jobs:
             --tls-cert "${TLS_CERT}" \
             --work-dir reports/enrollment
 
+      - name: Test CMP key updates (KUR/KUP)
+        run: |
+          bash tests/scripts/test_protocol_endpoints.sh \
+            --host "${TRUSTPOINT_HOST}" \
+            --env-file "${ENV_FILE}" \
+            --tls-cert "${TLS_CERT}" \
+            --work-dir reports/enrollment \
+            --cmp-key-update-only
+
       - name: Stop Trustpoint development server
         if: always()
         run: |
