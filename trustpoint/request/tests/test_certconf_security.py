@@ -20,10 +20,13 @@ from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
 from cmp.views import CmpRequestView
 from management.models import SecurityConfig
+from pki.models import CredentialModel, IssuedCredentialModel
 from request.authentication.cmp import CmpSharedSecretAuthentication
+from request.authorization.cmp import CmpCertConfAuthorization
 from request.clients.cmp_client import CmpClient
 from request.message_builder.cmp import CmpPkiHeaderBuilding
 from request.message_responder.cmp import CmpErrorMessageResponder, CmpPkiConfResponder
+from request.operation_processor.cert_conf import CertConfProcessor
 from request.request_context import CmpCertConfRequestContext
 from request.security_hardening import _certconf_hash_algorithm, authenticate_cmp_request
 
@@ -112,6 +115,40 @@ def test_explicit_certconf_digest_overrides_signature_digest() -> None:
     assert context.cmp_shared_secret == 'test-secret'
 
 
+@pytest.mark.parametrize('digest_type', [hashes.SHA256, hashes.SHA384, hashes.SHA512])
+def test_implicit_certconf_rejection_resolves_transaction_credential(digest_type, device_instance) -> None:
+    """Authenticated rejections revoke the transaction certificate for every implicit digest."""
+    SecurityConfig.objects.create()
+    certificate = _certificate(digest_type())
+    credential = CredentialModel.save_keyless_credential(
+        certificate,
+        [],
+        CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
+    )
+    issued = IssuedCredentialModel.objects.create(
+        common_name='CMP confirmation',
+        issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+        credential=credential,
+        device=device_instance['device'],
+        domain=device_instance['domain'],
+    )
+    context, transaction = _confirmation(certificate, digest_type())
+    context.operation = 'certconf'
+    context.cert_conf_status = 2
+    context.parsed_message['body']['certConf'][0]['statusInfo']['status'] = 2
+    context.cmp_shared_secret = 'test-secret'
+    CmpClient(context)._add_protection_shared_secret(context.parsed_message)
+    context.cmp_shared_secret = None
+    transaction.final_certificate = credential.certificate
+    with patch('request.security_hardening.validate_cmp_transaction_freshness', return_value=transaction):
+        authenticate_cmp_request(context)
+    CmpCertConfAuthorization().authorize(context)
+    assert context.credential_to_revoke == issued
+    with patch('request.operation_processor.cert_conf.CertificateRevocationProcessor.process_operation') as revoke:
+        CertConfProcessor().process_operation(context)
+    revoke.assert_called_once_with(context)
+
+
 def test_certconf_requires_explicit_digest_for_eddsa() -> None:
     """A signature without an implicit digest requires hashAlg."""
     certificate = _certificate(None)
@@ -121,10 +158,13 @@ def test_certconf_requires_explicit_digest_for_eddsa() -> None:
     assert isinstance(_certconf_hash_algorithm(context, certificate), hashes.SHA512)
 
 
-def test_certconf_rejects_disallowed_digest() -> None:
+@pytest.mark.parametrize(
+    'algorithm_oid', [HashAlgorithm.SHA1.dotted_string, HashAlgorithm.MD5.dotted_string, '1.2.3.4']
+)
+def test_certconf_rejects_disallowed_digest(algorithm_oid: str) -> None:
     """An explicit weak digest must not bypass the confirmation allowlist."""
-    context = CmpCertConfRequestContext(cert_hash_algorithm_oid=HashAlgorithm.SHA1.dotted_string)
-    with pytest.raises(ValueError, match='not permitted'):
+    context = CmpCertConfRequestContext(cert_hash_algorithm_oid=algorithm_oid)
+    with pytest.raises(ValueError):
         _certconf_hash_algorithm(context, _certificate(hashes.SHA384()))
 
 

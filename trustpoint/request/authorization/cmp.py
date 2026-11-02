@@ -5,13 +5,11 @@
 
 from typing import Never, cast
 
-from cryptography.hazmat.primitives import hashes
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
 from cmp.models import CmpTransactionModel
 from cmp.util import PKI_STATUS_REJECTION, PKIFailureInfo
 from pki.models import IssuedCredentialModel
-from request import cert_conf
 from request.cmp_key_update import validate_key_update_identity
 from request.cmp_transaction_state import CmpTransactionState
 from request.request_context import (
@@ -34,8 +32,6 @@ from .base import (
     ProtocolAuthorization,
     SecurityConfigAuthorization,
 )
-
-CERTCONF_ALLOWED_DIGESTS = cert_conf.CERTCONF_ALLOWED_DIGESTS
 
 
 class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
@@ -140,8 +136,8 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
     """Authorization component for certConf messages.
 
     When the EE signals rejection (statusInfo.status == 2) the component looks
-    up the ``IssuedCredentialModel`` whose certificate hash matches the
-    ``cert_hash`` carried in the certConf body and stores it in
+    up the ``IssuedCredentialModel`` for the authenticated transaction's
+    final certificate and stores it in
     ``context.credential_to_revoke`` so that the operation processor can
     revoke the certificate via the standard revocation pipeline.
 
@@ -166,8 +162,14 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
             self._raise_authorization_error(error_message, context)
 
         cert_hash_hex: str = context.cert_hash.hex().upper()
-        hash_algorithm = self._resolve_certconf_hash_algorithm(context)
-        cert_model = self._resolve_issued_credential_by_cert_hash(context=context, hash_algorithm=hash_algorithm)
+        transaction = context.cmp_transaction
+        if transaction is None or transaction.final_certificate is None:
+            self._raise_authorization_error('certConf rejection is not bound to an issued CMP transaction.', context)
+        cert_model = (
+            IssuedCredentialModel.objects.filter(credential__certificate=transaction.final_certificate)
+            .select_related('domain', 'device', 'credential__certificate')
+            .first()
+        )
 
         if cert_model is None:
             error_message = (
@@ -182,34 +184,6 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
             cert_model.common_name,
             cert_hash_hex,
         )
-
-    def _resolve_certconf_hash_algorithm(self, context: CmpCertConfRequestContext) -> hashes.HashAlgorithm:
-        """Resolve the digest and map failures to authorization errors."""
-        try:
-            return cert_conf.resolve_certconf_hash_algorithm(context.cert_hash_algorithm_oid)
-        except (ValueError, TypeError) as exc:
-            self._raise_authorization_error(str(exc), context)
-
-    def _resolve_issued_credential_by_cert_hash(
-        self,
-        *,
-        context: CmpCertConfRequestContext,
-        hash_algorithm: hashes.HashAlgorithm,
-    ) -> IssuedCredentialModel | None:
-        """Resolve a certificate and retain authorization context errors."""
-        if context.cert_hash is None:
-            self._raise_authorization_error(
-                'certConf rejection received but certHash is missing. Authorization denied.',
-                context,
-            )
-        try:
-            return cert_conf.resolve_issued_credential_by_cert_hash(
-                context.cert_hash,
-                hash_algorithm,
-                require_implicit_hash=context.cert_hash_algorithm_oid is None,
-            )
-        except ValueError as exc:
-            self._raise_authorization_error(str(exc), context)
 
     def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> Never:
         """Set a generic error on the context and raise ValueError."""
