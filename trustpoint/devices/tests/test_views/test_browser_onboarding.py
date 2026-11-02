@@ -56,7 +56,8 @@ def test_browser_grants_deny_users_without_download_permission(
 
 
 def test_authorized_browser_grant_allows_remote_private_key_download(
-    download_client: Client, tls_client_credential_instance: dict[str, Any],
+    download_client: Client,
+    tls_client_credential_instance: dict[str, Any],
 ) -> None:
     """An authorized user can delegate a credential download to a browser without a user session."""
     credential = tls_client_credential_instance['issued_credential']
@@ -68,21 +69,26 @@ def test_authorized_browser_grant_allows_remote_private_key_download(
     remote_client = Client()
     response = remote_client.post(reverse('devices:browser_login'), {'otp': grant.get_otp_display()})
     assert response.status_code == 302
-    response = remote_client.post(response.url, {
-        'password': 'ExportPassword123!',
-        'file_format': CredentialFileFormat.PKCS12.value,
-    })
+    response = remote_client.post(
+        response.url,
+        {
+            'password': 'ExportPassword123!',
+            'file_format': CredentialFileFormat.PKCS12.value,
+        },
+    )
 
     assert response.status_code == 200
     key, certificate, _chain = load_key_and_certificates(
-        b''.join(response.streaming_content), b'ExportPassword123!',
+        b''.join(response.streaming_content),
+        b'ExportPassword123!',
     )
     assert key is not None
     assert certificate == credential.credential.certificate.get_certificate_serializer().as_crypto()
 
 
 def test_authorized_browser_grant_cancellation_invalidates_download(
-    download_client: Client, remote_device_credential_download_instance: dict[str, Any],
+    download_client: Client,
+    remote_device_credential_download_instance: dict[str, Any],
 ) -> None:
     """An authorized user can cancel a grant, including a previously issued download token."""
     grant = remote_device_credential_download_instance['remote_credential']
