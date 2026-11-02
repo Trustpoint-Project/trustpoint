@@ -429,6 +429,28 @@ class TestSftpClient:
         sftp.close.assert_called_once()
         ssh.close.assert_called_once()
 
+    @pytest.mark.parametrize('operation', ['put', 'mkdir', 'close'])
+    @pytest.mark.parametrize('error_type', [PermissionError, FileNotFoundError, OSError])
+    def test_upload_wraps_os_errors(self, tmp_path: Path, operation: str, error_type: type[OSError]) -> None:
+        """Remote I/O errors use the backup error contract and still close the connection."""
+        local_file = tmp_path / 'backup.dump.gz'
+        local_file.write_bytes(b'backup')
+        client = SftpClient(overrides={'auth_method': BackupOptions.AuthMethod.PASSWORD, 'password': 'test'})
+        ssh, sftp = Mock(), Mock()
+        error = error_type('Remote I/O failed')
+        if operation == 'mkdir':
+            sftp.stat.side_effect = FileNotFoundError('Missing directory')
+        getattr(sftp, operation).side_effect = error
+
+        with patch.object(client, '_connect_sftp', return_value=(ssh, sftp)):
+            with pytest.raises(SftpError) as caught:
+                client.upload_file(local_file, '/backups/backup.dump.gz')
+
+        assert caught.value.__cause__ is error
+        assert str(error) in str(caught.value)
+        assert local_file.read_bytes() == b'backup'
+        ssh.close.assert_called_once()
+
     @patch('util.sftp.paramiko.SSHClient')
     def test_upload_file_success(self, mock_ssh_class: Mock, tmp_path: Path) -> None:
         """Uploads retain their path handling and close the verified connection."""

@@ -210,7 +210,7 @@ class SftpClient:
                 raise SftpError(msg) from e
 
             sftp.close()
-        except paramiko.SSHException as e:
+        except (paramiko.SSHException, OSError) as e:
             msg = f'Upload failed: {e}'
             raise SftpError(msg) from e
         finally:
