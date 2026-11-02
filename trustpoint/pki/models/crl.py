@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Never
 
 from cryptography import x509
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -40,8 +40,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
     )
 
     crl_pem = models.TextField(
-        verbose_name=_('CRL in PEM format'),
-        help_text=_('The Certificate Revocation List in PEM format')
+        verbose_name=_('CRL in PEM format'), help_text=_('The Certificate Revocation List in PEM format')
     )
 
     crl_number = models.PositiveBigIntegerField(
@@ -51,33 +50,19 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         blank=True,
     )
 
-    this_update = models.DateTimeField(
-        verbose_name=_('This Update'),
-        help_text=_('The thisUpdate field from the CRL')
-    )
+    this_update = models.DateTimeField(verbose_name=_('This Update'), help_text=_('The thisUpdate field from the CRL'))
 
     next_update = models.DateTimeField(
-        verbose_name=_('Next Update'),
-        null=True,
-        blank=True,
-        help_text=_('The nextUpdate field from the CRL')
+        verbose_name=_('Next Update'), null=True, blank=True, help_text=_('The nextUpdate field from the CRL')
     )
 
     is_active = models.BooleanField(
-        _('Active'),
-        default=True,
-        help_text=_('Whether this is the current active CRL for the CA')
+        _('Active'), default=True, help_text=_('Whether this is the current active CRL for the CA')
     )
 
-    created_at = models.DateTimeField(
-        verbose_name=_('Created'),
-        auto_now_add=True
-    )
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-    updated_at = models.DateTimeField(
-        verbose_name=_('Updated'),
-        auto_now=True
-    )
+    updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
     class Meta:
         """Meta options for CrlModel."""
@@ -111,12 +96,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
 
     def raise_invalid_signature_error(self) -> Never:
         """Raises a ValidationError indicating an invalid CRL signature."""
-        raise ValidationError(
-            _(
-                'The CRL signature is invalid. '
-                'This CRL was not signed by this CA.'
-            )
-        )
+        raise ValidationError(_('The CRL signature is invalid. This CRL was not signed by this CA.'))
 
     @classmethod
     def create_from_pem(
@@ -140,7 +120,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
             CrlModel: The newly created CRL model.
 
         Raises:
-            ValidationError: If the CRL is invalid or doesn't match the CA.
+            ValidationError: If the CRL is invalid, doesn't match the CA, or duplicates an existing CRL number.
         """
         try:
             crl = x509.load_pem_x509_crl(crl_pem.encode())
@@ -149,24 +129,15 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
 
         if ca is not None:
             if not ca.ca_certificate_model:
-                raise ValidationError(
-                    _('The CA does not have a valid certificate model.')
-                )
+                raise ValidationError(_('The CA does not have a valid certificate model.'))
             ca_cert = ca.ca_certificate_model.get_certificate_serializer().as_crypto()
 
             # Check if CRL issuer matches CA subject
             if crl.issuer != ca_cert.subject:
-                raise ValidationError(
-                    _('The CRL issuer does not match the CA subject.')
-                )
+                raise ValidationError(_('The CRL issuer does not match the CA subject.'))
 
             if not crl.is_signature_valid(ca_cert.public_key()):  # type: ignore[arg-type]
-                raise ValidationError(
-                    _(
-                        'The CRL signature is invalid. '
-                        'This CRL was not signed by this CA.'
-                    )
-                )
+                raise ValidationError(_('The CRL signature is invalid. This CRL was not signed by this CA.'))
 
         crl_number = None
         try:
@@ -190,9 +161,6 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
             is_active=set_active if ca is not None else False,
         )
         crl_model.save()
-
-        if set_active and ca is not None:
-            cls.objects.filter(ca=ca, is_active=True).exclude(pk=crl_model.pk).update(is_active=False)
 
         return crl_model
 
@@ -264,11 +232,16 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         return validity_period.total_seconds() / 3600
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Override save to validate before saving."""
-        # Ensure only one active CRL per CA
-        if self.is_active:
-            CrlModel.objects.filter(ca=self.ca, is_active=True).exclude(pk=self.pk).update(is_active=False)
-        super().save(*args, **kwargs)
+        """Replace the active CRL atomically and report duplicate identifiers as validation errors."""
+        try:
+            with transaction.atomic():
+                if self.is_active:
+                    CrlModel.objects.filter(ca=self.ca, is_active=True).exclude(pk=self.pk).update(is_active=False)
+                super().save(*args, **kwargs)
+        except IntegrityError:
+            # Check uniqueness after rollback so the caller's transaction remains usable.
+            self.validate_unique()
+            raise
 
     def pre_delete(self) -> None:
         """Called before deleting the model."""

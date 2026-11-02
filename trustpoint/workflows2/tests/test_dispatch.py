@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import DEFAULT, patch
 
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -78,12 +78,12 @@ class DispatchTests(TestCase):
     def _store_definition(self) -> Workflow2Definition:
         ir = compile_workflow_yaml(YAML_TRUSTPOINT)
         return Workflow2Definition.objects.create(
-            name="TP device created",
+            name='TP device created',
             enabled=True,
-            trigger_on=ir["trigger"]["on"],
+            trigger_on=ir['trigger']['on'],
             yaml_text=YAML_TRUSTPOINT,
             ir_json=ir,
-            ir_hash=ir["meta"]["ir_hash"],
+            ir_hash=ir['meta']['ir_hash'],
         )
 
     def test_dispatch_creates_instance_for_matching_trigger_sync(self) -> None:
@@ -96,13 +96,13 @@ class DispatchTests(TestCase):
         svc = WorkflowDispatchService()
         with self.captureOnCommitCallbacks(execute=True):
             instances = svc.emit_event(
-                on="device.created",
-                event={"device": {"common_name": "dev1"}},
+                on='device.created',
+                event={'device': {'common_name': 'dev1'}},
                 source=EventSource(trustpoint=True),
             )
 
         self.assertEqual(len(instances), 1)
-        self.assertEqual(instances[0].definition.name, "TP device created")
+        self.assertEqual(instances[0].definition.name, 'TP device created')
         instances[0].refresh_from_db()
         self.assertEqual(instances[0].status, Workflow2Instance.STATUS_FINISHED)
 
@@ -118,8 +118,8 @@ class DispatchTests(TestCase):
 
         svc = WorkflowDispatchService()
         instances = svc.emit_event(
-            on="device.created",
-            event={"device": {"common_name": "dev1"}},
+            on='device.created',
+            event={'device': {'common_name': 'dev1'}},
             source=EventSource(trustpoint=True),
         )
 
@@ -133,7 +133,7 @@ class DispatchTests(TestCase):
 
         # Run worker once -> should execute and mark finished.
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
-        worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id="test-worker")
+        worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id='test-worker')
         stats = worker.tick()
         self.assertEqual(stats.claimed, 1)
 
@@ -151,8 +151,8 @@ class DispatchTests(TestCase):
         svc = WorkflowDispatchService()
         with self.captureOnCommitCallbacks(execute=True):
             instances = svc.emit_event(
-                on="device.created",
-                event={"device": {"common_name": "dev1"}},
+                on='device.created',
+                event={'device': {'common_name': 'dev1'}},
                 source=EventSource(trustpoint=True),
             )
 
@@ -172,12 +172,12 @@ class DispatchTests(TestCase):
         cfg.save()
 
         self._store_definition()
-        Workflow2WorkerHeartbeat.beat("live-worker")
+        Workflow2WorkerHeartbeat.beat('live-worker')
 
         svc = WorkflowDispatchService()
         instances = svc.emit_event(
-            on="device.created",
-            event={"device": {"common_name": "dev1"}},
+            on='device.created',
+            event={'device': {'common_name': 'dev1'}},
             source=EventSource(trustpoint=True),
         )
 
@@ -195,13 +195,13 @@ class DispatchTests(TestCase):
         self._store_definition()
         svc = WorkflowDispatchService()
         first = svc.emit_event(
-            on="device.created",
-            event={"device": {"common_name": "dev1"}},
+            on='device.created',
+            event={'device': {'common_name': 'dev1'}},
             source=EventSource(trustpoint=True),
         )[0]
         second = svc.emit_event(
-            on="device.created",
-            event={"device": {"common_name": "dev2"}},
+            on='device.created',
+            event={'device': {'common_name': 'dev2'}},
             source=EventSource(trustpoint=True),
         )[0]
 
@@ -232,12 +232,12 @@ class DispatchTests(TestCase):
         self._store_definition()
         svc = WorkflowDispatchService()
         inst = svc.emit_event(
-            on="device.created",
-            event={"device": {"common_name": "dev1"}},
+            on='device.created',
+            event={'device': {'common_name': 'dev1'}},
             source=EventSource(trustpoint=True),
         )[0]
 
-        Workflow2WorkerHeartbeat.beat("live-worker")
+        Workflow2WorkerHeartbeat.beat('live-worker')
         cfg.mode = WorkflowExecutionConfig.Mode.AUTO
         cfg.worker_stale_after_seconds = 30
         cfg.save()
@@ -257,8 +257,8 @@ class DispatchTests(TestCase):
 
         svc = WorkflowDispatchService()
         instances = svc.emit_event(
-            on="device.updated",
-            event={"device": {"common_name": "dev1"}},
+            on='device.updated',
+            event={'device': {'common_name': 'dev1'}},
             source=EventSource(trustpoint=True),
         )
 
@@ -271,18 +271,18 @@ class DispatchTests(TestCase):
 
         ir = compile_workflow_yaml(YAML_APPLY_FILTERED)
         Workflow2Definition.objects.create(
-            name="Filtered workflow",
+            name='Filtered workflow',
             enabled=True,
-            trigger_on=ir["trigger"]["on"],
+            trigger_on=ir['trigger']['on'],
             yaml_text=YAML_APPLY_FILTERED,
             ir_json=ir,
-            ir_hash=ir["meta"]["ir_hash"],
+            ir_hash=ir['meta']['ir_hash'],
         )
 
         svc = WorkflowDispatchService()
         instances = svc.emit_event(
-            on="device.created",
-            event={"device": {"common_name": "switch-02"}},
+            on='device.created',
+            event={'device': {'common_name': 'switch-02'}},
             source=EventSource(trustpoint=True),
         )
 
@@ -294,21 +294,21 @@ class DispatchTests(TestCase):
         cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
-        disabled_yaml = YAML_TRUSTPOINT.replace("enabled: true", "enabled: false", 1)
+        disabled_yaml = YAML_TRUSTPOINT.replace('enabled: true', 'enabled: false', 1)
         ir = compile_workflow_yaml(disabled_yaml)
         Workflow2Definition.objects.create(
-            name="Disabled in IR",
+            name='Disabled in IR',
             enabled=True,
-            trigger_on=ir["trigger"]["on"],
+            trigger_on=ir['trigger']['on'],
             yaml_text=disabled_yaml,
             ir_json=ir,
-            ir_hash=ir["meta"]["ir_hash"],
+            ir_hash=ir['meta']['ir_hash'],
         )
 
         svc = WorkflowDispatchService()
         instances = svc.emit_event(
-            on="device.created",
-            event={"device": {"common_name": "dev1"}},
+            on='device.created',
+            event={'device': {'common_name': 'dev1'}},
             source=EventSource(trustpoint=True),
         )
 
@@ -322,8 +322,8 @@ class DispatchTests(TestCase):
 
         svc = WorkflowDispatchService()
         outcome = svc.emit_event_outcome(
-            on="device.created",
-            event={"device": {"common_name": "dev1"}},
+            on='device.created',
+            event={'device': {'common_name': 'dev1'}},
             source=EventSource(trustpoint=True),
         )
 
@@ -332,47 +332,74 @@ class DispatchTests(TestCase):
 
     def test_workflow2run_unique_idempotency_constraint_rejects_duplicate_non_empty_key(self) -> None:
         Workflow2Run.objects.create(
-            trigger_on="device.created",
-            event_json={"x": 1},
-            source_json={"trustpoint": True},
-            idempotency_key="same-key",
+            trigger_on='device.created',
+            event_json={'x': 1},
+            source_json={'trustpoint': True},
+            idempotency_key='same-key',
         )
 
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 Workflow2Run.objects.create(
-                    trigger_on="device.created",
-                    event_json={"x": 2},
-                    source_json={"trustpoint": True},
-                    idempotency_key="same-key",
+                    trigger_on='device.created',
+                    event_json={'x': 2},
+                    source_json={'trustpoint': True},
+                    idempotency_key='same-key',
                 )
+
+    def test_get_or_create_run_recovers_from_key_collision(self) -> None:
+        """A losing insert returns the existing run without breaking the transaction."""
+        existing = Workflow2Run.objects.create(
+            trigger_on='device.created',
+            event_json={'x': 1},
+            source_json={'trustpoint': True},
+            idempotency_key='same-key',
+        )
+        svc = WorkflowDispatchService()
+        # Miss the competing row initially, then use real SQL for the fallback lookup.
+        with patch.object(
+            svc,
+            '_get_idempotent_run',
+            wraps=svc._get_idempotent_run,
+            side_effect=[None, DEFAULT],
+        ):
+            run = svc.get_or_create_run(
+                on='device.created',
+                event={'x': 2},
+                source=EventSource(trustpoint=True),
+                idempotency_key='same-key',
+            )
+
+        self.assertEqual(run.pk, existing.pk)
+        self.assertEqual(run.event_json, {'x': 1})
+        self.assertEqual(Workflow2Run.objects.count(), 1)
 
     def test_workflow2run_unique_idempotency_constraint_allows_blank_keys(self) -> None:
         Workflow2Run.objects.create(
-            trigger_on="device.created",
-            event_json={"x": 1},
-            source_json={"trustpoint": True},
-            idempotency_key="",
+            trigger_on='device.created',
+            event_json={'x': 1},
+            source_json={'trustpoint': True},
+            idempotency_key='',
         )
         Workflow2Run.objects.create(
-            trigger_on="device.created",
-            event_json={"x": 2},
-            source_json={"trustpoint": True},
-            idempotency_key="",
+            trigger_on='device.created',
+            event_json={'x': 2},
+            source_json={'trustpoint': True},
+            idempotency_key='',
         )
 
         self.assertEqual(
-            Workflow2Run.objects.filter(trigger_on="device.created", idempotency_key="").count(),
+            Workflow2Run.objects.filter(trigger_on='device.created', idempotency_key='').count(),
             2,
         )
 
     def test_release_run_idempotency_releases_finalized_run_key(self) -> None:
         svc = WorkflowDispatchService()
         first = Workflow2Run.objects.create(
-            trigger_on="device.created",
-            event_json={"x": 1},
-            source_json={"trustpoint": True},
-            idempotency_key="same-key",
+            trigger_on='device.created',
+            event_json={'x': 1},
+            source_json={'trustpoint': True},
+            idempotency_key='same-key',
             status=Workflow2Run.STATUS_FINISHED,
             finalized=True,
         )
@@ -380,21 +407,21 @@ class DispatchTests(TestCase):
         svc.release_run_idempotency(run_id=first.id)
 
         first.refresh_from_db()
-        self.assertEqual(first.idempotency_key, "")
+        self.assertEqual(first.idempotency_key, '')
 
         second = svc.get_or_create_run(
-            on="device.created",
-            event={"x": 2},
+            on='device.created',
+            event={'x': 2},
             source=EventSource(trustpoint=True),
-            idempotency_key="same-key",
+            idempotency_key='same-key',
         )
         self.assertNotEqual(first.id, second.id)
-        self.assertEqual(second.idempotency_key, "same-key")
+        self.assertEqual(second.idempotency_key, 'same-key')
 
     def test_workflow2job_unique_active_constraint_rejects_duplicate_active_job(self) -> None:
         definition = self._store_definition()
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
-        instance = runtime.create_instance(definition=definition, event={"device": {"common_name": "dev1"}})
+        instance = runtime.create_instance(definition=definition, event={'device': {'common_name': 'dev1'}})
 
         Workflow2Job.objects.create(
             instance=instance,
@@ -417,7 +444,7 @@ class DispatchTests(TestCase):
 
         definition = self._store_definition()
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
-        instance = runtime.create_instance(definition=definition, event={"device": {"common_name": "dev1"}})
+        instance = runtime.create_instance(definition=definition, event={'device': {'common_name': 'dev1'}})
         existing = Workflow2Job.objects.create(
             instance=instance,
             kind=Workflow2Job.KIND_RUN,
@@ -441,10 +468,10 @@ class DispatchTests(TestCase):
         now = timezone.now()
 
         expected_run = Workflow2Run.objects.create(
-            trigger_on="device.created",
-            event_json={"x": 1},
-            source_json={"trustpoint": True},
-            idempotency_key="",
+            trigger_on='device.created',
+            event_json={'x': 1},
+            source_json={'trustpoint': True},
+            idempotency_key='',
             status=Workflow2Run.STATUS_FINISHED,
             finalized=True,
             created_at=now,
@@ -452,16 +479,16 @@ class DispatchTests(TestCase):
         expected_instance = Workflow2Instance.objects.create(
             definition=definition,
             run=expected_run,
-            event_json={"x": 1},
+            event_json={'x': 1},
             vars_json={},
             status=Workflow2Instance.STATUS_FINISHED,
         )
 
         Workflow2Run.objects.create(
-            trigger_on="device.created",
-            event_json={"x": 2},
-            source_json={"trustpoint": True},
-            idempotency_key="",
+            trigger_on='device.created',
+            event_json={'x': 2},
+            source_json={'trustpoint': True},
+            idempotency_key='',
             status=Workflow2Run.STATUS_ERROR,
             finalized=False,
             created_at=now + timedelta(seconds=1),
@@ -470,16 +497,16 @@ class DispatchTests(TestCase):
         svc = WorkflowDispatchService()
         with patch.object(
             WorkflowDispatchService,
-            "_emit_event_internal",
+            '_emit_event_internal',
             return_value=(expected_run, [expected_instance]),
         ):
             outcome = svc.emit_event_outcome(
-                on="device.created",
-                event={"device": {"common_name": "dev1"}},
+                on='device.created',
+                event={'device': {'common_name': 'dev1'}},
                 source=EventSource(trustpoint=True),
             )
 
         self.assertIsNotNone(outcome)
         self.assertEqual(outcome.run.id, expected_run.id)
         self.assertEqual(outcome.instances[0].run_id, expected_run.id)
-        self.assertEqual(outcome.status, "completed")
+        self.assertEqual(outcome.status, 'completed')

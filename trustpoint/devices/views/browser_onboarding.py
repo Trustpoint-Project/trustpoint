@@ -29,6 +29,8 @@ from trustpoint.page_context import (
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     PageContextMixin,
 )
+from trustpoint.views.base import UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -39,9 +41,13 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
-class AbstractBrowserOnboardingOTPView(PageContextMixin, DetailView[IssuedCredentialModel]):
+
+class AbstractBrowserOnboardingOTPView(
+    UserPermissionRequiredMixin, PageContextMixin, DetailView[IssuedCredentialModel]
+):
     """View to display the OTP for remote credential download (aka. browser onboarding)."""
 
+    permission_required = AppPermissions.DOWNLOAD_CREDENTIALS
     http_method_names = ('get',)
 
     model = IssuedCredentialModel
@@ -98,9 +104,12 @@ class DeviceBrowserOnboardingOTPView(AbstractBrowserOnboardingOTPView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class AbstractBrowserOnboardingCancelView(PageContextMixin, DetailView[IssuedCredentialModel]):
+class AbstractBrowserOnboardingCancelView(
+    UserPermissionRequiredMixin, PageContextMixin, DetailView[IssuedCredentialModel]
+):
     """View to cancel the browser onboarding process and delete the associated RemoteDeviceCredentialDownloadModel."""
 
+    permission_required = AppPermissions.DOWNLOAD_CREDENTIALS
     http_method_names = ('get',)
 
     model = IssuedCredentialModel

@@ -355,20 +355,20 @@ class BackupManageViewTest(TestCase):
 
     @patch('management.views.backup.settings')
     @patch('management.views.backup.create_db_backup')
-    @patch('management.views.backup.SftpClient')
+    @patch('util.sftp.SftpClient._connect_sftp')
     def test_create_sftp_backup_upload_error(
-        self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock
+        self, mock_connect_sftp: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock
     ) -> None:
-        """Test SFTP backup when upload fails."""
+        """Real upload error conversion lets the view report failure and retain the local backup."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
         mock_create_db_backup.return_value = 'backup_2025-10-30_12-00-00.dump.gz'
-        mock_client = MagicMock()
-        mock_client.remote_directory = None
-        mock_client.upload_file.side_effect = SftpError('Upload failed')
-        mock_sftp_client.return_value = mock_client
+        ssh, sftp = MagicMock(), MagicMock()
+        sftp.put.side_effect = PermissionError('Permission denied')
+        mock_connect_sftp.return_value = (ssh, sftp)
 
         # Create the backup file
-        (self.backup_dir / 'backup_2025-10-30_12-00-00.dump.gz').write_text('test')
+        local_file = self.backup_dir / 'backup_2025-10-30_12-00-00.dump.gz'
+        local_file.write_text('test')
 
         BackupOptions.objects.create(
             host_key=SFTP_HOST_KEY,
@@ -386,6 +386,9 @@ class BackupManageViewTest(TestCase):
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('SFTP upload failed' in str(message) for message in messages))
+        self.assertTrue(any('Permission denied' in str(message) for message in messages))
+        self.assertEqual(local_file.read_text(), 'test')
+        ssh.close.assert_called_once()
 
     @patch('management.views.backup.settings')
     @patch('management.views.backup.create_db_backup')

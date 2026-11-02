@@ -257,9 +257,12 @@ def test_crl_duplicate_does_not_deactivate_current(api, issuing_ca_instance):
     """A duplicate import rolls back changes to the active CRL."""
     ca = issuing_ca_instance['issuing_ca']
     assert api.post('/api/crls/', {'ca': ca.pk, 'crl_file': crl_upload(issuing_ca_instance)}).status_code == 201
+    active = ca.get_active_crl()
     response = api.post('/api/crls/', {'ca': ca.pk, 'crl_file': crl_upload(issuing_ca_instance)})
-    assert response.status_code == 409
-    assert CrlModel.objects.filter(ca=ca, is_active=True).count() == 1
+    assert response.status_code == 400
+    assert 'already exists' in str(response.data)
+    assert ca.get_active_crl().pk == active.pk
+    assert ca.crls.count() == 1
 
 
 def test_unassociated_crl_is_inactive(api, issuing_ca_instance):
