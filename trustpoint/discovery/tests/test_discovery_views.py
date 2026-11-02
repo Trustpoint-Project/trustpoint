@@ -157,7 +157,9 @@ class TestRunScanInBackground:
         ScanManager.scanner_instance = scanner
 
         with (
-            patch('discovery.views.CertificateModel.save_certificate', return_value=sentinel.saved_certificate) as mock_save_certificate,
+            patch(
+                'discovery.views.CertificateModel.save_certificate', return_value=sentinel.saved_certificate
+            ) as mock_save_certificate,
             patch('discovery.views.DiscoveredDevice.objects.update_or_create') as mock_update_or_create,
         ):
             ScanManager.run_scan_in_background('192.168.1.1', '192.168.1.100')
@@ -311,6 +313,22 @@ class TestDiscoveryViews:
 
         assert response.status_code == 302
         assert DiscoveryPort.objects.count() == 0
+
+    @pytest.mark.parametrize('existing_port', [True, False])
+    def test_delete_port_requires_discovery_permission(self, client, existing_port) -> None:
+        """Unauthorized users receive 403 before lookup and cannot change scan coverage."""
+        user = get_user_model().objects.create_user(username='discovery-viewer', password='testpass123')
+        assert not user.has_perm('users.manage_certificate_discovery')
+        client.force_login(user)
+        port = DiscoveryPort.objects.create(port_number=4840, description='OPC UA')
+        port_id = port.pk if existing_port else port.pk + 1
+
+        response = client.post(reverse('discovery:delete_port', args=[port_id]))
+
+        assert response.status_code == 403
+        port.refresh_from_db()
+        assert port.port_number == 4840
+        assert port.description == 'OPC UA'
 
     def test_delete_port_removes_existing_port(self, authenticated_client) -> None:
         """Deleting a configured port should remove it from storage."""
