@@ -267,6 +267,15 @@
                         </div>
 
                         <div class="mb-3">
+                            {{ backup_options_form.host_key.label_tag }}
+                            {{ backup_options_form.host_key }}
+                            <div class="form-text">{{ backup_options_form.host_key.help_text }}</div>
+                            {% for error in backup_options_form.host_key.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="mb-3">
                             {{ backup_options_form.port.label_tag }}
                             {{ backup_options_form.port }}
 

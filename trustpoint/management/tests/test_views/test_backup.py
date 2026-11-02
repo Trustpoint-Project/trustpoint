@@ -11,6 +11,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import CommandError
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
+from management.tests.ssh_helpers import SFTP_HOST_KEY
 from management.models import BackupOptions
 from management.backup_artifacts import verify_backup_manifest
 from management.views.backup import get_backup_file_data, create_db_backup
@@ -213,6 +214,7 @@ class BackupManageViewTest(TestCase):
     def test_get_context_data_with_saved_settings(self) -> None:
         """Test context data when settings are saved."""
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
@@ -283,6 +285,7 @@ class BackupManageViewTest(TestCase):
         (self.backup_dir / 'backup_2025-10-30_12-00-00.dump.gz').write_text('test')
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
@@ -334,6 +337,7 @@ class BackupManageViewTest(TestCase):
         mock_sftp_client.side_effect = SftpError('Connection failed')
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
@@ -367,6 +371,7 @@ class BackupManageViewTest(TestCase):
         (self.backup_dir / 'backup_2025-10-30_12-00-00.dump.gz').write_text('test')
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
@@ -401,6 +406,7 @@ class BackupManageViewTest(TestCase):
         mock_sftp_client.return_value = mock_client
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
@@ -435,6 +441,7 @@ class BackupManageViewTest(TestCase):
         mock_sftp_client.return_value = mock_client
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
@@ -461,6 +468,7 @@ class BackupManageViewTest(TestCase):
             {
                 'test_sftp_connection': '',
                 'host': 'localhost',
+                'host_key': SFTP_HOST_KEY,
                 'port': 22,
                 'user': 'user',
                 'auth_method': BackupOptions.AuthMethod.PASSWORD,
@@ -485,6 +493,7 @@ class BackupManageViewTest(TestCase):
             {
                 'test_sftp_connection': '',
                 'host': 'localhost',
+                'host_key': SFTP_HOST_KEY,
                 'port': 22,
                 'user': 'user',
                 'auth_method': BackupOptions.AuthMethod.PASSWORD,
@@ -503,6 +512,7 @@ class BackupManageViewTest(TestCase):
             {
                 'test_sftp_connection': '',
                 'host': '',  # Missing required field
+                'host_key': SFTP_HOST_KEY,
                 'port': 22,
                 'user': 'user',
             },
@@ -518,6 +528,7 @@ class BackupManageViewTest(TestCase):
                 'save_backup_settings': '',
                 'enable_sftp_storage': True,
                 'host': 'localhost',
+                'host_key': SFTP_HOST_KEY,
                 'port': 22,
                 'user': 'testuser',
                 'auth_method': BackupOptions.AuthMethod.PASSWORD,
@@ -543,6 +554,7 @@ class BackupManageViewTest(TestCase):
                 'save_backup_settings': '',
                 'enable_sftp_storage': True,
                 'host': '',  # Missing required field
+                'host_key': SFTP_HOST_KEY,
                 'port': 'invalid',  # Invalid port
             },
         )
@@ -554,6 +566,7 @@ class BackupManageViewTest(TestCase):
         """Test resetting backup settings."""
         # Create settings first
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
