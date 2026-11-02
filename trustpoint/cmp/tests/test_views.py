@@ -343,7 +343,7 @@ class TestCmpInitializationRequestView:
 
         # Verify CmpAuthorization was initialized with correct operations
         mock_authz_cls.assert_called_once_with(
-            ['initialization', 'certification', 'keyupdate', 'revocation', 'certconf']
+            ['initialization', 'certification', 'keyupdate', 'getcacerts', 'revocation', 'certconf']
         )
 
 

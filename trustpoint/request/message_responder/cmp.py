@@ -25,10 +25,12 @@ from pki.models.ca_rollover import CaRolloverState
 from pki.services.ca_rollover import CaRolloverService
 from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
+from request.operation_processor.cmp_general import CA_CERTS_OID
 from request.request_context import (
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
     CmpCertificateRequestContext,
+    CmpGeneralRequestContext,
     CmpPollRequestContext,
     CmpRevocationRequestContext,
     HttpBaseRequestContext,
@@ -59,6 +61,8 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
             return None
         elif isinstance(context, CmpCertConfRequestContext):
             responder = CmpPkiConfResponder()
+        elif isinstance(context, CmpGeneralRequestContext):
+            responder = CmpGeneralResponder()
         elif isinstance(context, CmpCertificateRequestContext) and context.issued_certificate:
             if context.operation == 'initialization':
                 responder = CmpInitializationResponder()
@@ -198,14 +202,17 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
     @staticmethod
     def _sign_pki_message(pki_message: rfc4210.PKIMessage, context: CmpBaseRequestContext) -> rfc4210.PKIMessage:
         """Applies signature-based protection to the base PKI message."""
-        if context.operation == 'keyupdate' or (
+        if context.operation == 'getcacerts':
+            # Neither genp nor error responses may echo request-only generalInfo.
+            pki_message['header']['generalInfo'].clear()
+        if context.operation in ('keyupdate', 'getcacerts') or (
             context.cmp_transaction is not None and context.cmp_transaction.operation == 'keyupdate'
         ):
             credential = context.owner_credential or context.issuer_credential
             if credential is None and context.domain is not None:
                 credential = context.domain.get_issuing_ca_or_value_error().credential
             if credential is None:
-                msg = 'CMP key update response requires a signing credential.'
+                msg = 'CMP response requires a signing credential.'
                 raise ValueError(msg)
             algorithm = SignatureSuite.from_certificate(credential.get_certificate()).algorithm_identifier
             pki_message['header']['protectionAlg']['algorithm'] = algorithm.dotted_string
@@ -531,6 +538,54 @@ class CmpCertificationResponder(CmpMessageResponder):
             context=context,
         )
         CmpCertificationResponder._protect_and_respond(pki_message, context)
+
+
+class CmpGeneralResponder(CmpMessageResponder):
+    """Return domain-scoped CA discovery content in a signed genp message."""
+
+    @staticmethod
+    def build_response(context: BaseRequestContext) -> None:
+        """Encode id-it-caCerts, omitting infoValue when no certificates are available."""
+        if not isinstance(context, CmpGeneralRequestContext):
+            msg = 'CmpGeneralResponder requires a CmpGeneralRequestContext.'
+            raise TypeError(msg)
+        credential = context.issuer_credential
+        if credential is None:
+            msg = 'CMP general response requires a signing credential.'
+            raise ValueError(msg)
+        certificate = credential.get_certificate()
+        try:
+            ski = certificate.extensions.get_extension_for_class(x509.SubjectKeyIdentifier).value
+        except x509.ExtensionNotFound:
+            ski = x509.SubjectKeyIdentifier.from_public_key(certificate.public_key())
+        kid = rfc2459.KeyIdentifier(ski.digest).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2),
+        )
+        response = rfc4210.PKIMessage()
+        response['header'] = CmpGeneralResponder._build_response_message_header(
+            context.parsed_message,
+            kid,
+            certificate,
+        )
+        # Request generalInfo fields do not belong to support responses.
+        response['header']['generalInfo'].clear()
+        item = rfc4210.InfoTypeAndValue()
+        item['infoType'] = CA_CERTS_OID
+        if context.ca_certificates:
+            certificates = univ.SequenceOf(componentType=rfc4210.CMPCertificate())
+            for ca_certificate in context.ca_certificates:
+                cert, _ = decoder.decode(ca_certificate.public_bytes(Encoding.DER), asn1Spec=rfc4210.CMPCertificate())
+                certificates.append(cert)
+            item['infoValue'] = encoder.encode(certificates)
+        # pyasn1-modules calls the RFC genp choice 'gen'; its wire tag is [22].
+        response['body']['gen'].append(item)
+        for signer_certificate in dict.fromkeys([certificate, *credential.get_certificate_chain()]):
+            cert, _ = decoder.decode(signer_certificate.public_bytes(Encoding.DER), asn1Spec=rfc4210.CMPCertificate())
+            response['extraCerts'].append(cert)
+        response = CmpGeneralResponder._sign_pki_message(response, context)
+        context.http_response_status = 200
+        context.http_response_content_type = 'application/pkixcmp'
+        context.http_response_content = encoder.encode(response)
 
 
 class CmpTransactionResponder(CmpMessageResponder):

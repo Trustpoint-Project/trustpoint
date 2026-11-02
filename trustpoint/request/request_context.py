@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
+from dataclasses import field as dataclass_field
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -284,6 +285,13 @@ class EstCertificateRequestContext(EstBaseRequestContext, BaseCertificateRequest
 @dataclass(kw_only=True)
 class EstRevocationRequestContext(EstBaseRequestContext, BaseRevocationRequestContext):
     """EST context for certificate revocation requests."""
+
+
+@dataclass(kw_only=True)
+class CmpGeneralRequestContext(CmpBaseRequestContext):
+    """CMP support message context, independent of certificate issuance profiles."""
+
+    ca_certificates: list[x509.Certificate] = dataclass_field(default_factory=list)
 
 
 @dataclass(kw_only=True)

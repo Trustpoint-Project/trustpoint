@@ -11,6 +11,7 @@ Trustpoint implements CMP endpoints that allow devices and clients to:
 - Update valid certificates (Key Update Request - KUR / Key Update Response - KUP)
 - Confirm certificate acceptance (Certificate Confirm - certConf)
 - Revoke certificates (Revocation Request - RR)
+- Retrieve domain CA certificates (General Message / Response - genm / genp)
 
 ## Base URL
 
@@ -98,6 +99,7 @@ POST /.well-known/cmp/p/<domain>~<cert_profile>/<operation>
 | `certification` | Certificate Request / Response (`cr` / `cp`) | RFC 9483 Section 4.1.2 |
 | `keyupdate` | Key Update Request / Response (`kur` / `kup`) | RFC 9483 Section 4.1.3 |
 | `revocation` | Revocation Request / Response (`rr` / `rp`) | RFC 9483 Section 4.2 |
+| `getcacerts` | CA certificate retrieval (`genm` / `genp`, `id-it-caCerts`) | RFC 9483 Section 4.3.1 |
 
 `certConf` and `pollReq` are follow-up message bodies, not separate HTTP operation
 labels. Use the endpoint of the original enrollment operation for both.
@@ -251,6 +253,37 @@ openssl cmp \
   -cert cert_to_revoke.pem \
   -key cert_key.pem
 ```
+
+### Example 5: Retrieve CA Certificates
+
+Send a signed general message containing exactly one `InfoTypeAndValue` with
+`infoType` set to `id-it-caCerts` (`1.3.6.1.5.5.7.4.17`) and no `infoValue`.
+The HTTP operation label is `getcacerts`. For example:
+
+```bash
+openssl cmp \
+  -cmd genm -infotype caCerts \
+  -server https://trustpoint.example.com/.well-known/cmp/p/production/getcacerts \
+  -tls_used -tls_trusted https_root_ca.pem \
+  -cert current_cert.pem -key current_key.pem \
+  -trusted cmp_root_ca.pem \
+  -cacertsout ca_certificates.pem
+```
+
+The request must be signed with an active Trustpoint-issued application or domain
+certificate belonging to the requested domain. Shared-secret and unprotected
+requests are rejected. If the domain label is omitted, authentication determines
+the device's domain. No certificate profile is required.
+
+The signed `genp` response contains the domain's issuing CA certificate and its
+chain, plus any prepared rollover chain, with duplicates removed. Its single
+`InfoTypeAndValue` uses the same OID and carries a DER sequence of `CMPCertificate`
+values; `infoValue` is omitted when the certificate list is empty. The response
+includes its signing certificate and chain in `extraCerts`.
+
+This operation currently requires a local CA signing credential. It does not
+issue certificates, consume onboarding secrets, or create enrollment transactions.
+Other general-message OIDs are not implemented and receive CMP error responses.
 
 ## Error Handling
 

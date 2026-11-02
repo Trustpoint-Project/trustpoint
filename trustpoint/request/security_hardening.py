@@ -51,6 +51,7 @@ from request.request_context import (
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
     CmpCertificateRequestContext,
+    CmpGeneralRequestContext,
     CmpPollRequestContext,
     CmpRevocationRequestContext,
     EstBaseRequestContext,
@@ -295,6 +296,10 @@ def authenticate_cmp_request(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
     pbm = _is_pbm(context)
 
+    if isinstance(context, CmpGeneralRequestContext):
+        _authenticate_issued_cmp_signer(context, operation_label='CMP CA certificate retrieval')
+        return
+
     if isinstance(context, CmpPollRequestContext):
         tx = CmpTransactionState.get_by_transaction_id(str(context.cmp_transaction_id or ''))
         if tx is not None and tx.operation == 'keyupdate':
@@ -361,15 +366,20 @@ def authenticate_cmp_request(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
 
 def _authenticate_key_update_signer(context: CmpBaseRequestContext) -> None:
-    """Authenticate an active issued application or domain certificate for an update."""
+    """Authenticate the certificate whose key is being updated."""
+    _authenticate_issued_cmp_signer(context, operation_label='CMP key update')
+
+
+def _authenticate_issued_cmp_signer(context: CmpBaseRequestContext, *, operation_label: str) -> None:
+    """Authenticate an active issued certificate for updates or support messages."""
     if _is_pbm(context):
-        msg = 'CMP key update requires signature-based protection.'
+        msg = f'{operation_label} requires signature-based protection.'
         raise ValueError(msg)
     signer, _ = _extract_cmp_signer(context)
     context.client_certificate = signer
     ClientCertificateAuthentication(domain_credential_only=False).authenticate(context)
     if context.device is None:
-        msg = 'CMP key update signer has no device.'
+        msg = f'{operation_label} signer has no device.'
         raise ValueError(msg)
     context.domain = context.domain or context.device.domain
     _verify_declared_signature_algorithm(context, signer)
@@ -377,14 +387,14 @@ def _authenticate_key_update_signer(context: CmpBaseRequestContext) -> None:
     message = cast('rfc4210.PKIMessage', context.parsed_message)
     sender = message['header']['sender']
     if sender.getName() != 'directoryName' or NameParser.parse_name(sender['directoryName']) != signer.subject:
-        msg = 'CMP key update sender must match the protection certificate subject.'
+        msg = f'{operation_label} sender must match the protection certificate subject.'
         raise ValueError(msg)
     try:
         usage = signer.extensions.get_extension_for_class(x509.KeyUsage).value
     except x509.ExtensionNotFound:
         usage = None
     if usage is not None and not usage.digital_signature:
-        msg = 'CMP key update signer must permit digitalSignature.'
+        msg = f'{operation_label} signer must permit digitalSignature.'
         raise ValueError(msg)
     CmpSignatureBasedRevocationAuthentication()._verify_protection_signature(  # noqa: SLF001
         context.parsed_message,
@@ -517,12 +527,22 @@ def _verify_cmp_pop_signature(
         raise TypeError(msg)
 
 
+def _validate_cmp_general_transaction_freshness(context: CmpGeneralRequestContext) -> None:
+    """Keep independent support operations from reusing enrollment transaction IDs."""
+    if CmpTransactionState.get_by_transaction_id(str(context.cmp_transaction_id or '').lower()) is not None:
+        msg = 'CMP transactionID is already in use for another operation.'
+        raise ValueError(msg)
+
+
 def validate_cmp_transaction_freshness(context: CmpBaseRequestContext) -> CmpTransactionModel | None:
     """Validate transaction and nonce continuity, expiring overdue confirmations.
 
     TP-TA-03: stateful follow-up messages require transactionID plus the
     expected recipNonce and a fresh senderNonce.
     """
+    if isinstance(context, CmpGeneralRequestContext):
+        _validate_cmp_general_transaction_freshness(context)
+        return None
     if not isinstance(context, (CmpPollRequestContext, CmpCertConfRequestContext)):
         return None
     transaction_id = str(context.cmp_transaction_id or '').strip().lower()
@@ -570,6 +590,8 @@ def mark_cmp_client_nonce(context: CmpBaseRequestContext) -> None:
 
 def record_cmp_response_nonce(context: CmpBaseRequestContext) -> None:
     """Persist the server senderNonce after a response has been built."""
+    if isinstance(context, CmpGeneralRequestContext):
+        return
     tx = getattr(context, 'cmp_transaction', None)
     if tx is None and context.cmp_transaction_id:
         tx = CmpTransactionState.get_by_transaction_id(str(context.cmp_transaction_id).lower())
