@@ -409,23 +409,24 @@ class AokiEstIDevIDCommandBuilderTests(SimpleTestCase):
     def test_get_aoki_init_command_and_response_example(self) -> None:
         """Test AOKI EST initialization command and response sample."""
         cmd = AokiEstIDevIDCommandBuilder.get_aoki_init_command('https://example.test')
-        response_example = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example('domain_credential_custom')
+        response_example = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example('aoki', 'domain_credential_custom')
 
         assert 'curl --cert idevid.pem' in cmd
-        assert 'https://example.test/aoki/init' in cmd
+        assert cmd.endswith('https://example.test/aoki/init/')
         assert '"protocol": "EST"' in response_example
-        assert 'domain_credential_custom/simpleenroll' in response_example
+        assert '/.well-known/est/aoki/domain_credential_custom/' in response_example
 
     def test_get_est_enrollment_commands(self) -> None:
         """Test AOKI EST key, CSR, and enrollment commands."""
         key_cmd = AokiEstIDevIDCommandBuilder.get_keygen_command()
         csr_cmd = AokiEstIDevIDCommandBuilder.get_csr_command()
-        enroll_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command('https://example.test/est/enroll')
+        enroll_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command('https://example.test')
 
         assert 'domain_credential_key.pem' in key_cmd
         assert '-outform DER' in csr_cmd
         assert '-out domain_credential.der' in csr_cmd
-        assert '--cert domain-credential-cert.pem' in enroll_cmd
+        assert '--cert idevid.pem' in enroll_cmd
+        assert '--key idevid_pk.pem' in enroll_cmd
         assert '@domain_credential.der' in enroll_cmd
 
 

@@ -2438,11 +2438,12 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
             err_msg = 'Domain is required'
             raise Http404(err_msg)
         domain_cred_profile_name = domain.get_domain_credential_profile_name()
-        aoki_response = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(domain_cred_profile_name)
+        aoki_response = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(
+            domain.unique_name, domain_cred_profile_name,
+        )
         keygen_cmd = AokiEstIDevIDCommandBuilder.get_keygen_command()
         csr_cmd = AokiEstIDevIDCommandBuilder.get_csr_command()
-        enroll_path = f'{help_context.host_est_path}/.well-known/est/domain/{domain_cred_profile_name}/simpleenroll'
-        curl_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command(enroll_path)
+        curl_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command(help_context.host_base)
 
         aoki_response_html = (
             f'<pre class="bg-body-secondary text-body p-3 rounded overflow-x-auto">'

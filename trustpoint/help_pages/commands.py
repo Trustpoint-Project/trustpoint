@@ -528,13 +528,14 @@ class AokiEstIDevIDCommandBuilder:
             f'  --key idevid_pk.pem \\\n'
             f'  --cacert ownerid_ca.pem \\\n'
             f'  -o aoki_init_response.json \\\n'
-            f'{quote(host + "/aoki/init")}'
+            f'{quote(host + "/aoki/init/")}'
         )
 
     @staticmethod
-    def get_aoki_init_response_example(domain_credential_profile_name: str = 'domain_credential') -> str:
+    def get_aoki_init_response_example(domain_unique_name: str, domain_credential_profile_name: str) -> str:
         """Get an example AOKI initialization response JSON.
 
+        :param domain_unique_name: The domain used in the illustrative enrollment path.
         :param domain_credential_profile_name: The certificate profile name used for domain credentials.
         """
         return (
@@ -547,7 +548,7 @@ class AokiEstIDevIDCommandBuilder:
             '      "protocols": [\n'
             '        {\n'
             '          "protocol": "EST",\n'
-            f'          "url": "https://127.0.0.1:443/.well-known/est/domain/{domain_credential_profile_name}/simpleenroll"\n'
+            f'          "url": "/.well-known/est/{domain_unique_name}/{domain_credential_profile_name}/"\n'
             '        }\n'
             '      ]\n'
             '    }\n'
@@ -578,15 +579,30 @@ class AokiEstIDevIDCommandBuilder:
 
     @staticmethod
     def get_curl_enroll_command(host: str) -> str:
-        """Get the curl EST enrollment command for AOKI with IDevID."""
+        """Read the EST base URL and TLS trust from initialization, then enroll using the IDevID.
+
+        Args:
+            host: The server base URL used for AOKI initialization.
+        """
         return (
-            f'curl --cert domain-credential-cert.pem \\\n'
-            f'  --key domain-credential-key.pem \\\n'
+            f"ENROLL_URL=$(python3 - {quote(host)} <<'PY'\n"
+            'import json, sys\n'
+            'from urllib.parse import urljoin\n'
+            'with open("aoki_init_response.json") as response:\n'
+            '    info = json.load(response)["aoki-init"]\n'
+            'url = next(p["url"] for p in info["enrollment-info"]["protocols"] if p["protocol"] == "EST")\n'
+            'with open("trust_store.pem", "w") as truststore:\n'
+            '    truststore.write(info["tls-truststore"])\n'
+            'print(urljoin(sys.argv[1], url.rstrip("/") + "/simpleenroll"))\n'
+            'PY\n'
+            ') && \\\n'
+            f'curl --cert idevid.pem \\\n'
+            f'  --key idevid_pk.pem \\\n'
             f'  --cacert trust_store.pem \\\n'
             f'  --header "Content-Type: application/pkcs10" \\\n'
             f'  --data-binary "@domain_credential.der" \\\n'
             f'  -o domain_certificate.p7c \\\n'
-            f'{quote(host)}'
+            '"$ENROLL_URL"'
         )
 
 
