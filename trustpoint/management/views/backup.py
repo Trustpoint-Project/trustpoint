@@ -11,6 +11,7 @@ from pathlib import Path
 from shutil import copyfileobj
 from tempfile import TemporaryFile
 from typing import Any, BinaryIO, ClassVar
+from uuid import uuid4
 
 from django.conf import settings
 from django.contrib import messages
@@ -95,7 +96,7 @@ def create_db_backup(path: Path) -> str:
     """
     path.mkdir(parents=True, exist_ok=True)
     timestamp = dt.datetime.now(dt.UTC).strftime('%Y-%m-%d_%H-%M-%S')
-    filename = f'backup_{timestamp}.dump.gz'
+    filename = f'backup_{timestamp}_{uuid4().hex}.dump.gz'
     call_command('trustpointbackup', filename=filename)
     return filename
 

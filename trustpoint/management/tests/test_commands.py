@@ -2,14 +2,20 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for Django management commands."""
+
 import importlib
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 from pathlib import Path
+from threading import Event
 from unittest.mock import MagicMock, Mock, call, patch
 
 from django.conf import settings
+from django.core.files import locks
+from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
@@ -26,7 +32,7 @@ class CompileMsgCommandTest(TestCase):
         """Test that compilemsg is an alias for compilemessages."""
         from management.management.commands.compilemsg import Command
         from django.core.management.commands.compilemessages import Command as CompileMessagesCommand
-        
+
         # Verify it inherits from the right class
         self.assertTrue(issubclass(Command, CompileMessagesCommand))
 
@@ -52,7 +58,9 @@ class BootstrapManagerCommandTest(TestCase):
 
     @patch('management.util.startup_strategies.call_command')
     @patch('management.management.commands.bootstrap_manager.call_command')
-    def test_container_uses_precompiled_translations(self, mock_call_command: MagicMock, runtime_call: MagicMock) -> None:
+    def test_container_uses_precompiled_translations(
+        self, mock_call_command: MagicMock, runtime_call: MagicMock
+    ) -> None:
         """Both startup phases leave image-provided translation catalogs untouched."""
         from django.test import override_settings
         from management.management.commands.bootstrap_manager import Command
@@ -72,10 +80,10 @@ class MakeMsgCommandTest(TestCase):
     def test_makemsg_has_custom_msgmerge_options(self) -> None:
         """Test that makemsg has custom msgmerge options."""
         from management.management.commands.makemsg import Command
-        
+
         command = Command()
         expected_options = ['-q', '-N', '--backup=none', '--previous', '--update']
-        
+
         self.assertEqual(command.msgmerge_options, expected_options)
 
 
@@ -86,14 +94,14 @@ class PrintVersionCommandTest(TestCase):
         """Test that printversion outputs the application version."""
         out = StringIO()
         call_command('printversion', stdout=out)
-        
+
         output = out.getvalue().strip()
         self.assertEqual(output, settings.APP_VERSION)
 
     def test_printversion_help_text(self) -> None:
         """Test that printversion has correct help text."""
         from management.management.commands.printversion import Command
-        
+
         command = Command()
         self.assertIn('version', command.help.lower())
 
@@ -103,17 +111,13 @@ class InitTrustpointCommandTest(TestCase):
 
     @patch('management.management.commands.inittrustpoint.Path.open')
     @patch('management.management.commands.inittrustpoint.call_command')
-    def test_inittrustpoint_with_migrations(
-        self,
-        mock_call_command: MagicMock,
-        mock_open_file: MagicMock
-    ) -> None:
+    def test_inittrustpoint_with_migrations(self, mock_call_command: MagicMock, mock_open_file: MagicMock) -> None:
         """Test inittrustpoint runs migrations by default."""
         mock_open_file.return_value.__enter__.return_value.read.return_value = 'test-container-id'
-        
+
         out = StringIO()
         call_command('inittrustpoint', stdout=out)
-        
+
         # Should call migrate, collectstatic, compilemessages
         calls = [call[0][0] for call in mock_call_command.call_args_list]
         self.assertIn('migrate', calls)
@@ -122,17 +126,13 @@ class InitTrustpointCommandTest(TestCase):
 
     @patch('management.management.commands.inittrustpoint.Path.open')
     @patch('management.management.commands.inittrustpoint.call_command')
-    def test_inittrustpoint_without_migrations(
-        self,
-        mock_call_command: MagicMock,
-        mock_open_file: MagicMock
-    ) -> None:
+    def test_inittrustpoint_without_migrations(self, mock_call_command: MagicMock, mock_open_file: MagicMock) -> None:
         """Test inittrustpoint skips migrations with --nomigrations."""
         mock_open_file.return_value.__enter__.return_value.read.return_value = 'test-container-id'
-        
+
         out = StringIO()
         call_command('inittrustpoint', '--nomigrations', stdout=out)
-        
+
         # Should NOT call migrate
         calls = [call[0][0] for call in mock_call_command.call_args_list]
         self.assertNotIn('migrate', calls)
@@ -142,51 +142,41 @@ class InitTrustpointCommandTest(TestCase):
 
     @patch('management.management.commands.inittrustpoint.Path.open')
     @patch('management.management.commands.inittrustpoint.call_command')
-    def test_inittrustpoint_with_tls(
-        self,
-        mock_call_command: MagicMock,
-        mock_open_file: MagicMock
-    ) -> None:
+    def test_inittrustpoint_with_tls(self, mock_call_command: MagicMock, mock_open_file: MagicMock) -> None:
         """Test inittrustpoint prepares TLS with --tls option."""
         mock_open_file.return_value.__enter__.return_value.read.return_value = 'test-container-id'
-        
+
         out = StringIO()
         call_command('inittrustpoint', '--tls', stdout=out)
-        
+
         # Should call tls_cred
         calls = [call[0][0] for call in mock_call_command.call_args_list]
         self.assertIn('tls_cred', calls)
-        
+
     @patch('management.management.commands.inittrustpoint.Path.open')
     @patch('management.management.commands.inittrustpoint.call_command')
     def test_inittrustpoint_container_id_not_found(
-        self,
-        mock_call_command: MagicMock,
-        mock_open_file: MagicMock
+        self, mock_call_command: MagicMock, mock_open_file: MagicMock
     ) -> None:
         """Test inittrustpoint handles missing /etc/hostname file."""
         mock_open_file.side_effect = FileNotFoundError()
-        
+
         out = StringIO()
         call_command('inittrustpoint', stdout=out)
-        
+
         # Should still complete successfully
         output = out.getvalue()
         self.assertIn('initializing', output.lower())
 
     @patch('management.management.commands.inittrustpoint.Path.open')
     @patch('management.management.commands.inittrustpoint.call_command')
-    def test_inittrustpoint_creates_app_version(
-        self,
-        mock_call_command: MagicMock,
-        mock_open_file: MagicMock
-    ) -> None:
+    def test_inittrustpoint_creates_app_version(self, mock_call_command: MagicMock, mock_open_file: MagicMock) -> None:
         """Test inittrustpoint creates AppVersion record."""
         mock_open_file.return_value.__enter__.return_value.read.return_value = 'container-123'
-        
+
         out = StringIO()
         call_command('inittrustpoint', stdout=out)
-        
+
         # Should create AppVersion
         app_version = AppVersion.objects.get(pk=1)
         self.assertEqual(app_version.version, settings.APP_VERSION)
@@ -280,10 +270,10 @@ class StartupManagerCommandTest(TestCase):
     def test_startup_manager_version_parsing(self) -> None:
         """Test startup_manager can parse version from settings."""
         from management.management.commands.startup_manager import Command
-        
+
         command = Command()
         version = command._parse_version('1.2.3')
-        
+
         self.assertIsInstance(version, Version)
         self.assertEqual(str(version), '1.2.3')
 
@@ -304,7 +294,7 @@ class TlsCredCommandTest(TestCase):
         mock_key_path: MagicMock,
         mock_active: MagicMock,
         mock_credential: MagicMock,
-        mock_generator_class: MagicMock
+        mock_generator_class: MagicMock,
     ) -> None:
         """Test tls_cred command with --write_out option."""
         # Setup mocks
@@ -312,41 +302,41 @@ class TlsCredCommandTest(TestCase):
         mock_generator_class.return_value = mock_generator
         mock_tls_cred = Mock()
         mock_generator.generate_tls_server_credential.return_value = mock_tls_cred
-        
+
         # Setup mock for the saved credential (this is what gets assigned to active_tls.credential)
         mock_saved_cred = Mock()
-        
+
         # Setup mock for private key chain
         mock_key_serializer = Mock()
         mock_key_pem = Mock()
         mock_key_pem.decode.return_value = 'private_key'
         mock_key_serializer.as_pkcs8_pem.return_value = mock_key_pem
-        
-        # Setup mock for certificate chain  
+
+        # Setup mock for certificate chain
         mock_cert_serializer = Mock()
         mock_cert_pem = Mock()
         mock_cert_pem.decode.return_value = 'certificate'
         mock_cert_serializer.as_pem.return_value = mock_cert_pem
-        
+
         # Setup mock for chain
         mock_chain_serializer = Mock()
         mock_chain_pem = Mock()
         mock_chain_pem.decode.return_value = 'chain'
         mock_chain_serializer.as_pem.return_value = mock_chain_pem
-        
+
         mock_saved_cred.get_private_key_serializer.return_value = mock_key_serializer
         mock_saved_cred.get_certificate_serializer.return_value = mock_cert_serializer
         mock_saved_cred.get_certificate_chain_serializer.return_value = mock_chain_serializer
         mock_saved_cred.get_certificate().fingerprint.return_value = b'\x00\x01\x02\x03' * 8  # 32 bytes
-        
+
         mock_credential.save_credential_serializer.return_value = mock_saved_cred
-        
+
         mock_active_instance = Mock()
         mock_active.objects.get_or_create.return_value = (mock_active_instance, True)
-        
+
         out = StringIO()
         call_command('tls_cred', '--write_out', stdout=out)
-        
+
         # Verify write_text was called
         mock_key_path.write_text.assert_called_once()
         mock_cert_path.write_text.assert_called_once()
@@ -356,10 +346,7 @@ class TlsCredCommandTest(TestCase):
     @patch('management.management.commands.tls_cred.CredentialModel')
     @patch('management.management.commands.tls_cred.ActiveTrustpointTlsServerCredentialModel')
     def test_tls_cred_without_write_out(
-        self,
-        mock_active: MagicMock,
-        mock_credential: MagicMock,
-        mock_generator_class: MagicMock
+        self, mock_active: MagicMock, mock_credential: MagicMock, mock_generator_class: MagicMock
     ) -> None:
         """Test tls_cred command without --write_out option."""
         # Setup mocks
@@ -367,47 +354,148 @@ class TlsCredCommandTest(TestCase):
         mock_generator_class.return_value = mock_generator
         mock_tls_cred = Mock()
         mock_generator.generate_tls_server_credential.return_value = mock_tls_cred
-        
+
         # Setup mock for the saved credential (this is what gets assigned to active_tls.credential)
         mock_saved_cred = Mock()
-        
+
         # Setup mock for private key chain
         mock_key_serializer = Mock()
         mock_key_pem = Mock()
         mock_key_pem.decode.return_value = 'private_key'
         mock_key_serializer.as_pkcs8_pem.return_value = mock_key_pem
-        
-        # Setup mock for certificate chain  
+
+        # Setup mock for certificate chain
         mock_cert_serializer = Mock()
         mock_cert_pem = Mock()
         mock_cert_pem.decode.return_value = 'certificate'
         mock_cert_serializer.as_pem.return_value = mock_cert_pem
-        
+
         # Setup mock for chain
         mock_chain_serializer = Mock()
         mock_chain_pem = Mock()
         mock_chain_pem.decode.return_value = 'chain'
         mock_chain_serializer.as_pem.return_value = mock_chain_pem
-        
+
         mock_saved_cred.get_private_key_serializer.return_value = mock_key_serializer
         mock_saved_cred.get_certificate_serializer.return_value = mock_cert_serializer
         mock_saved_cred.get_certificate_chain_serializer.return_value = mock_chain_serializer
         mock_saved_cred.get_certificate().fingerprint.return_value = b'\x00\x01\x02\x03' * 8  # 32 bytes
-        
+
         mock_credential.save_credential_serializer.return_value = mock_saved_cred
-        
+
         mock_active_instance = Mock()
         mock_active.objects.get_or_create.return_value = (mock_active_instance, True)
-        
+
         out = StringIO()
         call_command('tls_cred', stdout=out)
-        
+
         output = out.getvalue()
         self.assertIn('TLS Server Credential generated successfully', output)
 
 
 class TrustpointBackupCommandTest(TestCase):
     """Test suite for trustpointbackup command."""
+
+    def setUp(self) -> None:
+        """Keep backup files and the shared lock in an isolated directory."""
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.backup_dir = Path(directory.name)
+        override = self.settings(BACKUP_FILE_PATH=self.backup_dir)
+        override.enable()
+        self.addCleanup(override.disable)
+
+    @patch('management.management.commands.trustpointbackup.write_backup_manifest')
+    @patch('management.management.commands.trustpointbackup.call_command')
+    def test_same_filename_commands_cannot_overlap(
+        self,
+        mock_dbbackup: MagicMock,
+        mock_write_manifest: MagicMock,
+    ) -> None:
+        """The second command waits for the first, then rejects its existing filename."""
+        dumping = Event()
+        second_started = Event()
+        release_dump = Event()
+        storage = FileSystemStorage(location=self.backup_dir)
+        path = self.backup_dir / 'scheduled.dump.gz'
+        manifest_path = backup_manifest_path(path)
+
+        def dump(_command, _flag, filename, _compress):
+            dumping.set()
+            assert release_dump.wait(timeout=10)
+            storage.save(filename, ContentFile(b'first snapshot'))
+
+        def write_manifest(payload_path):
+            manifest_path.write_bytes(payload_path.read_bytes())
+            return manifest_path
+
+        def run(second=False):
+            if second:
+                second_started.set()
+            try:
+                call_command('trustpointbackup', '--filename=scheduled.dump.gz', stdout=StringIO())
+            except CommandError as exc:
+                return str(exc)
+            return 'success'
+
+        mock_dbbackup.side_effect = dump
+        mock_write_manifest.side_effect = write_manifest
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(run)
+            try:
+                self.assertTrue(dumping.wait(timeout=5))
+                second = pool.submit(run, True)
+                self.assertTrue(second_started.wait(timeout=5))
+                with (self.backup_dir / '.backup.lock').open('a') as competing_lock:
+                    acquired = locks.lock(competing_lock, locks.LOCK_EX | locks.LOCK_NB)
+                    self.assertFalse(acquired, 'A separate file descriptor must not acquire the active backup lock')
+            finally:
+                release_dump.set()
+            self.assertEqual(first.result(timeout=10), 'success')
+            self.assertIn('already exists', second.result(timeout=10))
+
+        mock_dbbackup.assert_called_once()
+        mock_write_manifest.assert_called_once_with(path)
+        self.assertEqual(path.read_bytes(), b'first snapshot')
+        self.assertEqual(manifest_path.read_bytes(), b'first snapshot')
+        self.assertEqual(list(self.backup_dir.glob('*.dump.gz')), [path])
+
+    @patch('management.management.commands.trustpointbackup.write_backup_manifest')
+    @patch('management.management.commands.trustpointbackup.call_command')
+    def test_trustpointbackup_rejects_existing_filename(
+        self,
+        mock_call_command: MagicMock,
+        mock_write_manifest: MagicMock,
+    ) -> None:
+        """An explicit existing filename must not return or modify an older backup."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'existing.dump.gz'
+            path.write_bytes(b'old snapshot')
+            manifest_path = backup_manifest_path(path)
+            manifest_path.write_bytes(b'old manifest')
+
+            with self.settings(BACKUP_FILE_PATH=Path(directory)):
+                with self.assertRaisesMessage(CommandError, 'already exists'):
+                    call_command('trustpointbackup', '--filename=existing.dump.gz')
+
+            self.assertEqual(path.read_bytes(), b'old snapshot')
+            self.assertEqual(manifest_path.read_bytes(), b'old manifest')
+            self.assertEqual(list(Path(directory).glob('*.dump.gz')), [path])
+
+        mock_call_command.assert_not_called()
+        mock_write_manifest.assert_not_called()
+
+    @patch('management.management.commands.trustpointbackup.locks.lock', return_value=False)
+    @patch('management.management.commands.trustpointbackup.call_command')
+    def test_trustpointbackup_requires_lock(
+        self,
+        mock_call_command: MagicMock,
+        _mock_lock: MagicMock,
+    ) -> None:
+        """Never create a backup when the filesystem cannot provide a lock."""
+        with self.assertRaisesMessage(CommandError, 'Unable to acquire the backup lock'):
+            call_command('trustpointbackup', '--filename=unlocked.dump.gz')
+        mock_call_command.assert_not_called()
 
     @patch('management.management.commands.trustpointbackup.write_backup_manifest')
     @patch('management.management.commands.trustpointbackup.call_command')
@@ -502,7 +590,7 @@ class UpdateTlsCommandTest(TestCase):
         mock_cert_path: MagicMock,
         mock_key_path: MagicMock,
         mock_script_constant: MagicMock,
-        mock_subprocess: MagicMock
+        mock_subprocess: MagicMock,
     ) -> None:
         """Test update_tls command successful execution."""
         # Setup credential model
@@ -511,25 +599,25 @@ class UpdateTlsCommandTest(TestCase):
         mock_credential.get_certificate_serializer().as_pem.return_value = b'test_cert'
         mock_credential.get_certificate_chain_serializer().as_pem.return_value = b'test_chain'
         mock_credential.get_certificate().fingerprint.return_value = b'\x00\x01\x02\x03' * 8  # 32 bytes
-        
+
         mock_active = Mock()
         mock_active.credential = mock_credential
         mock_active_tls.objects.get.return_value = mock_active
-        
+
         # Mock Path for script
         mock_script_path = Mock()
         mock_script_path.exists.return_value = True
         mock_script_path.is_file.return_value = True
         mock_script_constant.resolve.return_value = mock_script_path
-        
+
         # Mock subprocess
         mock_result = Mock()
         mock_result.returncode = 0
         mock_subprocess.return_value = mock_result
-        
+
         out = StringIO()
         call_command('update_tls', stdout=out)
-        
+
         # Verify file writes
         mock_key_path.write_text.assert_called_once()
         mock_cert_path.write_text.assert_called_once()
@@ -538,11 +626,12 @@ class UpdateTlsCommandTest(TestCase):
     def test_update_tls_no_credential(self, mock_active_tls: MagicMock) -> None:
         """Test update_tls command when no active credential exists."""
         from django.core.exceptions import ObjectDoesNotExist
+
         mock_active_tls.objects.get.side_effect = ObjectDoesNotExist
-        
+
         with self.assertRaises(CommandError) as cm:
             call_command('update_tls')
-        
+
         self.assertIn('not found', str(cm.exception).lower())
 
     @patch('management.management.commands.update_tls.subprocess.run')
@@ -558,7 +647,7 @@ class UpdateTlsCommandTest(TestCase):
         mock_cert_path: MagicMock,
         mock_key_path: MagicMock,
         mock_script_constant: MagicMock,
-        mock_subprocess: MagicMock
+        mock_subprocess: MagicMock,
     ) -> None:
         """Test update_tls command when subprocess script fails."""
         # Setup credential model
@@ -567,27 +656,27 @@ class UpdateTlsCommandTest(TestCase):
         mock_credential.get_certificate_serializer().as_pem.return_value = b'test_cert'
         mock_credential.get_certificate_chain_serializer().as_pem.return_value = b'test_chain'
         mock_credential.get_certificate().fingerprint.return_value = b'\x00\x01\x02\x03' * 8  # 32 bytes
-        
+
         mock_active = Mock()
         mock_active.credential = mock_credential
         mock_active_tls.objects.get.return_value = mock_active
-        
+
         # Mock Path for script
         mock_script_path = Mock()
         mock_script_path.exists.return_value = True
         mock_script_path.is_file.return_value = True
         mock_script_constant.resolve.return_value = mock_script_path
-        
+
         # Mock subprocess failure
         mock_result = Mock()
         mock_result.returncode = 1
         mock_result.stdout = 'error output'
         mock_result.stderr = 'error details'
         mock_subprocess.return_value = mock_result
-        
+
         out = StringIO()
         call_command('update_tls', stdout=out)
-        
+
         # Command should complete but log error
         output = out.getvalue()
         self.assertIn('successful', output.lower())
@@ -600,13 +689,13 @@ class ManagePyOverrideTest(TestCase):
     def test_override_makemigrations_function(self, mock_execute: MagicMock) -> None:
         """Test override_makemigrations function exists and is callable."""
         from management.management.managepy_override import override_makemigrations
-        
+
         # Verify function exists and is callable
         self.assertTrue(callable(override_makemigrations))
-        
+
         # Call it with required arguments
         override_makemigrations(['manage.py', 'makemigrations'])
-        
+
         # Verify execute_from_command_line was called
         mock_execute.assert_called_once()
 
@@ -615,6 +704,7 @@ class ManagePyOverrideTest(TestCase):
         try:
             from management.management import managepy_override
             from management.management.managepy_override import override_makemigrations
+
             self.assertIsNotNone(managepy_override)
             self.assertIsNotNone(override_makemigrations)
         except ImportError as e:
