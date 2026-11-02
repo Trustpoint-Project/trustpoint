@@ -5,11 +5,16 @@
 import importlib
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 from pathlib import Path
+from threading import Event
 from unittest.mock import MagicMock, Mock, call, patch
 
 from django.conf import settings
+from django.core.files import locks
+from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
@@ -408,6 +413,101 @@ class TlsCredCommandTest(TestCase):
 
 class TrustpointBackupCommandTest(TestCase):
     """Test suite for trustpointbackup command."""
+
+    def setUp(self) -> None:
+        """Keep backup files and the shared lock in an isolated directory."""
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.backup_dir = Path(directory.name)
+        override = self.settings(BACKUP_FILE_PATH=self.backup_dir)
+        override.enable()
+        self.addCleanup(override.disable)
+
+    @patch('management.management.commands.trustpointbackup.write_backup_manifest')
+    @patch('management.management.commands.trustpointbackup.call_command')
+    def test_same_filename_commands_cannot_overlap(
+        self, mock_dbbackup: MagicMock, mock_write_manifest: MagicMock,
+    ) -> None:
+        """The second command waits for the first, then rejects its existing filename."""
+        dumping = Event()
+        second_started = Event()
+        release_dump = Event()
+        storage = FileSystemStorage(location=self.backup_dir)
+        path = self.backup_dir / 'scheduled.dump.gz'
+        manifest_path = backup_manifest_path(path)
+
+        def dump(_command, _flag, filename, _compress):
+            dumping.set()
+            assert release_dump.wait(timeout=10)
+            storage.save(filename, ContentFile(b'first snapshot'))
+
+        def write_manifest(payload_path):
+            manifest_path.write_bytes(payload_path.read_bytes())
+            return manifest_path
+
+        def run(second=False):
+            if second:
+                second_started.set()
+            try:
+                call_command('trustpointbackup', '--filename=scheduled.dump.gz', stdout=StringIO())
+            except CommandError as exc:
+                return str(exc)
+            return 'success'
+
+        mock_dbbackup.side_effect = dump
+        mock_write_manifest.side_effect = write_manifest
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(run)
+            try:
+                self.assertTrue(dumping.wait(timeout=5))
+                second = pool.submit(run, True)
+                self.assertTrue(second_started.wait(timeout=5))
+                with (self.backup_dir / '.backup.lock').open('a') as competing_lock:
+                    acquired = locks.lock(competing_lock, locks.LOCK_EX | locks.LOCK_NB)
+                    self.assertFalse(acquired, 'A separate file descriptor must not acquire the active backup lock')
+            finally:
+                release_dump.set()
+            self.assertEqual(first.result(timeout=10), 'success')
+            self.assertIn('already exists', second.result(timeout=10))
+
+        mock_dbbackup.assert_called_once()
+        mock_write_manifest.assert_called_once_with(path)
+        self.assertEqual(path.read_bytes(), b'first snapshot')
+        self.assertEqual(manifest_path.read_bytes(), b'first snapshot')
+        self.assertEqual(list(self.backup_dir.glob('*.dump.gz')), [path])
+
+    @patch('management.management.commands.trustpointbackup.write_backup_manifest')
+    @patch('management.management.commands.trustpointbackup.call_command')
+    def test_trustpointbackup_rejects_existing_filename(
+        self, mock_call_command: MagicMock, mock_write_manifest: MagicMock,
+    ) -> None:
+        """An explicit existing filename must not return or modify an older backup."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'existing.dump.gz'
+            path.write_bytes(b'old snapshot')
+            manifest_path = backup_manifest_path(path)
+            manifest_path.write_bytes(b'old manifest')
+
+            with self.settings(BACKUP_FILE_PATH=Path(directory)):
+                with self.assertRaisesMessage(CommandError, 'already exists'):
+                    call_command('trustpointbackup', '--filename=existing.dump.gz')
+
+            self.assertEqual(path.read_bytes(), b'old snapshot')
+            self.assertEqual(manifest_path.read_bytes(), b'old manifest')
+            self.assertEqual(list(Path(directory).glob('*.dump.gz')), [path])
+
+        mock_call_command.assert_not_called()
+        mock_write_manifest.assert_not_called()
+
+    @patch('management.management.commands.trustpointbackup.locks.lock', return_value=False)
+    @patch('management.management.commands.trustpointbackup.call_command')
+    def test_trustpointbackup_requires_lock(
+        self, mock_call_command: MagicMock, _mock_lock: MagicMock,
+    ) -> None:
+        """Never create a backup when the filesystem cannot provide a lock."""
+        with self.assertRaisesMessage(CommandError, 'Unable to acquire the backup lock'):
+            call_command('trustpointbackup', '--filename=unlocked.dump.gz')
+        mock_call_command.assert_not_called()
 
     @patch('management.management.commands.trustpointbackup.write_backup_manifest')
     @patch('management.management.commands.trustpointbackup.call_command')

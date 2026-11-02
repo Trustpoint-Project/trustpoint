@@ -8,7 +8,10 @@ from django.urls import reverse
 from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
 from django.core.management.base import CommandError
+from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
 from management.models import BackupOptions
+from management.backup_artifacts import verify_backup_manifest
 from management.views.backup import get_backup_file_data, create_db_backup
 from util.sftp import SftpError
 from pathlib import Path
@@ -122,9 +125,35 @@ class CreateDbBackupTest(TestCase):
 
         filename = create_db_backup(self.backup_dir)
 
-        self.assertEqual(filename, 'backup_2025-12-08_12-00-00.dump.gz')
+        self.assertRegex(filename, r'^backup_2025-12-08_12-00-00_[0-9a-f]{32}\.dump\.gz$')
         mock_call_command.assert_called_once_with('trustpointbackup', filename=filename)
         self.assertTrue(self.backup_dir.exists())
+
+    @patch('management.management.commands.trustpointbackup.call_command')
+    @patch('management.views.backup.dt')
+    def test_backups_in_same_second_have_distinct_payloads_and_manifests(
+        self, mock_datetime: MagicMock, mock_dbbackup: MagicMock,
+    ) -> None:
+        """Each returned filename identifies its own new payload and matching manifest."""
+        mock_datetime.datetime.now.return_value.strftime.return_value = '2025-12-08_12-00-00'
+        storage = FileSystemStorage(location=self.backup_dir)
+        payloads = iter((b'first snapshot', b'second snapshot'))
+
+        def save_dump(_command, _output_flag, filename, _compress_flag):
+            storage.save(filename, ContentFile(next(payloads)))
+
+        mock_dbbackup.side_effect = save_dump
+        with self.settings(BACKUP_FILE_PATH=self.backup_dir):
+            first = create_db_backup(self.backup_dir)
+            second = create_db_backup(self.backup_dir)
+
+        self.assertNotEqual(first, second)
+        self.assertEqual((self.backup_dir / first).read_bytes(), b'first snapshot')
+        self.assertEqual((self.backup_dir / second).read_bytes(), b'second snapshot')
+        self.assertNotEqual(
+            verify_backup_manifest(self.backup_dir / first).payload_sha256,
+            verify_backup_manifest(self.backup_dir / second).payload_sha256,
+        )
 
     def tearDown(self) -> None:
         """Clean up temporary directory."""
