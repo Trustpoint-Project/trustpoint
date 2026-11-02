@@ -114,11 +114,7 @@ def _build_certificate_request_dispatch(
     event_key: str,
     operation: str,
 ) -> Workflow2DispatchRequest | None:
-    if (
-        not context.device
-        or not context.domain
-        or not isinstance(context.cert_requested, CertificateSigningRequest)
-    ):
+    if not context.device or not context.domain or not isinstance(context.cert_requested, CertificateSigningRequest):
         return None
 
     issuing_ca = context.domain.get_issuing_ca_or_value_error()
@@ -222,7 +218,6 @@ def _build_cmp_request_dispatch(
     if certconf_status is not None:
         certconf_status_str = 'rejected' if certconf_status == PKI_STATUS_REJECTION else 'accepted'
 
-
     fingerprint = hashlib.sha256(fingerprint_source).hexdigest()
     transaction_id = _cmp_transaction_id(context)
     event = {
@@ -267,6 +262,12 @@ def _build_cmp_certification_dispatch(
         on=Triggers.CMP_CERTIFICATION,
         operation='certification',
     )
+
+
+def _build_cmp_keyupdate_dispatch(
+    context: BaseCertificateRequestContext,
+) -> Workflow2DispatchRequest | None:
+    return _build_cmp_request_dispatch(context, on=Triggers.CMP_KEYUPDATE, operation='keyupdate')
 
 
 def _build_cmp_certconf_dispatch(
@@ -401,6 +402,7 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
     _DISPATCH_BUILDERS: ClassVar[dict[tuple[str, str], Workflow2DispatchBuilder]] = {
         ('cmp', 'initialization'): _build_cmp_initialization_dispatch,
         ('cmp', 'certification'): _build_cmp_certification_dispatch,
+        ('cmp', 'keyupdate'): _build_cmp_keyupdate_dispatch,
         ('est', 'simpleenroll'): _build_est_simpleenroll_dispatch,
         ('est', 'simplereenroll'): _build_est_simplereenroll_dispatch,
         ('rest', 'enroll'): _build_rest_enroll_dispatch,
@@ -414,8 +416,10 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
         elif isinstance(context, BaseCertificateRequestContext):
             dispatch_request = self._build_dispatch_request(context)
         else:
-            msg = ('Workflow2CertificateRequestHandler requires a '
-                   'BaseCertificateRequestContext or CmpCertConfRequestContext.')
+            msg = (
+                'Workflow2CertificateRequestHandler requires a '
+                'BaseCertificateRequestContext or CmpCertConfRequestContext.'
+            )
             raise TypeError(msg)
         if dispatch_request is None:
             return Workflow2HandleResult.continue_processing()

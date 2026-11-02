@@ -100,6 +100,16 @@ def register_builtin_events() -> None:
                 context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, CMP_CERTREQ_CONTEXT, SOURCE_CONTEXT),
             ),
             EventSpec(
+                key=Triggers.CMP_KEYUPDATE,
+                title=_('CMP key update'),
+                description=_('CMP certificate key update request received.'),
+                group='cmp_requests',
+                group_title='CMP',
+                keywords=('cmp', 'keyupdate', 'kur', 'renewal', 'request'),
+                allowed_step_types=STEPSET_GATED_ENROLLMENT,
+                context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, CMP_CERTREQ_CONTEXT, SOURCE_CONTEXT),
+            ),
+            EventSpec(
                 key=Triggers.CMP_CERTCONF,
                 title=_('CMP certConf'),
                 description=_('CMP certification confirmation received.'),

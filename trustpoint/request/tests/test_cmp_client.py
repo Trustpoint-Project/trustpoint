@@ -582,7 +582,7 @@ class TestCmpClient:
         mock_message = Mock()
         mock_message.__getitem__ = Mock(return_value=mock_body)
 
-        with pytest.raises(CmpClientError, match='Expected CP or IP response, got: invalid'):
+        with pytest.raises(CmpClientError, match='Expected CP, IP, or KUP response, got: invalid'):
             client._extract_issued_certificate(mock_message, b'raw_data')
 
     def test_extract_issued_certificate_no_responses(self, valid_context: CmpBaseRequestContext) -> None:

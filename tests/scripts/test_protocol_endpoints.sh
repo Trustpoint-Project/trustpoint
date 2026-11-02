@@ -22,6 +22,8 @@
 #     uses that credential to request the application certificate
 #
 # In each case a TLS server certificate (profile "tls_server") is requested.
+# With --cmp-key-update-only, update the two existing CMP application certificates
+# using their original signing credentials and newly generated keys.
 #
 # Additionally the EST RA and CMP RA domains are tested: Trustpoint acts as registration
 # authority and forwards the request to the upstream CA domain of the same instance.
@@ -32,15 +34,17 @@ HOST="127.0.0.1:443"
 ENV_FILE=""
 TLS_CERT=""
 WORK_DIR=""
+CMP_KEY_UPDATE_ONLY=false
 
 usage() {
     cat <<'EOF'
-Usage: test_protocol_endpoints.sh --env-file <json> --tls-cert <pem> [--host <host:port>] [--work-dir <dir>]
+Usage: test_protocol_endpoints.sh --env-file <json> --tls-cert <pem> [--host <host:port>] [--work-dir <dir>] [--cmp-key-update-only]
 
   --env-file   JSON file written by the create_protocol_test_env management command.
   --tls-cert   PEM file used as curl/openssl trust anchor for the Trustpoint HTTPS server.
   --host       Host and port of the Trustpoint server (default: 127.0.0.1:443).
   --work-dir   Directory for generated keys and certificates (default: a temporary directory).
+  --cmp-key-update-only  Update existing CMP application certificates in --work-dir; requires a completed enrollment run.
 EOF
 }
 
@@ -50,6 +54,7 @@ while [[ $# -gt 0 ]]; do
         --env-file) ENV_FILE="$2"; shift 2 ;;
         --tls-cert) TLS_CERT="$2"; shift 2 ;;
         --work-dir) WORK_DIR="$2"; shift 2 ;;
+        --cmp-key-update-only) CMP_KEY_UPDATE_ONLY=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -60,7 +65,7 @@ if [[ -z "${ENV_FILE}" || -z "${TLS_CERT}" ]]; then
     exit 2
 fi
 
-for tool in openssl curl jq python3; do
+for tool in openssl curl jq python3 cmp; do
     command -v "${tool}" >/dev/null || { echo "Required tool not found: ${tool}" >&2; exit 2; }
 done
 
@@ -358,6 +363,58 @@ test_cmp_no_onboarding() {
     assert_tls_server_cert "${p}-cert.pem" 'CMP / no onboarding' "${ca}" "${algorithm}"
 }
 
+test_cmp_key_update() {
+    local source="$1" label="$2" p="${1}-kur"
+    local domain ca algorithm old_serial new_serial old_subject new_subject artifact
+    domain="$(proto_field cmp domain)"
+    ca="$(proto_field cmp ca)"
+    algorithm="$(proto_field cmp key_algorithm)"
+
+    log "CMP key update (${label}, ${algorithm})"
+
+    for artifact in "${source}-cert.pem" "${source}-key.pem" "${source}-full-chain.pem"; do
+        if [[ ! -s "${artifact}" ]]; then
+            fail "CMP key update / ${label}: missing enrollment artifact ${artifact}"
+            return 1
+        fi
+    done
+    gen_key "${p}-key.pem" "${algorithm}" || return 1
+
+    # OpenSSL inherits the existing subject/SAN from -oldcert. Omit
+    # -implicit_confirm so success also requires the certConf/pkiConf exchange
+    # on the same /keyupdate endpoint.
+    if ! openssl cmp -cmd kur \
+        -tls_used -tls_trusted "${TLS_CERT}" \
+        -trusted "${source}-full-chain.pem" \
+        -server "${BASE_URL}/.well-known/cmp/p/${domain}~${APP_PROFILE}/keyupdate" \
+        -cert "${source}-cert.pem" -key "${source}-key.pem" \
+        -oldcert "${source}-cert.pem" -newkey "${p}-key.pem" \
+        -certout "${p}-cert.pem" -chainout "${p}-chain.pem" -extracertsout "${p}-full-chain.pem"; then
+        fail "CMP key update / ${label}"
+        return 1
+    fi
+
+    assert_tls_server_cert "${p}-cert.pem" "CMP key update / ${label}" "${ca}" "${algorithm}" || return 1
+    old_serial="$(openssl x509 -in "${source}-cert.pem" -noout -serial)"
+    new_serial="$(openssl x509 -in "${p}-cert.pem" -noout -serial)"
+    old_subject="$(openssl x509 -in "${source}-cert.pem" -noout -subject -nameopt RFC2253)"
+    new_subject="$(openssl x509 -in "${p}-cert.pem" -noout -subject -nameopt RFC2253)"
+    if [[ "${old_serial}" == "${new_serial}" || "${old_subject}" != "${new_subject}" ]]; then
+        fail "CMP key update / ${label}: expected a new serial number and unchanged subject"
+        return 1
+    fi
+    openssl pkey -in "${p}-key.pem" -pubout -outform DER -out "${p}-expected-public-key.der" \
+        || { fail "CMP key update / ${label}: cannot extract the new public key"; return 1; }
+    openssl x509 -in "${p}-cert.pem" -pubkey -noout \
+        | openssl pkey -pubin -outform DER -out "${p}-issued-public-key.der" \
+        || { fail "CMP key update / ${label}: cannot extract the issued public key"; return 1; }
+    if ! cmp -s "${p}-expected-public-key.der" "${p}-issued-public-key.der"; then
+        fail "CMP key update / ${label}: issued certificate does not contain the new key"
+        return 1
+    fi
+    echo "PASS: CMP key update / ${label}: new key, new serial number, unchanged identity, and confirmed certificate"
+}
+
 test_cmp_onboarding() {
     local device='cmp-onboarding-device' p='cmp-ob'
     local domain ca algorithm dc_profile pk secret
@@ -512,14 +569,19 @@ echo "Using $(openssl version)"
 echo "Working directory: ${WORK_DIR}"
 
 # Every test is allowed to fail so that all protocols are exercised in a single run.
-test_est_no_onboarding || true
-test_est_onboarding || true
-test_cmp_no_onboarding || true
-test_cmp_onboarding || true
-test_cmp_ra || true
-test_est_ra || true
-test_rest_no_onboarding || true
-test_rest_onboarding || true
+if [[ "${CMP_KEY_UPDATE_ONLY}" == true ]]; then
+    test_cmp_key_update cmp-no 'no onboarding' || true
+    test_cmp_key_update cmp-ob 'onboarded' || true
+else
+    test_est_no_onboarding || true
+    test_est_onboarding || true
+    test_cmp_no_onboarding || true
+    test_cmp_onboarding || true
+    test_cmp_ra || true
+    test_est_ra || true
+    test_rest_no_onboarding || true
+    test_rest_onboarding || true
+fi
 
 echo
 if [[ "${FAILURES}" -gt 0 ]]; then

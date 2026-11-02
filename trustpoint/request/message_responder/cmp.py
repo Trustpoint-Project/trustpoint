@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.serialization import Encoding
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc4210  # type: ignore[import-untyped]
-from trustpoint_core.oid import HashAlgorithm
+from trustpoint_core.oid import HashAlgorithm, SignatureSuite
 
 from cmp.der import der_tlv as _der_tlv
 from cmp.models import CmpTransactionModel
@@ -62,7 +62,7 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         elif isinstance(context, CmpCertificateRequestContext) and context.issued_certificate:
             if context.operation == 'initialization':
                 responder = CmpInitializationResponder()
-            elif context.operation == 'certification':
+            elif context.operation in ('certification', 'keyupdate'):
                 responder = CmpCertificationResponder()
         elif isinstance(context, CmpRevocationRequestContext) and context.operation == 'revocation':
             responder = CmpRevocationResponder()
@@ -198,6 +198,18 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
     @staticmethod
     def _sign_pki_message(pki_message: rfc4210.PKIMessage, context: CmpBaseRequestContext) -> rfc4210.PKIMessage:
         """Applies signature-based protection to the base PKI message."""
+        if context.operation == 'keyupdate' or (
+            context.cmp_transaction is not None and context.cmp_transaction.operation == 'keyupdate'
+        ):
+            credential = context.owner_credential or context.issuer_credential
+            if credential is None and context.domain is not None:
+                credential = context.domain.get_issuing_ca_or_value_error().credential
+            if credential is None:
+                msg = 'CMP key update response requires a signing credential.'
+                raise ValueError(msg)
+            algorithm = SignatureSuite.from_certificate(credential.get_certificate()).algorithm_identifier
+            pki_message['header']['protectionAlg']['algorithm'] = algorithm.dotted_string
+            pki_message['header']['protectionAlg']['parameters'] = univ.noValue
         encoded_protected_part = CmpMessageResponder._get_encoded_protected_part(pki_message)
 
         signing_processor = LocalCaCmpSignatureProcessor(encoded_protected_part)
@@ -257,7 +269,11 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         return certificate_chain
 
     @classmethod
-    def _protect_and_respond(cls, pki_message: rfc4210.PKIMessage, context: CmpCertificateRequestContext) -> None:
+    def _protect_and_respond(
+        cls,
+        pki_message: rfc4210.PKIMessage,
+        context: CmpCertificateRequestContext | CmpPollRequestContext,
+    ) -> None:
         """Apply CMP protection and write the encoded certificate response."""
         if context.implicit_confirm:
             pki_message = cls._grant_implicit_confirm(pki_message)
@@ -445,14 +461,12 @@ class CmpCertificationResponder(CmpMessageResponder):
             cp_extra_certs.append(asn1_certificate)
 
         cp_body = rfc4210.PKIBody()
-        cp_body['cp'] = rfc4210.CertRepMessage().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
+        key_update = context is not None and context.operation == 'keyupdate'
+        body_type = 'kup' if key_update else 'cp'
+        body_tag = 8 if key_update else 3
+        cp_body[body_type] = rfc4210.CertRepMessage().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, body_tag)
         )
-        cp_body['cp']['caPubs'] = univ.SequenceOf().subtype(
-            sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
-        )
-        # TODO(AlexHx8472): Add TLS Server Certificate Root CA  # noqa: FIX002
 
         cert_response = rfc4210.CertResponse()
         cert_response['certReqId'] = 0
@@ -478,7 +492,7 @@ class CmpCertificationResponder(CmpMessageResponder):
 
             cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
 
-        cp_body['cp']['response'].append(cert_response)
+        cp_body[body_type]['response'].append(cert_response)
 
         cp_message = rfc4210.PKIMessage()
         cp_message['header'] = cp_header
@@ -627,7 +641,7 @@ class CmpTransactionResponder(CmpMessageResponder):
                 context=context,
             )
 
-        if context.operation == 'certification':
+        if context.operation in ('certification', 'keyupdate'):
             sender_kid = CmpTransactionResponder._build_sender_kid(issuing_ca_credential)
             return CmpCertificationResponder._build_base_cp_message(  # noqa: SLF001
                 parsed_message=context.parsed_message,
@@ -660,7 +674,7 @@ class CmpTransactionResponder(CmpMessageResponder):
         return 2, transaction_record.detail or f'Unsupported CMP transaction state: {transaction_record.status}.'
 
     @staticmethod
-    def respond_if_needed(context: BaseRequestContext) -> bool:  # noqa: PLR0911
+    def respond_if_needed(context: BaseRequestContext) -> bool:  # noqa: C901, PLR0911
         """Build a CMP response for delayed-delivery waiting, polling, or terminal transaction states."""
         if isinstance(context, CmpPollRequestContext):
             transaction_record = context.cmp_transaction
@@ -695,6 +709,15 @@ class CmpTransactionResponder(CmpMessageResponder):
 
             if pki_message is None:
                 return False
+
+            if context.operation == 'keyupdate' and pki_message['body'].getName() == 'kup':
+                # The final delayed response refers to the original enrollment request (§4.4).
+                original, _ = decoder.decode(bytes(transaction_record.request_der), asn1Spec=rfc4210.PKIMessage())
+                nonce = original['header']['senderNonce'].asOctets()
+                pki_message['header']['recipNonce'] = nonce
+                if context.issued_certificate is not None:
+                    CmpCertificationResponder._protect_and_respond(pki_message, context)  # noqa: SLF001
+                    return True
 
             pki_message = CmpTransactionResponder._protect_pki_message(pki_message, context=context)
             context.http_response_status = 200
@@ -934,6 +957,28 @@ class CmpErrorMessageResponder(CmpMessageResponder):
         context: CmpBaseRequestContext,
     ) -> rfc4210.PKIMessage:
         """Builds the CR response message (without the protection)."""
+        if (
+            isinstance(context, CmpCertificateRequestContext)
+            and context.operation == 'keyupdate'
+            and context.cmp_key_update_authenticated
+            and issuer_credential is not None
+        ):
+            rejection = CmpCertificationResponder._build_base_cp_message(  # noqa: SLF001
+                parsed_message,
+                None,
+                issuer_credential,
+                sender_kid,
+                status=2,
+                status_text=context.error_details or 'CMP key update rejected.',
+                context=context,
+            )
+            rejection['header']['generalInfo'].clear()
+            if context.error_code is not None:
+                rejection['body']['kup']['response'][0]['status']['failInfo'] = univ.BitString(
+                    '0' * int(context.error_code) + '1',
+                )
+            return rejection
+
         err_header = CmpErrorMessageResponder._build_response_message_header(
             serialized_pyasn1_message=parsed_message,
             sender_kid=sender_kid,
