@@ -35,7 +35,8 @@ class TokenObtainRequestSerializer(serializers.Serializer[Any]):
     username = serializers.CharField(required=False, help_text='Username (for human users)')
     password = serializers.CharField(required=False, help_text='Password (for human users)')
     otp = serializers.CharField(
-        required=False,write_only=True,
+        required=False,
+        write_only=True,
         max_length=MAX_TOKEN_LENGTH,
         help_text='Authenticator or recovery code, required for human login when OTP is enabled.',
     )

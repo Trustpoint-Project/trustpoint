@@ -918,7 +918,6 @@ def test_crl_mutation_views_deny_users_without_ca_permission(
     assert active_crl.is_active
 
 
-
 @pytest.mark.django_db
 def test_crl_import_view_get(authenticated_client: Client) -> None:
     """Test GET request to CRL import view."""
@@ -966,7 +965,7 @@ def test_duplicate_crl_web_import_preserves_active_list(
     active = ca.get_active_crl()
 
     response = authenticated_client.post(
-reverse('pki:crl-import'),
+        reverse('pki:crl-import'),
         {
             'crl_file': SimpleUploadedFile('duplicate.crl', historical.crl_pem.encode()),
             'ca': str(ca.pk),

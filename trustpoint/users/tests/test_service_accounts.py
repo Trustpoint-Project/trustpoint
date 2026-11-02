@@ -400,7 +400,8 @@ class TestServiceAccountAPI:
 
     @pytest.mark.parametrize('require_otp', [False, True])
     def test_api_authentication_with_service_account(
-        self, service_credential: tuple[ServiceAccountCredential, str],
+        self,
+        service_credential: tuple[ServiceAccountCredential, str],
         require_otp: bool,
     ) -> None:
         """Test API authentication using service account credentials via OAuth 2.0."""
