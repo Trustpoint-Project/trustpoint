@@ -4,7 +4,6 @@
 """Views for the network discovery dashboard and port management."""
 
 import csv
-import threading
 from typing import Any
 
 from django.contrib import messages
@@ -14,104 +13,11 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
-from pki.models.certificate import CertificateModel
 from trustpoint.views.base import ContextDataMixin
 from users.permissions import AppPermissions
 
 from .models import DiscoveredDevice, DiscoveryPort
-from .scanner import OTScanner
-
-
-class ScanManager:
-    """Thread-safe state manager for the network scanner."""
-
-    _lock = threading.Lock()
-
-    is_running = False
-    stop_pending = False
-    start_ip = '10.100.13.1'
-    end_ip = '10.100.13.254'
-    scanner_instance = None
-
-    @classmethod
-    def begin_scan(cls, start_ip: str, end_ip: str) -> bool:
-        """Starts a new OT device scan, unless one is already running."""
-        with cls._lock:
-            if cls.is_running:
-                return False
-            cls.is_running = True
-            cls.stop_pending = False
-            cls.start_ip = start_ip
-            cls.end_ip = end_ip
-            cls.scanner_instance = OTScanner(target_ports=[])
-            return True
-
-    @classmethod
-    def request_stop(cls) -> None:
-        """Requests the currently running scan to stop."""
-        with cls._lock:
-            cls.stop_pending = True
-            if cls.scanner_instance:
-                cls.scanner_instance.stop_requested.set()
-
-    @classmethod
-    def end_scan(cls) -> None:
-        """Ends the current scan and resets the state."""
-        with cls._lock:
-            cls.is_running = False
-            cls.stop_pending = False
-            cls.scanner_instance = None
-
-    @classmethod
-    def get_state(cls) -> dict[str, Any]:
-        """Returns the current state of the scan manager."""
-        with cls._lock:
-            return {
-                'scan_running': cls.is_running,
-                'stop_pending': cls.stop_pending,
-                'start_ip': cls.start_ip,
-                'end_ip': cls.end_ip,
-            }
-
-    @staticmethod
-    def run_scan_in_background(start_ip: str, end_ip: str) -> None:
-        """Threaded task to perform network scanning and database updates."""
-        try:
-            ports = list(DiscoveryPort.objects.values_list('port_number', flat=True))
-
-            # Safely get the active scanner instance
-            with ScanManager._lock:
-                scanner = ScanManager.scanner_instance
-
-            if scanner:
-                scanner.target_ports = ports
-                results = scanner.scan_network(start_ip, end_ip)
-
-                if scanner.stop_requested.is_set():
-                    return
-
-                for d in results:
-                    pki_cert = None
-                    ssl_info = d.get('ssl_info')
-                    if ssl_info and 'cert_object' in ssl_info:
-                        try:
-                            cert_obj = ssl_info.pop('cert_object')
-                            pki_cert = CertificateModel.save_certificate(cert_obj)
-                        except Exception:  # noqa: BLE001, S110
-                            pass
-
-                    DiscoveredDevice.objects.update_or_create(
-                        ip_address=d['ip'],
-                        defaults={
-                            'hostname': d.get('hostname') or '',
-                            'open_ports': d['ports'],
-                            'ssl_info': ssl_info,
-                            'certificate_record': pki_cert,
-                        },
-                    )
-        finally:
-            # Guarantee the state is reset even if the scanner crashes
-            ScanManager.end_scan()
+from .services import ScanManager
 
 
 class DiscoveryContextMixin(ContextDataMixin):
@@ -209,16 +115,19 @@ class StartScanView(View):
     http_method_names = ('post',)
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Start scanning in a background thread when no scan is running."""
+        """Queue a background scan when no scan is running."""
         if not request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_DISCOVERY):
             raise PermissionDenied
         start_ip = request.POST.get('start_ip', '10.100.13.1')
         end_ip = request.POST.get('end_ip', '10.100.13.254')
 
-        if ScanManager.begin_scan(start_ip, end_ip):
-            thread = threading.Thread(target=ScanManager.run_scan_in_background, args=(start_ip, end_ip))
-            thread.daemon = True
-            thread.start()
+        try:
+            started = ScanManager.begin_scan(start_ip, end_ip)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect('discovery:device_list')
+
+        if started:
             messages.success(request, 'Network scan started.')
         else:
             messages.warning(request, 'A scan is already running.')

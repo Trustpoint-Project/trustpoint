@@ -7,6 +7,7 @@ import concurrent.futures
 import ipaddress
 import socket
 import ssl
+from collections.abc import Callable
 from threading import Event
 from typing import Any
 
@@ -98,30 +99,43 @@ class OTScanner:
                 continue
 
         if not found or self.stop_requested.is_set():
-                return None
+            return None
 
         result['hostname'] = self._resolve_hostname(ip)
         return result
 
-
-    def scan_network(self, start_ip: str, end_ip: str) -> list[dict[str, Any]]:
-        """Orchestrate concurrent host scanning with instant shutdown support."""
+    def scan_network(
+        self,
+        start_ip: str,
+        end_ip: str,
+        *,
+        should_stop: Callable[[], bool] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Scan hosts concurrently, polling cancellation even while probes are blocked."""
         self.stop_requested.clear()
         ips = self._get_ips_from_range(start_ip, end_ip)
         results: list[dict[str, Any]] = []
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_ip = {executor.submit(self._scan_host, ip): ip for ip in ips}
-            for future in concurrent.futures.as_completed(future_to_ip):
+            pending = {executor.submit(self._scan_host, ip) for ip in ips}
+            while pending:
+                done, pending = concurrent.futures.wait(
+                    pending,
+                    timeout=0.25,
+                    return_when=concurrent.futures.FIRST_COMPLETED,
+                )
+                if should_stop is not None and should_stop():
+                    self.stop_requested.set()
                 if self.stop_requested.is_set():
                     executor.shutdown(wait=False, cancel_futures=True)
                     break
-                try:
-                    data = future.result()
-                    if data:
-                        results.append(data)
-                except concurrent.futures.CancelledError:
-                    continue
-                except Exception:  # noqa: BLE001, S112
-                    continue
+                for future in done:
+                    try:
+                        data = future.result()
+                        if data:
+                            results.append(data)
+                    except concurrent.futures.CancelledError:
+                        continue
+                    except Exception:  # noqa: BLE001, S112
+                        continue
         return results

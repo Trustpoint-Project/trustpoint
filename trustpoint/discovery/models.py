@@ -8,6 +8,22 @@ from django.db import models
 from pki.models.certificate import CertificateModel
 
 
+class DiscoveryScan(models.Model):
+    """Shared state for the single queued or running network scan."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    scan_id = models.UUIDField(null=True, editable=False)
+    is_running = models.BooleanField(default=False)
+    stop_pending = models.BooleanField(default=False)
+    start_ip = models.GenericIPAddressField(protocol='IPv4', default='10.100.13.1')
+    end_ip = models.GenericIPAddressField(protocol='IPv4', default='10.100.13.254')
+    started_at = models.DateTimeField(null=True)
+
+    def __str__(self) -> str:
+        """Identify the current discovery scan."""
+        return f'Discovery scan {self.scan_id}'
+
+
 class DiscoveryPort(models.Model):
     """Stores ports to be included in network scans."""
 

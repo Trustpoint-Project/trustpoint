@@ -20,7 +20,7 @@ flowchart TB
     subgraph TRUSTPOINT_WEB[Trustpoint web container]
         GUNICORN["Gunicorn WSGI server / 4 workers, 300s timeout"]
         DJANGO["Django application / protocol handlers / REST APIs / web UI"]
-        QCLUSTER["Django-Q2 qcluster / scheduled tasks / CRL generation / notifications"]
+        QCLUSTER["Django-Q2 qcluster / background scans / scheduled tasks / CRL generation / notifications"]
     end
 
     subgraph TRUSTPOINT_WORKER[Trustpoint worker container]
@@ -77,7 +77,7 @@ flowchart TB
 | **NGINX** | TLS termination, routing | Port 80 (HTTP for CMP/CRL only), Port 443 (HTTPS, TLS 1.2/1.3), proxies to Gunicorn on 127.0.0.1:8000 |
 | **Gunicorn** | WSGI server | 4 workers, 300s timeout, handles protocol endpoints, REST API, web UI |
 | **Django** | Application logic | Protocol handlers, REST API, web UI views, certificate operations |
-| **Django-Q2 qcluster** | Scheduled tasks | CRL generation, certificate expiry notifications, maintenance |
+| **Django-Q2 qcluster** | Background and scheduled tasks | Network discovery, CRL generation, certificate expiry notifications, maintenance |
 
 **Entry point:** `/docker/trustpoint/entrypoint.sh` with `TRUSTPOINT_SERVICE_ROLE=web`
 
