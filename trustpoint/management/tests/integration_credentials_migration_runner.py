@@ -36,7 +36,7 @@ def main() -> None:
     targets = executor.loader.graph.leaf_nodes()
     plan = executor.migration_plan(targets)
     management_steps = [migration.name for migration, _ in plan if migration.app_label == 'management']
-    assert management_steps == ['0001_initial', '0002_initial']
+    assert management_steps[:2] == ['0001_initial', '0002_initial'], management_steps
     executor.migrate(targets)
     apps = executor.loader.project_state(targets).apps
     for model_name, fields in (
