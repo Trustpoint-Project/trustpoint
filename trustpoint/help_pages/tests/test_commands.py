@@ -364,20 +364,20 @@ class EstClientCertificateCommandBuilderTests(SimpleTestCase):
 
         assert 'curl' in cmd
         assert 'https://127.0.0.1/.well-known/est/test/cacerts' in cmd
+        assert '--cacert trustpoint-tls-trust-store.pem' in cmd
 
     def test_get_idevid_enroll_and_conversion_commands(self) -> None:
         """Test EST IDevID enrollment and conversion command helpers."""
         enroll_cmd = EstClientCertificateCommandBuilder.get_idevid_enroll_domain_credential_command(
             host='https://example.test/.well-known/est/domain/simpleenroll',
         )
-        der_cmd = EstClientCertificateCommandBuilder.get_idevid_der_pem_conversion_command()
         pkcs7_cmd = EstClientCertificateCommandBuilder.get_idevid_pkcs7_pem_conversion_command()
 
         assert '--cert idevid.pem' in enroll_cmd
         assert '--key idevid.key' in enroll_cmd
+        assert '--cacert trustpoint-tls-trust-store.pem' in enroll_cmd
         assert '@domain_credential_csr.der' in enroll_cmd
-        assert 'openssl x509' in der_cmd
-        assert '-inform der' in der_cmd
+        assert '-o domain-credential-certificate.p7c' in enroll_cmd
         assert 'openssl pkcs7' in pkcs7_cmd
         assert '-in cacerts.p7b' in pkcs7_cmd
 

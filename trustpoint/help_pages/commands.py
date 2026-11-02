@@ -451,21 +451,12 @@ class EstClientCertificateCommandBuilder:
             'curl \\\n'
             '--cert idevid.pem \\\n'
             '--key idevid.key \\\n'
-            '--cacert server_cert.pem \\\n'
+            '--cacert trustpoint-tls-trust-store.pem \\\n'
             '--header "Content-Type: application/pkcs10" \\\n'
             '--data-binary "@domain_credential_csr.der" \\\n'
-            '-o certificate.der \\\n'
+            '-o domain-credential-certificate.p7c \\\n'
             f'{quote(host)}'
         )
-
-    @staticmethod
-    def get_idevid_der_pem_conversion_command() -> str:
-        """Gets the IDevID DER to PEM conversion command.
-
-        Returns:
-            The constructed command.
-        """
-        return 'openssl x509 \\\n-inform der \\\n-in certificate.der \\\n-out certificate.pem'
 
     @staticmethod
     def get_idevid_ca_certs_command(host: str) -> str:
@@ -480,7 +471,7 @@ class EstClientCertificateCommandBuilder:
         return (
             'curl -X GET \\\n'
             f'"{escape_shell_double_quotes(host)}" \\\n'
-            '--cacert server_cert.pem \\\n'
+            '--cacert trustpoint-tls-trust-store.pem \\\n'
             '-H "Accept: application/pkcs7-mime" \\\n'
             '| base64 --decode > cacerts.p7b'
         )

@@ -10,6 +10,7 @@ from django.test import RequestFactory, TestCase
 from trustpoint_core import oid
 
 from pki.models import CaModel
+from help_pages.commands import EstUsernamePasswordCommandBuilder
 from ..help_section import HelpSection, ValueRenderType
 from ..pki_help_views import (
     BaseHelpView,
@@ -250,6 +251,10 @@ class OnboardingEstIdevIdDomainCredentialStrategyTests(TestCase):
         assert 'Help - Issue Application Certificates' in heading
         assert sections[0].heading == 'Summary'
         assert sections[4].heading == 'Enroll Domain Credential'
+        assert sections[4].rows[2].key == 'Convert PKCS#7 to PEM'
+        assert sections[4].rows[2].value == (
+            EstUsernamePasswordCommandBuilder.get_domain_credential_conversion_p7_pem_command()
+        )
         assert sections[5].heading == 'CA Certificate Chain'
         mock_tls.assert_called_once()
         mock_keygen.assert_called_once()

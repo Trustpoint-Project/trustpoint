@@ -25,7 +25,11 @@ from help_pages.base import (
     build_keygen_section,
     build_tls_trust_store_section,
 )
-from help_pages.commands import CmpClientCertificateCommandBuilder, EstClientCertificateCommandBuilder
+from help_pages.commands import (
+    CmpClientCertificateCommandBuilder,
+    EstClientCertificateCommandBuilder,
+    EstUsernamePasswordCommandBuilder,
+)
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import TlsSettings
 from pki.models import CaModel, DevIdRegistration, DomainModel, IssuedCredentialModel, OwnerCredentialModel
@@ -191,8 +195,8 @@ class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
                     value_render_type=ValueRenderType.CODE,
                 ),
                 HelpRow(
-                    key=_non_lazy('Convert DER to PEM'),
-                    value=EstClientCertificateCommandBuilder.get_idevid_der_pem_conversion_command(),
+                    key=_non_lazy('Convert PKCS#7 to PEM'),
+                    value=EstUsernamePasswordCommandBuilder.get_domain_credential_conversion_p7_pem_command(),
                     value_render_type=ValueRenderType.CODE,
                 ),
             ],
