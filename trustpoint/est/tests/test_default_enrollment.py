@@ -37,8 +37,8 @@ def enrollment_request(request, rf, rsa_private_key, settings):
         headers['HTTP_SSL_CLIENT_CERT'] = certificate.public_bytes(Encoding.PEM).decode()
     csr = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(rsa_private_key, hashes.SHA256())
 
-    def post(prefix='', *, authenticated=True):
-        path = f'/.well-known/est/{prefix}{operation}'
+    def post(prefix='', *, authenticated=True, suffix=''):
+        path = f'/.well-known/est/{prefix}{operation}{suffix}'
         http_request = rf.post(
             path, data=base64.b64encode(csr.public_bytes(Encoding.DER)),
             content_type='application/pkcs10', **(headers if authenticated else {}),
@@ -85,4 +85,36 @@ def test_default_route_still_requires_authentication(enrollment_request):
     _, post = enrollment_request
     before = CertificateModel.objects.count()
     assert post(authenticated=False).status_code >= 400
+    assert CertificateModel.objects.count() == before
+
+
+@pytest.mark.parametrize('suffix', ['', '/'])
+def test_profile_only_route_uses_selected_profile(enrollment_request, suffix):
+    device, post = enrollment_request
+    domain = device.domain
+    selected = domain.get_allowed_cert_profile('domain_credential')
+    definition = selected.profile
+    definition['validity'] = {'days': 7}
+    selected.profile_json = definition
+    selected.save()
+    domain.domain_credential_profile = CertificateProfileModel.objects.create(
+        unique_name='other-default',
+        profile_json={'type': 'cert_profile', 'subj': {'allow': '*'}, 'validity': {'days': 30}},
+    )
+    domain.save()
+    before = CertificateModel.objects.count()
+    response = post('~domain_credential/', suffix=suffix)
+    assert response.status_code == 200, response.content
+    assert CertificateModel.objects.count() == before + 1
+    issued = CertificateModel.objects.latest('pk').get_certificate_serializer().as_crypto()
+    assert issued in load_der_pkcs7_certificates(base64.b64decode(response.content))
+    assert (issued.not_valid_after_utc - issued.not_valid_before_utc).days == 7
+
+
+@pytest.mark.parametrize('profile_name', ['missing', 'domain_credential'])
+def test_profile_only_route_rejects_unavailable_profile(enrollment_request, profile_name):
+    device, post = enrollment_request
+    device.domain.certificate_profiles.all().delete()
+    before = CertificateModel.objects.count()
+    assert post(f'~{profile_name}/').status_code == 403
     assert CertificateModel.objects.count() == before

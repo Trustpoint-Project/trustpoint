@@ -115,8 +115,10 @@ class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle POST requests for simple enrollment."""
         del args
-        domain_name = cast('str', kwargs.get('domain'))
+        domain_name = cast('str | None', kwargs.get('domain'))
         cert_profile = cast('str | None', kwargs.get('cert_profile'))
+        if domain_name is None and cert_profile is not None:
+            cert_profile = cert_profile.removeprefix('~')
         return self.process_enrollment(request, domain_name, cert_profile)
 
 
