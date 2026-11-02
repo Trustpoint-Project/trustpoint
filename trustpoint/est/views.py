@@ -140,7 +140,9 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
     def _get_ca_chain(ca: 'CaModel') -> CertificateCollectionSerializer:
         """Read local credentials or the public upstream chain of a keyless RA."""
         if ca.credential is not None:
-            return ca.credential.get_credential_serializer().get_full_chain_as_serializer()
+            return CertificateCollectionSerializer(
+                [ca.credential.get_certificate(), *ca.credential.get_certificate_chain()]
+            )
         certificate = ca.get_certificate()
         if certificate is None:
             msg = 'The configured CA has no certificate available.'

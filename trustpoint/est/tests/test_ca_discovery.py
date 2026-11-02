@@ -17,6 +17,7 @@ from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from est.views import EstCACertsView
 from pki.models.ca import CaModel
+from pki.models.credential import CredentialModel
 from pki.util.x509 import CertificateGenerator
 
 
@@ -74,3 +75,22 @@ def test_ra_without_ca_certificate_is_rejected():
     ca.get_certificate.return_value = None
     with pytest.raises(ValueError, match='no certificate available'):
         EstCACertsView._get_ca_chain(ca)
+
+
+@pytest.mark.parametrize('scoped', [False, True])
+def test_cacerts_does_not_load_private_keys(client, domain_instance, monkeypatch, scoped):
+    """Public discovery remains available when signing keys cannot be loaded."""
+    domain = domain_instance['domain']
+    credential = domain.issuing_ca.credential
+    expected = [credential.get_certificate(), *credential.get_certificate_chain()]
+    private_key = Mock(side_effect=RuntimeError('Signing key unavailable.'))
+    monkeypatch.setattr(CredentialModel, 'get_private_key', private_key)
+
+    prefix = f'{domain.unique_name}/' if scoped else ''
+    response = client.get(f'/.well-known/est/{prefix}cacerts')
+
+    assert response.status_code == 200
+    assert response['Content-Type'] == 'application/pkcs7-mime'
+    assert response['Content-Transfer-Encoding'] == 'base64'
+    assert set(load_der_pkcs7_certificates(base64.b64decode(response.content))) == set(expected)
+    private_key.assert_not_called()

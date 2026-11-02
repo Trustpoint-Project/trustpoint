@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from cryptography.hazmat.primitives.serialization.pkcs7 import load_der_pkcs7_certificates
 from django.test import RequestFactory
-from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from pki.models.ca_rollover import CaRolloverState
 from pki.models.domain import DomainModel
@@ -529,19 +528,20 @@ def test_est_cacerts_view_csrf_exempt():
     assert hasattr(EstCACertsView, 'dispatch')
 
 
+@patch.object(EstCACertsView, '_get_ca_chain')
 @patch('est.views.CaRolloverService')
 @patch.object(EstRequestedDomainExtractorMixin, 'extract_requested_domain')
-def test_est_cacerts_view_get_success(mock_extract_domain, mock_rollover_service, request_factory, mock_domain):
+def test_est_cacerts_view_get_success(
+    mock_extract_domain, mock_rollover_service, mock_get_ca_chain, request_factory, mock_domain
+):
     """Test successful GET request to EstCACertsView."""
     # Setup mock domain with issuing CA
-    mock_credential_serializer = Mock()
     mock_chain_serializer = Mock()
 
     # Create mock PKCS7 DER data
     pkcs7_der = b'\x30\x82\x01\x23'  # Mock DER data
     mock_chain_serializer.as_pkcs7_der.return_value = pkcs7_der
-    mock_credential_serializer.get_full_chain_as_serializer.return_value = mock_chain_serializer
-    mock_domain.issuing_ca.credential.get_credential_serializer.return_value = mock_credential_serializer
+    mock_get_ca_chain.return_value = mock_chain_serializer
 
     mock_extract_domain.return_value = (mock_domain, None)
     mock_rollover_service.get_active_rollover.return_value = None
@@ -606,21 +606,20 @@ def test_est_cacerts_view_get_exception(mock_extract_domain, request_factory):
     assert b'Error retrieving CA certificates' in response.content
 
 
+@patch.object(EstCACertsView, '_get_ca_chain')
 @patch('est.views.CaRolloverService')
 @patch.object(EstRequestedDomainExtractorMixin, 'extract_requested_domain')
 def test_est_cacerts_view_get_base64_line_wrapping(
-    mock_extract_domain, mock_rollover_service, request_factory, mock_domain
+    mock_extract_domain, mock_rollover_service, mock_get_ca_chain, request_factory, mock_domain
 ):
     """Test that EstCACertsView properly wraps base64 output at 64 characters."""
     # Setup mock with long certificate data
-    mock_credential_serializer = Mock()
     mock_chain_serializer = Mock()
 
     # Create long mock data to ensure line wrapping
     long_data = b'\x30' * 100  # 100 bytes will produce >64 char base64
     mock_chain_serializer.as_pkcs7_der.return_value = long_data
-    mock_credential_serializer.get_full_chain_as_serializer.return_value = mock_chain_serializer
-    mock_domain.issuing_ca.credential.get_credential_serializer.return_value = mock_credential_serializer
+    mock_get_ca_chain.return_value = mock_chain_serializer
 
     mock_extract_domain.return_value = (mock_domain, None)
     mock_rollover_service.get_active_rollover.return_value = None
@@ -657,17 +656,16 @@ def test_est_cacerts_view_get_none_response_fallback(mock_extract_domain, reques
     assert response.status_code == 500
 
 
+@patch.object(EstCACertsView, '_get_ca_chain')
 @patch('est.views.CaRolloverService')
-def test_est_cacerts_view_get_headers_removed(mock_rollover_service, request_factory, mock_domain):
+def test_est_cacerts_view_get_headers_removed(mock_rollover_service, mock_get_ca_chain, request_factory, mock_domain):
     """Test that Vary and Content-Language headers are removed from response."""
     # Setup mock domain with issuing CA
-    mock_credential_serializer = Mock()
     mock_chain_serializer = Mock()
 
     pkcs7_der = b'\x30\x82\x01\x23'
     mock_chain_serializer.as_pkcs7_der.return_value = pkcs7_der
-    mock_credential_serializer.get_full_chain_as_serializer.return_value = mock_chain_serializer
-    mock_domain.issuing_ca.credential.get_credential_serializer.return_value = mock_credential_serializer
+    mock_get_ca_chain.return_value = mock_chain_serializer
 
     mock_rollover_service.get_active_rollover.return_value = None
 
@@ -719,8 +717,8 @@ def test_default_cacerts_includes_prepared_rollover(client, domain_instance, rsa
     """Publish the next CA chain alongside the current chain during preparation."""
     next_cert, _ = CertificateGenerator.create_root_ca(cn='Next Root', private_key=rsa_private_key)
     rollover = Mock(state=CaRolloverState.PREPARATION)
-    next_credential = rollover.new_issuing_ca.credential.get_credential_serializer.return_value
-    next_credential.get_full_chain_as_serializer.return_value = CertificateCollectionSerializer([next_cert])
+    rollover.new_issuing_ca.credential.get_certificate.return_value = next_cert
+    rollover.new_issuing_ca.credential.get_certificate_chain.return_value = []
     with patch('est.views.CaRolloverService.get_active_rollover', return_value=rollover):
         response = client.get('/.well-known/est/cacerts')
 
