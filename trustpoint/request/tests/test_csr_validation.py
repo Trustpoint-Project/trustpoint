@@ -27,6 +27,7 @@ from request.gds_push.gds_push_service import GdsPushError, GdsPushService
 from request.message_parser.est import EstCsrSignatureVerification, EstPkiMessageParsing
 from request.message_parser.rest import RestCsrSignatureVerification, RestPkiMessageParsing
 from request.request_context import EstCertificateRequestContext, RestCertificateRequestContext
+from request.request_validator.http_req import EstHttpRequestValidator
 from scep.handler import ScepPkiOperationHandler
 from scep.protocol.errors import ScepProtocolError
 from scep.protocol.oids import FailInfo
@@ -107,6 +108,30 @@ def test_signature_validation_across_transports(signed_csr, transport, tampered)
     else:
         verifier.parse(context)
         assert context.cert_requested.subject == signed_csr.subject
+
+
+@pytest.mark.parametrize('newline', [b'\n', b'\r\n'])
+@pytest.mark.parametrize('junk', [b'', b'!'])
+def test_est_wrapped_base64_through_http_validation(rf, signed_csr, newline, junk):
+    """HTTP validation accepts wrapped CSRs but still rejects non-whitespace junk."""
+    der = signed_csr.public_bytes(Encoding.DER)
+    body = base64.encodebytes(der).replace(b'\n', newline) + junk
+    context = EstCertificateRequestContext(raw_message=rf.post(
+        '/.well-known/est/domain/tls_server/simpleenroll',
+        data=body,
+        content_type='application/pkcs10',
+        HTTP_CONTENT_TRANSFER_ENCODING='base64',
+    ))
+    if junk:
+        with pytest.raises(ValueError, match='Invalid base64 encoding in message'):
+            EstHttpRequestValidator().validate(context)
+        return
+
+    EstHttpRequestValidator().validate(context)
+    assert context.raw_message.body == body
+    EstPkiMessageParsing().parse(context)
+    EstCsrSignatureVerification().parse(context)
+    assert context.cert_requested.public_bytes(Encoding.DER) == der
 
 
 def test_scep_retains_algorithm_restrictions_and_error_codes(signed_csr):
