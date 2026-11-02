@@ -284,6 +284,8 @@ class DeletePortView(View):
 
     def post(self, request: HttpRequest, port_id: int) -> HttpResponse:
         """Delete a configured scan port by primary key."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_DISCOVERY):
+            raise PermissionDenied
         port = get_object_or_404(DiscoveryPort, id=port_id)
         port_num = port.port_number
         port.delete()
