@@ -1957,9 +1957,10 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                     has_missing_crl = True
 
                 ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
+                ca_link = format_html('<a href="{}" target="_blank">{}</a>', ca_detail_url, cn_value)
                 indent = '&nbsp;' * (idx * 4)
                 hierarchy_html += (
-                    f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> [{crl_link}{crl_status}]<br>'
+                    f'{indent}└─ {ca_link} [{crl_link}{crl_status}]<br>'
                 )
 
             except (ValueError, TypeError, AttributeError):
