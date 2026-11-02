@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_q.models import Schedule
@@ -158,9 +158,11 @@ class DeviceModel(CustomDeleteActionModel):
             except ValidationError as exc:
                 error_messages.update({name: ' '.join(messages) for name, messages in exc.message_dict.items()})
 
-    _AGENT_EST_PROTOCOLS = frozenset({
-        OnboardingProtocol.REST_USERNAME_PASSWORD,
-    })
+    _AGENT_EST_PROTOCOLS = frozenset(
+        {
+            OnboardingProtocol.REST_USERNAME_PASSWORD,
+        }
+    )
 
     def _validate_agent_device(self, error_messages: dict[str, str]) -> None:
         """Validate agent device type constraints."""
@@ -173,9 +175,7 @@ class DeviceModel(CustomDeleteActionModel):
                     'Agent devices must use REST - Username & Password as onboarding protocol.'
                 )
             if self.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP):
-                error_messages['onboarding_config'] = (
-                    'Agent devices must only have REST enabled as PKI protocol.'
-                )
+                error_messages['onboarding_config'] = 'Agent devices must only have REST enabled as PKI protocol.'
         if self.no_onboarding_config:
             error_messages['no_onboarding_config'] = 'Agent devices cannot use no-onboarding configuration.'
 
@@ -197,7 +197,6 @@ class DeviceModel(CustomDeleteActionModel):
 
         if error_messages:
             raise ValidationError(error_messages)
-
 
 
 class OpcUaGdsPushConfig(models.Model):
@@ -365,6 +364,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
             return 'OTP no longer valid'
         return f'{self.issued_credential_model.id}.{self.otp}'
 
+    @transaction.atomic
     def check_otp(self, otp: str) -> bool:
         """Check if the provided OTP matches the stored OTP.
 
@@ -374,6 +374,12 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         Returns:
             True if the OTP is valid, False otherwise.
         """
+        # Lock and reload before checking so stale requests cannot restore a consumed OTP.
+        try:
+            self.refresh_from_db(from_queryset=RemoteDeviceCredentialDownloadModel.objects.select_for_update())
+        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
+            return False
+
         if not self.otp or self.otp == '-':
             return False
         matches = otp == self.otp
