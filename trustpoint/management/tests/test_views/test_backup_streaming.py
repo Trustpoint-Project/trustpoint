@@ -93,24 +93,31 @@ def test_archive_errors_close_all_temporary_files(backup_files, monkeypatch, mod
 
 @pytest.mark.parametrize('archive_format', ['zip', 'tar.gz'])
 def test_bulk_archive_memory_stays_below_payload_size(backup_files, settings, archive_format):
-    filenames, _files = backup_files
+    filenames, files = backup_files
     chunk = os.urandom(64 * 1024)
-    for filename in filenames:
-        with (settings.BACKUP_FILE_PATH / filename).open('wb') as payload:
-            for _ in range(64):
-                payload.write(chunk)
     request = RequestFactory().post('/', {'selected': filenames})
+    peaks = []
+    for blocks in (16, 128):
+        for filename in filenames:
+            with (settings.BACKUP_FILE_PATH / filename).open('wb') as payload:
+                for _ in range(blocks):
+                    payload.write(chunk)
 
-    tracemalloc.start()
-    try:
-        response = BackupFilesDownloadMultipleView().post(request, archive_format)
+        tracemalloc.start()
         try:
-            size = sum(len(block) for block in response.streaming_content)
-            _current, peak = tracemalloc.get_traced_memory()
+            response = BackupFilesDownloadMultipleView().post(request, archive_format)
+            try:
+                size = sum(len(block) for block in response.streaming_content)
+                _current, peak = tracemalloc.get_traced_memory()
+            finally:
+                response.close()
         finally:
-            response.close()
-    finally:
-        tracemalloc.stop()
+            tracemalloc.stop()
 
-    assert size > 8 * 1024 * 1024
-    assert peak < 4 * 1024 * 1024
+        assert size > len(filenames) * blocks * len(chunk)
+        peaks.append(peak)
+        assert all(stream.closed for stream in files)
+        files.clear()
+
+    # Compare growth rather than fixed interpreter and test-runner overhead.
+    assert peaks[1] - peaks[0] < 4 * 1024 * 1024
