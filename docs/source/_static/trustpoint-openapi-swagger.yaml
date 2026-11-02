@@ -463,43 +463,10 @@ paths:
                 items:
                   $ref: '#/components/schemas/Certificate'
           description: ''
-    post:
-      operationId: api_certificates_create
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
-      tags:
-      - Certificate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Certificate'
-          description: ''
   /api/certificates/{id}/:
     get:
       operationId: api_certificates_retrieve
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
+      description: List, inspect, download, and delete stored certificates.
       parameters:
       - in: path
         name: id
@@ -509,78 +476,6 @@ paths:
         required: true
       tags:
       - Certificate
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Certificate'
-          description: ''
-    put:
-      operationId: api_certificates_update
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this certificate model.
-        required: true
-      tags:
-      - Certificate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Certificate'
-          description: ''
-    patch:
-      operationId: api_certificates_partial_update
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this certificate model.
-        required: true
-      tags:
-      - Certificate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedCertificate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedCertificate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedCertificate'
       security:
       - jwtAuth: []
       responses:
@@ -592,11 +487,7 @@ paths:
           description: ''
     delete:
       operationId: api_certificates_destroy
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
+      description: List, inspect, download, and delete stored certificates.
       parameters:
       - in: path
         name: id
@@ -2244,19 +2135,6 @@ components:
         unique_name:
           type: string
           maxLength: 255
-    PatchedCertificate:
-      type: object
-      description: |-
-        Serializer for Certificate instances.
-
-        Handles conversion between Certificate model objects and JSON representations.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        common_name:
-          type: string
-          maxLength: 256
     PatchedCredential:
       type: object
       description: |-
@@ -2439,6 +2317,11 @@ components:
         password:
           type: string
           writeOnly: true
+        otp:
+          type: string
+          writeOnly: true
+          maxLength: 64
+          description: Authenticator or unused recovery code, required for human login when OTP is enabled.
         access:
           type: string
           readOnly: true

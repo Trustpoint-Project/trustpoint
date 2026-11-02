@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Never
 
 from cryptography import x509
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -120,7 +120,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
             CrlModel: The newly created CRL model.
 
         Raises:
-            ValidationError: If the CRL is invalid or doesn't match the CA.
+            ValidationError: If the CRL is invalid, doesn't match the CA, or duplicates an existing CRL number.
         """
         try:
             crl = x509.load_pem_x509_crl(crl_pem.encode())
@@ -161,9 +161,6 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
             is_active=set_active if ca is not None else False,
         )
         crl_model.save()
-
-        if set_active and ca is not None:
-            cls.objects.filter(ca=ca, is_active=True).exclude(pk=crl_model.pk).update(is_active=False)
 
         return crl_model
 
@@ -235,11 +232,16 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         return validity_period.total_seconds() / 3600
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Override save to validate before saving."""
-        # Ensure only one active CRL per CA
-        if self.is_active:
-            CrlModel.objects.filter(ca=self.ca, is_active=True).exclude(pk=self.pk).update(is_active=False)
-        super().save(*args, **kwargs)
+        """Replace the active CRL atomically and report duplicate identifiers as validation errors."""
+        try:
+            with transaction.atomic():
+                if self.is_active:
+                    CrlModel.objects.filter(ca=self.ca, is_active=True).exclude(pk=self.pk).update(is_active=False)
+                super().save(*args, **kwargs)
+        except IntegrityError:
+            # Check uniqueness after rollback so the caller's transaction remains usable.
+            self.validate_unique()
+            raise
 
     def pre_delete(self) -> None:
         """Called before deleting the model."""

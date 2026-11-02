@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import DEFAULT, patch
 
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -346,6 +346,33 @@ class DispatchTests(TestCase):
                     source_json={'trustpoint': True},
                     idempotency_key='same-key',
                 )
+
+    def test_get_or_create_run_recovers_from_key_collision(self) -> None:
+        """A losing insert returns the existing run without breaking the transaction."""
+        existing = Workflow2Run.objects.create(
+            trigger_on='device.created',
+            event_json={'x': 1},
+            source_json={'trustpoint': True},
+            idempotency_key='same-key',
+        )
+        svc = WorkflowDispatchService()
+        # Miss the competing row initially, then use real SQL for the fallback lookup.
+        with patch.object(
+            svc,
+            '_get_idempotent_run',
+            wraps=svc._get_idempotent_run,
+            side_effect=[None, DEFAULT],
+        ):
+            run = svc.get_or_create_run(
+                on='device.created',
+                event={'x': 2},
+                source=EventSource(trustpoint=True),
+                idempotency_key='same-key',
+            )
+
+        self.assertEqual(run.pk, existing.pk)
+        self.assertEqual(run.event_json, {'x': 1})
+        self.assertEqual(Workflow2Run.objects.count(), 1)
 
     def test_workflow2run_unique_idempotency_constraint_allows_blank_keys(self) -> None:
         Workflow2Run.objects.create(

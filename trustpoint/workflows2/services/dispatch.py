@@ -311,14 +311,15 @@ class WorkflowDispatchService:
                 return existing
 
         try:
-            return Workflow2Run.objects.create(
-                trigger_on=on,
-                event_json=event,
-                source_json=asdict(source),
-                idempotency_key=normalized_idempotency_key,
-                status=Workflow2Run.STATUS_QUEUED,
-                finalized=False,
-            )
+            with transaction.atomic():
+                return Workflow2Run.objects.create(
+                    trigger_on=on,
+                    event_json=event,
+                    source_json=asdict(source),
+                    idempotency_key=normalized_idempotency_key,
+                    status=Workflow2Run.STATUS_QUEUED,
+                    finalized=False,
+                )
         except IntegrityError:
             if not normalized_idempotency_key:
                 raise

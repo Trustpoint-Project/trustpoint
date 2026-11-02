@@ -19,7 +19,7 @@ from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -461,17 +461,15 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
 @extend_schema(tags=['Certificate'])
 @extend_schema_view(
     retrieve=extend_schema(description='Retrieve a single certificate by id.'),
-    create=extend_schema(description='Create a certificate.'),
-    update=extend_schema(description='Update an existing certificate.'),
-    partial_update=extend_schema(description='Partially update an existing certificate.'),
     destroy=extend_schema(description='Delete a certificate.'),
 )
-class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
-    """ViewSet for managing Certificate instances.
-
-    Supports standard CRUD operations such as list, retrieve,
-    create, update, and delete.
-    """
+class CertificateViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet[CertificateModel],
+):
+    """List, inspect, download, and delete stored certificates."""
 
     queryset = CertificateModel.objects.select_related(
         'revoked_certificate', 'basic_constraints_extension', 'issuer_id'
@@ -484,7 +482,7 @@ class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
     ordering_fields: ClassVar = ['common_name', 'created_at']
 
     def get_serializer_class(self) -> type[CertificateSerializer]:
-        """Provide richer public reads while keeping the existing write contract."""
+        """Select the public certificate representation for each action."""
         if self.action == 'retrieve':
             return CertificateDetailSerializer
         if self.action == 'list':

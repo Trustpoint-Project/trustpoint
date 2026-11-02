@@ -36,15 +36,26 @@ The Management API uses JWT (JSON Web Tokens) for authentication.
 Obtaining a Token
 ^^^^^^^^^^^^^^^^^
 
-Request an access token using your username and password::
+Request an access token using your username and password. When the global OTP
+requirement is enabled, also include your authenticator code or an unused recovery
+code as the ``otp`` string::
 
     POST /api/token/
     Content-Type: application/json
 
     {
         "username": "your-username",
-        "password": "your-password"
+        "password": "your-password",
+        "otp": "012345"
     }
+
+Omit ``otp`` when OTP is disabled. Users need the ``users.use_rest_api`` permission.
+If OTP is required and no confirmed authenticator exists, enroll through the web
+interface first. Missing, invalid, reused, or throttled codes return HTTP 401
+without issuing tokens. Recovery codes can be used once.
+
+Service accounts continue to use the client credentials grant without OTP; see
+:doc:`service_accounts`.
 
 Response::
 
@@ -76,6 +87,9 @@ Access tokens expire after a period. Use the refresh token to obtain a new acces
     {
         "refresh": "<refresh-token>"
     }
+
+Refreshing an existing token does not require another OTP. Enabling OTP does not
+invalidate tokens that were already issued.
 
 Interactive Documentation
 --------------------------

@@ -23,7 +23,8 @@ from django.views.generic.edit import FormView
 from pki.filters import CrlFilter
 from pki.models import CaModel, CertificateModel, CrlModel
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
-from trustpoint.views.base import BulkDeleteView, ContextDataMixin
+from trustpoint.views.base import BulkDeleteView, ContextDataMixin, UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 
 
 class CrlContextMixin(ContextDataMixin):
@@ -82,9 +83,10 @@ class CrlTableView(ExportMixin, CrlContextMixin, ListView[CrlModel]):
         return context
 
 
-class CrlBulkDeleteConfirmView(BulkDeleteView):
+class CrlBulkDeleteConfirmView(UserPermissionRequiredMixin, BulkDeleteView):
     """View to confirm the deletion of multiple CRLs."""
 
+    permission_required = AppPermissions.MANAGE_CAS
     model = CrlModel
     success_url = reverse_lazy('pki:crls')
     ignore_url = reverse_lazy('pki:crls')
@@ -343,9 +345,10 @@ class CrlImportForm(forms.Form):
             ca_field.label_from_instance = lambda obj: obj.common_name  # type: ignore[method-assign]
 
 
-class CrlImportView(CrlContextMixin, FormView[CrlImportForm]):
+class CrlImportView(UserPermissionRequiredMixin, CrlContextMixin, FormView[CrlImportForm]):
     """View for importing CRLs."""
 
+    permission_required = AppPermissions.MANAGE_CAS
     form_class = CrlImportForm
     template_name = 'pki/crls/import.html'
     success_url = reverse_lazy('pki:crls')

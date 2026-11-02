@@ -18,6 +18,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
+from management.models import PasswordPolicy
 from users.authentication import ServiceAccountBackend
 from users.middleware import ServiceAccountMiddleware
 from users.models import BuiltinRole, ServiceAccountCredential, TrustpointUser
@@ -397,11 +398,14 @@ class TestServiceAccountConfiguration:
 class TestServiceAccountAPI:
     """Tests for service account API authentication."""
 
+    @pytest.mark.parametrize('require_otp', [False, True])
     def test_api_authentication_with_service_account(
-        self, service_credential: tuple[ServiceAccountCredential, str]
+        self, service_credential: tuple[ServiceAccountCredential, str],
+        require_otp: bool,
     ) -> None:
         """Test API authentication using service account credentials via OAuth 2.0."""
         credential, secret = service_credential
+        PasswordPolicy.objects.update_or_create(pk=1, defaults={'require_otp': require_otp})
         client = APIClient()
 
         # Use OAuth 2.0 client credentials grant
@@ -537,6 +541,30 @@ class TestServiceAccountAPI:
 class TestHumanUserAPI:
     """Tests for human user API authentication."""
 
+    def test_failed_password_counts_once_and_locks_at_configured_limit(self) -> None:
+        """Each failed request counts once, and the final attempt blocks further login."""
+        from management.models import AccountSecurityConfig
+
+        AccountSecurityConfig.objects.update_or_create(pk=1, defaults={'failed_login_attempts': 3})
+        user = TrustpointUser.objects.create_user(username='limited', password='TestPassword123!')
+        client = APIClient()
+
+        for attempt in range(1, 4):
+            response = client.post('/api/token/', {'username': user.username, 'password': 'wrong-password'})
+
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED
+            user.refresh_from_db()
+            assert user.failed_login_attempts == attempt
+            assert user.is_active == (attempt < 3)
+            assert user.blocked_by_failed_logins == (attempt == 3)
+
+        response = client.post('/api/token/', {'username': user.username, 'password': 'TestPassword123!'})
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        user.refresh_from_db()
+        assert user.failed_login_attempts == 3
+        assert user.blocked_by_failed_logins
+
     def test_token_requires_rest_api_permission(self) -> None:
         """A user without REST API access cannot obtain bearer tokens."""
         role = Group.objects.create(name='No API access')
@@ -566,10 +594,11 @@ class TestHumanUserAPI:
             codename='use_rest_api',
         )
         role.permissions.add(permission)
-        TrustpointUser.objects.create_user(
+        user = TrustpointUser.objects.create_user(
             username='api_access',
             password='TestPassword123!',
             role=role,
+            failed_login_attempts=2,
         )
 
         response = APIClient().post(
@@ -583,3 +612,5 @@ class TestHumanUserAPI:
         assert response.status_code == status.HTTP_200_OK
         assert 'access' in response.data
         assert 'refresh' in response.data
+        user.refresh_from_db()
+        assert user.failed_login_attempts == 0

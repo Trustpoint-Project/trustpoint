@@ -15,21 +15,26 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError
 from django.test import Client
 from django.urls import reverse
 from pki.models import CrlModel
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
+from pki.util.crl import generate_crl_with_revoked_certs
 from pki.util.x509 import CertificateGenerator
 from rest_framework.test import APIClient
+from users.permissions import AppPermissions
 
 User = get_user_model()
 
 
 @pytest.fixture
 def authenticated_client(issuing_ca_instance: dict[str, Any]) -> Client:
-    """Create an authenticated Django test client."""
+    """Create a Django test client with CA-management permission."""
     client = Client()
     user = User.objects.create_user(username='testuser', password='testpass123')
+    user.role.permissions.add(Permission.objects.get(codename='manage_cas'))
     client.force_login(user)
     return client
 
@@ -456,6 +461,34 @@ def test_crl_model_create_from_pem_valid_crl(issuing_ca_instance: dict[str, Any]
     assert crl_model.is_active is True
 
 
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('duplicate', [True, False])
+def test_failed_crl_save_preserves_active_list(issuing_ca_instance: dict[str, Any], duplicate: bool) -> None:
+    """Duplicate and unrelated database errors must leave the active CRL unchanged."""
+    ca = issuing_ca_instance['issuing_ca']
+    assert ca.issue_crl()
+    historical = ca.get_active_crl()
+    assert ca.issue_crl()
+    active = ca.get_active_crl()
+    replacement = CrlModel(
+        ca=ca,
+        crl_pem=historical.crl_pem,
+        crl_number=historical.crl_number if duplicate else active.crl_number + 1,
+        this_update=historical.this_update if duplicate else None,
+        is_active=True,
+    )
+
+    with pytest.raises(ValidationError if duplicate else IntegrityError) as error:
+        replacement.save()
+
+    if duplicate:
+        assert 'already exists' in str(error.value)
+    assert ca.get_active_crl().pk == active.pk
+    historical.refresh_from_db()
+    assert not historical.is_active
+    assert ca.crls.count() == 2
+
+
 def test_crl_model_create_from_pem_invalid_signature(issuing_ca_instance: dict[str, Any]) -> None:
     """Test that CRLs with invalid signatures are rejected."""
     issuing_ca = issuing_ca_instance['issuing_ca']
@@ -847,6 +880,45 @@ def test_crl_bulk_delete_confirm_view_post_protected_error(
 # ========================================
 
 
+@pytest.mark.parametrize('method', ['get', 'post'])
+@pytest.mark.parametrize('action', ['import', 'delete'])
+def test_crl_mutation_views_deny_users_without_ca_permission(
+    client: Client,
+    issuing_ca_instance: dict[str, Any],
+    method: str,
+    action: str,
+) -> None:
+    """Deny both forms and submissions without changing the stored CRLs."""
+    ca = issuing_ca_instance['issuing_ca']
+    assert ca.issue_crl()
+    active_crl = ca.get_active_crl()
+    original_ids = set(CrlModel.objects.values_list('pk', flat=True))
+    user = User.objects.create_user(username='ordinary', password='testpass123')
+    assert not user.has_perm(AppPermissions.MANAGE_CAS)
+    client.force_login(user)
+
+    data = {}
+    if action == 'import':
+        url = reverse('pki:crl-import')
+        if method == 'post':
+            crl = generate_crl_with_revoked_certs(ca)
+            data = {
+                'crl_file': SimpleUploadedFile('test.crl', crl.public_bytes(serialization.Encoding.PEM)),
+                'ca': str(ca.pk),
+                'set_active': 'on',
+            }
+    else:
+        url = reverse('pki:crls-delete_confirm', kwargs={'pks': str(active_crl.pk)})
+
+    response = getattr(client, method)(url, data)
+
+    assert response.status_code == 403
+    assert set(CrlModel.objects.values_list('pk', flat=True)) == original_ids
+    active_crl.refresh_from_db()
+    assert active_crl.is_active
+
+
+
 @pytest.mark.django_db
 def test_crl_import_view_get(authenticated_client: Client) -> None:
     """Test GET request to CRL import view."""
@@ -865,38 +937,47 @@ def test_crl_import_view_post_pem_success(
     """Test successful PEM CRL import."""
     ca = issuing_ca_instance['issuing_ca']
 
-    # Create a sample CRL PEM (simplified for testing)
-    crl_pem = """-----BEGIN X509 CRL-----
-MIIBvjCBpwIBATANBgkqhkiG9w0BAQsFADAVMRMwEQYDVQQDEwppLXNhbXBsZS1j
-YTAeFw0yMzEyMjcxMjAwMDBaFw0yNDEyMjYxMjAwMDBaMBUwEwYLKwYBBAGCNzwC
-AjAJBgUrDgMCGgUAMBMwETALBgNVBAoTBGlzYW0xCzAJBgNVBAYTAlVTMA0GCSqG
-SIb3DQEBCwUAA4IBAQB8Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
-Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
-Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
-Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
------END X509 CRL-----"""
-
-    url = reverse('pki:crl-import')
-
-    # Create a temporary file-like object
-    from io import BytesIO
-
-    file_content = BytesIO(crl_pem.encode())
-    file_content.name = 'test.crl'
-
+    crl = generate_crl_with_revoked_certs(ca)
     data = {
-        'crl_file': file_content,
-        'file_format': 'pem',
+        'crl_file': SimpleUploadedFile('test.crl', crl.public_bytes(serialization.Encoding.PEM)),
         'ca': str(ca.pk),
         'set_active': 'on',
     }
 
-    # Note: This test will fail because the CRL PEM above is not valid
-    # In a real test, you'd use a properly signed CRL
-    response = authenticated_client.post(url, data, format='multipart')
+    response = authenticated_client.post(reverse('pki:crl-import'), data)
 
-    # For now, expect validation error due to invalid CRL
-    assert response.status_code == 200  # Form re-rendered with errors
+    assert response.status_code == 302
+    assert response.url == reverse('pki:crls')
+    imported = ca.get_active_crl()
+    assert imported is not None
+    assert imported.crl_pem == crl.public_bytes(serialization.Encoding.PEM).decode()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_duplicate_crl_web_import_preserves_active_list(
+    authenticated_client: Client,
+    issuing_ca_instance: dict[str, Any],
+) -> None:
+    """A repeated historical upload returns a validation error without replacing the active CRL."""
+    ca = issuing_ca_instance['issuing_ca']
+    assert ca.issue_crl()
+    historical = ca.get_active_crl()
+    assert ca.issue_crl()
+    active = ca.get_active_crl()
+
+    response = authenticated_client.post(
+reverse('pki:crl-import'),
+        {
+            'crl_file': SimpleUploadedFile('duplicate.crl', historical.crl_pem.encode()),
+            'ca': str(ca.pk),
+            'set_active': 'on',
+        },
+    )
+
+    assert response.status_code == 200
+    assert 'already exists' in response.content.decode()
+    assert ca.get_active_crl().pk == active.pk
+    assert ca.crls.count() == 2
 
 
 @pytest.mark.django_db
