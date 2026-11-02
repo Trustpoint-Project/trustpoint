@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Persist and advance Workflow 2 runtime state."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -112,7 +113,6 @@ class WorkflowRuntimeService:
 
     def run_instance(self, instance: Workflow2Instance) -> Workflow2Instance:
         """Advance an instance until it blocks or reaches a terminal state."""
-        steps = 0
         while True:
             instance.refresh_from_db()
 
@@ -122,24 +122,9 @@ class WorkflowRuntimeService:
             ):
                 return instance
 
-            if not instance.current_step:
-                WorkflowInstanceTransitionService.mark_finished(instance)
-                save_instance_status(instance)
-                self._recompute_run_if_present(instance)
+            if self.run_one_step(instance).terminal:
+                instance.refresh_from_db()
                 return instance
-
-            if steps >= self.max_steps_per_run:
-                WorkflowInstanceTransitionService.mark_error(
-                    instance,
-                    reason='max_steps_exceeded',
-                    message=f'Workflow exceeded the maximum of {self.max_steps_per_run} steps.',
-                )
-                save_instance_status(instance)
-                self._recompute_run_if_present(instance)
-                return instance
-
-            self.run_one_step(instance)
-            steps += 1
 
     @staticmethod
     def _raise_runtime_state_error(message: str) -> None:
@@ -153,11 +138,7 @@ class WorkflowRuntimeService:
         err = f'{type(exc).__name__}: {exc}'
 
         with transaction.atomic():
-            instance = (
-                Workflow2Instance.objects.select_for_update()
-                .select_related('definition')
-                .get(id=instance.id)
-            )
+            instance = Workflow2Instance.objects.select_for_update().select_related('definition').get(id=instance.id)
 
             ir = instance.definition.ir_json if instance.definition_id else {}
             wf = (ir or {}).get('workflow') or {}
@@ -227,16 +208,8 @@ class WorkflowRuntimeService:
         approval_id: Any,
         instance_id: Any,
     ) -> tuple[Workflow2Approval, Workflow2Instance]:
-        approval = (
-            Workflow2Approval.objects.select_for_update()
-            .select_related('instance')
-            .get(id=approval_id)
-        )
-        inst = (
-            Workflow2Instance.objects.select_for_update()
-            .select_related('definition')
-            .get(id=instance_id)
-        )
+        approval = Workflow2Approval.objects.select_for_update().select_related('instance').get(id=approval_id)
+        inst = Workflow2Instance.objects.select_for_update().select_related('definition').get(id=instance_id)
         return approval, inst
 
     @staticmethod
@@ -287,11 +260,7 @@ class WorkflowRuntimeService:
         decision: str,
     ) -> tuple[str | None, dict[str, Any]]:
         params = self._approval_step_params(inst=inst, approval=approval)
-        selected_outcome = (
-            params.get('approved_outcome')
-            if decision == 'approved'
-            else params.get('rejected_outcome')
-        )
+        selected_outcome = params.get('approved_outcome') if decision == 'approved' else params.get('rejected_outcome')
         if not isinstance(selected_outcome, str) or not selected_outcome:
             msg = f"Approval step missing configured outcome for decision '{decision}'"
             raise ValueError(msg)
@@ -320,9 +289,7 @@ class WorkflowRuntimeService:
         )
 
         approval.status = (
-            Workflow2Approval.STATUS_APPROVED
-            if decision == 'approved'
-            else Workflow2Approval.STATUS_REJECTED
+            Workflow2Approval.STATUS_APPROVED if decision == 'approved' else Workflow2Approval.STATUS_REJECTED
         )
         approval.decided_at = timezone.now()
         approval.decided_by = decided_by or ''
@@ -490,14 +457,12 @@ class WorkflowRuntimeService:
         else:
             instance.current_step = ''
 
-    def run_one_step(self, instance: Workflow2Instance) -> StepResult:
+    def run_one_step(self, instance: Workflow2Instance) -> StepResult:  # noqa: PLR0915
         """Execute exactly one workflow step and persist the checkpoint."""
         try:
             with transaction.atomic():
                 instance = (
-                    Workflow2Instance.objects.select_for_update()
-                    .select_related('definition')
-                    .get(id=instance.id)
+                    Workflow2Instance.objects.select_for_update().select_related('definition').get(id=instance.id)
                 )
 
                 if (
@@ -522,6 +487,31 @@ class WorkflowRuntimeService:
                             vars_delta={},
                             output=None,
                             error=None,
+                            created_at=timezone.now(),
+                        ),
+                        terminal=True,
+                    )
+
+                if instance.run_count >= self.max_steps_per_run:
+                    message = f'Workflow exceeded the maximum of {self.max_steps_per_run} steps.'
+                    WorkflowInstanceTransitionService.mark_error(
+                        instance,
+                        reason='max_steps_exceeded',
+                        message=message,
+                    )
+                    save_instance_status(instance)
+                    self._recompute_run_if_present(instance)
+                    return StepResult(
+                        run=StepRun(
+                            run_index=int(instance.run_count) + 1,
+                            step_id=instance.current_step,
+                            step_type='limit',
+                            status='error',
+                            outcome=None,
+                            next_step=None,
+                            vars_delta={},
+                            output=None,
+                            error=message,
                             created_at=timezone.now(),
                         ),
                         terminal=True,
