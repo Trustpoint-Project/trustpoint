@@ -296,8 +296,10 @@ class CmpClientCertificateCommandBuilderTests(SimpleTestCase):
         assert '-cmd ir' in cmd
         assert '-tls_used' in cmd
         assert '-server https://127.0.0.1/.well-known/cmp/p/test' in cmd
-        assert 'domain_credential_key.pem' in cmd
-        assert 'domain_credential_cert.pem' in cmd
+        assert '-newkey domain-credential-key.pem' in cmd
+        assert '-certout domain-credential-certificate.pem' in cmd
+        assert '-chainout domain-credential-chain.pem' in cmd
+        assert '-extracertsout domain-credential-full-chain.pem' in cmd
 
     def test_get_dynamic_cert_profile_command(self) -> None:
         """Test dynamic certificate profile command."""

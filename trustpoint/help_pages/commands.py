@@ -372,10 +372,10 @@ class CmpClientCertificateCommandBuilder:
             '-key idevid.key \\\n'
             '-extracerts idevid_chain.pem \\\n'
             '-subject "/CN=Trustpoint Domain Credential" \\\n'
-            '-newkey domain_credential_key.pem \\\n'
-            '-certout domain_credential_cert.pem \\\n'
-            '-chainout chain_without_root.pem \\\n'
-            '-extracertsout full_chain.pem \\\n'
+            '-newkey domain-credential-key.pem \\\n'
+            '-certout domain-credential-certificate.pem \\\n'
+            '-chainout domain-credential-chain.pem \\\n'
+            '-extracertsout domain-credential-full-chain.pem \\\n'
             '-srvcert issuing_ca_cert.pem'
         )
 
