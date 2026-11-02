@@ -34,7 +34,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '26'
 
       - name: Verify bundled frontend and notices
         working-directory: trustpoint/workflows2/frontend
