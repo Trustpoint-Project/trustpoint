@@ -15,7 +15,10 @@ def test_reusable_credential_migration(tmp_path):
     environment.pop('TP_MIGRATION_TEST_DATABASE', None)
     result = subprocess.run(
         [sys.executable, str(runner), str(tmp_path)],
-        capture_output=True, text=True, env=environment, timeout=90,
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=90,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'PASS credential migration' in result.stdout

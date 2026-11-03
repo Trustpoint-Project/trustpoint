@@ -43,24 +43,36 @@ class Migration(migrations.Migration):
     operations = [
         # Text storage fits expanded UTF-8 ciphertext; historical fields stay plain during conversion.
         migrations.AlterField(
-            model_name='noonboardingconfigmodel', name='est_password',
+            model_name='noonboardingconfigmodel',
+            name='est_password',
             field=models.TextField(verbose_name='EST Password', max_length=128, blank=True, default=''),
         ),
         migrations.AlterField(
-            model_name='noonboardingconfigmodel', name='cmp_shared_secret',
+            model_name='noonboardingconfigmodel',
+            name='cmp_shared_secret',
             field=models.TextField(verbose_name='CMP Shared Secret', max_length=128, blank=True, default=''),
         ),
         migrations.RunPython(encrypt_credentials, decrypt_credentials),
         migrations.AlterField(
-            model_name='noonboardingconfigmodel', name='est_password',
+            model_name='noonboardingconfigmodel',
+            name='est_password',
             field=EncryptedTextField(
-                verbose_name='EST Password', max_length=128, blank=True, default='', validators=[MaxLengthValidator(128)],
+                verbose_name='EST Password',
+                max_length=128,
+                blank=True,
+                default='',
+                validators=[MaxLengthValidator(128)],
             ),
         ),
         migrations.AlterField(
-            model_name='noonboardingconfigmodel', name='cmp_shared_secret',
+            model_name='noonboardingconfigmodel',
+            name='cmp_shared_secret',
             field=EncryptedTextField(
-                verbose_name='CMP Shared Secret', max_length=128, blank=True, default='', validators=[MaxLengthValidator(128)],
+                verbose_name='CMP Shared Secret',
+                max_length=128,
+                blank=True,
+                default='',
+                validators=[MaxLengthValidator(128)],
             ),
         ),
     ]

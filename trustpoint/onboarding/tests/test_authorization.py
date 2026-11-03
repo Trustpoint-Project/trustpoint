@@ -47,9 +47,12 @@ def test_device_creation_rolls_back_when_policy_is_unavailable(ambiguous):
     if ambiguous:
         SecurityConfig.objects.create(pk=1, permitted_no_onboarding_pki_protocols=[4])
         SecurityConfig.objects.create(pk=2)
-    serializer = DeviceSerializer(data={
-        'common_name': 'no-policy-device', 'no_onboarding_config': {'pki_protocols': 4},
-    })
+    serializer = DeviceSerializer(
+        data={
+            'common_name': 'no-policy-device',
+            'no_onboarding_config': {'pki_protocols': 4},
+        }
+    )
     assert serializer.is_valid(), serializer.errors
 
     with pytest.raises(ValidationError, match='not permitted'):
@@ -60,11 +63,14 @@ def test_device_creation_rolls_back_when_policy_is_unavailable(ambiguous):
 
 
 @pytest.mark.parametrize('ambiguous', [False, True])
-@pytest.mark.parametrize('route,values', [
-    ('devices_create_no_onboarding', {'no_onboarding_pki_protocols': [16]}),
-    ('devices_create_onboarding', {'onboarding_protocol': 2, 'onboarding_pki_protocols': [1]}),
-    ('devices_create_opc_ua_gds_push', {'ip_address': '192.0.2.1', 'opc_server_port': 4840}),
-])
+@pytest.mark.parametrize(
+    'route,values',
+    [
+        ('devices_create_no_onboarding', {'no_onboarding_pki_protocols': [16]}),
+        ('devices_create_onboarding', {'onboarding_protocol': 2, 'onboarding_pki_protocols': [1]}),
+        ('devices_create_opc_ua_gds_push', {'ip_address': '192.0.2.1', 'opc_server_port': 4840}),
+    ],
+)
 def test_creation_pages_show_policy_errors_without_creating_records(admin_client, ambiguous, route, values):
     if ambiguous:
         policy = SecurityConfig.objects.create()

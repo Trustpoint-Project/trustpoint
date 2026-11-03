@@ -46,10 +46,21 @@ def main():
     assert not key.exists(), 'Empty installation must not initialize encryption material'
     old_apps = migrate(previous)
     old_config = old_apps.get_model('onboarding', 'NoOnboardingConfigModel')
-    inputs = [('', ''), ('a' * 128, ' edge spaces '), ('tpsec:v1:literal password', 'b' * 128), ('🔐' * 128, 'pässwörd')]
-    ids = [old_config.objects.create(
-        est_password=password, cmp_shared_secret=secret, est_password_version=7, cmp_secret_version=9,
-    ).pk for password, secret in inputs]
+    inputs = [
+        ('', ''),
+        ('a' * 128, ' edge spaces '),
+        ('tpsec:v1:literal password', 'b' * 128),
+        ('🔐' * 128, 'pässwörd'),
+    ]
+    ids = [
+        old_config.objects.create(
+            est_password=password,
+            cmp_shared_secret=secret,
+            est_password_version=7,
+            cmp_secret_version=9,
+        ).pk
+        for password, secret in inputs
+    ]
     backend = AppSecretBackendModel.objects.create(backend_kind='software', dek_initialized=True)
     wrapped = SoftwareAppSecretService.wrap_dek(b'\xab' * 32, b'a' * 32)
     AppSecretSoftwareConfigModel.objects.create(backend=backend, wrapped_dek=wrapped)
@@ -64,8 +75,12 @@ def main():
 
     key.write_text('ab' * 32)
     migrate(latest)
-    assert list(NoOnboardingConfigModel.objects.order_by('pk').values_list('est_password', 'cmp_shared_secret')) == inputs
-    assert list(NoOnboardingConfigModel.objects.values_list('est_password_version', 'cmp_secret_version')) == [(7, 9)] * len(inputs)
+    assert (
+        list(NoOnboardingConfigModel.objects.order_by('pk').values_list('est_password', 'cmp_shared_secret')) == inputs
+    )
+    assert list(NoOnboardingConfigModel.objects.values_list('est_password_version', 'cmp_secret_version')) == [
+        (7, 9)
+    ] * len(inputs)
     with connection.cursor() as cursor:
         cursor.execute('SELECT est_password, cmp_shared_secret FROM onboarding_noonboardingconfigmodel ORDER BY id')
         stored = cursor.fetchall()
@@ -84,7 +99,9 @@ def main():
         raise AssertionError('Missing key must stop migration reversal')
     key.write_text('ab' * 32)
     assert NoOnboardingConfigModel.objects.filter(pk__in=ids).count() == len(inputs)
-    assert list(NoOnboardingConfigModel.objects.order_by('pk').values_list('est_password', 'cmp_shared_secret')) == inputs
+    assert (
+        list(NoOnboardingConfigModel.objects.order_by('pk').values_list('est_password', 'cmp_shared_secret')) == inputs
+    )
     old_apps = migrate(previous)
     old_config = old_apps.get_model('onboarding', 'NoOnboardingConfigModel')
     assert list(old_config.objects.order_by('pk').values_list('est_password', 'cmp_shared_secret')) == inputs
