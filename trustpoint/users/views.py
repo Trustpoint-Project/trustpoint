@@ -54,6 +54,7 @@ from users.authentication import CERTIFICATE_LOGIN_ERROR_SESSION_KEY, REJECTED_C
 from users.form import TrustpointUserDetailsForm, UserClientCertificateForm
 from users.models import (
     MAX_TOKEN_LENGTH,
+    BuiltinRole,
     TrustpointUser,
     UserClientCertificate,
     UserOTPDevice,
@@ -175,8 +176,13 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
 
         return super().post(request, *args, **kwargs)
 
+    @transaction.atomic
     def form_valid(self, form: TrustpointUserProfileForm) -> HttpResponse:
         """Persist the user and apply the chosen language/timezone immediately."""
+        original_user = TrustpointUser.objects.get(pk=form.instance.pk)
+        if is_last_admin_user(original_user, lock=True) and form.cleaned_data['role'].name != BuiltinRole.ADMIN:
+            form.add_error('role', _('At least one active administrator must remain.'))
+            return self.form_invalid(form)
         super().form_valid(form)
         user = cast('TrustpointUser', self.request.user)
         translation.activate(user.language)
@@ -215,11 +221,12 @@ class UserProfileDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, forms
         context['is_self_delete'] = self.object.pk == self.request.user.pk
         return context
 
+    @transaction.atomic
     def form_valid(self, _form: forms.Form) -> HttpResponse:
         """Delete after confirmation, retaining the final-admin protection."""
         self.object = self.get_object()
         is_self_delete = self.object.pk == self.request.user.pk
-        if is_last_admin_user(self.object):
+        if is_last_admin_user(self.object, lock=True):
             messages.error(self.request, _('The default administrator account cannot be deleted.'))
             if is_self_delete:
                 return redirect('users:profile')
@@ -246,20 +253,6 @@ class UserProfileMixin(ContextDataMixin, LoginRequiredMixin):
         """Use the authenticated user for the profile's configuration links."""
         context = super().get_context_data(**kwargs)
         context['object'] = self.request.user
-        return context
-
-
-class UserProfileView(UserProfileMixin, TemplateView):
-    """Display a separate profile page for the signed-in user."""
-
-    template_name = 'users/profile.html'
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Show certificate authentication configuration when it is enabled."""
-        context = super().get_context_data(**kwargs)
-        context['certificate_authentication_enabled'] = CertificateAuthenticationConfig.objects.filter(
-            enabled=True,
-        ).exists()
         return context
 
 
@@ -411,6 +404,7 @@ class UserProfileRoleView(UserProfileMixin, TemplateView):
 class UserProfilePasswordChangeView(UserProfileMixin, PasswordChangeView):
     """Change only the signed-in user's password, requiring their current password."""
 
+    form_class = TrustpointPasswordChangeForm
     page_title = _('Change Password')
     template_name = 'users/profile_form.html'
     success_url = reverse_lazy('users:profile')

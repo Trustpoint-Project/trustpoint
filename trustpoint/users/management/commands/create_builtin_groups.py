@@ -10,18 +10,11 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.management import BaseCommand
 from django.db import transaction
 
-from users.models import AppPermission, BuiltinRole, GroupProfile
+from users.models import SERVICE_ACCOUNT_PERMISSION_CODENAMES, AppPermission, BuiltinRole, GroupProfile
 
 ROLE_PERMISSION_CODENAMES: dict[BuiltinRole, frozenset[str] | None] = {
     BuiltinRole.ADMIN: None,
-    BuiltinRole.SERVICE: frozenset({
-        'manage_cas',
-        'manage_ras',
-        'manage_domains',
-        'manage_truststores',
-        'manage_certificate_profiles',
-        'manage_devices',
-    }),
+    BuiltinRole.SERVICE: SERVICE_ACCOUNT_PERMISSION_CODENAMES,
     BuiltinRole.PKI_ADMIN: frozenset({
         'manage_crypto_backends',
         'issue_certificates',

@@ -71,6 +71,10 @@ class HumanUserTokenObtainPairSerializer(TokenObtainSerializer):
             msg = 'User is not permitted to use the REST API.'
             raise PermissionDenied(msg)
 
+        if self.user.must_change_password or self.user.password_is_expired():
+            msg = 'Change your password in the web interface before requesting API tokens.'
+            raise AuthenticationFailed(msg, code='password_change_required')
+
         if PasswordPolicy.is_otp_required():
             otp = attrs.get('otp', '')
             with transaction.atomic():
@@ -197,6 +201,11 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
             )
 
         grant_type = data.get('grant_type')
+        if any(not isinstance(data.get(field, ''), str) for field in ('client_id', 'client_secret')):
+            return Response(
+                {'error': 'invalid_request', 'error_description': 'Client credentials must be strings.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         client_id = (data.get('client_id') or '').strip()
         client_secret = (data.get('client_secret') or '').strip()
 
