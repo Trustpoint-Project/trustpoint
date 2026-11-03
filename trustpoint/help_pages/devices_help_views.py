@@ -2845,7 +2845,8 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         tls_cert_pem: str = root_cert_model.get_certificate_serializer().as_pem().decode('utf-8')
 
         host_ip = request.GET.get('host_ip', '127.0.0.1')
-        host_base = f'https://{host_ip}:443'
+        https_port = request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))
+        host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
         domain_name: str = device.domain.unique_name
         enroll_path = f'/rest/{domain_name}/domain_credential/enroll/'
 
