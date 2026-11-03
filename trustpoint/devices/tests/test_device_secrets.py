@@ -345,14 +345,16 @@ def test_clm_links_to_separate_replacement_page(policy, admin_client, admin_user
     assert response.url == endpoint
 
 
-def test_secret_page_requires_manage_devices_permission(policy, admin_client, admin_user):
-    admin_user.role.permissions.remove(Permission.objects.get(codename='manage_devices'))
+def test_secret_page_requires_manage_devices_permission(policy, client, django_user_model):
+    user = django_user_model.objects.create_user(username='device-viewer')
+    user.role.permissions.remove(Permission.objects.get(codename='manage_devices'))
+    client.force_login(user)
     config = no_onboarding()
     device = DeviceModel.objects.create(common_name='unauthorized-replacement', no_onboarding_config=config)
     endpoint = reverse('devices:devices_change_secret', kwargs={'pk': device.pk})
-    assert admin_client.get(endpoint).status_code == 403
-    assert admin_client.post(endpoint, {'credential': 'est_password', 'action': 'generate'}).status_code == 403
-    response = admin_client.get(reverse('devices:devices_certificate_lifecycle_management', kwargs={'pk': device.pk}))
+    assert client.get(endpoint).status_code == 403
+    assert client.post(endpoint, {'credential': 'est_password', 'action': 'generate'}).status_code == 403
+    response = client.get(reverse('devices:devices_certificate_lifecycle_management', kwargs={'pk': device.pk}))
     assert b'Change device secret' not in response.content
     config.refresh_from_db()
     assert config.est_password == 'generated-est'

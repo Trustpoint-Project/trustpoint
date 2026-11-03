@@ -274,9 +274,7 @@ class PasswordPolicyPageViewTest(TestCase):
 
     def setUp(self) -> None:
         """Create an authenticated settings administrator and both configurations."""
-        self.user = TrustpointUser.objects.create_user(username='policy-admin')
-        TrustpointUser.objects.filter(pk=self.user.pk).update(is_superuser=True, is_staff=True)
-        self.user.refresh_from_db()
+        self.user = TrustpointUser.objects.create_superuser(username='policy-admin')
         self.client.force_login(self.user)
         self.account_security = AccountSecurityConfig.objects.create(
             pk=1,

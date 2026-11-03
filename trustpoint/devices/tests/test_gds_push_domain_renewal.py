@@ -224,10 +224,11 @@ def test_enabling_requires_initial_credential(admin_client, renewal_device):
     assert renewal_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at is None
 
 
-def test_settings_require_device_management_permission(admin_client, renewal_device):
-    user = get_user_model().objects.get(pk=admin_client.session['_auth_user_id'])
+def test_settings_require_device_management_permission(client, renewal_device):
+    user = get_user_model().objects.create_user(username='renewal-viewer')
     user.role.permissions.remove(Permission.objects.get(codename='manage_devices'))
-    response = enable_renewal(admin_client, renewal_device)
+    client.force_login(user)
+    response = enable_renewal(client, renewal_device)
     assert response.status_code == 403
     renewal_device.refresh_from_db()
     assert not renewal_device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal
