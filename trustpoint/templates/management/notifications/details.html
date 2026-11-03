@@ -18,19 +18,22 @@
             <div class="tp-card-btn-footer">
                 <a href="{% url 'management:notifications' %}" class="btn btn-secondary">{% trans "Back" %}</a>
                 {% if is_read %}
-                    <a href="{% url 'management:notification_toggle_read' notification.pk %}" class="btn btn-outline-secondary">
-                        {% trans 'Mark as Unread' %}
-                    </a>
+                    <form method="post" action="{% url 'management:notification_toggle_read' notification.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-secondary">{% trans 'Mark as Unread' %}</button>
+                    </form>
                 {% else %}
-                    <a href="{% url 'management:notification_toggle_read' notification.pk %}" class="btn btn-outline-primary">
-                        {% trans 'Mark as Read' %}
-                    </a>
+                    <form method="post" action="{% url 'management:notification_toggle_read' notification.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-primary">{% trans 'Mark as Read' %}</button>
+                    </form>
                 {% endif %}
                 {% if notification.notification_type == 'WAR' or notification.notification_type == 'CRI' %}
                     {% if not is_solved %}
-                        <a href="{% url 'management:mark_as_solved' notification.pk %}" class="btn btn-success">
-                            {% trans 'Mark as Solved' %}
-                        </a>
+                        <form method="post" action="{% url 'management:mark_as_solved' notification.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success">{% trans 'Mark as Solved' %}</button>
+                        </form>
                     {% endif %}
                 {% endif %}
             </div>

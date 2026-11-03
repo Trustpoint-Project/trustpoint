@@ -129,6 +129,11 @@ class GroupProfile(models.Model):
         )
 
 
+def lock_admin_role() -> None:
+    """Serialize final-admin checks and writes; the caller must hold a transaction."""
+    Group.objects.select_for_update().filter(name=BuiltinRole.ADMIN).first()
+
+
 class TrustpointUserManager(UserManager['TrustpointUser']):
     """Custom manager that handles the required ``role`` field for ``createsuperuser``."""
 
@@ -407,8 +412,7 @@ def is_last_admin_user(user: TrustpointUser, *, lock: bool = False) -> bool:
         Group.objects.select_for_update().get(pk=user.role_id)
         user.refresh_from_db(fields=['role', 'is_active', 'account_type'])
     return (
-        user.role.name == BuiltinRole.ADMIN
-        and user.is_active
+        user.role.name == BuiltinRole.ADMIN and user.is_active
         and user.account_type == TrustpointUser.AccountType.HUMAN
         and not TrustpointUser.objects.filter(
             role=user.role,

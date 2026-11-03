@@ -21,16 +21,37 @@ mkdir -p "$NGINX_TLS_DIR"
 
 
 
-# 2) Move new TLS certs
-log INFO "Move TLS Server credentials into $NGINX_TLS_DIR"
+# Keep the previous files until Nginx accepts the update.
+backup_dir=$(mktemp -d)
+tls_files=(nginx-tls-server-key.key nginx-tls-server-cert.pem nginx-tls-server-cert-chain.pem)
+for name in "${tls_files[@]}"; do
+    if [ -f "$NGINX_TLS_DIR/$name" ]; then
+        cp -p "$NGINX_TLS_DIR/$name" "$backup_dir/$name"
+    fi
+done
+restore_tls() {
+    local status=$?
+    if [ "$status" -ne 0 ]; then
+        for name in "${tls_files[@]}"; do
+            rm -f "$NGINX_TLS_DIR/$name"
+            if [ -f "$backup_dir/$name" ]; then
+                cp -p "$backup_dir/$name" "$NGINX_TLS_DIR/$name"
+            fi
+        done
+    fi
+    rm -rf "$backup_dir"
+    exit "$status"
+}
+trap restore_tls EXIT
 
-# Copies the TLS-Server credentials into the nginx TLS directory.
-if ! mv /var/www/html/trustpoint/docker/trustpoint/nginx/tls/* "$NGINX_TLS_DIR"
-then
-    log ERROR "Failed to copy Trustpoint TLS files to $NGINX_TLS_DIR."
-    exit 5
+staging_dir=/var/www/html/trustpoint/docker/trustpoint/nginx/tls
+install -m 600 "$staging_dir/nginx-tls-server-key.key" "$NGINX_TLS_DIR/nginx-tls-server-key.key"
+install -m 644 "$staging_dir/nginx-tls-server-cert.pem" "$NGINX_TLS_DIR/nginx-tls-server-cert.pem"
+if [ -f "$staging_dir/nginx-tls-server-cert-chain.pem" ]; then
+    install -m 644 "$staging_dir/nginx-tls-server-cert-chain.pem" "$NGINX_TLS_DIR/nginx-tls-server-cert-chain.pem"
+else
+    rm -f "$NGINX_TLS_DIR/nginx-tls-server-cert-chain.pem"
 fi
-
 
 # Test nginx configuration with new certificates
 log INFO "Testing nginx configuration with new TLS certificates"
@@ -55,7 +76,8 @@ if [ -f /run/nginx.pid ] && [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.p
         fi
     done
     if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-        log ERROR "Failed to reload Nginx after $MAX_RETRIES attempts, TLS certificates will be applied on next start"
+        log ERROR "Failed to reload Nginx after $MAX_RETRIES attempts"
+        exit 3
     fi
     sleep $DELAY
 else

@@ -37,7 +37,7 @@ from users.form import (
     TrustpointUserRoleForm,
     TrustpointUserSetPasswordForm,
 )
-from users.models import BuiltinRole, TrustpointUser, UserOTPDevice, is_last_admin_user
+from users.models import BuiltinRole, TrustpointUser, UserOTPDevice, is_last_admin_user, lock_admin_role
 from users.permissions import AppPermissions
 
 
@@ -139,6 +139,7 @@ class UserDeleteView(
         if not self.request.user.has_perm(AppPermissions.MANAGE_USERS):
             raise PermissionDenied
 
+        lock_admin_role()
         self.object = self.get_object()
 
         if is_last_admin_user(self.object, lock=True):
@@ -223,6 +224,7 @@ class UserChangeRoleView(
         """
         if not self.request.user.has_perm(AppPermissions.MANAGE_ROLES):
             raise PermissionDenied
+        lock_admin_role()
         user: TrustpointUser = self.get_object()
         new_role = form.cleaned_data['role']
 
@@ -319,6 +321,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
         """
         if not request.user.has_perm(AppPermissions.MANAGE_USERS):
             raise PermissionDenied
+        lock_admin_role()
         instance = self.get_object()
         if is_last_admin_user(instance, lock=True):
             return Response(
@@ -336,6 +339,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
         """
         if not request.user.has_perm(AppPermissions.MANAGE_USERS):
             raise PermissionDenied
+        lock_admin_role()
         instance = self.get_object()
         new_role = request.data.get('role') if isinstance(request.data, dict) else None
         if is_last_admin_user(instance, lock=True) and new_role is not None and str(new_role) != str(instance.role_id):

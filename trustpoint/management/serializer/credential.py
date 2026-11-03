@@ -25,4 +25,4 @@ class CredentialSerializer(serializers.ModelSerializer[CredentialModel]):
 
         model = CredentialModel
         fields: ClassVar[list[str]] = ['id', 'credential_type', 'created_at']
-        read_only_fields: ClassVar[list[str]] = ['id']
+        read_only_fields: ClassVar[list[str]] = ['id', 'credential_type']

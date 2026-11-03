@@ -32,12 +32,10 @@
 
             {# --- General actions --- #}
             <div class="d-flex flex-wrap gap-2 mb-4">
-                <a
-                    href="{% url 'management:refresh_notifications' %}"
-                    class="btn btn-sm btn-outline-secondary"
-                >
-                    {% trans 'Refresh' %}
-                </a>
+                <form method="post" action="{% url 'management:refresh_notifications' %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">{% trans 'Refresh' %}</button>
+                </form>
 
                 <form method="post" class="d-inline">
                     {% csrf_token %}
