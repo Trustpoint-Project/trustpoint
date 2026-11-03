@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Test cases for devices help views."""
+
 import ipaddress
 from cryptography import x509
 
@@ -133,9 +134,7 @@ class BaseHelpViewTests(TestCase):
         self.view = BaseHelpView()
 
     @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
-    def test_make_context_success(
-        self, mock_filter: Mock
-    ) -> None:
+    def test_make_context_success(self, mock_filter: Mock) -> None:
         """Test _make_context creates HelpContext successfully."""
         mock_queryset = Mock()
         mock_queryset.count.return_value = 2
@@ -197,11 +196,8 @@ class BaseHelpViewTests(TestCase):
             self.view._make_context()
 
     @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
-    @patch('help_pages.devices_help_views.ActiveTrustpointTlsServerCredentialModel.objects.get'
-    )
-    def test_get_context_data_success(
-        self, mock_get: Mock, mock_filter: Mock
-    ) -> None:
+    @patch('help_pages.devices_help_views.ActiveTrustpointTlsServerCredentialModel.objects.get')
+    def test_get_context_data_success(self, mock_get: Mock, mock_filter: Mock) -> None:
         """Test get_context_data builds help page successfully."""
         mock_filter.return_value.count.return_value = 1
 
@@ -217,7 +213,7 @@ class BaseHelpViewTests(TestCase):
         mock_strategy.build_sections.return_value = ([], 'Test Heading')
 
         mock_ip = Mock(spec=x509.IPAddress)
-        mock_ip.value = ipaddress.IPv4Address("192.168.1.1")
+        mock_ip.value = ipaddress.IPv4Address('192.168.1.1')
         mock_san = Mock()
         mock_san.value = [mock_ip]
         mock_cert = Mock()
@@ -471,6 +467,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategyTests(TestCase):
         mock_onboarding.est_username = 'testuser'
         mock_onboarding.est_password = 'testpass'
         mock_device.onboarding_config = mock_onboarding
+        mock_device.common_name = 'testuser'
 
         mock_domain = Mock()
         mock_domain.public_key_info = 'RSA 2048'
@@ -529,9 +526,7 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
     @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
     @patch('help_pages.devices_help_views.reverse')
-    def test_build_sections_with_domain_credential(
-        self, mock_reverse: Mock, mock_filter: Mock
-    ) -> None:
+    def test_build_sections_with_domain_credential(self, mock_reverse: Mock, mock_filter: Mock) -> None:
         """Test build_sections when device has domain credential."""
         mock_filter.return_value.exists.return_value = True
 
@@ -565,9 +560,7 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
     @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
     @patch('help_pages.devices_help_views.reverse')
-    def test_build_sections_without_domain_credential(
-        self, mock_reverse: Mock, mock_filter: Mock
-    ) -> None:
+    def test_build_sections_without_domain_credential(self, mock_reverse: Mock, mock_filter: Mock) -> None:
         """Test build_sections when device does not have domain credential."""
         mock_filter.return_value.exists.return_value = False
 
@@ -802,7 +795,9 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         device = _device(domain, no_onboarding=True)
         profiles = [_profile(alias='server_alias'), _profile('client_auth', 'Client Auth')]
 
-        sections, heading = NoOnboardingCmpSharedSecretStrategy().build_sections(_help_context(device, domain, profiles))
+        sections, heading = NoOnboardingCmpSharedSecretStrategy().build_sections(
+            _help_context(device, domain, profiles)
+        )
 
         assert 'CMP with a shared-secret' in heading
         assert sections[0].rows[3].value == 'cmp-secret'
@@ -1075,7 +1070,7 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         assert '-server https://trustpoint.test:8443/.well-known/cmp/p/test-domain' in cmp_sections[3].rows[1].value
         assert est_heading == 'AOKI with EST - IDevID Authentication (mTLS)'
         assert '"protocol": "EST"' in est_sections[3].rows[1].value
-        assert 'domain_credential/simpleenroll' in est_sections[3].rows[1].value
+        assert '/.well-known/est/test-domain/domain_credential/' in est_sections[3].rows[1].value
 
     def test_aoki_est_strategy_requires_domain_for_response_profile(self) -> None:
         """Test AOKI EST fails when no domain is available for the domain credential profile."""

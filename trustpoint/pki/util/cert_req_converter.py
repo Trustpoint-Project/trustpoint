@@ -5,6 +5,7 @@
 
 import datetime as dt
 import logging
+import re
 from typing import Any, cast
 
 from cryptography import x509
@@ -30,6 +31,7 @@ def _eku_oid_from_str(usage_str: str) -> x509.ObjectIdentifier:
     except ValueError as e:
         exc_msg = f'Unknown extended key usage: {usage_str!r}'
         raise ValueError(exc_msg) from e
+
 
 class JSONCertRequestConverter:
     """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
@@ -95,8 +97,12 @@ class JSONCertRequestConverter:
             elif isinstance(ext.value, x509.CRLDistributionPoints):
                 req_ext['crl_distribution_points'] = {
                     'critical': ext.critical,
-                    'uris': [name.value for point in ext.value for name in (point.full_name or [])
-                             if isinstance(name, x509.UniformResourceIdentifier)],
+                    'uris': [
+                        name.value
+                        for point in ext.value
+                        for name in (point.full_name or [])
+                        if isinstance(name, x509.UniformResourceIdentifier)
+                    ],
                 }
             elif isinstance(ext.value, x509.BasicConstraints):
                 bc: dict[str, Any] = {'ca': ext.value.ca, 'critical': ext.critical}
@@ -190,7 +196,7 @@ class JSONCertRequestConverter:
     def add_extensions(
         json: dict[str, Any],
         builder: x509.CertificateBuilder | x509.CertificateSigningRequestBuilder,
-        ) -> x509.CertificateBuilder | x509.CertificateSigningRequestBuilder:
+    ) -> x509.CertificateBuilder | x509.CertificateSigningRequestBuilder:
         """Processes JSON data to add X.509 certificate extensions to a CertificateBuilder.
 
         Args:
@@ -227,9 +233,15 @@ class JSONCertRequestConverter:
             elif ext_name == 'crl_distribution_points':
                 crl_uris = ext_value.get('uris', [])
                 if crl_uris:
-                    dp_list = [x509.DistributionPoint(full_name=[x509.UniformResourceIdentifier(uri)],
-                                                       relative_name=None, reasons=None, crl_issuer=None)
-                               for uri in crl_uris]
+                    dp_list = [
+                        x509.DistributionPoint(
+                            full_name=[x509.UniformResourceIdentifier(uri)],
+                            relative_name=None,
+                            reasons=None,
+                            crl_issuer=None,
+                        )
+                        for uri in crl_uris
+                    ]
                     builder = builder.add_extension(x509.CRLDistributionPoints(dp_list), critical=critical)
             else:
                 logger.debug('JSON Cert Request Adapter: Skipping unsupported extension: %s', ext_name)
@@ -276,9 +288,7 @@ class JSONCertRequestConverter:
         default_backdate = dt.timedelta(hours=1)
 
         builder = builder.not_valid_before(dt.datetime.now(dt.UTC) - default_backdate)
-        return builder.not_valid_after(
-            dt.datetime.now(dt.UTC) + validity_period
-        )
+        return builder.not_valid_after(dt.datetime.now(dt.UTC) + validity_period)
 
     @staticmethod
     def from_json(json: dict[str, Any]) -> x509.CertificateBuilder:
@@ -290,7 +300,7 @@ class JSONCertRequestConverter:
         Returns:
             Certificate builder with all data from JSON applied
         """
-        json = JSONProfileVerifier.validate_request(json) # normalize aliases and validate
+        json = JSONProfileVerifier.validate_request(json)  # normalize aliases and validate
 
         builder = JSONCertRequestConverter._subject_from_json(json, x509.CertificateBuilder())
 
@@ -312,7 +322,8 @@ class JSONCertRequestCommandExtractor:
                 continue
             first, *others = name_identifier.split('_')
             name_camel = ''.join([first.lower(), *map(str.capitalize, others)])
-            subj_str += f'/{name_camel}={value}'
+            escaped_value = re.sub(r'([\\/+])', r'\\\1', str(value))
+            subj_str += f'/{name_camel}={escaped_value}'
         if not subj_str:
             subj_str = '/'
         return subj_str
@@ -340,14 +351,21 @@ class JSONCertRequestCommandExtractor:
         san_parts = ''
         for san_type, san_values in san.items():
             if san_type in 'dns_names':
-                san_parts += f'DNS:{san_values}, ' if isinstance(san_values, str) \
+                san_parts += (
+                    f'DNS:{san_values}, '
+                    if isinstance(san_values, str)
                     else ''.join([f'DNS:{v}, ' for v in san_values])
+                )
             elif san_type == 'uris':
-                san_parts += f'URI:{san_values}, ' if isinstance(san_values, str) \
+                san_parts += (
+                    f'URI:{san_values}, '
+                    if isinstance(san_values, str)
                     else ''.join([f'URI:{v}, ' for v in san_values])
+                )
             elif san_type == 'ip_addresses':
-                san_parts += f'IP:{san_values}, ' if isinstance(san_values, str) \
-                    else ''.join([f'IP:{v}, ' for v in san_values])
+                san_parts += (
+                    f'IP:{san_values}, ' if isinstance(san_values, str) else ''.join([f'IP:{v}, ' for v in san_values])
+                )
             else:
                 logger.debug('JSON Cert Request Command Extractor: Skipping SAN type: %s', san_type)
         if san_parts and san.get('critical', False):
