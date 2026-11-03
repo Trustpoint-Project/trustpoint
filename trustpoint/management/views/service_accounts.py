@@ -16,6 +16,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView
 
 from users.models import BuiltinRole, ServiceAccountCredential, TrustpointUser
@@ -38,9 +39,12 @@ class ServiceAccountListView(LoginRequiredMixin, ListView[TrustpointUser]):
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
         """Return only service accounts."""
-        return TrustpointUser.objects.filter(
-            account_type=TrustpointUser.AccountType.SERVICE
-        ).select_related('role', 'organization').prefetch_related('service_credentials').order_by('-date_joined')
+        return (
+            TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.SERVICE)
+            .select_related('role', 'organization')
+            .prefetch_related('service_credentials')
+            .order_by('-date_joined')
+        )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add page context."""
@@ -59,9 +63,9 @@ class ServiceAccountDetailView(LoginRequiredMixin, DetailView[TrustpointUser]):
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
         """Return only service accounts."""
-        return TrustpointUser.objects.filter(
-            account_type=TrustpointUser.AccountType.SERVICE
-        ).prefetch_related('service_credentials')
+        return TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.SERVICE).prefetch_related(
+            'service_credentials'
+        )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add credentials and page context."""
@@ -72,9 +76,7 @@ class ServiceAccountDetailView(LoginRequiredMixin, DetailView[TrustpointUser]):
         return context
 
 
-class ServiceAccountCreateView(
-    CreateView[TrustpointUser, forms.ModelForm[TrustpointUser]]
-):
+class ServiceAccountCreateView(CreateView[TrustpointUser, forms.ModelForm[TrustpointUser]]):
     """Create a new service account with API credentials."""
 
     model = TrustpointUser
@@ -121,10 +123,7 @@ class ServiceAccountCreateView(
             'secret': secret,
         }
 
-        messages.success(
-            self.request,
-            f'Service account "{service_account.username}" created successfully!'
-        )
+        messages.success(self.request, f'Service account "{service_account.username}" created successfully!')
 
         return redirect(reverse('management:service_account_created'))
 
@@ -134,7 +133,7 @@ class ServiceAccountCreateView(
 
 
 @login_required
-@permission_required('users.view_trustpointuser', raise_exception=True)
+@permission_required(AppPermissions.MANAGE_SERVICE_ACCOUNTS, raise_exception=True)
 def service_account_created_view(request: HttpRequest) -> HttpResponse:
     """Display newly created service account credentials (one-time view)."""
     credentials = request.session.pop('new_service_account', None)
@@ -146,17 +145,21 @@ def service_account_created_view(request: HttpRequest) -> HttpResponse:
     # Get the service account object
     service_account = get_object_or_404(TrustpointUser, pk=credentials['pk'])
 
-    return render(request, 'management/service_accounts/service_account_created.html', {
-        'service_account': service_account,
-        'client_id': credentials['client_id'],
-        'secret': credentials['secret'],
-        'page_category': 'management',
-        'page_name': 'service_accounts',
-    })
+    return render(
+        request,
+        'management/service_accounts/service_account_created.html',
+        {
+            'service_account': service_account,
+            'client_id': credentials['client_id'],
+            'secret': credentials['secret'],
+            'page_category': 'management',
+            'page_name': 'service_accounts',
+        },
+    )
 
 
 @login_required
-@permission_required('users.change_serviceaccountcredential', raise_exception=True)
+@permission_required(AppPermissions.MANAGE_SERVICE_ACCOUNTS, raise_exception=True)
 def revoke_credential_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Revoke a service account credential."""
     credential = get_object_or_404(ServiceAccountCredential, pk=pk)
@@ -165,27 +168,28 @@ def revoke_credential_view(request: HttpRequest, pk: int) -> HttpResponse:
         credential.is_active = False
         credential.save()
 
-        messages.success(
-            request,
-            f'Credential {credential.client_id} has been revoked.'
-        )
+        messages.success(request, f'Credential {credential.client_id} has been revoked.')
         return redirect(reverse('management:service_account_detail', kwargs={'pk': credential.service_account.pk}))
 
-    return render(request, 'management/service_accounts/revoke_credential_confirm.html', {
-        'credential': credential,
-        'page_category': 'management',
-        'page_name': 'service_accounts',
-    })
+    return render(
+        request,
+        'management/service_accounts/revoke_credential_confirm.html',
+        {
+            'credential': credential,
+            'page_category': 'management',
+            'page_name': 'service_accounts',
+        },
+    )
 
 
 @login_required
-@permission_required('users.add_serviceaccountcredential', raise_exception=True)
+@permission_required(AppPermissions.MANAGE_SERVICE_ACCOUNTS, raise_exception=True)
+@require_POST
 @transaction.atomic
 def generate_credential_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Generate a new credential for an existing service account."""
     service_account = get_object_or_404(
-        TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.SERVICE),
-        pk=pk
+        TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.SERVICE), pk=pk
     )
 
     # Generate new API credentials
@@ -208,10 +212,7 @@ def generate_credential_view(request: HttpRequest, pk: int) -> HttpResponse:
         'secret': secret,
     }
 
-    messages.success(
-        request,
-        f'New credential generated for service account "{service_account.username}"!'
-    )
+    messages.success(request, f'New credential generated for service account "{service_account.username}"!')
 
     return redirect(reverse('management:service_account_created'))
 
@@ -226,9 +227,7 @@ class ServiceAccountDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, fo
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
         """Return only service accounts."""
-        return TrustpointUser.objects.filter(
-            account_type=TrustpointUser.AccountType.SERVICE
-        )
+        return TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.SERVICE)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add page context."""
@@ -244,8 +243,5 @@ class ServiceAccountDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, fo
         self.object = self.get_object()
         username = self.object.username
 
-        messages.success(
-            self.request,
-            f'Service account "{username}" deleted successfully.'
-        )
+        messages.success(self.request, f'Service account "{username}" deleted successfully.')
         return super().form_valid(form)

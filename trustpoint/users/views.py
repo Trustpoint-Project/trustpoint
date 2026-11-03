@@ -58,6 +58,7 @@ from users.models import (
     UserClientCertificate,
     UserOTPDevice,
     is_last_admin_user,
+    lock_admin_role,
     new_otp_key,
 )
 
@@ -125,20 +126,17 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
         """Add the separate account-security form to the profile page."""
         context = super().get_context_data(**kwargs)
         profile_user = self.object
-        context['can_change_password'] = (
-            profile_user.pk == self.request.user.pk
-            or self.request.user.has_perm(AppPermissions.MANAGE_USERS)
+        context['can_change_password'] = profile_user.pk == self.request.user.pk or self.request.user.has_perm(
+            AppPermissions.MANAGE_USERS
         )
         context['can_delete_user'] = context['can_change_password']
         context['can_require_password_change'] = self.request.user.has_perm(AppPermissions.MANAGE_USERS)
-        context['can_manage_account_security'] = (
-            context['can_change_password']
-            or self.request.user.has_perm(AppPermissions.MANAGE_USERS)
+        context['can_manage_account_security'] = context['can_change_password'] or self.request.user.has_perm(
+            AppPermissions.MANAGE_USERS
         )
         context['failed_login_blocked'] = bool(profile_user.blocked_by_failed_logins)
-        context['can_unblock_failed_login'] = (
-            profile_user.blocked_by_failed_logins
-            and self.request.user.has_perm(AppPermissions.MANAGE_USERS)
+        context['can_unblock_failed_login'] = profile_user.blocked_by_failed_logins and self.request.user.has_perm(
+            AppPermissions.MANAGE_USERS
         )
         context['certificate_authentication_enabled'] = CertificateAuthenticationConfig.objects.filter(
             enabled=True,
@@ -215,9 +213,12 @@ class UserProfileDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, forms
         context['is_self_delete'] = self.object.pk == self.request.user.pk
         return context
 
+    @transaction.atomic
     def form_valid(self, _form: forms.Form) -> HttpResponse:
         """Delete after confirmation, retaining the final-admin protection."""
+        lock_admin_role()
         self.object = self.get_object()
+        self.object.refresh_from_db()
         is_self_delete = self.object.pk == self.request.user.pk
         if is_last_admin_user(self.object):
             messages.error(self.request, _('The default administrator account cannot be deleted.'))
@@ -242,6 +243,7 @@ class UserProfileMixin(ContextDataMixin, LoginRequiredMixin):
     request: HttpRequest
     context_page_category = 'users'
     context_page_name = 'profile'
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Use the authenticated user for the profile's configuration links."""
         context = super().get_context_data(**kwargs)
@@ -279,9 +281,13 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserCl
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Show only certificates owned by the current user."""
         context = super().get_context_data(**kwargs)
-        context['client_certificates'] = UserClientCertificate.objects.filter(
-            user=cast('TrustpointUser', self.request.user),
-        ).select_related('certificate').order_by('identifier')
+        context['client_certificates'] = (
+            UserClientCertificate.objects.filter(
+                user=cast('TrustpointUser', self.request.user),
+            )
+            .select_related('certificate')
+            .order_by('identifier')
+        )
         context['certificate_authentication_enabled'] = CertificateAuthenticationConfig.objects.filter(
             enabled=True,
         ).exists()
@@ -313,18 +319,24 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserCl
                 issuing_certificate = self._get_issuing_certificate()
                 certificate, private_key = create_user_client_certificate(user.pk, identifier)
                 credential = CredentialSerializer(
-                    private_key=private_key, certificate=certificate, additional_certificates=[issuing_certificate],
+                    private_key=private_key,
+                    certificate=certificate,
+                    additional_certificates=[issuing_certificate],
                 )
                 pkcs12_data = credential.as_pkcs12(friendly_name=identifier.encode('utf-8'))
                 certificate_model = CertificateModel.save_certificate(certificate)
                 association = UserClientCertificate.objects.create(
-                    user=user, certificate=certificate_model, identifier=identifier, is_active=True,
+                    user=user,
+                    certificate=certificate_model,
+                    identifier=identifier,
+                    is_active=True,
                 )
         except ValidationError as exc:
             form.add_error(None, exc)
         except IntegrityError:
             if UserClientCertificate.objects.filter(
-                user=cast('TrustpointUser', self.request.user), identifier=identifier,
+                user=cast('TrustpointUser', self.request.user),
+                identifier=identifier,
             ).exists():
                 form.add_error('identifier', _('You already have a client certificate with this identifier.'))
             else:
@@ -333,11 +345,13 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserCl
             form.add_error(None, str(exc))
         except (CryptoError, ValueError, RuntimeError):
             form.add_error(
-                None, _('The client certificate could not be created. Check the management CA configuration.'),
+                None,
+                _('The client certificate could not be created. Check the management CA configuration.'),
             )
         else:
             response = FileResponse(
-                BytesIO(pkcs12_data), as_attachment=True,
+                BytesIO(pkcs12_data),
+                as_attachment=True,
                 filename=f'trustpoint-client-certificate-{user.pk}-{association.pk}.p12',
                 content_type=CredentialFileFormat.PKCS12.mime_type,
             )
@@ -358,7 +372,9 @@ class UserProfileClientCertificateActionView(UserProfileMixin, View):
             raise Http404
         with transaction.atomic():
             association = get_object_or_404(
-                UserClientCertificate.objects.select_for_update(), pk=pk, user=request.user,
+                UserClientCertificate.objects.select_for_update(),
+                pk=pk,
+                user=request.user,
             )
             if action == 'delete':
                 certificate = association.certificate
@@ -546,7 +562,6 @@ class TrustpointLoginView(LoginView):
 
         return super().get(request, *args, **kwargs)
 
-
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Redirects to the appropriate startup wizard section if the setup wizard is not completed.
 
@@ -573,7 +588,8 @@ class OTPTokenForm(forms.Form):
     """Accept an authenticator code or a single-use recovery code."""
 
     token = forms.CharField(
-        label=_('Verification code'), max_length=MAX_TOKEN_LENGTH,
+        label=_('Verification code'),
+        max_length=MAX_TOKEN_LENGTH,
         widget=forms.TextInput(attrs={'autocomplete': 'one-time-code', 'autofocus': True}),
     )
 
@@ -584,7 +600,8 @@ def begin_otp_login(request: HttpRequest, user: TrustpointUser, next_url: str) -
     with transaction.atomic():
         current_user = TrustpointUser.objects.select_for_update().get(pk=user.pk)
         if (
-            not current_user.is_active or current_user.account_type != 'HUMAN'
+            not current_user.is_active
+            or current_user.account_type != 'HUMAN'
             or not constant_time_compare(current_user.get_session_auth_hash(), user.get_session_auth_hash())
         ):
             return redirect('users:login')
@@ -632,25 +649,40 @@ class OTPLoginView(FormView[OTPTokenForm]):
             return self.restart_login()
         self.pending = pending
         if (
-            not PasswordPolicy.is_otp_required() or not self.pending
+            not PasswordPolicy.is_otp_required()
+            or not self.pending
             or not 0 <= time.time() - self.pending['issued_at'] < OTP_LOGIN_TIMEOUT
             or self.pending['backend'] not in settings.AUTHENTICATION_BACKENDS
         ):
             return self.restart_login()
         with transaction.atomic():
-            user = TrustpointUser.objects.select_for_update().filter(
-                pk=self.pending['user_id'], is_active=True, account_type='HUMAN',
-            ).first()
+            user = (
+                TrustpointUser.objects.select_for_update()
+                .filter(
+                    pk=self.pending['user_id'],
+                    is_active=True,
+                    account_type='HUMAN',
+                )
+                .first()
+            )
             if user is None or not constant_time_compare(
-                user.get_session_auth_hash(), self.pending['auth_hash'],
+                user.get_session_auth_hash(),
+                self.pending['auth_hash'],
             ):
                 return self.restart_login()
             self.user = user
-            self.device = UserOTPDevice.objects.select_for_update().filter(
-                pk=self.pending['device_id'], user=self.user, confirmed=not self.pending['enrolling'],
-            ).first()
+            self.device = (
+                UserOTPDevice.objects.select_for_update()
+                .filter(
+                    pk=self.pending['device_id'],
+                    user=self.user,
+                    confirmed=not self.pending['enrolling'],
+                )
+                .first()
+            )
             if self.device is None or not constant_time_compare(
-                hashlib.sha256(self.device.key.encode('ascii')).hexdigest(), self.pending['key_hash'],
+                hashlib.sha256(self.device.key.encode('ascii')).hexdigest(),
+                self.pending['key_hash'],
             ):
                 return self.restart_login()
             return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
@@ -667,13 +699,15 @@ class OTPLoginView(FormView[OTPTokenForm]):
         context['enrolling'] = self.pending['enrolling']
         if self.pending['enrolling']:
             label = quote(f'Trustpoint:{self.user.get_username()}', safe='')
-            params = urlencode({
-                'secret': base64.b32encode(bytes.fromhex(self.device.key)).decode('ascii'),
-                'issuer': 'Trustpoint',
-                'algorithm': 'SHA1',
-                'digits': 6,
-                'period': 30,
-            })
+            params = urlencode(
+                {
+                    'secret': base64.b32encode(bytes.fromhex(self.device.key)).decode('ascii'),
+                    'issuer': 'Trustpoint',
+                    'algorithm': 'SHA1',
+                    'digits': 6,
+                    'period': 30,
+                }
+            )
             image = BytesIO()
             write_qrcode_image(f'otpauth://totp/{label}?{params}', image)
             context['qr_code_url'] = 'data:image/svg+xml;base64,' + base64.b64encode(image.getvalue()).decode('ascii')
@@ -694,7 +728,9 @@ class OTPLoginView(FormView[OTPTokenForm]):
 
         next_url = self.pending['next']
         if not url_has_allowed_host_and_scheme(
-            next_url, allowed_hosts={self.request.get_host()}, require_https=self.request.is_secure(),
+            next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
         ):
             next_url = resolve_url(settings.LOGIN_REDIRECT_URL)
         self.request.session.pop(PENDING_OTP_SESSION_KEY, None)
@@ -702,7 +738,12 @@ class OTPLoginView(FormView[OTPTokenForm]):
         otp_login(self.request, self.device)
         if recovery_codes is not None:
             # Render once: plaintext recovery codes are never stored in the session or database.
-            return render(self.request, 'users/otp_recovery_codes.html', {
-                'recovery_codes': recovery_codes, 'next_url': next_url,
-            })
+            return render(
+                self.request,
+                'users/otp_recovery_codes.html',
+                {
+                    'recovery_codes': recovery_codes,
+                    'next_url': next_url,
+                },
+            )
         return redirect(next_url)

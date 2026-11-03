@@ -294,7 +294,8 @@ def build_workflow_execution_context(
         'workflow_worker_latest_id': getattr(latest, 'worker_id', None),
         'workflow_worker_latest_seen': getattr(latest, 'last_seen', None),
         'workflow_worker_stale_after_seconds': stale_after,
-        'workflow_inline_takeover_enabled': str(workflow_config.mode).lower() in {
+        'workflow_inline_takeover_enabled': str(workflow_config.mode).lower()
+        in {
             WorkflowExecutionConfig.Mode.AUTO,
             WorkflowExecutionConfig.Mode.INLINE,
         },
@@ -317,12 +318,9 @@ def build_smtp_email_context(
     }
 
 
-class SettingsFormViewMixin[FormType: (
-    LoggingConfigForm
-    | NotificationConfigForm
-    | PrometheusConfigForm
-    | SecurityConfigForm
-)](
+class SettingsFormViewMixin[
+    FormType: (LoggingConfigForm | NotificationConfigForm | PrometheusConfigForm | SecurityConfigForm)
+](
     PageContextMixin,
     SecurityLevelMixin,
     LoggerMixin,
@@ -336,7 +334,7 @@ class SettingsFormViewMixin[FormType: (
 
     def get_success_url(self) -> str:
         """Return the URL to redirect to after successful form submission."""
-        return f"{reverse_lazy('management:settings')}?tab={self.setting_type}"
+        return f'{reverse_lazy("management:settings")}?tab={self.setting_type}'
 
     def form_valid(self, form: FormType) -> HttpResponse:
         """Handle valid form submission."""
@@ -414,10 +412,25 @@ class SettingsTabView(TemplateView):
         context['started_time'] = metrics_context['started_time']
         context['database_size'] = metrics_context['database_size']
         context['started_time_ts'] = int(APP_STARTED_AT.timestamp())
-        for key in ('memory_available', 'memory_message', 'memory_usage', 'memory_usage_number',
-                    'memory_usage_unit', 'memory_limit', 'memory_anon', 'memory_file', 'memory_kernel',
-                    'disk_available', 'disk_message', 'disk_read', 'disk_write',
-                    'network_available', 'network_message', 'network_received', 'network_transmitted'):
+        for key in (
+            'memory_available',
+            'memory_message',
+            'memory_usage',
+            'memory_usage_number',
+            'memory_usage_unit',
+            'memory_limit',
+            'memory_anon',
+            'memory_file',
+            'memory_kernel',
+            'disk_available',
+            'disk_message',
+            'disk_read',
+            'disk_write',
+            'network_available',
+            'network_message',
+            'network_received',
+            'network_transmitted',
+        ):
             context[key] = metrics_context[key]
 
         workflow_execution_form = kwargs.get('workflow_execution_form')
@@ -456,7 +469,7 @@ class SettingsTabView(TemplateView):
         if form.is_valid():
             form.save()
             messages.success(request, _('Account security settings saved.'))
-            return redirect(f"{reverse_lazy('management:settings')}?tab=account-security")
+            return redirect(f'{reverse_lazy("management:settings")}?tab=account-security')
 
         messages.error(request, _('Please correct the account security settings errors.'))
         context = self.get_context_data(
@@ -472,7 +485,7 @@ class SettingsTabView(TemplateView):
             smtp_config = smtp_email_form.save()
             smtp_config.apply_to_django_settings()
             messages.success(request, _('SMTP email settings saved.'))
-            return redirect(f"{reverse_lazy('management:settings')}?tab=smtp-email")
+            return redirect(f'{reverse_lazy("management:settings")}?tab=smtp-email')
 
         messages.error(request, _('Please correct the SMTP email settings errors.'))
         context = self.get_context_data(
@@ -549,7 +562,7 @@ class SettingsTabView(TemplateView):
                 )
             else:
                 messages.error(request, _('SMTP test email was not accepted by the email backend.'))
-        return redirect(f"{reverse_lazy('management:settings')}?tab=smtp-email")
+        return redirect(f'{reverse_lazy("management:settings")}?tab=smtp-email')
 
     def _post_workflow_execution(self, request: HttpRequest) -> HttpResponse:
         """Handle inline Workflow 2 execution settings updates from the settings tab page."""
@@ -557,7 +570,7 @@ class SettingsTabView(TemplateView):
         if workflow_execution_form.is_valid():
             workflow_execution_form.save()
             messages.success(request, _('Workflow execution settings saved.'))
-            return redirect(f"{reverse_lazy('management:settings')}?tab=workflow")
+            return redirect(f'{reverse_lazy("management:settings")}?tab=workflow')
 
         messages.error(request, _('Please correct the workflow execution settings errors.'))
         context = self.get_context_data(
@@ -614,17 +627,17 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
                     form.instance.not_permitted_signature_algorithm_oids = list(
                         mode_defaults['not_permitted_signature_algorithm_oids']
                     )
-                    form.instance.save(update_fields=[
-                        'allow_auto_gen_pki',
-                        'not_permitted_ecc_curve_oids',
-                        'not_permitted_mldsa_variant_oids',
-                        'not_permitted_signature_algorithm_oids',
-                    ])
+                    form.instance.save(
+                        update_fields=[
+                            'allow_auto_gen_pki',
+                            'not_permitted_ecc_curve_oids',
+                            'not_permitted_mldsa_variant_oids',
+                            'not_permitted_signature_algorithm_oids',
+                        ]
+                    )
 
                 if new_int > old_int:
                     self.sec.reset_settings(new_value)
-
-
 
             if 'auto_gen_pki' in form.changed_data:
                 old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
@@ -813,7 +826,6 @@ class MetricsSettingsView(UserPermissionRequiredMixin, SettingsFormViewMixin[Pro
     setting_type = 'metrics'
     permission_required = AppPermissions.VIEW_METRICS
 
-
     def get_form_kwargs(self) -> dict[str, Any]:
         """Load the singleton PrometheusConfig instance into the form."""
         kwargs = super().get_form_kwargs()
@@ -840,11 +852,14 @@ class MetricsSettingsView(UserPermissionRequiredMixin, SettingsFormViewMixin[Pro
         context.update(get_network_metrics())
         return context
 
+
 class ChangeLogLevelView(View):
     """Deprecated view for changing the logging level."""
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Handle POST requests to change the logging level."""
+        if not request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
+            raise PermissionDenied
         form = LoggingConfigForm(request.POST)
         if not form.is_valid():
             normalized_data = request.POST.copy()

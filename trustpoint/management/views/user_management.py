@@ -37,7 +37,7 @@ from users.form import (
     TrustpointUserRoleForm,
     TrustpointUserSetPasswordForm,
 )
-from users.models import BuiltinRole, TrustpointUser, UserOTPDevice, is_last_admin_user
+from users.models import BuiltinRole, TrustpointUser, UserOTPDevice, is_last_admin_user, lock_admin_role
 from users.permissions import AppPermissions
 
 
@@ -122,6 +122,7 @@ class UserDeleteView(
     template_name = 'management/users/user_confirm_delete.html'
     success_url = reverse_lazy('management:user_management')
 
+    @transaction.atomic
     def form_valid(self, form: Any) -> HttpResponse:
         """Delete the user unless they are the last admin.
 
@@ -138,6 +139,7 @@ class UserDeleteView(
         if not self.request.user.has_perm(AppPermissions.MANAGE_USERS):
             raise PermissionDenied
 
+        lock_admin_role()
         self.object = self.get_object()
 
         if is_last_admin_user(self.object):
@@ -206,6 +208,7 @@ class UserChangeRoleView(
     success_url = reverse_lazy('management:user_management')
     page_title = _('Roles & Organization')
 
+    @transaction.atomic
     def form_valid(self, form: BaseModelForm[TrustpointUser]) -> HttpResponse:
         """Save the role change unless it would remove the last admin.
 
@@ -221,6 +224,7 @@ class UserChangeRoleView(
         """
         if not self.request.user.has_perm(AppPermissions.MANAGE_ROLES):
             raise PermissionDenied
+        lock_admin_role()
         user: TrustpointUser = self.get_object()
         new_role = form.cleaned_data['role']
 
@@ -303,10 +307,12 @@ class UserResetOTPView(UserConfigurationMixin, View):
 @extend_schema(tags=['User Management'])
 class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
     """API view for user."""
+
     queryset = get_user_model().objects.all()
     serializer_class = UserSerializer
     permission_classes = (IsSuperUser,)
 
+    @transaction.atomic
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Delete the user unless they are the last remaining admin.
 
@@ -315,6 +321,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
         """
         if not request.user.has_perm(AppPermissions.MANAGE_USERS):
             raise PermissionDenied
+        lock_admin_role()
         instance = self.get_object()
         if is_last_admin_user(instance):
             return Response(
@@ -323,6 +330,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
             )
         return super().destroy(request, *args, **kwargs)
 
+    @transaction.atomic
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Update the user, refusing to change the role of the last remaining admin.
 
@@ -331,6 +339,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
         """
         if not request.user.has_perm(AppPermissions.MANAGE_USERS):
             raise PermissionDenied
+        lock_admin_role()
         instance = self.get_object()
         new_role = request.data.get('role') if isinstance(request.data, dict) else None
         if is_last_admin_user(instance) and new_role is not None and str(new_role) != str(instance.role_id):

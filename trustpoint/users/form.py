@@ -9,6 +9,7 @@ from zoneinfo import available_timezones
 from django import forms
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import Group, Permission
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from management.models.organization import OrganizationModel
@@ -276,9 +277,7 @@ class GroupPermissionForm(forms.ModelForm[Group]):
     """
 
     permissions = _PermissionMultipleChoiceField(
-        queryset=Permission.objects.select_related('content_type').filter(
-             content_type__model='apppermission'
-        ),
+        queryset=Permission.objects.select_related('content_type').filter(content_type__model='apppermission'),
         required=False,
         widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '15'}),
         label=_('Permissions'),
@@ -316,6 +315,7 @@ class GroupPermissionForm(forms.ModelForm[Group]):
                 self.fields['grants_staff'].initial = profile.grants_staff
                 self.fields['grants_superuser'].initial = profile.grants_superuser
 
+    @transaction.atomic
     def save(self, *, commit: bool = True) -> Group:  # type: ignore[override]
         """Save the Group and create or update its GroupProfile.
 
