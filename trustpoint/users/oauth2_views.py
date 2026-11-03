@@ -16,6 +16,7 @@ from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_v
 from rest_framework import serializers, status
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import default_user_authentication_rule
 from rest_framework_simplejwt.serializers import TokenObtainSerializer
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -27,6 +28,18 @@ from .models import MAX_TOKEN_LENGTH, TrustpointUser, UserOTPDevice
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
+
+
+def api_user_authentication_rule(user: TrustpointUser | None) -> bool:
+    """Require active accounts and enforce human password rotation for login and refresh."""
+    if user is None or not default_user_authentication_rule(user):
+        return False
+    if user.account_type == TrustpointUser.AccountType.HUMAN and (
+        user.must_change_password or user.password_is_expired()
+    ):
+        msg = 'Change your password in the web interface before requesting API tokens.'
+        raise AuthenticationFailed(msg, code='password_change_required')
+    return True
 
 
 class TokenObtainRequestSerializer(serializers.Serializer[Any]):
@@ -70,10 +83,6 @@ class HumanUserTokenObtainPairSerializer(TokenObtainSerializer):
         if self.user is None or not self.user.has_perm('users.use_rest_api'):
             msg = 'User is not permitted to use the REST API.'
             raise PermissionDenied(msg)
-
-        if self.user.must_change_password or self.user.password_is_expired():
-            msg = 'Change your password in the web interface before requesting API tokens.'
-            raise AuthenticationFailed(msg, code='password_change_required')
 
         if PasswordPolicy.is_otp_required():
             otp = attrs.get('otp', '')

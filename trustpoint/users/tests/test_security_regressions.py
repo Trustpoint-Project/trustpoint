@@ -285,3 +285,92 @@ def test_concurrent_admin_deletions_leave_one_active_admin():
             statuses = list(pool.map(delete_admin, admins))
     assert sorted(statuses) == [204, 400]
     assert TrustpointUser.objects.filter(role__name=BuiltinRole.ADMIN, is_active=True).count() == 1
+
+
+@pytest.mark.parametrize('restriction', ['expired', 'required'])
+def test_password_rotation_blocks_existing_refresh_tokens(restriction):
+    role = Group.objects.create(name='Refresh API access')
+    role.permissions.add(Permission.objects.get(codename='use_rest_api'))
+    user = TrustpointUser.objects.create_user(username='refresh-user', password=PASSWORD, role=role)
+    client = APIClient()
+    response = client.post('/api/token/', {'username': user.username, 'password': PASSWORD}, format='json')
+    assert response.status_code == 200
+    refresh = response.data['refresh']
+    assert client.post('/api/token/refresh/', {'refresh': refresh}, format='json').status_code == 200
+    if restriction == 'required':
+        TrustpointUser.objects.filter(pk=user.pk).update(must_change_password=True)
+    else:
+        PasswordPolicy.objects.filter(pk=1).update(password_expiry_days=1)
+        TrustpointUser.objects.filter(pk=user.pk).update(password_changed_at=timezone.now() - timedelta(days=2))
+
+    response = client.post('/api/token/refresh/', {'refresh': refresh}, format='json')
+
+    assert response.status_code == 401
+    assert response.data['detail'].code == 'password_change_required'
+    assert 'access' not in response.data
+
+
+def test_partial_user_save_does_not_restore_a_stale_role():
+    stale_user = TrustpointUser.objects.create_superuser(username='stale-role')
+    current_user = TrustpointUser.objects.get(pk=stale_user.pk)
+    viewer = Group.objects.create(name='Viewer')
+    current_user.role = viewer
+    current_user.save(update_fields=['role'])
+
+    stale_user.last_login = timezone.now()
+    stale_user.save(update_fields=['last_login'])
+
+    stale_user.refresh_from_db()
+    assert stale_user.role == viewer
+    assert not stale_user.is_staff and not stale_user.is_superuser
+    assert list(stale_user.groups.all()) == [viewer]
+    assert stale_user.last_login is not None
+
+
+def test_partial_account_type_change_clears_privileges():
+    user = TrustpointUser.objects.create_superuser(username='service-transition')
+    user.account_type = TrustpointUser.AccountType.SERVICE
+    user.save(update_fields=['account_type'])
+    user.refresh_from_db()
+    assert user.account_type == TrustpointUser.AccountType.SERVICE
+    assert not user.is_staff and not user.is_superuser
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('creating', [False, True])
+def test_user_save_holds_lock_when_reading_role_grants(creating):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import DatabaseError, connection, connections, transaction
+    from django.db.models import QuerySet
+
+    if not connection.features.has_select_for_update_nowait:
+        pytest.skip('Requires a database with nonblocking row locks, such as PostgreSQL.')
+    role = Group.objects.create(name='Locked grants')
+    profile = GroupProfile.objects.create(group=role, grants_staff=True, grants_superuser=True)
+    user = TrustpointUser(username='locked-grants', role=role)
+    if not creating:
+        user.save()
+    original_first = QuerySet.first
+
+    def row_is_locked():
+        model, row_pk = (GroupProfile, profile.pk) if creating else (TrustpointUser, user.pk)
+        try:
+            with transaction.atomic():
+                model.objects.select_for_update(nowait=True).get(pk=row_pk)
+        except DatabaseError:
+            return True
+        finally:
+            connections.close_all()
+        return False
+
+    def check_after_read(queryset):
+        result = original_first(queryset)
+        if queryset.model is GroupProfile:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                assert pool.submit(row_is_locked).result(timeout=10)
+        return result
+
+    with patch.object(QuerySet, 'first', check_after_read):
+        user.save()
+    assert user.is_staff and user.is_superuser

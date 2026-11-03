@@ -208,10 +208,10 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
 class TrustpointUser(AbstractUser):
     """Custom user model that adds a role field to the standard Django user.
 
-    The ``role`` foreign key points to a ``Group`` instance.  On every
-    save the model synchronises Django's ``is_staff`` / ``is_superuser``
-    flags and the user's ``groups`` M2M relation so that the user belongs
-    to exactly the group referenced by ``role``.
+    The ``role`` foreign key points to a ``Group`` instance. Full saves and
+    changes to permission fields synchronise Django's ``is_staff`` /
+    ``is_superuser`` flags and the user's ``groups`` M2M relation so that
+    the user belongs to exactly the group referenced by ``role``.
     """
 
     class LanguageChoices(models.TextChoices):
@@ -348,39 +348,39 @@ class TrustpointUser(AbstractUser):
             msg = _('Service accounts cannot be staff or superusers.')
             raise ValidationError(msg)
 
+    @transaction.atomic
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Persist the user and synchronise Django permission flags and group membership.
+        """Synchronise role grants and membership only when saving permission fields.
 
-        Reads ``grants_staff`` and ``grants_superuser`` from the role's
-        :class:`GroupProfile` to set ``is_staff`` and ``is_superuser``.
-        Groups without a profile default to both flags being ``False``.
-
-        After saving, the user's ``groups`` M2M is set to contain
-        *exactly* the group pointed to by ``role``.
-
-        Service accounts are never staff or superusers.
+        Existing users lock their row before reading grants. New users lock the
+        role profile so a grant update cannot miss their uncommitted insertion.
         """
-        # Service accounts can never be staff or superusers
-        if self.account_type == self.AccountType.SERVICE:
-            self.is_staff = False
-            self.is_superuser = False
-        # Sync Django permission flags from the role's GroupProfile for human accounts
-        elif self.role_id:
-            profile = GroupProfile.objects.filter(group_id=self.role_id).first()
-            self.is_superuser = profile.grants_superuser if profile else False
-            self.is_staff = profile.grants_staff if profile else False
-        else:
-            self.is_superuser = False
-            self.is_staff = False
+        update_fields = kwargs.get('update_fields')
+        sync_role = update_fields is None or bool(
+            set(update_fields) & {'role', 'role_id', 'account_type', 'is_staff', 'is_superuser'}
+        )
+        if sync_role:
+            existing_user = None
+            if self.pk:
+                existing_user = type(self).objects.select_for_update().filter(pk=self.pk).only('pk').first()
+            if self.account_type == self.AccountType.SERVICE:
+                self.is_staff = False
+                self.is_superuser = False
+            else:
+                profiles = GroupProfile.objects.filter(group_id=self.role_id)
+                if existing_user is None:
+                    profiles = profiles.select_for_update()
+                profile = profiles.first()
+                self.is_superuser = profile.grants_superuser if profile else False
+                self.is_staff = profile.grants_staff if profile else False
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {'is_staff', 'is_superuser'}
 
         if self.password_changed_at is None and self.has_usable_password():
             self.password_changed_at = self.date_joined or timezone.now()
-        if kwargs.get('update_fields'):
-            kwargs['update_fields'] = set(kwargs['update_fields']) | {'is_staff', 'is_superuser'}
         super().save(*args, **kwargs)
-
-        # Ensure the user belongs to exactly the role group.
-        self.groups.set([self.role])
+        if sync_role:
+            self.groups.set([self.role])
 
     def set_password(self, raw_password: str | None) -> None:
         """Hash a password while retaining only the immediately prior hash."""

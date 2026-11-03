@@ -712,6 +712,10 @@ class UIConfig:
     notifications_paginate_by: ClassVar[int] = 50
 
 
+SIMPLE_JWT = {
+    'USER_AUTHENTICATION_RULE': 'users.oauth2_views.api_user_authentication_rule',
+}
+
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
