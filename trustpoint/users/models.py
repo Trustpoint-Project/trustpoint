@@ -57,12 +57,15 @@ class BuiltinRole(models.TextChoices):
         """Return the dedicated group used by service accounts."""
         group, created = Group.objects.get_or_create(name=cls.SERVICE.value)
         if created:
-            group.permissions.set(Permission.objects.filter(
-                content_type__app_label='users',
-                content_type__model='apppermission',
-                codename__in=SERVICE_ACCOUNT_PERMISSION_CODENAMES,
-            ))
+            group.permissions.set(
+                Permission.objects.filter(
+                    content_type__app_label='users',
+                    content_type__model='apppermission',
+                    codename__in=SERVICE_ACCOUNT_PERMISSION_CODENAMES,
+                )
+            )
         return group
+
 
 class GroupProfile(models.Model):
     """Extended attributes for a Django ``Group`` used as a role.
@@ -121,7 +124,8 @@ class GroupProfile(models.Model):
         super().save(*args, **kwargs)
         self.refresh_from_db(fields=['grants_staff', 'grants_superuser'])
         TrustpointUser.objects.filter(role_id=self.group_id, account_type=TrustpointUser.AccountType.HUMAN).update(
-            is_staff=self.grants_staff, is_superuser=self.grants_superuser,
+            is_staff=self.grants_staff,
+            is_superuser=self.grants_superuser,
         )
 
 
@@ -164,7 +168,8 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
             admin_group, _ = Group.objects.get_or_create(name=BuiltinRole.ADMIN.value)
             GroupProfile.objects.get_or_create(
-                group=admin_group, defaults={'grants_staff': True, 'grants_superuser': True},
+                group=admin_group,
+                defaults={'grants_staff': True, 'grants_superuser': True},
             )
             extra_fields['role'] = admin_group
         if 'organization' not in extra_fields:
@@ -266,7 +271,7 @@ class TrustpointUser(AbstractUser):
         null=True,
         blank=True,
         related_name='org_users',
-        verbose_name=_('organization')
+        verbose_name=_('organization'),
     )
 
     language = models.CharField(
@@ -406,8 +411,12 @@ def is_last_admin_user(user: TrustpointUser, *, lock: bool = False) -> bool:
         and user.is_active
         and user.account_type == TrustpointUser.AccountType.HUMAN
         and not TrustpointUser.objects.filter(
-            role=user.role, is_active=True, account_type=TrustpointUser.AccountType.HUMAN,
-        ).exclude(pk=user.pk).exists()
+            role=user.role,
+            is_active=True,
+            account_type=TrustpointUser.AccountType.HUMAN,
+        )
+        .exclude(pk=user.pk)
+        .exists()
     )
 
 
@@ -436,8 +445,7 @@ class AppPermission(models.Model):
                 'manage_service_accounts',
                 _('Can manage service accounts'),
             ),
-                ('use_rest_api', _('Can use the REST API')),
-
+            ('use_rest_api', _('Can use the REST API')),
             # -----------------------------------------------------------------
             # PKI configuration
             # -----------------------------------------------------------------
@@ -453,7 +461,6 @@ class AppPermission(models.Model):
                 'manage_crypto_backends',
                 _('Can manage cryptographic backends'),
             ),
-
             # -----------------------------------------------------------------
             # Certificate lifecycle
             # -----------------------------------------------------------------
@@ -473,16 +480,13 @@ class AppPermission(models.Model):
                 'view_help_pages',
                 _('Can view help pages'),
             ),
-
             # -----------------------------------------------------------------
             # Device lifecycle
             # -----------------------------------------------------------------
             ('manage_devices', _('Can manage devices')),
-
             # -----------------------------------------------------------------
             # Automation and integration
             # -----------------------------------------------------------------
-
             (
                 'manage_certificate_discovery',
                 _('Can manage certificate discovery'),
@@ -491,7 +495,6 @@ class AppPermission(models.Model):
                 'manage_signer',
                 _('Can manage signer'),
             ),
-
             # -----------------------------------------------------------------
             # Workflow engine
             # -----------------------------------------------------------------
@@ -500,7 +503,6 @@ class AppPermission(models.Model):
                 'approve_workflows',
                 _('Can approve workflows'),
             ),
-
             # -----------------------------------------------------------------
             # System administration
             # -----------------------------------------------------------------
@@ -521,7 +523,6 @@ class AppPermission(models.Model):
                 'manage_tls_webserver_configuration',
                 _('Can manage TLS webserver configuration'),
             ),
-
             # -----------------------------------------------------------------
             # Monitoring and audit
             # -----------------------------------------------------------------
@@ -639,7 +640,8 @@ class ServiceAccountCredential(models.Model):
         """Record the last usage time of this credential."""
         self.last_used = timezone.now()
         type(self).objects.filter(pk=self.pk).update(
-            last_used=self.last_used, usage_count=models.F('usage_count') + 1,
+            last_used=self.last_used,
+            usage_count=models.F('usage_count') + 1,
         )
         self.refresh_from_db(fields=['usage_count'])
 
@@ -707,12 +709,15 @@ class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[mi
     """
 
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='otp_devices',
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='otp_devices',
         limit_choices_to={'account_type': 'HUMAN'},
     )
     name = models.CharField(max_length=64, default='Authenticator')
     key = EncryptedTextField(
-        default=new_otp_key, editable=False,
+        default=new_otp_key,
+        editable=False,
         validators=[RegexValidator(r'\A[0-9a-f]{40}\Z', _('Invalid OTP secret.'))],
     )
     confirmed = models.BooleanField(default=False, editable=False)
@@ -738,9 +743,11 @@ class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[mi
     def verify_token(self, token: str) -> bool:
         """Verify a TOTP or consume a recovery code; the caller must lock this device."""
         if (
-            self.pk is None or not settings.TRUSTPOINT_IS_OPERATIONAL
+            self.pk is None
+            or not settings.TRUSTPOINT_IS_OPERATIONAL
             or settings.TRUSTPOINT_IS_BOOTSTRAP
-            or not self.user.is_active or self.user.account_type != 'HUMAN'
+            or not self.user.is_active
+            or self.user.account_type != 'HUMAN'
         ):
             return False
         allowed, _details = self.verify_is_allowed()
@@ -756,15 +763,23 @@ class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[mi
                 self.last_t = totp.t()
         elif self.confirmed and re.fullmatch(r'[0-9a-fA-F-]{32,35}', token):
             digest = hashlib.sha256(token.replace('-', '').lower().encode('ascii')).hexdigest()
-            verified = self.recovery_codes.filter(code_hash=digest, used_at__isnull=True).update(
-                used_at=timezone.now(),
-            ) == 1
+            verified = (
+                self.recovery_codes.filter(code_hash=digest, used_at__isnull=True).update(
+                    used_at=timezone.now(),
+                )
+                == 1
+            )
         if verified:
             self.throttle_reset(commit=False)
             self.set_last_used_timestamp(commit=False)
-            self.save(update_fields=[
-                'last_t', 'last_used_at', 'throttling_failure_count', 'throttling_failure_timestamp',
-            ])
+            self.save(
+                update_fields=[
+                    'last_t',
+                    'last_used_at',
+                    'throttling_failure_count',
+                    'throttling_failure_timestamp',
+                ]
+            )
         else:
             self.throttle_increment()
         return verified
@@ -781,11 +796,13 @@ class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[mi
             # 128 random bits per code permit SHA-256 storage without a password-derived hash.
             codes = [secrets.token_hex(16) for _index in range(RECOVERY_CODE_COUNT)]
             device.recovery_codes.all().delete()
-            device.recovery_codes.bulk_create([
-                UserOTPRecoveryCode(device=device, code_hash=hashlib.sha256(code.encode('ascii')).hexdigest())
-                for code in codes
-            ])
-            return ['-'.join(code[i:i + 8] for i in range(0, len(code), 8)) for code in codes]
+            device.recovery_codes.bulk_create(
+                [
+                    UserOTPRecoveryCode(device=device, code_hash=hashlib.sha256(code.encode('ascii')).hexdigest())
+                    for code in codes
+                ]
+            )
+            return ['-'.join(code[i : i + 8] for i in range(0, len(code), 8)) for code in codes]
 
 
 class UserOTPRecoveryCode(models.Model):

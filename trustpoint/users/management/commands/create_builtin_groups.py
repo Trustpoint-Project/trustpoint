@@ -15,37 +15,45 @@ from users.models import SERVICE_ACCOUNT_PERMISSION_CODENAMES, AppPermission, Bu
 ROLE_PERMISSION_CODENAMES: dict[BuiltinRole, frozenset[str] | None] = {
     BuiltinRole.ADMIN: None,
     BuiltinRole.SERVICE: SERVICE_ACCOUNT_PERMISSION_CODENAMES,
-    BuiltinRole.PKI_ADMIN: frozenset({
-        'manage_crypto_backends',
-        'issue_certificates',
-        'revoke_certificates',
-        'download_credentials',
-        'view_help_pages',
-    }),
-    BuiltinRole.DEVICE_OPERATOR: frozenset({
-        'manage_devices',
-        'download_credentials',
-        'view_help_pages',
-    }),
-    BuiltinRole.SYSTEM_ADMIN: frozenset({
-        'manage_users',
-        'manage_roles',
-        'manage_organizations',
-        'manage_service_accounts',
-        'manage_system_configuration',
-        'manage_security_configuration',
-        'manage_backups',
-        'manage_notifications',
-        'manage_tls_webserver_configuration',
-        'view_metrics',
-    }),
+    BuiltinRole.PKI_ADMIN: frozenset(
+        {
+            'manage_crypto_backends',
+            'issue_certificates',
+            'revoke_certificates',
+            'download_credentials',
+            'view_help_pages',
+        }
+    ),
+    BuiltinRole.DEVICE_OPERATOR: frozenset(
+        {
+            'manage_devices',
+            'download_credentials',
+            'view_help_pages',
+        }
+    ),
+    BuiltinRole.SYSTEM_ADMIN: frozenset(
+        {
+            'manage_users',
+            'manage_roles',
+            'manage_organizations',
+            'manage_service_accounts',
+            'manage_system_configuration',
+            'manage_security_configuration',
+            'manage_backups',
+            'manage_notifications',
+            'manage_tls_webserver_configuration',
+            'view_metrics',
+        }
+    ),
     BuiltinRole.WORKFLOW_ADMIN: frozenset({'manage_workflows'}),
     BuiltinRole.WORKFLOW_APPROVER: frozenset({'approve_workflows'}),
-    BuiltinRole.SECURITY_AUDITOR: frozenset({
-        'view_audit_log',
-        'view_system_logs',
-        'view_metrics',
-    }),
+    BuiltinRole.SECURITY_AUDITOR: frozenset(
+        {
+            'view_audit_log',
+            'view_system_logs',
+            'view_metrics',
+        }
+    ),
 }
 
 
