@@ -108,8 +108,8 @@ class Workflow2HttpViewTests(TestCase):
         self.user = get_user_model().objects.create_user(
             username="workflow2-tester",
             password="testpass123",
+            role=wf2_test_role,
         )
-        self.user.role = wf2_test_role
 
     def _store_definition(self) -> Workflow2Definition:
         ir = compile_workflow_yaml(GRAPH_YAML, compiler_version="test")
