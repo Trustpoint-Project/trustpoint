@@ -13,6 +13,7 @@ def _mock_certificate(subject: bytes = b'subject', issuer: bytes = b'issuer') ->
     cert = Mock()
     cert.subject.public_bytes.return_value = subject
     cert.issuer.public_bytes.return_value = issuer
+    cert.fingerprint.return_value = b'fingerprint'
     return cert
 
 
@@ -28,8 +29,7 @@ def test_find_existing_ca_for_certificate_prefers_keyless_match() -> None:
 
     assert result is keyless_ca
     filter_mock.assert_called_once_with(
-        certificate__subject_public_bytes=b'subject'.hex().upper(),
-        certificate__issuer_public_bytes=b'issuer'.hex().upper(),
+        certificate__sha256_fingerprint=b'fingerprint'.hex().upper(),
     )
 
 
@@ -51,11 +51,9 @@ def test_find_existing_ca_for_certificate_falls_back_to_credential_match() -> No
     assert result is credential_ca
     assert filter_mock.call_args_list == [
         call(
-            certificate__subject_public_bytes=b'subject'.hex().upper(),
-            certificate__issuer_public_bytes=b'issuer'.hex().upper(),
+            certificate__sha256_fingerprint=b'fingerprint'.hex().upper(),
         ),
         call(
-            credential__certificate__subject_public_bytes=b'subject'.hex().upper(),
-            credential__certificate__issuer_public_bytes=b'issuer'.hex().upper(),
+            credential__certificate__sha256_fingerprint=b'fingerprint'.hex().upper(),
         ),
     ]

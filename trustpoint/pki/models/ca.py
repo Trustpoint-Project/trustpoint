@@ -12,7 +12,7 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_q.models import Schedule
@@ -828,6 +828,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return None
         return active_crl.get_crl_as_crypto()
 
+    @transaction.atomic
     def schedule_next_crl_generation(self, *, post_revocation_crl: bool = False) -> None:
         """Schedule the next CRL generation task for this CA using Django-Q2.
 
@@ -841,9 +842,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         duration = timedelta(seconds=30) if post_revocation_crl else timedelta(hours=self.crl_cycle_interval_hours)
         scheduled_time = timezone.now() + duration
 
-        base_name = f'crl_gen_{self.unique_name}'
-        # new schedule overrides any existing schedule for this CA
-        Schedule.objects.filter(name__startswith=base_name).delete()
+        type(self).objects.select_for_update().get(pk=self.pk)
+        base_name = f'crl_gen_{self.pk}'
+        # Match task arguments to replace legacy name-based schedules safely too.
+        Schedule.objects.filter(func='pki.tasks.generate_crl_for_ca', args=str((self.pk,))).delete()
 
         schedule(
             'pki.tasks.generate_crl_for_ca',
@@ -851,6 +853,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             schedule_type='O',
             next_run=scheduled_time,
             name=f'{base_name}_{scheduled_time.timestamp()}',
+            q_options={'ack_failure': True},
         )
 
         self.last_crl_generation_started_at = scheduled_time

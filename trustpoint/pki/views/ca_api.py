@@ -66,7 +66,7 @@ from pki.serializer.ca_api import (
 )
 from pki.services.ca_enrollment import CmpCaEnrollmentService, EstCaEnrollmentService
 from pki.services.ca_rollover import CaRolloverError, CaRolloverService
-from pki.services.external_csr import build_external_csr, certificate_matches_credential
+from pki.services.external_csr import build_external_csr
 from pki.util.cert_profile import ProfileValidationError
 from pki.views.issuing_cas import CanManageIssuingCas, IssuingCaViewSet
 from request.clients import EstClientError
@@ -322,14 +322,6 @@ class IssuingCaManagementViewSet(PkiApiErrorsMixin, CaInventoryMixin, IssuingCaV
             except ValueError as exc:
                 msg = 'Unable to enroll the CA. Check the enrollment configuration and request data.'
                 raise ValidationError(msg) from exc
-            certificate_model = ca.credential.certificate
-            if certificate_model is None:
-                raise UpstreamError
-            cert = certificate_model.get_certificate_serializer().as_crypto()
-            IssuingCaImportMixin()._validate_ca_certificate(cert)  # noqa: SLF001
-            if not certificate_matches_credential(cert, ca.credential):
-                msg = 'The upstream certificate does not match the managed key.'
-                raise ValidationError(msg)
             CaRolloverService.complete_awaiting_rollover_for_ca(ca)
         return Response(CaSerializer(ca).data)
 

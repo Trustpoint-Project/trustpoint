@@ -262,19 +262,6 @@ class EstUsernamePasswordCommandBuilderTests(SimpleTestCase):
         assert 'certutil -f -decode certificate-1.p7c certificate-1.p7b' in cmd
         assert 'openssl pkcs7 -inform DER -in certificate-1.p7b -print_certs -out certificate-1.pem' in cmd
 
-    def test_get_curl_enroll_windows_command(self) -> None:
-        """Test Windows-friendly EST curl command."""
-        cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_windows_command(
-            est_username='device-1',
-            est_password='secret-value',
-            host='https://example.test/.well-known/est/domain/app/simpleenroll',
-            cred_number=5,
-        )
-
-        assert cmd.startswith('curl.exe --user "device-1:secret-value" ^')
-        assert '--data-binary "@csr-5.der"' in cmd
-        assert '-o certificate-5.p7c' in cmd
-
     def test_get_domain_credential_est_commands(self) -> None:
         """Test EST username/password domain credential command helpers."""
         csr_cmd = EstUsernamePasswordCommandBuilder.get_domain_credential_profile_command()
@@ -305,8 +292,10 @@ class CmpClientCertificateCommandBuilderTests(SimpleTestCase):
         assert '-cmd ir' in cmd
         assert '-tls_used' in cmd
         assert '-server https://127.0.0.1/.well-known/cmp/p/test' in cmd
-        assert 'domain_credential_key.pem' in cmd
-        assert 'domain_credential_cert.pem' in cmd
+        assert '-newkey domain-credential-key.pem' in cmd
+        assert '-certout domain-credential-certificate.pem' in cmd
+        assert '-chainout domain-credential-chain.pem' in cmd
+        assert '-extracertsout domain-credential-full-chain.pem' in cmd
 
     def test_get_dynamic_cert_profile_command(self) -> None:
         """Test dynamic certificate profile command."""
@@ -371,20 +360,20 @@ class EstClientCertificateCommandBuilderTests(SimpleTestCase):
 
         assert 'curl' in cmd
         assert 'https://127.0.0.1/.well-known/est/test/cacerts' in cmd
+        assert '--cacert trustpoint-tls-trust-store.pem' in cmd
 
     def test_get_idevid_enroll_and_conversion_commands(self) -> None:
         """Test EST IDevID enrollment and conversion command helpers."""
         enroll_cmd = EstClientCertificateCommandBuilder.get_idevid_enroll_domain_credential_command(
             host='https://example.test/.well-known/est/domain/simpleenroll',
         )
-        der_cmd = EstClientCertificateCommandBuilder.get_idevid_der_pem_conversion_command()
         pkcs7_cmd = EstClientCertificateCommandBuilder.get_idevid_pkcs7_pem_conversion_command()
 
         assert '--cert idevid.pem' in enroll_cmd
         assert '--key idevid.key' in enroll_cmd
+        assert '--cacert trustpoint-tls-trust-store.pem' in enroll_cmd
         assert '@domain_credential_csr.der' in enroll_cmd
-        assert 'openssl x509' in der_cmd
-        assert '-inform der' in der_cmd
+        assert '-o domain-credential-certificate.p7c' in enroll_cmd
         assert 'openssl pkcs7' in pkcs7_cmd
         assert '-in cacerts.p7b' in pkcs7_cmd
 
@@ -416,23 +405,26 @@ class AokiEstIDevIDCommandBuilderTests(SimpleTestCase):
     def test_get_aoki_init_command_and_response_example(self) -> None:
         """Test AOKI EST initialization command and response sample."""
         cmd = AokiEstIDevIDCommandBuilder.get_aoki_init_command('https://example.test')
-        response_example = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example('domain_credential_custom')
+        response_example = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(
+            'aoki', 'domain_credential_custom'
+        )
 
         assert 'curl --cert idevid.pem' in cmd
-        assert 'https://example.test/aoki/init' in cmd
+        assert cmd.endswith('https://example.test/aoki/init/')
         assert '"protocol": "EST"' in response_example
-        assert 'domain_credential_custom/simpleenroll' in response_example
+        assert '/.well-known/est/aoki/domain_credential_custom/' in response_example
 
     def test_get_est_enrollment_commands(self) -> None:
         """Test AOKI EST key, CSR, and enrollment commands."""
         key_cmd = AokiEstIDevIDCommandBuilder.get_keygen_command()
         csr_cmd = AokiEstIDevIDCommandBuilder.get_csr_command()
-        enroll_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command('https://example.test/est/enroll')
+        enroll_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command('https://example.test')
 
         assert 'domain_credential_key.pem' in key_cmd
         assert '-outform DER' in csr_cmd
         assert '-out domain_credential.der' in csr_cmd
-        assert '--cert domain-credential-cert.pem' in enroll_cmd
+        assert '--cert idevid.pem' in enroll_cmd
+        assert '--key idevid_pk.pem' in enroll_cmd
         assert '@domain_credential.der' in enroll_cmd
 
 

@@ -467,6 +467,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategyTests(TestCase):
         mock_onboarding.est_username = 'testuser'
         mock_onboarding.est_password = 'testpass'
         mock_device.onboarding_config = mock_onboarding
+        mock_device.common_name = 'testuser'
 
         mock_domain = Mock()
         mock_domain.public_key_info = 'RSA 2048'
@@ -1069,7 +1070,7 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         assert '-server https://trustpoint.test:8443/.well-known/cmp/p/test-domain' in cmp_sections[3].rows[1].value
         assert est_heading == 'AOKI with EST - IDevID Authentication (mTLS)'
         assert '"protocol": "EST"' in est_sections[3].rows[1].value
-        assert 'domain_credential/simpleenroll' in est_sections[3].rows[1].value
+        assert '/.well-known/est/test-domain/domain_credential/' in est_sections[3].rows[1].value
 
     def test_aoki_est_strategy_requires_domain_for_response_profile(self) -> None:
         """Test AOKI EST fails when no domain is available for the domain credential profile."""

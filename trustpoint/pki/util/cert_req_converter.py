@@ -5,6 +5,7 @@
 
 import datetime as dt
 import logging
+import re
 from typing import Any, cast
 
 from cryptography import x509
@@ -321,7 +322,8 @@ class JSONCertRequestCommandExtractor:
                 continue
             first, *others = name_identifier.split('_')
             name_camel = ''.join([first.lower(), *map(str.capitalize, others)])
-            subj_str += f'/{name_camel}={value}'
+            escaped_value = re.sub(r'([\\/+])', r'\\\1', str(value))
+            subj_str += f'/{name_camel}={escaped_value}'
         if not subj_str:
             subj_str = '/'
         return subj_str

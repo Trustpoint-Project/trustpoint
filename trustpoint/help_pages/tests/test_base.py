@@ -327,14 +327,28 @@ class BuildIssuingCaCertSectionTests(SimpleTestCase):
         mock_domain = Mock()
         mock_issuing_ca = Mock()
         mock_issuing_ca.pk = 789
+        mock_issuing_ca.ca_certificate_model.pk = 42
         mock_domain.issuing_ca = mock_issuing_ca
-        mock_reverse.return_value = '/download/789'
+        mock_reverse.return_value = '/download/42'
 
         section = build_issuing_ca_cert_section(mock_domain)
 
         assert section.heading == 'Download Issuing CA Certificate'
         assert len(section.rows) == 1
         assert 'Download Issuing CA Certificate' in section.rows[0].key
+        mock_reverse.assert_called_once_with(
+            'pki:certificate-file-download-file-name',
+            kwargs={'file_format': 'pem', 'pk': 42, 'file_name': 'issuing_ca_cert.pem'},
+        )
+        assert 'href="/download/42"' in section.rows[0].value
+
+    def test_build_issuing_ca_cert_section_no_certificate(self) -> None:
+        """A CA without a certificate cannot produce a certificate download link."""
+        domain = Mock()
+        domain.issuing_ca.ca_certificate_model = None
+
+        with self.assertRaisesMessage(Http404, 'Issuing CA certificate is missing.'):
+            build_issuing_ca_cert_section(domain)
 
     def test_build_issuing_ca_cert_section_no_issuing_ca(self) -> None:
         """Test building issuing CA cert section without issuing CA."""

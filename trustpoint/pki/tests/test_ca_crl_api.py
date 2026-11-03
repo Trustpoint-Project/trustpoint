@@ -559,6 +559,7 @@ def test_upstream_ca_enrollment(api, ca, lab_config, protocol):
     upstream.assert_called_once()
     new_ca.refresh_from_db()
     assert new_ca.get_certificate().serial_number == cert.serial_number
+    new_ca.credential.clean()
 
 
 def test_ca_api_openapi_contract():

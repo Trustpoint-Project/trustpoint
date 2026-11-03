@@ -6,16 +6,20 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from django.db import transaction
+from django.utils import timezone
+from django_q.tasks import schedule
 
 from pki.models import CaModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverState
 
 logger = logging.getLogger(__name__)
+MAX_CRL_ATTEMPTS = 3
 
 
-def generate_crl_for_ca(ca_id: int) -> None:
+def generate_crl_for_ca(ca_id: int, *, attempt: int = 1) -> None:
     """Generate a CRL for a specific CA.
 
     This function is executed by Django-Q2 as a background task.
@@ -24,6 +28,7 @@ def generate_crl_for_ca(ca_id: int) -> None:
 
     Raises:
         ValueError: If the CA does not exist.
+        RuntimeError: If generation fails; up to two delayed retries are scheduled.
     """
     try:
         ca = CaModel.objects.get(pk=ca_id)
@@ -34,16 +39,23 @@ def generate_crl_for_ca(ca_id: int) -> None:
 
     logger.info('Starting CRL generation for CA: %s', ca.unique_name)
 
-    try:
-        with transaction.atomic():
-            success = ca.issue_crl(crl_validity_hours=int(ca.crl_validity_hours))
-            if success:
-                logger.info('CRL generated successfully for CA: %s', ca.unique_name)
-            else:
-                logger.warning('CRL generation failed for CA: %s', ca.unique_name)
-    except Exception:
-        logger.exception('Unexpected error during CRL generation for CA %s', ca.unique_name)
-        raise
+    with transaction.atomic():
+        ca = CaModel.objects.select_for_update().get(pk=ca_id)
+        success = ca.issue_crl(crl_validity_hours=ca.crl_validity_hours)
+    if success:
+        logger.info('CRL generated successfully for CA: %s', ca.unique_name)
+        return
+    if attempt < MAX_CRL_ATTEMPTS:
+        schedule(
+            'pki.tasks.generate_crl_for_ca',
+            ca_id,
+            attempt=attempt + 1,
+            schedule_type='O',
+            next_run=timezone.now() + timedelta(minutes=1),
+            q_options={'ack_failure': True},
+        )
+    msg = f'CRL generation failed for CA {ca.unique_name} (attempt {attempt}/{MAX_CRL_ATTEMPTS})'
+    raise RuntimeError(msg)
 
 
 def check_rollover_transition(rollover_id: int) -> None:
@@ -68,7 +80,7 @@ def check_rollover_transition(rollover_id: int) -> None:
     try:
         with transaction.atomic():
             # Refresh from database to get latest state
-            rollover.refresh_from_db()
+            rollover.refresh_from_db(from_queryset=CaRolloverModel.objects.select_for_update())
 
             if rollover.state != CaRolloverState.PREPARATION:
                 logger.info(

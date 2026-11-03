@@ -22,6 +22,7 @@ from django.utils.html import format_html, json_script
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext as _
 
+from help_pages.commands import escape_shell_double_quotes
 from help_pages.help_section import HelpRow, ValueRenderType
 from pki.forms.cert_profiles import ProfileBasedFormFieldBuilder
 
@@ -33,7 +34,6 @@ if TYPE_CHECKING:
 MAX_OPTIONAL_PARAMETERS = 6
 _CONTROL_CHARS = re.compile(r'[\x00-\x1f\x7f]')
 _SUBJECT_SPECIAL_CHARS = re.compile(r'([\\/+])')
-_DOUBLE_QUOTE_SPECIAL_CHARS = re.compile(r'([\\"$`])')
 NON_SUBJECT_VALUE_PATTERN = r'[^\s,]*'
 
 RequestPath = tuple[str | int, ...]
@@ -75,7 +75,7 @@ class CertParameter:
         if self.is_subject:
             value = _SUBJECT_SPECIAL_CHARS.sub(r'\\\1', value)
         if self.quoting == ShellQuoting.DOUBLE:
-            return _DOUBLE_QUOTE_SPECIAL_CHARS.sub(r'\\\1', value).replace('!', '"\'!\'"')
+            return escape_shell_double_quotes(value)
         escaped = value.replace("'", "'\\''")
         return escaped if self.quoting == ShellQuoting.SINGLE else f"'{escaped}'"
 

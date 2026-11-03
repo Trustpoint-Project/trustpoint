@@ -318,7 +318,7 @@ class TestCaCrlScheduling:
 
         root_ca.schedule_next_crl_generation()
 
-        assert not Schedule.objects.filter(name__startswith=f'crl_gen_{root_ca.unique_name}').exists()
+        assert not Schedule.objects.filter(name__startswith=f'crl_gen_{root_ca.pk}').exists()
 
     def test_enabled_cycle_creates_a_single_schedule(self, ca_hierarchy: dict[str, Any]) -> None:
         """Enabling the cycle schedules exactly one future generation."""
@@ -329,7 +329,7 @@ class TestCaCrlScheduling:
         root_ca.schedule_next_crl_generation()
         root_ca.schedule_next_crl_generation()
 
-        schedules = Schedule.objects.filter(name__startswith=f'crl_gen_{root_ca.unique_name}')
+        schedules = Schedule.objects.filter(name__startswith=f'crl_gen_{root_ca.pk}')
         assert schedules.count() == 1
         assert root_ca.last_crl_generation_started_at is not None
 
@@ -340,7 +340,7 @@ class TestCaCrlScheduling:
 
         root_ca.schedule_next_crl_generation(post_revocation_crl=True)
 
-        assert Schedule.objects.filter(name__startswith=f'crl_gen_{root_ca.unique_name}').exists()
+        assert Schedule.objects.filter(name__startswith=f'crl_gen_{root_ca.pk}').exists()
 
 
 class TestCaDeletion:

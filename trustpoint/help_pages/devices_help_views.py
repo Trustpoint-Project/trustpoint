@@ -73,7 +73,7 @@ from trustpoint.page_context import (
     DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY,
     PageContextMixin,
 )
-from trustpoint.views.base import UserPermissionRequiredMixin
+from trustpoint.views.base import SuperuserRequiredMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
@@ -1957,10 +1957,9 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                     has_missing_crl = True
 
                 ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
+                ca_link = format_html('<a href="{}" target="_blank">{}</a>', ca_detail_url, cn_value)
                 indent = '&nbsp;' * (idx * 4)
-                hierarchy_html += (
-                    f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> [{crl_link}{crl_status}]<br>'
-                )
+                hierarchy_html += f'{indent}└─ {ca_link} [{crl_link}{crl_status}]<br>'
 
             except (ValueError, TypeError, AttributeError):
                 continue
@@ -2437,11 +2436,13 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
             err_msg = 'Domain is required'
             raise Http404(err_msg)
         domain_cred_profile_name = domain.get_domain_credential_profile_name()
-        aoki_response = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(domain_cred_profile_name)
+        aoki_response = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(
+            domain.unique_name,
+            domain_cred_profile_name,
+        )
         keygen_cmd = AokiEstIDevIDCommandBuilder.get_keygen_command()
         csr_cmd = AokiEstIDevIDCommandBuilder.get_csr_command()
-        enroll_path = f'{help_context.host_est_path}/.well-known/est/domain/{domain_cred_profile_name}/simpleenroll'
-        curl_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command(enroll_path)
+        curl_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command(help_context.host_base)
 
         aoki_response_html = (
             f'<pre class="bg-body-secondary text-body p-3 rounded overflow-x-auto">'
@@ -2659,7 +2660,7 @@ def _build_aoki_demo_section(request: Any) -> HelpSection:
     )
 
 
-class AokiSetupDemoEnvView(PageContextMixin, View):
+class AokiSetupDemoEnvView(SuperuserRequiredMixin, PageContextMixin, View):
     """POST view that runs the ``aoki_setup_idevid_test_env`` management command."""
 
     http_method_names = ('post',)
@@ -2688,7 +2689,7 @@ class AokiSetupDemoEnvView(PageContextMixin, View):
         return HttpResponseRedirect(cmp_url)
 
 
-class AokiDemoDownloadView(PageContextMixin, View):
+class AokiDemoDownloadView(SuperuserRequiredMixin, PageContextMixin, View):
     """Serve a single file from the AOKI demo certificate directory for download."""
 
     http_method_names = ('get',)
@@ -2812,12 +2813,13 @@ class AgentDomainCredentialHelpView(BaseHelpView):
         return context
 
 
-class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
+class AgentSetupProfileDownloadView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
     """Generate and serve a pre-filled agent_setup.json for an agent device."""
 
     http_method_names = ('get',)
     model = DeviceModel
     context_object_name = 'device'
+    permission_required = AppPermissions.DOWNLOAD_CREDENTIALS
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
@@ -2845,7 +2847,8 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         tls_cert_pem: str = root_cert_model.get_certificate_serializer().as_pem().decode('utf-8')
 
         host_ip = request.GET.get('host_ip', '127.0.0.1')
-        host_base = f'https://{host_ip}:443'
+        https_port = request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))
+        host_base = f'https://{host_ip}:{https_port}' if str(https_port) != '443' else f'https://{host_ip}'
         domain_name: str = device.domain.unique_name
         enroll_path = f'/rest/{domain_name}/domain_credential/enroll/'
 
