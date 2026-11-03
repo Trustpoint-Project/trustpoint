@@ -602,7 +602,7 @@ class UpdateTlsCommandTest(TestCase):
 
         mock_active = Mock()
         mock_active.credential = mock_credential
-        mock_active_tls.objects.get.return_value = mock_active
+        mock_active_tls.objects.select_for_update.return_value.get.return_value = mock_active
 
         # Mock Path for script
         mock_script_path = Mock()
@@ -627,7 +627,7 @@ class UpdateTlsCommandTest(TestCase):
         """Test update_tls command when no active credential exists."""
         from django.core.exceptions import ObjectDoesNotExist
 
-        mock_active_tls.objects.get.side_effect = ObjectDoesNotExist
+        mock_active_tls.objects.select_for_update.return_value.get.side_effect = ObjectDoesNotExist
 
         with self.assertRaises(CommandError) as cm:
             call_command('update_tls')
@@ -659,7 +659,7 @@ class UpdateTlsCommandTest(TestCase):
 
         mock_active = Mock()
         mock_active.credential = mock_credential
-        mock_active_tls.objects.get.return_value = mock_active
+        mock_active_tls.objects.select_for_update.return_value.get.return_value = mock_active
 
         # Mock Path for script
         mock_script_path = Mock()
@@ -675,11 +675,10 @@ class UpdateTlsCommandTest(TestCase):
         mock_subprocess.return_value = mock_result
 
         out = StringIO()
-        call_command('update_tls', stdout=out)
+        with self.assertRaises(CommandError):
+            call_command('update_tls', stdout=out)
 
-        # Command should complete but log error
-        output = out.getvalue()
-        self.assertIn('successful', output.lower())
+        self.assertNotIn('successful', out.getvalue().lower())
 
 
 class ManagePyOverrideTest(TestCase):

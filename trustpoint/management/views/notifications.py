@@ -8,8 +8,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.core.management import CommandError, call_command
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
@@ -73,6 +74,9 @@ class NotificationsListView(
             A redirect back to the notifications list.
         """
         del args, kwargs
+
+        if not request.user.has_perm(AppPermissions.MANAGE_NOTIFICATIONS):
+            raise PermissionDenied
 
         if 'mark_all_read' in request.POST:
             new_status_qs = NotificationStatus.objects.filter(
@@ -173,47 +177,31 @@ class NotificationDetailsView(PageContextMixin, LoggerMixin, DetailView[Notifica
         return context
 
 
-class NotificationMarkSolvedView(
-    UserPermissionRequiredMixin,
-    PageContextMixin,
-    LoggerMixin,
-    DetailView[NotificationModel]
-):
-    """Mark notification as solved when viewed in the notification details page."""
+class NotificationMarkSolvedView(UserPermissionRequiredMixin, LoggerMixin, TemplateView):
+    """Mark a notification solved only after an authorized form submission."""
 
-    template_name = 'management/notifications/details.html'
-    model = NotificationModel
-    context_object_name = 'notification'
+    http_method_names = ('post',)
     permission_required = AppPermissions.MANAGE_NOTIFICATIONS
 
-    page_category = 'management'
-    page_name = 'notifications'
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds information about the solved status of the notification."""
-        context = super().get_context_data(**kwargs)
-
-        # TODO(AlexHx8472): This should be generated automatically by utilizing a migration # noqa: FIX002
+    def post(self, _request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponseRedirect:
+        """Save the solved status and return to notification details."""
+        notification = get_object_or_404(NotificationModel, pk=kwargs['pk'])
         solved_status, _ = NotificationStatus.objects.get_or_create(status='SOLVED')
-
-        if solved_status:
-            self.object.statuses.add(solved_status)
-
-        context['is_solved'] = solved_status in self.object.statuses.all()
-        return context
-
+        notification.statuses.add(solved_status)
+        return redirect('management:notification_details', pk=notification.pk)
 
 class NotificationToggleReadView(UserPermissionRequiredMixin, LoggerMixin, TemplateView):
     """Toggle the read/unread state of a notification and redirect back to its details."""
 
+    http_method_names = ('post',)
     permission_required = AppPermissions.MANAGE_NOTIFICATIONS
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
         """Toggle the NEW status on the notification and redirect to details."""
         del args
 
         pk = kwargs['pk']
-        notification = NotificationModel.objects.get(pk=pk)
+        notification = get_object_or_404(NotificationModel, pk=pk)
         new_status, _created = NotificationStatus.objects.get_or_create(status='NEW')
 
         if new_status in notification.statuses.all():
@@ -229,10 +217,11 @@ class NotificationToggleReadView(UserPermissionRequiredMixin, LoggerMixin, Templ
 class RefreshNotificationsView(UserPermissionRequiredMixin, LoggerMixin, TemplateView):
     """View to execute all notifications and redirect back to notifications list."""
 
+    http_method_names = ('post',)
     permission_required = AppPermissions.MANAGE_NOTIFICATIONS
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
-        """Handles GET requests and redirects to the notifications list."""
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
+        """Run notification checks after an authorized form submission."""
         del args
         del kwargs
 

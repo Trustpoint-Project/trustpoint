@@ -58,6 +58,7 @@ from users.models import (
     UserClientCertificate,
     UserOTPDevice,
     is_last_admin_user,
+    lock_admin_role,
     new_otp_key,
 )
 
@@ -215,9 +216,12 @@ class UserProfileDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, forms
         context['is_self_delete'] = self.object.pk == self.request.user.pk
         return context
 
+    @transaction.atomic
     def form_valid(self, _form: forms.Form) -> HttpResponse:
         """Delete after confirmation, retaining the final-admin protection."""
+        lock_admin_role()
         self.object = self.get_object()
+        self.object.refresh_from_db()
         is_self_delete = self.object.pk == self.request.user.pk
         if is_last_admin_user(self.object):
             messages.error(self.request, _('The default administrator account cannot be deleted.'))

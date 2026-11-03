@@ -116,6 +116,20 @@ class GroupProfile(models.Model):
         """Return a human-readable representation of the profile."""
         return f'Profile for {self.group.name}'
 
+    @transaction.atomic
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Apply role grants to existing users in the same transaction."""
+        super().save(*args, **kwargs)
+        persisted = type(self).objects.get(pk=self.pk)
+        TrustpointUser.objects.filter(role_id=self.group_id, account_type=TrustpointUser.AccountType.HUMAN).update(
+            is_staff=persisted.grants_staff, is_superuser=persisted.grants_superuser,
+        )
+
+
+def lock_admin_role() -> None:
+    """Serialize final-admin checks and writes; the caller must hold a transaction."""
+    Group.objects.select_for_update().filter(name=BuiltinRole.ADMIN).first()
+
 
 class TrustpointUserManager(UserManager['TrustpointUser']):
     """Custom manager that handles the required ``role`` field for ``createsuperuser``."""

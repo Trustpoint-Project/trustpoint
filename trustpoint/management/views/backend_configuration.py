@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from django.contrib import messages
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.management import CommandError, call_command
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
@@ -21,6 +21,7 @@ from appsecrets.models import AppSecretBackendModel
 from crypto.application.capabilities import BackendCapabilityReport, get_active_backend_capability_report
 from crypto.models import BackendKind, CryptoProviderProfileModel
 from pki.services.key_generation import supported_key_type_choices
+from users.permissions import AppPermissions
 
 PKCS11_ASSET_DOWNLOADS = {
     'module': ('module_path', 'application/octet-stream'),
@@ -208,6 +209,8 @@ class BackendConfigurationView(TemplateView):
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Manually refresh the provider capability snapshot for the active backend."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CRYPTO_BACKENDS):
+            raise PermissionDenied
         action = request.POST.get('action')
         if action != 'reprobe':
             return redirect('management:backend_configuration')

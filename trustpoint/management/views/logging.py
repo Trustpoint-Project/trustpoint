@@ -365,7 +365,7 @@ class LoggingViewSet(viewsets.GenericViewSet[Any]):
             )
 
         return FileResponse(
-            file_path.read_text(encoding='utf-8', errors='backslashreplace'),
+            file_path.open('rb'),
             as_attachment=True,
             filename=file_name
         )

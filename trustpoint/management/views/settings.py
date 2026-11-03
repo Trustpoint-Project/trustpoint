@@ -845,6 +845,8 @@ class ChangeLogLevelView(View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Handle POST requests to change the logging level."""
+        if not request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
+            raise PermissionDenied
         form = LoggingConfigForm(request.POST)
         if not form.is_valid():
             normalized_data = request.POST.copy()

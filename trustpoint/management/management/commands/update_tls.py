@@ -11,6 +11,7 @@ from pathlib import Path
 from cryptography.hazmat.primitives import hashes
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 from django.utils.translation import gettext as _
 
 from management.nginx_paths import (
@@ -18,6 +19,7 @@ from management.nginx_paths import (
     NGINX_CERT_PATH,
     NGINX_KEY_PATH,
 )
+from management.tls_files import write_tls_pem_files
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from trustpoint.logger import LoggerMixin
 
@@ -32,12 +34,13 @@ class Command(LoggerMixin, BaseCommand):
 
     help = 'Updates Nginx TLS config to the current active TLS server credential.'
 
+    @transaction.atomic
     def handle(self, **_options: object) -> None:
         """Entrypoint for the command."""
         try:
             self.logger.debug('Extracting TLS cert and preparing for update of Nginx config...')
 
-            active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
+            active_tls = ActiveTrustpointTlsServerCredentialModel.objects.select_for_update().get(id=1)
         except ObjectDoesNotExist as e:
             error_msg = _('TLS cert not found in DB')
             self.stdout.write(self.style.ERROR(error_msg))
@@ -49,22 +52,6 @@ class Command(LoggerMixin, BaseCommand):
             self.stdout.write(self.style.ERROR(error_msg))
             raise CommandError(error_msg)
 
-        private_key_pem = tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
-        certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
-        trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
-
-        NGINX_KEY_PATH.write_text(private_key_pem)
-        NGINX_CERT_PATH.write_text(certificate_pem)
-
-        # Only write chain file if there's actually a chain (not empty)
-        if trust_store_pem.strip():
-            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
-        elif NGINX_CERT_CHAIN_PATH.exists():
-            # Remove chain file if it exists but chain is empty
-            NGINX_CERT_CHAIN_PATH.unlink()
-
-        self.logger.debug('Finished with preparation.')
-
         script_path = SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL.resolve()
 
         if not script_path.exists():
@@ -74,18 +61,26 @@ class Command(LoggerMixin, BaseCommand):
             err_msg = f'The script path {script_path} is not a valid file.'
             raise ValueError(err_msg)
 
-        command = ['sudo', str(script_path)]
-
-        self.logger.debug('Running TLS update script: %s', command)
-        result = subprocess.run(command, check=False, capture_output=True, text=True)  # noqa: S603
-
-        if result.returncode != 0:
-            self.logger.error('TLS update script failed with return code %d', result.returncode)
-            self.logger.error('Script stdout: %s', result.stdout)
-            self.logger.error('Script stderr: %s', result.stderr)
-            # Do not raise exception to allow TLS activation to succeed even if Nginx restart fails
-        else:
-            self.logger.debug('TLS update script executed successfully')
+        paths = (NGINX_KEY_PATH, NGINX_CERT_PATH, NGINX_CERT_CHAIN_PATH)
+        previous_files = {path: path.read_bytes() if path.is_file() else None for path in paths}
+        try:
+            write_tls_pem_files(
+                tls_server_credential_model,
+                key_path=NGINX_KEY_PATH, cert_path=NGINX_CERT_PATH, chain_path=NGINX_CERT_CHAIN_PATH,
+            )
+            command = ['sudo', str(script_path)]
+            result = subprocess.run(command, check=False, capture_output=True, text=True)  # noqa: S603
+            if result.returncode != 0:
+                self.logger.error('TLS update script failed: %s', result.stderr)
+                message = 'Nginx TLS credential update failed.'
+                raise CommandError(message)  # noqa: TRY301
+        except Exception:
+            for path, content in previous_files.items():
+                if content is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_bytes(content)
+            raise
 
         self.stdout.write('Nginx TLS credential update successful.')
         sha256_fingerprint = tls_server_credential_model.get_certificate().fingerprint(hashes.SHA256())

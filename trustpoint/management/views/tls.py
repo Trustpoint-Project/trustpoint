@@ -19,6 +19,7 @@ from django.views.generic import FormView, TemplateView, View
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
+from rest_framework.exceptions import ValidationError as ApiValidationError
 from rest_framework.permissions import BasePermission
 
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
@@ -31,7 +32,7 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
-from trustpoint.views.base import BulkDeleteView
+from trustpoint.views.base import BulkDeleteView, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
@@ -40,9 +41,10 @@ if TYPE_CHECKING:
     from rest_framework.request import Request
 
 
-class TlsSettingsContextMixin:
+class TlsSettingsContextMixin(UserPermissionRequiredMixin):
     """Mixin which adds data to the context for the TLS settings application."""
 
+    permission_required = AppPermissions.MANAGE_TLS_WEBSERVER_CONFIGURATION
     page_category: str = 'management'
     page_name: str = 'tls'
 
@@ -185,13 +187,13 @@ class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
         except ObjectDoesNotExist:
             return []
 
-class TlsAddMethodSelectView(TemplateView):
+class TlsAddMethodSelectView(TlsSettingsContextMixin, TemplateView):
     """View to select the method to add a TLS Certificate."""
 
     template_name = 'management/tls/method_select.html'
     success_url = reverse_lazy('management:tls-add-method-select')
 
-class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
+class GenerateTlsCertificateView(TlsSettingsContextMixin, LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
 
     This view handles the generation of TLS Server Credentials. It provides a form for the
@@ -211,6 +213,7 @@ class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertifica
     success_url = reverse_lazy('management:tls')
 
 
+    @transaction.atomic
     def form_valid(self, form: StartupWizardTlsCertificateForm) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential generation.
 
@@ -242,7 +245,7 @@ class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertifica
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
 
-            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.select_for_update().get_or_create(id=1)
             active_tls.credential = trustpoint_tls_server_credential
             active_tls.save()
 
@@ -330,13 +333,20 @@ class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
             return HttpResponseRedirect(self.success_url)
         return super().get(request, *args, **kwargs)
 
+    def get_queryset(self) -> Any:
+        """Limit selected certificate IDs to webserver TLS credentials."""
+        return super().get_queryset().filter(
+            credential_set__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+        ).distinct()
+
+    @transaction.atomic
     def form_valid(self, _form: Form) -> HttpResponse:
         """Attempt to delete tls certificates if the form is valid."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_TLS_WEBSERVER_CONFIGURATION):
             raise PermissionDenied
         queryset = self.get_queryset()
         try:
-            active_credential = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
+            active_credential = ActiveTrustpointTlsServerCredentialModel.objects.select_for_update().get(id=1)
         except ActiveTrustpointTlsServerCredentialModel.DoesNotExist:
             active_credential = None
         if active_credential and active_credential.credential and (cert := active_credential.credential.certificate):
@@ -352,10 +362,12 @@ class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
                     return redirect(self.get_success_url())
         try:
             certs_to_delete = list(queryset)
+            queryset = CertificateModel.objects.filter(pk__in=[cert.pk for cert in certs_to_delete])
             with transaction.atomic():
                 # Delete all related credentials first
                 CredentialModel.objects.filter(
-                    certificate__in=queryset
+                    certificate__in=queryset,
+                    credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
                 ).delete()
                 # Delete certificates
                 delete_count = queryset.count()
@@ -394,13 +406,16 @@ class ActivateTlsServerView(View, LoggerMixin):
         self.logger.info('Activating TLS certificate with ID: %s', cert_id)
         try:
             tls_certificate = CredentialModel.objects.get(
-                certificate__id=cert_id)
+                certificate__id=cert_id,
+                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            )
             self.logger.info('Found TLS credential: %s', tls_certificate.id)
 
-            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-            active_tls.credential = tls_certificate
-            active_tls.save()
-            UpdateTlsCommand().handle()  # Apply new NGINX TLS configuration
+            with transaction.atomic():
+                active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.select_for_update().get_or_create(id=1)
+                active_tls.credential = tls_certificate
+                active_tls.save()
+                UpdateTlsCommand().handle()
             if tls_certificate.certificate is None:
                 self.logger.error('TLS certificate has no certificate model')
                 messages.error(request, 'TLS certificate has no certificate model')
@@ -445,7 +460,9 @@ class TlsViewSet(viewsets.ModelViewSet[Any]):
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
     """
-    queryset = CredentialModel.objects.all().order_by('-created_at')
+    queryset = CredentialModel.objects.filter(
+        credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+    ).order_by('-created_at')
     serializer_class = CredentialSerializer
     permission_classes = (CanManageTls,)
     filter_backends = (
@@ -454,5 +471,18 @@ class TlsViewSet(viewsets.ModelViewSet[Any]):
         filters.OrderingFilter
     )
     filterset_fields: ClassVar = ['credential_type']
-    search_fields: ClassVar = ['certificates']
+    search_fields: ClassVar = ['certificate__common_name']
     ordering_fields: ClassVar = ['created_at']
+
+    def perform_create(self, serializer: Any) -> None:
+        """Keep API-created credentials scoped to webserver TLS."""
+        serializer.save(credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER)
+
+    @transaction.atomic
+    def perform_destroy(self, instance: CredentialModel) -> None:
+        """Keep the active webserver credential, including during concurrent activation."""
+        active = ActiveTrustpointTlsServerCredentialModel.objects.select_for_update().filter(id=1).first()
+        if active is not None and active.credential_id == instance.pk:
+            message = 'Cannot delete the active TLS credential.'
+            raise ApiValidationError(message)
+        instance.delete()

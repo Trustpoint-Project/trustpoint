@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy as _
@@ -614,6 +614,7 @@ class NotificationConfig(models.Model):
 
         return self.last_notification_check_started_at or None
 
+    @transaction.atomic
     def schedule_next_notification_check(self, cycle_interval_hours: float | None = None) -> None:
         """Schedule the next notification execution using Django-Q2.
 
@@ -624,19 +625,23 @@ class NotificationConfig(models.Model):
             cycle_interval_hours: The number of hours until the next notification check should run.
                                 If None, uses the model's notification_cycle_interval_hours setting.
         """
-        if not self.notification_cycle_enabled:
+        current = type(self).objects.select_for_update().get(pk=self.pk)
+        if not current.notification_cycle_enabled:
             log.debug('Notification cycle not enabled, skipping scheduling')
             return
 
-        if not self.enabled:
+        if not current.enabled:
             log.debug('Notifications are disabled, skipping scheduling')
             return
 
         # Use provided interval or fall back to model setting
-        interval = cycle_interval_hours if cycle_interval_hours is not None else self.notification_cycle_interval_hours
+        interval = (
+            cycle_interval_hours if cycle_interval_hours is not None else current.notification_cycle_interval_hours
+        )
 
         scheduled_time = timezone.now() + timedelta(hours=interval)
 
+        Schedule.objects.filter(func='management.tasks.execute_all_notifications').delete()
         schedule(
             'management.tasks.execute_all_notifications',
             schedule_type='O',

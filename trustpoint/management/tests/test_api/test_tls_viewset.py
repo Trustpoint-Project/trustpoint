@@ -160,8 +160,7 @@ class TestTlsViewSetFilter:
         response = authenticated_client.get(url)
         assert response.status_code == status.HTTP_200_OK
         returned_ids = {item['id'] for item in response.data}
-        assert issued_credential.pk in returned_ids
-        assert tls_credential.pk not in returned_ids
+        assert returned_ids == set()
 
 
 @pytest.mark.django_db

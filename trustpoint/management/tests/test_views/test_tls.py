@@ -362,7 +362,7 @@ class GenerateTlsCertificateViewTest(TestCase):
         """Test only GET and POST methods are allowed."""
         self.assertEqual(self.view.http_method_names, ('get', 'post'))
 
-    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel.objects.get_or_create')
+    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel.objects.select_for_update')
     @patch('management.views.tls.TlsServerCredentialGenerator')
     @patch('management.views.tls.CredentialModel.save_credential_serializer')
     def test_form_valid_generates_credential(self, mock_save_cred, mock_generator_class, mock_get_or_create):
@@ -381,7 +381,7 @@ class GenerateTlsCertificateViewTest(TestCase):
         
         # Mock get_or_create
         mock_active_tls = Mock()
-        mock_get_or_create.return_value = (mock_active_tls, True)
+        mock_get_or_create.return_value.get_or_create.return_value = (mock_active_tls, True)
         
         form = Mock(spec=StartupWizardTlsCertificateForm)
         form.cleaned_data = {
@@ -524,7 +524,7 @@ class ActivateTlsServerViewTest(TestCase):
         self.credential.id = 1
 
     @patch('management.views.tls.UpdateTlsCommand')
-    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel.objects.get_or_create')
+    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel.objects.select_for_update')
     @patch('management.views.tls.CredentialModel.objects.get')
     def test_post_activates_credential(self, mock_cred_get, mock_get_or_create, mock_cmd_class):
         """Test POST activates TLS server credential."""
@@ -540,7 +540,7 @@ class ActivateTlsServerViewTest(TestCase):
         
         # Mock get_or_create
         mock_active_tls = Mock()
-        mock_get_or_create.return_value = (mock_active_tls, True)
+        mock_get_or_create.return_value.get_or_create.return_value = (mock_active_tls, True)
         
         # Mock the command
         mock_cmd = Mock()
@@ -549,7 +549,10 @@ class ActivateTlsServerViewTest(TestCase):
         response = self.view.post(request, pk=self.certificate.pk)
         
         # Check credential was looked up
-        mock_cred_get.assert_called_once_with(certificate__id=self.certificate.pk)
+        mock_cred_get.assert_called_once_with(
+            certificate__id=self.certificate.pk,
+            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+        )
         
         # Check UpdateTlsCommand was called
         mock_cmd.handle.assert_called_once()
@@ -581,7 +584,7 @@ class ActivateTlsServerViewTest(TestCase):
         messages_list = list(get_messages(request))
         self.assertTrue(any('failed' in str(msg).lower() for msg in messages_list))
 
-    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel.objects.get_or_create')
+    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel.objects.select_for_update')
     @patch('management.views.tls.CredentialModel.objects.get')
     def test_post_with_validation_error(self, mock_cred_get, mock_get_or_create):
         """Test POST handles ValidationError."""
@@ -596,7 +599,7 @@ class ActivateTlsServerViewTest(TestCase):
         mock_cred_get.return_value = self.credential
         
         # Mock validation error
-        mock_get_or_create.side_effect = ValidationError('Test validation error')
+        mock_get_or_create.return_value.get_or_create.side_effect = ValidationError('Test validation error')
         
         self.view.post(request, pk=self.certificate.pk)
         
@@ -605,7 +608,7 @@ class ActivateTlsServerViewTest(TestCase):
         self.assertTrue(any('failed' in str(msg).lower() for msg in messages_list))
 
     @patch('management.views.tls.UpdateTlsCommand')
-    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel.objects.get_or_create')
+    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel.objects.select_for_update')
     @patch('management.views.tls.CredentialModel.objects.get')
     def test_post_with_unexpected_exception(self, mock_cred_get, mock_get_or_create, mock_cmd_class):
         """Test POST handles unexpected exceptions."""
@@ -621,7 +624,7 @@ class ActivateTlsServerViewTest(TestCase):
         
         # Mock get_or_create
         mock_active_tls = Mock()
-        mock_get_or_create.return_value = (mock_active_tls, True)
+        mock_get_or_create.return_value.get_or_create.return_value = (mock_active_tls, True)
         
         # Mock unexpected error
         mock_cmd_class.side_effect = Exception('Unexpected error')
