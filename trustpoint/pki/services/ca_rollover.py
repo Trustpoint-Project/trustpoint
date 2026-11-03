@@ -114,9 +114,7 @@ class CaRolloverService:
                 )
                 notes = form.cleaned_data.get('notes', '') if hasattr(form, 'cleaned_data') else ''
                 initial_state = (
-                    CaRolloverState.AWAITING_NEW_CA
-                    if strategy.awaits_new_ca_certificate
-                    else CaRolloverState.PLANNED
+                    CaRolloverState.AWAITING_NEW_CA if strategy.awaits_new_ca_certificate else CaRolloverState.PLANNED
                 )
                 rollover = CaRolloverModel.objects.create(
                     old_issuing_ca=locked_ca,
@@ -191,8 +189,13 @@ class CaRolloverService:
             ca.chain_truststore = CaModel._create_chain_truststore(ca)  # noqa: SLF001
         ca.save(
             update_fields=[
-                'ca_type', 'chain_truststore', 'remote_host', 'remote_port',
-                'remote_path', 'est_username', 'cmp_sender_kid',
+                'ca_type',
+                'chain_truststore',
+                'remote_host',
+                'remote_port',
+                'remote_path',
+                'est_username',
+                'cmp_sender_kid',
             ]
         )
         rollover.state = CaRolloverState.PLANNED

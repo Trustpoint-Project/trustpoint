@@ -268,7 +268,9 @@ class RolloverActionView(LoginRequiredMixin, View):
             raise PermissionDenied
         _ensure_strategies_loaded()
         rollover = get_object_or_404(
-            CaRolloverModel.objects.select_for_update(), pk=rollover_pk, old_issuing_ca_id=pk,
+            CaRolloverModel.objects.select_for_update(),
+            pk=rollover_pk,
+            old_issuing_ca_id=pk,
         )
         try:
             self.perform_action(rollover)
