@@ -18,7 +18,7 @@ from drf_spectacular.utils import (
 from rest_framework import filters, status, viewsets
 from rest_framework import serializers as drf_serializers
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 from rest_framework.response import Response
 
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
@@ -45,6 +45,7 @@ from pki.util.certificate_request import build_request_data as _build_request_da
 from request.clients import EstClientError
 from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
@@ -78,6 +79,23 @@ def _resolve_cert_profile(
 
 
 
+class CanManageOwnerCredentials(BasePermission):
+    """Keep reads authenticated and guard management and enrollment separately."""
+
+    def has_permission(self, request: Request, view: Any) -> bool:
+        """Apply the existing device-management and issuance permissions."""
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        permission = (
+            AppPermissions.ISSUE_CERTIFICATES
+            if view.action in ('request_domain_credential', 'request_devownerid')
+            else AppPermissions.MANAGE_DEVICES
+        )
+        return request.user.has_perm(permission)
+
+
 @extend_schema(tags=['DevOwnerID'])
 class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialModel]):
     """ViewSet for managing DevOwnerID (OwnerCredential) instances via REST API.
@@ -94,7 +112,7 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
 
     queryset = OwnerCredentialModel.objects.order_by('-created_at')
     serializer_class = OwnerCredentialSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanManageOwnerCredentials,)
     filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -255,7 +273,6 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         detail=True,
         methods=['post'],
         url_path='request/domain_credential',
-        permission_classes=[IsAuthenticated],
     )
     def request_domain_credential(self, request: Request, pk: int | None = None, **_kwargs: Any) -> Response:
         """Enroll a Domain Credential for this DevOwnerID via EST."""
@@ -375,7 +392,6 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         detail=True,
         methods=['post'],
         url_path='request/devownerid',
-        permission_classes=[IsAuthenticated],
     )
     def request_devownerid(self, request: Request, pk: int | None = None, **_kwargs: Any) -> Response:
         """Enroll a DevOwnerID certificate for this DevOwnerID via EST."""

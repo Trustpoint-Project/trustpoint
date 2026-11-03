@@ -1126,8 +1126,8 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
 
         return owner_credential
 
-    def post_delete(self) -> None:
-        """Deletes all remote issued credentials and the onboarding config on deletion."""
+    def pre_delete(self) -> None:
+        """Delete owned credentials before their protected owner relationship is removed."""
         self.logger.debug('Deleting remote issued credentials of owner credential %s', self)
         for issued in self.remote_issued_credentials.all():
             issued.credential.delete()

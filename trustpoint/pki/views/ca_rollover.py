@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
@@ -260,12 +261,15 @@ class RolloverActionView(LoginRequiredMixin, View):
         rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
         return render(request, self.template_name, {'issuing_ca': issuing_ca, 'rollover': rollover})
 
+    @transaction.atomic
     def post(self, request: HttpRequest, pk: int, rollover_pk: int) -> HttpResponse:
         """Execute the configured action, report its result, and audit success."""
         if not request.user.has_perm(AppPermissions.MANAGE_CAS):
             raise PermissionDenied
         _ensure_strategies_loaded()
-        rollover = get_object_or_404(CaRolloverModel, pk=rollover_pk, old_issuing_ca_id=pk)
+        rollover = get_object_or_404(
+            CaRolloverModel.objects.select_for_update(), pk=rollover_pk, old_issuing_ca_id=pk,
+        )
         try:
             self.perform_action(rollover)
             messages.success(request, self.success_message)

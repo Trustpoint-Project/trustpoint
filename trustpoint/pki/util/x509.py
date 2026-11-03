@@ -14,7 +14,8 @@ from ipaddress import ip_address
 from typing import TYPE_CHECKING, TypeGuard, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 try:
     from cryptography.hazmat.primitives.asymmetric import mldsa
@@ -662,55 +663,13 @@ class CertificateVerifier:
             issuer_cert: The issuer certificate containing the public key.
 
         Raises:
-            ValueError: If the signature verification fails or the hash algorithm is missing.
-            TypeError: If the issuer public key type is unsupported.
+            ValueError: If issuer names or the encoded certificate signature do not verify.
         """
-        issuer_public_key = issuer_cert.public_key()
-
-        is_mldsa = mldsa and isinstance(issuer_public_key, (
-            mldsa.MLDSA44PublicKey,
-            mldsa.MLDSA65PublicKey,
-            mldsa.MLDSA87PublicKey,
-        ))
-
-        hash_algorithm = cert.signature_hash_algorithm
-        if hash_algorithm is None and not is_mldsa:
-            err_msg = 'Certificate signature algorithm is not supported or is missing'
-            raise ValueError(err_msg)
-
-        if isinstance(issuer_public_key, rsa.RSAPublicKey):
-            try:
-                issuer_public_key.verify(
-                    cert.signature,
-                    cert.tbs_certificate_bytes,
-                    padding.PKCS1v15(),
-                    hash_algorithm,  # type: ignore[arg-type]
-                )
-            except Exception as e:
-                err_msg = f'Certificate signature verification failed: {e}'
-                raise ValueError(err_msg) from e
-        elif isinstance(issuer_public_key, ec.EllipticCurvePublicKey):
-            try:
-                issuer_public_key.verify(
-                    cert.signature,
-                    cert.tbs_certificate_bytes,
-                    ec.ECDSA(hash_algorithm),  # type: ignore[arg-type]
-                )
-            except Exception as e:
-                err_msg = f'Certificate signature verification failed: {e}'
-                raise ValueError(err_msg) from e
-        elif is_mldsa:
-            try:
-                issuer_public_key.verify(  # type: ignore[union-attr,call-arg]
-                    signature=cert.signature,
-                    data=cert.tbs_certificate_bytes,
-                )
-            except Exception as e:
-                err_msg = f'Certificate signature verification failed: {e}'
-                raise ValueError(err_msg) from e
-        else:
-            err_msg = f'Unsupported issuer public key type: {type(issuer_public_key)}'
-            raise TypeError(err_msg)
+        try:
+            cert.verify_directly_issued_by(issuer_cert)
+        except (InvalidSignature, ValueError, TypeError) as exc:
+            msg = f'Certificate signature verification failed: {exc}'
+            raise ValueError(msg) from exc
 
     @staticmethod
     def _try_verify_against_issuer(

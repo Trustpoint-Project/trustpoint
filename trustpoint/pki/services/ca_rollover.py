@@ -182,20 +182,32 @@ class CaRolloverService:
             raise CaRolloverError(msg)
 
         ca.ca_type = CaModel.CaTypeChoice.LOCAL_PKCS11
+        ca.remote_host = ''
+        ca.remote_port = None
+        ca.remote_path = ''
+        ca.est_username = ''
+        ca.cmp_sender_kid = None
         if ca.chain_truststore is None:
             ca.chain_truststore = CaModel._create_chain_truststore(ca)  # noqa: SLF001
-        ca.save(update_fields=['ca_type', 'chain_truststore'])
+        ca.save(
+            update_fields=[
+                'ca_type', 'chain_truststore', 'remote_host', 'remote_port',
+                'remote_path', 'est_username', 'cmp_sender_kid',
+            ]
+        )
         rollover.state = CaRolloverState.PLANNED
         rollover.save(update_fields=['state'])
         return rollover
 
     @staticmethod
+    @transaction.atomic
     def execute_rollover(rollover: CaRolloverModel) -> None:
         """Start the rollover: transition from PLANNED to PREPARATION.
 
         :param rollover: The rollover to execute.
         :raises CaRolloverError: If the rollover cannot be started.
         """
+        rollover.refresh_from_db(from_queryset=CaRolloverModel.objects.select_for_update())
         strategy = CaRolloverService.get_strategy(
             CaRolloverStrategyType(rollover.strategy_type),
         )
@@ -212,12 +224,14 @@ class CaRolloverService:
         logger.info('Rollover %s started.', rollover.pk)
 
     @staticmethod
+    @transaction.atomic
     def finalize_rollover(rollover: CaRolloverModel) -> None:
         """Complete the rollover.
 
         :param rollover: The rollover to finalize.
         :raises CaRolloverError: If the rollover cannot be completed.
         """
+        rollover.refresh_from_db(from_queryset=CaRolloverModel.objects.select_for_update())
         strategy = CaRolloverService.get_strategy(
             CaRolloverStrategyType(rollover.strategy_type),
         )
@@ -231,12 +245,14 @@ class CaRolloverService:
         logger.info('Rollover %s completed.', rollover.pk)
 
     @staticmethod
+    @transaction.atomic
     def cancel_rollover(rollover: CaRolloverModel) -> None:
         """Cancel the rollover.
 
         :param rollover: The rollover to cancel.
         :raises CaRolloverError: If the rollover cannot be cancelled.
         """
+        rollover.refresh_from_db(from_queryset=CaRolloverModel.objects.select_for_update())
         strategy = CaRolloverService.get_strategy(
             CaRolloverStrategyType(rollover.strategy_type),
         )
