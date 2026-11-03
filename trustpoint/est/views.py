@@ -115,8 +115,10 @@ class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle POST requests for simple enrollment."""
         del args
-        domain_name = cast('str', kwargs.get('domain'))
+        domain_name = cast('str | None', kwargs.get('domain'))
         cert_profile = cast('str | None', kwargs.get('cert_profile'))
+        if domain_name is None and cert_profile is not None:
+            cert_profile = cert_profile.removeprefix('~')
         return self.process_enrollment(request, domain_name, cert_profile)
 
 
@@ -138,7 +140,9 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
     def _get_ca_chain(ca: 'CaModel') -> CertificateCollectionSerializer:
         """Read local credentials or the public upstream chain of a keyless RA."""
         if ca.credential is not None:
-            return ca.credential.get_credential_serializer().get_full_chain_as_serializer()
+            return CertificateCollectionSerializer(
+                [ca.credential.get_certificate(), *ca.credential.get_certificate_chain()]
+            )
         certificate = ca.get_certificate()
         if certificate is None:
             msg = 'The configured CA has no certificate available.'

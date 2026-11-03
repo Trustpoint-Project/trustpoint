@@ -3,7 +3,6 @@
 
 """Provides the `HttpRequestValidator` class for validating HTTP requests."""
 
-import base64
 import contextlib
 import ipaddress
 import itertools
@@ -14,6 +13,7 @@ from typing import TYPE_CHECKING
 from cryptography import x509
 from django.conf import settings
 
+from pki.services.csr import decode_base64_csr
 from request.request_context import HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -252,7 +252,7 @@ class ContentTransferEncodingValidation(ValidationComponent, LoggerMixin):
         encoding = context.raw_message.headers.get('Content-Transfer-Encoding', '').lower()
         if encoding == 'base64':
             try:
-                base64.b64decode(context.raw_message.body, validate=True)
+                decode_base64_csr(context.raw_message.body)
             except Exception as exc:
                 msg = 'Invalid base64 encoding in message.'
                 raise ValueError(msg) from exc

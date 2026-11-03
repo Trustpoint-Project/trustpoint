@@ -935,6 +935,7 @@ def test_crl_import_view_post_pem_success(
 ) -> None:
     """Test successful PEM CRL import."""
     ca = issuing_ca_instance['issuing_ca']
+
     crl = generate_crl_with_revoked_certs(ca)
     data = {
         'crl_file': SimpleUploadedFile('test.crl', crl.public_bytes(serialization.Encoding.PEM)),

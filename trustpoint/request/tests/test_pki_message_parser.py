@@ -905,13 +905,12 @@ class TestEstMessageParser:
         """Test EstMessageParser initialization."""
         parser = EstMessageParser()
 
-        assert len(parser.components) == 6
+        assert len(parser.components) == 5
         assert isinstance(parser.components[0], EstAuthorizationHeaderParsing)
         assert isinstance(parser.components[1], EstPkiMessageParsing)
         assert isinstance(parser.components[2], DomainParsing)
-        assert isinstance(parser.components[3], CertProfileParsing)
-        assert isinstance(parser.components[4], EstCsrSignatureVerification)
-        assert isinstance(parser.components[5], EstChannelBindingVerification)
+        assert isinstance(parser.components[3], EstCsrSignatureVerification)
+        assert isinstance(parser.components[4], EstChannelBindingVerification)
 
     def test_parse_delegation(self):
         """Test that parse method delegates to all components."""
@@ -924,7 +923,6 @@ class TestEstMessageParser:
             patch.object(parser.components[2], 'parse') as mock_parse3,
             patch.object(parser.components[3], 'parse') as mock_parse4,
             patch.object(parser.components[4], 'parse') as mock_parse5,
-            patch.object(parser.components[5], 'parse') as mock_parse6,
         ):
             parser.parse(mock_context)
 
@@ -933,7 +931,6 @@ class TestEstMessageParser:
             mock_parse3.assert_called_once_with(mock_context)
             mock_parse4.assert_called_once_with(mock_context)
             mock_parse5.assert_called_once_with(mock_context)
-            mock_parse6.assert_called_once_with(mock_context)
 
     def test_parse_component_failure_stops_execution(self):
         """Test that component failure stops execution of subsequent components."""

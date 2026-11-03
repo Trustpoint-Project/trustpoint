@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, cast
 from request.authentication import RestAuthentication
 from request.authorization import EstAuthorization, RestAuthorization
 from request.message_parser import EstMessageParser, RestMessageParser
+from request.message_parser.base import CertProfileParsing
 from request.message_responder import EstMessageResponder, RestMessageResponder
 from request.operation_processor.general import OperationProcessor
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext, CmpCertificateRequestContext
@@ -80,6 +81,9 @@ class EnrollmentOrchestrator[Context: BaseCertificateRequestContext]:
 def _authenticate_est(context: EstCertificateRequestContext) -> None:
     require_single_security_config(context)
     authenticate_est_request(context)
+    if context.domain is None and context.device is not None:
+        context.domain = context.device.domain
+    CertProfileParsing().parse(context)
 
 
 def est_enrollment(
