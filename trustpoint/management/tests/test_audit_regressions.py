@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 """Regressions for management authorization, credential safety, and scheduling."""
 
 from io import StringIO
