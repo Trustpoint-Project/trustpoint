@@ -139,8 +139,14 @@ class PasswordPolicyFormOwnershipTest(SimpleTestCase):
         """Expose all password and OTP controls in one form."""
         fields = set(PasswordPolicyForm().fields)
         password_fields = {
-            'minimum_length', 'prevent_password_reuse', 'password_expiry_days', 'user_similarity_enabled',
-            'max_similarity', 'reject_common_passwords', 'common_password_list', 'reject_numeric_passwords',
+            'minimum_length',
+            'prevent_password_reuse',
+            'password_expiry_days',
+            'user_similarity_enabled',
+            'max_similarity',
+            'reject_common_passwords',
+            'common_password_list',
+            'reject_numeric_passwords',
             'require_otp',
         }
         assert password_fields.issubset(fields)
@@ -274,9 +280,7 @@ class PasswordPolicyPageViewTest(TestCase):
 
     def setUp(self) -> None:
         """Create an authenticated settings administrator and both configurations."""
-        self.user = TrustpointUser.objects.create_user(username='policy-admin')
-        TrustpointUser.objects.filter(pk=self.user.pk).update(is_superuser=True, is_staff=True)
-        self.user.refresh_from_db()
+        self.user = TrustpointUser.objects.create_superuser(username='policy-admin')
         self.client.force_login(self.user)
         self.account_security = AccountSecurityConfig.objects.create(
             pk=1,

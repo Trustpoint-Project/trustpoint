@@ -852,7 +852,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             self.id,
             schedule_type='O',
             next_run=scheduled_time,
-            name=base_name,
+            name=f'{base_name}_{scheduled_time.timestamp()}',
             q_options={'ack_failure': True},
         )
 

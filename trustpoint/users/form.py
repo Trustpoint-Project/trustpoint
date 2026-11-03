@@ -15,26 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from management.models.organization import OrganizationModel
 from users.permissions import AppPermissions
 
-from .models import BuiltinRole, GroupProfile, TrustpointUser, UserClientCertificate
-
-
-class TrustpointSuperUserCreationForm(UserCreationForm[TrustpointUser]):
-    """Form for creating the initial superuser during setup.
-
-    This form is used in the setup wizard to create the first superuser.
-    """
-
-    class Meta(UserCreationForm.Meta):
-        """Metaclass extending the standard UserCreationForm with the TrustpointUser model."""
-
-        model = TrustpointUser
-        fields = UserCreationForm.Meta.fields
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Apply Bootstrap form-control class to every field widget."""
-        super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs['class'] = 'form-control'
+from .models import BuiltinRole, GroupProfile, TrustpointUser, UserClientCertificate, is_last_admin_user
 
 
 class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
@@ -133,10 +114,7 @@ class TrustpointUserProfileForm(forms.ModelForm[TrustpointUser]):
         if not can_manage_users:
             self.fields['role'].disabled = True
             self.fields['organization'].disabled = True
-        elif (
-            self.instance.role.name == BuiltinRole.ADMIN
-            and TrustpointUser.objects.filter(role__name=BuiltinRole.ADMIN).count() == 1
-        ):
+        elif is_last_admin_user(self.instance):
             self.fields['role'].disabled = True
 
         role_field = self.fields.get('role')
@@ -325,6 +303,9 @@ class GroupPermissionForm(forms.ModelForm[Group]):
         Returns:
             The saved Group instance.
         """
+        if commit and self.instance.pk:
+            # New-user creation locks the profile before inserting group references.
+            GroupProfile.objects.select_for_update().filter(group_id=self.instance.pk).first()
         group = super().save(commit=commit)
         if commit:
             GroupProfile.objects.update_or_create(

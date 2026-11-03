@@ -134,12 +134,12 @@ def test_crl_schedule_preserves_other_ca_and_replaces_legacy_job(issuing_ca_mode
         next_run=timezone.now(),
     )
     b.schedule_next_crl_generation()
-    other_job = Schedule.objects.get(name=f'crl_gen_{b.pk}')
+    other_job = Schedule.objects.get(func='pki.tasks.generate_crl_for_ca', args=str((b.pk,)))
     a.schedule_next_crl_generation()
     a.schedule_next_crl_generation()
     assert Schedule.objects.filter(pk=other_job.pk).exists()
     assert not Schedule.objects.filter(pk=legacy.pk).exists()
-    assert Schedule.objects.filter(name=f'crl_gen_{a.pk}').count() == 1
+    assert Schedule.objects.filter(func='pki.tasks.generate_crl_for_ca', args=str((a.pk,))).count() == 1
 
 
 def test_failed_crl_is_reported_and_retried_at_most_three_times(issuing_ca_model):

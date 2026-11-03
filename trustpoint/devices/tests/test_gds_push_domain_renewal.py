@@ -33,10 +33,13 @@ def renewal_device(device_instance_onboarding, admin_client):
     from onboarding.models import OnboardingPkiProtocol, OnboardingProtocol
 
     tls_credential = TlsServerCredentialGenerator(
-        ipv4_addresses=[IPv4Address('192.0.2.10')], ipv6_addresses=[], domain_names=[],
+        ipv4_addresses=[IPv4Address('192.0.2.10')],
+        ipv6_addresses=[],
+        domain_names=[],
     ).generate_tls_server_credential()
     credential = CredentialModel.save_credential_serializer(
-        tls_credential, CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+        tls_credential,
+        CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
     )
     ActiveTrustpointTlsServerCredentialModel.objects.create(credential=credential)
 
@@ -224,10 +227,11 @@ def test_enabling_requires_initial_credential(admin_client, renewal_device):
     assert renewal_device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at is None
 
 
-def test_settings_require_device_management_permission(admin_client, renewal_device):
-    user = get_user_model().objects.get(pk=admin_client.session['_auth_user_id'])
+def test_settings_require_device_management_permission(client, renewal_device):
+    user = get_user_model().objects.create_user(username='renewal-viewer')
     user.role.permissions.remove(Permission.objects.get(codename='manage_devices'))
-    response = enable_renewal(admin_client, renewal_device)
+    client.force_login(user)
+    response = enable_renewal(client, renewal_device)
     assert response.status_code == 403
     renewal_device.refresh_from_db()
     assert not renewal_device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal

@@ -28,6 +28,7 @@ from .authentication import (
     REJECTED_CERTIFICATE_SESSION_KEY,
     ClientCertificateBackend,
 )
+from .management_backend import INTERACTIVE_BACKEND
 from .models import TrustpointUser, UserOTPDevice
 
 SESSION_ACTIVITY_WRITE_INTERVAL_SECONDS = 60
@@ -86,7 +87,7 @@ class ClientCertificateAuthenticationMiddleware:
         certificate_digest = hashlib.sha256(request.META.get('HTTP_SSL_CLIENT_CERT', '').encode('utf-8')).hexdigest()
         if (
             request.user.is_authenticated
-            and request.session.get(BACKEND_SESSION_KEY) == 'django.contrib.auth.backends.ModelBackend'
+            and request.session.get(BACKEND_SESSION_KEY) == INTERACTIVE_BACKEND
             and request.session.get(REJECTED_CERTIFICATE_SESSION_KEY) == certificate_digest
         ):
             return self.get_response(request)
@@ -102,7 +103,8 @@ class ClientCertificateAuthenticationMiddleware:
         if settings.TRUSTPOINT_IS_BOOTSTRAP:
             return True
         if (
-            not certificate_session and not request.user.is_authenticated
+            not certificate_session
+            and not request.user.is_authenticated
             and any(path.startswith(prefix) for prefix in settings.PUBLIC_PATHS)
         ):
             return True
@@ -128,7 +130,7 @@ class PasswordOTPRequiredMiddleware:
         if (
             not request.path_info.startswith('/api/')
             and request.user.is_authenticated
-            and request.session.get(BACKEND_SESSION_KEY) == 'django.contrib.auth.backends.ModelBackend'
+            and request.session.get(BACKEND_SESSION_KEY) == INTERACTIVE_BACKEND
             and PasswordPolicy.is_otp_required()
         ):
             device = UserOTPDevice.objects.filter(user=request.user, confirmed=True).only('id').first()
@@ -216,10 +218,7 @@ class IdleSessionTimeoutMiddleware:
 
         # Avoid rewriting the session on every request while still recording
         # activity often enough for the configured timeout to be accurate.
-        if (
-            last_activity is None
-            or now - float(last_activity) >= SESSION_ACTIVITY_WRITE_INTERVAL_SECONDS
-        ):
+        if last_activity is None or now - float(last_activity) >= SESSION_ACTIVITY_WRITE_INTERVAL_SECONDS:
             request.session[self.SESSION_KEY] = now
         return self.get_response(request)
 
@@ -270,7 +269,7 @@ class ServiceAccountMiddleware:
                 return self.get_response(request)
 
             logout(request)
-            return redirect(f"{reverse('users:login')}?error=service_account")
+            return redirect(f'{reverse("users:login")}?error=service_account')
 
         return self.get_response(request)
 

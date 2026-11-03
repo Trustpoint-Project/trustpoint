@@ -142,7 +142,7 @@ class UserDeleteView(
         lock_admin_role()
         self.object = self.get_object()
 
-        if is_last_admin_user(self.object):
+        if is_last_admin_user(self.object, lock=True):
             messages.error(
                 self.request,
                 _('Cannot delete "%(username)s": at least one admin must remain.') % {'username': self.object.username},
@@ -228,7 +228,7 @@ class UserChangeRoleView(
         user: TrustpointUser = self.get_object()
         new_role = form.cleaned_data['role']
 
-        if is_last_admin_user(user) and new_role.name != BuiltinRole.ADMIN:
+        if is_last_admin_user(user, lock=True) and new_role.name != BuiltinRole.ADMIN:
             messages.error(
                 self.request,
                 _('Cannot change role of "%(username)s": at least one admin must remain.')
@@ -323,7 +323,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
             raise PermissionDenied
         lock_admin_role()
         instance = self.get_object()
-        if is_last_admin_user(instance):
+        if is_last_admin_user(instance, lock=True):
             return Response(
                 {'detail': 'Cannot delete this user: at least one admin must remain.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -342,7 +342,7 @@ class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
         lock_admin_role()
         instance = self.get_object()
         new_role = request.data.get('role') if isinstance(request.data, dict) else None
-        if is_last_admin_user(instance) and new_role is not None and str(new_role) != str(instance.role_id):
+        if is_last_admin_user(instance, lock=True) and new_role is not None and str(new_role) != str(instance.role_id):
             return Response(
                 {'detail': 'Cannot change role of this user: at least one admin must remain.'},
                 status=status.HTTP_400_BAD_REQUEST,

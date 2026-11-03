@@ -36,6 +36,9 @@ if TYPE_CHECKING:
     from management.models.organization import OrganizationModel
 
 
+SERVICE_ACCOUNT_PERMISSION_CODENAMES = frozenset({'use_rest_api'})
+
+
 class BuiltinRole(models.TextChoices):
     """Canonical names of built-in Trustpoint roles."""
 
@@ -52,17 +55,15 @@ class BuiltinRole(models.TextChoices):
     @classmethod
     def get_service_group(cls) -> Group:
         """Return the dedicated group used by service accounts."""
-        group, _ = Group.objects.get_or_create(name=cls.SERVICE.value)
-        try:
-            permission = Permission.objects.get(
-                content_type__app_label='users',
-                content_type__model='apppermission',
-                codename='use_rest_api',
+        group, created = Group.objects.get_or_create(name=cls.SERVICE.value)
+        if created:
+            group.permissions.set(
+                Permission.objects.filter(
+                    content_type__app_label='users',
+                    content_type__model='apppermission',
+                    codename__in=SERVICE_ACCOUNT_PERMISSION_CODENAMES,
+                )
             )
-        except Permission.DoesNotExist:
-            pass
-        else:
-            group.permissions.set([permission])
         return group
 
 
@@ -119,12 +120,12 @@ class GroupProfile(models.Model):
 
     @transaction.atomic
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Apply role grants to existing users in the same transaction."""
+        """Apply role grants to existing human accounts in the same transaction."""
         super().save(*args, **kwargs)
-        persisted = type(self).objects.get(pk=self.pk)
+        self.refresh_from_db(fields=['grants_staff', 'grants_superuser'])
         TrustpointUser.objects.filter(role_id=self.group_id, account_type=TrustpointUser.AccountType.HUMAN).update(
-            is_staff=persisted.grants_staff,
-            is_superuser=persisted.grants_superuser,
+            is_staff=self.grants_staff,
+            is_superuser=self.grants_superuser,
         )
 
 
@@ -171,6 +172,10 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
         """
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
             admin_group, _ = Group.objects.get_or_create(name=BuiltinRole.ADMIN.value)
+            GroupProfile.objects.get_or_create(
+                group=admin_group,
+                defaults={'grants_staff': True, 'grants_superuser': True},
+            )
             extra_fields['role'] = admin_group
         if 'organization' not in extra_fields:
             extra_fields['organization'] = self._get_default_org()
@@ -208,10 +213,10 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
 class TrustpointUser(AbstractUser):
     """Custom user model that adds a role field to the standard Django user.
 
-    The ``role`` foreign key points to a ``Group`` instance.  On every
-    save the model synchronises Django's ``is_staff`` / ``is_superuser``
-    flags and the user's ``groups`` M2M relation so that the user belongs
-    to exactly the group referenced by ``role``.
+    The ``role`` foreign key points to a ``Group`` instance. Full saves and
+    changes to permission fields synchronise Django's ``is_staff`` /
+    ``is_superuser`` flags and the user's ``groups`` M2M relation so that
+    the user belongs to exactly the group referenced by ``role``.
     """
 
     class LanguageChoices(models.TextChoices):
@@ -348,37 +353,39 @@ class TrustpointUser(AbstractUser):
             msg = _('Service accounts cannot be staff or superusers.')
             raise ValidationError(msg)
 
+    @transaction.atomic
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Persist the user and synchronise Django permission flags and group membership.
+        """Synchronise role grants and membership only when saving permission fields.
 
-        Reads ``grants_staff`` and ``grants_superuser`` from the role's
-        :class:`GroupProfile` to set ``is_staff`` and ``is_superuser``.
-        Groups without a profile default to both flags being ``False``.
-
-        After saving, the user's ``groups`` M2M is set to contain
-        *exactly* the group pointed to by ``role``.
-
-        Service accounts are never staff or superusers.
+        Existing users lock their row before reading grants. New users lock the
+        role profile so a grant update cannot miss their uncommitted insertion.
         """
-        # Service accounts can never be staff or superusers
-        if self.account_type == self.AccountType.SERVICE:
-            self.is_staff = False
-            self.is_superuser = False
-        # Sync Django permission flags from the role's GroupProfile for human accounts
-        elif self.role_id:
-            profile: GroupProfile | None = getattr(self.role, 'profile', None)
-            self.is_superuser = profile.grants_superuser if profile else False
-            self.is_staff = profile.grants_staff if profile else False
-        else:
-            self.is_superuser = False
-            self.is_staff = False
+        update_fields = kwargs.get('update_fields')
+        sync_role = update_fields is None or bool(
+            set(update_fields) & {'role', 'role_id', 'account_type', 'is_staff', 'is_superuser'}
+        )
+        if sync_role:
+            existing_user = None
+            if self.pk:
+                existing_user = type(self).objects.select_for_update().filter(pk=self.pk).only('pk').first()
+            if self.account_type == self.AccountType.SERVICE:
+                self.is_staff = False
+                self.is_superuser = False
+            else:
+                profiles = GroupProfile.objects.filter(group_id=self.role_id)
+                if existing_user is None:
+                    profiles = profiles.select_for_update()
+                profile = profiles.first()
+                self.is_superuser = profile.grants_superuser if profile else False
+                self.is_staff = profile.grants_staff if profile else False
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {'is_staff', 'is_superuser'}
 
         if self.password_changed_at is None and self.has_usable_password():
             self.password_changed_at = self.date_joined or timezone.now()
         super().save(*args, **kwargs)
-
-        # Ensure the user belongs to exactly the role group.
-        self.groups.set([self.role])
+        if sync_role:
+            self.groups.set([self.role])
 
     def set_password(self, raw_password: str | None) -> None:
         """Hash a password while retaining only the immediately prior hash."""
@@ -396,10 +403,25 @@ class TrustpointUser(AbstractUser):
         return policy.password_expired(self.password_changed_at or self.date_joined)
 
 
-def is_last_admin_user(user: TrustpointUser) -> bool:
+def is_last_admin_user(user: TrustpointUser, *, lock: bool = False) -> bool:
     """Return whether deleting or demoting this user would remove the final admin."""
+    if user.role.name != BuiltinRole.ADMIN:
+        return False
+    if lock:
+        # All deletion/demotion paths lock the same row until their transaction ends.
+        Group.objects.select_for_update().get(pk=user.role_id)
+        user.refresh_from_db(fields=['role', 'is_active', 'account_type'])
     return (
-        user.role.name == BuiltinRole.ADMIN and TrustpointUser.objects.filter(role__name=BuiltinRole.ADMIN).count() == 1
+        user.role.name == BuiltinRole.ADMIN
+        and user.is_active
+        and user.account_type == TrustpointUser.AccountType.HUMAN
+        and not TrustpointUser.objects.filter(
+            role=user.role,
+            is_active=True,
+            account_type=TrustpointUser.AccountType.HUMAN,
+        )
+        .exclude(pk=user.pk)
+        .exists()
     )
 
 
@@ -622,8 +644,11 @@ class ServiceAccountCredential(models.Model):
     def record_usage(self) -> None:
         """Record the last usage time of this credential."""
         self.last_used = timezone.now()
-        self.usage_count += 1
-        self.save(update_fields=['last_used', 'usage_count'])
+        type(self).objects.filter(pk=self.pk).update(
+            last_used=self.last_used,
+            usage_count=models.F('usage_count') + 1,
+        )
+        self.refresh_from_db(fields=['usage_count'])
 
     @staticmethod
     def generate_client_id() -> str:
