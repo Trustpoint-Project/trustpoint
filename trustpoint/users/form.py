@@ -303,6 +303,9 @@ class GroupPermissionForm(forms.ModelForm[Group]):
         Returns:
             The saved Group instance.
         """
+        if commit and self.instance.pk:
+            # New-user creation locks the profile before inserting group references.
+            GroupProfile.objects.select_for_update().filter(group_id=self.instance.pk).first()
         group = super().save(commit=commit)
         if commit:
             GroupProfile.objects.update_or_create(

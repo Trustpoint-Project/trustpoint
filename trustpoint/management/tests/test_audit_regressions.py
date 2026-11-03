@@ -368,3 +368,71 @@ def test_concurrent_admin_removal_keeps_one_admin(monkeypatch, operation):
         results = list(pool.map(remove, users))
     assert sorted(results) == ([204, 400] if operation == 'delete' else [200, 400])
     assert TrustpointUser.objects.filter(role=admin_role).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('editor', ['form', 'api'])
+def test_new_account_and_role_edit_use_the_same_lock_order(editor):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event, local
+    from unittest.mock import patch
+
+    from django.db import connection, connections
+    from django.db.models import Model, QuerySet
+
+    if connection.vendor != 'postgresql':
+        pytest.skip('Row-lock concurrency requires PostgreSQL')
+    role = Group.objects.create(name='Concurrent account role')
+    GroupProfile.objects.create(group=role, grants_staff=True, grants_superuser=True)
+    creation_ready, editor_ready = Event(), Event()
+    thread_state = local()
+    original_save = Model.save
+    original_lock = QuerySet.select_for_update
+
+    def coordinate_save(instance, *args, **kwargs):
+        if isinstance(instance, TrustpointUser):
+            creation_ready.set()
+            assert editor_ready.wait(timeout=10)
+        elif isinstance(instance, GroupProfile) and getattr(thread_state, 'editing', False):
+            editor_ready.set()
+        return original_save(instance, *args, **kwargs)
+
+    def coordinate_lock(queryset, *args, **kwargs):
+        if queryset.model is GroupProfile and getattr(thread_state, 'editing', False):
+            editor_ready.set()
+        return original_lock(queryset, *args, **kwargs)
+
+    def create_account():
+        try:
+            user = TrustpointUser(username='concurrent-account', role_id=role.pk)
+            user.save()
+            return user.pk
+        finally:
+            connections.close_all()
+
+    def edit_role():
+        try:
+            assert creation_ready.wait(timeout=10)
+            thread_state.editing = True
+            current = Group.objects.get(pk=role.pk)
+            data = {'name': 'Renamed account role', 'grants_staff': False, 'grants_superuser': False}
+            form = (
+                GroupPermissionForm(data, instance=current)
+                if editor == 'form'
+                else RoleSerializer(current, data=data, partial=True)
+            )
+            assert form.is_valid(), form.errors
+            form.save()
+        finally:
+            connections.close_all()
+
+    with patch.object(Model, 'save', coordinate_save), patch.object(QuerySet, 'select_for_update', coordinate_lock):
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            created = pool.submit(create_account)
+            edited = pool.submit(edit_role)
+            user_pk = created.result(timeout=20)
+            edited.result(timeout=20)
+    user = TrustpointUser.objects.get(pk=user_pk)
+    assert user.role.name == 'Renamed account role'
+    assert not user.is_staff and not user.is_superuser
+    assert list(user.groups.all()) == [user.role]

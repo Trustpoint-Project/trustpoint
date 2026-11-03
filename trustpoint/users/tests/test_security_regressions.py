@@ -254,39 +254,6 @@ def test_profile_rechecks_last_admin_after_form_validation(rf):
     assert last.role.name == BuiltinRole.ADMIN
 
 
-@pytest.mark.django_db(transaction=True)
-def test_concurrent_admin_deletions_leave_one_active_admin():
-    from concurrent.futures import ThreadPoolExecutor
-    from threading import Barrier
-
-    from django.db import connection, connections
-    from management.views import user_management
-
-    if not connection.features.has_select_for_update:
-        pytest.skip('Requires a database with row locks, such as PostgreSQL.')
-    admins = [TrustpointUser.objects.create_superuser(username=f'admin-{i}') for i in range(2)]
-    barrier = Barrier(2)
-    original_check = user_management.is_last_admin_user
-
-    def synchronized_check(user, *, lock=False):
-        barrier.wait(timeout=10)
-        return original_check(user, lock=lock)
-
-    def delete_admin(user):
-        try:
-            client = APIClient()
-            client.force_authenticate(user)
-            return client.delete(reverse('users-detail', args=[user.pk])).status_code
-        finally:
-            connections.close_all()
-
-    with patch.object(user_management, 'is_last_admin_user', synchronized_check):
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            statuses = list(pool.map(delete_admin, admins))
-    assert sorted(statuses) == [204, 400]
-    assert TrustpointUser.objects.filter(role__name=BuiltinRole.ADMIN, is_active=True).count() == 1
-
-
 @pytest.mark.parametrize('restriction', ['expired', 'required'])
 def test_password_rotation_blocks_existing_refresh_tokens(restriction):
     role = Group.objects.create(name='Refresh API access')

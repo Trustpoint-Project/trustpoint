@@ -412,7 +412,8 @@ def is_last_admin_user(user: TrustpointUser, *, lock: bool = False) -> bool:
         Group.objects.select_for_update().get(pk=user.role_id)
         user.refresh_from_db(fields=['role', 'is_active', 'account_type'])
     return (
-        user.role.name == BuiltinRole.ADMIN and user.is_active
+        user.role.name == BuiltinRole.ADMIN
+        and user.is_active
         and user.account_type == TrustpointUser.AccountType.HUMAN
         and not TrustpointUser.objects.filter(
             role=user.role,

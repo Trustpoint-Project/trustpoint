@@ -91,6 +91,8 @@ class RoleSerializer(serializers.ModelSerializer[Group]):
     @transaction.atomic
     def update(self, instance: Group, validated_data: dict[str, Any]) -> Group:
         """Update a role's name, permissions, and GroupProfile grants."""
+        # Match the profile-first lock order used by new-user creation.
+        GroupProfile.objects.select_for_update().filter(group_id=instance.pk).first()
         grants_staff = validated_data.pop('grants_staff', None)
         grants_superuser = validated_data.pop('grants_superuser', None)
         permissions = validated_data.pop('permissions', None)
