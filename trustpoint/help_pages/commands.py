@@ -58,7 +58,8 @@ class CmpSharedSecretCommandBuilder:
 
     @staticmethod
     def get_dynamic_cert_profile_command(
-        host: str, pk: int, shared_secret: str, cred_number: int, sample_request: dict[str, Any]) -> str:
+        host: str, pk: int, shared_secret: str, cred_number: int, sample_request: dict[str, Any]
+    ) -> str:
         """Gets the dynamic certificate profile command.
 
         Args:
@@ -93,8 +94,7 @@ class CmpSharedSecretCommandBuilder:
         )
 
     @staticmethod
-    def get_app_cert_self_revoke_command(
-        host: str, cred_number: int) -> str:
+    def get_app_cert_self_revoke_command(host: str, cred_number: int) -> str:
         """Gets the command for CMP application credential self-revocation request.
 
         Usable for revoking application credentials for both onboarding and no-onboarding,
@@ -117,7 +117,6 @@ class CmpSharedSecretCommandBuilder:
             f'-revreason 0 \\\n'
             f'-trusted full-chain-{cred_number}.pem'
         )
-
 
     @staticmethod
     def get_domain_credential_profile_command(host: str, pk: int, shared_secret: str) -> str:
@@ -151,8 +150,7 @@ class EstUsernamePasswordCommandBuilder:
     """Builds EST username-password commands for different certificate profiles."""
 
     @staticmethod
-    def get_dynamic_cert_profile_command(
-        cred_number: int, sample_request: dict[str, Any]) -> str:
+    def get_dynamic_cert_profile_command(cred_number: int, sample_request: dict[str, Any]) -> str:
         """Gets the dynamic certificate profile command.
 
         Args:
@@ -323,8 +321,7 @@ class CmpClientCertificateCommandBuilder:
     """Builds CMP client-certificate (domain credential auth) commands for different certificate profiles."""
 
     @staticmethod
-    def get_dynamic_cert_profile_command(
-        host: str, cred_number: int, sample_request: dict[str, Any]) -> str:
+    def get_dynamic_cert_profile_command(host: str, cred_number: int, sample_request: dict[str, Any]) -> str:
         """Gets the dynamic certificate profile command.
 
         Args:
@@ -507,11 +504,7 @@ class AokiCmpIDevIDCommandBuilder:
     @staticmethod
     def get_keygen_command() -> str:
         """Get the key generation command for domain credential."""
-        return (
-            'openssl genrsa \\\n'
-            '  -out domain_credential_key.pem \\\n'
-            '  2048'
-        )
+        return 'openssl genrsa \\\n  -out domain_credential_key.pem \\\n  2048'
 
     @staticmethod
     def get_cmp_ir_command(host: str) -> str:
@@ -573,11 +566,7 @@ class AokiEstIDevIDCommandBuilder:
     @staticmethod
     def get_keygen_command() -> str:
         """Get the key generation command for domain credential."""
-        return (
-            'openssl genrsa \\\n'
-            '  -out domain_credential_key.pem \\\n'
-            '  2048'
-        )
+        return 'openssl genrsa \\\n  -out domain_credential_key.pem \\\n  2048'
 
     @staticmethod
     def get_csr_command() -> str:
@@ -664,9 +653,7 @@ class RestUsernamePasswordCommandBuilder:
         Returns:
             The constructed command.
         """
-        return (
-            f'jq -r .certificate certificate-{cred_number}.json > certificate-{cred_number}.pem'
-        )
+        return f'jq -r .certificate certificate-{cred_number}.json > certificate-{cred_number}.pem'
 
     @staticmethod
     def get_domain_credential_csr_command() -> str:

@@ -114,9 +114,7 @@ class CaRolloverService:
                 )
                 notes = form.cleaned_data.get('notes', '') if hasattr(form, 'cleaned_data') else ''
                 initial_state = (
-                    CaRolloverState.AWAITING_NEW_CA
-                    if strategy.awaits_new_ca_certificate
-                    else CaRolloverState.PLANNED
+                    CaRolloverState.AWAITING_NEW_CA if strategy.awaits_new_ca_certificate else CaRolloverState.PLANNED
                 )
                 rollover = CaRolloverModel.objects.create(
                     old_issuing_ca=locked_ca,

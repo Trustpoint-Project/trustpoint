@@ -365,9 +365,15 @@ def test_secret_page_displays_validation_errors(policy, admin_client, admin_user
     config = no_onboarding()
     device = DeviceModel.objects.create(common_name='invalid-replacement', no_onboarding_config=config)
     endpoint = reverse('devices:devices_change_secret', kwargs={'pk': device.pk})
-    response = admin_client.post(endpoint, {
-        'credential': 'est_password', 'action': 'custom', 'value': 'chosen', 'confirmation': 'mismatch',
-    })
+    response = admin_client.post(
+        endpoint,
+        {
+            'credential': 'est_password',
+            'action': 'custom',
+            'value': 'chosen',
+            'confirmation': 'mismatch',
+        },
+    )
     assert response.status_code == 200
     assert b'The secret and confirmation do not match.' in response.content
     assert b'data-secret-replacement' in response.content

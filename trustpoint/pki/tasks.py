@@ -74,7 +74,7 @@ def check_rollover_transition(rollover_id: int) -> None:
                 logger.info(
                     'Rollover %s is no longer in PREPARATION state (current: %s), skipping transition check',
                     rollover.id,
-                    rollover.get_state_display()
+                    rollover.get_state_display(),
                 )
                 return
 
@@ -82,7 +82,7 @@ def check_rollover_transition(rollover_id: int) -> None:
                 logger.info(
                     'Transitioning rollover %s from PREPARATION to TRANSITION (scheduled time: %s)',
                     rollover.id,
-                    rollover.transition_scheduled_at
+                    rollover.transition_scheduled_at,
                 )
                 rollover.transition_to_transition()
                 logger.info('Successfully transitioned rollover %s to TRANSITION state', rollover.id)
@@ -90,10 +90,8 @@ def check_rollover_transition(rollover_id: int) -> None:
                 logger.debug(
                     'Rollover %s is not yet ready to transition (scheduled time: %s)',
                     rollover.id,
-                    rollover.transition_scheduled_at
+                    rollover.transition_scheduled_at,
                 )
     except Exception:
         logger.exception('Unexpected error during rollover transition check for rollover %s', rollover.id)
         raise
-
-

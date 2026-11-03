@@ -33,10 +33,13 @@ def renewal_device(device_instance_onboarding, admin_client):
     from onboarding.models import OnboardingPkiProtocol, OnboardingProtocol
 
     tls_credential = TlsServerCredentialGenerator(
-        ipv4_addresses=[IPv4Address('192.0.2.10')], ipv6_addresses=[], domain_names=[],
+        ipv4_addresses=[IPv4Address('192.0.2.10')],
+        ipv6_addresses=[],
+        domain_names=[],
     ).generate_tls_server_credential()
     credential = CredentialModel.save_credential_serializer(
-        tls_credential, CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+        tls_credential,
+        CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
     )
     ActiveTrustpointTlsServerCredentialModel.objects.create(credential=credential)
 

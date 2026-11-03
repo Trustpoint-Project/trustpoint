@@ -135,12 +135,14 @@ def build_profile_select_section(
         )
 
     if not options:
-        options = format_html('<option value="" selected disabled>{}</option>',
-                              _('No application certificate profiles allowed in domain.'))
+        options = format_html(
+            '<option value="" selected disabled>{}</option>',
+            _('No application certificate profiles allowed in domain.'),
+        )
     select = format_html(
-        '<select id="{}" class="form-select cert-profile-select" '
-        'aria-label="Certificate Profile Select">{}</select>',
-        select_id, options,
+        '<select id="{}" class="form-select cert-profile-select" aria-label="Certificate Profile Select">{}</select>',
+        select_id,
+        options,
     )
     return HelpSection(
         _non_lazy('Certificate Profile Selection'),
@@ -161,10 +163,10 @@ def build_tls_trust_store_section() -> HelpSection:
     if not tls or not tls.credential:
         msg = format_html(
             '<div class="tp-message alert alert-danger d-flex" role="alert">'
-                '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" '
-                'fill="currentColor" role="img" aria-label="error:">'
-                    '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
-                '<div>{}<br>{}</div>'
+            '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" '
+            'fill="currentColor" role="img" aria-label="error:">'
+            '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
+            '<div>{}<br>{}</div>'
             '</div>',
             'This onboarding method is not securely available without TLS.',
             'Please ensure you are running Trustpoint within the correctly configured Docker environment!',

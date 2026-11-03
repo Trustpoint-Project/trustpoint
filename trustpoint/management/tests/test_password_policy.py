@@ -139,8 +139,14 @@ class PasswordPolicyFormOwnershipTest(SimpleTestCase):
         """Expose all password and OTP controls in one form."""
         fields = set(PasswordPolicyForm().fields)
         password_fields = {
-            'minimum_length', 'prevent_password_reuse', 'password_expiry_days', 'user_similarity_enabled',
-            'max_similarity', 'reject_common_passwords', 'common_password_list', 'reject_numeric_passwords',
+            'minimum_length',
+            'prevent_password_reuse',
+            'password_expiry_days',
+            'user_similarity_enabled',
+            'max_similarity',
+            'reject_common_passwords',
+            'common_password_list',
+            'reject_numeric_passwords',
             'require_otp',
         }
         assert password_fields.issubset(fields)

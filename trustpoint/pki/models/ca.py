@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 
 # Minimum CRL cycle interval: approximately 5 minutes (0.0833 hours)
 MIN_CRL_CYCLE_INTERVAL_HOURS = 0.0833
+
+
 class CaModel(LoggerMixin, CustomDeleteActionModel):
     """Generic CA Model representing any Certificate Authority.
 
@@ -69,13 +71,12 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         REMOTE_ISSUING_CMP = 7, _('Remote-Issuing-CMP')  # Trustpoint = CA
         REMOTE_ISSUING_CSR = 8, _('Remote-Issuing-CSR')  # Trustpoint = CA, CSR external issuance
 
-
     unique_name = models.CharField(
         verbose_name=_('CA Name'),
         max_length=100,
         validators=[UniqueNameValidator()],
         unique=True,
-        help_text=_('Unique identifier for this CA')
+        help_text=_('Unique identifier for this CA'),
     )
 
     parent_ca = models.ForeignKey(
@@ -85,24 +86,14 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('Parent CA'),
-        help_text=_('The parent CA in the hierarchy (issuer of this CA)')
+        help_text=_('The parent CA in the hierarchy (issuer of this CA)'),
     )
 
-    is_active = models.BooleanField(
-        _('Active'),
-        default=True,
-        help_text=_('Whether this CA is currently active')
-    )
+    is_active = models.BooleanField(_('Active'), default=True, help_text=_('Whether this CA is currently active'))
 
-    created_at = models.DateTimeField(
-        verbose_name=_('Created'),
-        auto_now_add=True
-    )
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-    updated_at = models.DateTimeField(
-        verbose_name=_('Updated'),
-        auto_now=True
-    )
+    updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
     # CA type field
     ca_type = models.IntegerField(
@@ -110,7 +101,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         choices=CaTypeChoice,
         null=True,
         blank=True,
-        help_text=_('Type of CA - KEYLESS for keyless CAs')
+        help_text=_('Type of CA - KEYLESS for keyless CAs'),
     )
 
     # For keyless CAs: certificate without private key
@@ -121,7 +112,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('CA Certificate'),
-        help_text=_('The CA certificate (for keyless CAs)')
+        help_text=_('The CA certificate (for keyless CAs)'),
     )
 
     # For issuing CAs: full credential with private key
@@ -132,7 +123,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('Credential'),
-        help_text=_('The CA credential with private key (for issuing CAs)')
+        help_text=_('The CA credential with private key (for issuing CAs)'),
     )
 
     chain_truststore = models.OneToOneField(
@@ -142,7 +133,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         blank=True,
         related_name='issuing_ca',
         verbose_name=_('Chain Truststore'),
-        help_text=_('The truststore containing the full certificate chain for this CA.')
+        help_text=_('The truststore containing the full certificate chain for this CA.'),
     )
 
     remote_host = models.CharField(
@@ -150,22 +141,15 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         max_length=253,
         blank=True,
         default='',
-        help_text=_('The hostname or IP address of the remote PKI')
+        help_text=_('The hostname or IP address of the remote PKI'),
     )
 
     remote_port = models.PositiveIntegerField(
-        verbose_name=_('Remote Port'),
-        blank=True,
-        null=True,
-        help_text=_('The port number of the remote PKI')
+        verbose_name=_('Remote Port'), blank=True, null=True, help_text=_('The port number of the remote PKI')
     )
 
     remote_path = models.CharField(
-        verbose_name=_('Remote Path'),
-        max_length=255,
-        blank=True,
-        default='',
-        help_text=_('The path on the remote PKI')
+        verbose_name=_('Remote Path'), max_length=255, blank=True, default='', help_text=_('The path on the remote PKI')
     )
 
     est_username = models.CharField(
@@ -173,14 +157,14 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         max_length=128,
         blank=True,
         default='',
-        help_text=_('Username for EST authentication')
+        help_text=_('Username for EST authentication'),
     )
 
     cmp_sender_kid = models.PositiveIntegerField(
         verbose_name=_('CMP Sender KID'),
         blank=True,
         null=True,
-        help_text=_('senderKID for CMP shared-secret authentication (e.g. the device ID on a Trustpoint upstream)')
+        help_text=_('senderKID for CMP shared-secret authentication (e.g. the device ID on a Trustpoint upstream)'),
     )
 
     onboarding_config = models.ForeignKey(
@@ -190,7 +174,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('Onboarding Config'),
-        help_text=_('Onboarding configuration for remote CA connection')
+        help_text=_('Onboarding configuration for remote CA connection'),
     )
 
     no_onboarding_config = models.ForeignKey(
@@ -200,38 +184,38 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('No Onboarding Config'),
-        help_text=_('No-onboarding configuration for remote CA connection')
+        help_text=_('No-onboarding configuration for remote CA connection'),
     )
 
     crl_cycle_enabled = models.BooleanField(
         _('Enable CRL Cycle Updates'),
         default=False,
-        help_text=_('Enable automatic periodic CRL generation for this CA')
+        help_text=_('Enable automatic periodic CRL generation for this CA'),
     )
 
     crl_cycle_interval_hours = models.FloatField(
         _('CRL Cycle Interval (hours)'),
         default=24.0,
-        help_text=_('The interval in hours between CRL generations (minimum ~5 minutes)')
+        help_text=_('The interval in hours between CRL generations (minimum ~5 minutes)'),
     )
 
     crl_validity_hours = models.FloatField(
         _('CRL Validity (hours)'),
         default=24.0,
-        help_text=_('The validity period in hours for generated CRLs (nextUpdate field)')
+        help_text=_('The validity period in hours for generated CRLs (nextUpdate field)'),
     )
 
     last_crl_generation_started_at = models.DateTimeField(
         _('Last CRL Generation Started'),
         null=True,
         blank=True,
-        help_text=_('Timestamp when the last CRL generation task was started')
+        help_text=_('Timestamp when the last CRL generation task was started'),
     )
 
     auto_crl_on_revocation_enabled = models.BooleanField(
         _('Auto-Generate CRL on Revocation'),
         default=True,
-        help_text=_('Automatically generate a new CRL when a certificate is revoked')
+        help_text=_('Automatically generate a new CRL when a certificate is revoked'),
     )
 
     class Meta:
@@ -244,12 +228,12 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=(
-                    models.Q(ca_type=-1, certificate__isnull=False, credential__isnull=True) |
-                    models.Q(ca_type__in=[4, 5], credential__isnull=True) |
-                    models.Q(ca_type__in=[0, 1, 2, 3, 6, 7, 8], certificate__isnull=True, credential__isnull=False)
+                    models.Q(ca_type=-1, certificate__isnull=False, credential__isnull=True)
+                    | models.Q(ca_type__in=[4, 5], credential__isnull=True)
+                    | models.Q(ca_type__in=[0, 1, 2, 3, 6, 7, 8], certificate__isnull=True, credential__isnull=False)
                 ),
                 name='ca_mode_constraint',
-                violation_error_message=_('Invalid CA configuration')
+                violation_error_message=_('Invalid CA configuration'),
             )
         ]
 
@@ -277,13 +261,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
     @property
     def is_keyless_ca(self) -> bool:
         """Returns True if this is a keyless CA, or a remote RA with a certificate."""
-        return (
-            self.certificate is not None and
-            self.ca_type in (
-                self.CaTypeChoice.KEYLESS,
-                self.CaTypeChoice.REMOTE_CMP_RA,
-                self.CaTypeChoice.REMOTE_EST_RA,
-            )
+        return self.certificate is not None and self.ca_type in (
+            self.CaTypeChoice.KEYLESS,
+            self.CaTypeChoice.REMOTE_CMP_RA,
+            self.CaTypeChoice.REMOTE_EST_RA,
         )
 
     @property
@@ -352,9 +333,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         for truststore_order in self.chain_truststore.truststoreordermodel_set.order_by('order'):
             cert = truststore_order.certificate
             try:
-                ca = CaModel.objects.get(
-                    models.Q(credential__certificate=cert) | models.Q(certificate=cert)
-                )
+                ca = CaModel.objects.get(models.Q(credential__certificate=cert) | models.Q(certificate=cert))
                 ca_chain.append(ca)
             except CaModel.DoesNotExist as e:
                 msg = f'Certificate in chain_truststore does not correspond to any CA: {cert.common_name}'
@@ -412,13 +391,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             and self.crl_cycle_interval_hours
             and float(self.crl_cycle_interval_hours) < MIN_CRL_CYCLE_INTERVAL_HOURS
         ):
-            raise ValidationError(
-                {'crl_cycle_interval_hours': _('CRL cycle interval must be at least 5 minutes')}
-            )
+            raise ValidationError({'crl_cycle_interval_hours': _('CRL cycle interval must be at least 5 minutes')})
         if self.crl_validity_hours and float(self.crl_validity_hours) < 1.0:
-            raise ValidationError(
-                {'crl_validity_hours': _('CRL validity period must be at least 1 hour')}
-            )
+            raise ValidationError({'crl_validity_hours': _('CRL validity period must be at least 1 hour')})
         if (
             self.crl_cycle_enabled
             and self.crl_cycle_interval_hours
@@ -456,7 +431,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.onboarding_config and self.no_onboarding_config:
             raise ValidationError(_('Only one of onboarding or no-onboarding config can be set for remote CAs.'))
 
-    def _clean_remote_issuing_ca(self) -> None: # noqa: C901
+    def _clean_remote_issuing_ca(self) -> None:  # noqa: C901
         """Validates remote issuing CA fields."""
         if self.certificate is not None:
             raise ValidationError(_('Remote issuing CAs cannot have certificate set.'))
@@ -490,8 +465,13 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
             raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
         # Remote-only fields should not be set for local/keyless CAs
-        if (self.remote_host or self.remote_port is not None or self.remote_path or self.est_username
-                or self.cmp_sender_kid is not None):
+        if (
+            self.remote_host
+            or self.remote_port is not None
+            or self.remote_path
+            or self.est_username
+            or self.cmp_sender_kid is not None
+        ):
             raise ValidationError(_('Remote fields can only be set for remote CAs.'))
 
     def save(self, *args: Any, **kwargs: Any) -> None:
@@ -531,10 +511,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         if not bc_extension.value.ca:
             raise ValidationError(
-                _(
-                    'The provided certificate is not a CA certificate; '
-                    'it is an End Entity certificate.'
-                )
+                _('The provided certificate is not a CA certificate; it is an End Entity certificate.')
             )
 
         cert_model = CertificateModel.save_certificate(certificate_obj)
@@ -569,36 +546,24 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             ) from e
         if not bc_extension.value.ca:
             raise ValidationError(
-                _(
-                    'The provided certificate is not a CA certificate; '
-                    'it is an End Entity certificate.'
-                )
+                _('The provided certificate is not a CA certificate; it is an End Entity certificate.')
             )
 
         try:
             key_usage_extension = ca_cert.extensions.get_extension_for_class(x509.KeyUsage)
         except x509.ExtensionNotFound as e:
             raise ValidationError(
-                _(
-                    'The provided certificate is not a CA certificate; '
-                    'KeyUsage extension is required.'
-                )
+                _('The provided certificate is not a CA certificate; KeyUsage extension is required.')
             ) from e
 
         key_usage = key_usage_extension.value
         if not key_usage.key_cert_sign:
             raise ValidationError(
-                _(
-                    'The provided certificate is not a valid CA certificate; '
-                    'it does not have keyCertSign enabled.'
-                )
+                _('The provided certificate is not a valid CA certificate; it does not have keyCertSign enabled.')
             )
         if not key_usage.crl_sign:
             raise ValidationError(
-                _(
-                    'The provided certificate is not a valid CA certificate; '
-                    'it does not have cRLSign enabled.'
-                )
+                _('The provided certificate is not a valid CA certificate; it does not have cRLSign enabled.')
             )
 
     @classmethod
@@ -663,11 +628,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         )
         for idx, cert in enumerate(cert_models):
             if cert:  # Only add non-None certificates
-                TruststoreOrderModel.objects.create(
-                    order=idx,
-                    certificate=cert,
-                    trust_store=truststore
-                )
+                TruststoreOrderModel.objects.create(order=idx, certificate=cert, trust_store=truststore)
         return truststore
 
     @classmethod
@@ -770,7 +731,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return True
 
     @property
-
     def signature_suite(self) -> oid.SignatureSuite | None:
         """The signature suite for the CA public key certificate, or None if missing."""
         if self.is_keyless_ca:
@@ -890,7 +850,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             self.id,
             schedule_type='O',
             next_run=scheduled_time,
-            name=f'{base_name}_{scheduled_time.timestamp()}'
+            name=f'{base_name}_{scheduled_time.timestamp()}',
         )
 
         self.last_crl_generation_started_at = scheduled_time
@@ -899,7 +859,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             'Next CRL generation for CA %s scheduled for %s %svia Django-Q2',
             self.unique_name,
             scheduled_time,
-            '(auto post-revocation) ' if post_revocation_crl else ''
+            '(auto post-revocation) ' if post_revocation_crl else '',
         )
 
     # ===== Hierarchy Methods =====

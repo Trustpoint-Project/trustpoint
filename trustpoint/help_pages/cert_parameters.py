@@ -159,8 +159,13 @@ class CertParameterTemplate:
         full_command = variants['1' * len(optional_ids)]
         parameters = [
             CertParameter(
-                id=c.id, label=c.label, path=c.path, required=c.required, default=c.default,
-                placeholder=c.placeholder, quoting=_quoting_at(full_command, full_command.index(c.placeholder)),
+                id=c.id,
+                label=c.label,
+                path=c.path,
+                required=c.required,
+                default=c.default,
+                placeholder=c.placeholder,
+                quoting=_quoting_at(full_command, full_command.index(c.placeholder)),
             )
             for c in candidates
         ]
@@ -193,14 +198,16 @@ def _expand_candidates(editable_fields: Iterable[EditableProfileField]) -> list[
             continue
         for path, value in entries:
             index = len(candidates)
-            candidates.append(CertParameter(
-                id='_'.join(str(p) for p in path),
-                label=_label(path),
-                path=path,
-                required=field.required,
-                default=value,
-                placeholder=f'__TP_PARAM_{index}__',
-            ))
+            candidates.append(
+                CertParameter(
+                    id='_'.join(str(p) for p in path),
+                    label=_label(path),
+                    path=path,
+                    required=field.required,
+                    default=value,
+                    placeholder=f'__TP_PARAM_{index}__',
+                )
+            )
     return candidates
 
 
@@ -248,7 +255,8 @@ def build_cert_parameter_rows(
     """Build the Certificate Parameters rows of one profile; JS toggles them via data-cert-params-profile."""
     if template is None or not template.parameters:
         message = (
-            _('No additional parameters required.') if template is not None
+            _('No additional parameters required.')
+            if template is not None
             else _('The certificate parameters cannot be determined for this profile.')
         )
         value = format_html('<span data-cert-params-profile="{}">{}</span>', profile_name, message)

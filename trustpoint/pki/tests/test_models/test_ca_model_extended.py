@@ -245,9 +245,7 @@ class TestCaIssuedCertificates:
         assert revoked.certificate.common_name == 'revoked-leaf'
         assert revoked.revocation_reason == RevokedCertificateModel.ReasonCode.CESSATION
 
-    def test_already_revoked_certificates_are_not_revoked_twice(
-        self, ca_hierarchy: dict[str, Any]
-    ) -> None:
+    def test_already_revoked_certificates_are_not_revoked_twice(self, ca_hierarchy: dict[str, Any]) -> None:
         """Revocation is idempotent for certificates that are no longer valid."""
         child_ca = ca_hierarchy['child_ca']
         leaf, _ = CertificateGenerator.create_ee(
@@ -353,9 +351,7 @@ class TestCaDeletion:
         with pytest.raises(ValidationError, match='child CAs'):
             ca_hierarchy['root_ca'].pre_delete()
 
-    def test_ca_with_unexpired_certificates_cannot_be_deleted(
-        self, ca_hierarchy: dict[str, Any]
-    ) -> None:
+    def test_ca_with_unexpired_certificates_cannot_be_deleted(self, ca_hierarchy: dict[str, Any]) -> None:
         """A CA that issued still-valid certificates cannot be removed."""
         child_ca = ca_hierarchy['child_ca']
         leaf, _ = CertificateGenerator.create_ee(
@@ -366,9 +362,7 @@ class TestCaDeletion:
         with pytest.raises(ValidationError, match='unexpired certificate'):
             child_ca.pre_delete()
 
-    def test_leaf_ca_without_issued_certificates_can_be_deleted(
-        self, ca_hierarchy: dict[str, Any]
-    ) -> None:
+    def test_leaf_ca_without_issued_certificates_can_be_deleted(self, ca_hierarchy: dict[str, Any]) -> None:
         """A CA with no children and no live certificates deletes cleanly."""
         child_ca = ca_hierarchy['child_ca']
 
@@ -376,9 +370,7 @@ class TestCaDeletion:
 
         assert not CaModel.objects.filter(unique_name='hierarchy_child').exists()
 
-    def test_display_not_valid_after_prefers_credential_certificate(
-        self, ca_hierarchy: dict[str, Any]
-    ) -> None:
+    def test_display_not_valid_after_prefers_credential_certificate(self, ca_hierarchy: dict[str, Any]) -> None:
         """The displayed expiry is taken from the CA certificate."""
         root_ca = ca_hierarchy['root_ca']
 
