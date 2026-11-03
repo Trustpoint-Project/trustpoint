@@ -50,11 +50,11 @@ def test_revocation_signal_schedules_crl_generation(
     time_diff = (issuing_ca.last_crl_generation_started_at - timezone.now()).total_seconds()
     assert 20 < time_diff < 40
 
-    schedule = Schedule.objects.get(name__startswith=f'crl_gen_{issuing_ca.unique_name}')
+    schedule = Schedule.objects.get(name__startswith=f'crl_gen_{issuing_ca.pk}')
     schedule_diff = (schedule.next_run - issuing_ca.last_crl_generation_started_at).total_seconds()
     assert abs(schedule_diff) < 2
 
-    base_name = f'crl_gen_{issuing_ca.unique_name}'
+    base_name = f'crl_gen_{issuing_ca.pk}'
     assert Schedule.objects.filter(name__startswith=base_name).count() == 1
 
 
@@ -85,7 +85,7 @@ def test_revocation_signal_respects_auto_crl_flag(issuing_ca_instance: dict[str,
     issuing_ca.refresh_from_db()
     assert issuing_ca.last_crl_generation_started_at is not None
     # check schedule is more than 1 min in the future (not due to revocation, but regular cycle if enabled) or does not exist
-    schedule = Schedule.objects.filter(name__startswith=f'crl_gen_{issuing_ca.unique_name}').first()
+    schedule = Schedule.objects.filter(name__startswith=f'crl_gen_{issuing_ca.pk}').first()
     if schedule:
         schedule_diff = (schedule.next_run - timezone.now()).total_seconds()
         assert schedule_diff > 60
@@ -126,7 +126,7 @@ def test_revocation_signal_deduplicates_schedule_per_ca(issuing_ca_instance: dic
         revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION,
     )
 
-    schedules = Schedule.objects.filter(name__startswith=f'crl_gen_{issuing_ca.unique_name}')
+    schedules = Schedule.objects.filter(name__startswith=f'crl_gen_{issuing_ca.pk}')
     assert schedules.count() == 1
 
 
@@ -176,8 +176,8 @@ def test_revocation_signal_creates_one_schedule_per_ca(issuing_ca_instance: dict
         revocation_reason=RevokedCertificateModel.ReasonCode.UNSPECIFIED,
     )
 
-    base_name = f'crl_gen_{issuing_ca.unique_name}'
-    other_base_name = f'crl_gen_{other_ca.unique_name}'
+    base_name = f'crl_gen_{issuing_ca.pk}'
+    other_base_name = f'crl_gen_{other_ca.pk}'
 
     assert Schedule.objects.filter(name__startswith=base_name).count() == 1
     assert Schedule.objects.filter(name__startswith=other_base_name).count() == 1

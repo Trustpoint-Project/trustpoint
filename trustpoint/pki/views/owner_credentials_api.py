@@ -18,7 +18,7 @@ from drf_spectacular.utils import (
 from rest_framework import filters, status, viewsets
 from rest_framework import serializers as drf_serializers
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 from rest_framework.response import Response
 
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
@@ -45,6 +45,7 @@ from pki.util.certificate_request import build_request_data as _build_request_da
 from request.clients import EstClientError
 from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
@@ -77,6 +78,22 @@ def _resolve_cert_profile(
         return first
 
 
+class CanManageOwnerCredentials(BasePermission):
+    """Keep reads authenticated and guard management and enrollment separately."""
+
+    def has_permission(self, request: Request, view: Any) -> bool:
+        """Apply the existing device-management and issuance permissions."""
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        permission = (
+            AppPermissions.ISSUE_CERTIFICATES
+            if view.action in ('request_domain_credential', 'request_devownerid')
+            else AppPermissions.MANAGE_DEVICES
+        )
+        return request.user.has_perm(permission)
+
 
 @extend_schema(tags=['DevOwnerID'])
 class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialModel]):
@@ -94,7 +111,7 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
 
     queryset = OwnerCredentialModel.objects.order_by('-created_at')
     serializer_class = OwnerCredentialSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanManageOwnerCredentials,)
     filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -181,25 +198,19 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         )
 
     def _create_file_import(self, request: Request) -> Response:
-        serializer = OwnerCredentialFileImportSerializer(
-            data=request.data, context={'request': request}
-        )
+        serializer = OwnerCredentialFileImportSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         return Response(OwnerCredentialSerializer(instance).data, status=status.HTTP_201_CREATED)
 
     def _create_est_basic_auth(self, request: Request) -> Response:
-        serializer = OwnerCredentialEstBasicAuthSerializer(
-            data=request.data, context={'request': request}
-        )
+        serializer = OwnerCredentialEstBasicAuthSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         return Response(OwnerCredentialSerializer(instance).data, status=status.HTTP_201_CREATED)
 
     def _create_est_mtls(self, request: Request) -> Response:
-        serializer = OwnerCredentialEstMtlsSerializer(
-            data=request.data, context={'request': request}
-        )
+        serializer = OwnerCredentialEstMtlsSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         return Response(OwnerCredentialSerializer(instance).data, status=status.HTTP_201_CREATED)
@@ -255,7 +266,6 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         detail=True,
         methods=['post'],
         url_path='request/domain_credential',
-        permission_classes=[IsAuthenticated],
     )
     def request_domain_credential(self, request: Request, pk: int | None = None, **_kwargs: Any) -> Response:
         """Enroll a Domain Credential for this DevOwnerID via EST."""
@@ -271,9 +281,7 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        content_serializer = CertificateIssuanceContentSerializer(
-            data=request.data, context={'request': request}
-        )
+        content_serializer = CertificateIssuanceContentSerializer(data=request.data, context={'request': request})
         content_serializer.is_valid(raise_exception=True)
         cert_content = content_serializer.validated_data
 
@@ -321,9 +329,7 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         pending_issued.refresh_from_db()
         return Response(
             {
-                'message': (
-                    f'Successfully enrolled Domain Credential for "{owner_credential.unique_name}" via EST.'
-                ),
+                'message': (f'Successfully enrolled Domain Credential for "{owner_credential.unique_name}" via EST.'),
                 'issued_credential_id': pending_issued.pk,
                 'common_name': pending_issued.common_name,
             },
@@ -343,7 +349,11 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         )
         context.request_data = _build_request_data(cert_content)
         enroll_owner_credential_est(
-            context, owner_credential, pending_issued, logger=self.logger, domain_credential=True,
+            context,
+            owner_credential,
+            pending_issued,
+            logger=self.logger,
+            domain_credential=True,
         )
 
     @extend_schema(
@@ -375,7 +385,6 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         detail=True,
         methods=['post'],
         url_path='request/devownerid',
-        permission_classes=[IsAuthenticated],
     )
     def request_devownerid(self, request: Request, pk: int | None = None, **_kwargs: Any) -> Response:
         """Enroll a DevOwnerID certificate for this DevOwnerID via EST."""
@@ -387,15 +396,10 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
             OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING,
         )
         if owner_credential.owner_credential_type not in allowed_types:
-            msg = (
-                'DevOwnerID certificate request is only available for '
-                'REMOTE_EST or REMOTE_EST_ONBOARDING types.'
-            )
+            msg = 'DevOwnerID certificate request is only available for REMOTE_EST or REMOTE_EST_ONBOARDING types.'
             return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
-        content_serializer = CertificateIssuanceContentSerializer(
-            data=request.data, context={'request': request}
-        )
+        content_serializer = CertificateIssuanceContentSerializer(data=request.data, context={'request': request})
         content_serializer.is_valid(raise_exception=True)
         cert_content = content_serializer.validated_data
 
@@ -471,5 +475,9 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         context = EstCertificateRequestContext(**self._build_est_context_kwargs(owner_credential, cert_profile))
         context.request_data = _build_request_data(cert_content)
         enroll_owner_credential_est(
-            context, owner_credential, pending_issued, logger=self.logger, domain_credential=False,
+            context,
+            owner_credential,
+            pending_issued,
+            logger=self.logger,
+            domain_credential=False,
         )

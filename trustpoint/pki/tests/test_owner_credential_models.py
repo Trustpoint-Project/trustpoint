@@ -155,8 +155,8 @@ class TestOwnerCredentialModel:
         assert oc.dev_owner_id_credential is not None
         assert oc.dev_owner_id_credential.pk == issued2.pk
 
-    def test_post_delete_removes_issued_credentials(self) -> None:
-        """post_delete removes all associated remote issued credentials."""
+    def test_delete_removes_issued_credentials(self) -> None:
+        """Deleting an owner removes its protected issued credentials first."""
         oc = OwnerCredentialModel.objects.create(unique_name='oc-delete')
         cred = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
@@ -167,5 +167,5 @@ class TestOwnerCredentialModel:
             credential=cred,
             owner_credential=oc,
         )
-        oc.post_delete()
+        oc.delete()
         assert not CredentialModel.objects.filter(pk=cred.pk).exists()

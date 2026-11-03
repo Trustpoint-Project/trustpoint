@@ -8,12 +8,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from cryptography import x509
-from cryptography.hazmat.primitives import serialization
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
+from django.db import transaction
 
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.issued_credential import RemoteIssuedCredentialModel
+from pki.services.external_csr import certificate_matches_credential
 from pki.util.certificate_request import build_ca_request_data
 from request.clients import EstClient
 from request.clients.cmp_client import CmpClient
@@ -38,9 +41,19 @@ class CmpContextParams(NamedTuple):
     sender_kid: int | None
 
 
+def validate_ca_enrollment_certificate(ca: CaModel, certificate: x509.Certificate) -> CredentialModel:
+    """Reject invalid CA material before attaching it to a managed private key."""
+    CaModel._validate_ca_certificate(certificate)  # noqa: SLF001
+    if ca.credential is None or not certificate_matches_credential(certificate, ca.credential):
+        msg = 'The upstream certificate does not match the managed key.'
+        raise ValueError(msg)
+    return ca.credential
+
+
 class EstCaEnrollmentService(LoggerMixin):
     """Shared upstream CA enrollment independent of browser sessions."""
 
+    @transaction.atomic
     def enroll(self, ca: CaModel, cert_content_data: dict[str, Any], cert_profile: CertificateProfileModel) -> None:
         """Perform the EST enrollment process."""
         request_data = self._build_request_data_from_form(cert_content_data)
@@ -79,24 +92,18 @@ class EstCaEnrollmentService(LoggerMixin):
         est_client = EstClient(context)
         issued_cert, _ = est_client.simple_enroll(signed_csr)
 
+        credential = validate_ca_enrollment_certificate(ca, issued_cert)
         cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode('utf-8')
         cert_obj = x509.load_pem_x509_certificate(cert_pem.encode())
         cert_model = CertificateModel.save_certificate(cert_obj)
 
-        if ca.credential:
-            ca.credential.certificate = cert_model
-            ca.credential.save()
-        else:
-            credential = CredentialModel(
-                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
-                certificate=cert_model,
-                private_key=ca.credential.private_key if ca.credential else '',
-            )
-            credential.save()
-            credential.certificates.add(cert_model)
-            PrimaryCredentialCertificate.objects.create(credential=credential, certificate=cert_model, is_primary=True)
-            ca.credential = credential
-            ca.save()
+        credential.certificate = cert_model
+        credential.save(update_fields=['certificate'])
+        PrimaryCredentialCertificate.objects.update_or_create(
+            credential=credential,
+            certificate=cert_model,
+            defaults={'is_primary': True},
+        )
 
         cn_attrs = cert_obj.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
         common_name_value = cn_attrs[0].value if cn_attrs else ''
@@ -124,6 +131,7 @@ class EstCaEnrollmentService(LoggerMixin):
 class CmpCaEnrollmentService(LoggerMixin):
     """Shared upstream CA enrollment independent of browser sessions."""
 
+    @transaction.atomic
     def enroll(
         self,
         ca: CaModel,
@@ -274,6 +282,7 @@ class CmpCaEnrollmentService(LoggerMixin):
         cert_profile: CertificateProfileModel,
     ) -> None:
         """Save the issued certificate and chain certificates."""
+        credential = validate_ca_enrollment_certificate(ca, issued_cert)
         cert_model = CertificateModel.save_certificate(issued_cert)
 
         chain_ca_models = []
@@ -284,8 +293,14 @@ class CmpCaEnrollmentService(LoggerMixin):
             else:
                 cn_attrs = chain_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
                 cn = cn_attrs[0].value if cn_attrs else 'unknown'
+                common_name = cn.decode() if isinstance(cn, bytes) else cn
+                unique_name = common_name
+                counter = 1
+                while CaModel.objects.filter(unique_name=unique_name).exists():
+                    unique_name = f'{common_name}-{counter}'
+                    counter += 1
                 keyless_ca = CaModel.create_keyless_ca(
-                    unique_name=str(cn),
+                    unique_name=unique_name,
                     certificate_obj=chain_cert,
                     parent_ca=None,
                 )
@@ -300,22 +315,14 @@ class CmpCaEnrollmentService(LoggerMixin):
             ca.save()
             self.logger.info('Set parent CA %s for issuing CA %s', issuer_ca.unique_name, ca.unique_name)
 
-        if ca.credential:
-            ca.credential.certificate = cert_model
-            ca.credential.save()
-            self._build_certificate_chain_for_credential(ca.credential, ca.parent_ca)
-        else:
-            credential = CredentialModel(
-                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
-                certificate=cert_model,
-                private_key=ca.credential.private_key if ca.credential else '',
-            )
-            credential.save()
-            credential.certificates.add(cert_model)
-            PrimaryCredentialCertificate.objects.create(credential=credential, certificate=cert_model, is_primary=True)
-            ca.credential = credential
-            ca.save()
-            self._build_certificate_chain_for_credential(credential, ca.parent_ca)
+        credential.certificate = cert_model
+        credential.save(update_fields=['certificate'])
+        PrimaryCredentialCertificate.objects.update_or_create(
+            credential=credential,
+            certificate=cert_model,
+            defaults={'is_primary': True},
+        )
+        self._build_certificate_chain_for_credential(credential, ca.parent_ca)
 
         # Create a RemoteIssuedCredentialModel to track the issued CA credential
         cn_attrs = issued_cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
@@ -340,23 +347,15 @@ class CmpCaEnrollmentService(LoggerMixin):
         chain_ca_models: list[CaModel],
     ) -> None:
         """Build the CA hierarchy by setting parent-child relationships."""
-        ca_by_subject = {}
         for ca in chain_ca_models:
             cert = ca.get_certificate()
-            if cert:
-                ca_by_subject[cert.subject.public_bytes().hex()] = ca
-
-        for ca in chain_ca_models:
-            cert = ca.get_certificate()
-            if not cert:
+            if cert is None:
                 continue
-            issuer_subject_bytes = cert.issuer.public_bytes().hex()
-            if issuer_subject_bytes in ca_by_subject:
-                parent_ca = ca_by_subject[issuer_subject_bytes]
-                if parent_ca not in (ca, ca.parent_ca):
-                    ca.parent_ca = parent_ca
-                    ca.save()
-                    self.logger.info('Set parent CA %s for CA %s', parent_ca.unique_name, ca.unique_name)
+            parent_ca = self._find_issuer_ca(cert, [candidate for candidate in chain_ca_models if candidate != ca])
+            if parent_ca is not None and parent_ca != ca.parent_ca:
+                ca.parent_ca = parent_ca
+                ca.save()
+                self.logger.info('Set parent CA %s for CA %s', parent_ca.unique_name, ca.unique_name)
 
     def _find_issuer_ca(
         self,
@@ -368,6 +367,10 @@ class CmpCaEnrollmentService(LoggerMixin):
         for ca in chain_ca_models:
             ca_cert = ca.get_certificate()
             if ca_cert and ca_cert.subject.public_bytes().hex() == issuer_subject_bytes:
+                try:
+                    issued_cert.verify_directly_issued_by(ca_cert)
+                except (InvalidSignature, ValueError, TypeError):
+                    continue
                 return ca
         return None
 
@@ -378,8 +381,8 @@ class CmpCaEnrollmentService(LoggerMixin):
         chain = []
         current: CaModel | None = parent_ca
         while current:
-            if current.certificate:
-                chain.append(current.certificate)
+            if current.ca_certificate_model:
+                chain.append(current.ca_certificate_model)
             current = current.parent_ca
         credential.certificatechainordermodel_set.all().delete()
         primary_cert = credential.certificate
@@ -390,19 +393,8 @@ class CmpCaEnrollmentService(LoggerMixin):
 
     def _find_existing_ca_for_certificate(self, cert: x509.Certificate) -> CaModel | None:
         """Find an existing CA that has the given certificate."""
-        # TODO(FHK): subject+issuer byte equality is not sufficient for  # noqa: FIX002
-
-        subject_bytes = cert.subject.public_bytes().hex().upper()
-        issuer_bytes = cert.issuer.public_bytes().hex().upper()
-
-        keyless_match = CaModel.objects.filter(
-            certificate__subject_public_bytes=subject_bytes,
-            certificate__issuer_public_bytes=issuer_bytes,
-        ).first()
+        fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
+        keyless_match = CaModel.objects.filter(certificate__sha256_fingerprint=fingerprint).first()
         if keyless_match:
             return keyless_match
-
-        return CaModel.objects.filter(
-            credential__certificate__subject_public_bytes=subject_bytes,
-            credential__certificate__issuer_public_bytes=issuer_bytes,
-        ).first()
+        return CaModel.objects.filter(credential__certificate__sha256_fingerprint=fingerprint).first()

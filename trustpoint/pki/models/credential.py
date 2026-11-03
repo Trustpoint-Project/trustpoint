@@ -102,10 +102,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         CertificateModel, through='PrimaryCredentialCertificate', blank=True, related_name='credential'
     )
     certificate_chain: models.ManyToManyField[CertificateModel, CertificateChainOrderModel] = models.ManyToManyField(
-        CertificateModel, blank=True,
+        CertificateModel,
+        blank=True,
         through='CertificateChainOrderModel',
         through_fields=('credential', 'certificate'),
-        related_name='credential_certificate_chains'
+        related_name='credential_certificate_chains',
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
@@ -147,8 +148,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             return  # No further validation if certificate is None
 
         if qs.get().certificate != self.certificate:
-            exc_msg = ('The ForeignKey certificate must be identical to the one '
-                       'marked primary in the primarycredentialcertificate_set.')
+            exc_msg = (
+                'The ForeignKey certificate must be identical to the one '
+                'marked primary in the primarycredentialcertificate_set.'
+            )
 
             raise ValidationError(exc_msg)
 
@@ -197,22 +200,17 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         credential_type: CredentialModel.CredentialTypeChoice,
     ) -> CredentialModel:
         """This method will store a credential that is expected to be normalized."""
-        cls.logger.info(
-            'Starting to save credential of type: %s',
-            credential_type
-        )
+        cls.logger.info('Starting to save credential of type: %s', credential_type)
         certificate = cls._validate_and_save_certificate(normalized_credential_serializer)
         private_key_pem = cls._process_private_key(normalized_credential_serializer, credential_type)
         credential_model = cls._create_credential_model(certificate, credential_type, private_key_pem)
         additional_certificates = list(reversed(normalized_credential_serializer.additional_certificates))
-        cls._save_additional_certificates(
-            credential_model, additional_certificates
-        )
+        cls._save_additional_certificates(credential_model, additional_certificates)
         return credential_model
 
     @staticmethod
     def _validate_and_save_certificate(
-        normalized_credential_serializer: CredentialSerializer
+        normalized_credential_serializer: CredentialSerializer,
     ) -> CertificateModel | None:
         """Validates and saves the certificate from the provided serializer.
 
@@ -333,7 +331,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 certificate=certificate_model,
                 credential=credential_model,
                 order=order,
-                primary_certificate=primary_cert
+                primary_certificate=primary_cert,
             )
 
     @classmethod
@@ -363,7 +361,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 certificate=certificate_model,
                 credential=credential_model,
                 order=order,
-                primary_certificate=primary_cert
+                primary_certificate=primary_cert,
             )
 
         return credential_model
@@ -409,8 +407,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         # Issued credentials must be revoked before deletion, not a requirement for CA credentials
         if self.credential_type == CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL:
             for cert in qs:
-                if (cert.certificate_status in
-                    [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
+                if cert.certificate_status in [
+                    CertificateModel.CertificateStatus.OK,
+                    CertificateModel.CertificateStatus.NOT_YET_VALID,
+                ]:
                     exc_msg = f'Cannot delete credential {self} because it still has active certificates.'
                     self.logger.error(exc_msg)
                     raise ValidationError(exc_msg)
@@ -421,8 +421,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def force_delete(self) -> tuple[int, dict[str, int]]:
         """Delete the credential without running ``pre_delete`` and then delete its certificates."""
         certificates_to_delete: list[CertificateModel] = [
-            chain_entry.certificate
-            for chain_entry in self.ordered_certificate_chain_queryset.order_by('-order')
+            chain_entry.certificate for chain_entry in self.ordered_certificate_chain_queryset.order_by('-order')
         ]
         if self.certificate is not None:
             certificates_to_delete.append(self.certificate)
@@ -581,7 +580,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return CredentialSerializer(
             private_key=self.get_private_key(),
             certificate=self.get_certificate_serializer().as_crypto(),
-            additional_certificates=self.get_certificate_chain_serializer().as_crypto()
+            additional_certificates=self.get_certificate_chain_serializer().as_crypto(),
         )
 
     @property
@@ -663,8 +662,12 @@ class CertificateChainOrderModel(models.Model):
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE, null=False, blank=False, editable=False)
     order = models.PositiveIntegerField(null=False, blank=False, editable=False)
     primary_certificate = models.ForeignKey(
-        CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False,
-        related_name = 'primary_certificate_set'
+        CertificateModel,
+        on_delete=models.PROTECT,
+        null=False,
+        blank=False,
+        editable=False,
+        related_name='primary_certificate_set',
     )
 
     class Meta:
@@ -762,9 +765,7 @@ class CertificateChainOrderModel(models.Model):
         """
         existing_orders = CertificateChainOrderModel.objects.filter(
             credential=self.credential, primary_certificate=self.primary_certificate
-        ).values_list(
-            'order', flat=True
-        )
+        ).values_list('order', flat=True)
         return max(existing_orders, default=-1)
 
 
@@ -778,9 +779,8 @@ class IDevIDReferenceModel(models.Model):
     of the DevOwnerID certificate whose SAN contained this reference, so the details view can
     display the DevOwnerID certificate information without a fragile fingerprint-string lookup.
     """
-    dev_owner_id = models.ForeignKey(
-        'OwnerCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE
-    )
+
+    dev_owner_id = models.ForeignKey('OwnerCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE)
     idevid_ref = models.CharField(max_length=255, verbose_name=_('IDevID Identifier'))
     dev_owner_id_certificate = models.ForeignKey(
         CertificateModel,
@@ -789,9 +789,7 @@ class IDevIDReferenceModel(models.Model):
         related_name='idevid_refs',
         null=True,
         blank=True,
-        help_text=_(
-            'The DevOwnerID certificate whose SAN contained this IDevID reference.'
-        ),
+        help_text=_('The DevOwnerID certificate whose SAN contained this IDevID reference.'),
     )
 
     def __str__(self) -> str:
@@ -901,7 +899,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         verbose_name=_('Credential Type'),
         choices=OwnerCredentialTypeChoice,
         default=OwnerCredentialTypeChoice.LOCAL,
-        help_text=_('How the DevOwnerID certificate is acquired.')
+        help_text=_('How the DevOwnerID certificate is acquired.'),
     )
 
     remote_host = models.CharField(
@@ -909,14 +907,11 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         max_length=253,
         blank=True,
         default='',
-        help_text=_('The hostname or IP address of the remote CA used to enroll this DevOwnerID.')
+        help_text=_('The hostname or IP address of the remote CA used to enroll this DevOwnerID.'),
     )
 
     remote_port = models.PositiveIntegerField(
-        verbose_name=_('Remote Port'),
-        blank=True,
-        null=True,
-        help_text=_('The port number of the remote CA.')
+        verbose_name=_('Remote Port'), blank=True, null=True, help_text=_('The port number of the remote CA.')
     )
 
     remote_path = models.CharField(
@@ -924,7 +919,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         max_length=255,
         blank=True,
         default='',
-        help_text=_('The path on the remote CA endpoint (DevOwnerID enrollment).')
+        help_text=_('The path on the remote CA endpoint (DevOwnerID enrollment).'),
     )
 
     remote_path_domain_credential = models.CharField(
@@ -935,7 +930,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         help_text=_(
             'The EST path used to obtain the domain credential during onboarding '
             '(e.g. /.well-known/est/simpleenroll). Only relevant for EST onboarding.'
-        )
+        ),
     )
 
     est_username = models.CharField(
@@ -943,7 +938,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         max_length=128,
         blank=True,
         default='',
-        help_text=_('Username for EST authentication when enrolling from a remote CA.')
+        help_text=_('Username for EST authentication when enrolling from a remote CA.'),
     )
 
     key_type = models.CharField(
@@ -951,7 +946,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         max_length=32,
         blank=True,
         default='ECC-SECP256R1',
-        help_text=_('Cryptographic key type used for all DevOwnerID key pairs (e.g. RSA-2048, ECC-SECP256R1).')
+        help_text=_('Cryptographic key type used for all DevOwnerID key pairs (e.g. RSA-2048, ECC-SECP256R1).'),
     )
 
     onboarding_config = models.ForeignKey(
@@ -961,7 +956,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('Onboarding Config'),
-        help_text=_('Onboarding configuration used for remote CA enrollment.')
+        help_text=_('Onboarding configuration used for remote CA enrollment.'),
     )
 
     no_onboarding_config = models.ForeignKey(
@@ -971,7 +966,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('No Onboarding Config'),
-        help_text=_('No-onboarding configuration (manual or EST username/password).')
+        help_text=_('No-onboarding configuration (manual or EST username/password).'),
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
@@ -992,8 +987,9 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         e.g. after re-enrollment or renewal rounds.
         """
         return (
-            self.remote_issued_credentials
-            .filter(issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID)
+            self.remote_issued_credentials.filter(
+                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
+            )
             .select_related('credential__certificate')
             .order_by('-created_at')
         )
@@ -1013,8 +1009,9 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         Domain credentials are obtained during onboarding before the DevOwnerID is enrolled.
         """
         return (
-            self.remote_issued_credentials
-            .filter(issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL)
+            self.remote_issued_credentials.filter(
+                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL
+            )
             .select_related('credential__certificate')
             .order_by('-created_at')
         )
@@ -1034,6 +1031,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         if cert is None:
             return False
         from pki.models.certificate import CertificateModel as CertModel  # noqa: PLC0415
+
         return cert.certificate_status == CertModel.CertificateStatus.OK
 
     @classmethod
@@ -1077,13 +1075,16 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
             if isinstance(san, x509.UniformResourceIdentifier) and san.value.startswith('dev-owner:'):
                 idevid_refs.add(san.value)
         if not idevid_refs:
-            raise ValidationError(_(
-                'The provided certificate is not a valid DevOwnerID; '
-                'it does not contain a valid IDevID reference in the SAN.'
-            ))
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid DevOwnerID; '
+                    'it does not contain a valid IDevID reference in the SAN.'
+                )
+            )
 
         # Derive common_name from the certificate subject CN (or fall back to unique_name)
         from util.field import get_certificate_name  # noqa: PLC0415
+
         common_name = get_certificate_name(owner_cert) or unique_name
 
         # Create a MANUAL NoOnboardingConfig if none is given
@@ -1126,8 +1127,8 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
 
         return owner_credential
 
-    def post_delete(self) -> None:
-        """Deletes all remote issued credentials and the onboarding config on deletion."""
+    def pre_delete(self) -> None:
+        """Delete owned credentials before their protected owner relationship is removed."""
         self.logger.debug('Deleting remote issued credentials of owner credential %s', self)
         for issued in self.remote_issued_credentials.all():
             issued.credential.delete()
