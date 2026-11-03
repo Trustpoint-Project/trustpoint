@@ -23,7 +23,9 @@ from management.views import notifications, tls
 from management.views.backend_configuration import BackendConfigurationView
 from management.views.logging import LoggingViewSet
 from management.views.service_accounts import (
-    generate_credential_view, revoke_credential_view, service_account_created_view,
+    generate_credential_view,
+    revoke_credential_view,
+    service_account_created_view,
 )
 from management.views.settings import ChangeLogLevelView
 from pki.models import CredentialModel
@@ -52,11 +54,14 @@ def request(user, method='post', data=None):
     return value
 
 
-@pytest.mark.parametrize('view,form', [
-    (tls.GenerateTlsCertificateView, None),
-    (tls.TlsAddFileImportPkcs12View, TlsAddFileImportPkcs12Form),
-    (tls.TlsAddFileImportSeparateFilesView, TlsAddFileImportSeparateFilesForm),
-])
+@pytest.mark.parametrize(
+    'view,form',
+    [
+        (tls.GenerateTlsCertificateView, None),
+        (tls.TlsAddFileImportPkcs12View, TlsAddFileImportPkcs12Form),
+        (tls.TlsAddFileImportSeparateFilesView, TlsAddFileImportSeparateFilesForm),
+    ],
+)
 def test_tls_permission_checked_before_form_validation(manager, monkeypatch, view, form):
     validate = Mock(side_effect=AssertionError('Unauthorized input reached validation'))
     if form is not None:
@@ -66,11 +71,14 @@ def test_tls_permission_checked_before_form_validation(manager, monkeypatch, vie
     validate.assert_not_called()
 
 
-@pytest.mark.parametrize('view,data', [
-    (ChangeLogLevelView, {'loglevel': 'DEBUG'}),
-    (BackendConfigurationView, {'action': 'reprobe'}),
-    (notifications.NotificationsListView, {'mark_all_read': '1'}),
-])
+@pytest.mark.parametrize(
+    'view,data',
+    [
+        (ChangeLogLevelView, {'loglevel': 'DEBUG'}),
+        (BackendConfigurationView, {'action': 'reprobe'}),
+        (notifications.NotificationsListView, {'mark_all_read': '1'}),
+    ],
+)
 def test_management_writes_require_permission(manager, view, data):
     with pytest.raises(PermissionDenied):
         view.as_view()(request(manager, data=data))
@@ -131,7 +139,9 @@ def test_tls_bulk_delete_removes_selected_certificate(manager, credential_instan
 def test_role_grants_reach_existing_users(manager, editor, enabled):
     GroupProfile.objects.create(group=manager.role, grants_superuser=not enabled, grants_staff=not enabled)
     service = TrustpointUser.objects.create_user(
-        username='audit-service', role=manager.role, account_type=TrustpointUser.AccountType.SERVICE,
+        username='audit-service',
+        role=manager.role,
+        account_type=TrustpointUser.AccountType.SERVICE,
     )
     data = {'grants_staff': enabled, 'grants_superuser': enabled}
     if editor == 'api':
@@ -162,11 +172,14 @@ def test_notification_scheduling_replaces_existing_cycles():
     assert Schedule.objects.get(func='management.tasks.execute_all_notifications').pk == before
 
 
-@pytest.mark.parametrize('view', [
-    notifications.NotificationMarkSolvedView,
-    notifications.NotificationToggleReadView,
-    notifications.RefreshNotificationsView,
-])
+@pytest.mark.parametrize(
+    'view',
+    [
+        notifications.NotificationMarkSolvedView,
+        notifications.NotificationToggleReadView,
+        notifications.RefreshNotificationsView,
+    ],
+)
 def test_notification_mutations_reject_get(manager, view):
     grant(manager, 'manage_notifications')
     assert view.as_view()(request(manager, 'get'), pk=1).status_code == 405
@@ -186,7 +199,8 @@ def test_notification_status_changes_require_post(manager):
 def test_service_manager_rotates_and_revokes_with_app_permission(manager):
     grant(manager, 'manage_service_accounts')
     service = TrustpointUser.objects.create_user(
-        username='managed-service', account_type=TrustpointUser.AccountType.SERVICE,
+        username='managed-service',
+        account_type=TrustpointUser.AccountType.SERVICE,
         role=BuiltinRole.get_service_group(),
     )
     assert generate_credential_view(request(manager, 'get'), service.pk).status_code == 405
@@ -207,6 +221,7 @@ def test_service_manager_rotates_and_revokes_with_app_permission(manager):
 
 def test_log_download_preserves_bytes_and_streams_blocks(manager, tmp_path, monkeypatch):
     import management.views.logging as log_views
+
     content = b'\xff' + b'x' * 10000
     (tmp_path / 'trustpoint.log').write_bytes(content)
     monkeypatch.setattr(log_views, 'LOG_DIR_PATH', tmp_path)
@@ -222,6 +237,7 @@ def test_log_download_preserves_bytes_and_streams_blocks(manager, tmp_path, monk
 @pytest.mark.parametrize('missing_chain', [False, True])
 def test_failed_tls_update_restores_staging_files(tmp_path, monkeypatch, missing_chain):
     import management.management.commands.update_tls as command
+
     paths = [tmp_path / name for name in ('key', 'cert', 'chain')]
     for name, path in zip(('NGINX_KEY_PATH', 'NGINX_CERT_PATH', 'NGINX_CERT_CHAIN_PATH'), paths, strict=True):
         monkeypatch.setattr(command, name, path)
@@ -234,8 +250,11 @@ def test_failed_tls_update_restores_staging_files(tmp_path, monkeypatch, missing
     credential.get_private_key_serializer().as_pkcs8_pem.return_value = b'new-key'
     credential.get_certificate_serializer().as_pem.return_value = b'new-cert'
     credential.get_certificate_chain_serializer().as_pem.return_value = b'new-chain'
-    monkeypatch.setattr(command.ActiveTrustpointTlsServerCredentialModel.objects, 'select_for_update',
-                        lambda: SimpleNamespace(get=lambda **kwargs: SimpleNamespace(credential=credential)))
+    monkeypatch.setattr(
+        command.ActiveTrustpointTlsServerCredentialModel.objects,
+        'select_for_update',
+        lambda: SimpleNamespace(get=lambda **kwargs: SimpleNamespace(credential=credential)),
+    )
     monkeypatch.setattr(command.subprocess, 'run', Mock(return_value=SimpleNamespace(returncode=1, stderr='failed')))
     output = StringIO()
     with pytest.raises(CommandError):
@@ -267,19 +286,30 @@ def test_privileged_tls_installer_restores_installed_files(tmp_path, failure):
     for name in names[:2]:
         (staging / name).write_text('candidate')
     nginx = binaries / 'nginx'
-    nginx.write_text('#!/bin/bash\n' + (
-        'exit 1\n' if failure == 'validation' else
-        'if [ "$1" = "-s" ]; then exit 1; fi\nexit 0\n' if failure == 'reload' else 'exit 0\n'
-    ))
+    nginx.write_text(
+        '#!/bin/bash\n'
+        + (
+            'exit 1\n'
+            if failure == 'validation'
+            else 'if [ "$1" = "-s" ]; then exit 1; fi\nexit 0\n'
+            if failure == 'reload'
+            else 'exit 0\n'
+        )
+    )
     nginx.chmod(0o755)
     pid = tmp_path / 'nginx.pid'
     import os
+
     pid.write_text(str(os.getpid()))
     source = script.read_text().replace('/etc/trustpoint/tls/', str(installed))
     source = source.replace('/var/www/html/trustpoint/docker/trustpoint/nginx/tls', str(staging))
     source = source.replace('/run/nginx.pid', str(pid)).replace('DELAY=2', 'DELAY=0')
-    result = subprocess.run(['bash', '-c', source], env={**os.environ, 'PATH': f'{binaries}:{os.environ["PATH"]}'},
-                            capture_output=True, text=True)
+    result = subprocess.run(
+        ['bash', '-c', source],
+        env={**os.environ, 'PATH': f'{binaries}:{os.environ["PATH"]}'},
+        capture_output=True,
+        text=True,
+    )
     assert (result.returncode != 0) is (failure is not None), result.stdout + result.stderr
     if failure:
         assert all((installed / name).read_text() == 'previous' for name in names)
@@ -303,7 +333,8 @@ def test_concurrent_admin_removal_keeps_one_admin(monkeypatch, operation):
         pytest.skip('Row-lock concurrency requires PostgreSQL')
     admin_role, _ = Group.objects.get_or_create(name=BuiltinRole.ADMIN)
     GroupProfile.objects.update_or_create(
-        group=admin_role, defaults={'grants_superuser': True, 'grants_staff': True},
+        group=admin_role,
+        defaults={'grants_superuser': True, 'grants_staff': True},
     )
     users = [TrustpointUser.objects.create_user(username=f'concurrent-admin-{i}', role=admin_role) for i in range(2)]
     plain = Group.objects.create(name='Concurrent viewer')

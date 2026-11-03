@@ -307,6 +307,7 @@ class UserResetOTPView(UserConfigurationMixin, View):
 @extend_schema(tags=['User Management'])
 class UserViewSet(viewsets.ModelViewSet[TrustpointUser]):
     """API view for user."""
+
     queryset = get_user_model().objects.all()
     serializer_class = UserSerializer
     permission_classes = (IsSuperUser,)

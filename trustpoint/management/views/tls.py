@@ -58,6 +58,7 @@ class TlsSettingsContextMixin(UserPermissionRequiredMixin):
 
 class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
     """View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses."""
+
     template_name = 'management/tls.html'
     form_class = IPv4AddressForm
     success_url = reverse_lazy('management:tls')
@@ -120,20 +121,23 @@ class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
                     issuer_details[field] = attribute.value
 
         tls_certificates = CertificateModel.objects.filter(
-            credential__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER)
+            credential__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
+        )
 
         self.logger.info('TLS certificates count: %s', tls_certificates.count())
         for cert in tls_certificates:
             self.logger.info('TLS cert: %s, pk: %s', cert.common_name, cert.pk)
 
-        context.update({
-            'certificate': certificate,
-            'san_ips': san_ips,
-            'san_dns_names': san_dns_names,
-            'issuer_details': issuer_details,
-            'tls_certificates': tls_certificates,
-            'tls_form': StartupWizardTlsCertificateForm()
-        })
+        context.update(
+            {
+                'certificate': certificate,
+                'san_ips': san_ips,
+                'san_dns_names': san_dns_names,
+                'issuer_details': issuer_details,
+                'tls_certificates': tls_certificates,
+                'tls_form': StartupWizardTlsCertificateForm(),
+            }
+        )
 
         return context
 
@@ -163,7 +167,8 @@ class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
         try:
             try:
                 active_credential = ActiveTrustpointTlsServerCredentialModel.objects.select_related('credential').get(
-                    id=1)
+                    id=1
+                )
             except ActiveTrustpointTlsServerCredentialModel.DoesNotExist:
                 active_credential = None
 
@@ -187,11 +192,13 @@ class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
         except ObjectDoesNotExist:
             return []
 
+
 class TlsAddMethodSelectView(TlsSettingsContextMixin, TemplateView):
     """View to select the method to add a TLS Certificate."""
 
     template_name = 'management/tls/method_select.html'
     success_url = reverse_lazy('management:tls-add-method-select')
+
 
 class GenerateTlsCertificateView(TlsSettingsContextMixin, LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
@@ -211,7 +218,6 @@ class GenerateTlsCertificateView(TlsSettingsContextMixin, LoggerMixin, FormView[
     template_name = 'management/tls/generate_tls.html'
     form_class = StartupWizardTlsCertificateForm
     success_url = reverse_lazy('management:tls')
-
 
     @transaction.atomic
     def form_valid(self, form: StartupWizardTlsCertificateForm) -> HttpResponse:
@@ -266,6 +272,7 @@ class GenerateTlsCertificateView(TlsSettingsContextMixin, LoggerMixin, FormView[
             self.logger.exception(err_msg)
             return redirect('management:tls', permanent=False)
 
+
 class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImportPkcs12Form], LoggerMixin):
     """View to import an TLS-Server Credential from a PKCS12 file."""
 
@@ -289,6 +296,7 @@ class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImp
             actor=actor,
         )
         return super().form_valid(form)
+
 
 class TlsAddFileImportSeparateFilesView(
     TlsSettingsContextMixin, FormView[TlsAddFileImportSeparateFilesForm], LoggerMixin
@@ -316,6 +324,7 @@ class TlsAddFileImportSeparateFilesView(
         )
         return super().form_valid(form)
 
+
 class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple TLS certificates."""
 
@@ -335,9 +344,14 @@ class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
 
     def get_queryset(self) -> Any:
         """Limit selected certificate IDs to webserver TLS credentials."""
-        return super().get_queryset().filter(
-            credential_set__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
-        ).distinct()
+        return (
+            super()
+            .get_queryset()
+            .filter(
+                credential_set__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            )
+            .distinct()
+        )
 
     @transaction.atomic
     def form_valid(self, _form: Form) -> HttpResponse:
@@ -355,9 +369,7 @@ class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
             if active_id in cert_ids:
                 cert_ids.remove(active_id)
                 queryset = queryset.exclude(id=active_id)
-                messages.warning(
-                    self.request, _('Cannot delete the active TLS certificate.')
-                )
+                messages.warning(self.request, _('Cannot delete the active TLS certificate.'))
                 if len(cert_ids) == 0:
                     return redirect(self.get_success_url())
         try:
@@ -394,6 +406,7 @@ class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
 
         return redirect(self.get_success_url())
 
+
 class ActivateTlsServerView(View, LoggerMixin):
     """Activate a TLS server certificate."""
 
@@ -421,8 +434,7 @@ class ActivateTlsServerView(View, LoggerMixin):
                 messages.error(request, 'TLS certificate has no certificate model')
                 return redirect(reverse('management:tls'))
             self.logger.info(
-                'Activated TLS credential: %s, certificate: %s',
-                tls_certificate.id, tls_certificate.certificate.id
+                'Activated TLS credential: %s, certificate: %s', tls_certificate.id, tls_certificate.certificate.id
             )
             messages.success(request, 'TLS Server certificate activated successfully')
         except (CredentialModel.DoesNotExist, ValidationError):
@@ -432,6 +444,7 @@ class ActivateTlsServerView(View, LoggerMixin):
             self.logger.exception('Unexpected error activating TLS certificate')
             messages.error(request, 'An unexpected error occurred while activating TLS certificate')
         return redirect(reverse('management:tls'))
+
 
 class CanManageTls(BasePermission):
     """Allow only users permitted to manage TLS certificates."""
@@ -452,7 +465,7 @@ class CanManageTls(BasePermission):
     create=extend_schema(description='Create a TLS Certificate.'),
     update=extend_schema(description='Update an existing TLS Certificate.'),
     partial_update=extend_schema(description='Partially update an existing TLS Certificate.'),
-    destroy=extend_schema(description='Delete a TLS Certificate.')
+    destroy=extend_schema(description='Delete a TLS Certificate.'),
 )
 class TlsViewSet(viewsets.ModelViewSet[Any]):
     """ViewSet for managing Backup instances.
@@ -460,16 +473,13 @@ class TlsViewSet(viewsets.ModelViewSet[Any]):
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
     """
+
     queryset = CredentialModel.objects.filter(
         credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
     ).order_by('-created_at')
     serializer_class = CredentialSerializer
     permission_classes = (CanManageTls,)
-    filter_backends = (
-        DjangoFilterBackend,
-        filters.SearchFilter,
-        filters.OrderingFilter
-    )
+    filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['credential_type']
     search_fields: ClassVar = ['certificate__common_name']
     ordering_fields: ClassVar = ['created_at']

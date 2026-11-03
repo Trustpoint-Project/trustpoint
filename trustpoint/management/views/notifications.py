@@ -190,6 +190,7 @@ class NotificationMarkSolvedView(UserPermissionRequiredMixin, LoggerMixin, Templ
         notification.statuses.add(solved_status)
         return redirect('management:notification_details', pk=notification.pk)
 
+
 class NotificationToggleReadView(UserPermissionRequiredMixin, LoggerMixin, TemplateView):
     """Toggle the read/unread state of a notification and redirect back to its details."""
 

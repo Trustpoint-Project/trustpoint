@@ -277,9 +277,7 @@ class GroupPermissionForm(forms.ModelForm[Group]):
     """
 
     permissions = _PermissionMultipleChoiceField(
-        queryset=Permission.objects.select_related('content_type').filter(
-             content_type__model='apppermission'
-        ),
+        queryset=Permission.objects.select_related('content_type').filter(content_type__model='apppermission'),
         required=False,
         widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '15'}),
         label=_('Permissions'),

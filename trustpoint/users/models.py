@@ -65,6 +65,7 @@ class BuiltinRole(models.TextChoices):
             group.permissions.set([permission])
         return group
 
+
 class GroupProfile(models.Model):
     """Extended attributes for a Django ``Group`` used as a role.
 
@@ -122,7 +123,8 @@ class GroupProfile(models.Model):
         super().save(*args, **kwargs)
         persisted = type(self).objects.get(pk=self.pk)
         TrustpointUser.objects.filter(role_id=self.group_id, account_type=TrustpointUser.AccountType.HUMAN).update(
-            is_staff=persisted.grants_staff, is_superuser=persisted.grants_superuser,
+            is_staff=persisted.grants_staff,
+            is_superuser=persisted.grants_superuser,
         )
 
 
@@ -269,7 +271,7 @@ class TrustpointUser(AbstractUser):
         null=True,
         blank=True,
         related_name='org_users',
-        verbose_name=_('organization')
+        verbose_name=_('organization'),
     )
 
     language = models.CharField(
@@ -397,8 +399,7 @@ class TrustpointUser(AbstractUser):
 def is_last_admin_user(user: TrustpointUser) -> bool:
     """Return whether deleting or demoting this user would remove the final admin."""
     return (
-        user.role.name == BuiltinRole.ADMIN
-        and TrustpointUser.objects.filter(role__name=BuiltinRole.ADMIN).count() == 1
+        user.role.name == BuiltinRole.ADMIN and TrustpointUser.objects.filter(role__name=BuiltinRole.ADMIN).count() == 1
     )
 
 
@@ -427,8 +428,7 @@ class AppPermission(models.Model):
                 'manage_service_accounts',
                 _('Can manage service accounts'),
             ),
-                ('use_rest_api', _('Can use the REST API')),
-
+            ('use_rest_api', _('Can use the REST API')),
             # -----------------------------------------------------------------
             # PKI configuration
             # -----------------------------------------------------------------
@@ -444,7 +444,6 @@ class AppPermission(models.Model):
                 'manage_crypto_backends',
                 _('Can manage cryptographic backends'),
             ),
-
             # -----------------------------------------------------------------
             # Certificate lifecycle
             # -----------------------------------------------------------------
@@ -464,16 +463,13 @@ class AppPermission(models.Model):
                 'view_help_pages',
                 _('Can view help pages'),
             ),
-
             # -----------------------------------------------------------------
             # Device lifecycle
             # -----------------------------------------------------------------
             ('manage_devices', _('Can manage devices')),
-
             # -----------------------------------------------------------------
             # Automation and integration
             # -----------------------------------------------------------------
-
             (
                 'manage_certificate_discovery',
                 _('Can manage certificate discovery'),
@@ -482,7 +478,6 @@ class AppPermission(models.Model):
                 'manage_signer',
                 _('Can manage signer'),
             ),
-
             # -----------------------------------------------------------------
             # Workflow engine
             # -----------------------------------------------------------------
@@ -491,7 +486,6 @@ class AppPermission(models.Model):
                 'approve_workflows',
                 _('Can approve workflows'),
             ),
-
             # -----------------------------------------------------------------
             # System administration
             # -----------------------------------------------------------------
@@ -512,7 +506,6 @@ class AppPermission(models.Model):
                 'manage_tls_webserver_configuration',
                 _('Can manage TLS webserver configuration'),
             ),
-
             # -----------------------------------------------------------------
             # Monitoring and audit
             # -----------------------------------------------------------------
@@ -696,12 +689,15 @@ class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[mi
     """
 
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='otp_devices',
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='otp_devices',
         limit_choices_to={'account_type': 'HUMAN'},
     )
     name = models.CharField(max_length=64, default='Authenticator')
     key = EncryptedTextField(
-        default=new_otp_key, editable=False,
+        default=new_otp_key,
+        editable=False,
         validators=[RegexValidator(r'\A[0-9a-f]{40}\Z', _('Invalid OTP secret.'))],
     )
     confirmed = models.BooleanField(default=False, editable=False)
@@ -727,9 +723,11 @@ class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[mi
     def verify_token(self, token: str) -> bool:
         """Verify a TOTP or consume a recovery code; the caller must lock this device."""
         if (
-            self.pk is None or not settings.TRUSTPOINT_IS_OPERATIONAL
+            self.pk is None
+            or not settings.TRUSTPOINT_IS_OPERATIONAL
             or settings.TRUSTPOINT_IS_BOOTSTRAP
-            or not self.user.is_active or self.user.account_type != 'HUMAN'
+            or not self.user.is_active
+            or self.user.account_type != 'HUMAN'
         ):
             return False
         allowed, _details = self.verify_is_allowed()
@@ -745,15 +743,23 @@ class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[mi
                 self.last_t = totp.t()
         elif self.confirmed and re.fullmatch(r'[0-9a-fA-F-]{32,35}', token):
             digest = hashlib.sha256(token.replace('-', '').lower().encode('ascii')).hexdigest()
-            verified = self.recovery_codes.filter(code_hash=digest, used_at__isnull=True).update(
-                used_at=timezone.now(),
-            ) == 1
+            verified = (
+                self.recovery_codes.filter(code_hash=digest, used_at__isnull=True).update(
+                    used_at=timezone.now(),
+                )
+                == 1
+            )
         if verified:
             self.throttle_reset(commit=False)
             self.set_last_used_timestamp(commit=False)
-            self.save(update_fields=[
-                'last_t', 'last_used_at', 'throttling_failure_count', 'throttling_failure_timestamp',
-            ])
+            self.save(
+                update_fields=[
+                    'last_t',
+                    'last_used_at',
+                    'throttling_failure_count',
+                    'throttling_failure_timestamp',
+                ]
+            )
         else:
             self.throttle_increment()
         return verified
@@ -770,11 +776,13 @@ class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[mi
             # 128 random bits per code permit SHA-256 storage without a password-derived hash.
             codes = [secrets.token_hex(16) for _index in range(RECOVERY_CODE_COUNT)]
             device.recovery_codes.all().delete()
-            device.recovery_codes.bulk_create([
-                UserOTPRecoveryCode(device=device, code_hash=hashlib.sha256(code.encode('ascii')).hexdigest())
-                for code in codes
-            ])
-            return ['-'.join(code[i:i + 8] for i in range(0, len(code), 8)) for code in codes]
+            device.recovery_codes.bulk_create(
+                [
+                    UserOTPRecoveryCode(device=device, code_hash=hashlib.sha256(code.encode('ascii')).hexdigest())
+                    for code in codes
+                ]
+            )
+            return ['-'.join(code[i : i + 8] for i in range(0, len(code), 8)) for code in codes]
 
 
 class UserOTPRecoveryCode(models.Model):

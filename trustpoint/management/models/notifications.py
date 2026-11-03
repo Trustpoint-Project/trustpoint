@@ -334,10 +334,7 @@ class NotificationModel(models.Model):
                 ),
                 self.GDS_PUSH_FAILED: NotificationMessage(
                     _('OPC UA GDS Push failed for device {device}'),
-                    _(
-                        'The OPC UA GDS Push operation failed for device {device}. '
-                        'Error: {error_message}'
-                    ),
+                    _('The OPC UA GDS Push operation failed for device {device}. Error: {error_message}'),
                 ),
                 self.SIGNER_KEY_EXPIRING: NotificationMessage(
                     _('Signing key {signer_name} is expiring soon'),
@@ -482,6 +479,7 @@ class NotificationModel(models.Model):
             return _('Guess we messed up. Type of this notification is %(type)s') % {'type': self.message_type}
         return message_string.long.format(**self.message_data)
 
+
 class WeakECCCurve(models.Model):
     """Represents a weak or deprecated ECC curve."""
 
@@ -489,17 +487,13 @@ class WeakECCCurve(models.Model):
 
     class ECCCurveChoices(models.TextChoices):
         """Enumeration of weak or deprecated ECC curve OIDs."""
+
         SECP160R1 = '1.3.132.0.8', _('SECP160R1')
         SECP192R1 = '1.2.840.10045.3.1.1', _('SECP192R1')
         SECP224R1 = '1.3.132.0.33', _('SECP224R1')
         SECP256K1 = '1.3.132.0.10', _('SECP256K1')
 
-
-    oid = models.CharField(
-        max_length=64,
-        choices=ECCCurveChoices.choices,
-        unique=True
-    )
+    oid = models.CharField(max_length=64, choices=ECCCurveChoices.choices, unique=True)
 
     def __str__(self) -> str:
         """Return the human-readable name for the ECC curve."""
@@ -513,66 +507,60 @@ class WeakSignatureAlgorithm(models.Model):
 
     class SignatureChoices(models.TextChoices):
         """Enumeration of weak or deprecated signature algorithm OIDs."""
+
         MD5 = '1.2.840.113549.2.5', _('MD5')
         SHA1 = '1.3.14.3.2.26', _('SHA-1')
         SHA224 = '2.16.840.1.101.3.4.2.4', _('SHA-224')
 
-    oid = models.CharField(
-        max_length=64,
-        choices=SignatureChoices.choices,
-        unique=True
-    )
+    oid = models.CharField(max_length=64, choices=SignatureChoices.choices, unique=True)
 
     def __str__(self) -> str:
         """Return the human-readable name for the weak signature algorithm."""
         return str(dict(self.SignatureChoices.choices).get(self.oid, self.oid))
+
 
 class NotificationConfig(models.Model):
     """Stores global configuration for notification thresholds and behaviors."""
 
     objects: models.Manager[NotificationConfig]
 
-    enabled = models.BooleanField(
-        default=False,
-        help_text=_('Enable or disable all notifications globally.')
-    )
+    enabled = models.BooleanField(default=False, help_text=_('Enable or disable all notifications globally.'))
 
     notification_cycle_enabled = models.BooleanField(
         _('Enable Notification Cycle Updates'),
         default=False,
-        help_text=_('Enable automatic periodic notification checks via Django-Q2')
+        help_text=_('Enable automatic periodic notification checks via Django-Q2'),
     )
 
     notification_cycle_interval_hours = models.FloatField(
         _('Notification Cycle Interval (hours)'),
         default=0.0833,  # 5 minutes
-        help_text=_('The interval in hours between automatic notification checks (default: 5 minutes)')
+        help_text=_('The interval in hours between automatic notification checks (default: 5 minutes)'),
     )
 
     last_notification_check_started_at = models.DateTimeField(
         _('Last Notification Check Started'),
         null=True,
         blank=True,
-        help_text=_('Timestamp when the last notification check task was started')
+        help_text=_('Timestamp when the last notification check task was started'),
     )
 
     cert_expiry_warning_days = models.PositiveIntegerField(
         default=30,
-        help_text=_("Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning.")
+        help_text=_("Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning."),
     )
 
     issuing_ca_expiry_warning_days = models.PositiveIntegerField(
-        default=30,
-        help_text=_("Number of days before an issuing CA's certificate expiration to trigger a warning.")
+        default=30, help_text=_("Number of days before an issuing CA's certificate expiration to trigger a warning.")
     )
 
     crl_expiry_warning_days = models.PositiveIntegerField(
-        default=7,
-        help_text=_("Number of days before a CRL's expiration to trigger a 'CRL Expiring' warning.")
+        default=7, help_text=_("Number of days before a CRL's expiration to trigger a 'CRL Expiring' warning.")
     )
 
     class Meta:
         """Meta class configuration."""
+
         verbose_name = _('Notification Configuration')
 
     def __str__(self) -> str:
@@ -598,10 +586,11 @@ class NotificationConfig(models.Model):
             return None
 
         try:
-            next_task = Schedule.objects.filter(
-                func='management.tasks.execute_all_notifications',
-                schedule_type='O'
-            ).order_by('next_run').first()
+            next_task = (
+                Schedule.objects.filter(func='management.tasks.execute_all_notifications', schedule_type='O')
+                .order_by('next_run')
+                .first()
+            )
 
             if next_task and next_task.next_run:
                 return next_task.next_run  # type: ignore[no-any-return]
@@ -646,7 +635,7 @@ class NotificationConfig(models.Model):
             'management.tasks.execute_all_notifications',
             schedule_type='O',
             next_run=scheduled_time,
-            name=f'notification_check_{scheduled_time.timestamp()}'
+            name=f'notification_check_{scheduled_time.timestamp()}',
         )
 
         self.last_notification_check_started_at = scheduled_time

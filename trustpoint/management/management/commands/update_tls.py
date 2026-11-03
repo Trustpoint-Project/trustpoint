@@ -66,7 +66,9 @@ class Command(LoggerMixin, BaseCommand):
         try:
             write_tls_pem_files(
                 tls_server_credential_model,
-                key_path=NGINX_KEY_PATH, cert_path=NGINX_CERT_PATH, chain_path=NGINX_CERT_CHAIN_PATH,
+                key_path=NGINX_KEY_PATH,
+                cert_path=NGINX_CERT_PATH,
+                chain_path=NGINX_CERT_CHAIN_PATH,
             )
             command = ['sudo', str(script_path)]
             result = subprocess.run(command, check=False, capture_output=True, text=True)  # noqa: S603

@@ -94,14 +94,18 @@ class TestTlsViewSetList:
         response = authenticated_client.get(reverse('tls-list'))
         assert response.status_code == status.HTTP_200_OK
 
-    def test_list_contains_created_credentials(self, authenticated_client: APIClient, tls_credential: CredentialModel) -> None:
+    def test_list_contains_created_credentials(
+        self, authenticated_client: APIClient, tls_credential: CredentialModel
+    ) -> None:
         """Credentials present in the DB appear in the list response."""
         response = authenticated_client.get(reverse('tls-list'))
         assert response.status_code == status.HTTP_200_OK
         ids = [item['id'] for item in response.data]
         assert tls_credential.pk in ids
 
-    def test_list_exposes_expected_fields(self, authenticated_client: APIClient, tls_credential: CredentialModel) -> None:
+    def test_list_exposes_expected_fields(
+        self, authenticated_client: APIClient, tls_credential: CredentialModel
+    ) -> None:
         """Each list item exposes id, credential_type, and created_at."""
         response = authenticated_client.get(reverse('tls-list'))
         assert response.status_code == status.HTTP_200_OK
@@ -116,7 +120,9 @@ class TestTlsViewSetList:
 class TestTlsViewSetRetrieve:
     """Tests for GET /api/tls/{id}/."""
 
-    def test_retrieve_existing_returns_200(self, authenticated_client: APIClient, tls_credential: CredentialModel) -> None:
+    def test_retrieve_existing_returns_200(
+        self, authenticated_client: APIClient, tls_credential: CredentialModel
+    ) -> None:
         """Retrieving an existing credential returns 200 with correct data."""
         url = reverse('tls-detail', args=[tls_credential.pk])
         response = authenticated_client.get(url)
@@ -167,13 +173,17 @@ class TestTlsViewSetFilter:
 class TestTlsViewSetDelete:
     """Tests for DELETE /api/tls/{id}/."""
 
-    def test_delete_existing_returns_204(self, authenticated_client: APIClient, tls_credential: CredentialModel) -> None:
+    def test_delete_existing_returns_204(
+        self, authenticated_client: APIClient, tls_credential: CredentialModel
+    ) -> None:
         """Deleting an existing credential returns 204."""
         url = reverse('tls-detail', args=[tls_credential.pk])
         response = authenticated_client.delete(url)
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
-    def test_delete_removes_credential_from_database(self, authenticated_client: APIClient, tls_credential: CredentialModel) -> None:
+    def test_delete_removes_credential_from_database(
+        self, authenticated_client: APIClient, tls_credential: CredentialModel
+    ) -> None:
         """After DELETE the credential no longer exists in the database."""
         pk = tls_credential.pk
         url = reverse('tls-detail', args=[pk])
