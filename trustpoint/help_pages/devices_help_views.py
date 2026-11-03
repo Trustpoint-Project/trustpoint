@@ -1959,9 +1959,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                 ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
                 ca_link = format_html('<a href="{}" target="_blank">{}</a>', ca_detail_url, cn_value)
                 indent = '&nbsp;' * (idx * 4)
-                hierarchy_html += (
-                    f'{indent}└─ {ca_link} [{crl_link}{crl_status}]<br>'
-                )
+                hierarchy_html += f'{indent}└─ {ca_link} [{crl_link}{crl_status}]<br>'
 
             except (ValueError, TypeError, AttributeError):
                 continue
@@ -2439,7 +2437,8 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
             raise Http404(err_msg)
         domain_cred_profile_name = domain.get_domain_credential_profile_name()
         aoki_response = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(
-            domain.unique_name, domain_cred_profile_name,
+            domain.unique_name,
+            domain_cred_profile_name,
         )
         keygen_cmd = AokiEstIDevIDCommandBuilder.get_keygen_command()
         csr_cmd = AokiEstIDevIDCommandBuilder.get_csr_command()

@@ -15,13 +15,18 @@ from help_pages.devices_help_views import AgentSetupProfileDownloadView
 from users.models import TrustpointUser
 
 
-@pytest.mark.parametrize('permission, expected_status', [
-    (None, 403),
-    ('view_help_pages', 403),
-    ('download_credentials', 200),
-])
+@pytest.mark.parametrize(
+    'permission, expected_status',
+    [
+        (None, 403),
+        ('view_help_pages', 403),
+        ('download_credentials', 200),
+    ],
+)
 def test_agent_profile_requires_download_permission(
-    client: Client, permission: str | None, expected_status: int,
+    client: Client,
+    permission: str | None,
+    expected_status: int,
 ) -> None:
     """Only credential downloaders may reach the handler that exposes the password."""
     role = Group.objects.create(name='Agent profile access')

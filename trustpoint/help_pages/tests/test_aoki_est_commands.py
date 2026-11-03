@@ -26,7 +26,9 @@ def test_aoki_est_enrollment_uses_initialization_response(tmp_path: Path, absolu
     response = {
         'aoki-init': {
             'tls-truststore': 'TLS CERTIFICATE\n',
-            'enrollment-info': {'protocols': [{'protocol': 'EST', 'url': context_host + path if absolute_url else path}]},
+            'enrollment-info': {
+                'protocols': [{'protocol': 'EST', 'url': context_host + path if absolute_url else path}]
+            },
         },
     }
     (tmp_path / 'aoki_init_response.json').write_text(json.dumps(response))
@@ -41,15 +43,22 @@ def test_aoki_est_enrollment_uses_initialization_response(tmp_path: Path, absolu
     assert (tmp_path / 'trust_store.pem').read_text() == 'TLS CERTIFICATE\n'
 
 
-@pytest.mark.parametrize('response', [
-    'not JSON', '{"aoki-init": {}}', '{"aoki-init": {"enrollment-info": {"protocols": []}}}',
-])
+@pytest.mark.parametrize(
+    'response',
+    [
+        'not JSON',
+        '{"aoki-init": {}}',
+        '{"aoki-init": {"enrollment-info": {"protocols": []}}}',
+    ],
+)
 def test_invalid_aoki_response_stops_before_enrollment(tmp_path: Path, response: str) -> None:
     (tmp_path / 'aoki_init_response.json').write_text(response)
     command = AokiEstIDevIDCommandBuilder.get_curl_enroll_command('https://example.test')
     result = subprocess.run(
         ['bash', '-c', 'curl() { touch enrollment-attempted; };\n' + command],
-        cwd=tmp_path, capture_output=True, check=False,
+        cwd=tmp_path,
+        capture_output=True,
+        check=False,
     )
     assert result.returncode != 0
     assert not (tmp_path / 'enrollment-attempted').exists()

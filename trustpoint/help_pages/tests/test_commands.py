@@ -44,9 +44,7 @@ class KeyGenCommandBuilderTests(SimpleTestCase):
             key_size=4096,
         )
 
-        cmd = KeyGenCommandBuilder.get_key_gen_command(
-            public_key_info, cred_number=1, key_name='custom-key.pem'
-        )
+        cmd = KeyGenCommandBuilder.get_key_gen_command(public_key_info, cred_number=1, key_name='custom-key.pem')
 
         assert 'openssl genrsa' in cmd
         assert '-out custom-key.pem' in cmd
@@ -74,9 +72,7 @@ class KeyGenCommandBuilderTests(SimpleTestCase):
             named_curve=oid.NamedCurve.SECP384R1,
         )
 
-        cmd = KeyGenCommandBuilder.get_key_gen_command(
-            public_key_info, cred_number=3, key_name='ec-key.pem'
-        )
+        cmd = KeyGenCommandBuilder.get_key_gen_command(public_key_info, cred_number=3, key_name='ec-key.pem')
 
         assert 'openssl ecparam' in cmd
         assert '-name secp384r1' in cmd
@@ -409,7 +405,9 @@ class AokiEstIDevIDCommandBuilderTests(SimpleTestCase):
     def test_get_aoki_init_command_and_response_example(self) -> None:
         """Test AOKI EST initialization command and response sample."""
         cmd = AokiEstIDevIDCommandBuilder.get_aoki_init_command('https://example.test')
-        response_example = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example('aoki', 'domain_credential_custom')
+        response_example = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(
+            'aoki', 'domain_credential_custom'
+        )
 
         assert 'curl --cert idevid.pem' in cmd
         assert cmd.endswith('https://example.test/aoki/init/')

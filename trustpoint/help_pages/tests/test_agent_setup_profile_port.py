@@ -12,15 +12,20 @@ from django.test import RequestFactory, override_settings
 from help_pages.devices_help_views import AgentSetupProfileDownloadView
 
 
-@pytest.mark.parametrize('configured_port, forwarded_port, expected_url', [
-    ('8443', None, 'https://192.0.2.10:8443'),
-    ('8443', '9443', 'https://192.0.2.10:9443'),
-    ('443', None, 'https://192.0.2.10'),
-    (443, None, 'https://192.0.2.10'),
-    ('8443', '443', 'https://192.0.2.10'),
-])
+@pytest.mark.parametrize(
+    'configured_port, forwarded_port, expected_url',
+    [
+        ('8443', None, 'https://192.0.2.10:8443'),
+        ('8443', '9443', 'https://192.0.2.10:9443'),
+        ('443', None, 'https://192.0.2.10'),
+        (443, None, 'https://192.0.2.10'),
+        ('8443', '443', 'https://192.0.2.10'),
+    ],
+)
 def test_agent_setup_profile_uses_https_port(
-    configured_port: str | int, forwarded_port: str | None, expected_url: str,
+    configured_port: str | int,
+    forwarded_port: str | None,
+    expected_url: str,
 ) -> None:
     request = RequestFactory().get('/', {'host_ip': '192.0.2.10'})
     request.user = Mock()

@@ -17,9 +17,13 @@ from help_pages.devices_help_views import OpcUaGdsPushOnboardingStrategy
 def test_ca_hierarchy_escapes_names(source: str) -> None:
     name = '<b>CA & "name"</b>'
     ca = Mock(pk=1, unique_name=name, crl_pem=None)
-    common_names = [] if source == 'unique_name' else [
-        Mock(value=name.encode() if source == 'bytes_common_name' else name),
-    ]
+    common_names = (
+        []
+        if source == 'unique_name'
+        else [
+            Mock(value=name.encode() if source == 'bytes_common_name' else name),
+        ]
+    )
     certificate = ca.ca_certificate_model.get_certificate_serializer.return_value.as_crypto.return_value
     certificate.subject.get_attributes_for_oid.return_value = common_names
 

@@ -63,7 +63,7 @@ class BaseHelpView(UserPermissionRequiredMixin, DetailView[DevIdRegistration]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -264,7 +264,7 @@ class DevIdRegistrationDetailView(UserPermissionRequiredMixin, DetailView[DevIdR
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -316,7 +316,7 @@ class DevIdRegistrationHelpView(DevIdRegistrationDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -379,7 +379,7 @@ class DomainDetailView(DetailView[DomainModel]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -428,7 +428,7 @@ class DomainHelpView(DomainDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -490,7 +490,7 @@ class CredentialDetailView[CredentialT: (IssuedCredentialModel, OwnerCredentialM
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
         public_key_info = device.public_key_info
         if not public_key_info:
@@ -526,16 +526,18 @@ class CredentialDetailView[CredentialT: (IssuedCredentialModel, OwnerCredentialM
         """Expose the credential-specific field and shared help context."""
         context = super().get_context_data(**kwargs)
         help_context = self._make_context()
-        context.update({
-            'page_name': help_context.page_name,
-            'device': help_context.device,
-            self.credential_context_name: getattr(help_context, self.credential_context_name),
-            'domain': help_context.domain,
-            'domain_unique_name': help_context.domain_unique_name,
-            'public_key_info': help_context.public_key_info,
-            'host_base': help_context.host_base,
-            'help_sections': help_context.help_sections,
-        })
+        context.update(
+            {
+                'page_name': help_context.page_name,
+                'device': help_context.device,
+                self.credential_context_name: getattr(help_context, self.credential_context_name),
+                'domain': help_context.domain,
+                'domain_unique_name': help_context.domain_unique_name,
+                'public_key_info': help_context.public_key_info,
+                'host_base': help_context.host_base,
+                'help_sections': help_context.help_sections,
+            }
+        )
         return context
 
 
@@ -586,7 +588,7 @@ class CaDetailView(DetailView[CaModel]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         # Create a minimal HelpContext for CA views
@@ -632,7 +634,7 @@ class CaHelpView(CaDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         ca_cert_section = HelpSection(
@@ -738,9 +740,7 @@ class CrlDownloadHelpView(CaDetailView):
             ],
         )
         download_pem_cmd = (
-            f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
-            f'  -o {ca.unique_name}.pem.crl \\\n'
-            f'  "{crl_endpoint}"'
+            f'curl --cacert trustpoint-tls-trust-store.pem \\\n  -o {ca.unique_name}.pem.crl \\\n  "{crl_endpoint}"'
         )
         download_der_cmd = (
             f'curl --cacert trustpoint-tls-trust-store.pem \\\n'

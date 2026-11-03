@@ -37,11 +37,20 @@ def test_demo_setup_requires_superuser(client: Client, demo_user: TrustpointUser
         assert response.url == reverse('management:index')
 
 
-@pytest.mark.parametrize('filename', [
-    'idevid.pem', 'idevid_pk.pem', 'owner_id_pk.pem', 'domain_ca_owner_id_pk.pem',
-])
+@pytest.mark.parametrize(
+    'filename',
+    [
+        'idevid.pem',
+        'idevid_pk.pem',
+        'owner_id_pk.pem',
+        'domain_ca_owner_id_pk.pem',
+    ],
+)
 def test_demo_download_requires_superuser(
-    client: Client, demo_user: TrustpointUser, tmp_path: Path, filename: str,
+    client: Client,
+    demo_user: TrustpointUser,
+    tmp_path: Path,
+    filename: str,
 ) -> None:
     """Only superusers may download demo certificates and private keys."""
     (tmp_path / filename).write_bytes(b'demo credential')

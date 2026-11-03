@@ -28,16 +28,19 @@ from pki.util.cert_profile import JSONProfileVerifier
 def shell_arguments(command: str, directory: Path) -> list[str]:
     """Capture arguments without running enrollment clients or contacting a server."""
     result = subprocess.run(
-        ['bash', '-c', 'openssl() { printf "%s\\0" "$@"; }; '
-         'curl() { printf "%s\\0" "$@"; }; jq() { :; };\n' + command],
-        cwd=directory, capture_output=True, check=True,
+        ['bash', '-c', 'openssl() { printf "%s\\0" "$@"; }; curl() { printf "%s\\0" "$@"; }; jq() { :; };\n' + command],
+        cwd=directory,
+        capture_output=True,
+        check=True,
     )
     assert result.stderr == b''
     assert not (directory / 'injected').exists()
     return result.stdout.decode().rstrip('\0').split('\0')
 
 
-@pytest.mark.parametrize('secret', ['two words', 'a"b\'c\\d', '$HOME', '$(touch injected)', '`touch injected`', 'a!b;c&d'])
+@pytest.mark.parametrize(
+    'secret', ['two words', 'a"b\'c\\d', '$HOME', '$(touch injected)', '`touch injected`', 'a!b;c&d']
+)
 @pytest.mark.parametrize('protocol', ['cmp', 'est', 'rest'])
 @pytest.mark.parametrize('domain_credential', [False, True])
 def test_secrets_reach_clients_unchanged(tmp_path: Path, secret: str, protocol: str, domain_credential: bool) -> None:
@@ -48,7 +51,11 @@ def test_secrets_reach_clients_unchanged(tmp_path: Path, secret: str, protocol: 
             command = CmpSharedSecretCommandBuilder.get_domain_credential_profile_command(host, 1, secret)
         else:
             command = CmpSharedSecretCommandBuilder.get_dynamic_cert_profile_command(
-                host, 1, secret, 1, {'subject': {'CN': 'device'}, 'validity': {'days': 1}},
+                host,
+                1,
+                secret,
+                1,
+                {'subject': {'CN': 'device'}, 'validity': {'days': 1}},
             )
         option, expected = '-secret', f'pass:{secret}'
     else:
@@ -67,8 +74,13 @@ def test_secrets_reach_clients_unchanged(tmp_path: Path, secret: str, protocol: 
 
 
 PROFILE_BUILDERS = [
-    partial(CmpSharedSecretCommandBuilder.get_dynamic_cert_profile_command,
-            host='https://tp/cmp', pk=1, shared_secret='secret', cred_number=1),
+    partial(
+        CmpSharedSecretCommandBuilder.get_dynamic_cert_profile_command,
+        host='https://tp/cmp',
+        pk=1,
+        shared_secret='secret',
+        cred_number=1,
+    ),
     partial(CmpClientCertificateCommandBuilder.get_dynamic_cert_profile_command, host='https://tp/cmp', cred_number=1),
     partial(EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command, cred_number=1),
     partial(RestUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command, cred_number=1),
@@ -83,13 +95,15 @@ def test_fixed_and_editable_profile_values_are_literal(tmp_path: Path, builder, 
     common_name = 'a/b+c\\d "quoted" \'single\' $HOME $(touch injected) `touch injected` !'
     uri = 'urn:device:$HOME:$(touch${IFS}injected):`touch${IFS}injected`:"quoted"'
     profile = {
-        'type': 'cert_profile', 'validity': {'days': 1},
+        'type': 'cert_profile',
+        'validity': {'days': 1},
         'subj': {'common_name': {'default': common_name} if editable else common_name},
         'ext': {'subject_alternative_name': {'uris': {'default': [uri]} if editable else [uri]}},
     }
     verifier = JSONProfileVerifier(profile)
     template = CertParameterTemplate.build(
-        verifier.get_sample_request(), verifier.get_editable_fields(),
+        verifier.get_sample_request(),
+        verifier.get_editable_fields(),
         lambda request: builder(sample_request=request),
     )
     arguments = shell_arguments(template.initial_command, tmp_path)
@@ -107,11 +121,16 @@ def test_openssl_preserves_subject_delimiters(tmp_path: Path) -> None:
     """Escaping must preserve the certificate name, not introduce extra subject attributes."""
     common_name = 'a/b+c\\d "q" \'s\' $HOME $(touch injected) `touch injected` !'
     key = ec.generate_private_key(ec.SECP256R1())
-    (tmp_path / 'key-1.pem').write_bytes(key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption(),
-    ))
+    (tmp_path / 'key-1.pem').write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
     command = EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
-        1, {'subject': {'common_name': common_name}},
+        1,
+        {'subject': {'common_name': common_name}},
     )
     result = subprocess.run(['bash', '-c', command], cwd=tmp_path, capture_output=True, check=False)
     assert result.returncode == 0, result.stderr.decode()
