@@ -140,6 +140,7 @@ class TestDeviceViewSetRetrieve:
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures('permissive_protocol_policy')
 class TestDeviceViewSetCreate:
     """Tests for POST /api/devices/."""
 
@@ -257,9 +258,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         policy = SecurityConfig.objects.create(pk=1, allow_user_defined_device_secrets=True)
         policy.apply_security_settings()
 
-    def test_create_device_with_onboarding_config_cmp_shared_secret(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_with_onboarding_config_cmp_shared_secret(self, authenticated_client: APIClient) -> None:
         """POST with nested onboarding_config creates both device and config."""
         payload = {
             'common_name': 'device-with-onboarding',
@@ -281,9 +280,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET
         assert device.onboarding_config.cmp_shared_secret == 'my-secret-123'  # noqa: S105
 
-    def test_create_device_with_onboarding_config_est_username_password(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_with_onboarding_config_est_username_password(self, authenticated_client: APIClient) -> None:
         """POST with EST username/password onboarding creates device correctly."""
         payload = {
             'common_name': 'device-est-onboarding',
@@ -303,9 +300,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD
         assert device.onboarding_config.est_password == 'est-password-456'  # noqa: S105
 
-    def test_create_device_with_onboarding_config_multiple_pki_protocols(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_with_onboarding_config_multiple_pki_protocols(self, authenticated_client: APIClient) -> None:
         """POST with multiple PKI protocols creates device correctly."""
         payload = {
             'common_name': 'device-multi-pki',
@@ -359,9 +354,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['onboarding_config'] is None
 
-    def test_create_device_with_auto_generated_cmp_shared_secret(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_with_auto_generated_cmp_shared_secret(self, authenticated_client: APIClient) -> None:
         """POST without cmp_shared_secret auto-generates a secure secret."""
         payload = {
             'common_name': 'device-auto-secret',
@@ -381,9 +374,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert device.onboarding_config.cmp_shared_secret != ''
         assert len(device.onboarding_config.cmp_shared_secret) > 20  # Should be a long secure secret
 
-    def test_create_device_with_auto_generated_est_password(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_with_auto_generated_est_password(self, authenticated_client: APIClient) -> None:
         """POST without est_password auto-generates a secure password."""
         payload = {
             'common_name': 'device-auto-est',
@@ -403,9 +394,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert device.onboarding_config.est_password != ''
         assert len(device.onboarding_config.est_password) > 20  # Should be a long secure password
 
-    def test_create_device_user_provided_secret_not_overridden(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_user_provided_secret_not_overridden(self, authenticated_client: APIClient) -> None:
         """POST with explicit cmp_shared_secret does not auto-generate."""
         user_secret = 'user-provided-secret-123'
         payload = {
@@ -425,9 +414,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert device.onboarding_config is not None
         assert device.onboarding_config.cmp_shared_secret == user_secret
 
-    def test_create_device_with_pki_protocol_enum_names(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_with_pki_protocol_enum_names(self, authenticated_client: APIClient) -> None:
         """POST with PKI protocol enum names (strings) works correctly."""
         payload = {
             'common_name': 'device-enum-names',
@@ -447,9 +434,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP)
         assert device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST)
 
-    def test_create_device_with_mixed_pki_protocol_format(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_with_mixed_pki_protocol_format(self, authenticated_client: APIClient) -> None:
         """POST with mixed PKI protocol formats (names and values) works."""
         payload = {
             'common_name': 'device-mixed-format',
@@ -469,9 +454,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP)
         assert device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST)
 
-    def test_create_device_with_lowercase_pki_protocol_names(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_with_lowercase_pki_protocol_names(self, authenticated_client: APIClient) -> None:
         """POST with lowercase PKI protocol names works (case-insensitive)."""
         payload = {
             'common_name': 'device-lowercase',
@@ -491,9 +474,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP)
         assert device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST)
 
-    def test_create_device_with_invalid_pki_protocol_name_returns_400(
-        self, authenticated_client: APIClient
-    ) -> None:
+    def test_create_device_with_invalid_pki_protocol_name_returns_400(self, authenticated_client: APIClient) -> None:
         """POST with invalid PKI protocol name returns 400."""
         payload = {
             'common_name': 'device-invalid-proto',
@@ -508,4 +489,3 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         # Error can be in response.data directly or nested under onboarding_config
         assert 'INVALID_PROTOCOL' in str(response.data)
-

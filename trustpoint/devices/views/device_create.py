@@ -40,6 +40,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
+
 class AbstractCreateChooseOnboaringView(PageContextMixin, TemplateView):
     """Abstract view for choosing if the new device shall be onboarded or not."""
 
@@ -162,8 +163,8 @@ class DeviceCreateView(PageContextMixin, FormView[forms.Form]):
         form.actor = self.request.user  # type: ignore[attr-defined]
         try:
             self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)  # type: ignore[attr-defined]
-        except ValidationError as exc:
-            form.add_error(None, exc)
+        except (ValidationError, ValueError) as exc:
+            form.add_error(None, exc if isinstance(exc, ValidationError) else str(exc))
             return self.form_invalid(form)
 
         actor = self.request.user if self.request.user.is_authenticated else None
@@ -228,7 +229,11 @@ class DeviceCreateOpcUaGdsPushView(AbstractCreateOnboardingView):
         Returns:
             The HTTP Response to be returned.
         """
-        self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)  # type: ignore[attr-defined]
+        try:
+            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)  # type: ignore[attr-defined]
+        except (ValidationError, ValueError) as exc:
+            form.add_error(None, exc if isinstance(exc, ValidationError) else str(exc))
+            return self.form_invalid(form)
 
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(

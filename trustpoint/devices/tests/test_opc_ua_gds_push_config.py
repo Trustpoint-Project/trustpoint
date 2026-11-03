@@ -51,6 +51,7 @@ def test_password_is_encrypted_and_not_returned_by_api(opc_device):
 
 
 @pytest.mark.parametrize('legacy', [False, True])
+@pytest.mark.usefixtures('permissive_protocol_policy')
 def test_api_accepts_nested_and_legacy_locations(opc_device, legacy):
     values = {'opc_user': 'admin', 'opc_password': 'secret', 'opc_server_port': 4841}
     if legacy:
@@ -80,10 +81,13 @@ def test_config_change_preserves_workflow_device_event(opc_device):
 
 
 @pytest.mark.parametrize('legacy', [False, True])
+@pytest.mark.usefixtures('permissive_protocol_policy')
 def test_api_creates_device_with_dedicated_config(device_instance_onboarding, legacy):
     domain = device_instance_onboarding['device'].domain
     payload = {
-        'common_name': 'created-opc-config', 'device_type': 2, 'domain': domain.pk,
+        'common_name': 'created-opc-config',
+        'device_type': 2,
+        'domain': domain.pk,
         'ip_address': '127.0.0.1',
         'onboarding_config': {'onboarding_protocol': 7, 'pki_protocols': ['OPC_GDS_PUSH']},
     }
@@ -92,7 +96,9 @@ def test_api_creates_device_with_dedicated_config(device_instance_onboarding, le
         payload['onboarding_config'].update({'opc_user': 'admin', 'opc_password': 'secret'})
     else:
         payload['opc_ua_gds_push_config'] = {
-            'opc_server_port': 4842, 'opc_user': 'admin', 'opc_password': 'secret',
+            'opc_server_port': 4842,
+            'opc_user': 'admin',
+            'opc_password': 'secret',
         }
     serializer = DeviceSerializer(data=payload)
     assert serializer.is_valid(), serializer.errors

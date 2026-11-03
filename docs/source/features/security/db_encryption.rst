@@ -22,6 +22,13 @@ keys. There is no conversion or upgrade path from development-era databases;
 1.0.0 requires a fresh installation. For recovery, retain the database and its
 matching original software KEK or HSM recovery material.
 
+Reusable CMP shared secrets and EST/REST passwords in no-onboarding
+configurations also use application-secret encryption. Migration
+``onboarding.0003_encrypt_no_onboarding_credentials`` encrypts existing values
+and requires access to the installation's configured application-secret keys
+when nonempty credentials exist. A missing key stops the migration and rolls
+back its changes; an empty installation does not initialize key material.
+
 Software Backend
 -------------------
 

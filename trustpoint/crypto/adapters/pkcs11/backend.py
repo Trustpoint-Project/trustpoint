@@ -190,19 +190,20 @@ class Pkcs11Backend(LoggerMixin):
     def verify_managed_key(self, key: Pkcs11ManagedKeyBinding) -> Pkcs11ManagedKeyVerification:
         """Verify that a managed-key binding still resolves to the expected key."""
         try:
+            with self._session_pool_for_token().session() as session:
+                self._locator.private_key(session, key)
             public_key = self.get_public_key(key)
         except KeyNotFoundError:
             return Pkcs11ManagedKeyVerification(
                 status=ManagedKeyVerificationStatus.MISSING,
                 resolved_public_key_fingerprint_sha256=None,
             )
+        except PKCS11Error as exc:
+            raise map_pkcs11_error(exc, operation='private-key lookup') from exc
 
         resolved_fingerprint = self._fingerprint_public_key(public_key)
 
-        if (
-            key.public_key_fingerprint_sha256 is not None
-            and key.public_key_fingerprint_sha256 != resolved_fingerprint
-        ):
+        if key.public_key_fingerprint_sha256 is not None and key.public_key_fingerprint_sha256 != resolved_fingerprint:
             return Pkcs11ManagedKeyVerification(
                 status=ManagedKeyVerificationStatus.MISMATCH,
                 resolved_public_key_fingerprint_sha256=resolved_fingerprint,

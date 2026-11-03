@@ -169,6 +169,76 @@ def test_stale_model_cannot_restore_superseded_secret(policy):
         stale.save()
 
 
+@pytest.mark.parametrize(
+    'field,version',
+    [
+        ('est_password', 'est_password_version'),
+        ('cmp_shared_secret', 'cmp_secret_version'),
+        ('scep_challenge', 'scep_secret_version'),
+    ],
+)
+@pytest.mark.parametrize('save_fields', ['all', 'secret', 'version'])
+def test_stale_save_cannot_restore_generation_when_secret_is_unchanged(policy, field, version, save_fields):
+    config = no_onboarding()
+    assign_secret(config, field, custom=True, value='unchanged-password')
+    stale = NoOnboardingConfigModel.objects.get(pk=config.pk)
+    context = BaseRequestContext()
+    remember_secret(context, stale, field)
+    assign_secret(config, field, custom=True, value='unchanged-password')
+    current_version = getattr(config, version)
+
+    kwargs = {} if save_fields == 'all' else {'update_fields': [field if save_fields == 'secret' else version]}
+    with pytest.raises(ValidationError, match='changed'):
+        stale.save(**kwargs)
+
+    config.refresh_from_db()
+    assert getattr(config, version) == current_version
+    assert current_version > context.authenticated_secret_version
+    with pytest.raises(ValueError, match='changed'), secret_use(context):
+        pytest.fail('Superseded authentication must remain invalid')
+
+
+def test_stale_metadata_save_does_not_overwrite_credential_generation(policy):
+    config = no_onboarding()
+    stale = NoOnboardingConfigModel.objects.get(pk=config.pk)
+    assign_secret(config, 'est_password', custom=True, value=config.est_password)
+    current_version = config.est_password_version
+    stale.save(update_fields=['trust_store'])
+    config.refresh_from_db()
+    assert config.est_password_version == current_version
+
+
+def test_reusable_credentials_are_encrypted_at_rest(policy):
+    from django.db import connection
+
+    config = no_onboarding()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            'SELECT est_password, cmp_shared_secret FROM onboarding_noonboardingconfigmodel WHERE id = %s',
+            [config.pk],
+        )
+        stored = cursor.fetchone()
+    assert all(value.startswith('tpsec:v1:') for value in stored)
+    config.refresh_from_db()
+    assert config.est_password == 'generated-est'
+    assert config.cmp_shared_secret == 'generated-cmp'
+
+
+@pytest.mark.parametrize('field', ['est_password', 'cmp_shared_secret'])
+@pytest.mark.parametrize('length', [128, 129])
+def test_reusable_credential_character_limit_is_preserved_for_unicode(policy, field, length):
+    config = no_onboarding()
+    value = '🔐' * length
+    setattr(config, field, value)
+    if length > 128:
+        with pytest.raises(ValidationError):
+            config.save()
+    else:
+        config.save()
+        config.refresh_from_db()
+        assert getattr(config, field) == value
+
+
 def test_completed_onboarding_cannot_restore_secrets_through_clm(policy):
     config = OnboardingConfigModel.objects.create(
         onboarding_protocol=OnboardingProtocol.EST_USERNAME_PASSWORD,
