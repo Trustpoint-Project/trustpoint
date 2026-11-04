@@ -21,10 +21,14 @@ from django.db import connection
 from django.db.models import Field
 from packaging.version import InvalidVersion, Version
 
-from management.util.output_wrapper import CommandOutputWrapper
-from management.util.startup_strategies import BootstrapTlsMaterialStrategy, StartupContext, WizardState
 from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
-from setup_wizard.operational_handoff import build_operational_environment, write_operational_env_file
+from setup_wizard.operational_handoff import (
+    build_operational_environment,
+    clear_operational_ready_file,
+    write_operational_env_file,
+)
+from setup_wizard.output_wrapper import CommandOutputWrapper
+from setup_wizard.startup_strategies import BootstrapTlsMaterialStrategy, StartupContext, WizardState
 from setup_wizard.tls_credential import load_staged_tls_credential
 from users.models import BuiltinRole
 
@@ -48,7 +52,7 @@ class Command(BaseCommand):
 
         output = CommandOutputWrapper(self.stdout, self.style)
         output.write('=== Starting Trustpoint Bootstrap Sequence ===')
-        output.write(f"Bootstrap database: {settings.DATABASES['default']['NAME']}")
+        output.write(f'Bootstrap database: {settings.DATABASES["default"]["NAME"]}')
 
         output.write('Preparing bootstrap database schema...')
         self._prepare_bootstrap_database()
@@ -213,15 +217,10 @@ class Command(BaseCommand):
         )
 
         try:
+            clear_operational_ready_file(Path(operational_ready_path))
             env_file = Path(operational_env_path)
             write_operational_env_file(build_operational_environment(config), env_file)
             output.write(f'Created operational environment file: {operational_env_path}')
-
-            # Create operational.ready marker
-            ready_file = Path(operational_ready_path)
-            ready_file.parent.mkdir(parents=True, exist_ok=True)
-            ready_file.write_text('auto-setup-requested\n')
-            output.write(f'Created operational ready marker: {operational_ready_path}')
 
             # Create a marker file to trigger auto-setup during operational switch
             auto_setup_marker = Path('/var/lib/trustpoint/bootstrap/auto-setup.marker')

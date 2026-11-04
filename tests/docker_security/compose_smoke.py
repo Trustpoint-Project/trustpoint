@@ -204,6 +204,25 @@ print(json.dumps({'digest':hashlib.sha256(settings.SECRET_KEY.encode()).hexdiges
     first = key('trustpoint')
     assert first == key('trustpoint-worker') and not first['leaked']
     print('PASS: web and worker share signing key and DEK; secrets are absent from environment variables.', flush=True)
+    # Recreate at the interruption window after DB setup commits but before readiness is published.
+    interrupted_setup = (
+        "from pathlib import Path; p=Path('/var/lib/trustpoint/bootstrap'); "
+        "(p/'operational.ready').unlink(); (p/'auto-setup.marker').write_text('interrupted auto setup')"
+    )
+    call(compose + ['exec', '-T', '--user', '33:33', 'trustpoint',
+                    '/var/www/html/trustpoint/.venv/bin/python', '-c', interrupted_setup], cwd=temp)
+    call(compose + ['up', '-d', '--no-deps', '--no-build', '--force-recreate', '--wait',
+                    '--wait-timeout', '180', 'trustpoint'], cwd=temp)
+    container = call(compose + ['ps', '--quiet', 'trustpoint'], cwd=temp).strip()
+    assert call(['docker', 'inspect', '--format', '{{.RestartCount}}', container]).strip() == '0'
+    assert first == key('trustpoint') == key('trustpoint-worker')
+    completion = (
+        "from pathlib import Path; p=Path('/var/lib/trustpoint/bootstrap'); "
+        "assert (p/'operational.ready').exists() and not (p/'auto-setup.marker').exists(); "
+        "assert Path('/etc/trustpoint/tls/nginx-tls-server-cert.pem').is_file()"
+    )
+    call(compose + ['exec', '-T', 'trustpoint', '/usr/local/bin/python3', '-I', '-c', completion], cwd=temp)
+    print('PASS: interrupted auto-setup recreation installs TLS and recovers without another restart.', flush=True)
     readonly = "from pathlib import Path; p=Path('/run/secrets/django_secret_key'); p.write_text('must-fail')"
     result = subprocess.run(
         compose + ['exec', '-T', '--user', '0', 'trustpoint', '/usr/local/bin/python3', '-c', readonly],

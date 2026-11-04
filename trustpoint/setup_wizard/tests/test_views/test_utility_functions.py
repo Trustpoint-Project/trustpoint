@@ -117,9 +117,7 @@ class ExecuteShellScriptTests(TestCase):
     @patch('setup_wizard.views.subprocess.run')
     def test_execute_script_failure(self, mock_run: Mock) -> None:
         """Test handling of script execution failure."""
-        mock_result = Mock()
-        mock_result.returncode = 1
-        mock_run.return_value = mock_result
+        mock_run.side_effect = subprocess.CalledProcessError(1, 'sudo', stderr='helper failed')
 
         with patch('setup_wizard.views.Path.exists', return_value=True), \
              patch('setup_wizard.views.Path.is_file', return_value=True):

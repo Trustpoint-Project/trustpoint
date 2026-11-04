@@ -150,8 +150,7 @@ RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
 RUN rm -f /etc/nginx/sites-enabled/*
 COPY ./docker/trustpoint/nginx/trustpoint-nginx-https.conf /etc/nginx/sites-available/trustpoint
 
-RUN chmod +x /etc/trustpoint/wizard/transition/*.sh \
-             /etc/trustpoint/wizard/configure_nginx.sh \
+RUN chmod +x /etc/trustpoint/wizard/configure_nginx.sh \
              /etc/trustpoint/wizard/install_pkcs11_assets.sh \
              /etc/trustpoint/wizard/switch_to_operational.sh \
              /etc/trustpoint/wizard/update_tls.sh \

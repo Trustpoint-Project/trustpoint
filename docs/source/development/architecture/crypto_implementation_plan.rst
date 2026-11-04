@@ -271,8 +271,8 @@ Primary files to replace:
 - large parts of ``trustpoint/management/models/pkcs11.py``
 - HSM-dependent startup/restore branches in:
 
-  - ``trustpoint/management/util/startup_context.py``
-  - ``trustpoint/management/util/startup_strategies.py``
+  - ``trustpoint/setup_wizard/startup_context.py``
+  - ``trustpoint/setup_wizard/startup_strategies.py``
   - ``trustpoint/setup_wizard/views.py``
 
 Exit criteria:

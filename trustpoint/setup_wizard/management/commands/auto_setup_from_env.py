@@ -27,14 +27,15 @@ from crypto.models import (
     CryptoProviderSoftwareConfigModel,
     SoftwareKeyEncryptionSource,
 )
+from management.models import AppVersion
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from management.security_change_audit import provider_configuration_changes
 from management.tls_files import write_tls_pem_files
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.models import SetupWizardCompletedModel
+from setup_wizard.runtime import execute_shell_script
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
-from setup_wizard.views import execute_shell_script
 
 UPDATE_TLS_NGINX = Path('/etc/trustpoint/wizard/update_tls_nginx.sh')
 
@@ -214,6 +215,10 @@ class Command(BaseCommand):
         if setup_completed:
             self.stdout.write(self.style.WARNING('Setup wizard already completed, skipping auto-setup'))
             return
+
+        if AppVersion.objects.exists():
+            msg = 'The target database already contains a Trustpoint installation. Use Connect Existing instead.'
+            raise CommandError(msg)
 
         try:
             username = self._env_value('TP_ADMIN_USERNAME', required=True)

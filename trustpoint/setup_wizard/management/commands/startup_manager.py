@@ -11,9 +11,9 @@ from django.core.management.base import BaseCommand
 from packaging.version import InvalidVersion, Version
 
 from management.models import AppVersion
-from management.util.output_wrapper import CommandOutputWrapper
-from management.util.startup_context import StartupContextBuilder
-from management.util.startup_strategies import CompletedRuntimeStartupStrategy
+from setup_wizard.output_wrapper import CommandOutputWrapper
+from setup_wizard.startup_context import StartupContextBuilder
+from setup_wizard.startup_strategies import CompletedRuntimeStartupStrategy
 
 
 class Command(BaseCommand):

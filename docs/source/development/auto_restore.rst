@@ -1,110 +1,49 @@
 .. _auto_restore:
 
-Auto Restore Workflow
+Recovery after restart
 ======================
 
-Overview
---------
+Normal startup
+--------------
 
-The auto restore workflow is triggered when a Trustpoint container with HSM-based storage (SoftHSM or Physical HSM) is restarted and the database contains encrypted data, but the HSM's Key Encryption Key (KEK) is not available. This process ensures that encrypted private keys can be recovered using a backup password, even if the HSM's volatile KEK is lost.
+Completed installations use ``startup_manager`` to run migrations, require the
+configured application-secret backend, and restore the active TLS credential
+from the database. The container then starts the web and background services.
+The old filesystem wizard states and their transition scripts are no longer used.
 
-**Key Point:** For SOFTWARE storage type, no auto restore is needed - the container restarts normally.
+Startup and setup code
+----------------------
 
-Workflow Process
-----------------
+The ``setup_wizard`` app owns the ``bootstrap_manager``, ``startup_manager``,
+``apply_bootstrap_config``, ``auto_setup_from_env``, and ``finalize_setup``
+management commands. Startup context and strategies live beside them in
+``setup_wizard/startup_context.py`` and ``setup_wizard/startup_strategies.py``.
+Database restore and isolated provider probes live in ``backup_restore.py`` and
+``pkcs11_probe.py``. Docker's privileged launchers remain under ``docker``.
 
-HSM-Based Storage (SoftHSM or Physical HSM)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Auto-setup publishes its operational ready marker only after setup, startup, and
+the runtime switch succeed. A failed attempt keeps its retry marker and starts
+in bootstrap mode again. Fresh install rejects an already configured database;
+use Connect Existing to attach to that installation.
 
-The auto restore workflow varies depending on what HSM components are available:
+Fresh install commits its application-version record together with the target
+database configuration. If the bootstrap save is interrupted after that commit,
+use Connect Existing to validate the committed installation and finish attaching
+instead of applying fresh-install settings again.
 
-**Scenario 1: KEK Lost, Token Exists**
+Required recovery material
+--------------------------
 
-.. code-block:: text
+Preserve the database, deployment volumes, Django signing key, and the original
+key-encryption key (KEK). Software storage requires the installation's
+``trustpoint_software_kek`` secret. PKCS#11 storage requires the original HSM
+key/token, provider configuration, and authentication material. SoftHSM also
+requires its original token/configuration volumes and PIN files.
 
-    Container Restart (SOFTHSM + WIZARD_COMPLETED + encrypted DB)
-        ↓
-    managestartup.py detects KEK lost but token exists
-        ↓
-    WIZARD_AUTO_RESTORE_PASSWORD state created
-        ↓
-    entrypoint.sh detects state → skips unwrap/config
-        ↓
-    User accesses web → /setup-wizard/auto_restore_password/
-        ↓
-    BackupAutoRestorePasswordView
-        ↓
-    DEK recovery + TLS extraction
-        ↓
-    sudo wizard_auto_restore_success.sh
-        ↓
-    NGINX & TLS config → WIZARD_COMPLETED
-        ↓
-    Done!
+A database backup alone cannot recover encrypted credentials. Do not initialize
+a replacement key or token over an existing installation when startup reports
+missing key material. Restore the original deployment material first.
 
-**Scenario 2: HSM Completely Lost (New HSM Installation)**
-
-.. code-block:: text
-
-    Container Restart (SOFTHSM + WIZARD_COMPLETED + encrypted DB)
-        ↓
-    managestartup.py detects new KEK scenario (token missing)
-        ↓
-    WIZARD_SETUP_HSM_AUTORESTORE state created
-        ↓
-    entrypoint.sh detects state → skips unwrap/config
-        ↓
-    User accesses web → /setup-wizard/auto-restore-hsm-setup/<hsm_type>/
-        ↓
-    AutoRestoreHsmSetupView
-        ↓
-    sudo wizard_setup_hsm.sh <module> <slot> <label> auto_restore_setup
-        ↓
-    HSM token initialized → WIZARD_AUTO_RESTORE_PASSWORD state created
-        ↓
-    User accesses web → /setup-wizard/auto_restore_password/
-        ↓
-    BackupAutoRestorePasswordView
-        ↓
-    DEK recovery + TLS extraction + CA deactivation
-        ↓
-    sudo wizard_auto_restore_success.sh
-        ↓
-    NGINX & TLS config → WIZARD_COMPLETED
-        ↓
-    Done!
-
-**Scenario 3: KEK Available (Normal Restart)**
-
-.. code-block:: text
-
-    Container Restart (SOFTHSM + WIZARD_COMPLETED + encrypted DB)
-        ↓
-    managestartup.py detects KEK available
-        ↓
-    Normal startup continues
-        ↓
-    DEK unwrapped using existing KEK
-        ↓
-    NGINX & TLS config → WIZARD_COMPLETED
-        ↓
-    Done!
-
-SOFTWARE Storage Type
-~~~~~~~~~~~~~~~~~~~~~
-
-For SOFTWARE storage type:
-
-.. code-block:: text
-
-    Container Restart (SOFTWARE + WIZARD_COMPLETED)
-        ↓
-    managestartup.py
-        ↓
-    No auto restore needed
-        ↓
-    Normal container startup continues
-        ↓
-    Done!
-
-
+Use the current setup wizard's backup restore flow for a new installation.
+For deployment persistence and backup requirements, see
+:doc:`../features/management/docker_deployment`.

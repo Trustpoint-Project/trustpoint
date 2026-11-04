@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import datetime as dt
 import shutil
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cryptography import x509
@@ -23,9 +22,11 @@ from trustpoint_core.serializer import (
 )
 
 from pki.util.x509 import CertificateVerifier
+from setup_wizard.staging import WIZARD_STAGING_ROOT
 
 if TYPE_CHECKING:
     import ipaddress
+    from pathlib import Path
 
 ONE_DAY = dt.timedelta(days=1)
 MIN_CERTIFICATE_CHAIN_LENGTH = 2
@@ -33,7 +34,7 @@ IPV4_VERSION = 4
 
 TLS_STAGING_DIRECTORY_MODE = 0o700
 TLS_STAGING_FILE_MODE = 0o600
-TLS_STAGING_ROOT = Path('/tmp/trustpoint-wizard/tls')  # noqa: S108
+TLS_STAGING_ROOT = WIZARD_STAGING_ROOT / 'tls'
 TLS_PRIVATE_KEY_FILE = TLS_STAGING_ROOT / 'tls-private-key.pem'
 TLS_CERTIFICATE_FILE = TLS_STAGING_ROOT / 'tls-certificate.pem'
 TLS_CHAIN_FILE = TLS_STAGING_ROOT / 'tls-chain.pem'

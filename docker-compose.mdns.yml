@@ -5,11 +5,6 @@ services:
       dockerfile: docker/mdns/Dockerfile
     network_mode: host
     restart: on-failure:3
-    # We mount the socket in case the host HAS Avahi already
-    volumes:
-      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket
-      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
-    # Required for starting internal D-Bus if the host doesn't have one
     cap_add:
       - NET_ADMIN
       - SYS_ADMIN

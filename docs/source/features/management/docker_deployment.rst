@@ -219,7 +219,8 @@ mDNS and external PostgreSQL
 
 On Linux, add ``-f docker-compose.mdns.yml`` to advertise the service. The
 advertiser uses host networking and additional capabilities; it remains separate
-from the application container. Docker Desktop is not supported for mDNS.
+from the application container. It runs its own D-Bus and Avahi services and
+does not mount host sockets. Docker Desktop is not supported for mDNS.
 
 For external PostgreSQL, set the existing ``DATABASE_*`` and ``POSTGRES_DB``
 settings, then start only the application service with
@@ -244,6 +245,8 @@ Persistence And Backups
      - ``postgres_data`` volume
    * - Bootstrap database and operational handoff
      - ``trustpoint_bootstrap`` volume
+   * - Unfinished wizard TLS credentials and provider uploads/PINs
+     - Private ``staging`` directory in ``trustpoint_bootstrap``
    * - Media, logs, and local backups
      - ``trustpoint_media`` volume
    * - Provider libraries/configuration and local crypto state

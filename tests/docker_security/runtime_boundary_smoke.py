@@ -7,6 +7,7 @@ import json
 import os
 import pwd
 import runpy
+import sqlite3
 import subprocess
 from pathlib import Path
 
@@ -22,6 +23,73 @@ marker = Path('/root/must-not-exist')
 helper = '/etc/trustpoint/wizard/switch_to_operational.sh'
 os.environ['DATABASE_PASSWORD'] = 'external-test-credential'
 runtime['initialize_deployment']()
+
+# Real root ownership must not escape through a web-created bootstrap symlink.
+storage = Path('/var/lib/trustpoint/storage-regression/new/bootstrap')
+protected = Path('/etc/trustpoint/storage-protected-script')
+protected.write_text('protected')
+protected.chmod(0o644)
+deployment = {
+    **runtime['DEPLOYMENT_DEFAULTS'],
+    'TRUSTPOINT_BOOTSTRAP_DB_PATH': str(storage / 'bootstrap.sqlite3'),
+    'TRUSTPOINT_OPERATIONAL_ENV_FILE': str(storage / 'operational.env'),
+    'TRUSTPOINT_OPERATIONAL_READY_FILE': str(storage / 'operational.ready'),
+}
+runtime['prepare_bootstrap_storage'](deployment)
+assert storage.stat().st_uid == account.pw_uid and storage.stat().st_mode & 0o777 == 0o750
+assert storage.parent.stat().st_uid == 0 and storage.parent.stat().st_mode & 0o777 == 0o755
+write_probe = storage / 'application-write-probe'
+subprocess.run(['sudo', '-u', 'www-data', 'touch', str(write_probe)], check=True)
+write_probe.unlink()
+database = storage / 'bootstrap.sqlite3'
+subprocess.run(['sudo', '-u', 'www-data', 'ln', '-s', str(protected), str(database)], check=True)
+try:
+    runtime['prepare_bootstrap_storage'](deployment)
+except OSError:
+    pass
+else:
+    raise AssertionError('Root startup accepted a symlinked database')
+assert protected.stat().st_uid == 0 and protected.stat().st_mode & 0o777 == 0o644
+database.unlink()
+with sqlite3.connect(database) as connection:
+    connection.execute('PRAGMA journal_mode=WAL')
+    connection.execute('CREATE TABLE saved (value TEXT)')
+    connection.execute("INSERT INTO saved VALUES ('committed state')")
+    connection.commit()
+    connection.execute('BEGIN IMMEDIATE')
+    before = {path: path.read_bytes() for path in storage.iterdir()}
+    runtime['prepare_bootstrap_storage'](deployment)
+    assert {path: path.read_bytes() for path in storage.iterdir()} == before
+    assert database.stat().st_uid == account.pw_uid
+    assert connection.execute('SELECT value FROM saved').fetchone() == ('committed state',)
+print('PASS: nested storage is writable by www-data; links are rejected and locked SQLite/WAL data is preserved.', flush=True)
+
+# The privileged installer accepts persistent staging and rejects the old /tmp root.
+staged = bootstrap / 'staging/pkcs11'
+staged.mkdir(parents=True)
+module = staged / 'test-module.so'
+pin = staged / 'test-pin.txt'
+module.write_bytes(b'fixture module; never loaded')
+pin.write_text('synthetic-pin')
+installer = '/etc/trustpoint/wizard/install_pkcs11_assets.sh'
+result = subprocess.run(
+    ['sudo', '-u', 'www-data', 'sudo', '-n', installer, str(module), str(pin)],
+    capture_output=True, text=True,
+)
+assert result.returncode == 0, result.stdout + result.stderr
+installed_pin = Path('/var/lib/trustpoint/hsm/config/user-pin.txt')
+assert installed_pin.read_text() == 'synthetic-pin'
+assert installed_pin.stat().st_uid == 0 and installed_pin.stat().st_mode & 0o777 == 0o640
+assert not pin.exists() and not module.exists()
+legacy = Path('/tmp/trustpoint-wizard/pkcs11/pin.txt')
+legacy.parent.mkdir(parents=True)
+legacy.write_text('reject-outside-persistent-staging')
+result = subprocess.run(
+    ['sudo', '-u', 'www-data', 'sudo', '-n', installer, str(legacy)], capture_output=True,
+)
+assert result.returncode != 0
+assert installed_pin.read_text() == 'synthetic-pin'
+print('PASS: sudo installer accepts persistent wizard staging and rejects legacy paths.', flush=True)
 
 # The host initializer is explicit and idempotent; the application only reads.
 initializer = runpy.run_path('/tests/init_secret.py')['initialize_secret']
@@ -60,8 +128,8 @@ kek_probe = key_probe.replace('django_secret_key', 'trustpoint_software_kek')
 subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', kek_probe], check=True)
 
 
-# Exercise the real auto-setup switch before replacing its body below. Service
-# executables are stubs; a second TLS install would fail on the empty staging dir.
+# Exercise the real auto-setup switch before replacing its body below. A retry
+# must install restored TLS files even when the database setup already committed.
 app = Path('/var/www/html/trustpoint')
 (app / '.venv/bin').mkdir(parents=True)
 (app / 'trustpoint').mkdir()
@@ -75,10 +143,16 @@ site = Path('/etc/nginx/sites-available/trustpoint')
 site.parent.mkdir(parents=True)
 site.write_text('proxy_pass http://127.0.0.1:8000;\n')
 (app / 'docker/trustpoint/nginx/tls').mkdir(parents=True)
+for name in ('nginx-tls-server-key.key', 'nginx-tls-server-cert.pem'):
+    (app / 'docker/trustpoint/nginx/tls' / name).write_text('restored operational TLS')
 app_program = app / '.venv/bin/python'
 app_program.write_text("""#!/bin/sh
 case "$*" in
   *migrate) exit 17 ;;
+  *finalize_setup)
+    touch "$TRUSTPOINT_OPERATIONAL_READY_FILE"
+    rm -f /var/lib/trustpoint/bootstrap/auto-setup.marker
+    exit 0 ;;
   *qcluster) exec /bin/sleep 60 ;;
 esac
 exit 0
@@ -89,16 +163,18 @@ gunicorn.write_text('#!/bin/sh\nexec /bin/sleep 60\n')
 gunicorn.chmod(0o755)
 auto_marker = bootstrap / 'auto-setup.marker'
 auto_marker.touch()
-pending.write_text('{}')
-os.chown(pending, account.pw_uid, account.pw_gid)
-result = subprocess.run([helper, '--pending'], capture_output=True, text=True, timeout=15)
+final.write_text('{}')
+os.chown(final, account.pw_uid, account.pw_gid)
+result = subprocess.run([helper, '--final'], capture_output=True, text=True, timeout=15)
 assert result.returncode == 17, result.stdout + result.stderr
 assert auto_marker.exists(), 'Failed migrations must preserve the auto-setup marker'
 app_program.write_text(app_program.read_text().replace('*migrate) exit 17', '*migrate) exit 0'))
-result = subprocess.run([helper, '--pending'], capture_output=True, text=True, timeout=15)
+result = subprocess.run([helper, '--final'], capture_output=True, text=True, timeout=15)
 assert result.returncode == 0, result.stdout + result.stderr
 assert not auto_marker.exists()
-assert 'Applying operational TLS files' not in result.stdout
+assert ready.exists()
+assert 'Applying operational TLS files' in result.stdout
+assert Path('/etc/trustpoint/tls/nginx-tls-server-cert.pem').read_text() == 'restored operational TLS'
 assert 'runtime switched to operational mode' in result.stdout
 for pid_path in Path('/run').glob('trustpoint-operational-*.pid'):
     os.kill(int(pid_path.read_text()), 15)

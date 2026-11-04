@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import ValidationError as DjangoValidationError
 
-from setup_wizard import views
+from setup_wizard import backup_restore as views
 from setup_wizard.models import SetupWizardConfigModel
 
 CUSTOM_DUMP_PAYLOAD = b'PGDMP\x01\x10trustpoint custom dump bytes'

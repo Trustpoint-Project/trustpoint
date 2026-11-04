@@ -5,7 +5,7 @@
 from unittest.mock import Mock
 
 from django.test import TestCase
-from management.util.output_wrapper import CommandOutputWrapper
+from setup_wizard.output_wrapper import CommandOutputWrapper
 
 
 class CommandOutputWrapperTest(TestCase):

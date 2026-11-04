@@ -8,8 +8,8 @@ from unittest.mock import Mock, patch
 from django.test import TestCase
 from packaging.version import Version
 
-from management.util.startup_context import StartupContextBuilder
-from management.util.startup_strategies import WizardState
+from setup_wizard.startup_context import StartupContextBuilder
+from setup_wizard.startup_strategies import WizardState
 
 
 class StartupContextBuilderTest(TestCase):
@@ -39,7 +39,7 @@ class StartupContextBuilderTest(TestCase):
         self.assertEqual(self.builder.db_version, db_version)
         self.assertEqual(result, self.builder)
 
-    @patch('management.util.startup_context.configured_backend_kind')
+    @patch('setup_wizard.startup_context.configured_backend_kind')
     def test_collect_backend_state(self, mock_configured_backend_kind: Mock) -> None:
         """Test collecting configured backend kind."""
         mock_configured_backend_kind.return_value = None
@@ -49,7 +49,7 @@ class StartupContextBuilderTest(TestCase):
         self.assertIsNone(self.builder.backend_kind)
         self.assertEqual(result, self.builder)
 
-    @patch('management.util.startup_context.load_staged_tls_credential')
+    @patch('setup_wizard.startup_context.load_staged_tls_credential')
     def test_collect_tls_staging_state(self, mock_load_staged_tls_credential: Mock) -> None:
         """Test collecting staged TLS state."""
         mock_load_staged_tls_credential.return_value = object()

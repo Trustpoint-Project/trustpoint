@@ -36,70 +36,8 @@ echo "=== Trustpoint phase: ${PHASE} ==="
 echo "=== Django settings: ${DJANGO_SETTINGS_MODULE} ==="
 
 mkdir -p /var/log/trustpoint
-BOOTSTRAP_STATE_DIR="$(dirname "$OPERATIONAL_ENV_FILE")"
-BOOTSTRAP_READY_DIR="$(dirname "$OPERATIONAL_READY_FILE")"
-BOOTSTRAP_DB_PATH="${TRUSTPOINT_BOOTSTRAP_DB_PATH:-/var/lib/trustpoint/bootstrap/bootstrap.sqlite3}"
-BOOTSTRAP_DB_DIR="$(dirname "$BOOTSTRAP_DB_PATH")"
-
-bootstrap_sqlite_write_probe() {
-  su -s /bin/bash www-data -c "python -c \"import sqlite3; p='${BOOTSTRAP_DB_PATH}'; con=sqlite3.connect(p); con.execute('CREATE TABLE IF NOT EXISTS trustpoint_bootstrap_write_probe (id integer primary key)'); con.execute('DROP TABLE trustpoint_bootstrap_write_probe'); con.commit(); con.close()\""
-}
-
-repair_bootstrap_sqlite_file() {
-  [ -e "$BOOTSTRAP_DB_PATH" ] || return 0
-
-  local repaired_path="${BOOTSTRAP_DB_PATH}.repair"
-  local stale_path
-  stale_path="${BOOTSTRAP_DB_PATH}.readonly.$(date +%s)"
-
-  cp "$BOOTSTRAP_DB_PATH" "$repaired_path"
-  chown www-data:www-data "$repaired_path"
-  chmod 660 "$repaired_path"
-  mv "$BOOTSTRAP_DB_PATH" "$stale_path"
-  mv "$repaired_path" "$BOOTSTRAP_DB_PATH"
-}
-
-prepare_bootstrap_sqlite_storage() {
-  mkdir -p "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR" "$BOOTSTRAP_DB_DIR"
-
-  if [ "$(id -u)" != "0" ]; then
-    return 0
-  fi
-
-  chown root:root /var/log/trustpoint
-  chmod 755 /var/log/trustpoint
-  chown -R www-data:www-data "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR" "$BOOTSTRAP_DB_DIR"
-  chmod 750 "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR" "$BOOTSTRAP_DB_DIR"
-
-  if [ -e "$BOOTSTRAP_DB_PATH" ]; then
-    chown www-data:www-data "$BOOTSTRAP_DB_PATH"
-    chmod 660 "$BOOTSTRAP_DB_PATH"
-  fi
-
-  find "$BOOTSTRAP_DB_DIR" -maxdepth 1 \( -name '*.sqlite3-journal' -o -name '*.sqlite3-wal' -o -name '*.sqlite3-shm' \) \
-    -exec chown www-data:www-data {} \; \
-    -exec chmod 660 {} \; 2>/dev/null || true
-
-  su -s /bin/bash www-data -c "test -w '$BOOTSTRAP_DB_DIR' && touch '$BOOTSTRAP_DB_DIR/.trustpoint-write-test' && rm -f '$BOOTSTRAP_DB_DIR/.trustpoint-write-test'"
-
-  if [ "$PHASE" != "bootstrap" ]; then
-    return 0
-  fi
-
-  if ! bootstrap_sqlite_write_probe; then
-    echo "WARNING: Bootstrap SQLite write probe failed; repairing database file permissions."
-    repair_bootstrap_sqlite_file
-    find "$BOOTSTRAP_DB_DIR" -maxdepth 1 \( -name '*.sqlite3-journal' -o -name '*.sqlite3-wal' -o -name '*.sqlite3-shm' \) \
-      -exec rm -f {} \; 2>/dev/null || true
-    bootstrap_sqlite_write_probe
-  fi
-}
-
-mkdir -p "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR"
-mkdir -p "$BOOTSTRAP_DB_DIR"
-if [ "$(id -u)" = "0" ]; then
-  prepare_bootstrap_sqlite_storage
-fi
+chown root:root /var/log/trustpoint
+chmod 755 /var/log/trustpoint
 
 wait_for_postgres() {
   echo "Waiting for PostgreSQL database..."
@@ -134,9 +72,83 @@ start_gunicorn() {
   fi
 }
 
+service_alive() {
+  local field state
+  kill -0 "$1" 2>/dev/null || return 1
+  if [ -r "/proc/$1/status" ]; then
+    while read -r field state _; do
+      if [ "$field" = "State:" ]; then
+        [ "$state" != "Z" ]
+        return
+      fi
+    done < "/proc/$1/status"
+  fi
+}
+
 start_nginx_foreground() {
+  local handoff_started=""
   echo "Starting Nginx server..."
-  exec nginx -g 'daemon off;'
+  nginx -g 'daemon off;' &
+  NGINX_PID=$!
+  while true; do
+    local required_pids=("$NGINX_PID")
+    if [ -f /run/trustpoint-operational.ready ]; then
+      if [ -z "$handoff_started" ]; then
+        handoff_started=$SECONDS
+      fi
+      if [ -n "${GUNICORN_PID:-}" ] && (( SECONDS - handoff_started >= 10 )); then
+        kill -TERM "$GUNICORN_PID" 2>/dev/null || true
+        GUNICORN_PID=""
+      fi
+      required_pids+=("$(cat /run/trustpoint-operational-gunicorn.pid)"
+                     "$(cat /run/trustpoint-operational-qcluster.pid)")
+    else
+      required_pids+=("$GUNICORN_PID")
+      if [ -n "${QCLUSTER_PID:-}" ]; then
+        required_pids+=("$QCLUSTER_PID")
+      fi
+    fi
+    for pid in "${required_pids[@]}"; do
+      if ! service_alive "$pid"; then
+        echo "ERROR: Required service $pid exited; stopping the container."
+        exit 1
+      fi
+    done
+    sleep 1
+  done
+}
+
+stop_web_services() {
+  local pid_file
+  local pids=("${NGINX_PID:-}" "${GUNICORN_PID:-}" "${QCLUSTER_PID:-}")
+  for pid_file in /run/trustpoint-operational-{gunicorn,qcluster}.pid; do
+    if [ -s "$pid_file" ]; then
+      pids+=("$(cat "$pid_file")")
+    fi
+  done
+  # Include children started just before a shutdown signal, before $! was saved.
+  for pid in $(jobs -pr); do
+    pids+=("$pid")
+  done
+  for pid in "${pids[@]}"; do
+    if [ -n "$pid" ]; then
+      kill -TERM "$pid" 2>/dev/null || true
+    fi
+  done
+  # Handoff services are not shell jobs; leave time within Docker's 10-second stop window.
+  local deadline=$((SECONDS + 8))
+  for pid in "${pids[@]}"; do
+    [ -n "$pid" ] || continue
+    while service_alive "$pid"; do
+      if (( SECONDS >= deadline )); then
+        echo "WARNING: Service $pid exceeded the shutdown deadline; killing it."
+        kill -KILL "$pid" 2>/dev/null || true
+        break
+      fi
+      sleep 0.1
+    done
+  done
+  wait || true
 }
 
 # ---------------- WORKER ROLE ----------------
@@ -155,6 +167,10 @@ if [ "$ROLE" = "worker" ]; then
   /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app sync-security
   exec /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app worker
 fi
+
+rm -f /run/trustpoint-operational.ready /run/trustpoint-operational-{gunicorn,qcluster}.pid
+trap stop_web_services EXIT
+trap 'exit 0' SIGTERM SIGINT
 
 if [ "$PHASE" = "bootstrap" ]; then
   echo "=== Starting Trustpoint BOOTSTRAP web role ==="
@@ -180,7 +196,6 @@ if [ "$PHASE" = "bootstrap" ]; then
   
   configure_web_edge
   start_gunicorn
-  trap 'kill $GUNICORN_PID 2>/dev/null; exit 0' SIGTERM SIGINT
   start_nginx_foreground
 fi
 
@@ -208,7 +223,5 @@ if ! kill -0 $QCLUSTER_PID 2>/dev/null; then
 fi
 
 start_gunicorn
-
-trap 'kill $QCLUSTER_PID $GUNICORN_PID 2>/dev/null; exit 0' SIGTERM SIGINT
 
 start_nginx_foreground

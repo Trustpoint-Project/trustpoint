@@ -1,5 +1,4 @@
 #!/bin/bash
-# /etc/trustpoint/wizard/transition/update_tls_nginx.sh
 NGINX_TLS_DIR="/etc/trustpoint/tls/"
 MAX_RETRIES=3
 DELAY=2  # seconds
@@ -17,9 +16,6 @@ log INFO "Starting TLS certificate setup for nginx"
 
 # Create nginx TLS directory
 mkdir -p "$NGINX_TLS_DIR"
-
-
-
 
 # Keep the previous files until Nginx accepts the update.
 backup_dir=$(mktemp -d)
