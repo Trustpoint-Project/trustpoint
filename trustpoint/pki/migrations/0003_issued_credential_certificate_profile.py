@@ -15,17 +15,22 @@ def link_existing_profiles(apps, schema_editor):
         if model_name == 'RemoteIssuedCredentialModel':
             # Imports carried a fixed label, not the profile used for issuance.
             issued = issued.exclude(
-                issued_credential_type=2, owner_credential__owner_credential_type=0,
+                issued_credential_type=2,
+                owner_credential__owner_credential_type=0,
                 issued_using_cert_profile__in=['', 'dev_owner_id'],
             )
-        names = issued.exclude(issued_using_cert_profile='').values_list('issued_using_cert_profile', flat=True).distinct()
+        names = (
+            issued.exclude(issued_using_cert_profile='').values_list('issued_using_cert_profile', flat=True).distinct()
+        )
         for name in names.iterator():
             matches = list(profiles.filter(models.Q(unique_name=name) | models.Q(display_name=name))[:2])
             if len(matches) == 1:
                 issued.filter(issued_using_cert_profile=name, certificate_profile__isnull=True).update(
                     certificate_profile_id=matches[0].pk
                 )
-        unresolved = list(issued.filter(certificate_profile__isnull=True).values('pk', 'issued_using_cert_profile')[:20])
+        unresolved = list(
+            issued.filter(certificate_profile__isnull=True).values('pk', 'issued_using_cert_profile')[:20]
+        )
         if unresolved:
             raise RuntimeError(
                 'Cannot remove saved certificate profile labels. Resolve missing or ambiguous '
@@ -44,7 +49,6 @@ def restore_profile_labels(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('pki', '0002_initial'),
     ]
@@ -53,13 +57,22 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='issuedcredentialmodel',
             name='certificate_profile',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='pki.certificateprofilemodel'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name='+',
+                to='pki.certificateprofilemodel',
+            ),
         ),
         migrations.AddField(
             model_name='remoteissuedcredentialmodel',
             name='certificate_profile',
             field=models.ForeignKey(
-                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+',
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='+',
                 to='pki.certificateprofilemodel',
                 help_text='Empty for imported DevOwnerID credentials without an issuance profile.',
             ),

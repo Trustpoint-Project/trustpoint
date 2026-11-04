@@ -31,7 +31,10 @@ def test_concurrent_initial_requests_issue_only_once(rsa_env: ScepEnv, same_tran
     signer = support.make_self_signed(key, 'race-device')
     bodies = [
         support.build_request(
-            signer_key=key, signer_cert=signer, server_cert=rsa_env.server_cert, csr=csr,
+            signer_key=key,
+            signer_cert=signer,
+            server_cert=rsa_env.server_cert,
+            csr=csr,
             transaction_id='race' if same_transaction else f'race-{index}',
         )[0]
         for index in range(2)

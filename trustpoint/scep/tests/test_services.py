@@ -26,7 +26,8 @@ def _replace_ca(env: ScepEnv, *, days: int = 3650, same_key: bool = False, cn: s
     unique = f'replacement-{uuid.uuid4().hex}'
     key = (
         env.domain.issuing_ca.get_credential().get_private_key()
-        if same_key else generate_managed_signing_private_key(alias=unique, key_spec=RsaKeySpec(key_size=2048))
+        if same_key
+        else generate_managed_signing_private_key(alias=unique, key_spec=RsaKeySpec(key_size=2048))
     )
     cert, key = CertificateGenerator.create_root_ca(cn, validity_days=days, private_key=key)
     env.domain.issuing_ca = CertificateGenerator.save_issuing_ca(cert, [], key, unique_name=unique)
@@ -39,8 +40,10 @@ def test_ca_near_expiry_keeps_server_key_and_allows_enrollment(client: Client, r
     assert services.ensure_server_credential(rsa_env.domain).pk == credential.pk
     key = support.make_key('rsa')
     body, _ = support.build_request(
-        signer_key=key, signer_cert=support.make_self_signed(key, 'device'),
-        server_cert=credential.get_certificate(), csr=support.make_csr(key, 'device', rsa_env.secret),
+        signer_key=key,
+        signer_cert=support.make_self_signed(key, 'device'),
+        server_cert=credential.get_certificate(),
+        csr=support.make_csr(key, 'device', rsa_env.secret),
     )
     response = client.post(rsa_env.url, body, content_type='application/x-pki-message', secure=True)
     assert support.parse_cert_rep(response.content).status == PkiStatus.SUCCESS

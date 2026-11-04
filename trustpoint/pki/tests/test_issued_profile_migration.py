@@ -13,7 +13,9 @@ NEW = [('pki', '0003_issued_credential_certificate_profile')]
 
 
 @pytest.mark.parametrize('remote', [False, True])
-@pytest.mark.parametrize('name_kind', ['unique_name', 'display_name', 'ambiguous', 'name_collision', 'unknown', 'blank'])
+@pytest.mark.parametrize(
+    'name_kind', ['unique_name', 'display_name', 'ambiguous', 'name_collision', 'unknown', 'blank']
+)
 def test_profile_migration_preserves_or_flags_legacy_names(credential_instance, device_instance, name_kind, remote):
     executor = MigrationExecutor(connection)
     executor.migrate(OLD)
@@ -26,16 +28,20 @@ def test_profile_migration_preserves_or_flags_legacy_names(credential_instance, 
     if name_kind in {'ambiguous', 'name_collision'}:
         profiles.objects.create(
             unique_name='Migration Label' if name_kind == 'name_collision' else 'other-profile',
-            display_name='Migration Label', profile_json={},
+            display_name='Migration Label',
+            profile_json={},
         )
     elif name_kind == 'unknown':
         name = 'Missing Profile'
     elif name_kind == 'blank':
         name = ''
     record = records.objects.create(
-        common_name='legacy-device', issued_credential_type=4 if remote else 1,
-        credential_id=credential_instance['credential'].pk, device_id=device_instance['device'].pk,
-        domain_id=device_instance['domain'].pk, issued_using_cert_profile=name,
+        common_name='legacy-device',
+        issued_credential_type=4 if remote else 1,
+        credential_id=credential_instance['credential'].pk,
+        device_id=device_instance['device'].pk,
+        domain_id=device_instance['domain'].pk,
+        issued_using_cert_profile=name,
     )
     try:
         if name_kind not in {'unique_name', 'display_name'}:
@@ -63,7 +69,6 @@ def test_profile_migration_preserves_or_flags_legacy_names(credential_instance, 
         executor.migrate(NEW)
 
 
-
 @pytest.mark.parametrize('label', ['', 'dev_owner_id'])
 def test_imported_owner_migration_keeps_profile_empty(credential_instance, label):
     executor = MigrationExecutor(connection)
@@ -72,12 +77,16 @@ def test_imported_owner_migration_keeps_profile_empty(credential_instance, label
     profiles = apps.get_model('pki', 'CertificateProfileModel')
     profiles.objects.create(unique_name='dev_owner_id', profile_json={})
     owner = apps.get_model('pki', 'OwnerCredentialModel').objects.create(
-        unique_name='imported-owner', owner_credential_type=0,
+        unique_name='imported-owner',
+        owner_credential_type=0,
     )
     records = apps.get_model('pki', 'RemoteIssuedCredentialModel')
     record = records.objects.create(
-        common_name='imported-owner', issued_credential_type=2, owner_credential_id=owner.pk,
-        credential_id=credential_instance['credential'].pk, issued_using_cert_profile=label,
+        common_name='imported-owner',
+        issued_credential_type=2,
+        owner_credential_id=owner.pk,
+        credential_id=credential_instance['credential'].pk,
+        issued_using_cert_profile=label,
     )
     try:
         MigrationExecutor(connection).migrate(NEW)
