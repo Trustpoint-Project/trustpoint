@@ -9,10 +9,20 @@ import pytest
 from pki.models import CredentialModel, RevokedCertificateModel
 
 from pki.models import IssuedCredentialModel
+from pki.models.cert_profile import CertificateProfileModel
+
+
+@pytest.fixture
+def profile() -> CertificateProfileModel:
+    return CertificateProfileModel.objects.get_or_create(
+        unique_name='tls_client', defaults={'display_name': 'TLS Client', 'profile_json': {}}
+    )[0]
 
 
 @pytest.mark.django_db
-def test_issued_credential_creation(credential_instance: dict[str, Any], device_instance: dict[str, Any]) -> None:
+def test_issued_credential_creation(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
+) -> None:
     """Test the creation of an IssuedCredentialModel linked to a valid credential."""
     device = device_instance['device']
     credential = credential_instance['credential']
@@ -20,7 +30,7 @@ def test_issued_credential_creation(credential_instance: dict[str, Any], device_
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Test Issued Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_using_cert_profile='TLS Client',
+        certificate_profile=profile,
         credential=credential,
         device=device,
         domain=device.domain,
@@ -31,12 +41,14 @@ def test_issued_credential_creation(credential_instance: dict[str, Any], device_
     assert issued_credential.device == device, 'The issued credential should be linked to the correct device.'
     assert issued_credential.domain == device.domain, 'The issued credential should be linked to the correct domain.'
     assert issued_credential.issued_credential_type == IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
-    assert issued_credential.issued_using_cert_profile == 'TLS Client'
+    assert issued_credential.certificate_profile == profile
     assert issued_credential.common_name == 'Test Issued Credential', 'The common name should match the input.'
 
 
 @pytest.mark.django_db
-def test_is_valid_domain_credential(credential_instance: dict[str, Any], device_instance: dict[str, Any]) -> None:
+def test_is_valid_domain_credential(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
+) -> None:
     """Test the validity of an IssuedCredentialModel instance as a domain credential."""
     device = device_instance['device']
     credential = credential_instance['credential']
@@ -44,7 +56,7 @@ def test_is_valid_domain_credential(credential_instance: dict[str, Any], device_
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Valid Domain Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-        issued_using_cert_profile='Trustpoint Domain Credential',
+        certificate_profile=profile,
         credential=credential,
         device=device,
         domain=device.domain,
@@ -55,7 +67,9 @@ def test_is_valid_domain_credential(credential_instance: dict[str, Any], device_
 
 
 @pytest.mark.django_db
-def test_revoke_issued_credential(credential_instance: dict[str, Any], device_instance: dict[str, Any]) -> None:
+def test_revoke_issued_credential(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
+) -> None:
     """Test the revocation of all certificates associated with an IssuedCredentialModel."""
     device = device_instance['device']
     credential = credential_instance['credential']
@@ -63,7 +77,7 @@ def test_revoke_issued_credential(credential_instance: dict[str, Any], device_in
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Credential To Revoke',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_using_cert_profile='TLS Client',
+        certificate_profile=profile,
         credential=credential,
         device=device,
         domain=device.domain,
@@ -86,7 +100,9 @@ def test_revoke_issued_credential(credential_instance: dict[str, Any], device_in
 
 
 @pytest.mark.django_db
-def test_get_credential_for_certificate(credential_instance: dict[str, Any], device_instance: dict[str, Any]) -> None:
+def test_get_credential_for_certificate(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
+) -> None:
     """Test retrieving the IssuedCredentialModel for a given certificate."""
     device = device_instance['device']
     credential = credential_instance['credential']
@@ -94,7 +110,7 @@ def test_get_credential_for_certificate(credential_instance: dict[str, Any], dev
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Retrieved Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_using_cert_profile='TLS Client',
+        certificate_profile=profile,
         credential=credential,
         device=device,
         domain=device.domain,
@@ -106,7 +122,9 @@ def test_get_credential_for_certificate(credential_instance: dict[str, Any], dev
 
 
 @pytest.mark.django_db
-def test_pre_delete_issued_credential(credential_instance: dict[str, Any], device_instance: dict[str, Any]) -> None:
+def test_pre_delete_issued_credential(
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
+) -> None:
     """Test the `pre_delete` method for IssuedCredentialModel."""
     device = device_instance['device']
     credential = credential_instance['credential']
@@ -114,7 +132,7 @@ def test_pre_delete_issued_credential(credential_instance: dict[str, Any], devic
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Credential To Delete',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_using_cert_profile='TLS Client',
+        certificate_profile=profile,
         credential=credential,
         device=device,
         domain=device.domain,
@@ -133,7 +151,7 @@ def test_pre_delete_issued_credential(credential_instance: dict[str, Any], devic
 
 @pytest.mark.django_db
 def test_str_and_clean_require_a_device(
-    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
 ) -> None:
     """The string form names the credential and a device is mandatory."""
     from django.core.exceptions import ValidationError
@@ -141,7 +159,7 @@ def test_str_and_clean_require_a_device(
     issued_credential = IssuedCredentialModel(
         common_name='Named Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_using_cert_profile='TLS Client',
+        certificate_profile=profile,
         credential=credential_instance['credential'],
         domain=device_instance['device'].domain,
     )
@@ -153,14 +171,14 @@ def test_str_and_clean_require_a_device(
 
 @pytest.mark.django_db
 def test_application_credential_is_not_a_domain_credential(
-    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
 ) -> None:
     """Application credentials cannot be used to enrol further credentials."""
     device = device_instance['device']
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Application Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_using_cert_profile='TLS Client',
+        certificate_profile=profile,
         credential=credential_instance['credential'],
         device=device,
         domain=device.domain,
@@ -174,14 +192,14 @@ def test_application_credential_is_not_a_domain_credential(
 
 @pytest.mark.django_db
 def test_revocation_is_skipped_without_a_domain(
-    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
 ) -> None:
     """A credential without a domain has no issuing CA and is not revoked."""
     device = device_instance['device']
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Domainless Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_using_cert_profile='TLS Client',
+        certificate_profile=profile,
         credential=credential_instance['credential'],
         device=device,
         domain=device.domain,
@@ -190,21 +208,19 @@ def test_revocation_is_skipped_without_a_domain(
 
     issued_credential.revoke()
 
-    assert not RevokedCertificateModel.objects.filter(
-        certificate=issued_credential.credential.certificate
-    ).exists()
+    assert not RevokedCertificateModel.objects.filter(certificate=issued_credential.credential.certificate).exists()
 
 
 @pytest.mark.django_db
 def test_already_revoked_certificates_are_not_revoked_again(
-    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
 ) -> None:
     """Revoking twice does not create duplicate revocation entries."""
     device = device_instance['device']
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Twice Revoked Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_using_cert_profile='TLS Client',
+        certificate_profile=profile,
         credential=credential_instance['credential'],
         device=device,
         domain=device.domain,
@@ -213,9 +229,7 @@ def test_already_revoked_certificates_are_not_revoked_again(
 
     issued_credential.revoke()
 
-    assert RevokedCertificateModel.objects.filter(
-        certificate=issued_credential.credential.certificate
-    ).count() == 1
+    assert RevokedCertificateModel.objects.filter(certificate=issued_credential.credential.certificate).count() == 1
 
 
 @pytest.mark.django_db
@@ -241,14 +255,14 @@ def test_unknown_serial_number_lookup_raises(device_instance: dict[str, Any]) ->
 
 @pytest.mark.django_db
 def test_serial_number_lookup_returns_matching_credential(
-    credential_instance: dict[str, Any], device_instance: dict[str, Any]
+    credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
 ) -> None:
     """A known serial number resolves to its issued credential."""
     device = device_instance['device']
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Serial Lookup Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_using_cert_profile='TLS Client',
+        certificate_profile=profile,
         credential=credential_instance['credential'],
         device=device,
         domain=device.domain,
@@ -258,3 +272,29 @@ def test_serial_number_lookup_returns_matching_credential(
     found = IssuedCredentialModel.get_credential_for_serial_number(device.domain, device, serial)
 
     assert found == issued_credential
+
+
+def test_profile_reference_controls_label_and_prevents_deletion(credential_instance, device_instance, profile) -> None:
+    from django.db.models.deletion import ProtectedError
+    from pki.serializer.certificate import CertificateIssuedCredentialSerializer
+
+    issued = IssuedCredentialModel.objects.create(
+        common_name='profile-reference',
+        credential=credential_instance['credential'],
+        device=device_instance['device'],
+        domain=device_instance['domain'],
+        issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+        certificate_profile=profile,
+    )
+    profile.display_name = 'Renamed profile'
+    profile.save(update_fields=['display_name'])
+    issued.refresh_from_db()
+    assert issued.issued_using_cert_profile == 'Renamed profile'
+    assert CertificateIssuedCredentialSerializer(issued).data['issued_using_cert_profile'] == 'Renamed profile'
+    assert 'issued_using_cert_profile' not in {field.name for field in issued._meta.fields}
+    with pytest.raises(ProtectedError):
+        profile.delete()
+    profile.display_name = ''
+    profile.save(update_fields=['display_name'])
+    issued.refresh_from_db()
+    assert issued.issued_using_cert_profile == profile.unique_name

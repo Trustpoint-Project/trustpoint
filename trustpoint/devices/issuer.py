@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import CredentialSerializer
 
     from devices.models import DeviceModel
+    from pki.models.cert_profile import CertificateProfileModel
     from pki.models.domain import DomainModel
 
 
@@ -34,7 +35,7 @@ class KeylessCredentialSaveConfig(Generic[TKeylessSavedRecord]):  # noqa: UP046
     certificate_chain: list[x509.Certificate]
     existing_records: Any
     create_record: Callable[[], TKeylessSavedRecord]
-    issued_using_cert_profile: str
+    certificate_profile: CertificateProfileModel
     success_log: str
 
 
@@ -56,7 +57,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
         credential: CredentialSerializer,
         common_name: str,
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
-        issued_using_cert_profile: str,
+        certificate_profile: CertificateProfileModel,
     ) -> IssuedCredentialModel:
         """Saves the issued credential in the database.
 
@@ -64,21 +65,19 @@ class SaveCredentialToDbMixin(LoggerMixin):
             credential: The credential serializer instance.
             common_name: The common name for the credential.
             issued_credential_type: The type of issued credential.
-            issued_using_cert_profile: The profile used for issuing the credential.
+            certificate_profile: The profile used for issuing the credential.
 
         Returns:
             The saved issued credential model.
         """
         self.logger.info(
-            "Saving credential for device '%s' (ID: %s) "
-            "in domain '%s' - CN: '%s', "
-            "Type: %s, Profile: %s",
+            "Saving credential for device '%s' (ID: %s) in domain '%s' - CN: '%s', Type: %s, Profile: %s",
             self.device.common_name,
             self.device.pk,
             self.domain.unique_name,
             common_name,
             issued_credential_type.label,
-            issued_using_cert_profile,
+            certificate_profile,
         )
         try:
             credential_model = CredentialModel.save_credential_serializer(
@@ -87,7 +86,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
 
             issued_credential_model = IssuedCredentialModel(
                 issued_credential_type=issued_credential_type,
-                issued_using_cert_profile=issued_using_cert_profile,
+                certificate_profile=certificate_profile,
                 common_name=common_name,
                 credential=credential_model,
                 device=self.device,
@@ -107,7 +106,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
             self.logger.info(
                 "Successfully saved IssuedCredentialModel (ID: %s) for device '%s'",
                 issued_credential_model.pk,
-                self.device.common_name
+                self.device.common_name,
             )
             return issued_credential_model
 
@@ -123,9 +122,8 @@ class SaveCredentialToDbMixin(LoggerMixin):
                 cred_model.update_keyless_credential(save_config.certificate, save_config.certificate_chain)
                 cred_model.save()
 
-                if hasattr(existing_record, 'issued_using_cert_profile'):
-                    existing_record.issued_using_cert_profile = save_config.issued_using_cert_profile
-                    existing_record.save()
+                existing_record.certificate_profile = save_config.certificate_profile
+                existing_record.save(update_fields=['certificate_profile'])
                 emit_certificate_issued_for_record(existing_record)
                 return existing_record  # type: ignore[no-any-return]
 
@@ -151,19 +149,17 @@ class SaveCredentialToDbMixin(LoggerMixin):
         certificate_chain: list[x509.Certificate],
         common_name: str,
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
-        issued_using_cert_profile: str,
+        certificate_profile: CertificateProfileModel,
     ) -> IssuedCredentialModel:
 
         self.logger.info(
-            "Saving keyless credential for device '%s' (ID: %s) "
-            "in domain '%s' - CN: '%s', "
-            "Type: %s, Profile: %s",
+            "Saving keyless credential for device '%s' (ID: %s) in domain '%s' - CN: '%s', Type: %s, Profile: %s",
             self.device.common_name,
             self.device.pk,
             self.domain.unique_name,
             common_name,
             issued_credential_type.label,
-            issued_using_cert_profile,
+            certificate_profile,
         )
 
         def create_record() -> IssuedCredentialModel:
@@ -175,7 +171,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
 
             issued_credential_model = IssuedCredentialModel(
                 issued_credential_type=issued_credential_type,
-                issued_using_cert_profile=issued_using_cert_profile,
+                certificate_profile=certificate_profile,
                 common_name=common_name,
                 credential=credential_model,
                 device=self.device,
@@ -196,7 +192,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
                     common_name=common_name,
                 ),
                 create_record=create_record,
-                issued_using_cert_profile=issued_using_cert_profile,
+                certificate_profile=certificate_profile,
                 success_log="Successfully saved keyless IssuedCredentialModel (ID: %s) for device '%s'",
             )
         )
@@ -204,6 +200,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
 
 class CredentialSaver(SaveCredentialToDbMixin):
     """A basic class for saving credentials to the database."""
+
     def __init__(self, device: DeviceModel, domain: DomainModel) -> None:
         """Initializes the Credential Saver.
 
@@ -237,14 +234,14 @@ class CredentialSaver(SaveCredentialToDbMixin):
         credential: CredentialSerializer,
         common_name: str,
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
-        cert_profile_disp_name: str,
+        certificate_profile: CertificateProfileModel,
     ) -> IssuedCredentialModel:
         """Saves a credential with a private key to the database."""
         return self._save(
             credential,
             common_name,
             issued_credential_type,
-            cert_profile_disp_name,
+            certificate_profile,
         )
 
     def save_keyless_credential(
@@ -253,28 +250,28 @@ class CredentialSaver(SaveCredentialToDbMixin):
         certificate_chain: list[x509.Certificate],
         common_name: str,
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
-        cert_profile_disp_name: str,
+        certificate_profile: CertificateProfileModel,
     ) -> IssuedCredentialModel:
         """Saves a keyless (i.e. private key stays on requesting device) credential to the database."""
         return self._save_keyless_credential(
-            certificate, certificate_chain, common_name, issued_credential_type, cert_profile_disp_name)
+            certificate, certificate_chain, common_name, issued_credential_type, certificate_profile
+        )
 
     def save_remote_keyless_credential(
         self,
         certificate: x509.Certificate,
         certificate_chain: list[x509.Certificate],
         common_name: str,
-        issued_using_cert_profile: str,
+        certificate_profile: CertificateProfileModel,
     ) -> RemoteIssuedCredentialModel:
         """Saves a keyless credential issued via a remote/RA CA as a RemoteIssuedCredentialModel."""
         self.logger.info(
-            "Saving remote keyless credential for device '%s' (ID: %s) "
-            "in domain '%s' - CN: '%s', Profile: %s",
+            "Saving remote keyless credential for device '%s' (ID: %s) in domain '%s' - CN: '%s', Profile: %s",
             self._device.common_name,
             self._device.pk,
             self._domain.unique_name,
             common_name,
-            issued_using_cert_profile,
+            certificate_profile,
         )
 
         def create_record() -> RemoteIssuedCredentialModel:
@@ -285,7 +282,7 @@ class CredentialSaver(SaveCredentialToDbMixin):
             )
             remote_issued = RemoteIssuedCredentialModel(
                 issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
-                issued_using_cert_profile=issued_using_cert_profile,
+                certificate_profile=certificate_profile,
                 common_name=common_name,
                 credential=credential_model,
                 device=self._device,
@@ -305,7 +302,7 @@ class CredentialSaver(SaveCredentialToDbMixin):
                     common_name=common_name,
                 ),
                 create_record=create_record,
-                issued_using_cert_profile=issued_using_cert_profile,
+                certificate_profile=certificate_profile,
                 success_log="Successfully saved RemoteIssuedCredentialModel (ID: %s) for device '%s'",
             )
         )

@@ -120,8 +120,13 @@ The ``IssuedCredentialModel`` bridges credentials to devices. It represents a cr
        # Metadata
        common_name: str
        issued_credential_type: DOMAIN_CREDENTIAL | APPLICATION_CREDENTIAL
-       issued_using_cert_profile: str
+       certificate_profile = ForeignKey(CertificateProfileModel, on_delete=PROTECT)
        created_at: DateTimeField
+
+
+``RemoteIssuedCredentialModel`` also stores a protected ``certificate_profile`` reference.
+Imported DevOwnerID credentials leave it empty because no issuance profile was used.
+The ``issued_using_cert_profile`` display value is derived from the related profile on both models.
 
 
 Credential Types - IssuedCredentialModel

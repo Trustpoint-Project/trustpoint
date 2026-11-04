@@ -9,6 +9,7 @@ import datetime as dt
 from typing import TYPE_CHECKING
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import rsa
 from django.db import transaction
 from trustpoint_core.oid import SignatureSuite
@@ -52,8 +53,14 @@ def get_local_issuing_ca(domain: DomainModel) -> CaModel:
     if ca.ca_type not in LOCAL_CA_TYPES:
         msg = 'SCEP is only supported for locally managed issuing CAs.'
         raise ScepConfigurationError(msg)
-    if ca.get_credential() is None:
+    credential = ca.get_credential()
+    if credential is None:
         msg = 'The issuing CA has no credential.'
+        raise ScepConfigurationError(msg)
+    cert = credential.get_certificate()
+    now = dt.datetime.now(dt.UTC)
+    if not cert.not_valid_before_utc <= now < cert.not_valid_after_utc:
+        msg = 'The issuing CA certificate is not currently valid.'
         raise ScepConfigurationError(msg)
     return ca
 
@@ -75,9 +82,7 @@ def _issue_server_certificate(domain: DomainModel, public_key: rsa.RSAPublicKey)
     builder = (
         x509.CertificateBuilder()
         .subject_name(
-            x509.Name(
-                [x509.NameAttribute(x509.NameOID.COMMON_NAME, f'Trustpoint SCEP Server ({domain.unique_name})')]
-            )
+            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, f'Trustpoint SCEP Server ({domain.unique_name})')])
         )
         .issuer_name(issuer_cert.subject)
         .public_key(public_key)
@@ -137,14 +142,25 @@ def server_credential_is_usable(config: ScepServerConfigModel) -> bool:
 
     cert = credential.get_certificate()
 
-    if cert.not_valid_after_utc - dt.datetime.now(dt.UTC) < SERVER_CERT_RENEW_BEFORE:
+    now = dt.datetime.now(dt.UTC)
+    if not cert.not_valid_before_utc <= now < cert.not_valid_after_utc:
         return False
 
     issuing_credential = get_local_issuing_ca(config.domain).get_credential()
 
-    return (
-        issuing_credential is not None
-        and cert.issuer == issuing_credential.get_certificate().subject
+    if issuing_credential is None:
+        return False
+    issuer_cert = issuing_credential.get_certificate()
+    try:
+        cert.verify_directly_issued_by(issuer_cert)
+    except (InvalidSignature, ValueError, TypeError):
+        return False
+    if credential.get_certificate_chain() != [issuer_cert, *issuing_credential.get_certificate_chain()]:
+        return False
+    # A CA nearing expiry cannot extend a server certificate already capped at its expiry.
+    return not (
+        cert.not_valid_after_utc - now < SERVER_CERT_RENEW_BEFORE
+        and cert.not_valid_after_utc < issuer_cert.not_valid_after_utc
     )
 
 
@@ -158,8 +174,6 @@ def scep_permitted_by_security_config() -> bool:
     return NoOnboardingPkiProtocol.SCEP.value in (cfg.permitted_no_onboarding_pki_protocols or [])
 
 
-
-
 def ensure_server_credential(domain: DomainModel) -> CredentialModel:
     """Return the SCEP server credential, provisioning it when missing or expiring."""
     from pki.models import DomainModel as DomainModelCls  # noqa: PLC0415
@@ -167,11 +181,7 @@ def ensure_server_credential(domain: DomainModel) -> CredentialModel:
     get_local_issuing_ca(domain)
 
     with transaction.atomic():
-        locked_domain = (
-            DomainModelCls.objects
-            .select_for_update()
-            .get(pk=domain.pk)
-        )
+        locked_domain = DomainModelCls.objects.select_for_update().get(pk=domain.pk)
 
         config, _ = ScepServerConfigModel.objects.get_or_create(
             domain=locked_domain,

@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 from django import forms
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Q, QuerySet
+from django.db.models import Q, QuerySet, Value
+from django.db.models.functions import Coalesce, NullIf
 from django.http import HttpResponse, HttpResponseBase
 from django.http.request import HttpRequest
 from django.shortcuts import redirect
@@ -62,6 +63,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
+
 class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, DetailView[DeviceModel], abc.ABC):
     """This is the CLM summary view in the devices section."""
 
@@ -91,34 +93,47 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
     def _get_owner_credential_for_device(self) -> OwnerCredentialModel | None:
         """Find the OwnerCredentialModel associated with this device."""
-        device_domain_cred = IssuedCredentialModel.objects.filter(
-            device=self.object,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-        ).select_related('credential__certificate').first()
+        device_domain_cred = (
+            IssuedCredentialModel.objects.filter(
+                device=self.object,
+                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+            )
+            .select_related('credential__certificate')
+            .first()
+        )
 
         if device_domain_cred is None or device_domain_cred.credential.certificate is None:
             return None
 
         fingerprint = device_domain_cred.credential.certificate.sha256_fingerprint
-        owner_ic = RemoteIssuedCredentialModel.objects.filter(
-            credential__certificates__sha256_fingerprint=fingerprint,
-            owner_credential__isnull=False,
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-        ).select_related('owner_credential').first()
+        owner_ic = (
+            RemoteIssuedCredentialModel.objects.filter(
+                credential__certificates__sha256_fingerprint=fingerprint,
+                owner_credential__isnull=False,
+                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
+            )
+            .select_related('owner_credential')
+            .first()
+        )
 
         if owner_ic is None:
             return None
         return owner_ic.owner_credential
 
     def _get_dev_owner_id_credentials_qs(
-        self, owner_credential: OwnerCredentialModel,
+        self,
+        owner_credential: OwnerCredentialModel,
     ) -> QuerySet[RemoteIssuedCredentialModel]:
         """Return enrolled DevOwnerID credentials for the given owner credential."""
-        return RemoteIssuedCredentialModel.objects.filter(
-            owner_credential=owner_credential,
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            credential__certificate__isnull=False,
-        ).select_related('credential__certificate').order_by('-created_at')
+        return (
+            RemoteIssuedCredentialModel.objects.filter(
+                owner_credential=owner_credential,
+                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+                credential__certificate__isnull=False,
+            )
+            .select_related('credential__certificate', 'certificate_profile')
+            .order_by('-created_at')
+        )
 
     def get_issued_creds_qs(self) -> QuerySet[IssuedCredentialModel]:
         """Gets a sorted queryset of all IssuedCredentialModels.
@@ -126,18 +141,35 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         Returns:
             Sorted queryset of all IssuedCredentialModels.
         """
-        issued_creds_qs = IssuedCredentialModel.objects.all()
+        issued_creds_qs = IssuedCredentialModel.objects.select_related('certificate_profile')
 
         sort_param = self.request.GET.get('sort', self.default_sort_param)
+        if sort_param.lstrip('-') == 'issued_using_cert_profile':
+            issued_creds_qs = issued_creds_qs.alias(
+                profile_label=Coalesce(
+                    NullIf('certificate_profile__display_name', Value('')), 'certificate_profile__unique_name'
+                )
+            )
+            sort_param = sort_param.replace('issued_using_cert_profile', 'profile_label')
         return issued_creds_qs.order_by(sort_param)
 
     def get_remote_issued_creds_qs(self) -> QuerySet[RemoteIssuedCredentialModel]:
         """Gets a sorted queryset of all RemoteIssuedCredentialModels for RA-issued certs."""
         sort_param = self.request.GET.get('sort', self.default_sort_param)
-        return RemoteIssuedCredentialModel.objects.filter(
+        issued_creds_qs = RemoteIssuedCredentialModel.objects.filter(
             device=self.object,
             issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
-        ).select_related('credential__certificate', 'domain').order_by(sort_param)
+        ).select_related('credential__certificate', 'domain', 'certificate_profile')
+        if sort_param.lstrip('-') == 'issued_using_cert_profile':
+            issued_creds_qs = issued_creds_qs.alias(
+                profile_label=Coalesce(
+                    NullIf('certificate_profile__display_name', Value('')),
+                    'certificate_profile__unique_name',
+                    Value(''),
+                )
+            )
+            sort_param = sort_param.replace('issued_using_cert_profile', 'profile_label')
+        return issued_creds_qs.order_by(sort_param)
 
     def get_domain_credentials_qs(
         self,
@@ -218,7 +250,8 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         for cred in context['dev_owner_id_credentials']:
             cred.expires_in = self._get_expires_in(cred)
             cred.expiration_date = cast(
-                'dt.datetime', cred.credential.certificate_or_error.not_valid_after,
+                'dt.datetime',
+                cred.credential.certificate_or_error.not_valid_after,
             )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -297,16 +330,11 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['NoOnboardingPkiProtocol'] = NoOnboardingPkiProtocol
         context['OnboardingStatus'] = OnboardingStatus
 
-
-        _agent_device_types = (
-            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-        )
+        _agent_device_types = (DeviceModel.DeviceType.AGENT_ONE_TO_ONE,)
         is_agent_device = self.object.device_type in _agent_device_types
         context['is_agent_device'] = is_agent_device
         context['issue_domain_cred_agent_url'] = (
-            f'{self.page_category}:{self.page_name}_agent_setup_profile_help'
-            if is_agent_device
-            else ''
+            f'{self.page_category}:{self.page_name}_agent_setup_profile_help' if is_agent_device else ''
         )
 
         # Add agent information if this is an agent device
@@ -405,9 +433,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             The onboarding form.
         """
         # Check if this is an agent device
-        _agent_device_types = (
-            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-        )
+        _agent_device_types = (DeviceModel.DeviceType.AGENT_ONE_TO_ONE,)
         if self.object.device_type in _agent_device_types:
             return ClmAgentDeviceForm(initial=self.get_agent_initial(), instance=self.object)
 
@@ -481,9 +507,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             raise PermissionDenied
         self.object = self.get_object()
 
-        _agent_device_types = (
-            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-        )
+        _agent_device_types = (DeviceModel.DeviceType.AGENT_ONE_TO_ONE,)
 
         form: ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm | ClmAgentDeviceForm
         if self.object.onboarding_config:
@@ -492,7 +516,9 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 form = ClmAgentDeviceForm(request.POST, instance=self.object)
                 if form.is_valid():
                     try:
-                        form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                        form.save(
+                            onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol)
+                        )
                     except ValidationError as exc:
                         form.add_error(None, exc)
             else:
@@ -501,7 +527,9 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 form.actor = request.user
                 if form.is_valid():
                     try:
-                        form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
+                        form.save(
+                            onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol)
+                        )
                     except ValidationError as exc:
                         form.add_error(None, exc)
         else:
@@ -523,9 +551,7 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
-    _AGENT_DEVICE_TYPES = (
-        DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
-    )
+    _AGENT_DEVICE_TYPES = (DeviceModel.DeviceType.AGENT_ONE_TO_ONE,)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Override page_name in context for agent devices so the sidebar highlights 'Agents'."""

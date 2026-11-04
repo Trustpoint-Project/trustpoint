@@ -20,6 +20,7 @@ from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
 from cmp.views import CmpRequestView
 from management.models import SecurityConfig
+from pki.models.cert_profile import CertificateProfileModel
 from pki.models import CredentialModel, IssuedCredentialModel
 from request.authentication.cmp import CmpSharedSecretAuthentication
 from request.authorization.cmp import CmpCertConfAuthorization
@@ -126,6 +127,9 @@ def test_implicit_certconf_rejection_resolves_transaction_credential(digest_type
         CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
     )
     issued = IssuedCredentialModel.objects.create(
+        certificate_profile=CertificateProfileModel.objects.get_or_create(
+            unique_name='test_profile', defaults={'profile_json': {}}
+        )[0],
         common_name='CMP confirmation',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
         credential=credential,

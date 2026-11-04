@@ -66,9 +66,7 @@ class TestOwnerCredentialSerializer:
         truststore = TruststoreModel.objects.create(
             unique_name='tls-store', intended_usage=TruststoreModel.IntendedUsage.TLS
         )
-        config = NoOnboardingConfigModel(
-            pki_protocols=NoOnboardingPkiProtocol.MANUAL, trust_store=truststore
-        )
+        config = NoOnboardingConfigModel(pki_protocols=NoOnboardingPkiProtocol.MANUAL, trust_store=truststore)
         config.save()
         owner = OwnerCredentialModel.objects.create(unique_name='oc-1', no_onboarding_config=config)
 
@@ -98,6 +96,8 @@ class TestOwnerCredentialSerializer:
             ),
         )
 
+        assert owner.dev_owner_id_credential.certificate_profile_id is None
+        assert owner.dev_owner_id_credential.issued_using_cert_profile == ''
         data = OwnerCredentialSerializer(owner).data
         assert data['devownerid_certificate_pem'].startswith('-----BEGIN CERTIFICATE-----')
         assert data['has_valid_domain_credential'] is False
@@ -283,9 +283,7 @@ class TestOwnerCredentialEstSerializers:
         truststore = TruststoreModel.objects.create(
             unique_name='est-tls', intended_usage=TruststoreModel.IntendedUsage.TLS
         )
-        serializer = OwnerCredentialEstBasicAuthSerializer(
-            data={**basic_payload, 'truststore_id': truststore.pk}
-        )
+        serializer = OwnerCredentialEstBasicAuthSerializer(data={**basic_payload, 'truststore_id': truststore.pk})
 
         assert serializer.is_valid(), serializer.errors
         assert serializer.save().no_onboarding_config.trust_store == truststore
@@ -311,9 +309,7 @@ class TestOwnerCredentialEstSerializers:
         assert serializer.is_valid(), serializer.errors
         owner = serializer.save()
         assert owner.onboarding_config is not None
-        assert owner.owner_credential_type == (
-            OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
-        )
+        assert owner.owner_credential_type == (OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING)
         assert owner.remote_path_domain_credential == '/.well-known/est/simpleenroll'
 
     def test_mtls_rejects_unknown_truststore_and_duplicate_name(self) -> None:

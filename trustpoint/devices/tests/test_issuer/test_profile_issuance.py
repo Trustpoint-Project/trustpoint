@@ -55,6 +55,7 @@ def test_profile_issued_certificate_policy_and_storage(
     assert credential.common_name == 'Profile certificate'
     profile = CertificateProfileModel.objects.get(unique_name=profile_name)
     assert credential.issued_using_cert_profile == profile.display_name
+    assert credential.certificate_profile == profile
     expected_type = (
         IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
         if profile_name == 'domain_credential'

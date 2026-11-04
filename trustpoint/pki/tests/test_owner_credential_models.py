@@ -169,3 +169,59 @@ class TestOwnerCredentialModel:
         )
         oc.delete()
         assert not CredentialModel.objects.filter(pk=cred.pk).exists()
+
+
+def test_remote_profile_reference_drives_label_and_protects_profile():
+    from django.db.models.deletion import ProtectedError
+    from pki.models.cert_profile import CertificateProfileModel
+
+    owner = OwnerCredentialModel.objects.create(unique_name='profile-owner')
+    profile = CertificateProfileModel.objects.create(
+        unique_name='remote_profile', display_name='Original', profile_json={}
+    )
+    credential = CredentialModel.objects.create(credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID)
+    record = RemoteIssuedCredentialModel.objects.create(
+        common_name='remote-owner',
+        owner_credential=owner,
+        credential=credential,
+        issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+        certificate_profile=profile,
+    )
+    profile.display_name = 'Renamed'
+    profile.save(update_fields=['display_name'])
+    record.refresh_from_db()
+    assert record.issued_using_cert_profile == 'Renamed'
+    with pytest.raises(ProtectedError):
+        profile.delete()
+    profile.display_name = ''
+    profile.save(update_fields=['display_name'])
+    record.refresh_from_db()
+    assert record.issued_using_cert_profile == 'remote_profile'
+    assert 'issued_using_cert_profile' not in {field.name for field in record._meta.fields}
+
+
+@pytest.mark.parametrize('remote', [False, True])
+def test_only_imported_owner_credentials_may_omit_profile(remote):
+    from django.core.exceptions import ValidationError
+
+    owner = OwnerCredentialModel.objects.create(
+        unique_name='owner-without-profile',
+        owner_credential_type=(
+            OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST
+            if remote
+            else OwnerCredentialModel.OwnerCredentialTypeChoice.LOCAL
+        ),
+    )
+    credential = CredentialModel.objects.create(credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID)
+    record = RemoteIssuedCredentialModel(
+        common_name='no-profile',
+        owner_credential=owner,
+        credential=credential,
+        issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+    )
+    if remote:
+        with pytest.raises(ValidationError, match='profile is required'):
+            record.clean()
+    else:
+        record.clean()
+        assert record.issued_using_cert_profile == ''

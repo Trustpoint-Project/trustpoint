@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from trustpoint_core.oid import KeyPairGenerator
@@ -89,7 +89,7 @@ def create_pending_owner_credential(
     return RemoteIssuedCredentialModel.objects.create(
         common_name=owner_credential.unique_name,
         issued_credential_type=cred_type,
-        issued_using_cert_profile=cert_profile.unique_name,
+        certificate_profile=cert_profile,
         credential=credential_model,
         owner_credential=owner_credential,
     )
@@ -126,6 +126,9 @@ def enroll_owner_credential_est(
     domain_credential: bool = False,
 ) -> None:
     """Enroll with the pending key, then persist the certificate and role-specific metadata."""
+    if context.certificate_profile_model is None:
+        msg = 'A certificate profile is required for owner credential enrollment.'
+        raise ValueError(msg)
     signing_credential = pending_issued.credential
     context.owner_credential = signing_credential
     csr_builder = ProfileAwareCsrBuilder()
@@ -149,11 +152,10 @@ def enroll_owner_credential_est(
         defaults={'is_primary': True},
     )
     pending_issued.common_name = cert_model.common_name or owner_credential.unique_name
+    pending_issued.certificate_profile = context.certificate_profile_model
+    pending_issued.save(update_fields=['common_name', 'certificate_profile'])
     if domain_credential:
-        pending_issued.issued_using_cert_profile = cast('str', context.cert_profile_str)
-        pending_issued.save(update_fields=['common_name', 'issued_using_cert_profile'])
         return
-    pending_issued.save(update_fields=['common_name'])
 
     try:
         san_ext = issued_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)

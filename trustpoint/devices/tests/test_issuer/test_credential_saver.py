@@ -10,6 +10,7 @@ import pytest
 
 from devices.issuer import CredentialSaver
 from pki.models import IssuedCredentialModel
+from pki.models.cert_profile import CertificateProfileModel
 from pki.tests.credential_helpers import issue_test_credential
 from pki.util.keys import KeyGenerator
 
@@ -48,19 +49,37 @@ def test_keyless_renewal_reuses_existing_credential(device_instance: dict[str, A
     )
 
 
-def test_credential_saver_preserves_associations_and_profile_label(device_instance: dict[str, Any]) -> None:
-    """Saving a certificate preserves device/domain links and records the selected profile label."""
+def test_credential_saver_preserves_associations_and_updates_profile(device_instance: dict[str, Any]) -> None:
+    """Saving a certificate preserves device/domain links and records the selected profile reference."""
     device = device_instance['device']
     issued = issue_test_credential(device, 'tls_client', common_name='saver-test')
     saver = CredentialSaver(device, device.domain)
     assert saver.device == device
     assert saver.domain == device.domain
+    profile = CertificateProfileModel.objects.create(unique_name='changed_profile', profile_json={})
     updated = saver.save_keyless_credential(
         issued.credential.get_certificate(),
         issued.credential.get_certificate_chain(),
         'saver-test',
         IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        'Changed Profile Label',
+        profile,
     )
     assert updated.pk == issued.pk
-    assert updated.issued_using_cert_profile == 'Changed Profile Label'
+    assert updated.certificate_profile == profile
+    updated.refresh_from_db()
+    assert updated.certificate_profile == profile
+
+
+def test_remote_credential_creation_and_renewal_store_the_selected_profile(device_instance):
+    device = device_instance['device']
+    local = issue_test_credential(device, 'tls_client', common_name='remote-test')
+    saver = CredentialSaver(device, device.domain)
+    certificate = local.credential.get_certificate()
+    chain = local.credential.get_certificate_chain()
+    first = saver.save_remote_keyless_credential(certificate, chain, 'remote-test', local.certificate_profile)
+    assert first.certificate_profile == local.certificate_profile
+    replacement = CertificateProfileModel.objects.create(unique_name='replacement_profile', profile_json={})
+    renewed = saver.save_remote_keyless_credential(certificate, chain, 'remote-test', replacement)
+    assert renewed.pk == first.pk
+    renewed.refresh_from_db()
+    assert renewed.certificate_profile == replacement

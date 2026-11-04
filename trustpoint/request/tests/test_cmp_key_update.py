@@ -86,7 +86,7 @@ def _kur(certificate, old_key, *, implicit=True, subject=None, bad_pop=False, ol
 
 def _post(message, issued, *, operation='keyupdate', path=None):
     if path is None:
-        path = f'/.well-known/cmp/p/{issued.domain.unique_name}~{issued.issued_using_cert_profile}/{operation}'
+        path = f'/.well-known/cmp/p/{issued.domain.unique_name}~{issued.certificate_profile.unique_name}/{operation}'
     request = RequestFactory().post(path, encoder.encode(message), content_type='application/pkixcmp')
     match = resolve(path)
     response = match.func(request, *match.args, **match.kwargs)
@@ -351,7 +351,7 @@ def test_key_update_http_paths(update_material, layout):
     """Resolve actual URLs, including the RFC 9483 HTTP keyupdate operation label."""
     issued, certificate, key = update_material
     message, _ = _kur(certificate, key)
-    path = layout.format(domain=issued.domain.unique_name, profile=issued.issued_using_cert_profile)
+    path = layout.format(domain=issued.domain.unique_name, profile=issued.certificate_profile.unique_name)
     response = _post(message, issued, path=path)
     assert response['body'].getName() == 'kup'
     assert int(response['body']['kup']['response'][0]['status']['status']) == 0
