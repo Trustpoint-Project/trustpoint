@@ -208,11 +208,13 @@ def test_bootstrap_storage_preserves_locked_database_and_recovery_files(tmp_path
 
 def test_bootstrap_storage_creates_traversable_parents_and_private_leaf(tmp_path, bootstrap_storage):
     storage = tmp_path / 'new' / 'nested' / 'bootstrap'
-    bootstrap_storage.update({
-        'TRUSTPOINT_BOOTSTRAP_DB_PATH': str(storage / 'bootstrap.sqlite3'),
-        'TRUSTPOINT_OPERATIONAL_ENV_FILE': str(storage / 'operational.env'),
-        'TRUSTPOINT_OPERATIONAL_READY_FILE': str(storage / 'operational.ready'),
-    })
+    bootstrap_storage.update(
+        {
+            'TRUSTPOINT_BOOTSTRAP_DB_PATH': str(storage / 'bootstrap.sqlite3'),
+            'TRUSTPOINT_OPERATIONAL_ENV_FILE': str(storage / 'operational.env'),
+            'TRUSTPOINT_OPERATIONAL_READY_FILE': str(storage / 'operational.ready'),
+        }
+    )
     runtime.prepare_bootstrap_storage(bootstrap_storage)
     assert (tmp_path / 'new').stat().st_mode & 0o777 == 0o755
     assert storage.parent.stat().st_mode & 0o777 == 0o755

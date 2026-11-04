@@ -62,7 +62,10 @@ with sqlite3.connect(database) as connection:
     assert {path: path.read_bytes() for path in storage.iterdir()} == before
     assert database.stat().st_uid == account.pw_uid
     assert connection.execute('SELECT value FROM saved').fetchone() == ('committed state',)
-print('PASS: nested storage is writable by www-data; links are rejected and locked SQLite/WAL data is preserved.', flush=True)
+print(
+    'PASS: nested storage is writable by www-data; links are rejected and locked SQLite/WAL data is preserved.',
+    flush=True,
+)
 
 # The privileged installer accepts persistent staging and rejects the old /tmp root.
 staged = bootstrap / 'staging/pkcs11'
@@ -74,7 +77,8 @@ pin.write_text('synthetic-pin')
 installer = '/etc/trustpoint/wizard/install_pkcs11_assets.sh'
 result = subprocess.run(
     ['sudo', '-u', 'www-data', 'sudo', '-n', installer, str(module), str(pin)],
-    capture_output=True, text=True,
+    capture_output=True,
+    text=True,
 )
 assert result.returncode == 0, result.stdout + result.stderr
 installed_pin = Path('/var/lib/trustpoint/hsm/config/user-pin.txt')
@@ -85,7 +89,8 @@ legacy = Path('/tmp/trustpoint-wizard/pkcs11/pin.txt')
 legacy.parent.mkdir(parents=True)
 legacy.write_text('reject-outside-persistent-staging')
 result = subprocess.run(
-    ['sudo', '-u', 'www-data', 'sudo', '-n', installer, str(legacy)], capture_output=True,
+    ['sudo', '-u', 'www-data', 'sudo', '-n', installer, str(legacy)],
+    capture_output=True,
 )
 assert result.returncode != 0
 assert installed_pin.read_text() == 'synthetic-pin'
@@ -366,4 +371,6 @@ for name in ('trustpoint/media', 'trustpoint/collected_static',
     path.unlink()
 """
 subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', permission_probe], check=True)
-print('PASS: host-provisioned signing key, idempotent initialization, permissions, auto-setup, sudo restrictions, and protected code.')
+print(
+    'PASS: host-provisioned signing key, idempotent initialization, permissions, auto-setup, sudo restrictions, and protected code.'
+)

@@ -77,9 +77,12 @@ try:
         # the SoftHSM stack. Real HSM envelopes are tested by envelope_smoke.py.
         config['secrets']['trustpoint_software_kek'] = {'file': str(kek_fixture)}
         for name in ('trustpoint', 'trustpoint-worker'):
-            config['services'][name]['secrets'].append({'source': 'trustpoint_software_kek',
-                                                       'target': '/run/secrets/trustpoint_software_kek'})
-            config['services'][name]['environment']['TRUSTPOINT_SOFTWARE_KEK_FILE'] = '/run/secrets/trustpoint_software_kek'
+            config['services'][name]['secrets'].append(
+                {'source': 'trustpoint_software_kek', 'target': '/run/secrets/trustpoint_software_kek'}
+            )
+            config['services'][name]['environment']['TRUSTPOINT_SOFTWARE_KEK_FILE'] = (
+                '/run/secrets/trustpoint_software_kek'
+            )
         config['services']['softhsm']['image'] = os.environ.get(
             'TRUSTPOINT_TEST_SOFTHSM_IMAGE', 'trustpoint-softhsm-regression:local'
         )
@@ -209,10 +212,25 @@ print(json.dumps({'digest':hashlib.sha256(settings.SECRET_KEY.encode()).hexdiges
         "from pathlib import Path; p=Path('/var/lib/trustpoint/bootstrap'); "
         "(p/'operational.ready').unlink(); (p/'auto-setup.marker').write_text('interrupted auto setup')"
     )
-    call(compose + ['exec', '-T', '--user', '33:33', 'trustpoint',
-                    '/var/www/html/trustpoint/.venv/bin/python', '-c', interrupted_setup], cwd=temp)
-    call(compose + ['up', '-d', '--no-deps', '--no-build', '--force-recreate', '--wait',
-                    '--wait-timeout', '180', 'trustpoint'], cwd=temp)
+    call(
+        compose
+        + [
+            'exec',
+            '-T',
+            '--user',
+            '33:33',
+            'trustpoint',
+            '/var/www/html/trustpoint/.venv/bin/python',
+            '-c',
+            interrupted_setup,
+        ],
+        cwd=temp,
+    )
+    call(
+        compose
+        + ['up', '-d', '--no-deps', '--no-build', '--force-recreate', '--wait', '--wait-timeout', '180', 'trustpoint'],
+        cwd=temp,
+    )
     container = call(compose + ['ps', '--quiet', 'trustpoint'], cwd=temp).strip()
     assert call(['docker', 'inspect', '--format', '{{.RestartCount}}', container]).strip() == '0'
     assert first == key('trustpoint') == key('trustpoint-worker')
@@ -235,7 +253,9 @@ print(json.dumps({'digest':hashlib.sha256(settings.SECRET_KEY.encode()).hexdiges
     kek_readonly = readonly.replace('django_secret_key', 'trustpoint_software_kek')
     result = subprocess.run(
         compose + ['exec', '-T', '--user', '0', 'trustpoint', '/usr/local/bin/python3', '-c', kek_readonly],
-        capture_output=True, text=True, cwd=temp,
+        capture_output=True,
+        text=True,
+        cwd=temp,
     )
     assert result.returncode and 'Read-only file system' in result.stderr
     print('PASS: software KEK is read-only even to container root.', flush=True)
@@ -281,7 +301,7 @@ print(json.dumps({'digest':hashlib.sha256(settings.SECRET_KEY.encode()).hexdiges
     )
     assert first == key('trustpoint') == key('trustpoint-worker')
     print('PASS: container recreation/image update preserves signing key, DEK, and operational data.', flush=True)
-    concurrent_probe = r'''import os, sys
+    concurrent_probe = r"""import os, sys
 sys.path.insert(0, '/var/www/html/trustpoint/trustpoint')
 os.environ['DJANGO_SETTINGS_MODULE']='trustpoint.settings'
 import django
@@ -314,9 +334,21 @@ assert all(key==keys[0] for key in keys)
 assert AppSecretBackendModel.objects.get().dek_initialized
 assert AppSecretSoftwareConfigModel.objects.count()==1
 print('PASS: eight PostgreSQL initializers recovered the same committed DEK.')
-'''
-    call(compose + ['exec', '-T', '--user', '33:33', 'trustpoint',
-                    '/var/www/html/trustpoint/.venv/bin/python', '-c', concurrent_probe], cwd=temp)
+"""
+    call(
+        compose
+        + [
+            'exec',
+            '-T',
+            '--user',
+            '33:33',
+            'trustpoint',
+            '/var/www/html/trustpoint/.venv/bin/python',
+            '-c',
+            concurrent_probe,
+        ],
+        cwd=temp,
+    )
     print('PASS: PostgreSQL concurrent initialization commits one shared DEK.', flush=True)
 except Exception:
     if (temp / 'stack.json').exists():
