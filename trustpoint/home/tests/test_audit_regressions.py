@@ -139,8 +139,13 @@ def test_crl_summary_fetches_only_active_metadata(issuing_ca_instance):
     ca = issuing_ca_instance['issuing_ca']
     now = timezone.now()
     for active in (False, True):
-        CrlModel.objects.create(ca=ca, crl_pem='unused', is_active=active,
-                                this_update=now - timedelta(days=1), next_update=now + timedelta(days=1))
+        CrlModel.objects.create(
+            ca=ca,
+            crl_pem='unused',
+            is_active=active,
+            this_update=now - timedelta(days=1),
+            next_update=now + timedelta(days=1),
+        )
     with CaptureQueriesContext(connection) as queries:
         summary = issuing_ca_crl_summary(now)
     assert summary == {'current': 1, 'expired': 0, 'not_yet_valid': 0, 'missing': 0}
@@ -152,10 +157,9 @@ def test_crl_summary_fetches_only_active_metadata(issuing_ca_instance):
 
 def test_simplified_devices_are_paginated_after_filtering(client, simplified_user):
     domain = DomainModel.objects.create(unique_name='audit-pagination')
-    devices = DeviceModel.objects.bulk_create([
-        DeviceModel(common_name=f'page-device-{index}', domain=domain)
-        for index in range(UIConfig.paginate_by + 1)
-    ])
+    devices = DeviceModel.objects.bulk_create(
+        [DeviceModel(common_name=f'page-device-{index}', domain=domain) for index in range(UIConfig.paginate_by + 1)]
+    )
     DeviceModel.objects.create(common_name='excluded', domain=domain)
     url = reverse('home:simplified_overview')
     params = {'domain': domain.pk, 'common_name': 'page-device'}
