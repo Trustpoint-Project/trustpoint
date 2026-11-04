@@ -43,12 +43,14 @@ def _sign(message, certificate, key, algorithm=AlgorithmIdentifier.RSA_SHA256):
     data = CmpMessageResponder._get_encoded_protected_part(message)
     digest = algorithm.hash_algorithm.hash_algorithm()
     signature = (
-        key.sign(data, padding.PKCS1v15(), digest) if isinstance(key, rsa.RSAPrivateKey)
+        key.sign(data, padding.PKCS1v15(), digest)
+        if isinstance(key, rsa.RSAPrivateKey)
         else key.sign(data, ec.ECDSA(digest))
     )
     message['protection'] = message['protection'].clone(value=univ.BitString.fromOctetString(signature))
     certificate_asn1, _ = decoder.decode(
-        certificate.public_bytes(serialization.Encoding.DER), asn1Spec=rfc4210.CMPCertificate(),
+        certificate.public_bytes(serialization.Encoding.DER),
+        asn1Spec=rfc4210.CMPCertificate(),
     )
     message['extraCerts'].clear()
     message['extraCerts'].append(certificate_asn1)
@@ -70,9 +72,14 @@ def signer(request):
     subject = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'CMP signer')])
     now = datetime.now(UTC)
     certificate = (
-        x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(key.public_key())
-        .serial_number(x509.random_serial_number()).not_valid_before(now - timedelta(minutes=1))
-        .not_valid_after(now + timedelta(days=1)).sign(key, hashes.SHA384())
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=1))
+        .sign(key, hashes.SHA384())
     )
     algorithm = AlgorithmIdentifier.RSA_SHA256 if request.param == 'rsa' else AlgorithmIdentifier.ECDSA_SHA256
     return key, certificate, algorithm
@@ -97,7 +104,9 @@ def test_signature_rejects_incompatible_or_unsafe_declarations(signer, invalid):
     if invalid == 'unknown':
         message['header']['protectionAlg']['algorithm'] = '1.2.3.4'
     elif invalid == 'wrong_key':
-        wrong = AlgorithmIdentifier.ECDSA_SHA256 if isinstance(key, rsa.RSAPrivateKey) else AlgorithmIdentifier.RSA_SHA256
+        wrong = (
+            AlgorithmIdentifier.ECDSA_SHA256 if isinstance(key, rsa.RSAPrivateKey) else AlgorithmIdentifier.RSA_SHA256
+        )
         message['header']['protectionAlg']['algorithm'] = wrong.dotted_string
     elif invalid == 'weak_hash':
         weak = AlgorithmIdentifier.RSA_SHA1 if isinstance(key, rsa.RSAPrivateKey) else AlgorithmIdentifier.ECDSA_SHA1
@@ -118,11 +127,21 @@ def test_rejected_followups_preserve_transaction_nonces(cmp_device_without_onboa
     message['header']['senderKID'] = str(device.pk).encode()
     server_nonce, client_nonce = os.urandom(16), os.urandom(16)
     message['header']['recipNonce'] = os.urandom(16) if outcome == 'nonce' else server_nonce
-    owner = DeviceModel.objects.create(common_name='another-device', domain=device.domain) if outcome == 'authorization' else device
+    owner = (
+        DeviceModel.objects.create(common_name='another-device', domain=device.domain)
+        if outcome == 'authorization'
+        else device
+    )
     record = CmpTransactionModel.objects.create(
-        transaction_id=message['header']['transactionID'].asOctets().hex(), operation='certification',
-        request_body_type='cr', request_der=b'original', device=owner, domain=device.domain,
-        status=CmpTransactionModel.Status.WAITING, last_server_nonce=server_nonce, last_client_nonce=client_nonce,
+        transaction_id=message['header']['transactionID'].asOctets().hex(),
+        operation='certification',
+        request_body_type='cr',
+        request_der=b'original',
+        device=owner,
+        domain=device.domain,
+        status=CmpTransactionModel.Status.WAITING,
+        last_server_nonce=server_nonce,
+        last_client_nonce=client_nonce,
     )
     secret = device.no_onboarding_config.cmp_shared_secret
     _protect(message, secret='wrong-secret' if outcome == 'hmac' else secret)
@@ -138,17 +157,23 @@ def test_rejected_followups_preserve_transaction_nonces(cmp_device_without_onboa
         assert bytes(record.last_client_nonce) == client_nonce
 
 
-@pytest.mark.parametrize('operation', ['initialization', 'certification', 'revocation', 'certconf', 'keyupdate', 'getcacerts'])
+@pytest.mark.parametrize(
+    'operation', ['initialization', 'certification', 'revocation', 'certconf', 'keyupdate', 'getcacerts']
+)
 def test_signed_response_declares_the_server_algorithm(domain_instance, signer, operation):
     key, certificate, _ = signer
-    algorithm = AlgorithmIdentifier.RSA_SHA384 if isinstance(key, rsa.RSAPrivateKey) else AlgorithmIdentifier.ECDSA_SHA384
+    algorithm = (
+        AlgorithmIdentifier.RSA_SHA384 if isinstance(key, rsa.RSAPrivateKey) else AlgorithmIdentifier.ECDSA_SHA384
+    )
     request, _ = _exchange()
     _sign(request, certificate, key, algorithm)
     domain = domain_instance['domain']
     credential = domain.issuing_ca.get_credential()
     response = rfc4210.PKIMessage()
     response['header'] = CmpMessageResponder._build_response_message_header(
-        request, request['header']['senderKID'], credential.get_certificate(),
+        request,
+        request['header']['senderKID'],
+        credential.get_certificate(),
     )
     response['body']['pkiconf'] = response['body']['pkiconf'].clone('')
     context = CmpBaseRequestContext(operation=operation, domain=domain, issuer_credential=credential)
@@ -163,7 +188,8 @@ def test_response_algorithm_and_signature_prefer_owner_credential(domain_instanc
     key, certificate, _ = signer
     _, response = _exchange()
     context = CmpBaseRequestContext(
-        operation='initialization', domain=domain_instance['domain'],
+        operation='initialization',
+        domain=domain_instance['domain'],
         owner_credential=Mock(get_certificate=lambda: certificate, get_private_key=lambda: key),
     )
     CmpMessageResponder._sign_pki_message(response, context)
@@ -175,34 +201,55 @@ def test_response_algorithm_and_signature_prefer_owner_credential(domain_instanc
 def idevid_transaction(cmp_device_with_onboarding):
     device = cmp_device_with_onboarding['device']
     root, root_key = CertificateGenerator.create_root_ca('Manufacturer')
-    subject = x509.Name([
-        x509.NameAttribute(x509.NameOID.COMMON_NAME, 'IDevID'),
-        x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, device.serial_number),
-    ])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'IDevID'),
+            x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, device.serial_number),
+        ]
+    )
     certificate, key = CertificateGenerator.create_ee(root_key, root.subject, subject)
-    truststore = TruststoreModel.objects.create(unique_name='cmp-manufacturer', intended_usage=TruststoreModel.IntendedUsage.IDEVID)
-    TruststoreOrderModel.objects.create(trust_store=truststore, certificate=CertificateModel.save_certificate(root), order=0)
+    truststore = TruststoreModel.objects.create(
+        unique_name='cmp-manufacturer', intended_usage=TruststoreModel.IntendedUsage.IDEVID
+    )
+    TruststoreOrderModel.objects.create(
+        trust_store=truststore, certificate=CertificateModel.save_certificate(root), order=0
+    )
     DevIdRegistration.objects.create(
-        unique_name='cmp-idevid', truststore=truststore, domain=device.domain, serial_number_pattern=device.serial_number,
+        unique_name='cmp-idevid',
+        truststore=truststore,
+        domain=device.domain,
+        serial_number_pattern=device.serial_number,
     )
     context = CmpCertificateRequestContext(
-        protocol='cmp', operation='initialization', request_data={
-            'subject': subject, 'public_key': key.public_key(), 'private_key': key, 'use_ir': True,
+        protocol='cmp',
+        operation='initialization',
+        request_data={
+            'subject': subject,
+            'public_key': key.public_key(),
+            'private_key': key,
+            'use_ir': True,
             'recipient_name': device.domain.issuing_ca.get_credential().get_certificate().subject.rfc4514_string(),
         },
     )
     CmpMessageBuilder().build(context)
     original = _sign(context.parsed_message, certificate, key)
     transaction = CmpTransactionModel.objects.create(
-        transaction_id=original['header']['transactionID'].asOctets().hex(), operation='initialization',
-        request_body_type='ir', request_der=encoder.encode(original), device=device, domain=device.domain,
-        status=CmpTransactionModel.Status.WAITING, last_server_nonce=os.urandom(16), last_client_nonce=os.urandom(16),
+        transaction_id=original['header']['transactionID'].asOctets().hex(),
+        operation='initialization',
+        request_body_type='ir',
+        request_der=encoder.encode(original),
+        device=device,
+        domain=device.domain,
+        status=CmpTransactionModel.Status.WAITING,
+        last_server_nonce=os.urandom(16),
+        last_client_nonce=os.urandom(16),
     )
     return transaction, certificate, key, root, root_key
 
 
 @pytest.mark.parametrize(
-    'invalid', [None, 'another_certificate', 'untrusted', 'signature', 'device', 'domain', 'operation', 'missing_original']
+    'invalid',
+    [None, 'another_certificate', 'untrusted', 'signature', 'device', 'domain', 'operation', 'missing_original'],
 )
 def test_idevid_polling_keeps_original_signer_and_transaction_scope(idevid_transaction, invalid):
     transaction, certificate, key, root, root_key = idevid_transaction
@@ -221,6 +268,7 @@ def test_idevid_polling_keeps_original_signer_and_transaction_scope(idevid_trans
         transaction.save(update_fields=['device'])
     elif invalid == 'domain':
         from pki.models import DomainModel
+
         transaction.domain = DomainModel.objects.create(unique_name='wrong-domain', issuing_ca=domain.issuing_ca)
         transaction.save(update_fields=['domain'])
     elif invalid == 'operation':
