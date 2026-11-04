@@ -48,13 +48,13 @@ def enrollment_request(request, rf, rsa_private_key, settings):
         match = resolve(path)
         return match.func(http_request, *match.args, **match.kwargs)
 
-    return device, post
+    return device, post, operation
 
 
 @pytest.mark.parametrize('custom_default', [False, True])
 @pytest.mark.parametrize('explicit_domain', [False, True])
 def test_default_route_issues_using_authenticated_domain(enrollment_request, custom_default, explicit_domain):
-    device, post = enrollment_request
+    device, post, operation = enrollment_request
     if custom_default:
         profile = CertificateProfileModel.objects.create(
             unique_name='custom-default',
@@ -64,6 +64,10 @@ def test_default_route_issues_using_authenticated_domain(enrollment_request, cus
         device.domain.save()
     before = CertificateModel.objects.count()
     response = post(f'{device.domain.unique_name}/' if explicit_domain else '')
+    if custom_default and operation == 'simplereenroll':
+        assert response.status_code == 403
+        assert CertificateModel.objects.count() == before
+        return
     assert response.status_code == 200, response.content
     certificates = load_der_pkcs7_certificates(base64.b64decode(response.content))
     assert certificates
@@ -75,7 +79,7 @@ def test_default_route_issues_using_authenticated_domain(enrollment_request, cus
 
 
 def test_explicit_cross_domain_request_is_rejected(enrollment_request, caplog):
-    device, post = enrollment_request
+    device, post, _ = enrollment_request
     other = DomainModel.objects.create(unique_name='other-domain', issuing_ca=device.domain.issuing_ca)
     before = CertificateModel.objects.count()
     assert post(f'{other.unique_name}/').status_code >= 400
@@ -84,7 +88,7 @@ def test_explicit_cross_domain_request_is_rejected(enrollment_request, caplog):
 
 
 def test_default_route_still_requires_authentication(enrollment_request):
-    _, post = enrollment_request
+    _, post, _ = enrollment_request
     before = CertificateModel.objects.count()
     assert post(authenticated=False).status_code >= 400
     assert CertificateModel.objects.count() == before
@@ -92,7 +96,7 @@ def test_default_route_still_requires_authentication(enrollment_request):
 
 @pytest.mark.parametrize('suffix', ['', '/'])
 def test_profile_only_route_uses_selected_profile(enrollment_request, suffix):
-    device, post = enrollment_request
+    device, post, _ = enrollment_request
     domain = device.domain
     selected = domain.get_allowed_cert_profile('domain_credential')
     definition = selected.profile
@@ -115,7 +119,7 @@ def test_profile_only_route_uses_selected_profile(enrollment_request, suffix):
 
 @pytest.mark.parametrize('profile_name', ['missing', 'domain_credential'])
 def test_profile_only_route_rejects_unavailable_profile(enrollment_request, profile_name):
-    device, post = enrollment_request
+    device, post, _ = enrollment_request
     device.domain.certificate_profiles.all().delete()
     before = CertificateModel.objects.count()
     assert post(f'~{profile_name}/').status_code == 403

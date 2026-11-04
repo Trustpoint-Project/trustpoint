@@ -176,6 +176,11 @@ openssl pkcs7 -in device_cert.p7 -inform DER -print_certs -out device_cert.pem
 
 Re-enroll an existing certificate (renewal with the same or new key).
 
+Renewal must use the same certificate profile as the existing certificate.
+Profile aliases are accepted. Omitting the profile selects the domain credential
+profile, so application certificate renewal must name its original profile.
+Requesting a different profile returns `403 Forbidden`.
+
 **Endpoint:** `POST /simplereenroll` or `POST /<domain>/<cert_profile>/simplereenroll`
 
 **Authentication:** Mutual TLS required (client certificate authentication)
@@ -444,6 +449,13 @@ EST requests can trigger Trustpoint Workflow2 approval processes for:
 - Certificate renewal (`/simplereenroll`)
 
 Workflows allow automated or manual approval based on configurable policies.
+
+Pending enrollment returns `202 Accepted` with `Retry-After: 60`. Wait at least
+60 seconds before retrying. A retry on a new TLS connection must include a fresh
+channel binding when used; the same enrollment still reuses its approval.
+Approvals are scoped to the device, domain, issuing CA, operation, and certificate
+profile. After upgrading from a version using CSR-only workflow keys, pending EST
+requests must be resubmitted and approved again.
 
 ## Security Considerations
 
