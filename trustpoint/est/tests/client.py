@@ -79,6 +79,24 @@ class ESTClient:
 
         return auth, cert
 
+    @staticmethod
+    def _issued_certificate(response, public_key) -> x509.Certificate:
+        """Read the issued certificate and select it by the requested public key."""
+        data = response.content
+        if response.headers.get('Content-Transfer-Encoding', '').lower() == 'base64':
+            data = base64.b64decode(data)
+        content_type = response.headers.get('Content-Type', '').split(';')[0].strip().lower()
+        if content_type == 'application/pkcs7-mime':
+            certificates = load_der_pkcs7_certificates(data)
+        elif data.lstrip().startswith(b'-----BEGIN'):
+            certificates = [x509.load_pem_x509_certificate(data)]
+        else:
+            certificates = [x509.load_der_x509_certificate(data)]
+        for certificate in certificates:
+            if certificate.public_key() == public_key:
+                return certificate
+        raise ValueError('EST response contains no certificate for the requested key.')
+
     def enroll(self, common_name, serial_number, save_key=True) -> None:
         """Performs EST enrollment to obtain a new certificate, with an option to store the private key."""
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -120,10 +138,8 @@ class ESTClient:
         response = self.session.post(url, data=csr_der, headers=headers, auth=auth, cert=cert, verify=self.ca_cert_path)
 
         if response.status_code == 200:
-            certificates = load_der_pkcs7_certificates(base64.b64decode(response.content))
-            cert_pem = next(
-                cert for cert in certificates if cert.public_key() == private_key.public_key()
-            ).public_bytes(encoding=serialization.Encoding.PEM)
+            issued = self._issued_certificate(response, private_key.public_key())
+            cert_pem = issued.public_bytes(encoding=serialization.Encoding.PEM)
             cert_path = self.out_cert_path or 'issued_cert.pem'
             with open(cert_path, 'wb') as cert_file:
                 cert_file.write(cert_pem)
@@ -188,10 +204,8 @@ class ESTClient:
         response = self.session.post(url, data=csr_der, headers=headers, auth=auth, cert=cert, verify=self.ca_cert_path)
 
         if response.status_code == 200:
-            certificates = load_der_pkcs7_certificates(base64.b64decode(response.content))
-            cert_pem = next(
-                cert for cert in certificates if cert.public_key() == private_key.public_key()
-            ).public_bytes(encoding=serialization.Encoding.PEM)
+            issued = self._issued_certificate(response, private_key.public_key())
+            cert_pem = issued.public_bytes(encoding=serialization.Encoding.PEM)
             cert_path = 'reenrolled_' + (self.out_cert_path or 'cert.pem')
             with open(cert_path, 'wb') as cert_file:
                 cert_file.write(cert_pem)
