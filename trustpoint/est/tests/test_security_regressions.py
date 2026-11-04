@@ -288,7 +288,16 @@ def test_example_client_reads_server_certificate_collection(
     chain = [*issued.credential.get_certificate_chain(), certificate]
     body = base64.b64encode(CertificateCollectionSerializer(chain).as_pkcs7_der())
     client = ESTClient('https://example.invalid/.well-known/est', 'basic', out_cert_path='issued.pem')
-    client.session.post = Mock(return_value=Mock(status_code=200, content=body))
+    client.session.post = Mock(
+        return_value=Mock(
+            status_code=200,
+            content=body,
+            headers={
+                'Content-Type': 'application/pkcs7-mime; smime-type=certs-only',
+                'Content-Transfer-Encoding': 'base64',
+            },
+        )
+    )
     if operation == 'enroll':
         monkeypatch.setattr('est.tests.client.rsa.generate_private_key', lambda **kwargs: rsa_private_key)
         client.enroll('device', 'serial', save_key=False)

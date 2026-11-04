@@ -218,13 +218,16 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
     @staticmethod
     def _parse_dashboard_query_date(value: str, default_time: time) -> datetime | None:
         """Parse a dashboard query date from either YYYY-MM-DD or an ISO datetime string."""
-        parsed_datetime = dateparse.parse_datetime(value)
+        try:
+            parsed_datetime = dateparse.parse_datetime(value)
+            parsed_date = dateparse.parse_date(value)
+        except ValueError:
+            return None
         if parsed_datetime:
             if timezone.is_naive(parsed_datetime):
                 return timezone.make_aware(parsed_datetime)
             return parsed_datetime
 
-        parsed_date = dateparse.parse_date(value)
         if parsed_date:
             return timezone.make_aware(datetime.combine(parsed_date, default_time))
 
@@ -256,7 +259,8 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         current_time = timezone.now()
         start_date_object: datetime | None = None
         end_date_object: datetime | None = None
-        reference_date_object = timezone.make_aware(datetime.combine(current_time.date(), current_time.time()))
+        reference_date_object = current_time
+        local_time = timezone.localtime(current_time).time()
 
         if start_date:
             parsed_start_date = self._parse_dashboard_query_date(start_date, datetime.min.time())
@@ -274,14 +278,14 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             return JsonResponse({'error': 'start_date must be on or before end_date.'}, status=400)
 
         if reference_date:
-            parsed_reference_date = self._parse_dashboard_query_date(reference_date, current_time.time())
+            parsed_reference_date = self._parse_dashboard_query_date(reference_date, local_time)
             if not parsed_reference_date:
                 return JsonResponse({'error': 'Invalid reference_date format. Use YYYY-MM-DD.'}, status=400)
             reference_date_object = parsed_reference_date
         elif end_date_object is not None:
             reference_date_object = timezone.make_aware(datetime.combine(end_date_object.date(), time.max))
         elif start_date_object is not None:
-            reference_date_object = timezone.make_aware(datetime.combine(start_date_object.date(), current_time.time()))
+            reference_date_object = timezone.make_aware(datetime.combine(start_date_object.date(), local_time))
 
         return start_date_object, end_date_object, reference_date_object
 
@@ -829,39 +833,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         return cert_counts_by_issuing_ca
 
-    def get_cert_counts_by_domain(
-        self,
-        start_date: datetime | None,
-        end_date: datetime | None = None,
-    ) -> list[dict[str, Any]]:
-        """Fetch certificate count grouped by domain from database.
-
-        Args:
-            start_date: The start date for fetching data.
-            end_date: The optional inclusive end date for the created-at range.
-
-        Returns:
-            It returns certificate count grouped by domain.
-        """
-        cert_counts_by_domain = []
-        try:
-            cert_counts_domain_qr = (
-                self._apply_created_at_date_range(
-                    IssuedCredentialModel.objects.all(),
-                    start_date,
-                    end_date,
-                )
-                .values(domain_name=F('domain__unique_name'))
-                .annotate(cert_count=Count('id'))
-            )
-
-            cert_counts_by_domain = list(cert_counts_domain_qr)
-        except Exception as exception:
-            err_msg = f'Error occurred in certificate count by issuing ca query: {exception}'
-            self.logger.exception(err_msg)
-
-        return cert_counts_by_domain
-
     def get_cert_counts_by_profile(
         self,
         start_date: datetime | None,
@@ -903,6 +874,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                     start_date,
                     end_date,
                 )
+                .filter(basic_constraints_extension__ca=True)
                 .exclude(credential__issued_credential__isnull=False)
                 .distinct()
                 .count()
@@ -914,31 +886,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             self.logger.exception(err_msg)
 
         return cert_counts_by_profile
-
-    def get_issuing_ca_counts_by_type(self, start_date: datetime) -> dict[str, Any]:
-        """Fetch issuing ca counts grouped by type from database.
-
-        Args:
-            start_date: The start date for fetching data.
-
-        Returns:
-            It returns issuing ca counts grouped by type.
-        """
-        ca_type_counts = {str(cert_type): 0 for _, cert_type in CaModel.CaTypeChoice.choices}
-        try:
-            ca_type_qr = (
-                CaModel.objects.filter(created_at__gt=start_date).values('ca_type').annotate(count=Count('ca_type'))
-            )
-
-            protocol_mapping = {key: str(value) for key, value in CaModel.CaTypeChoice.choices}
-            ca_type_counts = {
-                protocol_mapping[item['ca_type']]: item['count'] for item in ca_type_qr if item['ca_type'] is not None
-            }
-
-        except Exception as exception:
-            err_msg = f'Error occurred in ca counts by type query: {exception}'
-            self.logger.exception(err_msg)
-        return ca_type_counts
 
     def _get_expiring_credential_counts(
         self,

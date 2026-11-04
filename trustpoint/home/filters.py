@@ -78,7 +78,7 @@ class NotificationFilter(django_filters.FilterSet):
         """
         now = timezone.now()
         if value == 'today':
-            return queryset.filter(created_at__date=now.date())
+            return queryset.filter(created_at__date=timezone.localdate(now))
         if value == 'last7days':
             return queryset.filter(created_at__gte=now - timedelta(days=7))
         if value == 'last30days':

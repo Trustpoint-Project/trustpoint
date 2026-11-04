@@ -302,16 +302,6 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
         assert isinstance(result, list)
 
-    def test_get_cert_counts_by_domain(self) -> None:
-        """Test get_cert_counts_by_domain method."""
-        start_date = timezone.now() - timedelta(days=7)
-
-        with patch.object(IssuedCredentialModel.objects, 'filter') as mock_filter:
-            mock_filter.return_value.values.return_value.annotate.return_value = []
-            result = self.view.get_cert_counts_by_domain(start_date)
-
-        assert isinstance(result, list)
-
     def test_get_cert_counts_by_profile(self) -> None:
         """Test get_cert_counts_by_profile method."""
         start_date = timezone.now() - timedelta(days=7)
@@ -321,16 +311,6 @@ class DashboardChartsAndCountsViewTests(TestCase):
             with patch.object(IssuedCredentialModel.objects, 'filter') as mock_filter:
                 mock_filter.return_value.values.return_value.annotate.return_value = []
                 result = self.view.get_cert_counts_by_profile(start_date)
-
-        assert isinstance(result, dict)
-
-    def test_get_issuing_ca_counts_by_type(self) -> None:
-        """Test get_issuing_ca_counts_by_type method."""
-        start_date = timezone.now() - timedelta(days=7)
-
-        with patch.object(CaModel.objects, 'filter') as mock_filter:
-            mock_filter.return_value.values.return_value.annotate.return_value = []
-            result = self.view.get_issuing_ca_counts_by_type(start_date)
 
         assert isinstance(result, dict)
 
