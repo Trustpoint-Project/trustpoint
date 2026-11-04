@@ -187,14 +187,14 @@
                                             {% endwith %}
                                         </div>
                                     </div>
-                                    {% if not domain.issuing_ca.crl_cycle_enabled %}
+                                    {% if not domain.issuing_ca.crl_cycle_enabled and perms.users.manage_cas and domain.issuing_ca.is_active %}
                                     <form method="post" action="{% url 'home:simplified_enable_crl_cycle' domain.issuing_ca.pk %}" class="d-inline">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-outline-secondary btn-sm w-100" title="{% trans 'Enable automatic CRL generation every 48 hours with 72 hour validity' %}">
                                             {% trans "Enable CRL Cycle (48h/72h)" %}
                                         </button>
                                     </form>
-                                    {% else %}
+                                    {% elif domain.issuing_ca.crl_cycle_enabled %}
                                     <div class="alert alert-success mb-0 py-2 px-3 small">
                                         {% trans "CRL cycle updates are enabled" %} ({% trans "Interval" %}: {{ domain.issuing_ca.crl_cycle_interval_hours|floatformat:0 }}h | {% trans "Validity" %}: {{ domain.issuing_ca.crl_validity_hours|floatformat:0 }}h)
                                     </div>
@@ -467,6 +467,21 @@
                                             </tbody>
                                         </table>
                                     </div>
+                                    {% with page=domain.device_page %}
+                                    {% if page.has_other_pages %}
+                                    <nav aria-label="{% trans 'Device pages' %}">
+                                        <ul class="pagination m-3">
+                                            {% if page.has_previous %}
+                                            <li class="page-item"><a class="page-link" href="{% querystring page=page.previous_page_number %}">{% trans 'Previous' %}</a></li>
+                                            {% endif %}
+                                            <li class="page-item"><span class="page-link" aria-current="page">{% blocktrans with number=page.number total=page.paginator.num_pages %}Page {{ number }} of {{ total }}{% endblocktrans %}</span></li>
+                                            {% if page.has_next %}
+                                            <li class="page-item"><a class="page-link" href="{% querystring page=page.next_page_number %}">{% trans 'Next' %}</a></li>
+                                            {% endif %}
+                                        </ul>
+                                    </nav>
+                                    {% endif %}
+                                    {% endwith %}
                                 {% else %}
                                     <p class="text-muted text-center mb-0 p-3">{% trans "No devices in this domain" %}</p>
                                 {% endif %}

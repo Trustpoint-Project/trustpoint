@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views import View
@@ -20,7 +20,7 @@ from devices.dashboard_filters import (
 from devices.health import filter_credential_health
 from devices.models import DeviceModel
 from home.views import DashboardChartsAndCountsView
-from pki.models import CaModel, IssuedCredentialModel
+from pki.models import CaModel, CrlModel, IssuedCredentialModel
 from pki.services.certificate_health import certificate_health_conditions, classify_certificate
 
 if TYPE_CHECKING:
@@ -41,10 +41,18 @@ def application_certificate_device_counts(now: datetime) -> dict[str, int]:
         set(filter_devices_with_expired_or_revoked_application_certificates(devices, now).values_list('pk', flat=True))
         - active
     )
-    future = set(filter_credential_health(
-        devices, IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        ['not_yet_valid'], as_of=now,
-    ).values_list('pk', flat=True)) - active - bad
+    future = (
+        set(
+            filter_credential_health(
+                devices,
+                IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+                ['not_yet_valid'],
+                as_of=now,
+            ).values_list('pk', flat=True)
+        )
+        - active
+        - bad
+    )
     return {
         'active': len(active),
         'expired_or_revoked_only': len(bad),
@@ -57,7 +65,9 @@ def onboarding_domain_credentials_expiring(now: datetime, days: int) -> int:
     """Distinct onboarded-mode devices with a currently valid credential expiring in the selected horizon."""
     horizon = now + timedelta(days=days)
     current = certificate_health_conditions(
-        as_of=now, expiry_days=0, prefix='credential__certificate__',
+        as_of=now,
+        expiry_days=0,
+        prefix='credential__certificate__',
     )['valid']
     expiring_devices = IssuedCredentialModel.objects.filter(
         current,
@@ -106,7 +116,8 @@ def issuing_ca_status_and_suites(now: datetime, expiry_days: int) -> tuple[dict[
         'credential__certificate__revoked_certificate',
     )
     status = dict.fromkeys(
-        ('active', 'expiring', 'expired', 'revoked', 'not_yet_valid', 'disabled', 'no_certificate'), 0,
+        ('active', 'expiring', 'expired', 'revoked', 'not_yet_valid', 'disabled', 'no_certificate'),
+        0,
     )
     suites: dict[str, int] = {}
     for ca in cas:
@@ -117,8 +128,11 @@ def issuing_ca_status_and_suites(now: datetime, expiry_days: int) -> tuple[dict[
             key = 'no_certificate'
         else:
             health = classify_certificate(
-                not_valid_before=cert.not_valid_before, not_valid_after=cert.not_valid_after,
-                revoked=hasattr(cert, 'revoked_certificate'), as_of=now, expiry_days=expiry_days,
+                not_valid_before=cert.not_valid_before,
+                not_valid_after=cert.not_valid_after,
+                revoked=hasattr(cert, 'revoked_certificate'),
+                as_of=now,
+                expiry_days=expiry_days,
             )
             key = 'active' if health == 'valid' else health
         status[key] += 1
@@ -148,10 +162,16 @@ def issuing_ca_crl_summary(now: datetime) -> dict[str, int]:
             CaModel.CaTypeChoice.REMOTE_EST_RA,
             CaModel.CaTypeChoice.REMOTE_CMP_RA,
         )
-    ).prefetch_related('crls')
+    ).prefetch_related(
+        Prefetch(
+            'crls',
+            queryset=CrlModel.objects.filter(is_active=True).only('ca_id', 'this_update', 'next_update'),
+            to_attr='active_crls',
+        )
+    )
     result = {'current': 0, 'expired': 0, 'not_yet_valid': 0, 'missing': 0}
     for ca in cas:
-        crl = next((entry for entry in ca.crls.all() if entry.is_active), None)
+        crl = next(iter(ca.active_crls), None)
         if crl is None:
             result['missing'] += 1
         elif crl.this_update > now:
