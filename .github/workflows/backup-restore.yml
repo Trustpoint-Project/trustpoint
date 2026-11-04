@@ -1,116 +1,73 @@
-# .github/workflows/backup-restore.yml
 name: Tests / Backup & Restore
 
 on:
   workflow_call:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   backup-and-restore:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      TRUSTPOINT_PHASE: operational
-      TRUSTPOINT_OPERATIONAL_DATABASE: postgresql
-      DATABASE_ENGINE: django.db.backends.postgresql
-      POSTGRES_DB: trustpoint_db
-      DATABASE_USER: admin
-      DATABASE_PASSWORD: testing321
-      DATABASE_HOST: localhost
-      DATABASE_PORT: "5432"
-      TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND: "true"
-
+    timeout-minutes: 30
     steps:
-      - name: Install system tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ca-certificates curl gettext gnupg
-          curl -fSsL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-            | sudo gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
-          . /etc/os-release
-          echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ ${VERSION_CODENAME}-pgdg main" \
-            | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-18
-          /usr/lib/postgresql/18/bin/pg_restore --version
-      
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup .env file
-        run: cp .env.example .env
-
-      - name: Build and start PostgreSQL
+      - name: Configure disposable deployment and original secrets
         run: |
-          docker build -t trustpointproject/postgres:latest -f docker/db/Dockerfile .
-          docker run -d --name postgres -p 5432:5432 -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=testing321 -e POSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
+          cp .env.example .env
+          cat >> .env <<'ENV'
 
-      - name: Set up uv environment
-        uses: ./.github/actions/setup-uv-action
+          TP_AUTO_SETUP=true
+          TP_ADMIN_USERNAME=admin
+          TP_ADMIN_PASSWORD=testing321
+          TP_INJECT_DEMO_DATA=true
+          ENV
+          sudo python3 docker/init_secret.py --type all
 
-      - name: Initialize database schema
-        run: 
-          uv run trustpoint/manage.py inittrustpoint --tls --admin
+      - name: Build and start deployment
+        run: docker compose up -d --build --wait --wait-timeout 300 postgres trustpoint
 
-      - name: Populate test data
-        run: |
-          uv run trustpoint/manage.py add_domains_and_devices
-
-      - name: Build and start Trustpoint container
-        run: |
-          docker build -t trustpointproject/trustpoint:latest -f docker/trustpoint/Dockerfile .
-          docker run -d --name trustpoint --link postgres -p80:80 -p443:443 \
-            -e TRUSTPOINT_PHASE=operational \
-            -e TRUSTPOINT_OPERATIONAL_DATABASE=postgresql \
-            -e POSTGRES_DB=trustpoint_db \
-            -e DATABASE_USER=admin \
-            -e DATABASE_PASSWORD=testing321 \
-            -e DATABASE_HOST=postgres \
-            -e DATABASE_PORT=5432 \
-            trustpointproject/trustpoint:latest
-      
-      - name: Validate implicit restoration
+      - name: Validate original deployment
         run: ./tests/scripts/test_successfull_restoration.sh
 
-      - name: Create backup (from inside container)
-        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside.dump.gz"
-
-      - name: Download backup artifact
+      - name: Back up database and verify manifest
         run: |
-          docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz .
-          docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz.manifest.json .
+          docker compose exec -T --user www-data -e TRUSTPOINT_PHASE=operational trustpoint \
+            .venv/bin/python trustpoint/manage.py trustpointbackup --filename recovery.dump.gz
+          docker compose exec -T --user www-data -e TRUSTPOINT_PHASE=operational trustpoint \
+            .venv/bin/python trustpoint/manage.py trustpointbackup_manifest --filename recovery.dump.gz --verify
 
-      - name: Remove Trustpoint container
-        run: docker rm -f trustpoint
-
-      - name: Reset database
-        run: uv run trustpoint/manage.py reset_db --force --no-user --keep-all-migrations
-
-      - name: Stage backup for host-side restore
+      - name: Stop application and recreate empty database
         run: |
-          mkdir -p trustpoint/media/backups
-          cp from_outside.dump.gz trustpoint/media/backups/
-          cp from_outside.dump.gz.manifest.json trustpoint/media/backups/
+          docker compose stop trustpoint
+          docker compose exec -T postgres dropdb -U admin --force trustpoint_db
+          docker compose exec -T postgres createdb -U admin trustpoint_db
 
-      - name: Verify backup manifest
-        run: uv run trustpoint/manage.py trustpointbackup_manifest --filename from_outside.dump.gz --verify
-
-      - name: Restore database from host
+      - name: Restore using original secrets and runtime volumes
         run: |
-          export PATH="/usr/lib/postgresql/18/bin:$PATH"
-          uv run trustpoint/manage.py dbrestore -z --noinput -I trustpoint/media/backups/from_outside.dump.gz
+          docker compose run --rm --no-deps --user www-data \
+            -e TRUSTPOINT_PHASE=operational --entrypoint .venv/bin/python trustpoint \
+            trustpoint/manage.py dbrestore -z --noinput -i recovery.dump.gz
 
-      - name: Start restored Trustpoint container
+      - name: Start restored deployment
+        run: docker compose up -d --wait --wait-timeout 300 postgres trustpoint
+
+      - name: Validate restored deployment and encrypted TLS key
         run: |
-          docker run -d --name trustpoint --link postgres -p80:80 -p443:443 \
-            -e TRUSTPOINT_PHASE=operational \
-            -e TRUSTPOINT_OPERATIONAL_DATABASE=postgresql \
-            -e POSTGRES_DB=trustpoint_db \
-            -e DATABASE_USER=admin \
-            -e DATABASE_PASSWORD=testing321 \
-            -e DATABASE_HOST=postgres \
-            -e DATABASE_PORT=5432 \
-            trustpointproject/trustpoint:latest
+          ./tests/scripts/test_successfull_restoration.sh
+          docker compose exec -T --user www-data -e TRUSTPOINT_PHASE=operational trustpoint \
+            .venv/bin/python trustpoint/manage.py shell -c \
+            "from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel; credential = ActiveTrustpointTlsServerCredentialModel.objects.get(pk=1).credential; assert credential.get_private_key() is not None"
 
-      - name: Validate post-restore deployment
-        run: ./tests/scripts/test_successfull_restoration.sh
+      - name: Show deployment logs
+        if: always()
+        run: docker compose logs --tail=100
+
+      - name: Cleanup disposable deployment
+        if: always()
+        run: docker compose down -v --remove-orphans

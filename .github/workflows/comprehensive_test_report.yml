@@ -70,7 +70,10 @@ jobs:
       - generate-bdd-test-results
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -82,6 +85,13 @@ jobs:
         with:
           ref: gh-pages
           path: gh-pages
+
+      - name: Select report history
+        run: |
+          mkdir -p report-history
+          if [ -d gh-pages/reports ]; then
+            cp -a gh-pages/reports/. report-history/
+          fi
 
       - name: Download unit-test-results
         uses: actions/download-artifact@v8
@@ -107,6 +117,8 @@ jobs:
       - name: Generate Allure HTML report
         uses:  simple-elf/allure-report-action@v1
         with:
+          gh_pages: report-history
+          report_url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports
           allure_results: allure-results # default
           allure_report: allure-report # default
           allure_history: allure-history # default
@@ -117,4 +129,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages # default
           publish_dir: allure-history
+          destination_dir: reports
+          keep_files: true
           allow_empty_commit: true
