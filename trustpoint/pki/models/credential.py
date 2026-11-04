@@ -990,7 +990,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
             self.remote_issued_credentials.filter(
                 issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
             )
-            .select_related('credential__certificate')
+            .select_related('credential__certificate', 'certificate_profile')
             .order_by('-created_at')
         )
 
@@ -1012,7 +1012,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
             self.remote_issued_credentials.filter(
                 issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL
             )
-            .select_related('credential__certificate')
+            .select_related('credential__certificate', 'certificate_profile')
             .order_by('-created_at')
         )
 
@@ -1109,7 +1109,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         RemoteIssuedCredentialModel.objects.create(
             common_name=common_name,
             issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            issued_using_cert_profile='dev_owner_id',
+            certificate_profile=None,
             credential=credential_model,
             owner_credential=owner_credential,
         )

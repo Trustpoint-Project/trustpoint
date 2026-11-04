@@ -15,6 +15,7 @@ from pyasn1.codec.der.encoder import encode as der_encode
 from pyasn1_modules import rfc4210, rfc5280
 
 from devices.models import DeviceModel
+from pki.models.cert_profile import CertificateProfileModel
 from pki.models import CaModel, CertificateModel, CredentialModel, IssuedCredentialModel, RevokedCertificateModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
 from pki.models.credential import PrimaryCredentialCertificate
@@ -55,6 +56,9 @@ def _issued_credential(ca: CaModel, certificate: CertificateModel) -> IssuedCred
     )
     PrimaryCredentialCertificate.objects.create(credential=credential, certificate=certificate, is_primary=True)
     return IssuedCredentialModel.objects.create(
+        certificate_profile=CertificateProfileModel.objects.get_or_create(
+            unique_name='test_profile', defaults={'profile_json': {}}
+        )[0],
         common_name='revocation-credential',
         credential=credential,
         device=device,

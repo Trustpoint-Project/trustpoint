@@ -115,7 +115,7 @@ class EstCaEnrollmentService(LoggerMixin):
         remote_issued_credential = RemoteIssuedCredentialModel(
             common_name=common_name,
             issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.LOCAL_CA,
-            issued_using_cert_profile=cert_profile.unique_name,
+            certificate_profile=cert_profile,
             credential=ca.credential,
             ca=ca,
         )
@@ -335,7 +335,7 @@ class CmpCaEnrollmentService(LoggerMixin):
         remote_issued_credential = RemoteIssuedCredentialModel(
             common_name=common_name,
             issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.LOCAL_CA,
-            issued_using_cert_profile=cert_profile.unique_name,
+            certificate_profile=cert_profile,
             credential=ca.credential,
             ca=ca,
         )

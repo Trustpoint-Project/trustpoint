@@ -140,7 +140,9 @@ class _Env:
                 return_value=Mock(name='issuer'),
             ),
             patch.object(
-                RemoteCaCertificateIssueProcessor, '_get_credential_type_for_template', return_value=(None, 'Profile')
+                RemoteCaCertificateIssueProcessor,
+                '_get_credential_type_for_template',
+                return_value=(None, Mock(display_name='Profile', unique_name='profile')),
             ),
         ):
             client_class.return_value.send_and_extract_certificate.side_effect = side_effect
@@ -338,7 +340,9 @@ def test_est_ra_preserves_response_intermediate_and_saves_verified_path(trusted)
         patch(f'{PATCH_BASE}.AuditLog.create_entry'),
         patch.object(RemoteCaCertificateIssueProcessor, '_get_keyless_issuer_credential', return_value=Mock()),
         patch.object(
-            RemoteCaCertificateIssueProcessor, '_get_credential_type_for_template', return_value=(None, 'Profile')
+            RemoteCaCertificateIssueProcessor,
+            '_get_credential_type_for_template',
+            return_value=(None, Mock(display_name='Profile', unique_name='profile')),
         ),
     ):
         processor = RemoteCaCertificateIssueProcessor(ca_type='est')

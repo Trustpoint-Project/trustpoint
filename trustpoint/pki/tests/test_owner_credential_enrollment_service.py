@@ -39,6 +39,9 @@ def enrollment(request):
         operation='simpleenroll',
         domain=None,
         cert_profile_str='selected-profile',
+        certificate_profile_model=CertificateProfileModel.objects.create(
+            unique_name='selected-profile', profile_json={'type': 'cert_profile'}
+        ),
     )
     return domain, owner, pending, context
 
@@ -87,7 +90,7 @@ def test_success_reuses_pending_key_and_preserves_role_specific_updates(enrollme
         credential=credential, certificate=credential.certificate, is_primary=True
     ).exists()
     assert pending.common_name == 'issued-owner'
-    assert pending.issued_using_cert_profile == ('selected-profile' if domain else 'original-profile')
+    assert pending.certificate_profile == context.certificate_profile_model
     references = IDevIDReferenceModel.objects.filter(dev_owner_id=owner)
     if domain:
         assert not references.exists()
@@ -114,3 +117,16 @@ def test_est_failure_keeps_the_pending_record_unissued(enrollment):
     assert pending.credential.get_private_key_serializer().as_pkcs8_pem() == original_key
     assert pending.issued_using_cert_profile == 'original-profile'
     assert not IDevIDReferenceModel.objects.filter(dev_owner_id=owner).exists()
+
+
+def test_owner_enrollment_requires_profile_before_sending_request(enrollment):
+    domain, owner, pending, context = enrollment
+    context.certificate_profile_model = None
+    with patch('pki.services.owner_credential.EstClient') as client:
+        with pytest.raises(ValueError, match='certificate profile is required'):
+            enroll_owner_credential_est(
+                context, owner, pending, logger=logging.getLogger(__name__), domain_credential=domain
+            )
+        client.assert_not_called()
+    pending.refresh_from_db()
+    assert pending.certificate_profile.unique_name == 'original-profile'

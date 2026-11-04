@@ -84,6 +84,7 @@ class CertificateIssuedCredentialSerializer(serializers.ModelSerializer[IssuedCr
     device_name = serializers.CharField(source='device.common_name', read_only=True)
     onboarding_protocol = serializers.CharField(source='device.get_onboarding_protocol_display', read_only=True)
     credential_type_display = serializers.CharField(source='get_issued_credential_type_display', read_only=True)
+    issued_using_cert_profile = serializers.CharField(read_only=True)
 
     class Meta:
         """Identifiers and issuance metadata, without credential contents or secrets."""
@@ -250,7 +251,7 @@ class CertificateDetailSerializer(CertificateSummarySerializer):
         """Expose local issuance associations used for device/profile navigation and revocation."""
         credentials = (
             IssuedCredentialModel.objects.filter(credential__certificate=obj)
-            .select_related('device__onboarding_config', 'device__no_onboarding_config')
+            .select_related('device__onboarding_config', 'device__no_onboarding_config', 'certificate_profile')
             .order_by('pk')
         )
         return [dict(item) for item in CertificateIssuedCredentialSerializer(credentials, many=True).data]

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
@@ -22,6 +23,7 @@ from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import filters
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import BasePermission
 
 from management.security_change_audit import audit_security_change, security_change
@@ -50,9 +52,9 @@ class CertProfileContextMixin(ContextDataMixin):
     context_page_name = 'cert_profiles'
 
 
-class CertProfileTableView(CertProfileContextMixin,
-                           SortableTableMixin[CertificateProfileModel],
-                           ListView[CertificateProfileModel]):
+class CertProfileTableView(
+    CertProfileContextMixin, SortableTableMixin[CertificateProfileModel], ListView[CertificateProfileModel]
+):
     """Certificate Profile Table View."""
 
     model = CertificateProfileModel
@@ -62,8 +64,9 @@ class CertProfileTableView(CertProfileContextMixin,
     default_sort_param = 'unique_name'
 
 
-class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
-                            UpdateView[CertificateProfileModel, CertProfileConfigForm]):
+class CertProfileConfigView(
+    LoggerMixin, CertProfileContextMixin, UpdateView[CertificateProfileModel, CertProfileConfigForm]
+):
     """View to display the details of and edit a Certificate Profile."""
 
     http_method_names = ('get', 'post')
@@ -92,7 +95,7 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
         if not form['unique_name'].value():
             context['is_new'] = True
 
-        default_json = { # new profile default
+        default_json = {  # new profile default
             'type': 'cert_profile',
             'credential_type': CertificateProfileModel.ProfileCredentialType.APPLICATION,
             'subj': {},
@@ -148,8 +151,9 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
         return HttpResponseRedirect(self.get_success_url())
 
 
-class CertProfileIssuanceView(FormErrorMessageMixin, LoggerMixin, CertProfileContextMixin,
-                              FormView[CertificateIssuanceForm]):
+class CertProfileIssuanceView(
+    FormErrorMessageMixin, LoggerMixin, CertProfileContextMixin, FormView[CertificateIssuanceForm]
+):
     """View to display the issuance form for a Certificate Profile."""
 
     http_method_names = ('get', 'post')
@@ -226,6 +230,7 @@ class CanManageCertificateProfiles(BasePermission):
             and request.user.has_perm(AppPermissions.MANAGE_CERTIFICATE_PROFILES)
         )
 
+
 @extend_schema(tags=['Certificate Profile'])
 @extend_schema_view(
     retrieve=extend_schema(description='Retrieve a single certificate profile by id.'),
@@ -277,7 +282,7 @@ class CanManageCertificateProfiles(BasePermission):
     ),
     update=extend_schema(description='Update an existing certificate profile.'),
     partial_update=extend_schema(description='Partially update an existing certificate profile.'),
-    destroy=extend_schema(description='Delete a certificate profile.')
+    destroy=extend_schema(description='Delete a certificate profile.'),
 )
 class CertProfileViewSet(AuditedModelViewSet[CertificateProfileModel]):
     """ViewSet for managing Certificate Profile instances.
@@ -285,17 +290,21 @@ class CertProfileViewSet(AuditedModelViewSet[CertificateProfileModel]):
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
     """
+
     queryset = CertificateProfileModel.objects.all().order_by('-created_at')
     serializer_class = CertProfileSerializer
     permission_classes = (CanManageCertificateProfiles,)
-    filter_backends = (
-        DjangoFilterBackend,
-        filters.SearchFilter,
-        filters.OrderingFilter
-    )
+    filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['unique_name', 'created_at']
     search_fields: ClassVar = ['unique_name', 'display_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at']
+
+    def perform_destroy(self, instance: CertificateProfileModel) -> None:
+        """Explain protected profile references instead of returning a server error."""
+        try:
+            super().perform_destroy(instance)
+        except ProtectedError as exc:
+            raise ValidationError(_('This certificate profile is referenced by issued credentials.')) from exc
 
     def get_serializer_class(self) -> type[CertProfileDetailSerializer | CertProfileSerializer]:
         """Return the detail serializer for retrieve, and the list serializer for all other actions."""

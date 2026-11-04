@@ -27,6 +27,7 @@ from home.analytics import application_certificate_device_counts
 from home.simplified_view import SimplifiedDomainOverviewView
 from home.views import DashboardChartsAndCountsView
 from pki.filters import CertificateFilter
+from pki.models.cert_profile import CertificateProfileModel
 from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel, RevokedCertificateModel
 from pki.models.credential import PrimaryCredentialCertificate
 from pki.models.domain import DomainModel
@@ -74,6 +75,9 @@ def _issue(device: DeviceModel, certificate: CertificateModel | None, kind: int)
     if certificate is not None:
         PrimaryCredentialCertificate.objects.create(credential=credential, certificate=certificate, is_primary=True)
     IssuedCredentialModel.objects.create(
+        certificate_profile=CertificateProfileModel.objects.get_or_create(
+            unique_name='test_profile', defaults={'profile_json': {}}
+        )[0],
         common_name=device.common_name,
         device=device,
         credential=credential,
