@@ -170,8 +170,7 @@ class AcceptHeaderValidation(ValidationComponent, LoggerMixin):
         accept_header = context.raw_message.headers.get('Accept')
         if not accept_header:
             return
-        accepted_types = [content_type.strip() for content_type in accept_header.split(',')]
-        if not any(allowed_type in accepted_types for allowed_type in self.allowed_content_types):
+        if context.raw_message.get_preferred_type(self.allowed_content_types) is None:
             msg = (
                 f"The provided 'Accept' header '{accept_header}' does not match any of the allowed types: "
                 f'{", ".join(self.allowed_content_types)}.'
@@ -307,7 +306,7 @@ class EstHttpRequestValidator(CompositeValidation):
         self.add(TrustedProxyHeadersValidation())
         self.add(PayloadSizeValidation(max_payload_size=65536))
         self.add(ContentTypeValidation(expected_content_type='application/pkcs10'))
-        self.add(AcceptHeaderValidation(allowed_content_types=['application/pkcs7-mime', '*/*']))
+        self.add(AcceptHeaderValidation(allowed_content_types=['application/pkcs7-mime; smime-type=certs-only']))
         self.add(ClientCertificateValidation())
         self.add(IntermediateCertificatesValidation())
         self.add(ContentTransferEncodingValidation())

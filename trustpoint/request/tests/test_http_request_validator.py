@@ -169,22 +169,20 @@ class TestAcceptHeaderValidation:
         validator = AcceptHeaderValidation(allowed_content_types=allowed_types)
         assert validator.allowed_content_types == allowed_types
 
-    def test_validate_success_single_type(self):
+    def test_validate_success_single_type(self, rf):
         """Test successful validation with single matching type."""
         validator = AcceptHeaderValidation(allowed_content_types=['application/json'])
         context = BaseRequestContext()
-        context.raw_message = MagicMock()
-        context.raw_message.headers = {'Accept': 'application/json'}
+        context.raw_message = rf.get('/', HTTP_ACCEPT='application/json')
 
         # Should not raise any exception
         validator.validate(context)
 
-    def test_validate_success_multiple_types(self):
+    def test_validate_success_multiple_types(self, rf):
         """Test successful validation with multiple types."""
         validator = AcceptHeaderValidation(allowed_content_types=['application/json', 'application/xml'])
         context = BaseRequestContext()
-        context.raw_message = MagicMock()
-        context.raw_message.headers = {'Accept': 'application/json, application/xml'}
+        context.raw_message = rf.get('/', HTTP_ACCEPT='application/json, application/xml')
 
         # Should not raise any exception
         validator.validate(context)
@@ -199,12 +197,11 @@ class TestAcceptHeaderValidation:
         # Should not raise any exception
         validator.validate(context)
 
-    def test_validate_invalid_accept_header(self):
+    def test_validate_invalid_accept_header(self, rf):
         """Test ValueError when Accept header doesn't match allowed types."""
         validator = AcceptHeaderValidation(allowed_content_types=['application/json'])
         context = BaseRequestContext()
-        context.raw_message = MagicMock()
-        context.raw_message.headers = {'Accept': 'text/plain'}
+        context.raw_message = rf.get('/', HTTP_ACCEPT='text/plain')
 
         try:
             validator.validate(context)

@@ -117,8 +117,10 @@ class ESTClient:
         response = self.session.post(url, data=csr_der, headers=headers, auth=auth, cert=cert, verify=self.ca_cert_path)
 
         if response.status_code == 200:
-            cert_der = response.content
-            cert_pem = x509.load_der_x509_certificate(cert_der).public_bytes(encoding=serialization.Encoding.PEM)
+            certificates = load_der_pkcs7_certificates(base64.b64decode(response.content))
+            cert_pem = next(
+                cert for cert in certificates if cert.public_key() == private_key.public_key()
+            ).public_bytes(encoding=serialization.Encoding.PEM)
             cert_path = self.out_cert_path or 'issued_cert.pem'
             with open(cert_path, 'wb') as cert_file:
                 cert_file.write(cert_pem)
@@ -183,8 +185,10 @@ class ESTClient:
         response = self.session.post(url, data=csr_der, headers=headers, auth=auth, cert=cert, verify=self.ca_cert_path)
 
         if response.status_code == 200:
-            cert_der = response.content
-            cert_pem = x509.load_der_x509_certificate(cert_der).public_bytes(encoding=serialization.Encoding.PEM)
+            certificates = load_der_pkcs7_certificates(base64.b64decode(response.content))
+            cert_pem = next(
+                cert for cert in certificates if cert.public_key() == private_key.public_key()
+            ).public_bytes(encoding=serialization.Encoding.PEM)
             cert_path = 'reenrolled_' + (self.out_cert_path or 'cert.pem')
             with open(cert_path, 'wb') as cert_file:
                 cert_file.write(cert_pem)
