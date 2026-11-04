@@ -44,6 +44,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
+
 class DownloadTokenRequiredAuthenticationMixin:
     """Mixin which checks the token included in the URL for browser download views."""
 
@@ -80,6 +81,7 @@ class DownloadTokenRequiredAuthenticationMixin:
 
         return cast('HttpResponseBase', super_dispatch(request, *args, **kwargs))
 
+
 class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[IssuedCredentialModel]):
     """View to download a password protected application credential in the desired format.
 
@@ -89,6 +91,7 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
     http_method_names = ('get', 'post')
 
     model = IssuedCredentialModel
+    queryset = IssuedCredentialModel.objects.select_related('certificate_profile')
     template_name = 'devices/credentials/credential_download.html'
     context_object_name = 'credential'
 
@@ -164,7 +167,6 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
         form = self.form_class(self.request.POST)
 
         if form.is_valid():
-
             password = form.cleaned_data['password'].encode()
 
             try:
@@ -244,6 +246,7 @@ class DeviceBrowserCredentialDownloadView(
     """View to download a password protected domain or app credential in the desired format from a remote client."""
 
     is_browser_download = True
+
 
 #  ----------------------------------- Certificate Lifecycle Management - Downloads ------------------------------------
 
@@ -341,5 +344,3 @@ class OpcUaGdsPushCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the OPC UA GDS Push pages."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-

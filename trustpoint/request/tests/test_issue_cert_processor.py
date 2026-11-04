@@ -95,14 +95,14 @@ def test_get_credential_type_for_template_distinguishes_domain_and_application(
     )
 
     context = CmpCertificateRequestContext(domain=domain, certificate_profile_model=domain_profile)  # type: ignore[arg-type]
-    credential_type, display_name = CertificateIssueProcessor._get_credential_type_for_template(context)  # noqa: SLF001
+    credential_type, profile = CertificateIssueProcessor._get_credential_type_for_template(context)  # noqa: SLF001
     assert credential_type == IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
-    assert display_name == (domain_profile.display_name or domain_profile.unique_name)
+    assert profile == domain_profile
 
     context.certificate_profile_model = tls_profile
-    credential_type, display_name = CertificateIssueProcessor._get_credential_type_for_template(context)  # noqa: SLF001
+    credential_type, profile = CertificateIssueProcessor._get_credential_type_for_template(context)  # noqa: SLF001
     assert credential_type == IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
-    assert display_name == (tls_profile.display_name or tls_profile.unique_name)
+    assert profile == tls_profile
 
     context.certificate_profile_model = None
     with pytest.raises(ValueError, match='Certificate profile model is required'):

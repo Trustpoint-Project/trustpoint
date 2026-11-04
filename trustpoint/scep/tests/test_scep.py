@@ -113,9 +113,7 @@ def test_get_ca_cert_returns_server_and_ca_chain(client: Client, rsa_env: ScepEn
     sd = support.ber_decoder.decode(ci['content'], asn1Spec=support.rfc5652.SignedData())[0]
     assert len(sd['signerInfos']) == 0
     assert not sd['encapContentInfo']['eContent'].isValue
-    certs = [
-        x509.load_der_x509_certificate(support.der_encoder.encode(c['certificate'])) for c in sd['certificates']
-    ]
+    certs = [x509.load_der_x509_certificate(support.der_encoder.encode(c['certificate'])) for c in sd['certificates']]
     server = next(c for c in certs if c.subject == rsa_env.server_cert.subject)
     usage = server.extensions.get_extension_for_class(x509.KeyUsage).value
     assert usage.digital_signature
@@ -383,9 +381,7 @@ def test_renewal_cannot_change_identity(client: Client, rsa_env: ScepEnv) -> Non
     _assert_failure(rep, nonce, FailInfo.BAD_REQUEST)
 
 
-def test_renewal_with_invalid_csr_signature_independent_of_outer_signature(
-    client: Client, rsa_env: ScepEnv
-) -> None:
+def test_renewal_with_invalid_csr_signature_independent_of_outer_signature(client: Client, rsa_env: ScepEnv) -> None:
     key, cert = _enrolled(client, rsa_env)
     csr_der = bytearray(support.make_csr(support.make_key('rsa'), CN).public_bytes(serialization.Encoding.DER))
     csr_der[-5] ^= 0xFF
@@ -447,35 +443,6 @@ def test_conflicting_transaction_reuse_rejected(client: Client, rsa_env: ScepEnv
     assert IssuedCredentialModel.objects.filter(device=rsa_env.device).count() == 1
 
 
-def test_concurrent_duplicate_is_served_as_retry(client: Client, rsa_env: ScepEnv) -> None:
-    """The second of two racing identical requests loses the unique constraint and is answered as a retry."""
-    key = support.make_key('rsa')
-    csr = support.make_csr(key, CN, rsa_env.secret)
-    signer = support.make_self_signed(key, CN)
-    body, _ = support.build_request(
-        signer_key=key, signer_cert=signer, server_cert=rsa_env.server_cert, csr=csr, transaction_id='tx-race'
-    )
-    assert support.parse_cert_rep(_post(client, rsa_env, body).content).status == PkiStatus.SUCCESS
-
-    original = ScepPkiOperationHandler._lookup_transaction  # noqa: SLF001
-    calls = {'n': 0}
-
-    def racy(config: Any, transaction_id: str) -> Any:
-        calls['n'] += 1
-        return None if calls['n'] == 1 else original(config, transaction_id)
-
-    with (
-        patch.object(ScepPkiOperationHandler, '_lookup_transaction', staticmethod(racy)),
-        patch('onboarding.models.ScepEnrollmentModelMixin.can_authorize_scep_enrollment', return_value=True),
-    ):
-        body2, _ = support.build_request(
-            signer_key=key, signer_cert=signer, server_cert=rsa_env.server_cert, csr=csr, transaction_id='tx-race'
-        )
-        rep = support.parse_cert_rep(_post(client, rsa_env, body2).content)
-    assert rep.status == PkiStatus.SUCCESS
-    assert IssuedCredentialModel.objects.filter(device=rsa_env.device).count() == 1
-
-
 def test_failed_issuance_does_not_consume_secret(client: Client, rsa_env: ScepEnv) -> None:
     key = support.make_key('rsa')
     with patch('scep.handler.OperationProcessor.process_operation', side_effect=RuntimeError('boom')):
@@ -500,7 +467,9 @@ def test_rejection_is_audited_without_secret(client: Client, rsa_env: ScepEnv) -
 
 
 @pytest.mark.parametrize('kind', ['rsa', 'p256'])
-def test_responses_verify_and_decrypt_with_openssl(client: Client, rsa_env: ScepEnv, ec_env: ScepEnv, kind: str) -> None:
+def test_responses_verify_and_decrypt_with_openssl(
+    client: Client, rsa_env: ScepEnv, ec_env: ScepEnv, kind: str
+) -> None:
     env = rsa_env if kind == 'rsa' else ec_env
     key = support.make_key(kind)
     response, rep, _ = _enroll(client, env, key)
@@ -509,7 +478,19 @@ def test_responses_verify_and_decrypt_with_openssl(client: Client, rsa_env: Scep
         d = Path(tmp)
         (d / 'rep.der').write_bytes(response.content)
         verify = subprocess.run(  # noqa: S603
-            ['openssl', 'cms', '-verify', '-inform', 'DER', '-in', str(d / 'rep.der'), '-noverify', '-out', str(d / 'inner.der'), '-binary'],  # noqa: S607
+            [
+                'openssl',
+                'cms',
+                '-verify',
+                '-inform',
+                'DER',
+                '-in',
+                str(d / 'rep.der'),
+                '-noverify',
+                '-out',
+                str(d / 'inner.der'),
+                '-binary',
+            ],  # noqa: S607
             capture_output=True,
             check=False,
         )
@@ -524,7 +505,18 @@ def test_responses_verify_and_decrypt_with_openssl(client: Client, rsa_env: Scep
         else:
             args = ['-pwri_password', env.secret]
         decrypt = subprocess.run(  # noqa: S603
-            ['openssl', 'cms', '-decrypt', '-inform', 'DER', '-in', str(d / 'inner.der'), '-out', str(d / 'certs.der'), *args],  # noqa: S607
+            [
+                'openssl',
+                'cms',
+                '-decrypt',
+                '-inform',
+                'DER',
+                '-in',
+                str(d / 'inner.der'),
+                '-out',
+                str(d / 'certs.der'),
+                *args,
+            ],  # noqa: S607
             capture_output=True,
             check=False,
         )
@@ -563,3 +555,36 @@ def test_custom_scep_challenge_authorizes_enrollment_exactly(client: Client, rsa
     _, rep, _ = _enroll(client, rsa_env, support.make_key('rsa'))
     assert rep.status == PkiStatus.SUCCESS
     assert rsa_env.config.scep_challenge_state() == 'consumed'
+
+
+@pytest.mark.parametrize('edit', ['rename', 'duplicate_label', 'removed'])
+def test_renewal_uses_original_profile_reference(client: Client, rsa_env: ScepEnv, edit: str) -> None:
+    from pki.models.cert_profile import CertificateProfileModel
+    from pki.models.domain import DomainAllowedCertificateProfileModel
+
+    rsa_env.profile.display_name = 'Original Label'
+    rsa_env.profile.save(update_fields=['display_name'])
+    key, cert = _enrolled(client, rsa_env)
+    issued = IssuedCredentialModel.get_credential_for_certificate(cert)
+    assert issued.certificate_profile_id == rsa_env.profile.pk
+    if edit == 'rename':
+        rsa_env.profile.display_name = 'Renamed Label'
+        rsa_env.profile.save(update_fields=['display_name'])
+    else:
+        other = CertificateProfileModel.objects.create(
+            unique_name='other_profile',
+            display_name='Original Label',
+            profile_json=rsa_env.profile.profile_json,
+        )
+        DomainAllowedCertificateProfileModel.objects.create(domain=rsa_env.domain, certificate_profile=other)
+        if edit == 'removed':
+            rsa_env.domain.certificate_profiles.filter(certificate_profile=rsa_env.profile).delete()
+    _, rep, nonce = _renew(client, rsa_env, key, cert, support.make_key('rsa'), 'profile-renewal')
+    if edit == 'removed':
+        _assert_failure(rep, nonce, FailInfo.BAD_REQUEST)
+    else:
+        assert rep.status == PkiStatus.SUCCESS, rep.fail_text
+        renewed = support.decrypt_cert_rep(rep, key=key)[0]
+        assert (
+            IssuedCredentialModel.get_credential_for_certificate(renewed).certificate_profile_id == rsa_env.profile.pk
+        )

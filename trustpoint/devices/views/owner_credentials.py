@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
     from django.forms import ChoiceField, Form
 
+
 class OwnerCredentialContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the PKI -> Issuing CAs pages."""
 
@@ -70,7 +71,8 @@ class ZeroTouchContextMixin(ContextDataMixin):
 
 
 class OwnerCredentialTableView(
-    ZeroTouchContextMixin, SortableTableMixin[OwnerCredentialModel], ListView[OwnerCredentialModel]):
+    ZeroTouchContextMixin, SortableTableMixin[OwnerCredentialModel], ListView[OwnerCredentialModel]
+):
     """Owner Credential Table View (displayed in Devices → Zero-Touch Credentials)."""
 
     model = OwnerCredentialModel
@@ -103,9 +105,7 @@ class OwnerCredentialDetailView(LoggerMixin, ZeroTouchContextMixin, DetailView[O
         """
         context = super().get_context_data(**kwargs)
         owner_credential = self.get_object()
-        context['idevid_refs'] = list(
-            owner_credential.idevid_ref_set.select_related('dev_owner_id_certificate').all()
-        )
+        context['idevid_refs'] = list(owner_credential.idevid_ref_set.select_related('dev_owner_id_certificate').all())
         return context
 
 
@@ -160,9 +160,7 @@ class OwnerCredentialFileImportView(ZeroTouchContextMixin, FormView[OwnerCredent
 OwnerCredentialAddView = OwnerCredentialFileImportView
 
 
-class OwnerCredentialAddRequestEstMethodSelectView(
-    ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]
-):
+class OwnerCredentialAddRequestEstMethodSelectView(ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]):
     """View to select between EST authentication methods: Basic Auth or mTLS Client Auth."""
 
     template_name = 'devices/zero_touch_credentials/add/est_method_select.html'
@@ -308,6 +306,7 @@ class OwnerCredentialTruststoreAssociationView(
         truststore_id = self.request.GET.get('truststore_id')
         if truststore_id:
             from pki.models.truststore import TruststoreModel  # noqa: PLC0415
+
             try:
                 truststore = TruststoreModel.objects.get(pk=truststore_id)
                 kwargs.setdefault('initial', {})['trust_store'] = truststore
@@ -349,7 +348,8 @@ class OwnerCredentialTruststoreAssociationView(
                 reverse(
                     'devices:zero_touch_credentials-truststore-association',
                     kwargs={'pk': owner_credential.pk},
-                ) + f'?truststore_id={truststore.pk}'
+                )
+                + f'?truststore_id={truststore.pk}'
             )
 
         context = self.get_context_data()
@@ -369,7 +369,8 @@ class OwnerCredentialTruststoreAssociationView(
         intended_usage_field = cast('ChoiceField', import_form.fields['intended_usage'])
         raw_choices: Any = intended_usage_field.choices
         intended_usage_field.choices = [
-            choice for choice in raw_choices
+            choice
+            for choice in raw_choices
             if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.TLS
         ]
         context['import_form'] = import_form
@@ -419,20 +420,15 @@ class OwnerCredentialOnboardingSetupView(
         context['owner_credential'] = owner_credential
 
         # Collect IDevID subject serial numbers for the regex helper
-        idevid_refs = list(
-            owner_credential.idevid_ref_set.all()
-        )
-        idevid_reference_strs = [
-            ref.idevid_subj_sn_or_san_uri
-            for ref in idevid_refs
-            if ref.idevid_subj_sn_or_san_uri
-        ]
+        idevid_refs = list(owner_credential.idevid_ref_set.all())
+        idevid_reference_strs = [ref.idevid_subj_sn_or_san_uri for ref in idevid_refs if ref.idevid_subj_sn_or_san_uri]
         context['idevid_reference_strs'] = idevid_reference_strs
         context['idevid_refs'] = idevid_refs
 
         # Build a suggested regex from the serial numbers
         if idevid_reference_strs:
             import re  # noqa: PLC0415
+
             escaped = [re.escape(sn) for sn in idevid_reference_strs]
             if len(escaped) == 1:
                 context['suggested_pattern'] = f'^{escaped[0]}$'
@@ -486,10 +482,14 @@ class OwnerCredentialCLMView(ZeroTouchContextMixin, DetailView[OwnerCredentialMo
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds issued credentials with computed display fields to the context."""
         context = super().get_context_data(**kwargs)
-        issued_creds: QuerySet[RemoteIssuedCredentialModel] = RemoteIssuedCredentialModel.objects.filter(
-            owner_credential=self.object,
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-        ).select_related('credential__certificate').order_by('-created_at')
+        issued_creds: QuerySet[RemoteIssuedCredentialModel] = (
+            RemoteIssuedCredentialModel.objects.filter(
+                owner_credential=self.object,
+                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+            )
+            .select_related('credential__certificate', 'certificate_profile')
+            .order_by('-created_at')
+        )
 
         for cred in issued_creds:
             if cred.credential.certificate is not None:
@@ -518,10 +518,14 @@ class OwnerCredentialCLMView(ZeroTouchContextMixin, DetailView[OwnerCredentialMo
         context['is_onboarding'] = is_onboarding
 
         if is_onboarding:
-            domain_creds: QuerySet[RemoteIssuedCredentialModel] = RemoteIssuedCredentialModel.objects.filter(
-                owner_credential=self.object,
-                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-            ).select_related('credential__certificate').order_by('-created_at')
+            domain_creds: QuerySet[RemoteIssuedCredentialModel] = (
+                RemoteIssuedCredentialModel.objects.filter(
+                    owner_credential=self.object,
+                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
+                )
+                .select_related('credential__certificate', 'certificate_profile')
+                .order_by('-created_at')
+            )
 
             for cred in domain_creds:
                 if cred.credential.certificate is not None:
@@ -638,8 +642,13 @@ class IssuedCredentialDeleteView(LoggerMixin, ZeroTouchContextMixin, DetailView[
 # DevOwnerID EST certificate issuance (define content → request)
 # ---------------------------------------------------------------------------
 
-class OwnerCredentialDefineCertContentEstView(FormErrorMessageMixin, CertificateProfileSelectionMixin,
-    LoggerMixin, ZeroTouchContextMixin, FormView[CertificateIssuanceForm]
+
+class OwnerCredentialDefineCertContentEstView(
+    FormErrorMessageMixin,
+    CertificateProfileSelectionMixin,
+    LoggerMixin,
+    ZeroTouchContextMixin,
+    FormView[CertificateIssuanceForm],
 ):
     """Step 1 - Define the certificate content for a new Zero-Touch EST enrollment in the Devices section.
 
@@ -771,9 +780,7 @@ class OwnerCredentialDefineCertContentEstView(FormErrorMessageMixin, Certificate
         return redirect('devices:zero_touch_credentials-request-cert-est', pk=self.owner_credential.pk)
 
 
-class OwnerCredentialRequestCertEstView(
-    LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]
-):
+class OwnerCredentialRequestCertEstView(LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]):
     """Step 2 - Review and trigger the EST enrollment for a new Zero-Touch certificate in the Devices section.
 
     Reads the certificate content stored by
@@ -866,7 +873,11 @@ class OwnerCredentialRequestCertEstView(
         context = EstCertificateRequestContext(**self._build_est_context_kwargs(owner_credential, cert_profile))
         context.request_data = self._build_request_data(cert_content_data)
         enroll_owner_credential_est(
-            context, owner_credential, pending_issued, logger=self.logger, domain_credential=False,
+            context,
+            owner_credential,
+            pending_issued,
+            logger=self.logger,
+            domain_credential=False,
         )
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
@@ -918,8 +929,13 @@ class OwnerCredentialRequestCertEstView(
 # Domain Credential EST certificate issuance (define content → request)
 # ---------------------------------------------------------------------------
 
-class OwnerCredentialDefineCertContentDomainCredentialEstView(FormErrorMessageMixin, CertificateProfileSelectionMixin,
-    LoggerMixin, ZeroTouchContextMixin, FormView[CertificateIssuanceForm]
+
+class OwnerCredentialDefineCertContentDomainCredentialEstView(
+    FormErrorMessageMixin,
+    CertificateProfileSelectionMixin,
+    LoggerMixin,
+    ZeroTouchContextMixin,
+    FormView[CertificateIssuanceForm],
 ):
     """Step 1 - Define the certificate content for a new Domain Credential EST enrollment in the Devices section.
 
@@ -1112,7 +1128,11 @@ class OwnerCredentialRequestDomainCredentialEstView(
         )
         context.request_data = self._build_request_data(cert_content_data)
         enroll_owner_credential_est(
-            context, owner_credential, pending_issued, logger=self.logger, domain_credential=True,
+            context,
+            owner_credential,
+            pending_issued,
+            logger=self.logger,
+            domain_credential=True,
         )
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
@@ -1158,15 +1178,11 @@ class OwnerCredentialRequestDomainCredentialEstView(
                 request,
                 _('Failed to enroll Domain Credential via EST: {error}').format(error=str(exc)),
             )
-            return redirect(
-                'devices:zero_touch_credentials-request-domain-credential-est', pk=owner_credential.pk
-            )
+            return redirect('devices:zero_touch_credentials-request-domain-credential-est', pk=owner_credential.pk)
         except Exception as exc:
             self.logger.exception('Unexpected error during Domain Credential EST enrollment')
             messages.error(
                 request,
                 _('Unexpected error during enrollment: {error}').format(error=str(exc)),
             )
-            return redirect(
-                'devices:zero_touch_credentials-request-domain-credential-est', pk=owner_credential.pk
-            )
+            return redirect('devices:zero_touch_credentials-request-domain-credential-est', pk=owner_credential.pk)
