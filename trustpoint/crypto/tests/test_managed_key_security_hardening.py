@@ -5,11 +5,14 @@
 
 from __future__ import annotations
 
+from unittest.mock import Mock, patch
+
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
+from django.db.models.deletion import ProtectedError
 
 from crypto.application.service import TrustpointCryptoBackend
-from crypto.domain.errors import ProviderConfigurationError
+from crypto.domain.errors import ProviderConfigurationError, ProviderUnavailableError
 from crypto.domain.policies import KeyPolicy
 from crypto.domain.specs import SignRequest
 from crypto.models import (
@@ -19,7 +22,8 @@ from crypto.models import (
     CryptoProviderProfileModel,
     ManagedKeyStatus,
 )
-from management.models import SecurityConfig
+from management.models import AuditLog, LoggingConfig, SecurityConfig
+from pki.models import CredentialModel
 
 pytestmark = pytest.mark.django_db
 
@@ -88,3 +92,53 @@ def test_private_key_import_rejects_ambiguous_security_policy() -> None:
             private_key=private_key,
             policy=KeyPolicy.managed_signing_key(),
         )
+
+
+def test_destroy_referenced_key_never_touches_provider() -> None:
+    """Protected credential references must be checked before irreversible destruction."""
+    managed_key = _managed_key(status=ManagedKeyStatus.ACTIVE)
+    CredentialModel.objects.create(
+        credential_type=CredentialModel.CredentialTypeChoice.SIGNER,
+        managed_private_key=managed_key,
+    )
+    LoggingConfig.objects.update_or_create(pk=1, defaults={'crypto_backend_audit_enabled': True})
+    backend = TrustpointCryptoBackend()
+    with patch.object(backend, '_build_adapter') as build_adapter, pytest.raises(ProtectedError):
+        backend.destroy_managed_key(managed_key.to_managed_key_ref())
+
+    build_adapter.assert_not_called()
+    assert CryptoManagedKeyModel.objects.filter(pk=managed_key.pk).exists()
+    assert CryptoManagedKeyPkcs11BindingModel.objects.filter(managed_key=managed_key).exists()
+    entry = AuditLog.objects.get(operation_type=AuditLog.OperationType.CRYPTO_DESTROY_MANAGED_KEY)
+    assert entry.details['status'] == 'error'
+
+
+@pytest.mark.parametrize('provider_fails', [False, True])
+def test_destroy_key_rolls_back_provider_failure_and_audits_result(provider_fails) -> None:
+    """Provider failures restore the binding; success preserves the deleted key's audit identity."""
+    managed_key = _managed_key(status=ManagedKeyStatus.ACTIVE)
+    key_ref = managed_key.to_managed_key_ref()
+    LoggingConfig.objects.update_or_create(pk=1, defaults={'crypto_backend_audit_enabled': True})
+
+    def destroy_binding(binding):
+        assert not CryptoManagedKeyModel.objects.filter(pk=key_ref.id).exists()
+        if provider_fails:
+            raise ProviderUnavailableError('provider unavailable')
+
+    adapter = Mock()
+    adapter.destroy_managed_key.side_effect = destroy_binding
+    backend = TrustpointCryptoBackend()
+    with patch.object(backend, '_build_adapter', return_value=adapter):
+        if provider_fails:
+            with pytest.raises(ProviderUnavailableError, match='provider unavailable'):
+                backend.destroy_managed_key(key_ref)
+        else:
+            backend.destroy_managed_key(key_ref)
+
+    adapter.destroy_managed_key.assert_called_once()
+    adapter.close.assert_called_once()
+    assert CryptoManagedKeyModel.objects.filter(pk=key_ref.id).exists() is provider_fails
+    assert CryptoManagedKeyPkcs11BindingModel.objects.filter(managed_key_id=key_ref.id).exists() is provider_fails
+    entry = AuditLog.objects.get(operation_type=AuditLog.OperationType.CRYPTO_DESTROY_MANAGED_KEY)
+    assert entry.target_object_id == str(key_ref.id)
+    assert entry.details['status'] == ('error' if provider_fails else 'success')

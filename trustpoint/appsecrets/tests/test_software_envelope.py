@@ -17,6 +17,8 @@ from appsecrets.service import (
     AppSecretConfigurationError,
     SoftwareAppSecretService,
     clear_app_secret_cache,
+    decrypt_app_secret,
+    encrypt_app_secret,
     load_software_kek,
 )
 from util.encrypted_fields import EncryptedTextField
@@ -56,6 +58,15 @@ def test_field_roundtrip_and_persisted_ciphertext():
     assert field.from_db_value(encoded, None, connection) == 'protected field'
 
 
+def test_warm_field_decryption_uses_joined_configuration_reads(settings, django_assert_num_queries):
+    """Cached decryption still validates current state without separate queries for related rows."""
+    settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = False
+    ciphertext = encrypt_app_secret('protected field')
+    with django_assert_num_queries(20):
+        for _ in range(10):
+            assert decrypt_app_secret(ciphertext) == 'protected field'
+
+
 @pytest.mark.parametrize('value', ['', ' ', 'ff' * 31, 'ff' * 33, 'gg' * 32, 'ab' * 32 + '\n', 'é' * 64])
 def test_invalid_kek_is_rejected_without_initializing(fresh_service, monkeypatch, tmp_path, value):
     key = tmp_path / 'bad-kek'
@@ -89,9 +100,12 @@ def test_invalid_wrapped_dek_is_never_reinitialized(fresh_service, mutation):
     fresh_service.require_dek()
     config = AppSecretSoftwareConfigModel.objects.get()
     wrapped = bytes(config.wrapped_dek)
-    broken = {'missing': None, 'truncated': wrapped[:-1],
-              'tampered': wrapped[:-1] + bytes([wrapped[-1] ^ 1]),
-              'unsupported': wrapped.replace(b':v1:', b':v2:')}[mutation]
+    broken = {
+        'missing': None,
+        'truncated': wrapped[:-1],
+        'tampered': wrapped[:-1] + bytes([wrapped[-1] ^ 1]),
+        'unsupported': wrapped.replace(b':v1:', b':v2:'),
+    }[mutation]
     AppSecretSoftwareConfigModel.objects.filter(pk=config.pk).update(wrapped_dek=broken)
     with patch('appsecrets.service.os.urandom', side_effect=AssertionError('must never regenerate')):
         with pytest.raises(AppSecretConfigurationError):
@@ -171,4 +185,3 @@ def test_errors_and_logs_never_contain_key_material(fresh_service, caplog, capsy
 def test_first_dek_does_not_query_absent_bootstrap_table(fresh_service):
     with patch.object(connection.introspection, 'table_names', return_value=[]):
         assert len(fresh_service.require_dek()) == 32
-

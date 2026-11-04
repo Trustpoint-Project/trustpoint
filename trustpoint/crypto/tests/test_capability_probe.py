@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import pytest
 
 from crypto.adapters.pkcs11.capability_probe import (
@@ -14,14 +12,7 @@ from crypto.adapters.pkcs11.capability_probe import (
     Pkcs11CapabilityProbe,
 )
 from crypto.domain.errors import ProviderUnavailableError
-from pkcs11 import Mechanism
-
-
-@dataclass
-class FakeMechanismInfo:
-    flags: tuple[str, ...]
-    min_key_size: int | None = None
-    max_key_size: int | None = None
+from pkcs11 import Mechanism, MechanismFlag, MechanismInfo
 
 
 class FakeSlot:
@@ -41,9 +32,13 @@ class FakeSlot:
 
     def get_mechanism_info(self, mechanism):
         if mechanism in {Mechanism.RSA_PKCS, Mechanism.RSA_PKCS_KEY_PAIR_GEN}:
-            return FakeMechanismInfo(flags=('SIGN', 'VERIFY'), min_key_size=1024, max_key_size=4096)
+            return MechanismInfo(
+                self, mechanism, ulMinKeySize=1024, ulMaxKeySize=4096, flags=MechanismFlag.SIGN | MechanismFlag.VERIFY
+            )
         if mechanism in {Mechanism.ECDSA, Mechanism.EC_KEY_PAIR_GEN}:
-            return FakeMechanismInfo(flags=('SIGN', 'VERIFY'), min_key_size=256, max_key_size=521)
+            return MechanismInfo(
+                self, mechanism, ulMinKeySize=256, ulMaxKeySize=521, flags=MechanismFlag.SIGN | MechanismFlag.VERIFY
+            )
         raise AssertionError(f'Unexpected mechanism: {mechanism!r}')
 
 
@@ -68,6 +63,10 @@ def test_probe_produces_serializable_snapshot() -> None:
     assert 'CKM_ECDSA' in rebuilt.mechanisms
     assert rebuilt.derived_features['can_generate_rsa'] is True
     assert rebuilt.derived_features['can_sign_ecdsa'] is True
+    assert rebuilt.mechanism(Mechanism.RSA_PKCS_KEY_PAIR_GEN).min_key_size == 1024
+    assert rebuilt.mechanism(Mechanism.RSA_PKCS_KEY_PAIR_GEN).max_key_size == 4096
+    assert rebuilt.mechanism(Mechanism.EC_KEY_PAIR_GEN).min_key_size == 256
+    assert rebuilt.mechanism(Mechanism.EC_KEY_PAIR_GEN).max_key_size == 521
 
 
 def test_probe_fingerprint_is_stable_for_same_contents() -> None:

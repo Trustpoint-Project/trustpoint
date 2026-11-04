@@ -9,6 +9,7 @@ Feature: Device management
 
   Background:
     Given the admin user is logged into Trustpoint
+    And a security configuration exists
     And a domain named "behave-domain" exists
 
   @critical

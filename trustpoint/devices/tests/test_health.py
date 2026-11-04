@@ -26,6 +26,13 @@ from devices.views.tables import DeviceTableView
 from home.analytics import application_certificate_device_counts
 from home.simplified_view import SimplifiedDomainOverviewView
 from home.views import DashboardChartsAndCountsView
+from onboarding.models import (
+    NoOnboardingConfigModel,
+    NoOnboardingPkiProtocol,
+    OnboardingConfigModel,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+)
 from pki.filters import CertificateFilter
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel, RevokedCertificateModel
@@ -278,6 +285,57 @@ def test_prefetched_badges_need_no_additional_queries(django_assert_num_queries)
     with django_assert_num_queries(0):
         for device in devices:
             assert credential_health_display(device, DOMAIN, as_of=NOW)['status_key'] == 'valid'
+
+
+def test_device_table_does_not_decrypt_unused_secrets(django_assert_num_queries):
+    """Loading configurations and issued credentials must not load their unused encrypted values."""
+    est, cmp = OnboardingConfigModel.objects.bulk_create(
+        [
+            OnboardingConfigModel(
+                onboarding_protocol=OnboardingProtocol.EST_USERNAME_PASSWORD,
+                pki_protocols=OnboardingPkiProtocol.EST | OnboardingPkiProtocol.SCEP,
+                est_password='synthetic EST password',
+                scep_challenge='synthetic SCEP challenge',
+            ),
+            OnboardingConfigModel(
+                onboarding_protocol=OnboardingProtocol.CMP_SHARED_SECRET,
+                pki_protocols=OnboardingPkiProtocol.CMP,
+                cmp_shared_secret='synthetic CMP secret',
+            ),
+        ]
+    )
+    no_onboarding = NoOnboardingConfigModel.objects.bulk_create(
+        [
+            NoOnboardingConfigModel(
+                pki_protocols=NoOnboardingPkiProtocol.SCEP
+                | NoOnboardingPkiProtocol.CMP_SHARED_SECRET
+                | NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+                scep_challenge='synthetic SCEP challenge',
+                cmp_shared_secret='synthetic CMP secret',
+                est_password='synthetic EST password',
+            ),
+        ]
+    )[0]
+    records = [
+        DeviceModel.objects.create(common_name='secret-est', onboarding_config=est),
+        DeviceModel.objects.create(common_name='secret-cmp', onboarding_config=cmp),
+        DeviceModel.objects.create(common_name='secret-scep', no_onboarding_config=no_onboarding),
+    ]
+    for device in records:
+        _issue(device, _certificate(-1, 30), DOMAIN)
+    CredentialModel.objects.update(private_key='synthetic private key')
+    view = DeviceTableView()
+    view.health_as_of = NOW
+
+    with (
+        patch('util.encrypted_fields.decrypt_app_secret', side_effect=AssertionError('unused secret decrypted')),
+        django_assert_num_queries(2),
+    ):
+        devices = list(view.get_base_queryset())
+        assert len(devices) == len(records)
+        for device in devices:
+            assert view._get_domain_credential_status(device)['status_key'] == 'valid'
+            assert view._get_onboarding_progress(device)['status_key'] in {'pending', 'no-onboarding'}
 
 
 def test_simplified_page_uses_shared_badges_and_certificate_counts(admin_user, admin_client):

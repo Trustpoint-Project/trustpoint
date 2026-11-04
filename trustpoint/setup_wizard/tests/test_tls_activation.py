@@ -7,6 +7,7 @@ import importlib
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 
 from management.management.commands.apply_bootstrap_config import OperationalBootstrapApplier
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -37,7 +38,11 @@ def staged_credential(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize('failure_step', [None, 'pem', 'nginx'])
 def test_staging_is_cleared_only_after_pem_write_and_nginx_succeed(
-    consumer, staged_credential, failure_step, monkeypatch
+    consumer,
+    staged_credential,
+    failure_step,
+    monkeypatch,
+    django_capture_on_commit_callbacks,
 ):
     """Both entry points apply the saved credential and retain staging on either I/O failure."""
     instance, module = consumer
@@ -69,9 +74,33 @@ def test_staging_is_cleared_only_after_pem_write_and_nginx_succeed(
             instance._apply_staged_tls_credential()
         assert tls_credential.load_staged_tls_credential() is not None
     else:
-        instance._apply_staged_tls_credential()
+        with django_capture_on_commit_callbacks(execute=True):
+            instance._apply_staged_tls_credential()
+            assert tls_credential.load_staged_tls_credential() is not None
         assert tls_credential.load_staged_tls_credential() is None
         assert observed == ['pem', 'nginx']
+
+
+def test_later_transaction_failure_preserves_staging(
+    consumer,
+    staged_credential,
+    monkeypatch,
+    django_capture_on_commit_callbacks,
+):
+    """A later setup write can roll back activation without deleting the key needed for retry."""
+    instance, module = consumer
+    before = list(ActiveTrustpointTlsServerCredentialModel.objects.values('pk', 'credential_id'))
+    monkeypatch.setattr(instance, '_write_pem_files', lambda credential: None)
+    executor_owner = instance if isinstance(instance, OperationalBootstrapApplier) else module
+    monkeypatch.setattr(executor_owner, 'execute_shell_script', lambda *args: None)
+
+    with django_capture_on_commit_callbacks(execute=True) as callbacks:
+        with pytest.raises(IntegrityError), transaction.atomic():
+            instance._apply_staged_tls_credential()
+            raise IntegrityError('A later setup write failed')
+    assert callbacks == []
+    assert list(ActiveTrustpointTlsServerCredentialModel.objects.values('pk', 'credential_id')) == before
+    assert tls_credential.load_staged_tls_credential().certificate == staged_credential.certificate
 
 
 def test_missing_staged_credential_preserves_caller_exception(consumer, monkeypatch):

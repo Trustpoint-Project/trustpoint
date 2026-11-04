@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, ClassVar, cast
 
 from django.apps import apps
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxLengthValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -24,7 +25,7 @@ from onboarding.enums import (
     OnboardingStatus,
 )
 from pki.models.truststore import TruststoreModel
-from util.encrypted_fields import EncryptedCharField
+from util.encrypted_fields import EncryptedCharField, EncryptedTextField
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -241,7 +242,8 @@ class ScepEnrollmentModelMixin(DeviceSecretStateMixin):
         """Atomically consume the enrollment authorization; False if it was no longer usable."""
         now = now or timezone.now()
         updated = (
-            type(self).objects.filter(
+            type(self)
+            .objects.filter(
                 models.Q(scep_challenge_expires_at__gt=now) | models.Q(scep_challenge_expires_at__isnull=True),
                 pk=self.pk,
                 scep_challenge_digest=self.scep_challenge_digest,
@@ -257,7 +259,8 @@ class ScepEnrollmentModelMixin(DeviceSecretStateMixin):
 
 
 class OnboardingConfigModel(
-    AbstractPkiProtocolModel[OnboardingPkiProtocol], ScepEnrollmentModelMixin,
+    AbstractPkiProtocolModel[OnboardingPkiProtocol],
+    ScepEnrollmentModelMixin,
 ):
     """Onboarding Configuration Model."""
 
@@ -338,7 +341,8 @@ class OnboardingConfigModel(
         if (
             self._state.adding
             and self.credential_expires_at is None
-            and self.onboarding_protocol in (
+            and self.onboarding_protocol
+            in (
                 OnboardingProtocol.CMP_SHARED_SECRET,
                 OnboardingProtocol.EST_USERNAME_PASSWORD,
                 OnboardingProtocol.REST_USERNAME_PASSWORD,
@@ -559,7 +563,8 @@ class OnboardingConfigModel(
 
 
 class NoOnboardingConfigModel(
-    AbstractPkiProtocolModel[NoOnboardingPkiProtocol], ScepEnrollmentModelMixin,
+    AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
+    ScepEnrollmentModelMixin,
 ):
     """No Onboarding Configuration Model."""
 
@@ -568,8 +573,20 @@ class NoOnboardingConfigModel(
     pki_protocols = models.PositiveIntegerField(
         verbose_name=_('Pki Protocol Bitwise Flag'), null=False, blank=True, default=0
     )
-    est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
-    cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
+    est_password = EncryptedTextField(
+        verbose_name=_('EST Password'),
+        max_length=128,
+        blank=True,
+        default='',
+        validators=[MaxLengthValidator(128)],
+    )
+    cmp_shared_secret = EncryptedTextField(
+        verbose_name=_('CMP Shared Secret'),
+        max_length=128,
+        blank=True,
+        default='',
+        validators=[MaxLengthValidator(128)],
+    )
 
     trust_store = models.ForeignKey(
         TruststoreModel,

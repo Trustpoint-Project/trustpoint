@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import hashes
+from django.db import transaction
 
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -41,4 +42,4 @@ def activate_staged_tls_credential(
     sha256_fingerprint = staged_tls_credential.get_certificate().fingerprint(hashes.SHA256())
     formatted_fingerprint = ':'.join(f'{byte:02X}' for byte in sha256_fingerprint)
     logger.info('TLS SHA256 fingerprint: %s', formatted_fingerprint)
-    clear_staged_tls_credential()
+    transaction.on_commit(clear_staged_tls_credential)

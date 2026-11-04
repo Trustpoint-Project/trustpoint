@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import json
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -103,6 +104,33 @@ def test_restore_plain_sql_uses_transactional_psql(monkeypatch: Any, tmp_path: P
     assert calls[0]['payload'] == b'CREATE TABLE restored(id integer);\n'
 
 
+def test_gzipped_sql_reaches_child_as_plain_sql(monkeypatch, tmp_path):
+    """A real child reads the OS descriptor, rather than Python's gzip stream wrapper."""
+    payload = b'CREATE TABLE restored(id integer);\n'
+    backup_path = tmp_path / 'backup.dump.gz'
+    backup_path.write_bytes(gzip.compress(payload))
+    run = subprocess.run
+    observed = []
+
+    def read_restore_input(command, **kwargs):
+        assert command[0] == 'psql'
+        result = run(
+            [sys.executable, '-c', 'import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())'],
+            stdin=kwargs['stdin'],
+            capture_output=True,
+            check=True,
+        )
+        observed.append(result.stdout)
+        return subprocess.CompletedProcess(command, 0, stdout=b'', stderr=b'')
+
+    monkeypatch.setattr(views, 'restore_backup_staging_root', lambda: tmp_path)
+    monkeypatch.setattr(views.subprocess, 'run', read_restore_input)
+    views.restore_operational_database_from_backup(_restore_config(backup_path))
+
+    assert observed == [payload]
+    assert list(tmp_path.iterdir()) == [backup_path]
+
+
 def test_restore_custom_dump_retries_without_transaction_timeout(monkeypatch: Any, tmp_path: Path) -> None:
     """Custom dumps from newer PostgreSQL versions are retried without transaction_timeout setup."""
     backup_path = tmp_path / 'backup.dump.gz'
@@ -146,8 +174,7 @@ def test_restore_custom_dump_retries_without_transaction_timeout(monkeypatch: An
     assert '--if-exists' in calls[1]['command']
     assert '--single-transaction' in calls[2]['command']
     assert calls[2]['input'] == (
-        b'DROP TABLE IF EXISTS app_secret_backend;\n'
-        b'CREATE TABLE app_secret_backend(id integer);\n'
+        b'DROP TABLE IF EXISTS app_secret_backend;\nCREATE TABLE app_secret_backend(id integer);\n'
     )
 
 

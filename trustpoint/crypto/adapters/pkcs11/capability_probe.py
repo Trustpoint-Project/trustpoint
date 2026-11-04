@@ -319,8 +319,8 @@ class Pkcs11CapabilityProbe:
                 name=mechanism_name,
                 code=_mechanism_storage_code(mechanism),
                 flags=_sorted_flag_names(getattr(info, 'flags', None)),
-                min_key_size=_optional_int(getattr(info, 'min_key_size', None) or getattr(info, 'ulMinKeySize', None)),
-                max_key_size=_optional_int(getattr(info, 'max_key_size', None) or getattr(info, 'ulMaxKeySize', None)),
+                min_key_size=_optional_int(info.min_key_length),
+                max_key_size=_optional_int(info.max_key_length),
             )
 
         if advertised_mechanisms and not mechanism_entries:
@@ -369,12 +369,8 @@ class Pkcs11CapabilityProbe:
         derived.update(rsa_exact_support)
         derived.update(ecdsa_exact_support)
 
-        derived['can_sign_rsa_pkcs1v15'] = (
-            derived['supports_raw_rsa_pkcs1v15'] or any(rsa_exact_support.values())
-        )
-        derived['can_sign_ecdsa'] = (
-            derived['supports_raw_ecdsa'] or any(ecdsa_exact_support.values())
-        )
+        derived['can_sign_rsa_pkcs1v15'] = derived['supports_raw_rsa_pkcs1v15'] or any(rsa_exact_support.values())
+        derived['can_sign_ecdsa'] = derived['supports_raw_ecdsa'] or any(ecdsa_exact_support.values())
         return derived
 
     def _format_version(self, value: Any) -> str | None:

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Tests for device views."""
+
 import ipaddress
 import json
 from datetime import timedelta
@@ -33,10 +34,13 @@ from setup_wizard.tls_credential import TlsServerCredentialGenerator
 def opc_ua_domain_device(device_instance_onboarding: dict[str, Any]) -> DeviceModel:
     """Use a custom domain profile to verify that issuance resolves the domain's choice."""
     tls_credential = TlsServerCredentialGenerator(
-        ipv4_addresses=[ipaddress.IPv4Address('192.0.2.10')], ipv6_addresses=[], domain_names=[],
+        ipv4_addresses=[ipaddress.IPv4Address('192.0.2.10')],
+        ipv6_addresses=[],
+        domain_names=[],
     ).generate_tls_server_credential()
     credential = CredentialModel.save_credential_serializer(
-        tls_credential, CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+        tls_credential,
+        CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
     )
     ActiveTrustpointTlsServerCredentialModel.objects.create(credential=credential)
     device = device_instance_onboarding['device']
@@ -46,9 +50,11 @@ def opc_ua_domain_device(device_instance_onboarding: dict[str, Any]) -> DeviceMo
     device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
     device.ip_address = '127.0.0.1'
     device.save()
-    profile_json = json.loads((
-        Path(__file__).resolve().parents[3] / 'pki/default_certificate_profiles/opc_ua_domain_credential.json'
-    ).read_text())
+    profile_json = json.loads(
+        (
+            Path(__file__).resolve().parents[3] / 'pki/default_certificate_profiles/opc_ua_domain_credential.json'
+        ).read_text()
+    )
     profile_json['subj']['common_name'] = {'value': 'Custom Domain Credential', 'mutable': False}
     profile_json['ext']['subject_alternative_name']['dns_names'] = {'default': ['device.example.com']}
     profile_json['validity']['mutable'] = True
@@ -66,7 +72,9 @@ def opc_ua_domain_device(device_instance_onboarding: dict[str, Any]) -> DeviceMo
 @pytest.mark.django_db
 @pytest.mark.parametrize('opc_ua_profile_selected', [False, True])
 def test_opc_ua_domain_credential_warns_about_profile_selection(
-    admin_client: Client, opc_ua_domain_device: DeviceModel, opc_ua_profile_selected: bool,
+    admin_client: Client,
+    opc_ua_domain_device: DeviceModel,
+    opc_ua_profile_selected: bool,
 ) -> None:
     """Show a warning with a settings link unless the OPC UA domain profile is selected."""
     device = opc_ua_domain_device
@@ -80,9 +88,12 @@ def test_opc_ua_domain_credential_warns_about_profile_selection(
         ).read_text()
         profile.save()
 
-    response = admin_client.get(reverse(
-        'devices:devices_onboarding_clm_issue_domain_credential', kwargs={'pk': device.pk},
-    ))
+    response = admin_client.get(
+        reverse(
+            'devices:devices_onboarding_clm_issue_domain_credential',
+            kwargs={'pk': device.pk},
+        )
+    )
 
     assert response.status_code == HTTPStatus.OK
     warnings = [str(message) for message in response.context['messages'] if message.level == WARNING]
@@ -99,7 +110,9 @@ def test_opc_ua_domain_credential_warns_about_profile_selection(
 @pytest.mark.django_db
 @pytest.mark.parametrize('route', ['opc_ua', 'manual'])
 def test_domain_profile_prefills_shared_issuance_form(
-    admin_client: Client, opc_ua_domain_device: DeviceModel, route: str,
+    admin_client: Client,
+    opc_ua_domain_device: DeviceModel,
+    route: str,
 ) -> None:
     """Both routes render the domain profile's values and resolved template defaults."""
     device = opc_ua_domain_device
@@ -120,8 +133,10 @@ def test_domain_profile_prefills_shared_issuance_form(
     if route == 'opc_ua':
         url = reverse('devices:devices_onboarding_clm_issue_domain_credential', kwargs={'pk': device.pk})
     else:
-        url = reverse('devices:devices_certificate_lifecycle_management_issue_profile_credential',
-                      kwargs={'pk': device.pk, 'profile_id': profile.pk})
+        url = reverse(
+            'devices:devices_certificate_lifecycle_management_issue_profile_credential',
+            kwargs={'pk': device.pk, 'profile_id': profile.pk},
+        )
 
     response = admin_client.get(url)
 
@@ -146,7 +161,9 @@ def test_domain_profile_prefills_shared_issuance_form(
 @pytest.mark.django_db
 @pytest.mark.parametrize('method', ['get', 'post'])
 def test_opc_ua_gds_push_domain_credential_form_renders(
-    admin_client: Client, opc_ua_domain_device: DeviceModel, method: str,
+    admin_client: Client,
+    opc_ua_domain_device: DeviceModel,
+    method: str,
 ) -> None:
     """Use the shared profile template on GET and after invalid submission."""
     device = opc_ua_domain_device
@@ -170,7 +187,9 @@ def test_opc_ua_gds_push_domain_credential_form_renders(
 
 
 @pytest.mark.django_db
-def test_opc_ua_domain_credential_issuance_uses_profile(admin_client: Client, opc_ua_domain_device: DeviceModel) -> None:
+def test_opc_ua_domain_credential_issuance_uses_profile(
+    admin_client: Client, opc_ua_domain_device: DeviceModel
+) -> None:
     """Sign a domain credential with profile subject/validity and required OPC UA extensions."""
     device = opc_ua_domain_device
     url = reverse('devices:devices_onboarding_clm_issue_domain_credential', kwargs={'pk': device.pk})
@@ -200,7 +219,8 @@ def test_opc_ua_domain_credential_issuance_uses_profile(admin_client: Client, op
 
 @pytest.mark.django_db
 def test_opc_ua_domain_credential_default_profile_fallback(
-    admin_client: Client, opc_ua_domain_device: DeviceModel,
+    admin_client: Client,
+    opc_ua_domain_device: DeviceModel,
 ) -> None:
     """Use the standard domain profile when no custom profile is configured."""
     device = opc_ua_domain_device
@@ -226,13 +246,16 @@ def test_opc_ua_domain_credential_default_profile_fallback(
 
 @pytest.mark.django_db
 def test_opc_ua_domain_credential_failure_returns_to_device(
-    admin_client: Client, opc_ua_domain_device: DeviceModel,
+    admin_client: Client,
+    opc_ua_domain_device: DeviceModel,
 ) -> None:
     """Do not advance to truststore association when credential issuance fails."""
     device = opc_ua_domain_device
     url = reverse('devices:devices_onboarding_clm_issue_domain_credential', kwargs={'pk': device.pk})
-    with patch('devices.views.credential_issuance.CredentialIssueProcessor.process_operation',
-               side_effect=ValueError('Signing failed')):
+    with patch(
+        'devices.views.credential_issuance.CredentialIssueProcessor.process_operation',
+        side_effect=ValueError('Signing failed'),
+    ):
         response = admin_client.post(url, data={'uris': 'urn:trustpoint:test-device', 'days': 7})
     assert response.status_code == HTTPStatus.FOUND
     assert response.url == reverse('devices:devices_certificate_lifecycle_management', kwargs={'pk': device.pk})
@@ -241,7 +264,8 @@ def test_opc_ua_domain_credential_failure_returns_to_device(
 
 @pytest.mark.django_db
 def test_manual_profile_issuance_still_issues_application_credential(
-    admin_client: Client, device_instance: dict[str, Any],
+    admin_client: Client,
+    device_instance: dict[str, Any],
 ) -> None:
     """The shared hooks preserve manual application issuance and device navigation."""
     device = device_instance['device']
@@ -254,8 +278,10 @@ def test_manual_profile_issuance_still_issues_application_credential(
         },
     )
     DomainAllowedCertificateProfileModel.objects.create(domain=device.domain, certificate_profile=profile)
-    url = reverse('devices:devices_certificate_lifecycle_management_issue_profile_credential',
-                  kwargs={'pk': device.pk, 'profile_id': profile.pk})
+    url = reverse(
+        'devices:devices_certificate_lifecycle_management_issue_profile_credential',
+        kwargs={'pk': device.pk, 'profile_id': profile.pk},
+    )
     response = admin_client.get(url)
     assert response.status_code == HTTPStatus.OK
     assert 'pki/cert_profiles/issuance.html' in [t.name for t in response.templates]
@@ -290,9 +316,7 @@ class TestDeviceTableView:
         assert 'devices/devices.html' in [t.name for t in response.templates]
 
     def test_device_table_view_filters_generic_devices(
-        self,
-        admin_client: Client,
-        device_instance: dict[str, Any]
+        self, admin_client: Client, device_instance: dict[str, Any]
     ) -> None:
         """Test that device table view only shows generic devices."""
         device = device_instance['device']
@@ -305,11 +329,7 @@ class TestDeviceTableView:
         devices = response.context['object_list']
         assert device in devices
 
-    def test_device_table_view_pagination(
-        self,
-        admin_client: Client,
-        device_instance: dict[str, Any]
-    ) -> None:
+    def test_device_table_view_pagination(self, admin_client: Client, device_instance: dict[str, Any]) -> None:
         """Test pagination in device table view."""
         # Create multiple devices
         domain = device_instance['domain']
@@ -318,7 +338,7 @@ class TestDeviceTableView:
                 common_name=f'test-device-pagination-{i}',
                 serial_number=f'SN-PAGINATE-{i:05d}',
                 domain=domain,
-                device_type=DeviceModel.DeviceType.GENERIC_DEVICE
+                device_type=DeviceModel.DeviceType.GENERIC_DEVICE,
             )
 
         url = reverse('devices:devices')
@@ -341,9 +361,7 @@ class TestOpcUaGdsPushTableView:
         assert 'devices/devices.html' in [t.name for t in response.templates]
 
     def test_opcua_gds_push_table_view_filters_opcua_gds_push_devices(
-        self,
-        admin_client: Client,
-        device_instance: dict[str, Any]
+        self, admin_client: Client, device_instance: dict[str, Any]
     ) -> None:
         """Test that devices table shows OPC UA GDS Push devices."""
         domain = device_instance['domain']
@@ -353,7 +371,7 @@ class TestOpcUaGdsPushTableView:
             common_name='opcua-gds-push-device',
             serial_number='SN67890',
             domain=domain,
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
         )
 
         url = reverse('devices:devices')
@@ -377,9 +395,7 @@ class TestDeviceCreateChooseOnboardingView:
         assert 'devices/create_choose_onboarding.html' in [t.name for t in response.templates]
 
     def test_device_create_choose_onboarding_context(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
+        self, admin_client: Client, domain_instance: dict[str, Any]
     ) -> None:
         """Test that view provides correct context."""
         url = reverse('devices:devices_create')
@@ -406,6 +422,7 @@ class TestOpcUaGdsPushCreateChooseOnboardingView:
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures('permissive_protocol_policy')
 class TestDeviceCreateNoOnboardingView:
     """Test DeviceCreateNoOnboardingView."""
 
@@ -418,9 +435,7 @@ class TestDeviceCreateNoOnboardingView:
         assert 'devices/create.html' in [t.name for t in response.templates]
 
     def test_device_create_no_onboarding_post_valid(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
+        self, admin_client: Client, domain_instance: dict[str, Any]
     ) -> None:
         """Test POST request with valid data creates device."""
         domain = domain_instance['domain']
@@ -444,10 +459,7 @@ class TestDeviceCreateNoOnboardingView:
         assert device.domain == domain
         assert device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE
 
-    def test_device_create_no_onboarding_post_invalid(
-        self,
-        admin_client: Client
-    ) -> None:
+    def test_device_create_no_onboarding_post_invalid(self, admin_client: Client) -> None:
         """Test POST request with invalid data shows errors."""
         post_data = {
             'common_name': '',  # Invalid: empty name
@@ -464,6 +476,7 @@ class TestDeviceCreateNoOnboardingView:
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures('permissive_protocol_policy')
 class TestDeviceCreateOnboardingView:
     """Test DeviceCreateOnboardingView."""
 
@@ -475,11 +488,7 @@ class TestDeviceCreateOnboardingView:
         assert response.status_code == 200
         assert 'devices/create.html' in [t.name for t in response.templates]
 
-    def test_device_create_onboarding_post_valid(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
-    ) -> None:
+    def test_device_create_onboarding_post_valid(self, admin_client: Client, domain_instance: dict[str, Any]) -> None:
         """Test POST request with valid data creates device with onboarding."""
         domain = domain_instance['domain']
 
@@ -502,6 +511,7 @@ class TestDeviceCreateOnboardingView:
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures('permissive_protocol_policy')
 class TestOpcUaGdsPushCreateOnboardingView:
     """Test OpcUaGdsPushCreateOnboardingView."""
 
@@ -514,9 +524,7 @@ class TestOpcUaGdsPushCreateOnboardingView:
         assert 'devices/create.html' in [t.name for t in response.templates]
 
     def test_opcua_gds_push_create_onboarding_creates_opcua_gds_push_device(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
+        self, admin_client: Client, domain_instance: dict[str, Any]
     ) -> None:
         """Test that OPC UA GDS Push view creates OPC UA GDS Push device with onboarding."""
         domain = domain_instance['domain']
@@ -548,11 +556,7 @@ class TestOpcUaGdsPushCreateOnboardingView:
 class TestDeviceCertificateLifecycleManagementSummaryView:
     """Test DeviceCertificateLifecycleManagementSummaryView."""
 
-    def test_clm_summary_view_get(
-        self,
-        admin_client: Client,
-        device_instance: dict[str, Any]
-    ) -> None:
+    def test_clm_summary_view_get(self, admin_client: Client, device_instance: dict[str, Any]) -> None:
         """Test GET request to CLM summary view."""
         device = device_instance['device']
 
@@ -591,18 +595,14 @@ class TestDeviceCreateAddOnboardingTypeView:
         assert response.status_code == 200
         context = response.context
 
-
         assert context.get('page_category') == 'devices'
         assert context.get('page_name') == 'devices'
-
 
         assert 'cancel_create_url' in context
         assert context['cancel_create_url'] == 'devices:devices'
 
-
         assert 'use_onboarding_url_name' in context
         assert context['use_onboarding_url_name'] == 'pki:devid_registration-method_select'
-
 
         assert 'use_no_onboarding_url' in context
         assert context['use_no_onboarding_url'] == 'devices:devices_create_no_onboarding'
@@ -613,9 +613,7 @@ class TestOpcUaGdsPushCertificateLifecycleManagementSummaryView:
     """Test OpcUaGdsPushCertificateLifecycleManagementSummaryView."""
 
     def test_opcua_gds_push_clm_summary_view_get(
-        self,
-        admin_client: Client,
-        device_instance_onboarding: dict[str, Any]
+        self, admin_client: Client, device_instance_onboarding: dict[str, Any]
     ) -> None:
         """Test GET request to OPC UA GDS Push CLM summary view."""
         device = device_instance_onboarding['device']
@@ -636,20 +634,16 @@ class TestIssuedCredentialRevocationView:
     """Test the revocation error messages if tried to revoke revoked cert."""
 
     def test_revoke_already_revoked_certificate_coverage(
-            self,
-            admin_client: Client,
-            device_instance: dict[str, Any]
+        self, admin_client: Client, device_instance: dict[str, Any]
     ) -> None:
         """Mocks the certificate status to REVOKED to hit the error message."""
         device = device_instance['device']
 
         url = reverse('devices:devices_credential_revoke', kwargs={'pk': 1})
 
-
         with patch('devices.views.revoke.AbstractIssuedCredentialRevocationView.get_object') as mock_get:
             mock_issued_cred = Mock()
             mock_cert = Mock()
-
 
             mock_cert.certificate_status = CertificateModel.CertificateStatus.REVOKED
             mock_issued_cred.credential.certificate_or_error = mock_cert
@@ -660,10 +654,8 @@ class TestIssuedCredentialRevocationView:
 
             response = admin_client.post(url, data={'revocation_reason': 'unspecified'}, follow=True)
 
-
         assert response.status_code == HTTPStatus.OK
         messages_list = [str(m) for m in list(response.context['messages'])]
-
 
         assert any('already revoked' in m for m in messages_list)
 
@@ -671,7 +663,10 @@ class TestIssuedCredentialRevocationView:
 @pytest.mark.django_db
 @pytest.mark.parametrize('mutable', [True, False])
 def test_manual_profile_crl_urls_render_and_are_issued(
-    admin_client: Client, device_instance: dict[str, Any], *, mutable: bool,
+    admin_client: Client,
+    device_instance: dict[str, Any],
+    *,
+    mutable: bool,
 ) -> None:
     """Display CRL URLs and retain profile constraints through actual manual issuance."""
     device = device_instance['device']
@@ -687,8 +682,10 @@ def test_manual_profile_crl_urls_render_and_are_issued(
         },
     )
     DomainAllowedCertificateProfileModel.objects.create(domain=device.domain, certificate_profile=profile)
-    url = reverse('devices:devices_certificate_lifecycle_management_issue_profile_credential',
-                  kwargs={'pk': device.pk, 'profile_id': profile.pk})
+    url = reverse(
+        'devices:devices_certificate_lifecycle_management_issue_profile_credential',
+        kwargs={'pk': device.pk, 'profile_id': profile.pk},
+    )
     response = admin_client.get(url)
     assert response.status_code == HTTPStatus.OK
     assert b'name="crl_distribution_point_uris"' in response.content

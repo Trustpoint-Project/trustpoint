@@ -231,9 +231,12 @@ class CryptoProviderProfileRepository:
 class CryptoManagedKeyRepository:
     """Persistence helpers for backend-managed key references."""
 
-    def get_by_id(self, *, managed_key_id: UUID) -> CryptoManagedKeyModel:
+    def get_by_id(self, *, managed_key_id: UUID, for_update: bool = False) -> CryptoManagedKeyModel:
         """Return a managed-key record by UUID."""
-        return CryptoManagedKeyModel.objects.select_related('provider_profile').get(pk=managed_key_id)
+        keys = CryptoManagedKeyModel.objects.select_related('provider_profile')
+        if for_update:
+            keys = keys.select_for_update(of=('self',))
+        return keys.get(pk=managed_key_id)
 
     def get_by_alias(self, *, alias: str) -> CryptoManagedKeyModel:
         """Return a managed-key record by stable application alias."""
@@ -515,8 +518,5 @@ class CryptoManagedKeyRepository:
             _save_untyped_model(rest_model)
             return
 
-        msg = (
-            f'Cannot persist binding type {type(binding).__name__} for '
-            f'backend kind {profile.backend_kind!r}.'
-        )
+        msg = f'Cannot persist binding type {type(binding).__name__} for backend kind {profile.backend_kind!r}.'
         raise InternalConsistencyError(msg)
