@@ -3,7 +3,7 @@
 
 """Provides the 'CmpAuthentication' class using the Composite pattern for modular CMP authentication."""
 
-from typing import Never
+from typing import Never, get_args
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -11,7 +11,8 @@ from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.asymmetric import ec, mldsa, padding, rsa
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, SignatureSuite
+from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, PublicKeyInfo, SignatureSuite
 
 from cmp.util import cmp_hmac_algorithm
 from devices.models import DeviceModel
@@ -64,15 +65,26 @@ class CmpAuthenticationBase(AuthenticationComponent, LoggerMixin):
 
         protection_value = parsed_message['protection'].asOctets()
         public_key = cmp_signer_cert.public_key()
+        declared = AlgorithmIdentifier.from_dotted_string(str(parsed_message['header']['protectionAlg']['algorithm']))
+        signature_suite = SignatureSuite(declared, PublicKeyInfo.from_certificate(cmp_signer_cert))
+        parameters = parsed_message['header']['protectionAlg']['parameters']
+        if parameters.hasValue() and (
+            not isinstance(public_key, rsa.RSAPublicKey) or parameters.asOctets() != b'\x05\x00'
+        ):
+            err_msg = 'Unsupported CMP signature algorithm parameters.'
+            raise ValueError(err_msg)
         if isinstance(public_key, (mldsa.MLDSA44PublicKey, mldsa.MLDSA65PublicKey, mldsa.MLDSA87PublicKey)):
             public_key.verify(protection_value, encoded_protected_part)
             return
-        signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
 
         hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
         if hash_algorithm is None:
             err_msg = 'Failed to get the corresponding hash algorithm.'
             raise ValueError(err_msg)
+        digest = hash_algorithm.hash_algorithm()
+        if not isinstance(digest, get_args(AllowedCertSignHashAlgos)):
+            err_msg = 'CMP signature hash algorithm is not permitted.'
+            raise TypeError(err_msg)
 
         public_key = cmp_signer_cert.public_key()
         if isinstance(public_key, rsa.RSAPublicKey):
@@ -80,13 +92,13 @@ class CmpAuthenticationBase(AuthenticationComponent, LoggerMixin):
                 signature=protection_value,
                 data=encoded_protected_part,
                 padding=padding.PKCS1v15(),
-                algorithm=hash_algorithm.hash_algorithm(),
+                algorithm=digest,
             )
         elif isinstance(public_key, ec.EllipticCurvePublicKey):
             public_key.verify(
                 signature=protection_value,
                 data=encoded_protected_part,
-                signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
+                signature_algorithm=ec.ECDSA(digest),
             )
         else:
             err_msg = 'Cannot verify signature due to unsupported public key type.'

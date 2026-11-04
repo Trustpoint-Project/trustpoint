@@ -110,6 +110,7 @@ class CmpRequestView(LoggerMixin, View):
             self.logger.exception(err_msg)
             return LoggedHttpResponse(err_msg, status=500)
 
+        authorized = False
         try:
             CmpHttpRequestValidator().validate(ctx)
             ctx = cast('CmpBaseRequestContext', CmpMessageParser().parse(ctx))
@@ -130,6 +131,7 @@ class CmpRequestView(LoggerMixin, View):
             # Only persist a follow-up nonce after both authentication and
             # authorization succeeded, otherwise an attacker could burn a nonce.
             mark_cmp_client_nonce(ctx)
+            authorized = True
 
             process_workflow_operation(ctx, self._process_authorized_operation)
         except Exception:
@@ -139,7 +141,7 @@ class CmpRequestView(LoggerMixin, View):
 
         try:
             CmpMessageResponder.build_response(ctx)
-            if isinstance(ctx, CmpBaseRequestContext):
+            if authorized and isinstance(ctx, CmpBaseRequestContext):
                 record_cmp_response_nonce(ctx)
             release_delivered_workflow2_request(ctx)
         except Exception:

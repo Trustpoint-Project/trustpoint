@@ -23,7 +23,7 @@ from django.db import transaction
 from django.urls import Resolver404, resolve
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, SignatureSuite
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm
 
 from cmp.confirmation import require_awaiting_confirmation
 from cmp.models import CmpTransactionModel
@@ -44,7 +44,7 @@ from request.authentication.cmp import (
     CmpSignatureBasedRevocationAuthentication,
 )
 from request.authentication.est import ReenrollmentAuthentication, UsernamePasswordAuthentication
-from request.cmp_key_update import validate_key_update_followup, validate_key_update_identity
+from request.cmp_key_update import validate_key_update_identity, validate_signature_followup
 from request.cmp_transaction_state import CmpTransactionState
 from request.request_context import (
     BaseCertificateRequestContext,
@@ -204,55 +204,6 @@ def _extract_cmp_signer(context: CmpBaseRequestContext) -> tuple[x509.Certificat
     return helper._extract_extra_certs(context)  # noqa: SLF001
 
 
-def _verify_declared_signature_algorithm(
-    context: CmpBaseRequestContext,
-    signer_cert: x509.Certificate,
-) -> None:
-    """Require the declared CMP protection algorithm to match verifier semantics.
-
-    TP-TA-11: the message-declared algorithm, signer key type and the algorithm
-    actually used by the current verifier must agree.
-    """
-    message = context.parsed_message
-    if not isinstance(message, rfc4210.PKIMessage):
-        msg = 'CMP message is missing or invalid.'
-        raise TypeError(msg)
-
-    declared_oid = message['header']['protectionAlg']['algorithm'].prettyPrint()
-    declared = AlgorithmIdentifier.from_dotted_string(declared_oid)
-    if declared == AlgorithmIdentifier.PASSWORD_BASED_MAC:
-        msg = 'Expected signature-based CMP protection, got PBM.'
-        raise ValueError(msg)
-
-    public_key = signer_cert.public_key()
-    mldsa_algorithms = (
-        (mldsa.MLDSA44PublicKey, AlgorithmIdentifier.ML_DSA_44),
-        (mldsa.MLDSA65PublicKey, AlgorithmIdentifier.ML_DSA_65),
-        (mldsa.MLDSA87PublicKey, AlgorithmIdentifier.ML_DSA_87),
-    )
-    for key_type, algorithm in mldsa_algorithms:
-        if isinstance(public_key, key_type):
-            if declared != algorithm:
-                msg = 'CMP protectionAlg is incompatible with the ML-DSA signer key.'
-                raise ValueError(msg)
-            return
-
-    current_suite = SignatureSuite.from_certificate(signer_cert)
-    expected_hash = current_suite.algorithm_identifier.hash_algorithm
-    declared_hash = declared.hash_algorithm
-    if expected_hash is None or declared_hash is None or expected_hash != declared_hash:
-        msg = 'CMP protectionAlg does not match the signature verifier hash algorithm.'
-        raise ValueError(msg)
-
-    name = declared.name.upper()
-    if isinstance(public_key, rsa.RSAPublicKey) and 'RSA' not in name:
-        msg = 'CMP protectionAlg is incompatible with the RSA signer key.'
-        raise ValueError(msg)
-    if isinstance(public_key, ec.EllipticCurvePublicKey) and 'ECDSA' not in name:
-        msg = 'CMP protectionAlg is incompatible with the EC signer key.'
-        raise ValueError(msg)
-
-
 def _require_active_issued_signer(context: CmpBaseRequestContext, *, domain_only: bool) -> None:
     cert = context.client_certificate
     if cert is None:
@@ -304,16 +255,23 @@ def authenticate_cmp_request(  # noqa: C901, PLR0911, PLR0912, PLR0915
         tx = CmpTransactionState.get_by_transaction_id(str(context.cmp_transaction_id or ''))
         if tx is not None and tx.operation == 'keyupdate':
             _authenticate_key_update_signer(context)
-            validate_key_update_followup(context, tx)
+            validate_signature_followup(context, tx)
             return
         if pbm:
             CmpSharedSecretAuthentication().authenticate(context)
             _reject_retired_onboarding_secret(context)
         else:
             CmpSignatureBasedPollAuthentication().authenticate(context)
-            signer, _ = _extract_cmp_signer(context)
-            _verify_declared_signature_algorithm(context, signer)
-            _require_active_issued_signer(context, domain_only=True)
+            config = context.device.onboarding_config if context.device is not None else None
+            if (
+                tx is not None
+                and tx.operation == 'initialization'
+                and config is not None
+                and config.onboarding_protocol == OnboardingProtocol.CMP_IDEVID
+            ):
+                validate_signature_followup(context, tx)
+            else:
+                _require_active_issued_signer(context, domain_only=True)
         return
 
     if isinstance(context, CmpRevocationRequestContext):
@@ -325,8 +283,6 @@ def authenticate_cmp_request(  # noqa: C901, PLR0911, PLR0912, PLR0915
             _reject_retired_onboarding_secret(context)
         else:
             CmpSignatureBasedRevocationAuthentication().authenticate(context)
-            signer, _ = _extract_cmp_signer(context)
-            _verify_declared_signature_algorithm(context, signer)
             _require_active_issued_signer(context, domain_only=False)
         return
 
@@ -346,8 +302,6 @@ def authenticate_cmp_request(  # noqa: C901, PLR0911, PLR0912, PLR0915
             _reject_retired_onboarding_secret(context)
         else:
             CmpSignatureBasedInitializationAuthentication().authenticate(context)
-            signer, _ = _extract_cmp_signer(context)
-            _verify_declared_signature_algorithm(context, signer)
         return
 
     if context.operation == 'certification':
@@ -356,8 +310,6 @@ def authenticate_cmp_request(  # noqa: C901, PLR0911, PLR0912, PLR0915
             _reject_retired_onboarding_secret(context)
         else:
             CmpSignatureBasedCertificationAuthentication().authenticate(context)
-            signer, _ = _extract_cmp_signer(context)
-            _verify_declared_signature_algorithm(context, signer)
             _require_active_issued_signer(context, domain_only=True)
         return
 
@@ -382,7 +334,6 @@ def _authenticate_issued_cmp_signer(context: CmpBaseRequestContext, *, operation
         msg = f'{operation_label} signer has no device.'
         raise ValueError(msg)
     context.domain = context.domain or context.device.domain
-    _verify_declared_signature_algorithm(context, signer)
     _require_active_issued_signer(context, domain_only=False)
     message = cast('rfc4210.PKIMessage', context.parsed_message)
     sender = message['header']['sender']
@@ -674,7 +625,7 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
 
     if tx.operation == 'keyupdate':
         _authenticate_key_update_signer(context)
-        validate_key_update_followup(context, tx)
+        validate_signature_followup(context, tx)
         return
 
     if _is_pbm(context):
@@ -693,7 +644,6 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
         return
 
     signer, intermediates = _extract_cmp_signer(context)
-    _verify_declared_signature_algorithm(context, signer)
     CmpSignatureBasedRevocationAuthentication()._verify_protection_signature(  # noqa: SLF001
         cast('rfc4210.PKIMessage', context.parsed_message), signer
     )
