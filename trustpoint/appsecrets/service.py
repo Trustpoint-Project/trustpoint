@@ -260,8 +260,8 @@ class BaseAppSecretService:
         payload = nonce + encryptor.tag + ciphertext
         return CIPHERTEXT_PREFIX + base64.b64encode(payload).decode('ascii')
 
-    def decrypt_text(self, ciphertext: str) -> str:
-        """Decode and decrypt stored ciphertext."""
+    def decrypt_text(self, ciphertext: str, *, dek: bytes | None = None) -> str:
+        """Decrypt with the configured DEK, or an explicitly recovered target DEK during attachment."""
         if ciphertext == '':
             return ciphertext
         if not ciphertext.startswith(CIPHERTEXT_PREFIX):
@@ -278,7 +278,8 @@ class BaseAppSecretService:
         tag = payload[AES_GCM_NONCE_BYTES : AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES]
         encrypted = payload[AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES :]
 
-        dek = self.require_dek()
+        if dek is None:
+            dek = self.require_dek()
         cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce, tag))
         decryptor = cipher.decryptor()
         decryptor.authenticate_additional_data(AAD_CONTEXT)
@@ -322,12 +323,12 @@ def load_software_kek(*, allow_development_creation: bool = False) -> bytes:
     return bytes.fromhex(value)
 
 
-def _stored_dek_ready(
-    config: AppSecretSoftwareConfigModel | AppSecretPkcs11ConfigModel, kind: AppSecretBackendKind
+def _stored_dek_ready[Config: (AppSecretSoftwareConfigModel, AppSecretPkcs11ConfigModel)](
+    config: Config, kind: AppSecretBackendKind
 ) -> bool:
     """Refresh runtime state without taking an initialization lock on every field read."""
     try:
-        config.refresh_from_db()
+        config.refresh_from_db(from_queryset=type(config).objects.select_related('backend'))
         backend = config.backend
     except ObjectDoesNotExist as exception:
         msg = 'Application-secret configuration is missing. Restore the installation database backup.'
@@ -772,6 +773,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                     protected_dek = self._try_wrap_temporary_dek_key(
                         kek=kek,
                         dek_key=dek_key,
+                        dek=dek,
                         attempt_errors=attempt_errors,
                         attempt_prefix=f'generate/{template_name}/{capabilities_name}',
                     )
@@ -793,21 +795,27 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         *,
         kek: _Pkcs11Kek,
         dek_key: _Pkcs11DekKey,
+        dek: bytes,
         attempt_errors: list[str],
         attempt_prefix: str,
     ) -> bytes | None:
-        """Try protecting a temporary DEK key object with C_WrapKey."""
+        """Accept C_WrapKey protection only after recovering the original DEK."""
         for mechanism in APP_SECRET_DEK_WRAP_MECHANISMS:
             try:
-                return (
+                protected_dek = (
                     PKCS11_CWRAP_DEK_PREFIX
                     + int(mechanism).to_bytes(PKCS11_MECHANISM_BYTES, 'big')
                     + bytes(kek.wrap_key(dek_key, mechanism=mechanism))
                 )
-            except (AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
+                recovered_dek = self._recover_dek(kek=kek, protected_dek=protected_dek)
+            except (AppSecretConfigurationError, AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
                 attempt_errors.append(
                     f'{attempt_prefix}/{mechanism.name}: {self._format_pkcs11_attempt_error(exception)}'
                 )
+            else:
+                if recovered_dek == dek:
+                    return protected_dek
+                attempt_errors.append(f'{attempt_prefix}/{mechanism.name}: recovered DEK mismatch')
         return None
 
     def _try_import_and_protect_dek(
@@ -826,6 +834,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                 protected_dek = self._try_wrap_temporary_dek_key(
                     kek=kek,
                     dek_key=dek_key,
+                    dek=dek,
                     attempt_errors=attempt_errors,
                     attempt_prefix=f'import/{template_name}',
                 )
@@ -836,28 +845,6 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             finally:
                 self._destroy_temporary_dek_key(dek_key)
         return None
-
-    def _protect_dek(self, *, kek: _Pkcs11Kek, dek: bytes) -> bytes:
-        """Protect an existing DEK with PKCS#11 C_WrapKey or C_Encrypt."""
-        attempt_errors: list[str] = []
-        session = kek.session
-        protected_dek = self._try_import_and_protect_dek(
-            session=session,
-            kek=kek,
-            dek=dek,
-            attempt_errors=attempt_errors,
-        )
-        if protected_dek is not None:
-            return protected_dek
-        encrypted_dek = self._try_encrypt_dek(kek=kek, dek=dek, attempt_errors=attempt_errors)
-        if encrypted_dek is not None:
-            return encrypted_dek
-
-        msg = (
-            'PKCS#11 app-secret KEK could not protect the DEK with PKCS#11 C_WrapKey or C_Encrypt.'
-            f'{self._format_pkcs11_attempts(attempt_errors)}'
-        )
-        raise AppSecretConfigurationError(msg)
 
     def _recover_dek(self, *, kek: _Pkcs11Kek, protected_dek: bytes) -> bytes:
         """Recover a DEK protected by a PKCS#11 KEK."""
@@ -923,17 +910,21 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         raise AppSecretConfigurationError(msg)
 
     def _try_encrypt_dek(self, *, kek: _Pkcs11Kek, dek: bytes, attempt_errors: list[str]) -> bytes | None:
-        """Try protecting raw DEK bytes with PKCS#11 C_Encrypt."""
+        """Accept C_Encrypt protection only after recovering the original DEK."""
         for mechanism, prefix in APP_SECRET_DEK_ENCRYPT_MECHANISMS:
             iv = os.urandom(AES_GCM_NONCE_BYTES)
             try:
                 ciphertext = bytes(
                     kek.encrypt(dek, mechanism=mechanism, mechanism_param=pkcs11.GCMParams(iv, aad=prefix))
                 )
-            except (AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
+                protected_dek = prefix + iv + ciphertext
+                recovered_dek = self._recover_dek(kek=kek, protected_dek=protected_dek)
+            except (AppSecretConfigurationError, AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
                 attempt_errors.append(f'encrypt/{mechanism.name}: {self._format_pkcs11_attempt_error(exception)}')
-                continue
-            return prefix + iv + ciphertext
+            else:
+                if recovered_dek == dek:
+                    return protected_dek
+                attempt_errors.append(f'encrypt/{mechanism.name}: recovered DEK mismatch')
         return None
 
     def _decrypt_dek(
@@ -1055,7 +1046,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
 def get_app_secret_service() -> BaseAppSecretService:
     """Return the active application-secret service implementation."""
     ensure_local_software_backends()
-    backend = AppSecretBackendModel.objects.first()
+    backend = AppSecretBackendModel.objects.select_related('software_config', 'pkcs11_config').first()
     if backend is None:
         msg = 'The application-secret backend has not been configured yet.'
         raise AppSecretConfigurationError(msg)

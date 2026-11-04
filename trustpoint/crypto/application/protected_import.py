@@ -23,6 +23,8 @@ from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.signing import sign_with_rsa_or_ec_key
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from crypto.domain.algorithms import SupportedPublicKey
     from crypto.domain.specs import SignRequest
 
@@ -54,6 +56,10 @@ def imported_key_algorithm(private_key: SupportedImportedPrivateKey) -> KeyAlgor
 class ProtectedImportKeyOperations:
     """Local operations for imported private keys stored through app-secret encryption."""
 
+    def __init__(self, *, decrypt_secret: Callable[[str], str] | None = None) -> None:
+        """Allow attachment checks to use the target's recovered application-secret key."""
+        self._decrypt_secret = decrypt_secret
+
     def verify_managed_key(self, key: ProtectedImportManagedKeyBinding) -> ProtectedImportManagedKeyVerification:
         """Verify that the encrypted imported key still decrypts and matches its fingerprint."""
         try:
@@ -65,10 +71,7 @@ class ProtectedImportKeyOperations:
             )
 
         resolved_fingerprint = public_key_fingerprint_sha256(public_key)
-        if (
-            key.public_key_fingerprint_sha256 is not None
-            and key.public_key_fingerprint_sha256 != resolved_fingerprint
-        ):
+        if key.public_key_fingerprint_sha256 is not None and key.public_key_fingerprint_sha256 != resolved_fingerprint:
             return ProtectedImportManagedKeyVerification(
                 status=ManagedKeyVerificationStatus.MISMATCH,
                 resolved_public_key_fingerprint_sha256=resolved_fingerprint,
@@ -88,9 +91,8 @@ class ProtectedImportKeyOperations:
         private_key = self._load_private_key(key)
         hash_algorithm = self._hash_algorithm(request.hash_algorithm)
 
-        if (
-            (key.algorithm is KeyAlgorithm.RSA and isinstance(private_key, rsa.RSAPrivateKey))
-            or (key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey))
+        if (key.algorithm is KeyAlgorithm.RSA and isinstance(private_key, rsa.RSAPrivateKey)) or (
+            key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey)
         ):
             return sign_with_rsa_or_ec_key(private_key, data, request, hash_algorithm)
 
@@ -101,7 +103,7 @@ class ProtectedImportKeyOperations:
         """Decrypt and load an imported private key."""
         try:
             private_key_der = base64.b64decode(
-                decrypt_app_secret(key.encrypted_private_key_pkcs8_der_b64).encode('ascii')
+                (self._decrypt_secret or decrypt_app_secret)(key.encrypted_private_key_pkcs8_der_b64).encode('ascii')
             )
             private_key = serialization.load_der_private_key(private_key_der, password=None)
         except (TypeError, ValueError) as exc:

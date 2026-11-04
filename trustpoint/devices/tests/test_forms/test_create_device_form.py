@@ -10,7 +10,9 @@ import pytest
 from devices.forms import NoOnboardingCreateForm
 from devices.models import DeviceModel
 
+
 @pytest.mark.django_db
+@pytest.mark.usefixtures('permissive_protocol_policy')
 def test_create_device_form_valid_data(domain_instance: dict[str, Any]) -> None:
     """Test CreateDeviceForm with valid data."""
     domain = domain_instance['domain']
@@ -19,7 +21,7 @@ def test_create_device_form_valid_data(domain_instance: dict[str, Any]) -> None:
         'common_name': 'TestDevice',
         'serial_number': '12345',
         'domain': domain.pk,
-        'no_onboarding_pki_protocols': [1], # 1 is CMP Shared Secret
+        'no_onboarding_pki_protocols': [1],  # 1 is CMP Shared Secret
     }
 
     form = NoOnboardingCreateForm(data=form_data)
@@ -58,6 +60,7 @@ def test_create_device_form_invalid_common_name_characters(domain_instance: dict
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures('permissive_protocol_policy')
 def test_create_device_form_duplicate_common_name(domain_instance: dict[str, Any]) -> None:
     """Test CreateDeviceForm rejects duplicate common names."""
     domain = domain_instance['domain']

@@ -5,18 +5,22 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pkcs11
 import pytest
 
+from appsecrets.models import AppSecretBackendModel, AppSecretPkcs11ConfigModel
 from appsecrets.service import (
     DEK_LENGTH_BYTES,
     PKCS11_CWRAP_DEK_PREFIX,
     PKCS11_ENCRYPTED_DEK_GCM_PREFIX,
     AppSecretConfigurationError,
     Pkcs11AppSecretService,
+    clear_app_secret_cache,
 )
 
 pytestmark = pytest.mark.django_db
@@ -197,18 +201,100 @@ def _service() -> Pkcs11AppSecretService:
     return service
 
 
-def test_pkcs11_app_secret_protect_dek_uses_key_wrap_operation() -> None:
-    """DEK protection prefers C_WrapKey over a temporary AES key object."""
-    service = _service()
+@pytest.fixture
+def fresh_pkcs11_service(monkeypatch):
+    """Use real initialization records with an existing simulated token KEK."""
+    AppSecretBackendModel.objects.all().delete()
+    backend = AppSecretBackendModel.objects.create(backend_kind='pkcs11')
+    config = AppSecretPkcs11ConfigModel.objects.create(
+        backend=backend,
+        module_path='/not/loaded.so',
+        token_serial='known-token',
+        auth_source='file',
+        auth_source_ref='/not/read-pin',
+    )
+    service = Pkcs11AppSecretService(config)
     kek = _FakeKek()
+    monkeypatch.setattr(service, '_open_session', lambda **kwargs: nullcontext(kek.session))
+    monkeypatch.setattr(kek.session, 'get_key', lambda **kwargs: kek, raising=False)
+    return service, kek
 
-    wrapped = service._protect_dek(kek=kek, dek=b'a' * 32)  # noqa: SLF001
 
-    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + (b'a' * 32)
-    assert len(kek.wrap_calls) == 1
-    wrapped_key, mechanism = kek.wrap_calls[0]
-    assert mechanism == pkcs11.Mechanism.AES_KEY_WRAP
-    assert wrapped_key.destroyed
+@pytest.mark.parametrize('imported', [False, True])
+def test_initialization_falls_back_when_wrapping_cannot_be_recovered(fresh_pkcs11_service, imported):
+    """A successful wrap must not prevent fallback to recoverable GCM protection."""
+    service, kek = fresh_pkcs11_service
+    kek.session.fail_generation = imported
+    kek.unwrap_key = Mock(side_effect=pkcs11.PKCS11Error)
+
+    service.ensure_backend_ready()
+
+    config = AppSecretPkcs11ConfigModel.objects.get()
+    assert bytes(config.wrapped_dek).startswith(PKCS11_ENCRYPTED_DEK_GCM_PREFIX)
+    assert AppSecretBackendModel.objects.get().dek_initialized
+    ciphertext = service.encrypt_text('persisted secret')
+    clear_app_secret_cache()
+    assert service.decrypt_text(ciphertext) == 'persisted secret'
+    assert kek.wrap_calls and kek.decrypt_calls
+    assert not kek.destroyed
+    assert all(key.destroyed for key in kek.session.created_keys + kek.session.generated_keys + kek.unwrapped_keys)
+
+
+@pytest.mark.parametrize('failure', ['unwrap-error', 'unwrap-mismatch', 'decrypt-error', 'decrypt-mismatch'])
+def test_initialization_never_persists_unrecoverable_protection(fresh_pkcs11_service, failure):
+    """Failed recovery and wrong recovered bytes must leave initialization untouched."""
+    service, kek = fresh_pkcs11_service
+    if failure.startswith('unwrap'):
+        kek.fail_encrypt = True
+        kek.unwrap_key = (
+            Mock(side_effect=pkcs11.PKCS11Error)
+            if failure.endswith('error')
+            else Mock(side_effect=lambda *args, **kwargs: _FakeDekKey(b'w' * 32))
+        )
+    else:
+        kek.fail_wrap = True
+        kek.decrypt = (
+            Mock(side_effect=pkcs11.PKCS11Error) if failure.endswith('error') else Mock(return_value=b'w' * 32)
+        )
+
+    with pytest.raises(AppSecretConfigurationError, match='could not protect a DEK'):
+        service.ensure_backend_ready()
+
+    assert not AppSecretBackendModel.objects.get().dek_initialized
+    assert AppSecretPkcs11ConfigModel.objects.get().wrapped_dek is None
+    assert not kek.destroyed
+    assert all(key.destroyed for key in kek.session.created_keys + kek.session.generated_keys)
+
+
+def test_wrapping_falls_back_to_next_recoverable_mechanism(fresh_pkcs11_service, monkeypatch):
+    """Try the next wrapping mechanism when only the first one's unwrap is unsupported."""
+    service, kek = fresh_pkcs11_service
+    unwrap = kek.unwrap_key
+
+    def unwrap_supported_mechanisms(*args, mechanism, **kwargs):
+        if mechanism is pkcs11.Mechanism.AES_KEY_WRAP:
+            raise pkcs11.PKCS11Error
+        return unwrap(*args, mechanism=mechanism, **kwargs)
+
+    monkeypatch.setattr(kek, 'unwrap_key', unwrap_supported_mechanisms)
+    service.ensure_backend_ready()
+    wrapped = bytes(AppSecretPkcs11ConfigModel.objects.get().wrapped_dek)
+    assert wrapped.startswith(PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP_PAD).to_bytes(4, 'big'))
+    assert service.require_dek() == b'g' * 32
+
+
+def test_new_kek_profile_is_discarded_when_only_its_recovery_fails(monkeypatch):
+    """Creating a KEK must try another profile if the generated wrap-only profile cannot unwrap."""
+    service = _service()
+    session = _FakeSession()
+    monkeypatch.setattr(_FakeKek, 'unwrap_key', Mock(side_effect=pkcs11.PKCS11Error))
+
+    kek, dek, protected = service._create_kek_with_protected_dek(session)
+
+    assert len(session.generated_keks) == 2
+    assert session.generated_keks[0].destroyed
+    assert session.generated_keks[1] is kek
+    assert service._recover_dek(kek=kek, protected_dek=protected) == dek
 
 
 def test_pkcs11_app_secret_generate_protected_dek_prefers_token_generated_key() -> None:
@@ -219,7 +305,9 @@ def test_pkcs11_app_secret_generate_protected_dek_prefers_token_generated_key() 
     dek, wrapped = service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
 
     assert dek == b'g' * 32
-    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + (b'g' * 32)
+    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + (
+        b'g' * 32
+    )
     assert len(kek.session.generated_keys) == 1
     assert not kek.session.created_keys
     assert kek.session.generated_keys[0].destroyed
@@ -234,7 +322,9 @@ def test_pkcs11_app_secret_generate_protected_dek_falls_back_to_imported_key() -
     dek, wrapped = service._generate_protected_dek(session=kek.session, kek=kek)  # noqa: SLF001
 
     assert len(dek) == DEK_LENGTH_BYTES
-    assert wrapped == PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + dek
+    assert (
+        wrapped == PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + dek
+    )
     assert len(kek.session.created_keys) == 1
     assert kek.session.created_keys[0].destroyed
 
@@ -314,7 +404,9 @@ def test_pkcs11_app_secret_recover_dek_uses_key_unwrap_operation() -> None:
     service = _service()
     kek = _FakeKek()
 
-    protected_dek = PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + (b'b' * 32)
+    protected_dek = (
+        PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + (b'b' * 32)
+    )
 
     dek = service._recover_dek(kek=kek, protected_dek=protected_dek)  # noqa: SLF001
 
@@ -386,8 +478,11 @@ def test_pkcs11_missing_dek_never_reinitializes(monkeypatch: pytest.MonkeyPatch)
     AppSecretBackendModel.objects.all().delete()
     backend = AppSecretBackendModel.objects.create(backend_kind='pkcs11', dek_initialized=True)
     config = AppSecretPkcs11ConfigModel.objects.create(
-        backend=backend, module_path='/not/loaded.so', token_serial='known-token',
-        auth_source='file', auth_source_ref='/not/read-pin',
+        backend=backend,
+        module_path='/not/loaded.so',
+        token_serial='known-token',
+        auth_source='file',
+        auth_source_ref='/not/read-pin',
     )
     service = Pkcs11AppSecretService(config)
     monkeypatch.delenv('TRUSTPOINT_SOFTWARE_KEK_FILE', raising=False)
@@ -407,8 +502,12 @@ def test_pkcs11_recovery_needs_no_software_kek(monkeypatch: pytest.MonkeyPatch) 
     backend = AppSecretBackendModel.objects.create(backend_kind='pkcs11', dek_initialized=True)
     wrapped = PKCS11_CWRAP_DEK_PREFIX + int(pkcs11.Mechanism.AES_KEY_WRAP).to_bytes(4, 'big') + b'wrapped:' + b'x' * 32
     config = AppSecretPkcs11ConfigModel.objects.create(
-        backend=backend, module_path='/not/loaded.so', token_serial='known-token',
-        auth_source='file', auth_source_ref='/not/read-pin', wrapped_dek=wrapped,
+        backend=backend,
+        module_path='/not/loaded.so',
+        token_serial='known-token',
+        auth_source='file',
+        auth_source_ref='/not/read-pin',
+        wrapped_dek=wrapped,
     )
     service = Pkcs11AppSecretService(config)
     kek = _FakeKek()

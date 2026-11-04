@@ -51,8 +51,13 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
+
 class AbstractDeviceTableView(
-    DeviceHealthPresentationMixin, ExportMixin, PageContextMixin, ListView[DeviceModel], abc.ABC,
+    DeviceHealthPresentationMixin,
+    ExportMixin,
+    PageContextMixin,
+    ListView[DeviceModel],
+    abc.ABC,
 ):
     """Device Table View."""
 
@@ -188,9 +193,7 @@ class AbstractDeviceTableView(
             'application_certificate_state',
             'expired_device',
         }
-        context['filters_active'] = any(
-            self.request.GET.get(k) for k in filter_keys
-        )
+        context['filters_active'] = any(self.request.GET.get(k) for k in filter_keys)
 
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)
@@ -217,14 +220,24 @@ class AbstractDeviceTableView(
         """Return the shared base queryset for device list pages."""
         issued_credentials_prefetch = Prefetch(
             'issued_credentials',
-            queryset=IssuedCredentialModel.objects.select_related('credential__certificate__revoked_certificate'),
+            queryset=IssuedCredentialModel.objects.select_related('credential__certificate__revoked_certificate').defer(
+                'credential__private_key'
+            ),
         )
         return (
             self.model.objects.all()
             # This field is not used in the table and has been a migration pain
             # point in partially updated local databases, so we avoid selecting
             # it eagerly here.
-            .defer('rfc_4122_uuid')
+            .defer(
+                'rfc_4122_uuid',
+                'onboarding_config__est_password',
+                'onboarding_config__cmp_shared_secret',
+                'onboarding_config__scep_challenge',
+                'no_onboarding_config__est_password',
+                'no_onboarding_config__cmp_shared_secret',
+                'no_onboarding_config__scep_challenge',
+            )
             .select_related('domain', 'onboarding_config', 'no_onboarding_config')
             .annotate(
                 # Normalise the visible states into integer ranks so the table
@@ -238,11 +251,13 @@ class AbstractDeviceTableView(
                 ),
                 domain_credential_sort=credential_health_expression(
                     IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-                    as_of=self.health_as_of, state_values=DOMAIN_HEALTH_RANKS,
+                    as_of=self.health_as_of,
+                    state_values=DOMAIN_HEALTH_RANKS,
                 ),
                 application_certificate_sort=credential_health_expression(
                     IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-                    as_of=self.health_as_of, state_values=APPLICATION_HEALTH_RANKS,
+                    as_of=self.health_as_of,
+                    state_values=APPLICATION_HEALTH_RANKS,
                 ),
                 onboarding_protocol_sort=Case(
                     When(onboarding_config__isnull=False, then=F('onboarding_config__onboarding_protocol')),

@@ -17,10 +17,12 @@ import subprocess
 import sys
 import uuid
 import zipfile
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import psycopg
+from cryptography.exceptions import InvalidTag
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
@@ -44,6 +46,7 @@ from appsecrets.models import (
 )
 from appsecrets.service import (
     AppSecretConfigurationError,
+    BaseAppSecretService,
     Pkcs11AppSecretService,
     SoftwareAppSecretService,
     clear_app_secret_cache,
@@ -53,9 +56,11 @@ from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
+from crypto.adapters.protected_import.bindings import ProtectedImportManagedKeyBinding
 from crypto.adapters.software.backend import SoftwareBackend
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
 from crypto.adapters.software.config import SoftwareProviderProfile
+from crypto.application.protected_import import ProtectedImportKeyOperations
 from crypto.domain.algorithms import KeyAlgorithm
 from crypto.domain.errors import CryptoError
 from crypto.domain.policies import SigningExecutionMode
@@ -77,6 +82,7 @@ from setup_wizard.backend_configuration import BackendConfigurationMixin
 from setup_wizard.operational_attach import (
     CompatibilityCheck,
     CompatibilitySeverity,
+    OperationalAppSecretMaterial,
     OperationalAttachmentValidator,
     OperationalAttachMode,
     OperationalBackendBinding,
@@ -225,8 +231,8 @@ def _restore_archive_is_custom_pg_dump(archive_path: Path) -> bool:
         return bool(archive_file.read(5) == b'PGDMP')
 
 
-def _materialize_custom_restore_archive(archive_path: Path) -> Path:
-    """Return a filesystem path containing an uncompressed PostgreSQL custom dump."""
+def _materialize_restore_archive(archive_path: Path) -> Path:
+    """Return an uncompressed file that restore subprocesses can read by file descriptor."""
     if not _looks_like_gzip(archive_path):
         return archive_path
 
@@ -442,6 +448,7 @@ def restore_operational_database_from_backup(
         decrypted_path = _decrypt_restore_archive_if_needed(archive_path, backup_password)
         extracted_path = _extract_restore_bundle_if_needed(decrypted_path or archive_path)
         restore_source_path = extracted_path or decrypted_path or archive_path
+        materialized_restore_path = _materialize_restore_archive(restore_source_path)
 
         env = os.environ.copy()
         env['PGPASSWORD'] = config_model.operational_db_password
@@ -455,8 +462,7 @@ def restore_operational_database_from_backup(
             '--dbname',
             config_model.operational_db_name,
         ]
-        if _restore_archive_is_custom_pg_dump(restore_source_path):
-            materialized_restore_path = _materialize_custom_restore_archive(restore_source_path)
+        if _restore_archive_is_custom_pg_dump(materialized_restore_path):
             command = [
                 'pg_restore',
                 '--format=custom',
@@ -483,7 +489,7 @@ def restore_operational_database_from_backup(
                 )
         else:
             command = ['psql', '--set', 'ON_ERROR_STOP=1', '--single-transaction', *common_args]
-            with _open_restore_archive(restore_source_path) as archive_file:
+            with materialized_restore_path.open('rb') as archive_file:
                 completed_process = subprocess.run(  # noqa: S603
                     command,
                     stdin=archive_file,
@@ -764,9 +770,9 @@ def persist_valid_pkcs11_fields_from_invalid_form(
         form.instance.fresh_install_pkcs11_slot_id = int(raw_slot_id)
         update_fields.append('fresh_install_pkcs11_slot_id')
     if 'fresh_install_pkcs11_enforce_app_secret_protection' not in form.errors:
-        form.instance.fresh_install_pkcs11_enforce_app_secret_protection = (
-            form.data.get('fresh_install_pkcs11_enforce_app_secret_protection') in {'on', 'true', 'True', '1'}
-        )
+        form.instance.fresh_install_pkcs11_enforce_app_secret_protection = form.data.get(
+            'fresh_install_pkcs11_enforce_app_secret_protection'
+        ) in {'on', 'true', 'True', '1'}
         update_fields.append('fresh_install_pkcs11_enforce_app_secret_protection')
 
     if update_fields:
@@ -1089,9 +1095,7 @@ def validate_staged_pkcs11_app_secret_protection(
 def _format_pkcs11_probe_process_output(completed_process: subprocess.CompletedProcess[str]) -> str:
     """Return bounded stdout/stderr from an isolated PKCS#11 probe process."""
     output = '\n'.join(
-        part.strip()
-        for part in (completed_process.stdout, completed_process.stderr)
-        if part and part.strip()
+        part.strip() for part in (completed_process.stdout, completed_process.stderr) if part and part.strip()
     )
     if len(output) > MAX_PKCS11_PROBE_OUTPUT_LENGTH:
         return output[-MAX_PKCS11_PROBE_OUTPUT_LENGTH:]
@@ -1400,12 +1404,8 @@ class FreshInstallFormBaseView[FormT: BaseForm](LoginRequiredMixin, LoggerMixin,
         config_model = SetupWizardConfigModel.get_singleton()
         current_state = config_model.get_current_step()
         viewed_step = self.step_state
-        admin_user_submitted = config_model.is_step_submitted(
-            SetupWizardConfigModel.FreshInstallCurrentStep.ADMIN_USER
-        )
-        database_submitted = config_model.is_step_submitted(
-            SetupWizardConfigModel.FreshInstallCurrentStep.DATABASE
-        )
+        admin_user_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.ADMIN_USER)
+        database_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.DATABASE)
         crypto_storage_submitted = config_model.is_step_submitted(
             SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE
         )
@@ -2237,8 +2237,8 @@ class FreshInstallSummaryView(BackendConfigurationMixin, FreshInstallModelFormBa
 
         token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
         slot_id = config_model.fresh_install_pkcs11_slot_id
-        auth_source_ref = (
-            (config_model.fresh_install_pkcs11_auth_source_ref or '').strip() or str(FINAL_WIZARD_PKCS11_PIN_PATH)
+        auth_source_ref = (config_model.fresh_install_pkcs11_auth_source_ref or '').strip() or str(
+            FINAL_WIZARD_PKCS11_PIN_PATH
         )
         fallback_pin_path = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
         if auth_source_ref and not _path_exists(Path(auth_source_ref)) and _path_exists(fallback_pin_path):
@@ -2403,10 +2403,7 @@ class FreshInstallSummaryView(BackendConfigurationMixin, FreshInstallModelFormBa
 
         messages.success(
             self.request,
-            (
-                'Operational configuration was applied successfully. '
-                f'{handoff_marker_message}{switch_result.detail}'
-            ),
+            (f'Operational configuration was applied successfully. {handoff_marker_message}{switch_result.detail}'),
         )
         return redirect('setup_wizard:fresh_install_summary')
 
@@ -2754,7 +2751,7 @@ class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBa
         response = run_staged_pkcs11_connection_test(
             self,
             form,
-            success_redirect_name=f"setup_wizard:{self.step_url_names['backend-config']}",
+            success_redirect_name=f'setup_wizard:{self.step_url_names["backend-config"]}',
         )
         if response.status_code in {301, 302}:
             return self._step_redirect('backend-config')
@@ -2921,6 +2918,27 @@ def _software_dek_is_decryptable(wrapped_dek: bytes) -> bool:
     return True
 
 
+def _recover_target_app_secret_dek(
+    config_model: SetupWizardConfigModel,
+    material: OperationalAppSecretMaterial,
+) -> bytes:
+    """Recover target key material without consulting or changing the bootstrap encryption state."""
+    if material.backend_kind == BackendKind.SOFTWARE.value:
+        return SoftwareAppSecretService.unwrap_dek(load_software_kek(), material.wrapped_dek)
+    if material.backend_kind != BackendKind.PKCS11.value:
+        msg = 'The target application-secret backend is unsupported.'
+        raise AppSecretConfigurationError(msg)
+    if config_model.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+        msg = 'The target application-secret backend requires staged HSM storage.'
+        raise AppSecretConfigurationError(msg)
+    secret_config = _build_staged_pkcs11_app_secret_config(
+        config_model,
+        wrapped_dek=material.wrapped_dek,
+        kek_label=material.kek_label,
+    )
+    return Pkcs11AppSecretService(secret_config).recover_existing_dek()
+
+
 def app_secret_decryptability_checks(  # noqa: PLR0911
     *,
     config_model: SetupWizardConfigModel,
@@ -2976,8 +2994,10 @@ def app_secret_decryptability_checks(  # noqa: PLR0911
                 code='appsecret.decryptability_failed',
                 label='Application Secrets',
                 severity=CompatibilitySeverity.ERROR,
-                message=('The target software app-secret DEK cannot be unwrapped. '
-                         'Restore the original KEK and intact database.'),
+                message=(
+                    'The target software app-secret DEK cannot be unwrapped. '
+                    'Restore the original KEK and intact database.'
+                ),
             ),
         )
 
@@ -3012,12 +3032,7 @@ def app_secret_decryptability_checks(  # noqa: PLR0911
         )
 
     try:
-        secret_config = _build_staged_pkcs11_app_secret_config(
-            config_model,
-            wrapped_dek=material.wrapped_dek,
-            kek_label=material.kek_label,
-        )
-        Pkcs11AppSecretService(secret_config).recover_existing_dek()
+        _recover_target_app_secret_dek(config_model, material)
     except (AppSecretConfigurationError, DjangoValidationError, OSError, RuntimeError, ValueError) as exception:
         error_detail = str(exception).strip() or type(exception).__name__
         return (
@@ -3066,6 +3081,17 @@ def _managed_key_binding_from_material(material: Any) -> object:
     algorithm = KeyAlgorithm(material.algorithm)
     signing_execution_mode = SigningExecutionMode(material.signing_execution_mode)
     provider_label = material.provider_label or None
+
+    if material.backend_kind == 'protected_import':
+        return ProtectedImportManagedKeyBinding(
+            key_handle=str(material.binding['key_handle']),
+            algorithm=algorithm,
+            encrypted_private_key_pkcs8_der_b64=str(material.binding['encrypted_private_key_pkcs8_der_b64']),
+            encryption_metadata=dict(material.binding.get('encryption_metadata') or {}),
+            public_key_fingerprint_sha256=material.public_key_fingerprint_sha256,
+            signing_execution_mode=signing_execution_mode,
+            provider_label=provider_label,
+        )
 
     if material.backend_kind == BackendKind.PKCS11.value:
         return Pkcs11ManagedKeyBinding(
@@ -3207,21 +3233,42 @@ def managed_key_backend_reconciliation_checks(  # noqa: C901, PLR0911, PLR0912
     missing_count = 0
     mismatch_count = 0
     error_count = 0
+    imported_key_operations: ProtectedImportKeyOperations | None = None
     verification_backend = cast('ManagedKeyBackendAdapter', backend)
     try:
         for material in materials:
             try:
                 binding = _managed_key_binding_from_material(material)
-                verification = verification_backend.verify_managed_key(binding)
-            except (CryptoError, DjangoValidationError, KeyError, TypeError, ValueError):
+                if isinstance(binding, ProtectedImportManagedKeyBinding):
+                    if imported_key_operations is None:
+                        secret_material = OperationalTargetInspector().inspect_app_secret_material(target.database)
+                        dek = _recover_target_app_secret_dek(config_model, secret_material)
+                        imported_key_operations = ProtectedImportKeyOperations(
+                            decrypt_secret=partial(BaseAppSecretService().decrypt_text, dek=dek),
+                        )
+                    verification_status = imported_key_operations.verify_managed_key(binding).status
+                else:
+                    verification_status = verification_backend.verify_managed_key(binding).status
+            except (
+                CryptoError,
+                DjangoValidationError,
+                AppSecretConfigurationError,
+                InvalidTag,
+                OSError,
+                RuntimeError,
+                psycopg.Error,
+                KeyError,
+                TypeError,
+                ValueError,
+            ):
                 error_count += 1
                 continue
 
-            if verification.status == ManagedKeyVerificationStatus.MISSING:
+            if verification_status == ManagedKeyVerificationStatus.MISSING:
                 missing_count += 1
-            elif verification.status == ManagedKeyVerificationStatus.MISMATCH:
+            elif verification_status == ManagedKeyVerificationStatus.MISMATCH:
                 mismatch_count += 1
-            elif verification.status != ManagedKeyVerificationStatus.PRESENT:
+            elif verification_status != ManagedKeyVerificationStatus.PRESENT:
                 error_count += 1
     finally:
         backend.close()
@@ -3433,13 +3480,15 @@ class RestoreBackupImportView(ConnectExistingWizardMixin[RestoreBackupImportForm
             config_model.restore_backup_import_submitted = False
             config_model.restore_backup_restored_at = None
             config_model.restore_backup_restore_error = ''
-            config_model.save(update_fields=[
-                'restore_backup_archive_path',
-                'restore_backup_archive_original_name',
-                'restore_backup_import_submitted',
-                'restore_backup_restored_at',
-                'restore_backup_restore_error',
-            ])
+            config_model.save(
+                update_fields=[
+                    'restore_backup_archive_path',
+                    'restore_backup_archive_original_name',
+                    'restore_backup_import_submitted',
+                    'restore_backup_restored_at',
+                    'restore_backup_restore_error',
+                ]
+            )
             messages.success(request, 'The staged backup archive was removed for this wizard session.')
             return self._step_redirect('backup-import')
         return super().post(request, *args, **kwargs)
@@ -3473,22 +3522,26 @@ class RestoreBackupImportView(ConnectExistingWizardMixin[RestoreBackupImportForm
             config_model.restore_backup_restore_error = str(exception)
             config_model.restore_backup_restored_at = None
             config_model.restore_backup_import_submitted = True
-            config_model.save(update_fields=[
-                'restore_backup_restore_error',
-                'restore_backup_restored_at',
-                'restore_backup_import_submitted',
-            ])
+            config_model.save(
+                update_fields=[
+                    'restore_backup_restore_error',
+                    'restore_backup_restored_at',
+                    'restore_backup_import_submitted',
+                ]
+            )
             form.add_error('backup_archive', exception)
             return self.render_to_response(self.get_context_data(form=form))
 
         config_model.restore_backup_restored_at = timezone.now()
         config_model.restore_backup_restore_error = ''
         config_model.restore_backup_import_submitted = True
-        config_model.save(update_fields=[
-            'restore_backup_restored_at',
-            'restore_backup_restore_error',
-            'restore_backup_import_submitted',
-        ])
+        config_model.save(
+            update_fields=[
+                'restore_backup_restored_at',
+                'restore_backup_restore_error',
+                'restore_backup_import_submitted',
+            ]
+        )
         messages.success(self.request, 'Backup restored into the configured PostgreSQL database.')
         return super().form_valid(form)
 

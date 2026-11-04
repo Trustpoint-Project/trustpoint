@@ -179,11 +179,6 @@ class TlsServerCredentialGenerator:
         self._ipv6_addresses = ipv6_addresses
         self._domain_names = domain_names
 
-    @staticmethod
-    def _generate_key_pair() -> PrivateKeySerializer:
-        """Generate a new EC private key for a staged TLS credential."""
-        return PrivateKeySerializer(ec.generate_private_key(curve=ec.SECP256R1()))
-
     def generate_tls_server_credential(self) -> CredentialSerializer:
         """Generate a self-signed TLS credential for use by the Trustpoint server."""
         one_day = dt.timedelta(1, 0, 0)

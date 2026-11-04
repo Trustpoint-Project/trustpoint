@@ -10,7 +10,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
 from appsecrets.service import get_app_secret_service
@@ -36,10 +36,12 @@ from crypto.application.protected_import import (
 from crypto.domain.errors import (
     CryptoError,
     KeyNotFoundError,
+    MechanismUnsupportedError,
     ProviderConfigurationError,
     ProviderOperationNotImplementedError,
     UnsupportedKeySpecError,
 )
+from crypto.domain.policies import KeyPolicy, KeyUsage, SigningExecutionMode
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
 from crypto.models import BackendKind, CryptoManagedKeyModel, CryptoProviderProfileModel, ManagedKeyStatus
 from crypto.repositories import CryptoManagedKeyRepository, CryptoProviderProfileRepository, ManagedKeyBinding
@@ -48,7 +50,6 @@ from trustpoint.logger import LoggerMixin
 if TYPE_CHECKING:
     from crypto.application.provider_backend import ManagedKeyBackendAdapter
     from crypto.domain.algorithms import SupportedPublicKey
-    from crypto.domain.policies import KeyPolicy
     from crypto.domain.specs import KeySpec, SignRequest
 
 
@@ -268,9 +269,7 @@ class TrustpointCryptoBackend(LoggerMixin):
                 try:
                     adapter_verification = adapter.verify_managed_key(binding)
                     verification_status = adapter_verification.status
-                    resolved_public_key_fingerprint_sha256 = (
-                        adapter_verification.resolved_public_key_fingerprint_sha256
-                    )
+                    resolved_public_key_fingerprint_sha256 = adapter_verification.resolved_public_key_fingerprint_sha256
                 finally:
                     adapter.close()
         except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
@@ -385,6 +384,15 @@ class TrustpointCryptoBackend(LoggerMixin):
         started_at = perf_counter()
         details = sign_request_audit_details(request, data_length=len(data))
         try:
+            policy = KeyPolicy(
+                usages=frozenset(KeyUsage(usage) for usage in managed_key.policy_snapshot.get('usages', ())),
+            )
+            if not policy.can_sign:
+                msg = 'The managed key policy does not allow signing.'
+                raise ProviderConfigurationError(msg)
+            if request.prehashed and managed_key.signing_execution_mode == SigningExecutionMode.COMPLETE_BACKEND:
+                msg = 'Complete-backend signing cannot accept prehashed payloads.'
+                raise MechanismUnsupportedError(msg)
             binding = self._managed_key_repository.build_backend_binding(managed_key)
             if isinstance(binding, ProtectedImportManagedKeyBinding):
                 signature = self._protected_import_operations.sign(key=binding, data=data, request=request)
@@ -431,13 +439,18 @@ class TrustpointCryptoBackend(LoggerMixin):
         target_display = self._managed_key_target_display(managed_key)
         started_at = perf_counter()
         try:
-            binding = self._managed_key_repository.build_backend_binding(managed_key)
-            if not isinstance(binding, ProtectedImportManagedKeyBinding):
-                adapter = self._build_adapter(managed_key.provider_profile)
-                try:
-                    adapter.destroy_managed_key(binding)
-                finally:
-                    adapter.close()
+            with transaction.atomic():
+                managed_key = self._load_managed_key(key, for_update=True)
+                binding = self._managed_key_repository.build_backend_binding(managed_key)
+                managed_key.delete()
+                # Preserve the deleted key's identity for audit entries, including failed provider cleanup.
+                managed_key.pk = key.id
+                if not isinstance(binding, ProtectedImportManagedKeyBinding):
+                    adapter = self._build_adapter(managed_key.provider_profile)
+                    try:
+                        adapter.destroy_managed_key(binding)
+                    finally:
+                        adapter.close()
         except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
             audit_crypto_backend_operation(
                 operation='destroy_managed_key',
@@ -460,7 +473,6 @@ class TrustpointCryptoBackend(LoggerMixin):
                 profile=profile,
                 managed_key=managed_key,
             )
-        managed_key.delete()
 
     @staticmethod
     def _validate_protected_import_policy(profile: CryptoProviderProfileModel) -> None:
@@ -502,10 +514,10 @@ class TrustpointCryptoBackend(LoggerMixin):
             msg = 'No configured crypto backend profile exists for this Trustpoint instance.'
             raise ProviderConfigurationError(msg) from exc
 
-    def _load_managed_key(self, key: ManagedKeyRef) -> CryptoManagedKeyModel:
+    def _load_managed_key(self, key: ManagedKeyRef, *, for_update: bool = False) -> CryptoManagedKeyModel:
         """Resolve an application-facing managed-key reference to its stored binding."""
         try:
-            return self._managed_key_repository.get_by_id(managed_key_id=key.id)
+            return self._managed_key_repository.get_by_id(managed_key_id=key.id, for_update=for_update)
         except CryptoManagedKeyModel.DoesNotExist as exc:
             msg = f'Managed key {key.id} does not exist.'
             raise KeyNotFoundError(msg) from exc

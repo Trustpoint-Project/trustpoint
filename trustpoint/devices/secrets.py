@@ -215,15 +215,19 @@ def guard_configuration_save(config: Config, kwargs: dict[str, Any]) -> Iterator
             msg = 'Completed onboarding cannot be reopened.'
             raise ValidationError(msg)
         for field, version in VERSIONS.items():
+            if (
+                old is not None
+                and (fields is None or field in fields or version in fields)
+                and getattr(config, version) != getattr(old, version)
+            ):
+                msg = 'The device credential changed. Reload the device and retry.'
+                raise ValidationError(msg)
             if fields is not None and field not in fields:
                 continue
             if old is not None and (
                 getattr(old, field) != getattr(config, field)
                 or field in getattr(config, 'secret_assignment_actions', {})
             ):
-                if getattr(config, version) != getattr(old, version):
-                    msg = 'The device credential changed. Reload the device and retry.'
-                    raise ValidationError(msg)
                 # Clearing bootstrap secrets at completion is retirement, not replacement.
                 retiring = (
                     _is_onboarding_config(config)
