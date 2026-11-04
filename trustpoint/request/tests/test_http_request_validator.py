@@ -3,6 +3,7 @@
 
 
 """Unit tests for the HTTP request validation module."""
+
 import base64
 from unittest.mock import MagicMock
 
@@ -298,6 +299,7 @@ class TestClientCertificateValidation:
 
         validator.validate(context)
 
+
 class TestIntermediateCertificatesValidation:
     """Test IntermediateCertificatesValidation class."""
 
@@ -562,10 +564,7 @@ class TestEstHttpRequestValidator:
         context = EstCertificateRequestContext()
         context.raw_message = MagicMock()
         context.raw_message.body = b'test est payload'
-        context.raw_message.headers = {
-            'Content-Type': 'application/pkcs10',
-            'Accept': 'application/pkcs7-mime'
-        }
+        context.raw_message.headers = {'Content-Type': 'application/pkcs10', 'Accept': 'application/pkcs7-mime'}
         context.raw_message.META = {}
 
         validator.validate(context)
@@ -583,8 +582,11 @@ def test_enrollment_rejects_proxy_headers_from_untrusted_or_invalid_peers(
     settings.TRUSTPOINT_TRUSTED_PROXY_IPS = ('127.0.0.1', '::1')
     context = EstCertificateRequestContext()
     context.raw_message = rf.post(
-        '/', data=b'payload', content_type=content_type,
-        REMOTE_ADDR=remote_addr, HTTP_X_FORWARDED_FOR='127.0.0.1',
+        '/',
+        data=b'payload',
+        content_type=content_type,
+        REMOTE_ADDR=remote_addr,
+        HTTP_X_FORWARDED_FOR='127.0.0.1',
     )
     with pytest.raises(ValueError, match='TrustedProxyHeadersValidation'):
         validator_type().validate(context)
@@ -595,7 +597,10 @@ def test_configured_proxy_network_can_supply_forwarded_headers(rf, settings):
     settings.TRUSTPOINT_TRUSTED_PROXY_IPS = '198.51.100.0/24'
     context = EstCertificateRequestContext()
     context.raw_message = rf.post(
-        '/', data=b'payload', content_type='application/pkcs10',
-        REMOTE_ADDR='198.51.100.10', HTTP_X_FORWARDED_FOR='203.0.113.10',
+        '/',
+        data=b'payload',
+        content_type='application/pkcs10',
+        REMOTE_ADDR='198.51.100.10',
+        HTTP_X_FORWARDED_FOR='203.0.113.10',
     )
     EstHttpRequestValidator().validate(context)
