@@ -1,0 +1,1 @@
+{"app_secret_backend_kind":"software","backup_format":"postgres_dump_gzip","created_at":"2026-11-04T15:18:16.384127Z","crypto_backend_kind":"software","database_engine":"postgresql","encrypted":false,"encryption":"none","manifest_version":1,"payload_sha256":"9faf551cbbef8bb3a603955e185acb688694f7540ac6445ea89f4937dd9a1b78","trustpoint_version":"1.0.0"}
