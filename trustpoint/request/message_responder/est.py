@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 """EST-specific message responder classes."""
+
 import base64
+from http import HTTPStatus
 
 from cryptography.hazmat.primitives.serialization import Encoding
 from trustpoint_core.serializer import CertificateCollectionSerializer
@@ -52,6 +54,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
         run_status = str(workflow2_outcome.run.status)
         if decision == Workflow2IssuanceDecision.WAIT:
             status = 202
+            context.http_response_headers = {'Retry-After': '60'}
             detail = (
                 'Enrollment request pending workflow approval.'
                 if run_status == 'awaiting'
@@ -107,7 +110,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
             return cert, 'application/x-pem-file'
         # Default to RFC 7030 compliant format: base64-encoded with line wrapping
         b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
-        cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)]) + '\n'
+        cert = '\n'.join([b64_cert[i : i + 64] for i in range(0, len(b64_cert), 64)]) + '\n'
         if context.est_encoding == 'base64_der':
             content_type = 'application/pkix-cert'
         else:
@@ -130,7 +133,6 @@ class EstCertificateMessageResponder(EstMessageResponder):
         cert, content_type = EstCertificateMessageResponder._prepare_certificate_data(context)
 
         if context.device and context.device.onboarding_config:
-
             retire_onboarding_secrets(context.device.onboarding_config)
         context.http_response_status = 200
         context.http_response_content = cert
@@ -150,5 +152,10 @@ class EstErrorMessageResponder(EstMessageResponder):
             exc_msg = 'EstErrorMessageResponder requires an EstBaseRequestContext.'
             raise TypeError(exc_msg)
         context.http_response_status = context.http_response_status or 500
+        if context.http_response_status == HTTPStatus.UNAUTHORIZED and context.operation == 'simpleenroll':
+            context.http_response_headers = {
+                **(context.http_response_headers or {}),
+                'WWW-Authenticate': 'Basic realm="est", charset="UTF-8"',
+            }
         context.http_response_content = context.http_response_content or 'An error occurred processing the EST request.'
         context.http_response_content_type = context.http_response_content_type or 'text/plain'

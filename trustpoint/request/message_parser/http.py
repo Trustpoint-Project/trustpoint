@@ -39,6 +39,7 @@ class BasicAuthHeaderParsing(ParsingComponent, LoggerMixin):
         if not header.lower().startswith('basic '):
             msg = "Authorization header must start with 'Basic'."
             self.logger.warning('%s auth header parsing failed: Expected Basic authentication', self.protocol.upper())
+            context.error(msg, http_status=401)
             raise ValueError(msg)
 
         try:

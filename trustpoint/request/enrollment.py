@@ -80,7 +80,11 @@ class EnrollmentOrchestrator[Context: BaseCertificateRequestContext]:
 
 def _authenticate_est(context: EstCertificateRequestContext) -> None:
     require_single_security_config(context)
-    authenticate_est_request(context)
+    try:
+        authenticate_est_request(context)
+    except ValueError:
+        context.error('EST authentication failed.', http_status=401)
+        raise
     if context.domain is None and context.device is not None:
         context.domain = context.device.domain
     CertProfileParsing().parse(context)
