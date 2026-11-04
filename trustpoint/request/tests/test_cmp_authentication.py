@@ -113,9 +113,13 @@ def test_certconf_without_domain_preserves_fallback() -> None:
 @pytest.mark.parametrize('has_owner', [True, False])
 def test_resolved_owner_protects_pkiconf_header_and_signature(*, has_owner: bool) -> None:
     """Carry the selected trust anchor from authentication into the pkiConf signer."""
+    from request.tests.test_est_client import certificate_and_csr
+
+    _, certificate, _ = certificate_and_csr()
     issuer = Mock(name='independent-issuing-ca')
     owner = Mock(name='domain-devowner') if has_owner else None
     signer = owner or issuer
+    signer.get_certificate.return_value = certificate
     device = Mock(onboarding_config=None)
     issued = Mock(domain=Mock(unique_name='tenant-domain'), device=device)
     context = CmpCertConfRequestContext(
@@ -126,7 +130,9 @@ def test_resolved_owner_protects_pkiconf_header_and_signature(*, has_owner: bool
     with (
         patch.object(CmpCertConfAuthentication, '_resolve_issued_credential_by_cert_hash', return_value=issued),
         patch.object(AokiServiceMixin, 'get_domain_based_owner_credential', return_value=owner),
-        patch.object(CmpPkiConfResponder, '_build_base_pkiconf_message', return_value={}) as build,
+        patch.object(
+            CmpPkiConfResponder, '_build_base_pkiconf_message', return_value={'header': {'protectionAlg': {}}}
+        ) as build,
         patch.object(CmpMessageResponder, '_get_encoded_protected_part', return_value=b'protected-part'),
         patch.object(GenericSigner, 'sign', return_value=b'signature') as sign,
         patch(

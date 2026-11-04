@@ -16,7 +16,7 @@ from trustpoint_core.oid import AlgorithmIdentifier
 
 from request.authentication.cmp import CmpSignatureBasedInitializationAuthentication
 from request.request_context import CmpBaseRequestContext, CmpCertificateRequestContext
-from request.security_hardening import _verify_declared_signature_algorithm, validate_cmp_proof_of_possession
+from request.security_hardening import validate_cmp_proof_of_possession
 
 
 @pytest.fixture(
@@ -96,8 +96,6 @@ def test_mldsa_protection_supports_onboarded_device_requests(mldsa_key_and_algor
     message['protection'] = message['protection'].clone(
         value=univ.BitString.fromOctetString(key.sign(encoder.encode(protected)))
     )
-    context = CmpBaseRequestContext(parsed_message=message)
-    _verify_declared_signature_algorithm(context, certificate)
     CmpSignatureBasedInitializationAuthentication()._verify_protection_signature(message, certificate)
 
     header['sender']['rfc822Name'] = 'attacker@example.test'

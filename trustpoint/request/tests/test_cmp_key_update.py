@@ -19,7 +19,7 @@ from pyasn1_modules import rfc4210, rfc4211
 
 from cmp.models import CmpTransactionModel
 from management.models import SecurityConfig
-from request.cmp_key_update import validate_key_update_followup
+from request.cmp_key_update import validate_signature_followup
 from request.message_builder.cmp import CmpMessageBuilder, CmpPkiHeaderBuilding
 from request.message_parser.cmp import CmpMessageParser
 from request.request_context import CmpCertificateRequestContext
@@ -188,7 +188,7 @@ def test_key_update_followup_rejects_changed_signer(update_material):
     message, _ = _kur(certificate, key)
     context = CmpCertificateRequestContext(client_certificate=issued.domain.issuing_ca.credential.get_certificate())
     with pytest.raises(ValueError, match='original protection certificate'):
-        validate_key_update_followup(context, Mock(request_der=encoder.encode(message)))
+        validate_signature_followup(context, Mock(request_der=encoder.encode(message)))
 
 
 @pytest.mark.parametrize('implicit', [True, False])

@@ -88,13 +88,13 @@ def _validate_old_cert_id(context: CmpCertificateRequestContext, certificate: x5
             raise ValueError(msg)
 
 
-def validate_key_update_followup(context: CmpBaseRequestContext, transaction: CmpTransactionModel) -> None:
-    """Keep update polling and confirmation bound to the original protection certificate."""
+def validate_signature_followup(context: CmpBaseRequestContext, transaction: CmpTransactionModel) -> None:
+    """Bind key-update and IDevID initialization follow-ups to the original signer."""
     original, remainder = decoder.decode(bytes(transaction.request_der), asn1Spec=build_pki_message_spec())
     if remainder or not original['extraCerts'].hasValue() or context.client_certificate is None:
-        msg = 'CMP key update transaction has no original protection certificate.'
+        msg = 'CMP transaction has no original protection certificate.'
         raise ValueError(msg)
     certificate = x509.load_der_x509_certificate(encoder.encode(original['extraCerts'][0]))
     if certificate != context.client_certificate:
-        msg = 'CMP key update follow-up must use the original protection certificate.'
+        msg = 'CMP follow-up must use the original protection certificate.'
         raise ValueError(msg)

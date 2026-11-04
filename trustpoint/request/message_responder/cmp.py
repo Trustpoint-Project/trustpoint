@@ -205,18 +205,15 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         if context.operation == 'getcacerts':
             # Neither genp nor error responses may echo request-only generalInfo.
             pki_message['header']['generalInfo'].clear()
-        if context.operation in ('keyupdate', 'getcacerts') or (
-            context.cmp_transaction is not None and context.cmp_transaction.operation == 'keyupdate'
-        ):
-            credential = context.owner_credential or context.issuer_credential
-            if credential is None and context.domain is not None:
-                credential = context.domain.get_issuing_ca_or_value_error().credential
-            if credential is None:
-                msg = 'CMP response requires a signing credential.'
-                raise ValueError(msg)
-            algorithm = SignatureSuite.from_certificate(credential.get_certificate()).algorithm_identifier
-            pki_message['header']['protectionAlg']['algorithm'] = algorithm.dotted_string
-            pki_message['header']['protectionAlg']['parameters'] = univ.noValue
+        credential = context.owner_credential or context.issuer_credential
+        if credential is None and context.domain is not None:
+            credential = context.domain.get_issuing_ca_or_value_error().credential
+        if credential is None:
+            msg = 'CMP response requires a signing credential.'
+            raise ValueError(msg)
+        algorithm = SignatureSuite.from_certificate(credential.get_certificate()).algorithm_identifier
+        pki_message['header']['protectionAlg']['algorithm'] = algorithm.dotted_string
+        pki_message['header']['protectionAlg']['parameters'] = univ.noValue
         encoded_protected_part = CmpMessageResponder._get_encoded_protected_part(pki_message)
 
         signing_processor = LocalCaCmpSignatureProcessor(encoded_protected_part)
