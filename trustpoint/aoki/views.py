@@ -15,6 +15,7 @@ from django.http import JsonResponse
 from django.views import View
 from trustpoint_core.oid import AlgorithmIdentifier
 
+from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
 
 class AokiServiceMixin:
     """Mixin for AOKI functionality."""
+
     @staticmethod
     def get_idevid_owner_san_uri(idevid_cert: x509.Certificate) -> str:
         """Get the Owner ID SAN URI corresponding to a IDevID certificate.
@@ -72,11 +74,33 @@ class AokiServiceMixin:
             owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref__in=uri_refs).first()
         if not owner_cred_ref:
             return None
-        owner_cred = owner_cred_ref.dev_owner_id
-        issued = owner_cred.dev_owner_id_credential
-        if issued is None:
-            return None
-        return issued.credential
+        return AokiServiceMixin._get_matching_owner_credential(owner_cred_ref)
+
+    @staticmethod
+    def _get_matching_owner_credential(reference: IDevIDReferenceModel) -> CredentialModel | None:
+        """Use the newest usable certificate that actually contains the matched reference."""
+        issued_credentials = reference.dev_owner_id.dev_owner_id_credentials.filter(
+            credential__certificate__isnull=False
+        )
+        for issued in issued_credentials:
+            credential = issued.credential
+            if not credential.private_key and not credential.managed_private_key_id:
+                continue
+            certificate = credential.certificate_or_error
+            if certificate.certificate_status != CertificateModel.CertificateStatus.OK:
+                continue
+            try:
+                san = (
+                    certificate.get_certificate_serializer()
+                    .as_crypto()
+                    .extensions.get_extension_for_class(x509.SubjectAlternativeName)
+                    .value
+                )
+            except x509.ExtensionNotFound:
+                continue
+            if reference.idevid_ref in san.get_values_for_type(x509.UniformResourceIdentifier):
+                return credential
+        return None
 
     @staticmethod
     def get_domain_based_owner_credential(domain: DomainModel | None) -> CredentialModel | None:
@@ -93,11 +117,7 @@ class AokiServiceMixin:
         owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref=f'dev-owner:ca:{ca_sha256_fingerprint}').first()
         if not owner_cred_ref:
             return None
-        owner_cred = owner_cred_ref.dev_owner_id
-        issued = owner_cred.dev_owner_id_credential
-        if issued is None:
-            return None
-        return issued.credential
+        return AokiServiceMixin._get_matching_owner_credential(owner_cred_ref)
 
 
 class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
@@ -111,57 +131,44 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if not tls_cert or not tls_cert.credential:
             return LoggedHttpResponse(
-                'No TLS server certificate available. Are you on the development server?', status = 500
+                'No TLS server certificate available. Are you on the development server?', status=500
             )
         try:
             client_cert, intermediary_cas = NginxTLSClientCertExtractor.get_client_cert_as_x509(request)
         except ClientCertificateAuthenticationError:
-            return LoggedHttpResponse(
-                'No valid TLS client certificate provided.', status = 401
-            )
+            return LoggedHttpResponse('No valid TLS client certificate provided.', status=401)
 
         try:
             domain, _idevid_subj_sn = IDevIDAuthenticator.authenticate_idevid_from_x509_no_device(
-                client_cert, intermediary_cas, domain=None)
+                client_cert, intermediary_cas, domain=None
+            )
         except IDevIDAuthenticationError:
             self.logger.exception('IDevID authentication failed.')
-            return LoggedHttpResponse(
-                'IDevID authentication failed.', status = 403
-            )
+            return LoggedHttpResponse('IDevID authentication failed.', status=403)
 
         owner_cred = self.get_owner_credential(client_cert)
         if not owner_cred:
-            return LoggedHttpResponse(
-                'No DevOwnerID present for this IDevID.', status = 422
-            )
+            return LoggedHttpResponse('No DevOwnerID present for this IDevID.', status=422)
         owner_pk = owner_cred.get_private_key()
 
         try:
             owner_id_cert = owner_cred.certificate_or_error
             owner_cert_pem = owner_id_cert.get_certificate_serializer().as_pem().decode()
-        except ValueError:
-            self.logger.warning('Owner credential has no certificate')
-            owner_cert_pem = ''
-
-        try:
             tls_cert_pem = tls_cert.credential.certificate_or_error.get_certificate_serializer().as_pem().decode()
         except ValueError:
-            self.logger.warning('TLS credential has no certificate')
-            tls_cert_pem = ''
+            self.logger.warning('Owner or TLS credential has no certificate')
+            return LoggedHttpResponse('Owner or TLS credential has no certificate.', status=500)
 
         aoki_init_response = {
             'aoki-init': {
                 'version': '1.0',
                 'enrollment-info': {
                     'protocols': [
-                        {
-                            'protocol': 'EST',
-                            'url': f'/.well-known/est/{domain.unique_name}/domain_credential/'
-                        }
+                        {'protocol': 'EST', 'url': f'/.well-known/est/{domain.unique_name}/domain_credential/'}
                     ]
                 },
                 'owner-id-cert': owner_cert_pem,
-                'tls-truststore': tls_cert_pem
+                'tls-truststore': tls_cert_pem,
             },
         }
         resp = JsonResponse(aoki_init_response)

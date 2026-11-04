@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import base64
 from typing import TYPE_CHECKING
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 from cryptography import x509
@@ -49,8 +49,9 @@ def mock_tls_cert():
 
 
 @pytest.fixture
-def mock_idevid_cert():
+def mock_idevid_cert(tmp_path, monkeypatch):
     """Create a mock IDevID certificate."""
+    monkeypatch.setattr('aoki.management.commands.aoki_gen_test_certs.CERTS_DIR', tmp_path)
     return AokiTestCertGenerator.generate_idevid_pki()
 
 
@@ -116,10 +117,10 @@ class TestAokiServiceMixin:
         with patch.object(AokiServiceMixin, 'get_idevid_owner_san_uri', return_value='dev-owner:cert:test_123abc'):
             with patch.object(IDevIDReferenceModel.objects, 'filter') as mock_filter:
                 mock_ref = Mock()
-                mock_ref.dev_owner_id.dev_owner_id_credential.credential = mock_owner_credential
                 mock_filter.return_value.first.return_value = mock_ref
                 
-                result = AokiServiceMixin.get_owner_credential(mock_idevid_cert)
+                with patch.object(AokiServiceMixin, '_get_matching_owner_credential', return_value=mock_owner_credential):
+                    result = AokiServiceMixin.get_owner_credential(mock_idevid_cert)
                 
                 assert result == mock_owner_credential
                 mock_filter.assert_called_once_with(idevid_ref='dev-owner:cert:test_123abc')
@@ -338,3 +339,26 @@ class TestAokiInitializationRequestView:
                         assert est_protocol['protocol'] == 'EST'
                         assert 'url' in est_protocol
                         assert domain.unique_name in est_protocol['url']
+
+
+@pytest.mark.parametrize('missing', ['owner', 'tls'])
+def test_initialization_does_not_sign_missing_certificates(
+    missing, request_factory, mock_tls_cert, mock_idevid_cert, mock_owner_credential, domain_instance
+):
+    credential = mock_owner_credential if missing == 'owner' else mock_tls_cert.credential
+    with (
+        patch.object(
+            type(credential), 'certificate_or_error', new_callable=PropertyMock,
+            side_effect=ValueError('missing'), create=True,
+        ),
+        patch('aoki.views.ActiveTrustpointTlsServerCredentialModel.objects.first', return_value=mock_tls_cert),
+        patch('aoki.views.NginxTLSClientCertExtractor.get_client_cert_as_x509', return_value=(mock_idevid_cert, [])),
+        patch(
+            'aoki.views.IDevIDAuthenticator.authenticate_idevid_from_x509_no_device',
+            return_value=(domain_instance['domain'], None),
+        ),
+        patch.object(AokiServiceMixin, 'get_owner_credential', return_value=mock_owner_credential),
+    ):
+        response = AokiInitializationRequestView().get(request_factory.get('/aoki/init/'))
+    assert response.status_code == 500
+    assert 'AOKI-Signature' not in response.headers

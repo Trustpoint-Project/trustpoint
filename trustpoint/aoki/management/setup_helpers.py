@@ -5,19 +5,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from django.core.management.base import CommandError
+from django.db import transaction
 
 from pki.management.commands.base_commands import CertificateCreationCommandMixin
-from pki.models import CaModel, CertificateModel, DomainModel
-from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from pki.models import CaModel, DomainModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TruststoreModel, TruststoreOrderModel
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class AokiCommandLoggingMixin(LoggerMixin):
@@ -44,7 +40,6 @@ class EstTestEnvironmentMixin(CertificateCreationCommandMixin, AokiCommandLoggin
     ca_unique_name: str
     domain_unique_name: str
     truststore_unique_name: str
-    https_server_cert_path: Path
 
     def _get_or_create_issuing_ca(self) -> CaModel:
         """Return an existing CA or create an RSA-2048 root and issuing CA."""
@@ -90,29 +85,23 @@ class EstTestEnvironmentMixin(CertificateCreationCommandMixin, AokiCommandLoggin
             self.log_and_stdout(f'Domain "{self.domain_unique_name}" already exists, updated issuing CA.')
         return domain
 
+    @transaction.atomic
     def _get_or_create_tls_truststore(self) -> TruststoreModel:
-        """Create the configured TLS truststore from the HTTPS server certificate."""
-        if TruststoreModel.objects.filter(unique_name=self.truststore_unique_name).exists():
-            self.log_and_stdout(f'Truststore "{self.truststore_unique_name}" already exists, skipping creation.')
-            return TruststoreModel.objects.get(unique_name=self.truststore_unique_name)
+        """Create or refresh the TLS truststore from the active HTTPS server certificate."""
+        active = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if active is None or active.credential is None or active.credential.certificate is None:
+            msg = 'No active HTTPS server certificate is configured.'
+            raise CommandError(msg)
 
-        if not self.https_server_cert_path.exists():
-            msg = f'HTTPS server certificate not found at {self.https_server_cert_path}'
-            raise FileNotFoundError(msg)
-
-        pem_data = self.https_server_cert_path.read_bytes()
-        crypto_cert = x509.load_pem_x509_certificate(pem_data)
-        cert_model = CertificateModel.save_certificate(crypto_cert)
-
-        truststore = TruststoreModel(
+        truststore, _ = TruststoreModel.objects.get_or_create(
             unique_name=self.truststore_unique_name,
-            intended_usage=TruststoreModel.IntendedUsage.TLS,
+            defaults={'intended_usage': TruststoreModel.IntendedUsage.TLS},
         )
-        truststore.save()
+        TruststoreOrderModel.objects.filter(trust_store=truststore).delete()
         TruststoreOrderModel.objects.create(
             trust_store=truststore,
-            certificate=cert_model,
+            certificate=active.credential.certificate,
             order=0,
         )
-        self.log_and_stdout(f'Created TLS truststore "{self.truststore_unique_name}".')
+        self.log_and_stdout(f'Updated TLS truststore "{self.truststore_unique_name}".')
         return truststore

@@ -26,7 +26,6 @@ Domain Credential) before a DevOwnerID can be issued.  It creates:
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from django.core.management import call_command
@@ -56,16 +55,12 @@ EST_PASSWORD = 'devownerid-onboarding123'
 
 OWNER_CRED_UNIQUE_NAME = 'DevOwnerIDOnboardingOwnerCred'
 TRUSTSTORE_UNIQUE_NAME = 'DevOwnerIDOnboardingTLSTruststore'
-HTTPS_SERVER_CERT_PATH = (
-    Path(__file__).resolve().parents[4] / 'tests' / 'data' / 'x509' / 'https_server.crt'
-)
+
 
 REMOTE_HOST = 'localhost'
 REMOTE_PORT = 443
 REMOTE_PATH_DEV_OWNER_ID = f'/.well-known/est/{DOMAIN_UNIQUE_NAME}/dev_owner_id/simpleenroll'
-REMOTE_PATH_DOMAIN_CREDENTIAL = (
-    f'/.well-known/est/{DOMAIN_UNIQUE_NAME}/domain_credential/simpleenroll'
-)
+REMOTE_PATH_DOMAIN_CREDENTIAL = f'/.well-known/est/{DOMAIN_UNIQUE_NAME}/domain_credential/simpleenroll'
 KEY_TYPE = 'RSA-2048'
 
 # ruff: noqa: S105  # test password is intentional
@@ -82,7 +77,6 @@ class Command(EstTestEnvironmentMixin, BaseCommand):
     ca_unique_name = CA_UNIQUE_NAME
     domain_unique_name = DOMAIN_UNIQUE_NAME
     truststore_unique_name = TRUSTSTORE_UNIQUE_NAME
-    https_server_cert_path = HTTPS_SERVER_CERT_PATH
 
     def handle(self, *args: Any, **kwargs: Any) -> None:
         """Execute the command.
@@ -117,7 +111,6 @@ class Command(EstTestEnvironmentMixin, BaseCommand):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
-
 
     def _get_or_create_device(self, domain: DomainModel) -> DeviceModel:
         """Return an existing device or create ``DevOwnerIDOnboardingDevice`` in *domain*.
@@ -155,7 +148,6 @@ class Command(EstTestEnvironmentMixin, BaseCommand):
         self.log_and_stdout(f'Created device "{DEVICE_COMMON_NAME}" (onboarding: EST username/password).')
         return device
 
-
     def _get_or_create_owner_credential(self, truststore: TruststoreModel) -> OwnerCredentialModel:
         """Return an existing OwnerCredential or create one configured for EST onboarding enrollment.
 
@@ -173,9 +165,7 @@ class Command(EstTestEnvironmentMixin, BaseCommand):
             ``DevOwnerIDOnboardingOwnerCred``.
         """
         if OwnerCredentialModel.objects.filter(unique_name=OWNER_CRED_UNIQUE_NAME).exists():
-            self.log_and_stdout(
-                f'OwnerCredential "{OWNER_CRED_UNIQUE_NAME}" already exists, skipping creation.'
-            )
+            self.log_and_stdout(f'OwnerCredential "{OWNER_CRED_UNIQUE_NAME}" already exists, skipping creation.')
             return OwnerCredentialModel.objects.get(unique_name=OWNER_CRED_UNIQUE_NAME)
 
         onboarding_config = OnboardingConfigModel(

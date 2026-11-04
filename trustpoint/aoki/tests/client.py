@@ -102,9 +102,15 @@ class AokiClient:
         """Verify the Owner ID certificate is valid for the device IDevID."""
         log.info('Verifying Owner ID certificate matches IDevID certificate')
         idevid_san_uri = self._get_idevid_owner_san_uri(idevid_cert)
-        log.info('IDevID SAN URI: %s', idevid_san_uri)
+        idevid_san_uris = [idevid_san_uri]
+        try:
+            san = idevid_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        except x509.ExtensionNotFound:
+            pass
+        else:
+            idevid_san_uris.extend('dev-owner:uri:' + uri for uri in san.get_values_for_type(x509.UniformResourceIdentifier))
         for san in owner_id_cert.extensions.get_extension_for_oid(x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value:
-            if isinstance(san, x509.UniformResourceIdentifier) and san.value == idevid_san_uri:
+            if isinstance(san, x509.UniformResourceIdentifier) and san.value in idevid_san_uris:
                 log.info('Owner ID certificate SAN URI matches IDevID certificate!')
                 return
         exc_msg = 'Owner ID certificate does not match IDevID certificate.'
@@ -288,8 +294,8 @@ class AokiClient:
             cert_template=None,
             username=None,#'admin',
             password=None,#'testing321',
-            cert_path=CERTS_DIR / 'idevid.pem',
-            key_path=CERTS_DIR / 'idevid_pk.pem',
+            cert_path=CERTS_DIR / self.cert_file,
+            key_path=CERTS_DIR / self.key_file,
             ca_cert_path=tls_truststore_path,
             out_cert_path=CERTS_DIR / 'dc_cert.pem',
             out_key_path=CERTS_DIR /'dc_private_key.pem',
