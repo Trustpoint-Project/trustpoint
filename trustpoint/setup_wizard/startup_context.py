@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from packaging.version import Version
 
     from crypto.models import BackendKind
-    from management.util.startup_strategies import OutputWriter, StartupContext
+    from setup_wizard.startup_strategies import OutputWriter, StartupContext
 
 
 class StartupContextBuilder:
@@ -98,7 +98,7 @@ class StartupContextBuilder:
 
     def build(self) -> StartupContext:
         """Build the StartupContext object."""
-        from management.util.startup_strategies import StartupContext, WizardState  # noqa: PLC0415
+        from setup_wizard.startup_strategies import StartupContext, WizardState  # noqa: PLC0415
 
         return StartupContext(
             current_version=self.current_version,

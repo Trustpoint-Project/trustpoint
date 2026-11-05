@@ -9,7 +9,7 @@ import pytest
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel, AppSecretPkcs11ConfigModel
 from crypto.models import BackendKind, CryptoProviderPkcs11ConfigModel, CryptoProviderProfileModel
-from management.management.commands.apply_bootstrap_config import OperationalBootstrapApplier
+from setup_wizard.management.commands.apply_bootstrap_config import OperationalBootstrapApplier
 from setup_wizard.views import FreshInstallSummaryView
 
 

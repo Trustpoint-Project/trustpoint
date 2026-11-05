@@ -14,10 +14,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import psycopg
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.crypto import constant_time_compare
 
+from setup_wizard.operational_attach import OperationalDatabaseConfig, OperationalTargetInspector
 from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_config_path
 
 if TYPE_CHECKING:
@@ -248,22 +250,18 @@ def _run_operational_manage_command(args: list[str], env_values: dict[str, str])
         return
 
     output = '\n'.join(
-        part.strip()
-        for part in (completed_process.stdout, completed_process.stderr)
-        if part and part.strip()
+        part.strip() for part in (completed_process.stdout, completed_process.stderr) if part and part.strip()
     )
     if len(output) > MAX_CAPTURED_OUTPUT_LENGTH:
         output = output[-MAX_CAPTURED_OUTPUT_LENGTH:]
-    err_msg = f"Operational command {' '.join(args)!r} failed: {output or 'no command output'}"
+    err_msg = f'Operational command {" ".join(args)!r} failed: {output or "no command output"}'
     raise DjangoValidationError(err_msg)
 
 
 def _format_completed_process_output(completed_process: subprocess.CompletedProcess[str]) -> str:
     """Return bounded stdout/stderr text for user-facing validation errors."""
     output = '\n'.join(
-        part.strip()
-        for part in (completed_process.stdout, completed_process.stderr)
-        if part and part.strip()
+        part.strip() for part in (completed_process.stdout, completed_process.stderr) if part and part.strip()
     )
     if len(output) > MAX_CAPTURED_OUTPUT_LENGTH:
         return output[-MAX_CAPTURED_OUTPUT_LENGTH:]
@@ -278,6 +276,22 @@ def run_operational_handoff(config_model: SetupWizardConfigModel) -> Operational
     payload_file = operational_payload_file_path()
     env_values = build_operational_environment(config_model)
     payload = build_apply_payload(config_model)
+
+    target = OperationalDatabaseConfig(
+        host=config_model.operational_db_host,
+        port=config_model.operational_db_port,
+        name=config_model.operational_db_name,
+        user=config_model.operational_db_user,
+        password=config_model.operational_db_password,
+    )
+    try:
+        snapshot = OperationalTargetInspector().inspect_database(target)
+    except psycopg.Error as exception:
+        msg = f'Could not inspect the fresh-install database: {exception}'
+        raise DjangoValidationError(msg) from exception
+    if snapshot.app_version is not None or snapshot.setup_completed:
+        msg = 'The target database already contains a Trustpoint installation. Use Connect Existing instead.'
+        raise DjangoValidationError(msg)
 
     clear_operational_ready_file(ready_file)
     write_apply_payload(payload, payload_file)

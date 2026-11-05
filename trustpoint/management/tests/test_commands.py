@@ -40,10 +40,10 @@ class CompileMsgCommandTest(TestCase):
 class BootstrapManagerCommandTest(TestCase):
     """Test suite for bootstrap_manager command helpers."""
 
-    @patch('management.management.commands.bootstrap_manager.call_command')
+    @patch('setup_wizard.management.commands.bootstrap_manager.call_command')
     def test_compile_messages_ignores_virtualenv_locales(self, mock_call_command: MagicMock) -> None:
         """Test bootstrap message compilation ignores dependency locale files."""
-        from management.management.commands.bootstrap_manager import Command  # noqa: PLC0415
+        from setup_wizard.management.commands.bootstrap_manager import Command  # noqa: PLC0415
 
         output = Mock()
 
@@ -56,15 +56,15 @@ class BootstrapManagerCommandTest(TestCase):
         assert '.venv' in call_args
         output.write.assert_called_once_with('Compiling translation messages...')
 
-    @patch('management.util.startup_strategies.call_command')
-    @patch('management.management.commands.bootstrap_manager.call_command')
+    @patch('setup_wizard.startup_strategies.call_command')
+    @patch('setup_wizard.management.commands.bootstrap_manager.call_command')
     def test_container_uses_precompiled_translations(
         self, mock_call_command: MagicMock, runtime_call: MagicMock
     ) -> None:
         """Both startup phases leave image-provided translation catalogs untouched."""
         from django.test import override_settings
-        from management.management.commands.bootstrap_manager import Command
-        from management.util.startup_strategies import RuntimeInitialization
+        from setup_wizard.management.commands.bootstrap_manager import Command
+        from setup_wizard.startup_strategies import RuntimeInitialization
 
         with override_settings(DOCKER_CONTAINER=True):
             Command._compile_messages(Mock())
@@ -188,7 +188,7 @@ class StartupManagerCommandTest(TestCase):
 
     def test_startup_accepts_environment_without_dotenv_file(self) -> None:
         """Deployment-provided settings do not require a .env file in the image."""
-        from management.management.commands.startup_manager import Command
+        from setup_wizard.management.commands.startup_manager import Command
 
         command = Command()
         with patch('pathlib.Path.exists', return_value=False), patch.object(command, 'manage_startup') as startup:
@@ -196,9 +196,9 @@ class StartupManagerCommandTest(TestCase):
 
         startup.assert_called_once_with()
 
-    @patch('management.management.commands.startup_manager.call_command')
-    @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
-    @patch('management.management.commands.startup_manager.StartupContextBuilder')
+    @patch('setup_wizard.management.commands.startup_manager.call_command')
+    @patch('setup_wizard.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
+    @patch('setup_wizard.management.commands.startup_manager.StartupContextBuilder')
     def test_startup_manager_operational_startup(
         self,
         mock_builder: MagicMock,
@@ -206,7 +206,7 @@ class StartupManagerCommandTest(TestCase):
         mock_call_command: MagicMock,
     ) -> None:
         """Test startup_manager executes the operational startup path."""
-        with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
+        with patch('setup_wizard.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             mock_first.return_value = None
 
             mock_context = Mock()
@@ -232,9 +232,9 @@ class StartupManagerCommandTest(TestCase):
             mock_strategy_class.assert_called_once_with()
             mock_strategy.execute.assert_called_once_with(mock_context)
 
-    @patch('management.management.commands.startup_manager.call_command')
-    @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
-    @patch('management.management.commands.startup_manager.StartupContextBuilder')
+    @patch('setup_wizard.management.commands.startup_manager.call_command')
+    @patch('setup_wizard.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
+    @patch('setup_wizard.management.commands.startup_manager.StartupContextBuilder')
     def test_startup_manager_runtime_error_becomes_command_error(
         self,
         mock_builder: MagicMock,
@@ -242,7 +242,7 @@ class StartupManagerCommandTest(TestCase):
         mock_call_command: MagicMock,
     ) -> None:
         """Test startup_manager reports operational dependency failures clearly."""
-        with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
+        with patch('setup_wizard.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             mock_first.return_value = None
 
             mock_context = Mock()
@@ -269,7 +269,7 @@ class StartupManagerCommandTest(TestCase):
 
     def test_startup_manager_version_parsing(self) -> None:
         """Test startup_manager can parse version from settings."""
-        from management.management.commands.startup_manager import Command
+        from setup_wizard.management.commands.startup_manager import Command
 
         command = Command()
         version = command._parse_version('1.2.3')

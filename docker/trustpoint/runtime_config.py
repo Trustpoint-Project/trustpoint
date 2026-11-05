@@ -16,6 +16,7 @@ import pwd
 import re
 import stat
 import sys
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -299,6 +300,7 @@ def run_application(job: str) -> None:
         'startup': [str(APP_DIR / '.venv/bin/python'), 'trustpoint/manage.py', 'startup_manager'],
         'migrate': [str(APP_DIR / '.venv/bin/python'), 'trustpoint/manage.py', 'migrate'],
         'auto-setup': [str(APP_DIR / '.venv/bin/python'), 'trustpoint/manage.py', 'auto_setup_from_env'],
+        'finalize-setup': [str(APP_DIR / '.venv/bin/python'), 'trustpoint/manage.py', 'finalize_setup'],
         'qcluster': [str(APP_DIR / '.venv/bin/python'), 'trustpoint/manage.py', 'qcluster'],
         'db-ready': [
             '/usr/bin/pg_isready',
@@ -348,6 +350,51 @@ def run_application(job: str) -> None:
     os.execve(commands[job][0], commands[job], environment)  # noqa: S606 - fixed commands, privileges already dropped.
 
 
+def prepare_bootstrap_storage(deployment: dict[str, str]) -> None:
+    """Pin directories and files before changing ownership; never repair SQLite data."""
+    account = pwd.getpwnam('www-data')
+    database = Path(deployment['TRUSTPOINT_BOOTSTRAP_DB_PATH'])
+    directories = {
+        database.parent,
+        Path(deployment['TRUSTPOINT_OPERATIONAL_ENV_FILE']).parent,
+        Path(deployment['TRUSTPOINT_OPERATIONAL_READY_FILE']).parent,
+    }
+    for directory in directories:
+        if not directory.is_absolute() or '..' in directory.parts:
+            msg = 'Bootstrap storage requires absolute paths without parent traversal.'
+            raise ValueError(msg)
+        descriptor = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for component in directory.parts[1:]:
+                with suppress(FileExistsError):
+                    os.mkdir(component, mode=0o755, dir_fd=descriptor)
+                child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+            os.fchown(descriptor, account.pw_uid, account.pw_gid)
+            os.fchmod(descriptor, 0o750)
+            if directory != database.parent:
+                continue
+            for suffix in ('', '-journal', '-wal', '-shm'):
+                try:
+                    file_descriptor = os.open(
+                        database.name + suffix, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor
+                    )
+                except FileNotFoundError:
+                    continue
+                try:
+                    metadata = os.fstat(file_descriptor)
+                    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                        msg = 'Bootstrap database files must be regular files without hard links.'
+                        raise ValueError(msg)
+                    os.fchown(file_descriptor, account.pw_uid, account.pw_gid)
+                    os.fchmod(file_descriptor, 0o660)
+                finally:
+                    os.close(file_descriptor)
+        finally:
+            os.close(descriptor)
+
+
 def enter_container() -> None:
     """Select startup phase and validate any persisted data before running the root entrypoint."""
     deployment = initialize_deployment()
@@ -365,6 +412,7 @@ def enter_container() -> None:
         msg = 'Invalid container startup phase.'
         raise ValueError(msg)
     environment['TRUSTPOINT_PHASE'] = phase
+    prepare_bootstrap_storage(deployment)
     _exec_script('entrypoint.sh', [], environment)
 
 
