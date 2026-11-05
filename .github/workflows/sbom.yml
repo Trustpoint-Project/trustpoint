@@ -1,16 +1,30 @@
 name: Security / SBOM
 
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      image:
+        description: Published image reference including its sha256 digest
+        required: true
+        type: string
+      version:
+        description: Release tag or commit identifier
+        required: true
+        type: string
   workflow_dispatch:
-  release:
-    types:
-      - published
+    inputs:
+      image:
+        description: Published image reference including its sha256 digest
+        required: true
+        type: string
+      version:
+        description: Release tag or commit identifier
+        required: true
+        type: string
 
 permissions:
   contents: write
+  packages: read
 
 concurrency:
   group: gh-pages
@@ -19,10 +33,20 @@ concurrency:
 jobs:
   sbom:
     runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ inputs.image }}
+      VERSION: ${{ inputs.version }}
 
     steps:
       - name: Checkout Trustpoint repo
         uses: actions/checkout@v7
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Syft
         run: |
@@ -30,49 +54,35 @@ jobs:
             | sh -s -- -b /usr/local/bin v1.42.1
           syft version
 
-      - name: Build Trustpoint Docker image
+      - name: Require immutable image and safe version path
         run: |
-          docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
-
-      - name: Determine SBOM version
-        id: sbom_version
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          else
-            VERSION="${{ github.ref_name }}"
-          fi
-
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          [[ "$IMAGE" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] || exit 1
+          [[ "$VERSION" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 1
 
       - name: Generate SBOMs for GitHub Pages
         run: |
-          VERSION="${{ steps.sbom_version.outputs.version }}"
+          mkdir -p public/latest
+          mkdir -p "public/${VERSION}"
 
-          mkdir -p public/sbom/latest
-          mkdir -p "public/sbom/${VERSION}"
+          syft "registry:${IMAGE}" \
+            -o cyclonedx-json=public/latest/trustpoint.cyclonedx.json
 
-          syft docker:trustpoint:latest \
-            -o cyclonedx-json=public/sbom/latest/trustpoint.cyclonedx.json
+          syft "registry:${IMAGE}" \
+            -o spdx-json=public/latest/trustpoint.spdx.json
 
-          syft docker:trustpoint:latest \
-            -o spdx-json=public/sbom/latest/trustpoint.spdx.json
+          cp public/latest/trustpoint.cyclonedx.json \
+            "public/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
 
-          cp public/sbom/latest/trustpoint.cyclonedx.json \
-            "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
+          cp public/latest/trustpoint.spdx.json \
+            "public/${VERSION}/trustpoint-${VERSION}.spdx.json"
 
-          cp public/sbom/latest/trustpoint.spdx.json \
-            "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
-
-          test -s public/sbom/latest/trustpoint.cyclonedx.json
-          test -s public/sbom/latest/trustpoint.spdx.json
-          test -s "public/sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
-          test -s "public/sbom/${VERSION}/trustpoint-${VERSION}.spdx.json"
+          test -s public/latest/trustpoint.cyclonedx.json
+          test -s public/latest/trustpoint.spdx.json
+          test -s "public/${VERSION}/trustpoint-${VERSION}.cyclonedx.json"
+          test -s "public/${VERSION}/trustpoint-${VERSION}.spdx.json"
 
       - name: Create SBOM index page
         run: |
-          VERSION="${{ steps.sbom_version.outputs.version }}"
-
           cat > public/index.html <<EOF
           <!doctype html>
           <html lang="en">
@@ -87,14 +97,14 @@ jobs:
 
             <h2>Latest</h2>
             <ul>
-              <li><a href="sbom/latest/trustpoint.cyclonedx.json">CycloneDX JSON</a></li>
-              <li><a href="sbom/latest/trustpoint.spdx.json">SPDX JSON</a></li>
+              <li><a href="latest/trustpoint.cyclonedx.json">CycloneDX JSON</a></li>
+              <li><a href="latest/trustpoint.spdx.json">SPDX JSON</a></li>
             </ul>
 
             <h2>${VERSION}</h2>
             <ul>
-              <li><a href="sbom/${VERSION}/trustpoint-${VERSION}.cyclonedx.json">CycloneDX JSON</a></li>
-              <li><a href="sbom/${VERSION}/trustpoint-${VERSION}.spdx.json">SPDX JSON</a></li>
+              <li><a href="${VERSION}/trustpoint-${VERSION}.cyclonedx.json">CycloneDX JSON</a></li>
+              <li><a href="${VERSION}/trustpoint-${VERSION}.spdx.json">SPDX JSON</a></li>
             </ul>
           </body>
           </html>
@@ -106,5 +116,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: public
-          keep_files: false
+          destination_dir: sbom
+          keep_files: true
           allow_empty_commit: true

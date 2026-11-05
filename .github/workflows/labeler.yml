@@ -1,7 +1,7 @@
 name: CI/CD / Auto Labeler
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 concurrency:
@@ -18,9 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
       - name: Apply labels
         uses: actions/labeler@v7
         with:
