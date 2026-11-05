@@ -43,6 +43,17 @@ jobs:
           docker compose exec -T --user www-data -e TRUSTPOINT_PHASE=operational trustpoint \
             .venv/bin/python trustpoint/manage.py trustpointbackup_manifest --filename recovery.dump.gz --verify
 
+      - name: Verify encrypted backup restoration through the setup wizard
+        run: |
+          docker compose exec -T postgres createdb -U admin trustpoint_encrypted_restore
+          docker compose exec -T --user www-data \
+            -e TRUSTPOINT_PHASE=bootstrap -e DJANGO_SETTINGS_MODULE=trustpoint.settings_bootstrap \
+            -e HOME=/run/trustpoint/home \
+            -e POSTGRES_DB=trustpoint_encrypted_restore trustpoint \
+            .venv/bin/python trustpoint/manage.py shell --no-imports \
+            < tests/scripts/check_encrypted_backup_restore.py
+          docker compose exec -T postgres dropdb -U admin trustpoint_encrypted_restore
+
       - name: Stop application and recreate empty database
         run: |
           docker compose stop trustpoint
