@@ -45,13 +45,13 @@ The repository currently provides these workflow entry points:
      - Inspect test direction and data assertions; system checks alone do not prove forward upgrades
    * - Backup/restore
      - ``backup-restore.yml``
-     - Reusable workflow only; confirm it was actually invoked and had matching secrets
+     - PR/main recovery run using the original deployment secrets and runtime volumes
    * - Security analysis
      - ``codeql.yml``, ``zap.yml``, ``sbom.yml``
      - Scan completion, artifacts, findings, and review decisions
 
-The current pytest workflow selects ``trustpoint/``; local complete test runs
-must also include root ``tests/`` utilities. The capability matrix replaces the
+The current pytest workflow selects ``trustpoint/`` and root ``tests/`` utilities.
+The capability matrix replaces the
 old per-requirement ``r_001`` through ``r_104`` badge links. Requirement tags remain
 in feature files; they do not imply separate hosted workflows still exist.
 

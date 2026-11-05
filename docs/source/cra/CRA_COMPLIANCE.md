@@ -346,7 +346,7 @@ risks, or that residual risk has been accepted.
 | SBOM | Syft workflow generates CycloneDX and SPDX from a built image | The final 1.0.0 image/digest/SBOM correspondence was not verified |
 | CI/CD / deployment | Build, test and deployment workflows are present | Workflow existence does not establish passing current runs or closed release findings |
 | ZAP | Operational setup precondition, required reports and failure/finding policy are configured | Hosted execution and authenticated protected-path coverage remain unverified |
-| Release integrity | `publish-ghcr.yml` and `docker-manual.yml` configure `actions/attest-build-provenance` | Attestations are not merely planned, but the published release attestation and subject digest still need verification |
+| Release integrity | `publish-images.yml` configure `actions/attest-build-provenance` | Attestations are not merely planned, but the published release attestation and subject digest still need verification |
 | Vulnerability handling / support | Private disclosure policy and acknowledgement commitment exist | Case handling history, supported versions, support duration and complete advisory/update evidence remain open |
 
 **Badges:**
@@ -468,7 +468,7 @@ Organizations incorporating Trustpoint into products placed on the EU market rem
 [codecov]: https://codecov.io/gh/Trustpoint-Project/trustpoint
 [contributing]: https://github.com/Trustpoint-Project/trustpoint/blob/main/CONTRIBUTING.md
 [openssf]: https://www.bestpractices.dev/projects/11535
-[docker-builds]: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-manual.yml
+[docker-builds]: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/publish-images.yml
 [license]: https://opensource.org/licenses/MIT
 
 <!-- Badges -->
