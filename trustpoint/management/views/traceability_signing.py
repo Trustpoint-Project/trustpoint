@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from typing import TYPE_CHECKING, Any, cast
 
 from cryptography import x509
@@ -29,7 +29,7 @@ from users.permissions import AppPermissions
 if TYPE_CHECKING:
     from django.db import models
     from django.db.models import QuerySet
-    from django.http import HttpRequest, HttpResponse
+    from django.http import HttpRequest, HttpResponse, HttpResponseBase
 
 
 class TraceabilityCredentialContextMixin(ContextDataMixin):
@@ -167,7 +167,7 @@ class TraceabilityCredentialCertificateView(
     template_name = 'management/traceability_credential/form.html'
     permission_required = AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Require the first-step settings in the session."""
         if 'traceability_signing_settings' not in request.session:
             return redirect('management:traceability_credential_create')
@@ -189,7 +189,7 @@ class TraceabilityCredentialCertificateView(
         """Create only after the profile form has validated certificate values."""
         settings = self.request.session.pop('traceability_signing_settings')
         builder = form.get_certificate_builder()
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         try:
             credential = TraceabilityCredentialService.create(
                 name=settings['name'],
@@ -228,7 +228,7 @@ class TraceabilityCredentialEditView(
     template_name = 'management/traceability_credential/form.html'
     permission_required = AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Load the logical credential before form processing."""
         self.credential = get_object_or_404(TraceabilityCredentialModel, pk=kwargs['pk'])
         return super().dispatch(request, *args, **kwargs)
@@ -262,7 +262,7 @@ class TraceabilityCredentialRotateView(
     template_name = 'management/traceability_credential/form.html'
     permission_required = AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Load the logical credential before displaying the confirmation."""
         self.credential = get_object_or_404(TraceabilityCredentialModel, pk=kwargs['pk'])
         return super().dispatch(request, *args, **kwargs)
@@ -288,8 +288,8 @@ class TraceabilityCredentialRotateView(
                 traceability_credential=self.credential,
                 certificate_data=TraceabilityCertificateData(
                     subject=x509.Name([]),
-                    not_valid_before=datetime.datetime.now(datetime.UTC),
-                    not_valid_after=datetime.datetime.now(datetime.UTC),
+                    not_valid_before=dt.datetime.now(dt.UTC),
+                    not_valid_after=dt.datetime.now(dt.UTC),
                     certificate_builder=builder,
                 ),
             )

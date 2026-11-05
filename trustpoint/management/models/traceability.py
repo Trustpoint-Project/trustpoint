@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from typing import ClassVar
 
 from django.apps import apps
@@ -110,7 +110,7 @@ class TraceabilityCredentialModel(models.Model):
         certificate = generation.credential.certificate
         if certificate is None:
             return False
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         return certificate.not_valid_before <= now <= certificate.not_valid_after
 
     def delete(self, *_args: object, **_kwargs: object) -> tuple[int, dict[str, int]]:

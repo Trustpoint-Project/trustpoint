@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -55,8 +55,8 @@ class TraceabilityCertificateData:
     """Validated certificate values supplied by a profile-driven form."""
 
     subject: x509.Name
-    not_valid_before: datetime.datetime
-    not_valid_after: datetime.datetime
+    not_valid_before: dt.datetime
+    not_valid_after: dt.datetime
     certificate_builder: x509.CertificateBuilder | None = None
 
 
@@ -262,11 +262,11 @@ class TraceabilityCredentialService:
         name: str,
         validity_days: int,
     ) -> TraceabilityCertificateData:
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         return TraceabilityCertificateData(
             subject=x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)]),
-            not_valid_before=now - datetime.timedelta(minutes=1),
-            not_valid_after=now + datetime.timedelta(days=validity_days),
+            not_valid_before=now - dt.timedelta(minutes=1),
+            not_valid_after=now + dt.timedelta(days=validity_days),
         )
 
     @staticmethod
@@ -318,7 +318,7 @@ class TraceabilityCredentialService:
                 credential_type=CredentialModel.CredentialTypeChoice.EVIDENCE_SIGNING_CREDENTIAL,
                 managed_key=managed_key,
             )
-            now = datetime.datetime.now(datetime.UTC)
+            now = dt.datetime.now(dt.UTC)
             logical.save()
             generation = TraceabilityCredentialGenerationModel.objects.create(
                 traceability_credential=logical,
@@ -417,7 +417,7 @@ class TraceabilityCredentialService:
                 credential_type=CredentialModel.CredentialTypeChoice.EVIDENCE_SIGNING_CREDENTIAL,
                 managed_key=managed_key,
             )
-            now = datetime.datetime.now(datetime.UTC)
+            now = dt.datetime.now(dt.UTC)
             previous.status = TraceabilityCredentialGenerationModel.Status.RETIRED
             previous.retired_at = now
             previous.save(update_fields=['status', 'retired_at'])
@@ -445,7 +445,7 @@ class TraceabilityCredentialService:
         generation = logical.current_generation
         if generation is None:
             raise ValidationError(NOT_USABLE)
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         generation.status = TraceabilityCredentialGenerationModel.Status.RETIRED
         generation.retired_at = now
         generation.save(update_fields=['status', 'retired_at'])
