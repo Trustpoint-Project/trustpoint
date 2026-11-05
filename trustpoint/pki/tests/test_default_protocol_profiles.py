@@ -22,6 +22,33 @@ PROTOCOL_PROFILE_NAMES = {
 }
 
 
+def test_default_loader_preserves_customized_profile() -> None:
+    """Rerunning setup must not replace an administrator's certificate policy."""
+    call_command('create_default_cert_profiles')
+    profile = CertificateProfileModel.objects.get(unique_name='mqtt_server')
+    customized = profile.profile
+    customized['validity']['days'] = 17
+    profile.profile_json = customized
+    profile.display_name = 'Local MQTT policy'
+    profile.is_default = False
+    profile.save()
+
+    call_command('create_default_cert_profiles')
+    profile.refresh_from_db()
+
+    assert profile.profile == customized
+    assert profile.display_name == 'Local MQTT policy'
+    assert not profile.is_default
+
+
+def test_default_loader_installs_traceability_profile() -> None:
+    """The standard loader installs the canonical traceability certificate profile."""
+    call_command('create_default_cert_profiles')
+    profile = CertificateProfileModel.objects.get(unique_name='traceability_credential')
+    assert profile.credential_type == CertificateProfileModel.ProfileCredentialType.EVIDENCE_SIGNING_CREDENTIAL
+    CertProfilePydanticModel.model_validate(profile.profile)
+
+
 def test_protocol_profiles_load_validate_and_are_selectable(issuing_ca_instance: dict[str, object]) -> None:
     """The default loader makes protocol profiles available to domains and the API."""
     call_command('create_default_cert_profiles')

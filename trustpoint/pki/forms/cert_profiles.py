@@ -477,7 +477,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 field_value = field_spec.get('value', field_spec.get('default', 0))
             else:
                 required_setting = profile_validity.get('required', [])
-                mutable_setting = profile_validity.get('mutable', [])
+                mutable_setting = profile_mutable
                 is_required = required_setting if isinstance(required_setting, bool) else field_name in required_setting
                 field_is_mutable = (
                     mutable_setting if isinstance(mutable_setting, bool) else field_name in mutable_setting

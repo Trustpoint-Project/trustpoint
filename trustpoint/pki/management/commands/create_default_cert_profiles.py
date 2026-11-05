@@ -50,7 +50,7 @@ class Command(BaseCommand):
                 'display_name': display_name,
                 'credential_type': credential_type,
             }
-            _obj, created = CertificateProfileModel.objects.update_or_create(
+            _obj, created = CertificateProfileModel.objects.get_or_create(
                 unique_name=unique_name,
                 defaults=defaults,
             )
@@ -58,4 +58,4 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(self.style.SUCCESS(f'Created certificate profile: {unique_name}'))
             else:
-                self.stdout.write(f'Updated certificate profile: {unique_name}')
+                self.stdout.write(f'Certificate profile already exists: {unique_name}')

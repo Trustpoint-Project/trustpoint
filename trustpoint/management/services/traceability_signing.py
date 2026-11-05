@@ -339,6 +339,7 @@ class TraceabilityCredentialService:
             TrustpointCryptoBackend().destroy_managed_key(private_key.managed_key_ref)
 
     @classmethod
+    @transaction.atomic
     def sign(
         cls,
         *,
@@ -347,6 +348,9 @@ class TraceabilityCredentialService:
         purpose: TraceabilityCredentialModel.Purpose,
     ) -> TraceabilitySigningResult:
         """Sign raw bytes using the active generation and its fixed curve hash."""
+        traceability_credential = TraceabilityCredentialModel.objects.select_for_update().get(
+            pk=traceability_credential.pk
+        )
         if purpose not in traceability_credential.purposes:
             raise ValidationError(PURPOSE_NOT_ASSIGNED)
         generation = traceability_credential.current_generation
@@ -486,7 +490,7 @@ class TraceabilityCredentialService:
             algorithm=algorithm,
         )
         if purpose not in logical.purposes:
-            return result.__class__(**{**result.__dict__, 'failure_reason': VerificationFailureReason.PURPOSE_MISMATCH})
+            return replace(result, failure_reason=VerificationFailureReason.PURPOSE_MISMATCH)
         try:
             certificate_obj = certificate.get_certificate_serializer().as_crypto()
             public_key = certificate_obj.public_key()
