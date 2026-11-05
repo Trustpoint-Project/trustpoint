@@ -25,13 +25,6 @@ class TraceabilityCredentialModel(models.Model):
         SECP256R1 = NamedCurve.SECP256R1.dotted_string, NamedCurve.SECP256R1.verbose_name
         SECP384R1 = NamedCurve.SECP384R1.dotted_string, NamedCurve.SECP384R1.verbose_name
 
-    class Purpose(models.TextChoices):
-        """Stable consumer purposes for Traceability Credentials."""
-
-        ISSUANCE_LOG = 'ISSUANCE_LOG', _('Issuance Log')
-        AUDIT_LOG = 'AUDIT_LOG', _('Audit Log')
-        CT_LOG = 'CT_LOG', _('Certificate Transparency Log')
-
     class Status(models.TextChoices):
         """Logical credential lifecycle states."""
 
@@ -41,7 +34,6 @@ class TraceabilityCredentialModel(models.Model):
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField(blank=True, default='')
     curve = models.CharField(max_length=64, choices=Curve.choices)
-    purposes = models.JSONField(default=list)
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.ACTIVE)
     current_generation = models.ForeignKey(
         'management.TraceabilityCredentialGenerationModel',
@@ -72,19 +64,10 @@ class TraceabilityCredentialModel(models.Model):
         """Validate required and immutable metadata."""
         if not self.name:
             raise ValidationError({'name': _('Name is required.')})
-        normalized_purposes = list(dict.fromkeys(self.purposes or []))
-        known_purposes = {choice.value for choice in self.Purpose}
-        if not normalized_purposes:
-            raise ValidationError({'purposes': _('At least one purpose is required.')})
-        if len(normalized_purposes) != len(self.purposes):
-            raise ValidationError({'purposes': _('Purposes must not contain duplicates.')})
-        if any(purpose not in known_purposes for purpose in normalized_purposes):
-            raise ValidationError({'purposes': _('Unknown Traceability Credential purpose.')})
-
         if self.pk:
             previous = type(self).objects.get(pk=self.pk)
-            if self.name != previous.name or self.curve != previous.curve or self.purposes != previous.purposes:
-                raise ValidationError(_('Name, curve, and purposes are immutable after creation.'))
+            if self.name != previous.name or self.curve != previous.curve:
+                raise ValidationError(_('Name and curve are immutable after creation.'))
 
     def _clean_lifecycle(self) -> None:
         """Validate status and retirement timestamp consistency."""

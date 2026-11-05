@@ -11,10 +11,12 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import OperationalError, connection, connections, transaction
+from django.db.migrations.executor import MigrationExecutor
 
 from crypto.application.private_keys import ManagedECPrivateKey
 from management.models.traceability import TraceabilityCredentialModel
 from management.services.traceability_signing import TraceabilityCredentialService, VerificationFailureReason
+from management.views.traceability_signing import TraceabilityCredentialSettingsForm
 
 pytestmark = pytest.mark.django_db
 
@@ -30,8 +32,60 @@ def credential(settings: Any) -> TraceabilityCredentialModel:
     return TraceabilityCredentialService.create(
         name='audit-evidence',
         curve=TraceabilityCredentialModel.Curve.SECP256R1,
-        purposes=[TraceabilityCredentialModel.Purpose.AUDIT_LOG],
     )
+
+
+def test_settings_form_accepts_credential_without_purposes() -> None:
+    """Creating a signing identity requires no predefined consumer assignment."""
+    form = TraceabilityCredentialSettingsForm(
+        data={
+            'name': 'shared-evidence',
+            'curve': TraceabilityCredentialModel.Curve.SECP256R1,
+        }
+    )
+    assert form.is_valid(), form.errors
+
+
+def test_same_credential_signs_consumer_defined_payloads(credential: TraceabilityCredentialModel) -> None:
+    """One identity signs multiple consumers' payloads, including their usage context."""
+    assert credential.current_generation is not None
+    for data in (b'audit:v1:event', b'issuance:v1:certificate', b'custom-consumer:v1:record'):
+        signed = TraceabilityCredentialService.sign(traceability_credential=credential, data=data)
+        assert TraceabilityCredentialService.verify(
+            generation=credential.current_generation,
+            data=data,
+            signature=signed.signature,
+        ).valid
+        assert not TraceabilityCredentialService.verify(
+            generation=credential.current_generation,
+            data=b'other-context:' + data,
+            signature=signed.signature,
+        ).valid
+
+
+@pytest.mark.django_db(transaction=True)
+def test_removing_purposes_preserves_existing_signatures(credential: TraceabilityCredentialModel) -> None:
+    """An existing restricted credential retains its identity and signatures after upgrade."""
+    signed = TraceabilityCredentialService.sign(traceability_credential=credential, data=b'old-evidence')
+    executor = MigrationExecutor(connection)
+    latest = executor.loader.graph.leaf_nodes()
+    previous = [('management', '0004_tp_v1_0_1_dev0')]
+    try:
+        executor.migrate(previous)
+        old_model = executor.loader.project_state(previous).apps.get_model('management', 'TraceabilityCredentialModel')
+        old_model.objects.filter(pk=credential.pk).update(purposes=['AUDIT_LOG'])
+    finally:
+        MigrationExecutor(connection).migrate(latest)
+
+    credential.refresh_from_db()
+    assert credential.current_generation is not None
+    assert credential.current_generation.pk == signed.generation_id
+    assert TraceabilityCredentialService.verify(
+        generation=credential.current_generation,
+        data=b'old-evidence',
+        signature=signed.signature,
+    ).valid
+    TraceabilityCredentialService.sign(traceability_credential=credential, data=b'new-consumer:v1:evidence')
 
 
 def test_retirement_rejects_signing_with_cached_credential(credential: TraceabilityCredentialModel) -> None:
@@ -42,7 +96,6 @@ def test_retirement_rejects_signing_with_cached_credential(credential: Traceabil
         TraceabilityCredentialService.sign(
             traceability_credential=credential,
             data=b'event',
-            purpose=TraceabilityCredentialModel.Purpose.AUDIT_LOG,
         )
 
 
@@ -68,7 +121,6 @@ def test_retirement_waits_for_in_progress_signature(
             TraceabilityCredentialService.sign(
                 traceability_credential=credential,
                 data=b'event',
-                purpose=TraceabilityCredentialModel.Purpose.AUDIT_LOG,
             )
         finally:
             connections.close_all()
@@ -99,13 +151,11 @@ def test_rotation_uses_current_generation_and_preserves_verification(credential:
     before = TraceabilityCredentialService.sign(
         traceability_credential=credential,
         data=b'event',
-        purpose=TraceabilityCredentialModel.Purpose.AUDIT_LOG,
     )
     new_generation = TraceabilityCredentialService.rotate(traceability_credential=credential)
     after = TraceabilityCredentialService.sign(
         traceability_credential=credential,
         data=b'event',
-        purpose=TraceabilityCredentialModel.Purpose.AUDIT_LOG,
     )
 
     assert before.generation_id != after.generation_id == new_generation.pk
@@ -114,25 +164,22 @@ def test_rotation_uses_current_generation_and_preserves_verification(credential:
         generation=old_generation,
         data=b'event',
         signature=before.signature,
-        purpose=TraceabilityCredentialModel.Purpose.AUDIT_LOG,
     ).valid
     assert TraceabilityCredentialService.verify(
         generation=new_generation,
         data=b'event',
         signature=after.signature,
-        purpose=TraceabilityCredentialModel.Purpose.AUDIT_LOG,
     ).valid
 
 
-def test_verification_returns_purpose_mismatch(credential: TraceabilityCredentialModel) -> None:
-    """An unassigned purpose returns a failure instead of crashing."""
+def test_verification_rejects_invalid_signature(credential: TraceabilityCredentialModel) -> None:
+    """Invalid signature bytes return a structured verification failure."""
     assert credential.current_generation is not None
     result = TraceabilityCredentialService.verify(
         generation=credential.current_generation,
         data=b'event',
         signature=b'invalid',
-        purpose=TraceabilityCredentialModel.Purpose.CT_LOG,
     )
 
     assert not result.valid
-    assert result.failure_reason == VerificationFailureReason.PURPOSE_MISMATCH
+    assert result.failure_reason == VerificationFailureReason.INVALID_SIGNATURE

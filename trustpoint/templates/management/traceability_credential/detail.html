@@ -21,7 +21,6 @@
             <dt class="col-sm-3">{% trans 'Status' %}</dt><dd class="col-sm-9">{{ credential.get_status_display }}</dd>
             <dt class="col-sm-3">{% trans 'Usable' %}</dt><dd class="col-sm-9">{% if credential.is_usable %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</dd>
             <dt class="col-sm-3">{% trans 'Curve' %}</dt><dd class="col-sm-9">{{ credential.get_curve_display }}</dd>
-            <dt class="col-sm-3">{% trans 'Purposes' %}</dt><dd class="col-sm-9">{{ credential.purposes|join:', ' }}</dd>
             <dt class="col-sm-3">{% trans 'Created' %}</dt><dd class="col-sm-9">{{ credential.created_at }}</dd>
             <dt class="col-sm-3">{% trans 'Updated' %}</dt><dd class="col-sm-9">{{ credential.updated_at }}</dd>
             <dt class="col-sm-3">{% trans 'Retired' %}</dt><dd class="col-sm-9">{{ credential.retired_at|default:'-' }}</dd>

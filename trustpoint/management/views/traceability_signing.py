@@ -53,12 +53,6 @@ class TraceabilityCredentialSettingsForm(forms.Form):
         choices=TraceabilityCredentialModel.Curve.choices,
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
-    purposes = forms.MultipleChoiceField(
-        label=_('Purposes'),
-        choices=TraceabilityCredentialModel.Purpose.choices,
-        required=True,
-        widget=forms.CheckboxSelectMultiple,
-    )
 
     def clean_name(self) -> str:
         """Reject duplicate names before key generation."""
@@ -141,7 +135,6 @@ class TraceabilityCredentialCreateView(
             'name': form.cleaned_data['name'],
             'description': form.cleaned_data['description'],
             'curve': form.cleaned_data['curve'],
-            'purposes': form.cleaned_data['purposes'],
         }
         return redirect('management:traceability_credential_certificate')
 
@@ -195,7 +188,6 @@ class TraceabilityCredentialCertificateView(
                 name=settings['name'],
                 description=settings['description'],
                 curve=TraceabilityCredentialModel.Curve(settings['curve']),
-                purposes=[TraceabilityCredentialModel.Purpose(purpose) for purpose in settings['purposes']],
                 certificate_data=TraceabilityCertificateData(
                     subject=x509.Name([]),
                     not_valid_before=now,

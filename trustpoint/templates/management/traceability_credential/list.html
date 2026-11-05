@@ -17,7 +17,6 @@
                     <th>{% trans 'Status' %}</th>
                     <th>{% trans 'Usable' %}</th>
                     <th>{% trans 'Curve' %}</th>
-                    <th>{% trans 'Purposes' %}</th>
                     <th>{% trans 'Current generation' %}</th>
                     <th>{% trans 'Certificate expiry' %}</th>
                 </tr>
@@ -29,12 +28,11 @@
                     <td>{{ credential.get_status_display }}</td>
                     <td>{% if credential.is_usable %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</td>
                     <td>{{ credential.get_curve_display }}</td>
-                    <td>{{ credential.purposes|join:', ' }}</td>
                     <td>{{ credential.current_generation.generation_number|default:'-' }}</td>
                     <td>{{ credential.current_generation.credential.certificate.not_valid_after|default:'-' }}</td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="7">{% trans 'No Traceability Credentials have been created.' %}</td></tr>
+                <tr><td colspan="6">{% trans 'No Traceability Credentials have been created.' %}</td></tr>
                 {% endfor %}
             </tbody>
         </table>

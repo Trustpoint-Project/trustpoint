@@ -33,7 +33,7 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CredentialModel
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
 type EvidenceDigest = hashes.SHA256 | hashes.SHA384
 
@@ -41,7 +41,6 @@ type EvidenceDigest = hashes.SHA256 | hashes.SHA384
 UNSUPPORTED_CURVE = 'Unsupported Traceability Credential curve.'
 NAME_NOT_UNIQUE = 'Traceability Credential name must be unique.'
 EC_KEY_REQUIRED = 'Traceability Credentials require an EC backend key.'
-PURPOSE_NOT_ASSIGNED = 'Purpose is not assigned to this Traceability Credential.'
 NOT_USABLE = 'Traceability Credential is not currently usable.'
 INVALID_TYPE = 'Invalid Traceability Credential type.'
 ALREADY_RETIRED = 'Traceability Credential is already retired.'
@@ -77,7 +76,6 @@ class VerificationFailureReason(StrEnum):
     """Stable failure reasons for historical verification."""
 
     INVALID_SIGNATURE = 'INVALID_SIGNATURE'
-    PURPOSE_MISMATCH = 'PURPOSE_MISMATCH'
     GENERATION_NOT_FOUND = 'GENERATION_NOT_FOUND'
     INVALID_CREDENTIAL_TYPE = 'INVALID_CREDENTIAL_TYPE'
     UNSUPPORTED_ALGORITHM = 'UNSUPPORTED_ALGORITHM'
@@ -283,7 +281,6 @@ class TraceabilityCredentialService:
         *,
         name: str,
         curve: TraceabilityCredentialModel.Curve,
-        purposes: Sequence[TraceabilityCredentialModel.Purpose],
         description: str = '',
         certificate_data: TraceabilityCertificateData | None = None,
     ) -> TraceabilityCredentialModel:
@@ -291,12 +288,10 @@ class TraceabilityCredentialService:
         if TraceabilityCredentialModel.objects.filter(name=name).exists():
             raise ValidationError(NAME_NOT_UNIQUE)
         cls._validate_canonical_profile()
-        normalized_purposes = sorted({str(purpose) for purpose in purposes})
         logical = TraceabilityCredentialModel(
             name=name,
             description=description,
             curve=curve,
-            purposes=normalized_purposes,
         )
         logical.full_clean(exclude=['current_generation', 'retired_at'])
         curve_name, digest, _ = cls._curve_values(curve)
@@ -349,14 +344,11 @@ class TraceabilityCredentialService:
         *,
         traceability_credential: TraceabilityCredentialModel,
         data: bytes,
-        purpose: TraceabilityCredentialModel.Purpose,
     ) -> TraceabilitySigningResult:
-        """Sign raw bytes using the active generation and its fixed curve hash."""
+        """Sign consumer-defined bytes; callers must encode the usage context in data."""
         traceability_credential = TraceabilityCredentialModel.objects.select_for_update().get(
             pk=traceability_credential.pk
         )
-        if purpose not in traceability_credential.purposes:
-            raise ValidationError(PURPOSE_NOT_ASSIGNED)
         generation = traceability_credential.current_generation
         if not traceability_credential.is_usable or generation is None:
             raise ValidationError(NOT_USABLE)
@@ -472,9 +464,8 @@ class TraceabilityCredentialService:
         generation: TraceabilityCredentialGenerationModel,
         data: bytes,
         signature: bytes,
-        purpose: TraceabilityCredentialModel.Purpose,
     ) -> TraceabilityVerificationResult:
-        """Verify a signature against the exact historical generation."""
+        """Verify the exact consumer-defined bytes against the historical generation."""
         logical = generation.traceability_credential
         certificate = generation.credential.certificate_or_error
         _, digest, algorithm = cls._curve_values(logical.curve)
@@ -487,8 +478,6 @@ class TraceabilityCredentialService:
             certificate_fingerprint_sha256=certificate.sha256_fingerprint,
             algorithm=algorithm,
         )
-        if purpose not in logical.purposes:
-            return replace(result, failure_reason=VerificationFailureReason.PURPOSE_MISMATCH)
         try:
             certificate_obj = certificate.get_certificate_serializer().as_crypto()
             public_key = certificate_obj.public_key()

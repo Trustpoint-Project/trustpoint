@@ -19,11 +19,7 @@
                     {% for field in form %}
                         <div class="mb-3">
                             <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                            {% if field.name == 'purposes' %}
-                                <div class="d-flex flex-column gap-2">{{ field }}</div>
-                            {% else %}
-                                {{ field }}
-                            {% endif %}
+                            {{ field }}
                             {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                             {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors }}</div>{% endif %}
                         </div>
