@@ -8,7 +8,7 @@ from unittest.mock import Mock
 from django.test import TestCase
 from packaging.version import Version
 
-from management.util.startup_strategies import (
+from setup_wizard.startup_strategies import (
     CompletedRuntimeStartupStrategy,
     StartupContext,
     WizardState,

@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
 from setup_wizard.models import SetupWizardConfigModel
-from setup_wizard.views import probe_staged_pkcs11_config
+from setup_wizard.pkcs11_probe import probe_staged_pkcs11_config
 
 
 class Command(BaseCommand):

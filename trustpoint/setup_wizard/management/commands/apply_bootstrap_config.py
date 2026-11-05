@@ -27,12 +27,15 @@ from crypto.models import (
     CryptoProviderPkcs11ConfigModel,
     Pkcs11AuthSource,
 )
+from management.models import AppVersion
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from management.security_change_audit import provider_configuration_changes
+from management.tls_files import write_tls_pem_files
 from setup_wizard.backend_configuration import BackendConfigurationMixin
 from setup_wizard.models import SetupWizardConfigModel
 from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
 from setup_wizard.pkcs11_staging import cleanup_wizard_pkcs11_staged_path, existing_wizard_pkcs11_staged_file
+from setup_wizard.runtime import execute_shell_script
 from setup_wizard.tls_activation import activate_staged_tls_credential
 from setup_wizard.tls_credential import load_staged_tls_credential
 from users.models import BuiltinRole
@@ -58,28 +61,7 @@ class OperationalBootstrapApplier(BackendConfigurationMixin):
         self.payload = payload
         self.fresh_install = payload['fresh_install']
 
-    @staticmethod
-    def execute_shell_script(script: Path, *args: str) -> None:
-        """Execute a privileged wizard helper script."""
-        script_path = Path(script).resolve()
-        if not script_path.exists():
-            msg = f'Script not found: {script_path}'
-            raise FileNotFoundError(msg)
-        if not script_path.is_file():
-            msg = f'The script path {script_path} is not a valid file.'
-            raise ValueError(msg)
-
-        completed_process = subprocess.run(  # noqa: S603
-            ['sudo', str(script_path), *list(args)],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if completed_process.returncode != 0:
-            error = subprocess.CalledProcessError(completed_process.returncode, str(script_path))
-            error.stdout = completed_process.stdout
-            error.stderr = completed_process.stderr
-            raise error
+    execute_shell_script = staticmethod(execute_shell_script)
 
     def _install_staged_pkcs11_assets(self) -> tuple[str, str, str]:  # noqa: C901, PLR0912, PLR0915
         """Install staged PKCS#11 assets and return final module, PIN-file, and provider-config paths."""
@@ -280,18 +262,10 @@ class OperationalBootstrapApplier(BackendConfigurationMixin):
     @staticmethod
     def _write_pem_files(credential_model: CredentialModel) -> None:
         """Write TLS private key, certificate, and optional chain files to disk."""
-        private_key_pem = credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
-        certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
-        trust_store_pem = credential_model.get_certificate_chain_serializer().as_pem().decode()
-
         NGINX_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        NGINX_KEY_PATH.write_text(private_key_pem)
-        NGINX_CERT_PATH.write_text(certificate_pem)
-
-        if trust_store_pem.strip():
-            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
-        elif NGINX_CERT_CHAIN_PATH.exists():
-            NGINX_CERT_CHAIN_PATH.unlink()
+        write_tls_pem_files(
+            credential_model, key_path=NGINX_KEY_PATH, cert_path=NGINX_CERT_PATH, chain_path=NGINX_CERT_CHAIN_PATH
+        )
 
     def _apply_staged_tls_credential(self) -> None:
         """Promote the staged TLS credential and apply it using this caller's I/O hooks."""
@@ -307,7 +281,7 @@ class OperationalBootstrapApplier(BackendConfigurationMixin):
         )
 
     def _create_operational_admin(self) -> None:
-        """Create or update the first operational administrator."""
+        """Create the first operational administrator without replacing an existing account."""
         admin_payload = self.payload['admin']
         username = (admin_payload['username'] or '').strip()
         password_hash = (admin_payload['password_hash'] or '').strip()
@@ -320,13 +294,16 @@ class OperationalBootstrapApplier(BackendConfigurationMixin):
 
         admin_group = Group.objects.get(name=BuiltinRole.ADMIN.value)
         user_model = get_user_model()
-        user, _ = user_model.objects.get_or_create(
+        user, created = user_model.objects.get_or_create(
             username=username,
             defaults={
                 'email': '',
                 'role': admin_group,
-            }
+            },
         )
+        if not created:
+            msg = 'The operational administrator already exists. Use Connect Existing instead.'
+            raise DjangoValidationError(msg)
         user.email = admin_payload.get('email') or ''
         user.password = password_hash
         user.is_active = True
@@ -334,6 +311,8 @@ class OperationalBootstrapApplier(BackendConfigurationMixin):
 
     def apply(self) -> None:
         """Apply the full bootstrap payload to the operational runtime."""
+        call_command('create_builtin_groups')
+        self._create_operational_admin()
         with provider_configuration_changes(actor=None):
             self._configure_instance_crypto_backend()
             self._probe_and_record_crypto_capabilities()
@@ -345,8 +324,6 @@ class OperationalBootstrapApplier(BackendConfigurationMixin):
             call_command('add_domains_and_devices')
         call_command('execute_all_notifications')
         self._apply_staged_tls_credential()
-        call_command('create_builtin_groups')
-        self._create_operational_admin()
 
 
 class Command(BaseCommand):
@@ -365,6 +342,10 @@ class Command(BaseCommand):
             msg = 'apply_bootstrap_config must run with TRUSTPOINT_PHASE=operational.'
             raise CommandError(msg)
 
+        if AppVersion.objects.exists():
+            msg = 'The target database already contains a Trustpoint installation. Use Connect Existing instead.'
+            raise CommandError(msg)
+
         config_path = Path(str(options['config']))
         try:
             payload = json.loads(config_path.read_text(encoding='utf-8'))
@@ -375,6 +356,8 @@ class Command(BaseCommand):
         try:
             with transaction.atomic():
                 OperationalBootstrapApplier(payload).apply()
+                # Make a committed install attachable even if the bootstrap save is interrupted.
+                AppVersion.objects.create(pk=1, version=settings.APP_VERSION)
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or exc.stdout or '').strip()
             raise CommandError(detail or f'Wizard helper script failed with exit code {exc.returncode}.') from exc

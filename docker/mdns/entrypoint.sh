@@ -37,7 +37,7 @@ if [ -z "$AUTO_IP" ]; then
     fi
 
     # 3. Extract the actual IP from that interface
-    AUTO_IP=$(ip -4 addr show "$GATEWAY_IFACE" | grep -oP 'inet \K[\d.]+')
+    AUTO_IP=$(ip -4 addr show "$GATEWAY_IFACE" | awk '/inet / {split($2, address, "/"); print address[1]; exit}')
 
     if [ -z "$AUTO_IP" ]; then
         echo "[ERROR] Could not detect any LAN IP. Check physical connection."
@@ -47,46 +47,60 @@ fi
 
 echo "[INFO] Detected Host IP: $AUTO_IP"
 
-# 2. Handle the Avahi/D-Bus Stack
-if [ -S /var/run/avahi-daemon/socket ]; then
-    echo "[INFO] Found existing Avahi socket on host. Using host daemon."
-else
-    echo "[INFO] No host Avahi found. Starting internal D-Bus and Avahi..."
+# Run a private D-Bus and Avahi; host sockets are not mounted.
+pids=()
+cleanup() {
+    kill "${pids[@]}" 2>/dev/null || true
+    wait || true
+}
+trap cleanup EXIT
+trap 'exit 0' INT TERM
 
-    # Ensure D-Bus is ready
-    rm -f /var/run/dbus/pid
-    rm -f /run/dbus/dbus.pid
-    dbus-uuidgen --ensure
-    #dbus-daemon --system --fork
-    dbus-daemon --system --fork --nopidfile --print-address
-
-    # Wait for the socket to actually appear
-    until [ -S /var/run/dbus/system_bus_socket ]; do
-        echo "[INFO] Waiting for D-Bus socket..."
-        sleep 0.5
+wait_for_service() {
+    local pid=$1 service=$2
+    local deadline=$((SECONDS + 10))
+    while (( SECONDS < deadline )); do
+        kill -0 "$pid" 2>/dev/null || return 1
+        if dbus-send --system --print-reply --reply-timeout=1000 \
+            --dest=org.freedesktop.DBus / org.freedesktop.DBus.NameHasOwner \
+            "string:$service" 2>/dev/null | grep -q 'boolean true'; then
+            return 0
+        fi
+        sleep 0.2
     done
+    echo "[ERROR] Timed out waiting for $service" >&2
+    return 1
+}
 
-    # Start Avahi in the background
-    #avahi-daemon -D --no-chroot
-    echo "[INFO] Starting Avahi-daemon..."
-    avahi-daemon --no-chroot --no-proc-title
+# A killed container retains socket and PID files in its private filesystem.
+rm -f /var/run/dbus/pid /run/dbus/dbus.pid /var/run/dbus/system_bus_socket \
+      /var/run/avahi-daemon/pid /var/run/avahi-daemon/socket
+dbus-uuidgen --ensure
+dbus-daemon --system --nofork --nopidfile &
+pids+=("$!")
+wait_for_service "$!" org.freedesktop.DBus
 
-    until [ -S /var/run/avahi-daemon/socket ]; do
-        echo "[INFO] Waiting for Avahi socket..."
-        sleep 0.5
-    done
-fi
+avahi-daemon --no-chroot --no-proc-title &
+pids+=("$!")
+wait_for_service "$!" org.freedesktop.Avahi
 
-# 3. Launch Advertisements
-# We use & to background them so we can track them all
 echo "[INFO] Publishing address and services -> $AUTO_IP"
-
 avahi-publish -a -R trustpoint.local "$AUTO_IP" &
-
-avahi-publish -s 'Trustpoint Web Interface' _https._tcp 443 &
-avahi-publish -s 'Trustpoint' _trustpoint._tcp 443 &
-avahi-publish -s 'AOKI Owner Service' _aoki._tcp 443 &
+pids+=("$!")
+avahi-publish -s -H trustpoint.local 'Trustpoint Web Interface' _https._tcp 443 &
+pids+=("$!")
+avahi-publish -s -H trustpoint.local 'Trustpoint' _trustpoint._tcp 443 &
+pids+=("$!")
+avahi-publish -s -H trustpoint.local 'AOKI Owner Service' _aoki._tcp 443 &
+pids+=("$!")
 
 echo "[INFO] mDNS services published. Container is running."
-
-wait -n
+while true; do
+    for pid in "${pids[@]}"; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            echo "[ERROR] Advertising service $pid exited." >&2
+            exit 1
+        fi
+    done
+    sleep 1
+done

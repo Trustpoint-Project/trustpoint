@@ -71,8 +71,8 @@ run_auto_setup() {
     log INFO "Auto-setup marker detected, running auto-setup from environment..."
     run_as_www_data migrate
     run_as_www_data auto-setup
-    rm -f /var/lib/trustpoint/bootstrap/auto-setup.marker
-    log INFO "Auto-setup completed and marker removed"
+    run_as_www_data startup
+    log INFO "Auto-setup completed"
 }
 
 run_startup_manager() {
@@ -92,7 +92,7 @@ start_qcluster() {
     fi
 
     log INFO "Starting operational Django-Q2 qcluster"
-    run_as_www_data qcluster > "$LOG_DIR/qcluster.log" 2>&1 &
+    /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app qcluster > "$LOG_DIR/qcluster.log" 2>&1 &
     local qcluster_pid=$!
     echo "$qcluster_pid" > "$OPERATIONAL_QCLUSTER_PID_FILE"
 
@@ -112,7 +112,7 @@ start_operational_gunicorn() {
     fi
 
     log INFO "Starting operational Gunicorn on port $OPERATIONAL_PORT"
-    run_as_www_data gunicorn > "$LOG_DIR/gunicorn-operational.log" 2>&1 &
+    /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app gunicorn > "$LOG_DIR/gunicorn-operational.log" 2>&1 &
     local gunicorn_pid=$!
     echo "$gunicorn_pid" > "$OPERATIONAL_GUNICORN_PID_FILE"
 
@@ -175,23 +175,20 @@ switch_nginx_proxy() {
     fi
 }
 
-schedule_bootstrap_gunicorn_shutdown() {
-    log INFO "Scheduling bootstrap Gunicorn shutdown on port $BOOTSTRAP_PORT"
-    nohup bash -c "sleep 10; ps -eo pid=,args= | awk '/gunicorn/ && /0\\.0\\.0\\.0:${BOOTSTRAP_PORT}/ && !/awk/ {print \$1}' | xargs -r kill -TERM" >/dev/null 2>&1 &
-}
-
 wait_for_postgres
 if [ -f /var/lib/trustpoint/bootstrap/auto-setup.marker ]; then
-    # auto_setup_from_env installs and reloads TLS itself, consuming staged files.
     run_auto_setup
 else
     run_startup_manager
-    apply_operational_tls_files
 fi
+apply_operational_tls_files
 start_qcluster
 start_operational_gunicorn
 wait_for_operational_http
 switch_nginx_proxy
-schedule_bootstrap_gunicorn_shutdown
+touch /run/trustpoint-operational.ready
+if [ "$OPERATIONAL_ENV_FILE" = "$TRUSTPOINT_OPERATIONAL_ENV_FILE" ]; then
+    run_as_www_data finalize-setup
+fi
 
 log INFO "Trustpoint runtime switched to operational mode without container restart"

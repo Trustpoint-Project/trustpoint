@@ -64,10 +64,12 @@ RUN softhsm_lib="$(ldconfig -p | awk '/libsofthsm2\.so/ {print $NF; exit}')" && 
     if [ -n "${proxy_lib}" ]; then ln -sf "${proxy_lib}" /usr/lib/libpkcs11-proxy.so; fi
 
 # Install PostgreSQL 18 client.
-RUN curl -fSsL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ trixie-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends postgresql-client-18 && \
+RUN curl -fSsL --retry 5 --retry-all-errors --connect-timeout 10 --max-time 60 \
+        https://apt.postgresql.org/pub/repos/apt/ACCC4CF8.asc \
+        -o /usr/share/keyrings/postgresql-archive-keyring.asc && \
+    echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.asc] https://apt.postgresql.org/pub/repos/apt/ trixie-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get -o Acquire::Retries=3 update && \
+    apt-get -o Acquire::Retries=3 install -y --no-install-recommends postgresql-client-18 && \
     rm -rf /var/lib/apt/lists/*
 
 # Set locale settings.
@@ -150,8 +152,7 @@ RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
 RUN rm -f /etc/nginx/sites-enabled/*
 COPY ./docker/trustpoint/nginx/trustpoint-nginx-https.conf /etc/nginx/sites-available/trustpoint
 
-RUN chmod +x /etc/trustpoint/wizard/transition/*.sh \
-             /etc/trustpoint/wizard/configure_nginx.sh \
+RUN chmod +x /etc/trustpoint/wizard/configure_nginx.sh \
              /etc/trustpoint/wizard/install_pkcs11_assets.sh \
              /etc/trustpoint/wizard/switch_to_operational.sh \
              /etc/trustpoint/wizard/update_tls.sh \

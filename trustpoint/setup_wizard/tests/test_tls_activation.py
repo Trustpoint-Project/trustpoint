@@ -9,7 +9,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 
-from management.management.commands.apply_bootstrap_config import OperationalBootstrapApplier
+from setup_wizard.management.commands.apply_bootstrap_config import OperationalBootstrapApplier
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import tls_credential
 from setup_wizard.tls_credential import TlsServerCredentialGenerator

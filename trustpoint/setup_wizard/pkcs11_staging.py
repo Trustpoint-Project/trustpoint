@@ -5,10 +5,11 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
-WIZARD_PKCS11_STAGING_ROOT = Path(tempfile.gettempdir()) / 'trustpoint-wizard' / 'pkcs11'
+from setup_wizard.staging import WIZARD_STAGING_ROOT
+
+WIZARD_PKCS11_STAGING_ROOT = WIZARD_STAGING_ROOT / 'pkcs11'
 
 
 def wizard_pkcs11_staging_root() -> Path:

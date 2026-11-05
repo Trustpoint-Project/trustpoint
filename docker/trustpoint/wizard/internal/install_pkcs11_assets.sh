@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eu
 
-STAGING_ROOT=/tmp/trustpoint-wizard/pkcs11
+STAGING_ROOT="$(dirname "${TRUSTPOINT_BOOTSTRAP_DB_PATH:-/var/lib/trustpoint/bootstrap/bootstrap.sqlite3}")/staging/pkcs11"
 HSM_ROOT="${TRUSTPOINT_HSM_ROOT:-/var/lib/trustpoint/hsm}"
 HSM_CONFIG_DIR="${TRUSTPOINT_HSM_CONFIG_DIR:-${HSM_ROOT}/config}"
 HSM_LIB_DIR="${TRUSTPOINT_HSM_LIB_DIR:-${HSM_ROOT}/lib}"

@@ -26,9 +26,7 @@ log INFO "STARTING NGINX RESTORE"
 log INFO "DEBUG: Checking if nginx is running"
 if pgrep nginx >/dev/null; then
     log INFO "DEBUG: Nginx is running, updating TLS"
-    if [ -f "/etc/trustpoint/wizard/transition/update_tls.sh" ]; then
-        /etc/trustpoint/wizard/transition/update_tls.sh
-    fi
+    /etc/trustpoint/wizard/update_tls.sh
     log INFO "Reloading Nginx"
     nginx -s reload
 else

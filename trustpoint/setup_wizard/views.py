@@ -7,16 +7,11 @@ from __future__ import annotations
 
 import contextlib
 import enum
-import gzip
 import ipaddress
-import json
 import logging
 import os
-import shutil
 import subprocess
-import sys
 import uuid
-import zipfile
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -54,8 +49,7 @@ from appsecrets.service import (
 )
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
-from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
-from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
+from crypto.adapters.pkcs11.config import Pkcs11TokenSelector
 from crypto.adapters.protected_import.bindings import ProtectedImportManagedKeyBinding
 from crypto.adapters.software.backend import SoftwareBackend
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
@@ -70,7 +64,6 @@ from crypto.models import (
     CryptoProviderPkcs11ConfigModel,
     Pkcs11AuthSource,
 )
-from management.backup_artifacts import BackupManifestError, backup_manifest_path, verify_backup_manifest
 from management.nginx_paths import (
     NGINX_CERT_CHAIN_PATH,
     NGINX_CERT_PATH,
@@ -79,6 +72,11 @@ from management.nginx_paths import (
 from management.security_change_audit import provider_configuration_changes
 from management.tls_files import write_tls_pem_files
 from setup_wizard.backend_configuration import BackendConfigurationMixin
+from setup_wizard.backup_restore import (
+    cleanup_staged_restore_archive,
+    restore_operational_database_from_backup,
+    stage_restore_backup_archive,
+)
 from setup_wizard.operational_attach import (
     CompatibilityCheck,
     CompatibilitySeverity,
@@ -105,11 +103,20 @@ from setup_wizard.pkcs11_local_dev import (
     local_dev_pkcs11_handoff_available,
     local_dev_pkcs11_module_path,
 )
+from setup_wizard.pkcs11_probe import (
+    apply_pkcs11_probe_fallbacks,
+    build_pkcs11_probe_profile,
+    pkcs11_path_exists,
+    probe_staged_pkcs11_config_isolated,
+    validate_pkcs11_probe_inputs,
+    validate_staged_pkcs11_app_secret_protection_if_required,
+)
 from setup_wizard.pkcs11_staging import (
     cleanup_wizard_pkcs11_staged_path,
     existing_wizard_pkcs11_staged_file,
     wizard_pkcs11_staging_root,
 )
+from setup_wizard.runtime import execute_shell_script
 from setup_wizard.tls_activation import activate_staged_tls_credential
 from setup_wizard.tls_credential import (
     TlsServerCredentialFileParser,
@@ -140,6 +147,7 @@ if TYPE_CHECKING:
     from django.utils.functional import Promise
     from trustpoint_core.serializer import CertificateSerializer
 
+    from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
     from crypto.application.provider_backend import ManagedKeyBackendAdapter
     from pki.models import CredentialModel
 
@@ -152,374 +160,6 @@ INSTALL_PKCS11_ASSETS = STATE_FILE_DIR / Path('install_pkcs11_assets.sh')
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-provider.cfg'
-MAX_RESTORE_OUTPUT_LENGTH = 4000
-MAX_PKCS11_PROBE_OUTPUT_LENGTH = 4000
-GPG_EXECUTABLE = '/usr/bin/gpg'
-
-
-def restore_backup_staging_root() -> Path:
-    """Return the bootstrap-private directory for staged restore archives."""
-    bootstrap_db_path = Path(str(settings.DATABASES['default']['NAME']))
-    return bootstrap_db_path.parent / 'restore'
-
-
-def staged_restore_archive(config_model: SetupWizardConfigModel) -> Path | None:
-    """Return the staged restore archive path when it still exists."""
-    configured_path = (config_model.restore_backup_archive_path or '').strip()
-    if not configured_path:
-        return None
-
-    try:
-        archive_path = Path(configured_path).resolve(strict=False)
-    except (OSError, TypeError, ValueError):
-        return None
-
-    staging_root = restore_backup_staging_root().resolve(strict=False)
-    if not archive_path.is_relative_to(staging_root) or not archive_path.is_file():
-        return None
-    return archive_path
-
-
-def cleanup_staged_restore_archive(config_model: SetupWizardConfigModel) -> None:
-    """Remove an obsolete staged restore archive."""
-    archive_path = staged_restore_archive(config_model)
-    if archive_path is None:
-        return
-    with contextlib.suppress(OSError):
-        archive_path.unlink()
-
-
-def stage_restore_backup_archive(uploaded_archive: Any) -> str:
-    """Persist an uploaded restore archive in bootstrap-private storage."""
-    original_name = str(getattr(uploaded_archive, 'name', '')).lower()
-    suffixes = ('.dump.gz.gpg', '.dump.gpg', '.zip.gpg', '.dump.gz', '.dump', '.zip', '.gpg')
-    suffix = next((value for value in suffixes if original_name.endswith(value)), '.dump')
-    staging_root = restore_backup_staging_root()
-    staging_root.mkdir(parents=True, exist_ok=True)
-    staging_root.chmod(0o700)
-    archive_path = staging_root / f'restore-{uuid.uuid4().hex}{suffix}'
-    with archive_path.open('wb') as destination:
-        for chunk in uploaded_archive.chunks():
-            destination.write(chunk)
-    archive_path.chmod(0o600)
-    return str(archive_path)
-
-
-def _looks_like_gzip(path: Path) -> bool:
-    """Return whether the file starts with the gzip magic bytes."""
-    with path.open('rb') as file:
-        return file.read(2) == b'\x1f\x8b'
-
-
-def _looks_like_gpg(path: Path) -> bool:
-    """Return whether the file looks like an OpenPGP encrypted payload."""
-    with path.open('rb') as file:
-        prefix = file.read(64)
-    return prefix.startswith(b'-----BEGIN PGP MESSAGE-----') or prefix[:1] in {b'\x85', b'\x8c', b'\x8d'}
-
-
-def _open_restore_archive(archive_path: Path) -> Any:
-    """Open a staged restore archive, transparently decompressing gzip files."""
-    if _looks_like_gzip(archive_path):
-        return gzip.open(archive_path, 'rb')
-    return archive_path.open('rb')
-
-
-def _restore_archive_is_custom_pg_dump(archive_path: Path) -> bool:
-    """Return whether the staged archive is a PostgreSQL custom-format dump."""
-    with _open_restore_archive(archive_path) as archive_file:
-        return bool(archive_file.read(5) == b'PGDMP')
-
-
-def _materialize_restore_archive(archive_path: Path) -> Path:
-    """Return an uncompressed file that restore subprocesses can read by file descriptor."""
-    if not _looks_like_gzip(archive_path):
-        return archive_path
-
-    materialized_path = restore_backup_staging_root() / f'pgrestore-{uuid.uuid4().hex}.dump'
-    try:
-        with gzip.open(archive_path, 'rb') as source, materialized_path.open('wb') as destination:
-            shutil.copyfileobj(source, destination)
-        materialized_path.chmod(0o600)
-    except OSError:
-        with contextlib.suppress(OSError):
-            materialized_path.unlink()
-        raise
-    return materialized_path
-
-
-def _format_restore_process_output(completed_process: subprocess.CompletedProcess[bytes]) -> str:
-    """Return bounded restore command output for the wizard."""
-    stderr = completed_process.stderr.decode('utf-8', errors='replace').strip() if completed_process.stderr else ''
-    stdout = completed_process.stdout.decode('utf-8', errors='replace').strip() if completed_process.stdout else ''
-    output = stderr or stdout
-    if len(output) > MAX_RESTORE_OUTPUT_LENGTH:
-        return output[-MAX_RESTORE_OUTPUT_LENGTH:]
-    return output
-
-
-def _restore_failed_on_transaction_timeout(completed_process: subprocess.CompletedProcess[bytes]) -> bool:
-    """Return whether pg_restore failed on a PostgreSQL transaction_timeout SET statement."""
-    output = _format_restore_process_output(completed_process)
-    return 'unrecognized configuration parameter "transaction_timeout"' in output
-
-
-def _strip_transaction_timeout_from_plain_restore(sql_payload: bytes) -> bytes:
-    """Remove pg_dump's PostgreSQL-17 transaction_timeout SET for older restore targets."""
-    filtered_lines = [
-        line for line in sql_payload.splitlines(keepends=True) if line.strip() != b'SET transaction_timeout = 0;'
-    ]
-    return b''.join(filtered_lines)
-
-
-def _retry_custom_restore_without_transaction_timeout(
-    *,
-    materialized_restore_path: Path,
-    common_args: list[str],
-    env: dict[str, str],
-) -> subprocess.CompletedProcess[bytes]:
-    """Retry a custom dump restore after filtering unsupported transaction_timeout setup."""
-    restore_options = ['--clean', '--if-exists', '--no-owner', '--no-privileges']
-    dump_to_sql_command = [
-        'pg_restore',
-        '--format=custom',
-        *restore_options,
-        '--file=-',
-        str(materialized_restore_path),
-    ]
-    dump_to_sql = subprocess.run(  # noqa: S603
-        dump_to_sql_command,
-        env=env,
-        capture_output=True,
-        check=False,
-    )
-    if dump_to_sql.returncode != 0:
-        return dump_to_sql
-
-    filtered_sql = _strip_transaction_timeout_from_plain_restore(dump_to_sql.stdout)
-    psql_command = ['psql', '--set', 'ON_ERROR_STOP=1', '--single-transaction', *common_args]
-    return subprocess.run(  # noqa: S603
-        psql_command,
-        input=filtered_sql,
-        env=env,
-        capture_output=True,
-        check=False,
-    )
-
-
-def _decrypt_restore_archive_if_needed(archive_path: Path, backup_password: str) -> Path | None:
-    """Decrypt a GPG-encrypted restore archive and return the temporary decrypted file path."""
-    if not backup_password:
-        return None
-    if not _looks_like_gpg(archive_path):
-        return None
-
-    archive_name = archive_path.name.lower()
-    if archive_name.endswith('.zip.gpg'):
-        decrypted_suffix = '.zip'
-    elif archive_name.endswith('.gz.gpg'):
-        decrypted_suffix = '.dump.gz'
-    else:
-        decrypted_suffix = '.dump'
-    decrypted_path = restore_backup_staging_root() / f'decrypted-{uuid.uuid4().hex}{decrypted_suffix}'
-    completed_process = subprocess.run(  # noqa: S603
-        [
-            GPG_EXECUTABLE,
-            '--batch',
-            '--yes',
-            '--pinentry-mode',
-            'loopback',
-            '--passphrase-fd',
-            '0',
-            '--output',
-            str(decrypted_path),
-            '--decrypt',
-            str(archive_path),
-        ],
-        input=backup_password.encode('utf-8'),
-        capture_output=True,
-        check=False,
-    )
-    if completed_process.returncode == 0:
-        decrypted_path.chmod(0o600)
-        return decrypted_path
-
-    output = _format_restore_process_output(completed_process)
-    with contextlib.suppress(OSError):
-        decrypted_path.unlink()
-    msg = f'Backup archive decryption failed: {output or "gpg failed without output"}'
-    raise DjangoValidationError(msg)
-
-
-def _restore_payload_suffix(filename: str) -> str:
-    """Return a safe suffix for an extracted PostgreSQL backup payload."""
-    normalized_name = filename.lower()
-    if normalized_name.endswith('.dump.gz'):
-        return '.dump.gz'
-    if normalized_name.endswith('.dump'):
-        return '.dump'
-    return '.dump'
-
-
-def _backup_payload_infos(archive: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
-    """Return PostgreSQL dump payload members from a Trustpoint backup bundle."""
-    payload_infos: list[zipfile.ZipInfo] = []
-    for member in archive.infolist():
-        if member.is_dir():
-            continue
-        member_name = Path(member.filename).name.lower()
-        if member_name.endswith('.manifest.json'):
-            continue
-        if member_name.endswith(('.dump', '.dump.gz')):
-            payload_infos.append(member)
-    return payload_infos
-
-
-def _extract_restore_bundle_if_needed(archive_path: Path) -> Path | None:
-    """Extract a Trustpoint ZIP backup bundle and verify its manifest sidecar."""
-    if not zipfile.is_zipfile(archive_path):
-        return None
-
-    payload_path: Path | None = None
-    manifest_path: Path | None = None
-    try:
-        with zipfile.ZipFile(archive_path) as backup_bundle:
-            payload_infos = _backup_payload_infos(backup_bundle)
-            if len(payload_infos) != 1:
-                msg = 'Backup bundle must contain exactly one .dump or .dump.gz payload.'
-                raise DjangoValidationError(msg)
-
-            payload_info = payload_infos[0]
-            payload_name = Path(payload_info.filename).name
-            manifest_name = f'{payload_name}.manifest.json'
-            manifest_info = next(
-                (
-                    member
-                    for member in backup_bundle.infolist()
-                    if not member.is_dir() and Path(member.filename).name == manifest_name
-                ),
-                None,
-            )
-            if manifest_info is None:
-                msg = f'Backup bundle is missing matching manifest sidecar {manifest_name!r}.'
-                raise DjangoValidationError(msg)
-
-            staging_root = restore_backup_staging_root()
-            staging_root.mkdir(parents=True, exist_ok=True)
-            payload_path = staging_root / f'extracted-{uuid.uuid4().hex}{_restore_payload_suffix(payload_name)}'
-            manifest_path = backup_manifest_path(payload_path)
-
-            with backup_bundle.open(payload_info) as source, payload_path.open('wb') as destination:
-                shutil.copyfileobj(source, destination)
-            with backup_bundle.open(manifest_info) as source, manifest_path.open('wb') as destination:
-                shutil.copyfileobj(source, destination)
-
-            payload_path.chmod(0o600)
-            manifest_path.chmod(0o600)
-            verify_backup_manifest(payload_path)
-            return payload_path
-    except (BackupManifestError, OSError, zipfile.BadZipFile) as exc:
-        for temporary_path in (manifest_path, payload_path):
-            if temporary_path is not None:
-                with contextlib.suppress(OSError):
-                    temporary_path.unlink()
-        msg = f'Backup bundle is invalid: {exc}'
-        raise DjangoValidationError(msg) from exc
-
-
-def restore_operational_database_from_backup(
-    config_model: SetupWizardConfigModel,
-    *,
-    backup_password: str = '',
-) -> None:
-    """Restore the staged backup archive into the configured operational PostgreSQL database."""
-    archive_path = staged_restore_archive(config_model)
-    if archive_path is None:
-        msg = 'No staged restore archive is available.'
-        raise DjangoValidationError(msg)
-    if _looks_like_gpg(archive_path) and not backup_password:
-        msg_0 = 'This backup archive is encrypted. Enter the backup password.'
-        raise DjangoValidationError(msg_0)
-
-    decrypted_path: Path | None = None
-    extracted_path: Path | None = None
-    materialized_restore_path: Path | None = None
-    try:
-        decrypted_path = _decrypt_restore_archive_if_needed(archive_path, backup_password)
-        extracted_path = _extract_restore_bundle_if_needed(decrypted_path or archive_path)
-        restore_source_path = extracted_path or decrypted_path or archive_path
-        materialized_restore_path = _materialize_restore_archive(restore_source_path)
-
-        env = os.environ.copy()
-        env['PGPASSWORD'] = config_model.operational_db_password
-        common_args = [
-            '--host',
-            config_model.operational_db_host,
-            '--port',
-            str(config_model.operational_db_port),
-            '--username',
-            config_model.operational_db_user,
-            '--dbname',
-            config_model.operational_db_name,
-        ]
-        if _restore_archive_is_custom_pg_dump(materialized_restore_path):
-            command = [
-                'pg_restore',
-                '--format=custom',
-                '--exit-on-error',
-                '--single-transaction',
-                '--clean',
-                '--if-exists',
-                '--no-owner',
-                '--no-privileges',
-                *common_args,
-                str(materialized_restore_path),
-            ]
-            completed_process = subprocess.run(  # noqa: S603
-                command,
-                env=env,
-                capture_output=True,
-                check=False,
-            )
-            if completed_process.returncode != 0 and _restore_failed_on_transaction_timeout(completed_process):
-                completed_process = _retry_custom_restore_without_transaction_timeout(
-                    materialized_restore_path=materialized_restore_path,
-                    common_args=common_args,
-                    env=env,
-                )
-        else:
-            command = ['psql', '--set', 'ON_ERROR_STOP=1', '--single-transaction', *common_args]
-            with materialized_restore_path.open('rb') as archive_file:
-                completed_process = subprocess.run(  # noqa: S603
-                    command,
-                    stdin=archive_file,
-                    env=env,
-                    capture_output=True,
-                    check=False,
-                )
-    except FileNotFoundError as exception:
-        error_message = f'Restore tool not available in this container: {exception.filename}.'
-        raise DjangoValidationError(error_message) from exception
-    finally:
-        temporary_restore_paths = {archive_path, decrypted_path, extracted_path}
-        if materialized_restore_path is not None and materialized_restore_path not in temporary_restore_paths:
-            with contextlib.suppress(OSError):
-                materialized_restore_path.unlink()
-        if extracted_path is not None:
-            with contextlib.suppress(OSError):
-                backup_manifest_path(extracted_path).unlink()
-            with contextlib.suppress(OSError):
-                extracted_path.unlink()
-        if decrypted_path is not None:
-            with contextlib.suppress(OSError):
-                decrypted_path.unlink()
-
-    if completed_process.returncode == 0:
-        return
-
-    output = _format_restore_process_output(completed_process)
-    msg = f'Database restore failed: {output or "restore command failed without output"}'
-    raise DjangoValidationError(msg)
 
 
 def record_bootstrap_progress(
@@ -891,352 +531,6 @@ def run_fresh_install_staged_pkcs11_connection_test(
     )
 
 
-def apply_pkcs11_probe_fallbacks(config_model: SetupWizardConfigModel) -> tuple[str, str, list[str]]:
-    """Apply runtime fallback PKCS#11 paths before probing a staged backend."""
-    module_path = (config_model.fresh_install_pkcs11_module_path or '').strip()
-    pin_file = (config_model.fresh_install_pkcs11_auth_source_ref or '').strip()
-    config_file = (config_model.fresh_install_pkcs11_config_path or '').strip()
-    config_env_var = (config_model.fresh_install_pkcs11_config_env_var or '').strip()
-    fallback_update_fields: list[str] = []
-
-    if (not module_path or not _path_exists(Path(module_path))) and _path_exists(FINAL_WIZARD_PKCS11_MODULE_PATH):
-        module_path = str(FINAL_WIZARD_PKCS11_MODULE_PATH)
-        config_model.fresh_install_pkcs11_module_path = module_path
-        fallback_update_fields.append('fresh_install_pkcs11_module_path')
-
-    if (not pin_file or not _path_exists(Path(pin_file))) and _path_exists(FINAL_WIZARD_PKCS11_PIN_PATH):
-        pin_file = str(FINAL_WIZARD_PKCS11_PIN_PATH)
-        config_model.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
-        config_model.fresh_install_pkcs11_auth_source_ref = pin_file
-        fallback_update_fields.extend(['fresh_install_pkcs11_auth_source', 'fresh_install_pkcs11_auth_source_ref'])
-
-    if (not config_file or not _path_exists(Path(config_file))) and _path_exists(FINAL_WIZARD_PKCS11_CONFIG_PATH):
-        config_file = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
-        config_model.fresh_install_pkcs11_config_path = config_file
-        fallback_update_fields.append('fresh_install_pkcs11_config_path')
-    elif (not config_file or not _path_exists(Path(config_file))) and local_dev_pkcs11_config_available():
-        config_file = str(local_dev_pkcs11_config_path())
-        config_model.fresh_install_pkcs11_config_path = config_file
-        fallback_update_fields.append('fresh_install_pkcs11_config_path')
-        if not config_env_var:
-            config_env_var = local_dev_pkcs11_config_env_var()
-            config_model.fresh_install_pkcs11_config_env_var = config_env_var
-            fallback_update_fields.append('fresh_install_pkcs11_config_env_var')
-    elif config_file and not config_env_var and local_dev_pkcs11_config_available():
-        local_dev_config = str(local_dev_pkcs11_config_path())
-        if config_file == local_dev_config:
-            config_env_var = local_dev_pkcs11_config_env_var()
-            config_model.fresh_install_pkcs11_config_env_var = config_env_var
-            fallback_update_fields.append('fresh_install_pkcs11_config_env_var')
-
-    if config_file and config_env_var:
-        os.environ[config_env_var] = config_file
-
-    return module_path, pin_file, fallback_update_fields
-
-
-def validate_pkcs11_probe_inputs(
-    *,
-    module_path: str,
-    pin_file: str,
-    token_label: str | None,
-    slot_id: int | None,
-) -> None:
-    """Validate the minimum PKCS#11 settings needed for a probe."""
-    if not module_path:
-        err_msg = 'No PKCS#11 module path is configured for the setup wizard.'
-        raise DjangoValidationError(err_msg)
-
-    if not pin_file:
-        err_msg = 'No PKCS#11 user PIN file is configured for the setup wizard.'
-        raise DjangoValidationError(err_msg)
-
-    if token_label is None and slot_id is None:
-        err_msg = 'No PKCS#11 token selector is configured. Enter a token label or slot ID.'
-        raise DjangoValidationError(err_msg)
-
-
-def build_pkcs11_probe_profile(
-    *,
-    profile_name: str,
-    module_path: str,
-    pin_file: str,
-    token_selector: Pkcs11TokenSelector,
-) -> Pkcs11ProviderProfile:
-    """Build a PKCS#11 profile for a staged wizard probe."""
-    return Pkcs11ProviderProfile(
-        name=profile_name,
-        module_path=module_path,
-        token=token_selector,
-        user_pin_file=pin_file,
-        max_sessions=2,
-        borrow_timeout_seconds=5.0,
-        rw_sessions=True,
-    )
-
-
-def refresh_pkcs11_probe_capabilities(
-    profile: Pkcs11ProviderProfile,
-) -> Any:
-    """Authenticate and probe PKCS#11 capabilities for the given staged profile."""
-    backend = Pkcs11Backend(profile=profile)
-    try:
-        backend.verify_authentication()
-        capabilities = backend.probe_capabilities()
-    except Exception as exception:
-        backend.log_runtime_diagnostics(logging.WARNING)
-        error_detail = str(exception).strip() or type(exception).__name__
-        err_msg = f'PKCS#11 probe failed: {error_detail}. Diagnostics: {backend.diagnostic_summary()}'
-        raise DjangoValidationError(err_msg) from exception
-    else:
-        return capabilities
-    finally:
-        backend.close()
-
-
-def validate_pkcs11_app_secret_protection_support(profile: Pkcs11ProviderProfile) -> None:
-    """Verify the staged PKCS#11 backend supports Trustpoint app-secret DEK protection."""
-    if profile.user_pin_file:
-        auth_source = AppSecretPkcs11AuthSource.FILE
-        auth_source_ref = profile.user_pin_file
-    elif profile.user_pin_env_var:
-        auth_source = AppSecretPkcs11AuthSource.ENV
-        auth_source_ref = profile.user_pin_env_var
-    else:
-        err_msg = 'App-secret PKCS#11 self-test requires a PIN file or PIN environment variable.'
-        raise DjangoValidationError(err_msg)
-
-    backend = AppSecretBackendModel(backend_kind=AppSecretBackendKind.PKCS11)
-    app_secret_config = AppSecretPkcs11ConfigModel(
-        backend=backend,
-        module_path=profile.module_path,
-        token_label=profile.token.token_label or '',
-        token_serial=profile.token.token_serial or '',
-        slot_id=profile.token.slot_id,
-        auth_source=auth_source,
-        auth_source_ref=auth_source_ref,
-    )
-    Pkcs11AppSecretService(app_secret_config).verify_temporary_dek_protection_support()
-
-
-def build_staged_pkcs11_probe_profile(
-    config_model: SetupWizardConfigModel,
-    *,
-    profile_name: str,
-) -> tuple[Pkcs11ProviderProfile, list[str]]:
-    """Build a PKCS#11 probe profile from staged wizard settings."""
-    module_path, pin_file, update_fields = apply_pkcs11_probe_fallbacks(config_model)
-    slot_id = config_model.fresh_install_pkcs11_slot_id
-    token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
-    token_serial = (config_model.fresh_install_pkcs11_token_serial or '').strip() or None
-
-    validate_pkcs11_probe_inputs(
-        module_path=module_path,
-        pin_file=pin_file,
-        token_label=token_label,
-        slot_id=slot_id,
-    )
-    return (
-        build_pkcs11_probe_profile(
-            profile_name=profile_name,
-            module_path=module_path,
-            pin_file=pin_file,
-            token_selector=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
-        ),
-        update_fields,
-    )
-
-
-def persist_pkcs11_probe_capabilities(
-    config_model: SetupWizardConfigModel,
-    capabilities: Any,
-    update_fields: list[str],
-) -> None:
-    """Persist selector details discovered during a staged PKCS#11 probe."""
-    if capabilities.token.label and capabilities.token.label != config_model.fresh_install_pkcs11_token_label:
-        config_model.fresh_install_pkcs11_token_label = capabilities.token.label
-        update_fields.append('fresh_install_pkcs11_token_label')
-
-    if capabilities.token.serial and capabilities.token.serial != config_model.fresh_install_pkcs11_token_serial:
-        config_model.fresh_install_pkcs11_token_serial = capabilities.token.serial
-        update_fields.append('fresh_install_pkcs11_token_serial')
-
-    if capabilities.token.slot_id != config_model.fresh_install_pkcs11_slot_id:
-        config_model.fresh_install_pkcs11_slot_id = capabilities.token.slot_id
-        update_fields.append('fresh_install_pkcs11_slot_id')
-
-    if update_fields:
-        config_model.save(update_fields=update_fields)
-
-
-def probe_staged_pkcs11_config(config_model: SetupWizardConfigModel, *, profile_name: str) -> Any:
-    """Authenticate against the staged PKCS#11 backend and persist discovered selector details."""
-    profile, update_fields = build_staged_pkcs11_probe_profile(config_model, profile_name=profile_name)
-    capabilities = refresh_pkcs11_probe_capabilities(profile)
-    persist_pkcs11_probe_capabilities(config_model, capabilities, update_fields)
-    return capabilities
-
-
-def validate_staged_pkcs11_app_secret_protection(
-    config_model: SetupWizardConfigModel,
-    *,
-    profile_name: str,
-) -> None:
-    """Verify staged PKCS#11 config can protect Trustpoint application secrets."""
-    profile, _update_fields = build_staged_pkcs11_probe_profile(config_model, profile_name=profile_name)
-    try:
-        validate_pkcs11_app_secret_protection_support(profile)
-    except Exception as exception:
-        error_detail = str(exception).strip() or type(exception).__name__
-        err_msg = f'PKCS#11 app-secret protection self-test failed: {error_detail}'
-        raise DjangoValidationError(err_msg) from exception
-
-
-def _format_pkcs11_probe_process_output(completed_process: subprocess.CompletedProcess[str]) -> str:
-    """Return bounded stdout/stderr from an isolated PKCS#11 probe process."""
-    output = '\n'.join(
-        part.strip() for part in (completed_process.stdout, completed_process.stderr) if part and part.strip()
-    )
-    if len(output) > MAX_PKCS11_PROBE_OUTPUT_LENGTH:
-        return output[-MAX_PKCS11_PROBE_OUTPUT_LENGTH:]
-    return output
-
-
-def probe_staged_pkcs11_config_isolated(
-    config_model: SetupWizardConfigModel,
-    *,
-    profile_name: str,
-) -> Pkcs11Capabilities:
-    """Run the staged PKCS#11 probe in a subprocess so native crashes cannot kill the web worker."""
-    command = [
-        sys.executable,
-        str(settings.BASE_DIR / 'manage.py'),
-        'probe_setup_wizard_pkcs11',
-        '--profile-name',
-        profile_name,
-    ]
-
-    completed_process = subprocess.run(  # noqa: S603
-        command,
-        cwd=str(settings.REPO_ROOT),
-        env=os.environ.copy(),
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if completed_process.returncode != 0:
-        failure = (
-            f'signal {-completed_process.returncode}'
-            if completed_process.returncode < 0
-            else f'exit code {completed_process.returncode}'
-        )
-        output = _format_pkcs11_probe_process_output(completed_process)
-        logger.error(
-            'Isolated PKCS#11 setup-wizard probe failed with %s. Captured output: %s',
-            failure,
-            output or 'no process output',
-        )
-        if completed_process.returncode < 0:
-            err_msg = (
-                f'PKCS#11 probe process crashed with {failure}. '
-                'The PKCS#11 provider library terminated the probe process.'
-            )
-        elif output:
-            err_msg = f'PKCS#11 probe process failed with {failure}: {output}'
-        else:
-            err_msg = f'PKCS#11 probe process failed with {failure}. Check the Trustpoint log for details.'
-        raise DjangoValidationError(err_msg)
-
-    output_lines = [line for line in completed_process.stdout.splitlines() if line.strip()]
-    if not output_lines:
-        err_msg = 'PKCS#11 probe process completed without returning capabilities.'
-        raise DjangoValidationError(err_msg)
-
-    try:
-        capabilities = Pkcs11Capabilities.from_json_dict(json.loads(output_lines[-1]))
-    except (json.JSONDecodeError, TypeError, KeyError, ValueError) as exception:
-        output = _format_pkcs11_probe_process_output(completed_process)
-        logger.exception(
-            'Isolated PKCS#11 setup-wizard probe returned invalid capabilities. Captured output: %s',
-            output or 'no process output',
-        )
-        err_msg = 'PKCS#11 probe process returned invalid capabilities. Check the Trustpoint log for details.'
-        raise DjangoValidationError(err_msg) from exception
-
-    config_model.refresh_from_db()
-    return capabilities
-
-
-def validate_staged_pkcs11_app_secret_protection_isolated(
-    config_model: SetupWizardConfigModel,
-    *,
-    profile_name: str,
-) -> None:
-    """Run the staged PKCS#11 app-secret protection self-test in an isolated subprocess."""
-    completed_process = subprocess.run(  # noqa: S603
-        [
-            sys.executable,
-            str(settings.BASE_DIR / 'manage.py'),
-            'test_setup_wizard_pkcs11_app_secret',
-            '--profile-name',
-            profile_name,
-        ],
-        cwd=str(settings.REPO_ROOT),
-        env=os.environ.copy(),
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if completed_process.returncode == 0:
-        config_model.refresh_from_db()
-        return
-
-    failure = (
-        f'signal {-completed_process.returncode}'
-        if completed_process.returncode < 0
-        else f'exit code {completed_process.returncode}'
-    )
-    output = _format_pkcs11_probe_process_output(completed_process)
-    logger.error(
-        'Isolated PKCS#11 app-secret self-test failed with %s. Captured output: %s',
-        failure,
-        output or 'no process output',
-    )
-    if completed_process.returncode < 0:
-        err_msg = (
-            f'PKCS#11 app-secret self-test process crashed with {failure}. '
-            'The PKCS#11 provider library terminated the self-test process.'
-        )
-    elif output:
-        err_msg = f'PKCS#11 app-secret self-test process failed with {failure}: {output}'
-    else:
-        err_msg = f'PKCS#11 app-secret self-test process failed with {failure}. Check the Trustpoint log for details.'
-    raise DjangoValidationError(err_msg)
-
-
-def validate_staged_pkcs11_app_secret_protection_if_required(
-    config_model: SetupWizardConfigModel,
-    *,
-    profile_name: str,
-) -> None:
-    """Run the isolated app-secret self-test when the staged policy requires it."""
-    if config_model.fresh_install_pkcs11_enforce_app_secret_protection:
-        validate_staged_pkcs11_app_secret_protection_isolated(config_model, profile_name=profile_name)
-
-
-def _path_exists(path: Path) -> bool:
-    """Return whether a setup-wizard path exists without leaking permission errors."""
-    try:
-        return path.exists()
-    except OSError:
-        return False
-
-
-def _save_untyped_model(instance: Any) -> None:
-    """Save a Django model whose save method is not typed for mypy."""
-    instance.save()
-
-
 class TrustpointWizardError(Exception):
     """Custom exception for Trustpoint wizard-related issues."""
 
@@ -1256,37 +550,6 @@ class TrustpointTlsServerCredentialError(Exception):
                            to 'Trustpoint TLS Server Credential error occurred.'.
         """
         super().__init__(message)
-
-
-def execute_shell_script(script: Path, *args: str) -> None:
-    """Execute a shell script with optional arguments.
-
-    Args:
-        script (Path): The path to the shell script to execute.
-        *args (str): Additional arguments to pass to the script.
-
-    Raises:
-        FileNotFoundError: If the script does not exist.
-        ValueError: If the script path is not a valid file.
-        subprocess.CalledProcessError: If the script fails to execute.
-    """
-    script_path = Path(script).resolve()
-
-    if not script_path.exists():
-        err_msg = f'Script not found: {script_path}'
-        raise FileNotFoundError(err_msg)
-    if not script_path.is_file():
-        err_msg = f'The script path {script_path} is not a valid file.'
-        raise ValueError(err_msg)
-
-    command = ['sudo', str(script_path), *list(args)]
-
-    # This method is executing all paths it gets.
-    # The security is actually implemented using a sudoers file within the linux system -> noqa: S603.
-    result = subprocess.run(command, capture_output=True, text=True, check=True)  # noqa: S603
-
-    if result.returncode != 0:
-        raise subprocess.CalledProcessError(result.returncode, str(script_path))
 
 
 # Index Views ---------------------------------------------------------------------------------------------------------
@@ -2193,7 +1456,7 @@ class FreshInstallSummaryView(BackendConfigurationMixin, FreshInstallModelFormBa
             staged_pin=staged_pin,
             configured_module_path=configured_module_path,
         )
-        uses_existing_installed_pin = staged_pin is None and _path_exists(FINAL_WIZARD_PKCS11_PIN_PATH)
+        uses_existing_installed_pin = staged_pin is None and pkcs11_path_exists(FINAL_WIZARD_PKCS11_PIN_PATH)
 
         cls._validate_staged_pkcs11_assets(
             staged_module=staged_module,
@@ -2232,7 +1495,7 @@ class FreshInstallSummaryView(BackendConfigurationMixin, FreshInstallModelFormBa
             (config_model.fresh_install_pkcs11_module_path or '').strip() or str(FINAL_WIZARD_PKCS11_MODULE_PATH)
         )
         fallback_module_path = Path(settings.HSM_DEFAULT_PKCS11_MODULE_PATH)
-        if not _path_exists(module_path) and _path_exists(fallback_module_path):
+        if not pkcs11_path_exists(module_path) and pkcs11_path_exists(fallback_module_path):
             module_path = fallback_module_path
 
         token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
@@ -2241,10 +1504,10 @@ class FreshInstallSummaryView(BackendConfigurationMixin, FreshInstallModelFormBa
             FINAL_WIZARD_PKCS11_PIN_PATH
         )
         fallback_pin_path = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
-        if auth_source_ref and not _path_exists(Path(auth_source_ref)) and _path_exists(fallback_pin_path):
+        if auth_source_ref and not pkcs11_path_exists(Path(auth_source_ref)) and pkcs11_path_exists(fallback_pin_path):
             auth_source_ref = str(fallback_pin_path)
 
-        if not _path_exists(module_path):
+        if not pkcs11_path_exists(module_path):
             err_msg = f'The PKCS#11 module path does not exist: {module_path}'
             raise DjangoValidationError(err_msg)
         if token_label is None and slot_id is None:
@@ -2263,7 +1526,7 @@ class FreshInstallSummaryView(BackendConfigurationMixin, FreshInstallModelFormBa
                 'A PKCS#11 provider config file is configured, but no provider config environment variable is set.'
             )
             raise DjangoValidationError(err_msg)
-        if config_env_var and config_path and _path_exists(Path(config_path)):
+        if config_env_var and config_path and pkcs11_path_exists(Path(config_path)):
             os.environ[config_env_var] = config_path
 
         profile = cls._activate_profile(
@@ -3331,7 +2594,14 @@ class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
                 password=config_model.operational_db_password,
             ),
             crypto_backend=OperationalBackendBinding(backend_kind=backend_kind),
-            app_secret_backend=OperationalBackendBinding(backend_kind=backend_kind),
+            app_secret_backend=OperationalBackendBinding(
+                backend_kind=(
+                    BackendKind.PKCS11.value
+                    if backend_kind == BackendKind.PKCS11.value
+                    and config_model.fresh_install_pkcs11_enforce_app_secret_protection
+                    else BackendKind.SOFTWARE.value
+                )
+            ),
             backup_file_name=config_model.restore_backup_archive_original_name or None,
         )
 

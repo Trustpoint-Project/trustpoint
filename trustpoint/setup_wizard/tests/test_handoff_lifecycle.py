@@ -23,6 +23,11 @@ def handoff_paths(monkeypatch, tmp_path):
     """Keep all persisted handoff state inside a temporary directory."""
     monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_ENV_FILE', str(tmp_path / 'operational.env'))
     monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_READY_FILE', str(tmp_path / 'operational.ready'))
+    monkeypatch.setattr(
+        handoff.OperationalTargetInspector,
+        'inspect_database',
+        Mock(return_value=Mock(app_version=None, setup_completed=False)),
+    )
     return tmp_path
 
 
@@ -365,7 +370,7 @@ def test_runtime_switch_rejects_arbitrary_handoff_paths(monkeypatch, switch_scri
 
 
 def test_auto_setup_uses_the_same_non_executable_handoff_writer(monkeypatch, settings, config, tmp_path):
-    from management.management.commands import bootstrap_manager
+    from setup_wizard.management.commands import bootstrap_manager
 
     config.save()
     settings.TRUSTPOINT_IS_OPERATIONAL = False
@@ -386,11 +391,12 @@ def test_auto_setup_uses_the_same_non_executable_handoff_writer(monkeypatch, set
     assert values['DATABASE_HOST'] == 'postgres'
     assert 'DATABASE_PASSWORD' not in values
     assert (tmp_path / 'auto-setup.marker').is_file()
+    assert not (tmp_path / 'operational.ready').exists()
 
 
 @pytest.mark.parametrize('credential_source', ['environment', 'file'])
 def test_fresh_bootstrap_seeds_database_before_auto_setup(monkeypatch, settings, handoff_paths, credential_source):
-    from management.management.commands import bootstrap_manager
+    from setup_wizard.management.commands import bootstrap_manager
 
     settings.TRUSTPOINT_IS_BOOTSTRAP = True
     settings.TRUSTPOINT_IS_OPERATIONAL = False
@@ -414,7 +420,12 @@ def test_fresh_bootstrap_seeds_database_before_auto_setup(monkeypatch, settings,
     # Leave seeding and handoff creation real, starting with a fresh wizard row.
     config = SetupWizardConfigModel.get_singleton()
     assert config.operational_db_password == ''
-    for method in ('_prepare_bootstrap_database', '_create_bootstrap_login', '_collect_static_files', '_compile_messages'):
+    for method in (
+        '_prepare_bootstrap_database',
+        '_create_bootstrap_login',
+        '_collect_static_files',
+        '_compile_messages',
+    ):
         monkeypatch.setattr(bootstrap_manager.Command, method, Mock())
     monkeypatch.setattr(bootstrap_manager.Command, '_has_staged_tls', Mock(return_value=False))
     monkeypatch.setattr(bootstrap_manager.BootstrapTlsMaterialStrategy, 'apply', Mock())
@@ -440,5 +451,5 @@ def test_fresh_bootstrap_seeds_database_before_auto_setup(monkeypatch, settings,
     assert 'deployment-test-secret' not in (handoff_paths / 'operational.env').read_text()
     if credential_source == 'file':
         assert values['DATABASE_PASSWORD_FILE'] == str(secret)
-    assert (handoff_paths / 'operational.ready').exists()
+    assert not (handoff_paths / 'operational.ready').exists()
     assert (handoff_paths / 'auto-setup.marker').exists()
