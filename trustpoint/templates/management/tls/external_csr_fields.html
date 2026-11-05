@@ -1,0 +1,26 @@
+<div class="tp-kvp-list">
+    {% for field in form %}
+        {% if not field_names or field.name in field_names %}
+            {% if field.is_hidden %}
+                {{ field }}
+            {% else %}
+                <div>
+                    <div>
+                        <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+                    </div>
+                    <div>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <div class="form-text">{{ field.help_text }}</div>
+                        {% endif %}
+                        {% if field.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in field.errors %}<div>{{ error }}</div>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+</div>

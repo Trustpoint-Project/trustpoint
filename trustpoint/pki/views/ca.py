@@ -4,10 +4,12 @@
 """CA views for the PKI application."""
 
 import logging
+from copy import copy
 from typing import Any, cast
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import ProtectedError, QuerySet
 from django.forms import Form
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -16,7 +18,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.generic import ListView
 
-from management.models.audit_log import AuditLog
+from management.security_change_audit import audit_security_change, snapshot_security_state
 from pki.filters import CaFilter
 from pki.models import CaModel
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
@@ -182,17 +184,12 @@ class CaBulkDeleteConfirmView(BulkDeleteView):
         deleted_count = queryset.count() if queryset else 0
 
         try:
-            cas_to_delete = list(queryset)
-            self._delete_cas_hierarchically(cas_to_delete)
-
-            actor = self.request.user if self.request.user.is_authenticated else None
-            for ca in cas_to_delete:
-                AuditLog.create_entry(
-                    operation_type=AuditLog.OperationType.CA_DELETED,
-                    target=ca,
-                    target_display=f'CA: {ca.unique_name}',
-                    actor=actor,
-                )
+            with transaction.atomic():
+                cas_to_delete = list(queryset.select_for_update())
+                snapshots = [(copy(ca), snapshot_security_state(ca)) for ca in cas_to_delete]
+                self._delete_cas_hierarchically(cas_to_delete)
+                for ca, before in snapshots:
+                    audit_security_change(target=ca, actor=self.request.user, before=before, action='deleted')
 
             messages.success(self.request, _('Successfully deleted {count} CA(s).').format(count=deleted_count))
             return HttpResponseRedirect(self.success_url)
@@ -226,15 +223,16 @@ class CaBulkDeleteConfirmView(BulkDeleteView):
 
         def delete_ca_and_children(ca: CaModel) -> None:
             """Recursively delete a CA and all its children."""
-            if ca.id in deleted_ids:
+            if ca.pk is None or ca.pk in deleted_ids:
                 return
 
             if ca.id in children_map:
                 for child in children_map[ca.id]:
                     delete_ca_and_children(child)
 
+            deleted_id = ca.id
             ca.delete()
-            deleted_ids.add(ca.id)
+            deleted_ids.add(deleted_id)
 
         for ca in cas:
             parent_id = ca.parent_ca.id if ca.parent_ca else None

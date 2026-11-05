@@ -3,16 +3,16 @@
     <div>
         <div>
             {% for context in cert_context %}
-                <div>
-                    <a href="{% url 'pki:certificate-detail' pk=context.certificate.id %}" class="btn btn-primary">
+                <section class="mb-4">
+                    <h3 class="h6 mb-3">
+                    <a href="{% url 'pki:certificate-detail' pk=context.certificate.id %}">
                         {{ context.certificate.common_name }}
                     </a>
-                </div>
-                <br>
+                    </h3>
 
                 <div class="tp-kvp-list">
                     <div>
-                        <div>Subject</div>
+                        <div>{% trans 'Subject' %}</div>
                         <div>
                             {% include 'pki/truststores/subject_table.html' with entries=context.subject_entries %}
                         </div>
@@ -20,7 +20,7 @@
                     </div>
 
                     <div>
-                        <div>Issuer</div>
+                        <div>{% trans 'Issuer' %}</div>
                         <div>
                         {% include 'pki/truststores/subject_table.html' with entries=context.issuer_entries  %}
                     </div>
@@ -28,13 +28,14 @@
                     </div>
                     <div>
                         <div>{% trans 'Serial Number' %}</div>
-                        <div>{{ context.certificate.serial_number }}</div>
+                        <div class="font-monospace text-break">{{ context.certificate.serial_number }}</div>
                     </div>
                     <div>
-                        <div>Fingerprint (SHA256)</div>
-                        <div>{{ context.certificate.sha256_fingerprint }}</div>
+                        <div>{% trans 'Fingerprint (SHA-256)' %}</div>
+                        <div class="font-monospace text-break">{{ context.certificate.sha256_fingerprint }}</div>
                     </div>
                 </div>
+                </section>
             {% endfor %}
         </div>
     </div>

@@ -9,7 +9,9 @@ import asyncio
 import logging
 
 from django.db import transaction
+from django.utils import timezone
 
+from devices.domain_credential_renewal import renew_gds_push_domain_credential
 from devices.models import DeviceModel
 from request.gds_push import GdsPushError, GdsPushService
 
@@ -38,7 +40,10 @@ def perform_gds_push_update(device_id: int) -> None:
 
     logger.info('Starting periodic GDS Push update for device: %s', device.common_name)
 
-    if not device.opc_gds_push_enable_periodic_update:
+    if (
+        not hasattr(device, 'opc_ua_gds_push_config')
+        or not device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update
+    ):
         logger.info(
             'Periodic GDS Push update disabled for device %s, skipping execution', device.common_name
         )
@@ -87,5 +92,30 @@ def perform_gds_push_update(device_id: int) -> None:
         raise
 
     # Schedule the next run
-    device.refresh_from_db(fields=['opc_gds_push_enable_periodic_update', 'opc_gds_push_renewal_interval'])
-    device.schedule_next_gds_push_update()
+    device.opc_ua_gds_push_config.refresh_from_db()
+    device.opc_ua_gds_push_config.schedule_next_gds_push_update()
+
+
+def perform_gds_push_domain_credential_renewal(device_id: int) -> None:
+    """Renew the local GDS identity and schedule its next independent renewal cycle."""
+    with transaction.atomic():
+        device = DeviceModel.objects.select_for_update().filter(pk=device_id).first()
+        if device is None:
+            logger.info('Device %s was deleted; skipping domain credential renewal', device_id)
+            return
+        if (
+            device.device_type != DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+            or not hasattr(device, 'opc_ua_gds_push_config')
+            or not device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal
+        ):
+            return
+        next_run = device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at
+        if next_run is not None and next_run > timezone.now():
+            # A queued task may belong to settings that have since been replaced.
+            return
+        try:
+            replacement = renew_gds_push_domain_credential(device)
+            logger.info('Renewed GDS Push domain credential for device %s: %s', device_id, replacement.pk)
+        except Exception:
+            logger.exception('Domain credential renewal failed for device %s; retaining previous identity', device_id)
+        device.opc_ua_gds_push_config.schedule_next_gds_push_domain_credential_renewal()

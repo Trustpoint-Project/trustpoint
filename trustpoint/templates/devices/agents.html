@@ -4,108 +4,277 @@
 {% load internationalization_tags %}
 
 {% block content %}
+<div class="card">
+    <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+        <div>
+            <h1 class="mb-1">
+                {% trans 'Agents' %}
+            </h1>
 
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <h1 class="mb-0">{% trans 'Agents' %}</h1>
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'agents:profiles' %}">
-        {% trans 'Agent Profiles' %}
-      </a>
-  </div>
+            <p class="mb-0 text-muted">
+                {% trans 'Manage agent devices, their onboarding state and assigned PKI capabilities.' %}
+            </p>
+        </div>
 
-  {% include 'devices/table_filter.html' with table_url='devices:agents' %}
+        <a
+            href="{% url 'agents:profiles' %}"
+            class="btn btn-sm btn-outline-secondary flex-shrink-0"
+        >
+            {% trans 'Agent Profiles' %}
+        </a>
+    </div>
 
-  <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
-    <table class="table" id="devices-table">
-      <thead>
-        <tr>
-          <th id="checkbox-column"><input type="checkbox"/></th>
-          <th data-col="name">{% trans 'Device' %}</th>
-          <th data-col="type">{% trans 'Type' %}</th>
-          <th class="text-nowrap" data-col="domain">{% trans 'Domain' %}</th>
-          <th class="text-nowrap" data-col="serial_number">{% trans 'Serial Number' %}</th>
-          <th class="text-nowrap" data-col="created_at">{% trans 'Created at' %}</th>
-          <th class="text-nowrap" data-col="onboarding">{% trans 'Onboarding' %}</th>
-          <th class="text-nowrap" data-col="onboarding_protocol">{% trans 'Onboarding Protocol' %}</th>
-          <th class="text-nowrap" data-col="pki_protocols">{% trans 'PKI Protocols' %}</th>
-          <th class="text-nowrap" data-col="actions">{% trans 'Actions' %}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for device in page_obj %}
-        <tr>
-          <td class="row_checkbox">
-            <input type="checkbox" name="row_checkbox" value="{{ device.id }}"/>
-          </td>
-          <td data-col="name">{{ device.common_name }}</td>
-          <td data-col="type">{{ device.get_device_type_display }}</td>
-          <td data-col="domain">
-            {% if device.domain %}
-              <a href="{% url 'pki:domains-detail' device.domain.pk %}">{{ device.domain }}</a>
-            {% else %}
-              <span class="text-muted">{% trans 'No domain' %}</span>
-            {% endif %}
-          </td>
-          <td data-col="serial_number">{{ device.serial_number }}</td>
-          <td data-col="created_at">{{ device.created_at|local_datetime }}</td>
-          <td data-col="onboarding">
-            {% with p=device.onboarding_progress %}
-            <span class="tp-status-badge tp-status-{{ p.status_key }}"
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="top"
-                  data-bs-html="true"
-                  title="{{ p.tooltip }}">
-                <span class="tp-status-dot"></span>
-                {{ p.status_label }}
-            </span>
-            {% endwith %}
-          </td>
-          <td data-col="onboarding_protocol">{{ device.onboarding_progress.onboarding_protocol }}</td>
-          <td data-col="pki_protocols">{{ device.onboarding_progress.pki_protocols }}</td>
-          <td data-col="actions" class="text-nowrap">
-            <div class="d-flex gap-1">
-              {% for agent in device.agent_list %}
-                {% if device.device_type == 4 %}
-                  <a href="{% url 'agents:targets-list' agent_id=agent.pk %}" class="btn btn-primary tp-table-btn">
-                    {% trans 'Devices' %}
-                  </a>
-                {% else %}
-                  <a href="{% url 'agents:assigned-profiles-list' agent_id=agent.pk %}" class="btn btn-primary tp-table-btn">
-                    {% trans 'Profiles' %}
-                  </a>
-                {% endif %}
-              {% endfor %}
-              {{ device.clm_button|safe }}
+    <div class="card-body text-start">
+        <section>
+            <div class="mb-3">
+                {% include 'devices/table_filter.html' with table_url='devices:agents' %}
             </div>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="10" class="text-center">{% trans 'No agent devices have been added yet.' %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% include 'trustpoint/pagination.html' %}
-  </div>
 
-  <div class="card-footer d-flex flex-column flex-md-row justify-content-between tp-sticky-footer">
-    <div class="m-1 d-flex flex-wrap gap-2">
-      <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-              data-tp-url="{{ device_revoke_url }}">
-        {% trans 'Revoke selected' %}
-      </button>
-      <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-              data-tp-url="{{ device_delete_url }}">
-        {% trans 'Delete selected' %}
-      </button>
+            <div class="table-responsive">
+                <table
+                    class="table table-hover align-middle"
+                    id="devices-table"
+                >
+                    <thead>
+                        <tr>
+                            <th id="checkbox-column" scope="col">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all agents' %}"
+                                >
+                            </th>
+
+                            <th scope="col" data-col="name">
+                                {% trans 'Device' %}
+                            </th>
+
+                            <th scope="col" data-col="type">
+                                {% trans 'Type' %}
+                            </th>
+
+                            <th
+                                scope="col"
+                                class="text-nowrap"
+                                data-col="domain"
+                            >
+                                {% trans 'Domain' %}
+                            </th>
+
+                            <th
+                                scope="col"
+                                class="text-nowrap"
+                                data-col="serial_number"
+                            >
+                                {% trans 'Serial Number' %}
+                            </th>
+
+                            <th
+                                scope="col"
+                                class="text-nowrap"
+                                data-col="created_at"
+                            >
+                                {% trans 'Created at' %}
+                            </th>
+
+                            <th
+                                scope="col"
+                                class="text-nowrap"
+                                data-col="onboarding"
+                            >
+                                {% trans 'Onboarding' %}
+                            </th>
+
+                            <th
+                                scope="col"
+                                class="text-nowrap"
+                                data-col="onboarding_protocol"
+                            >
+                                {% trans 'Onboarding Protocol' %}
+                            </th>
+
+                            <th
+                                scope="col"
+                                class="text-nowrap"
+                                data-col="pki_protocols"
+                            >
+                                {% trans 'PKI Protocols' %}
+                            </th>
+
+                            <th
+                                scope="col"
+                                class="text-end text-nowrap"
+                                data-col="actions"
+                            >
+                                {% trans 'Actions' %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for device in page_obj %}
+                            <tr>
+                                <td class="row_checkbox">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ device.id }}"
+                                        aria-label="{% blocktranslate with name=device.common_name %}Select agent {{ name }}{% endblocktranslate %}"
+                                    >
+                                </td>
+
+                                <td data-col="name">
+                                    {% if device.common_name %}
+                                        {{ device.common_name }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td data-col="type">
+                                    {{ device.get_device_type_display }}
+                                </td>
+
+                                <td data-col="domain">
+                                    {% if device.domain %}
+                                        <a href="{% url 'pki:domains-detail' device.domain.pk %}">
+                                            {{ device.domain }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td
+                                    class="text-nowrap"
+                                    data-col="serial_number"
+                                >
+                                    {% if device.serial_number %}
+                                        {{ device.serial_number }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td
+                                    class="text-nowrap"
+                                    data-col="created_at"
+                                >
+                                    {{ device.created_at|local_datetime }}
+                                </td>
+
+                                <td
+                                    class="text-nowrap"
+                                    data-col="onboarding"
+                                >
+                                    {% with p=device.onboarding_progress %}
+                                        <span
+                                            class="tp-status-badge tp-status-{{ p.status_key }}"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            data-bs-html="true"
+                                            title="{{ p.tooltip }}"
+                                        >
+                                            <span class="tp-status-dot"></span>
+                                            {{ p.status_label }}
+                                        </span>
+                                    {% endwith %}
+                                </td>
+
+                                <td
+                                    class="text-nowrap"
+                                    data-col="onboarding_protocol"
+                                >
+                                    {% if device.onboarding_progress.onboarding_protocol %}
+                                        {{ device.onboarding_progress.onboarding_protocol }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td
+                                    class="text-nowrap"
+                                    data-col="pki_protocols"
+                                >
+                                    {% if device.onboarding_progress.pki_protocols %}
+                                        {{ device.onboarding_progress.pki_protocols }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td
+                                    class="text-end text-nowrap"
+                                    data-col="actions"
+                                >
+                                    <div class="d-inline-flex flex-wrap justify-content-end gap-2">
+                                        {% for agent in device.agent_list %}
+                                            {% if device.device_type == 4 %}
+                                                <a
+                                                    href="{% url 'agents:targets-list' agent_id=agent.pk %}"
+                                                    class="btn btn-sm btn-outline-secondary"
+                                                >
+                                                    {% trans 'Devices' %}
+                                                </a>
+                                            {% else %}
+                                                <a
+                                                    href="{% url 'agents:assigned-profiles-list' agent_id=agent.pk %}"
+                                                    class="btn btn-sm btn-outline-secondary"
+                                                >
+                                                    {% trans 'Profiles' %}
+                                                </a>
+                                            {% endif %}
+                                        {% endfor %}
+
+                                        {{ device.clm_button|safe }}
+                                    </div>
+                                </td>
+                            </tr>
+
+                        {% empty %}
+                            <tr>
+                                <td
+                                    colspan="10"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans 'No agent devices have been added yet.' %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include 'trustpoint/pagination.html' %}
+        </section>
     </div>
-    <div class="m-1 d-flex flex-wrap justify-content-md-end gap-2">
-      <a class="btn btn-primary" href="{% url create_url %}">
-        {% trans 'Create Agent' %}
-      </a>
+
+    <div class="card-footer d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+        <div class="d-flex flex-wrap gap-2">
+            <button
+                type="button"
+                class="btn btn-outline-danger tp-table-select-btn"
+                data-tp-url="{{ device_revoke_url }}"
+            >
+                {% trans 'Revoke Selected' %}
+            </button>
+
+            <button
+                type="button"
+                class="btn btn-outline-danger tp-table-select-btn"
+                data-tp-url="{{ device_delete_url }}"
+            >
+                {% trans 'Delete Selected' %}
+            </button>
+        </div>
+
+        <a
+            href="{% url create_url %}"
+            class="btn btn-primary"
+        >
+            {% trans 'Create Agent' %}
+        </a>
     </div>
-  </div>
 </div>
-
 {% endblock content %}

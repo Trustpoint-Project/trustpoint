@@ -2,13 +2,18 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for the Backup views."""
+
 from unittest.mock import patch, MagicMock, Mock
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
 from django.core.management.base import CommandError
+from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
+from management.tests.ssh_helpers import SFTP_HOST_KEY
 from management.models import BackupOptions
+from management.backup_artifacts import verify_backup_manifest
 from management.views.backup import get_backup_file_data, create_db_backup
 from util.sftp import SftpError
 from pathlib import Path
@@ -112,7 +117,7 @@ class CreateDbBackupTest(TestCase):
         self.backup_dir = Path(self.temp_dir.name)
 
     @patch('management.views.backup.call_command')
-    @patch('management.views.backup.datetime')
+    @patch('management.views.backup.dt')
     def test_create_db_backup_success(self, mock_datetime: MagicMock, mock_call_command: MagicMock) -> None:
         """Test successful database backup creation."""
         mock_now = Mock()
@@ -122,9 +127,37 @@ class CreateDbBackupTest(TestCase):
 
         filename = create_db_backup(self.backup_dir)
 
-        self.assertEqual(filename, 'backup_2025-12-08_12-00-00.dump.gz')
+        self.assertRegex(filename, r'^backup_2025-12-08_12-00-00_[0-9a-f]{32}\.dump\.gz$')
         mock_call_command.assert_called_once_with('trustpointbackup', filename=filename)
         self.assertTrue(self.backup_dir.exists())
+
+    @patch('management.management.commands.trustpointbackup.call_command')
+    @patch('management.views.backup.dt')
+    def test_backups_in_same_second_have_distinct_payloads_and_manifests(
+        self,
+        mock_datetime: MagicMock,
+        mock_dbbackup: MagicMock,
+    ) -> None:
+        """Each returned filename identifies its own new payload and matching manifest."""
+        mock_datetime.datetime.now.return_value.strftime.return_value = '2025-12-08_12-00-00'
+        storage = FileSystemStorage(location=self.backup_dir)
+        payloads = iter((b'first snapshot', b'second snapshot'))
+
+        def save_dump(_command, _output_flag, filename, _compress_flag):
+            storage.save(filename, ContentFile(next(payloads)))
+
+        mock_dbbackup.side_effect = save_dump
+        with self.settings(BACKUP_FILE_PATH=self.backup_dir):
+            first = create_db_backup(self.backup_dir)
+            second = create_db_backup(self.backup_dir)
+
+        self.assertNotEqual(first, second)
+        self.assertEqual((self.backup_dir / first).read_bytes(), b'first snapshot')
+        self.assertEqual((self.backup_dir / second).read_bytes(), b'second snapshot')
+        self.assertNotEqual(
+            verify_backup_manifest(self.backup_dir / first).payload_sha256,
+            verify_backup_manifest(self.backup_dir / second).payload_sha256,
+        )
 
     def tearDown(self) -> None:
         """Clean up temporary directory."""
@@ -149,9 +182,9 @@ class BackupManageViewTest(TestCase):
     def test_get_queryset_no_backup_dir(self, mock_settings: MagicMock) -> None:
         """Test get_queryset when backup directory doesn't exist."""
         mock_settings.BACKUP_FILE_PATH = Path('/nonexistent/path')
-        
+
         response = self.client.get(self.url)
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['backup_files']), 0)
 
@@ -159,21 +192,21 @@ class BackupManageViewTest(TestCase):
     def test_get_queryset_with_backup_files(self, mock_settings: MagicMock) -> None:
         """Test get_queryset with existing backup files."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         # Create test backup files
         (self.backup_dir / 'backup_2025-12-08_10-00-00.dump.gz').write_text('test1')
         (self.backup_dir / 'backup_2025-12-08_11-00-00.dump.gz').write_text('test2')
         (self.backup_dir / 'other_file.txt').write_text('ignored')
-        
+
         response = self.client.get(self.url)
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['backup_files']), 2)
 
     def test_get_context_data_no_saved_settings(self) -> None:
         """Test context data when no settings are saved."""
         response = self.client.get(self.url)
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertIn('backup_options_form', response.context)
         self.assertFalse(response.context['has_saved_settings'])
@@ -181,24 +214,25 @@ class BackupManageViewTest(TestCase):
     def test_get_context_data_with_saved_settings(self) -> None:
         """Test context data when settings are saved."""
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
             port=22,
             user='testuser',
             auth_method=BackupOptions.AuthMethod.PASSWORD,
-            password='password'
+            password='password',
         )
-        
+
         response = self.client.get(self.url)
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context['has_saved_settings'])
 
     def test_post_unknown_action(self) -> None:
         """Test POST with unknown action."""
         response = self.client.post(self.url, {'unknown_action': ''})
-        
+
         self.assertEqual(response.status_code, 302)
 
     @patch('management.views.backup.create_db_backup')
@@ -237,7 +271,9 @@ class BackupManageViewTest(TestCase):
     @patch('management.views.backup.settings')
     @patch('management.views.backup.create_db_backup')
     @patch('management.views.backup.SftpClient')
-    def test_create_sftp_backup_success(self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock) -> None:
+    def test_create_sftp_backup_success(
+        self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock
+    ) -> None:
         """Test creating a backup and uploading via SFTP."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
         mock_create_db_backup.return_value = 'backup_2025-10-30_12-00-00.dump.gz'
@@ -249,6 +285,7 @@ class BackupManageViewTest(TestCase):
         (self.backup_dir / 'backup_2025-10-30_12-00-00.dump.gz').write_text('test')
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
@@ -256,7 +293,7 @@ class BackupManageViewTest(TestCase):
             user='user',
             auth_method=BackupOptions.AuthMethod.PASSWORD,
             password='password',
-            remote_directory='/remote/backups/'
+            remote_directory='/remote/backups/',
         )
 
         response = self.client.post(self.url, {'create_sftp_backup': ''})
@@ -291,20 +328,23 @@ class BackupManageViewTest(TestCase):
     @patch('management.views.backup.settings')
     @patch('management.views.backup.create_db_backup')
     @patch('management.views.backup.SftpClient')
-    def test_create_sftp_backup_client_creation_error(self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock) -> None:
+    def test_create_sftp_backup_client_creation_error(
+        self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock
+    ) -> None:
         """Test SFTP backup when client creation fails."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
         mock_create_db_backup.return_value = 'backup_2025-10-30_12-00-00.dump.gz'
         mock_sftp_client.side_effect = SftpError('Connection failed')
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
             port=22,
             user='user',
             auth_method=BackupOptions.AuthMethod.PASSWORD,
-            password='password'
+            password='password',
         )
 
         response = self.client.post(self.url, {'create_sftp_backup': ''})
@@ -315,27 +355,30 @@ class BackupManageViewTest(TestCase):
 
     @patch('management.views.backup.settings')
     @patch('management.views.backup.create_db_backup')
-    @patch('management.views.backup.SftpClient')
-    def test_create_sftp_backup_upload_error(self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock) -> None:
-        """Test SFTP backup when upload fails."""
+    @patch('util.sftp.SftpClient._connect_sftp')
+    def test_create_sftp_backup_upload_error(
+        self, mock_connect_sftp: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock
+    ) -> None:
+        """Real upload error conversion lets the view report failure and retain the local backup."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
         mock_create_db_backup.return_value = 'backup_2025-10-30_12-00-00.dump.gz'
-        mock_client = MagicMock()
-        mock_client.remote_directory = None
-        mock_client.upload_file.side_effect = SftpError('Upload failed')
-        mock_sftp_client.return_value = mock_client
+        ssh, sftp = MagicMock(), MagicMock()
+        sftp.put.side_effect = PermissionError('Permission denied')
+        mock_connect_sftp.return_value = (ssh, sftp)
 
         # Create the backup file
-        (self.backup_dir / 'backup_2025-10-30_12-00-00.dump.gz').write_text('test')
+        local_file = self.backup_dir / 'backup_2025-10-30_12-00-00.dump.gz'
+        local_file.write_text('test')
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
             port=22,
             user='user',
             auth_method=BackupOptions.AuthMethod.PASSWORD,
-            password='password'
+            password='password',
         )
 
         response = self.client.post(self.url, {'create_sftp_backup': ''})
@@ -343,15 +386,20 @@ class BackupManageViewTest(TestCase):
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('SFTP upload failed' in str(message) for message in messages))
+        self.assertTrue(any('Permission denied' in str(message) for message in messages))
+        self.assertEqual(local_file.read_text(), 'test')
+        ssh.close.assert_called_once()
 
     @patch('management.views.backup.settings')
     @patch('management.views.backup.create_db_backup')
     @patch('management.views.backup.SftpClient')
-    def test_create_sftp_backup_remote_directory_variations(self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock) -> None:
+    def test_create_sftp_backup_remote_directory_variations(
+        self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock
+    ) -> None:
         """Test SFTP backup with different remote directory formats."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
         mock_create_db_backup.return_value = 'backup_test.dump.gz'
-        
+
         # Create the backup file
         (self.backup_dir / 'backup_test.dump.gz').write_text('test')
 
@@ -361,6 +409,7 @@ class BackupManageViewTest(TestCase):
         mock_sftp_client.return_value = mock_client
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
@@ -368,22 +417,24 @@ class BackupManageViewTest(TestCase):
             user='user',
             auth_method=BackupOptions.AuthMethod.PASSWORD,
             password='password',
-            remote_directory='/path/'
+            remote_directory='/path/',
         )
 
         self.client.post(self.url, {'create_sftp_backup': ''})
-        
+
         call_args = mock_client.upload_file.call_args
         self.assertEqual(call_args[0][1], '/path/backup_test.dump.gz')
 
     @patch('management.views.backup.settings')
     @patch('management.views.backup.create_db_backup')
     @patch('management.views.backup.SftpClient')
-    def test_create_sftp_backup_remote_directory_no_trailing_slash(self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock) -> None:
+    def test_create_sftp_backup_remote_directory_no_trailing_slash(
+        self, mock_sftp_client: MagicMock, mock_create_db_backup: MagicMock, mock_settings: MagicMock
+    ) -> None:
         """Test SFTP backup with remote directory without trailing slash."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
         mock_create_db_backup.return_value = 'backup_test2.dump.gz'
-        
+
         # Create the backup file
         (self.backup_dir / 'backup_test2.dump.gz').write_text('test')
 
@@ -393,6 +444,7 @@ class BackupManageViewTest(TestCase):
         mock_sftp_client.return_value = mock_client
 
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
@@ -400,11 +452,11 @@ class BackupManageViewTest(TestCase):
             user='user',
             auth_method=BackupOptions.AuthMethod.PASSWORD,
             password='password',
-            remote_directory='/path'
+            remote_directory='/path',
         )
 
         self.client.post(self.url, {'create_sftp_backup': ''})
-        
+
         call_args = mock_client.upload_file.call_args
         self.assertEqual(call_args[0][1], '/path/backup_test2.dump.gz')
 
@@ -414,14 +466,18 @@ class BackupManageViewTest(TestCase):
         mock_client = MagicMock()
         mock_sftp_client.return_value = mock_client
 
-        response = self.client.post(self.url, {
-            'test_sftp_connection': '',
-            'host': 'localhost',
-            'port': 22,
-            'user': 'user',
-            'auth_method': BackupOptions.AuthMethod.PASSWORD,
-            'password': 'password',
-        })
+        response = self.client.post(
+            self.url,
+            {
+                'test_sftp_connection': '',
+                'host': 'localhost',
+                'host_key': SFTP_HOST_KEY,
+                'port': 22,
+                'user': 'user',
+                'auth_method': BackupOptions.AuthMethod.PASSWORD,
+                'password': 'password',
+            },
+        )
 
         self.assertEqual(response.status_code, 200)
         mock_client.test_connection.assert_called_once()
@@ -435,14 +491,18 @@ class BackupManageViewTest(TestCase):
         mock_client.test_connection.side_effect = SftpError('Connection refused')
         mock_sftp_client.return_value = mock_client
 
-        response = self.client.post(self.url, {
-            'test_sftp_connection': '',
-            'host': 'localhost',
-            'port': 22,
-            'user': 'user',
-            'auth_method': BackupOptions.AuthMethod.PASSWORD,
-            'password': 'password',
-        })
+        response = self.client.post(
+            self.url,
+            {
+                'test_sftp_connection': '',
+                'host': 'localhost',
+                'host_key': SFTP_HOST_KEY,
+                'port': 22,
+                'user': 'user',
+                'auth_method': BackupOptions.AuthMethod.PASSWORD,
+                'password': 'password',
+            },
+        )
 
         self.assertEqual(response.status_code, 200)
         messages = list(get_messages(response.wsgi_request))
@@ -450,32 +510,40 @@ class BackupManageViewTest(TestCase):
 
     def test_test_sftp_connection_invalid_form(self) -> None:
         """Test testing SFTP connection with invalid form data."""
-        response = self.client.post(self.url, {
-            'test_sftp_connection': '',
-            'host': '',  # Missing required field
-            'port': 22,
-            'user': 'user',
-        })
+        response = self.client.post(
+            self.url,
+            {
+                'test_sftp_connection': '',
+                'host': '',  # Missing required field
+                'host_key': SFTP_HOST_KEY,
+                'port': 22,
+                'user': 'user',
+            },
+        )
 
         self.assertEqual(response.status_code, 200)
 
     def test_save_settings_success(self) -> None:
         """Test saving backup settings successfully."""
-        response = self.client.post(self.url, {
-            'save_backup_settings': '',
-            'enable_sftp_storage': True,
-            'host': 'localhost',
-            'port': 22,
-            'user': 'testuser',
-            'auth_method': BackupOptions.AuthMethod.PASSWORD,
-            'password': 'password',
-            'remote_directory': '/remote/backups',
-        })
+        response = self.client.post(
+            self.url,
+            {
+                'save_backup_settings': '',
+                'enable_sftp_storage': True,
+                'host': 'localhost',
+                'host_key': SFTP_HOST_KEY,
+                'port': 22,
+                'user': 'testuser',
+                'auth_method': BackupOptions.AuthMethod.PASSWORD,
+                'password': 'password',
+                'remote_directory': '/remote/backups',
+            },
+        )
 
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('Backup settings saved successfully' in str(message) for message in messages))
-        
+
         # Verify settings were saved
         opts = BackupOptions.objects.get(pk=1)
         self.assertEqual(opts.host, 'localhost')
@@ -483,12 +551,16 @@ class BackupManageViewTest(TestCase):
 
     def test_save_settings_invalid_form(self) -> None:
         """Test saving backup settings with invalid form data."""
-        response = self.client.post(self.url, {
-            'save_backup_settings': '',
-            'enable_sftp_storage': True,
-            'host': '',  # Missing required field
-            'port': 'invalid',  # Invalid port
-        })
+        response = self.client.post(
+            self.url,
+            {
+                'save_backup_settings': '',
+                'enable_sftp_storage': True,
+                'host': '',  # Missing required field
+                'host_key': SFTP_HOST_KEY,
+                'port': 'invalid',  # Invalid port
+            },
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('backup_options_form', response.context)
@@ -497,13 +569,14 @@ class BackupManageViewTest(TestCase):
         """Test resetting backup settings."""
         # Create settings first
         BackupOptions.objects.create(
+            host_key=SFTP_HOST_KEY,
             pk=1,
             enable_sftp_storage=True,
             host='localhost',
             port=22,
             user='testuser',
             auth_method=BackupOptions.AuthMethod.PASSWORD,
-            password='password'
+            password='password',
         )
 
         response = self.client.post(self.url, {'reset_backup_settings': ''})
@@ -511,7 +584,7 @@ class BackupManageViewTest(TestCase):
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('Backup settings have been reset' in str(message) for message in messages))
-        
+
         # Verify settings were deleted
         self.assertFalse(BackupOptions.objects.filter(pk=1).exists())
 
@@ -528,7 +601,7 @@ class BackupFileDownloadViewTest(TestCase):
         self.client = Client()
         self.temp_dir = tempfile.TemporaryDirectory()
         self.backup_dir = Path(self.temp_dir.name)
-        
+
         # Create and log in a test user
         self.user = create_backup_test_user()
         self.client.login(username='testuser', password='testpassword')
@@ -537,18 +610,20 @@ class BackupFileDownloadViewTest(TestCase):
     def test_download_existing_file(self, mock_settings: MagicMock) -> None:
         """Test downloading an existing backup file."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         # Create test backup file
         test_file = self.backup_dir / 'backup_test.dump.gz'
         test_file.write_bytes(b'test content')
-        
+
         url = reverse('management:backup-download', kwargs={'filename': 'backup_test.dump.gz'})
         response = self.client.get(url)
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertIn('attachment', response['Content-Disposition'])
-        self.assertEqual(response.content, b'test content')
+        self.assertTrue(response.streaming)
+        self.assertEqual(b''.join(response.streaming_content), b'test content')
+        self.assertTrue(response.closed)
 
     @patch('management.views.backup.settings')
     def test_download_existing_file_with_manifest_returns_bundle(self, mock_settings: MagicMock) -> None:
@@ -567,22 +642,24 @@ class BackupFileDownloadViewTest(TestCase):
         self.assertEqual(response['Content-Type'], 'application/zip')
         self.assertIn('backup_test.zip', response['Content-Disposition'])
 
-        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        self.assertTrue(response.streaming)
+        with zipfile.ZipFile(io.BytesIO(b''.join(response.streaming_content))) as archive:
             self.assertEqual(
                 set(archive.namelist()),
                 {'backup_test.dump.gz', 'backup_test.dump.gz.manifest.json'},
             )
             self.assertEqual(archive.read('backup_test.dump.gz'), b'test content')
             self.assertEqual(archive.read('backup_test.dump.gz.manifest.json'), b'{"manifest_version":1}')
+        self.assertTrue(response.closed)
 
     @patch('management.views.backup.settings')
     def test_download_nonexistent_file(self, mock_settings: MagicMock) -> None:
         """Test downloading a nonexistent backup file."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         url = reverse('management:backup-download', kwargs={'filename': 'nonexistent.dump.gz'})
         response = self.client.get(url)
-        
+
         # Django test client returns 404 status code instead of raising Http404
         self.assertEqual(response.status_code, 404)
 
@@ -610,7 +687,7 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
         self.client = Client()
         self.temp_dir = tempfile.TemporaryDirectory()
         self.backup_dir = Path(self.temp_dir.name)
-        
+
         # Create and log in a test user
         self.user = create_backup_test_user()
         self.client.login(username='testuser', password='testpassword')
@@ -619,20 +696,21 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
     def test_download_multiple_as_zip(self, mock_settings: MagicMock) -> None:
         """Test downloading multiple backups as ZIP containing one ZIP artifact per backup."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         # Create test backup files
         (self.backup_dir / 'backup_1.dump.gz').write_bytes(b'content1')
         (self.backup_dir / 'backup_1.dump.gz.manifest.json').write_bytes(b'manifest1')
         (self.backup_dir / 'backup_2.dump.gz').write_bytes(b'content2')
         (self.backup_dir / 'backup_2.dump.gz.manifest.json').write_bytes(b'manifest2')
-        
+
         url = reverse('management:backup-download-multiple', kwargs={'archive_format': 'zip'})
         response = self.client.post(url, {'selected': ['backup_1.dump.gz', 'backup_2.dump.gz']})
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertIn('backups.zip', response['Content-Disposition'])
-        with zipfile.ZipFile(io.BytesIO(response.content)) as outer_archive:
+        self.assertTrue(response.streaming)
+        with zipfile.ZipFile(io.BytesIO(b''.join(response.streaming_content))) as outer_archive:
             self.assertEqual(set(outer_archive.namelist()), {'backup_1.zip', 'backup_2.zip'})
             with zipfile.ZipFile(io.BytesIO(outer_archive.read('backup_1.zip'))) as artifact:
                 self.assertEqual(set(artifact.namelist()), {'backup_1.dump.gz', 'backup_1.dump.gz.manifest.json'})
@@ -643,21 +721,24 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
     def test_download_multiple_as_tar_gz(self, mock_settings: MagicMock) -> None:
         """Test downloading multiple backups as tar.gz containing one tar.gz artifact per backup."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         # Create test backup files
         (self.backup_dir / 'backup_1.dump.gz').write_bytes(b'content1')
         (self.backup_dir / 'backup_1.dump.gz.manifest.json').write_bytes(b'manifest1')
         (self.backup_dir / 'backup_2.dump.gz').write_bytes(b'content2')
         (self.backup_dir / 'backup_2.dump.gz.manifest.json').write_bytes(b'manifest2')
-        
+
         url = reverse('management:backup-download-multiple', kwargs={'archive_format': 'tar.gz'})
         response = self.client.post(url, {'selected': ['backup_1.dump.gz', 'backup_2.dump.gz']})
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertIn('backups.tar.gz', response['Content-Disposition'])
-        with tarfile.open(fileobj=io.BytesIO(response.content), mode='r:gz') as outer_archive:
-            self.assertEqual({member.name for member in outer_archive.getmembers()}, {'backup_1.tar.gz', 'backup_2.tar.gz'})
+        self.assertTrue(response.streaming)
+        with tarfile.open(fileobj=io.BytesIO(b''.join(response.streaming_content)), mode='r:gz') as outer_archive:
+            self.assertEqual(
+                {member.name for member in outer_archive.getmembers()}, {'backup_1.tar.gz', 'backup_2.tar.gz'}
+            )
             artifact_bytes = outer_archive.extractfile('backup_1.tar.gz')
             self.assertIsNotNone(artifact_bytes)
             with tarfile.open(fileobj=io.BytesIO(artifact_bytes.read()), mode='r:gz') as artifact:
@@ -676,7 +757,7 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
         """Test downloading with no files selected."""
         url = reverse('management:backup-download-multiple', kwargs={'archive_format': 'zip'})
         response = self.client.post(url, {'selected': []})
-        
+
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('No files selected' in str(message) for message in messages))
@@ -685,10 +766,10 @@ class BackupFilesDownloadMultipleViewTest(TestCase):
     def test_download_multiple_no_valid_files(self, mock_settings: MagicMock) -> None:
         """Test downloading with no valid files."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         url = reverse('management:backup-download-multiple', kwargs={'archive_format': 'zip'})
         response = self.client.post(url, {'selected': ['nonexistent.dump.gz']})
-        
+
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('No valid files' in str(message) for message in messages))
@@ -706,7 +787,7 @@ class BackupFilesDeleteMultipleViewTest(TestCase):
         self.client = Client()
         self.temp_dir = tempfile.TemporaryDirectory()
         self.backup_dir = Path(self.temp_dir.name)
-        
+
         # Create and log in a test user
         self.user = create_backup_test_user()
         self.client.login(username='testuser', password='testpassword')
@@ -715,20 +796,20 @@ class BackupFilesDeleteMultipleViewTest(TestCase):
     def test_delete_multiple_success(self, mock_settings: MagicMock) -> None:
         """Test successfully deleting multiple backup files."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         # Create test backup files
         file1 = self.backup_dir / 'backup_1.dump.gz'
         file2 = self.backup_dir / 'backup_2.dump.gz'
         file1.write_bytes(b'content1')
         file2.write_bytes(b'content2')
-        
+
         url = reverse('management:backup-delete-multiple')
         response = self.client.post(url, {'selected': ['backup_1.dump.gz', 'backup_2.dump.gz']})
-        
+
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('Deleted' in str(message) for message in messages))
-        
+
         # Verify files were deleted
         self.assertFalse(file1.exists())
         self.assertFalse(file2.exists())
@@ -737,7 +818,7 @@ class BackupFilesDeleteMultipleViewTest(TestCase):
         """Test deleting with no files selected."""
         url = reverse('management:backup-delete-multiple')
         response = self.client.post(url, {'selected': []})
-        
+
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('No files selected' in str(message) for message in messages))
@@ -746,10 +827,10 @@ class BackupFilesDeleteMultipleViewTest(TestCase):
     def test_delete_multiple_nonexistent_file(self, mock_settings: MagicMock) -> None:
         """Test deleting files that don't exist."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         url = reverse('management:backup-delete-multiple')
         response = self.client.post(url, {'selected': ['nonexistent.dump.gz']})
-        
+
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('Errors deleting' in str(message) for message in messages))
@@ -774,18 +855,18 @@ class BackupFilesDeleteMultipleViewTest(TestCase):
     def test_delete_multiple_mixed_results(self, mock_settings: MagicMock) -> None:
         """Test deleting with mix of existing and nonexistent files."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         # Create one test backup file
         file1 = self.backup_dir / 'backup_1.dump.gz'
         file1.write_bytes(b'content1')
-        
+
         url = reverse('management:backup-delete-multiple')
         response = self.client.post(url, {'selected': ['backup_1.dump.gz', 'nonexistent.dump.gz']})
-        
+
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         message_strs = [str(m) for m in messages]
-        
+
         # Should have both success and error messages
         self.assertTrue(any('Deleted' in msg for msg in message_strs))
         self.assertTrue(any('Errors deleting' in msg for msg in message_strs))
@@ -795,17 +876,17 @@ class BackupFilesDeleteMultipleViewTest(TestCase):
     def test_delete_multiple_os_error(self, mock_unlink: MagicMock, mock_settings: MagicMock) -> None:
         """Test deleting files with OSError."""
         mock_settings.BACKUP_FILE_PATH = self.backup_dir
-        
+
         # Create test backup file
         file1 = self.backup_dir / 'backup_1.dump.gz'
         file1.write_bytes(b'content1')
-        
+
         # Mock unlink to raise OSError
         mock_unlink.side_effect = OSError('Permission denied')
-        
+
         url = reverse('management:backup-delete-multiple')
         response = self.client.post(url, {'selected': ['backup_1.dump.gz']})
-        
+
         self.assertEqual(response.status_code, 302)
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('Errors deleting' in str(message) for message in messages))

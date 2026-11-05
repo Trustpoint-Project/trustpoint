@@ -1,36 +1,115 @@
 {% load i18n %}
-<table class="table">
-    <thead>
-    <tr>
-        <th class="text-nowrap">{% trans 'Name' %}</th>
-        <th class="text-nowrap">{% trans 'Organization (O)' %}</th>
-        <th class="text-nowrap">{% trans 'Organization Unit (OU)' %}</th>
-        <th class="text-nowrap">{% trans 'Country (C)' %}</th>
-        <th class="text-nowrap">{% trans 'Users' %}</th>
-        <th class="text-end">{% trans 'Actions' %}</th>
-    </tr>
-    </thead>
-    <tbody>
-    {% for organization in organizations %}
-    <tr>
-        <td>{{ organization.name }}</td>
-        <td>{{ organization.organization }}</td>
-        <td>{{ organization.organization_unit|default:'-' }}</td>
-        <td>{{ organization.country|default:'-' }}</td>
-        <td>{{ organization.org_users.count }}</td>
-        <td class="text-end">
-            <a href="{% url 'management:edit_organization' organization.pk %}" class="btn btn-link text-body p-0 me-2" title="{% trans 'Edit' %}">
-                <i class="bi bi-pencil-square fs-5"></i>
-            </a>
-            <a href="{% url 'management:delete_organization' organization.pk %}" class="btn btn-link text-body p-0" title="{% trans 'Delete' %}">
-                <i class="bi bi-trash fs-5"></i>
-            </a>
-        </td>
-    </tr>
-    {% empty %}
-    <tr>
-        <td colspan="6" class="middle">{% trans 'No organizations have been added yet.' %}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-</table>
+
+<section>
+
+    <div class="table-responsive">
+
+        <table class="table table-hover align-middle">
+
+            <thead>
+                <tr>
+                    <th class="text-nowrap">
+                        {% trans 'Name' %}
+                    </th>
+
+                    <th class="text-nowrap">
+                        {% trans 'Organization (O)' %}
+                    </th>
+
+                    <th class="text-nowrap">
+                        {% trans 'Organizational Unit (OU)' %}
+                    </th>
+
+                    <th class="text-nowrap">
+                        {% trans 'Country (C)' %}
+                    </th>
+
+                    <th class="text-nowrap">
+                        {% trans 'Users' %}
+                    </th>
+
+                    <th class="text-end">
+                        {% trans 'Actions' %}
+                    </th>
+                </tr>
+            </thead>
+
+
+            <tbody>
+                {% for organization in organizations %}
+
+                    <tr>
+
+                        <td>
+                            {{ organization.name }}
+                        </td>
+
+                        <td>
+                            {% if organization.organization %}
+                                {{ organization.organization }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if organization.organization_unit %}
+                                {{ organization.organization_unit }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if organization.country %}
+                                {{ organization.country }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {{ organization.org_users.count }}
+                        </td>
+
+                        <td class="text-end">
+                            <div class="d-flex justify-content-end gap-2">
+
+                                <a
+                                    href="{% url 'management:edit_organization' organization.pk %}"
+                                    class="btn btn-sm btn-outline-primary"
+                                >
+                                    {% trans 'Edit' %}
+                                </a>
+
+                                <a
+                                    href="{% url 'management:delete_organization' organization.pk %}"
+                                    class="btn btn-sm btn-outline-secondary"
+                                >
+                                    {% trans 'Delete' %}
+                                </a>
+
+                            </div>
+                        </td>
+
+                    </tr>
+
+                {% empty %}
+
+                    <tr>
+                        <td
+                            colspan="6"
+                            class="text-center text-muted py-5"
+                        >
+                            {% trans 'No organizations have been added yet.' %}
+                        </td>
+                    </tr>
+
+                {% endfor %}
+            </tbody>
+
+        </table>
+
+    </div>
+
+</section>

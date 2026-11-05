@@ -8,12 +8,14 @@
     <link rel="stylesheet" href="{% static 'css/error.css' %}"> 
     <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
     {% block head %}{% endblock %}
+    <script src="{% static 'js/ui-actions.js' %}" defer></script>
+    <link rel="stylesheet" href="{% static 'css/ui-layout.css' %}">
 </head>
 <body>
     <div class="tp-content-wrapper">
         <header class="tp-page-header">
             <a class="tp-primary" href="/">
-                <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" id="tp-logo">
+                <img src="{% static 'img/trustpoint_logo_default.png' %}" alt="Trustpoint" id="tp-logo">
             </a>
         </header>
         <main>

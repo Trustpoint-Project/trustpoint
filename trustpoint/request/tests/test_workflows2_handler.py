@@ -69,7 +69,10 @@ def test_workflows2_device_updated_skips_context_without_event_payload() -> None
     """Device updates require the structured before/after payload."""
     device = Mock(id='device-1')
     context = BaseRequestContext(
-        event=Events.device_updated, device=device, protocol='device', operation='updated',
+        event=Events.device_updated,
+        device=device,
+        protocol='device',
+        operation='updated',
     )
 
     with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
@@ -572,8 +575,12 @@ def test_workflows2_handler_emits_device_deleted_from_request_context() -> None:
 
 def test_workflows2_certificate_handler_continues_when_dispatch_has_no_outcome(test_csr_fixture) -> None:
     context = EstCertificateRequestContext(
-        protocol='est', operation='simpleenroll', event=Events.est_simpleenroll,
-        device=Mock(id='device-1'), domain=Mock(id=1), cert_requested=test_csr_fixture.get_cryptography_object()
+        protocol='est',
+        operation='simpleenroll',
+        event=Events.est_simpleenroll,
+        device=Mock(id='device-1'),
+        domain=Mock(id=1, get_issuing_ca_or_value_error=Mock(return_value=Mock(id=11))),
+        cert_requested=test_csr_fixture.get_cryptography_object(),
     )
     with patch('request.workflows2_handler.WorkflowDispatchService') as service:
         service.return_value.emit_event_outcome.return_value = None

@@ -13,6 +13,7 @@ from django.contrib.auth.models import Permission
 from django.test import Client
 from django.urls import reverse
 
+from management.models import SecurityConfig
 from pki.models import CaModel
 from users.models import TrustpointUser
 
@@ -122,6 +123,9 @@ def test_ca_config_view_save_crl_settings(
     client_with_auth: Client
 ) -> None:
     """Test that CA config view saves CRL cycle settings."""
+    security_config = SecurityConfig(security_mode=SecurityConfig.SecurityModeChoices.LAB)
+    security_config.apply_security_settings(save=False)
+    security_config.save()
     issuing_ca: CaModel = issuing_ca_instance.get('issuing_ca')  # type: ignore[assignment]
 
     url = reverse('pki:issuing_cas-config', kwargs={'pk': issuing_ca.pk})

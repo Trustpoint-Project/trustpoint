@@ -25,13 +25,14 @@ jobs:
 
       - name: Run Pytest and create reports
         run: |
+          uv run python tests/scripts/build_redoc_csp.py --check
           mkdir -p reports
           uv run pytest \
           --md-report-flavor github \
           --md-report-color never \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
-          trustpoint/ 
+          trustpoint/ tests/
 
       - name: Display Summary in GitHub Actions even if tests fail
         if: always()

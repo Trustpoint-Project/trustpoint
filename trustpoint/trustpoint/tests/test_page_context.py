@@ -9,7 +9,6 @@ from django.views.generic import TemplateView
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PKI_PAGE_CATEGORY,
     PKI_PAGE_DOMAIN_SUBCATEGORY,
     PKI_PAGE_ISSUING_CAS_SUBCATEGORY,
@@ -34,7 +33,6 @@ class TestPageContextMixin(TestCase):
         assert context['test_key'] == 'test_value'
         assert context['DEVICES_PAGE_CATEGORY'] == DEVICES_PAGE_CATEGORY
         assert context['DEVICES_PAGE_DEVICES_SUBCATEGORY'] == DEVICES_PAGE_DEVICES_SUBCATEGORY
-        assert context['DEVICES_PAGE_OPC_UA_SUBCATEGORY'] == DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
     def test_get_context_data_with_super(self) -> None:
         """Test get_context_data when super class has get_context_data."""
@@ -92,7 +90,6 @@ class TestPageContextMixin(TestCase):
         """Test that constants have expected values."""
         assert DEVICES_PAGE_CATEGORY == 'devices'
         assert DEVICES_PAGE_DEVICES_SUBCATEGORY == 'devices'
-        assert DEVICES_PAGE_OPC_UA_SUBCATEGORY == 'opc_ua_gds'
         assert PKI_PAGE_CATEGORY == 'pki'
         assert PKI_PAGE_DOMAIN_SUBCATEGORY == 'domains'
         assert PKI_PAGE_ISSUING_CAS_SUBCATEGORY == 'issuing_cas'

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from django.db.models.signals import post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
-from devices.models import DeviceModel
+from devices.models import DeviceModel, OpcUaGdsPushConfig
 from request.request_context import BaseRequestContext
 from request.workflows2_handler import Workflow2Handler
 from workflows2.events.payloads import build_device_changes, build_device_snapshot
@@ -95,3 +95,29 @@ def on_device_deleted(
         operation=Events.device_deleted.operation,
     )
     Workflow2Handler().handle(context)
+
+
+@receiver(pre_save, sender=OpcUaGdsPushConfig)
+def cache_previous_gds_push_snapshot(
+    sender: ModelBase, instance: OpcUaGdsPushConfig, **_kwargs: Any,  # noqa: ARG001
+) -> None:
+    """Capture the owning device's OPC settings before a configuration update."""
+    if instance.pk:
+        device = DeviceModel.objects.get(pk=instance.device_id)
+        instance.workflow2_before_snapshot = build_device_snapshot(device)  # type: ignore[attr-defined]
+
+
+@receiver(post_save, sender=OpcUaGdsPushConfig)
+def on_gds_push_config_saved(
+    sender: type[OpcUaGdsPushConfig],  # noqa: ARG001
+    instance: OpcUaGdsPushConfig,
+    created: bool,  # noqa: FBT001
+    **_kwargs: Any,
+) -> None:
+    """Keep OPC setting changes visible to existing device lifecycle workflows."""
+    if created:
+        return
+    device = instance.device
+    device.opc_ua_gds_push_config = instance
+    device.workflow2_before_snapshot = getattr(instance, 'workflow2_before_snapshot', None)  # type: ignore[attr-defined]
+    on_device_saved(DeviceModel, device, created=False)

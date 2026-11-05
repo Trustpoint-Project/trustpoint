@@ -7,7 +7,7 @@ import json
 
 from cryptography.hazmat.primitives.serialization import Encoding
 
-from onboarding.models import OnboardingStatus
+from devices.secrets import retire_onboarding_secrets
 from request.request_context import BaseRequestContext, RestBaseRequestContext, RestCertificateRequestContext
 from request.workflow2_issuance import (
     Workflow2IssuanceDecision,
@@ -118,8 +118,8 @@ class RestCertificateMessageResponder(RestMessageResponder):
         }
 
         if context.device and context.device.onboarding_config:
-            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            context.device.onboarding_config.save()
+
+            retire_onboarding_secrets(context.device.onboarding_config)
 
         context.http_response_status = 200
         context.http_response_content = json.dumps(response_data)

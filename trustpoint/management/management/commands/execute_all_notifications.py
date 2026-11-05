@@ -31,7 +31,7 @@ class Command(BaseCommand):
             help='Number of minutes between notification checks (default: 5)'
         )
 
-    def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
+    def handle(self, *args: Any, **kwargs: Any) -> None:  # noqa: ARG002
         """Entrypoint for the command.
 
         Args:

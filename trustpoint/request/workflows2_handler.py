@@ -6,25 +6,32 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
 
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import CertificateSigningRequest
-from pyasn1.codec.der import encoder as der_encoder  # type: ignore[import-untyped]
+from django.db import transaction
+from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
+from pyasn1.codec.der import encoder as der_encoder
+from pyasn1_modules import rfc2986  # type: ignore[import-untyped]
 
 from cmp.util import PKI_STATUS_REJECTION
+from est.channel_binding import CHALLENGE_PASSWORD_OID
 from request.request_context import (
     BaseCertificateRequestContext,
     BaseRequestContext,
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
+    EstCertificateRequestContext,
     HttpBaseRequestContext,
 )
 from trustpoint.logger import LoggerMixin
-from workflows2.events.payloads import build_device_snapshot, serialize_source
+from workflows2.events.payloads import build_device_snapshot, build_enrollment_request_snapshot, serialize_source
 from workflows2.events.triggers import Triggers
 from workflows2.services.dispatch import DispatchOutcome, EventSource, WorkflowDispatchService
 from workflows2.services.request_decision import Workflow2RequestDecision, resolve_request_decision
@@ -112,11 +119,7 @@ def _build_certificate_request_dispatch(
     event_key: str,
     operation: str,
 ) -> Workflow2DispatchRequest | None:
-    if (
-        not context.device
-        or not context.domain
-        or not isinstance(context.cert_requested, CertificateSigningRequest)
-    ):
+    if not context.device or not context.domain or not isinstance(context.cert_requested, CertificateSigningRequest):
         return None
 
     issuing_ca = context.domain.get_issuing_ca_or_value_error()
@@ -128,6 +131,26 @@ def _build_certificate_request_dispatch(
     )
 
     fingerprint = hashlib.sha256(context.cert_requested.tbs_certrequest_bytes).hexdigest()
+    idempotency_key = fingerprint
+    if isinstance(context, EstCertificateRequestContext):
+        request_info = context.cert_requested.tbs_certrequest_bytes
+        if context.est_channel_binding_verified:
+            # A verified connection binding changes on reconnect, but the enrollment does not.
+            info, _ = der_decoder.decode(request_info, asn1Spec=rfc2986.CertificationRequestInfo())
+            attributes = [attr for attr in info['attributes'] if str(attr['type']) != CHALLENGE_PASSWORD_OID]
+            info['attributes'].clear()
+            info['attributes'].extend(attributes)
+            request_info = der_encoder.encode(info)
+        profile = context.certificate_profile_model
+        identity = [
+            source.ca_id,
+            source.domain_id,
+            source.device_id,
+            operation,
+            profile.pk if profile is not None else context.cert_profile_str,
+            hashlib.sha256(request_info).hexdigest(),
+        ]
+        idempotency_key = hashlib.sha256(json.dumps(identity).encode()).hexdigest()
     event = {
         'device': {
             **build_device_snapshot(context.device),
@@ -146,7 +169,7 @@ def _build_certificate_request_dispatch(
         on=on,
         event=event,
         source=source,
-        idempotency_key=fingerprint,
+        idempotency_key=idempotency_key,
         initial_vars={},
     )
 
@@ -220,7 +243,6 @@ def _build_cmp_request_dispatch(
     if certconf_status is not None:
         certconf_status_str = 'rejected' if certconf_status == PKI_STATUS_REJECTION else 'accepted'
 
-
     fingerprint = hashlib.sha256(fingerprint_source).hexdigest()
     transaction_id = _cmp_transaction_id(context)
     event = {
@@ -265,6 +287,12 @@ def _build_cmp_certification_dispatch(
         on=Triggers.CMP_CERTIFICATION,
         operation='certification',
     )
+
+
+def _build_cmp_keyupdate_dispatch(
+    context: BaseCertificateRequestContext,
+) -> Workflow2DispatchRequest | None:
+    return _build_cmp_request_dispatch(context, on=Triggers.CMP_KEYUPDATE, operation='keyupdate')
 
 
 def _build_cmp_certconf_dispatch(
@@ -399,6 +427,7 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
     _DISPATCH_BUILDERS: ClassVar[dict[tuple[str, str], Workflow2DispatchBuilder]] = {
         ('cmp', 'initialization'): _build_cmp_initialization_dispatch,
         ('cmp', 'certification'): _build_cmp_certification_dispatch,
+        ('cmp', 'keyupdate'): _build_cmp_keyupdate_dispatch,
         ('est', 'simpleenroll'): _build_est_simpleenroll_dispatch,
         ('est', 'simplereenroll'): _build_est_simplereenroll_dispatch,
         ('rest', 'enroll'): _build_rest_enroll_dispatch,
@@ -412,8 +441,10 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
         elif isinstance(context, BaseCertificateRequestContext):
             dispatch_request = self._build_dispatch_request(context)
         else:
-            msg = ('Workflow2CertificateRequestHandler requires a '
-                   'BaseCertificateRequestContext or CmpCertConfRequestContext.')
+            msg = (
+                'Workflow2CertificateRequestHandler requires a '
+                'BaseCertificateRequestContext or CmpCertConfRequestContext.'
+            )
             raise TypeError(msg)
         if dispatch_request is None:
             return Workflow2HandleResult.continue_processing()
@@ -438,6 +469,41 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
         if builder is None:
             return None
         return builder(context)
+
+    def handle_issued(self, context: BaseRequestContext) -> None:
+        """Capture effective attributes now and notify after issuance commits.
+
+        This is separate from the pre-issuance decision: notification failures
+        must neither block delivery nor overwrite the authorization outcome.
+        """
+        if not isinstance(context, BaseCertificateRequestContext) or context.issued_certificate is None:
+            return
+        try:
+            dispatch_request = self._build_dispatch_request(context)
+            if dispatch_request is None:
+                return
+            event = dispatch_request.event
+            event['phase'] = 'after_issuance'
+            event['request'] = build_enrollment_request_snapshot(context.issued_certificate)
+            fingerprint = context.issued_certificate.fingerprint(hashes.SHA256()).hex()
+
+            def dispatch() -> None:
+                try:
+                    # Isolate persistence errors from any surrounding transaction.
+                    with transaction.atomic():
+                        WorkflowDispatchService().emit_event(
+                            on=dispatch_request.on,
+                            event=event,
+                            source=dispatch_request.source,
+                            initial_vars=dispatch_request.initial_vars,
+                            idempotency_key=f'issued:{fingerprint}',
+                        )
+                except Exception:
+                    self.logger.exception('Failed to dispatch post-issuance workflow event.')
+
+            transaction.on_commit(dispatch)
+        except Exception:
+            self.logger.exception('Failed to capture post-issuance workflow event.')
 
     @staticmethod
     def _result_for_outcome(

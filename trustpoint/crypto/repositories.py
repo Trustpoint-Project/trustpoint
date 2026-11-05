@@ -5,11 +5,9 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from cryptography.hazmat.primitives import serialization
 from django.db import transaction
 from django.utils import timezone
 
@@ -23,6 +21,7 @@ from crypto.adapters.software.capabilities import SoftwareCapabilities
 from crypto.domain.algorithms import KeyAlgorithm
 from crypto.domain.errors import InternalConsistencyError, UnsupportedBackendKindError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.domain.public_keys import public_key_fingerprint_sha256
 from crypto.local_development import ensure_local_software_backends
 from crypto.models import (
     BackendKind,
@@ -232,9 +231,12 @@ class CryptoProviderProfileRepository:
 class CryptoManagedKeyRepository:
     """Persistence helpers for backend-managed key references."""
 
-    def get_by_id(self, *, managed_key_id: UUID) -> CryptoManagedKeyModel:
+    def get_by_id(self, *, managed_key_id: UUID, for_update: bool = False) -> CryptoManagedKeyModel:
         """Return a managed-key record by UUID."""
-        return CryptoManagedKeyModel.objects.select_related('provider_profile').get(pk=managed_key_id)
+        keys = CryptoManagedKeyModel.objects.select_related('provider_profile')
+        if for_update:
+            keys = keys.select_for_update(of=('self',))
+        return keys.get(pk=managed_key_id)
 
     def get_by_alias(self, *, alias: str) -> CryptoManagedKeyModel:
         """Return a managed-key record by stable application alias."""
@@ -426,14 +428,7 @@ class CryptoManagedKeyRepository:
             'usages': sorted(usage.value for usage in policy.usages),
         }
 
-    @staticmethod
-    def public_key_fingerprint_sha256(public_key: SupportedPublicKey) -> str:
-        """Return the SHA-256 fingerprint of SubjectPublicKeyInfo DER."""
-        spki_der = public_key.public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return hashlib.sha256(spki_der).hexdigest()
+    public_key_fingerprint_sha256 = staticmethod(public_key_fingerprint_sha256)
 
     @staticmethod
     def _validate_profile_binding_compatibility(
@@ -523,8 +518,5 @@ class CryptoManagedKeyRepository:
             _save_untyped_model(rest_model)
             return
 
-        msg = (
-            f'Cannot persist binding type {type(binding).__name__} for '
-            f'backend kind {profile.backend_kind!r}.'
-        )
+        msg = f'Cannot persist binding type {type(binding).__name__} for backend kind {profile.backend_kind!r}.'
         raise InternalConsistencyError(msg)

@@ -9,8 +9,10 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
 from management.models import NotificationModel, NotificationStatus, SecurityConfig
 from pki.models import CertificateModel
+from pki.security_policy import CryptographicPolicy, PolicyViolationCode, evaluate_signature, stored_signature_facts
 
 
 class Command(BaseCommand):
@@ -33,14 +35,25 @@ class Command(BaseCommand):
         config = SecurityConfig.objects.first()
         if config is None:
             return
-        not_permitted_algorithms = config.not_permitted_signature_algorithm_oids
+        policy = CryptographicPolicy.from_config(config)
+        if not policy.blocked_signature_oids:
+            return
 
-        not_permitted_certificates = CertificateModel.objects.filter(signature_algorithm_oid__in=not_permitted_algorithms)
+        not_permitted_certificates = CertificateModel.objects.all()
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
 
-        for cert in not_permitted_certificates:
+        for cert in not_permitted_certificates.iterator():
+            failures = evaluate_signature(policy, stored_signature_facts(cert))
+            if not any(failure.code in (
+                PolicyViolationCode.SIGNATURE_BLOCKED, PolicyViolationCode.SIGNATURE_HASH_BLOCKED,
+            ) for failure in failures):
+                continue
             if not NotificationModel.objects.filter(event='WEAK_SIGNATURE_ALGORITHM', certificate=cert).exists():
-                message_data = {'common_name': cert.common_name, 'signature_algorithm': cert.signature_algorithm}
+                try:
+                    algorithm_name = cert.signature_algorithm
+                except ValueError:
+                    algorithm_name = cert.signature_algorithm_oid
+                message_data = {'common_name': cert.common_name, 'signature_algorithm': algorithm_name}
 
                 notification = NotificationModel.objects.create(
                     certificate=cert,

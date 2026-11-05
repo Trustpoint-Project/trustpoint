@@ -3,11 +3,9 @@
 
 """Provides the 'RestAuthorization' class using the Composite pattern for modular REST authorization."""
 
-from request.request_context import BaseRequestContext, RestBaseRequestContext
-from trustpoint.logger import LoggerMixin
+from request.request_context import RestBaseRequestContext
 
 from .base import (
-    AuthorizationComponent,
     CertificateProfileAuthorization,
     CompositeAuthorization,
     DomainScopeValidation,
@@ -15,40 +13,14 @@ from .base import (
     ProtocolAuthorization,
     SecurityConfigAuthorization,
 )
+from .http import HttpOperationAuthorization
 
 
-class RestOperationAuthorization(AuthorizationComponent, LoggerMixin):
-    """Ensures the REST request is authorized for the specified operation."""
+class RestOperationAuthorization(HttpOperationAuthorization):
+    """Authorize the requested operation for RestBaseRequestContext."""
 
-    def __init__(self, allowed_operations: list[str]) -> None:
-        """Initialize the authorization component with a list of allowed operations."""
-        self.allowed_operations = allowed_operations
-
-    def authorize(self, context: BaseRequestContext) -> None:
-        """Authorize the request based on the operation type."""
-        if not isinstance(context, RestBaseRequestContext):
-            exc_msg = 'RestOperationAuthorization requires a RestBaseRequestContext.'
-            raise TypeError(exc_msg)
-
-        operation = context.operation
-
-        if not operation:
-            error_message = 'Operation information is missing. Authorization denied.'
-            self.logger.warning('REST operation authorization failed: Operation information is missing')
-            raise ValueError(error_message)
-
-        if operation not in self.allowed_operations:
-            error_message = (
-                f"Unauthorized operation: '{operation}'. "
-                f"Allowed operations: {', '.join(self.allowed_operations)}."
-            )
-            self.logger.warning(
-                'REST operation authorization failed: %s not in allowed operations %s',
-                operation, self.allowed_operations
-            )
-            raise ValueError(error_message)
-
-        self.logger.debug('REST operation authorization successful for operation: %s', operation)
+    context_type = RestBaseRequestContext
+    context_error_message = 'RestOperationAuthorization requires a RestBaseRequestContext.'
 
 
 class RestAuthorization(CompositeAuthorization):

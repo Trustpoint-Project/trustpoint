@@ -17,6 +17,7 @@ from pki.views.issuing_cas import (
     IssuingCaDefineCertContentCmpView,
     IssuingCaDefineCertContentEstView,
     IssuingCaDefineCertContentMixin,
+    IssuingCaExternalCsrView,
     IssuingCaRequestCertCmpView,
     IssuingCaRequestCertEstView,
     IssuingCaRequestCertMixin,
@@ -52,12 +53,16 @@ def test_est_and_cmp_request_data_convert_form_values() -> None:
     }
     est_view = IssuingCaRequestCertEstView()
     cmp_view = IssuingCaRequestCertCmpView()
-    est = IssuingCaRequestCertEstView.__dict__['_build_request_data_from_form'](est_view, content)
-    cmp = IssuingCaRequestCertCmpView.__dict__['_build_request_data_from_form'](cmp_view, content)
+    est = est_view._build_request_data_from_form(content)
+    cmp = cmp_view._build_request_data_from_form(content)
 
     assert est == cmp
+    assert IssuingCaExternalCsrView()._build_request_data_from_form(content) == est
     assert est['subj'] == {'common_name': 'ca.example', 'country_name': 'DE'}
-    assert est['ext']['subject_alternative_name']['ip_addresses'] == '192.0.2.1'
+    assert est['ext']['subject_alternative_name'] == {
+        'dns_names': ['ca.example'],
+        'ip_addresses': ['192.0.2.1'],
+    }
     assert est['validity'] == {'days': 30}
 
 
@@ -73,12 +78,11 @@ def test_define_content_profile_selection_prefers_requested_then_issuing_default
     view = IssuingCaDefineCertContentEstView()
     requested = RequestFactory().get('/', {'cert_profile_pk': selected.pk})
 
-    resolve_profile = IssuingCaDefineCertContentMixin.__dict__['_resolve_cert_profile']
-    assert resolve_profile(view, requested) == selected
-    assert resolve_profile(view, RequestFactory().get('/')) == default
+    assert view._resolve_cert_profile(requested) == selected
+    assert view._resolve_cert_profile(RequestFactory().get('/')) == default
 
     default.delete()
-    assert resolve_profile(view, RequestFactory().get('/')) == selected
+    assert view._resolve_cert_profile(RequestFactory().get('/')) == selected
 
 
 @pytest.mark.django_db

@@ -19,7 +19,7 @@ These formats are widely adopted for secure software supply chain management and
 SBOM Access and Links
 ----------------------
 
-You can access the latest `Trustpoint SBOMs <https://trustpoint-project.github.io/trustpoint/>`_ here:
+You can access the latest `Trustpoint SBOMs <https://trustpoint-project.github.io/trustpoint/sbom/>`_ here:
 
 ^^^^^^^^^^
 SPDX SBOM
@@ -39,7 +39,14 @@ SBOM Generation and CI Integration
 
 The SBOMs are **automatically generated** and kept up to date via a `GitHub Actions Workflow <https://github.com/Trustpoint-Project/trustpoint/blob/main/.github/workflows/sbom.yml>`_.
 
-This workflow is triggered **on every push to the `main` branch**, ensuring that the published SBOMs always reflect the current state of the codebase and its dependencies.
+The joint GHCR/Docker Hub publisher (``publish-images.yml``) calls this workflow
+after publishing images from ``main``,
+release tags, or a manual build. Syft scans the published image by its immutable
+SHA-256 digest from GHCR, rather than rebuilding it. Both registries receive the
+same build. The publisher uses the existing ``DOCKER_HUB_USERNAME`` and
+``DOCKER_HUB_ACCESS_TOKEN`` repository secrets. Version directories are retained
+under ``sbom/``. A manual SBOM run requires an image reference including its
+digest and a release tag or commit identifier.
 
 ----------------------
 Validation and Tools

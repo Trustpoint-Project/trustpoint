@@ -43,8 +43,12 @@ class UserSerializer(serializers.ModelSerializer[TrustpointUser]):
             )
 
         if password:
+            user = get_user_model()(**{
+                name: attrs.get(name, getattr(self.instance, name, ''))
+                for name in ('username', 'first_name', 'last_name', 'email')
+            })
             try:
-                validate_password(password, user=self.instance)
+                validate_password(password, user=user)
             except DjangoValidationError as exc:
                 raise serializers.ValidationError({'password': exc.messages}) from exc
 
@@ -66,5 +70,4 @@ class UserSerializer(serializers.ModelSerializer[TrustpointUser]):
 
         instance.save()
         return instance
-
 

@@ -56,7 +56,7 @@ export function renderGraphEdgeEditorOverlay({
   });
 
   return `
-    <div class="wf2-graph-floating-card wf2-graph-floating-edge wf2-graph-overlay-shell" style="left:${left}px; top:${top}px; width:${fitted.width}px; max-width:${fitted.maxWidth}px; max-height:${fitted.maxHeight}px;">
+    <div class="wf2-graph-floating-card wf2-graph-floating-edge wf2-graph-overlay-shell" data-overlay-left="${left}" data-overlay-top="${top}" data-overlay-width="${fitted.width}" data-overlay-max-width="${fitted.maxWidth}" data-overlay-max-height="${fitted.maxHeight}">
       <div class="wf2-graph-floating-header">
         <div>
           <div class="wf2-graph-floating-kicker">Edge editor</div>

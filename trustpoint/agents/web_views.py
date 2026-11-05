@@ -304,8 +304,20 @@ class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
         }
 
 
+class AgentContextMixin:
+    """Add the parent agent to assigned-profile template contexts."""
+
+    kwargs: dict[str, Any]
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Resolve the agent named by the URL after building the view context."""
+        context = super().get_context_data(**kwargs)  # type: ignore[misc]
+        context['agent'] = get_object_or_404(TrustpointAgent, pk=self.kwargs['agent_id'])
+        return context  # type: ignore[no-any-return]
+
+
 class AgentAssignedProfileTableView(
-    AgentSecurityMixin, PageContextMixin, LoggerMixin, ListView[AgentAssignedProfile]
+    AgentContextMixin, AgentSecurityMixin, PageContextMixin, LoggerMixin, ListView[AgentAssignedProfile]
 ):
     """List all workflow profiles assigned to a specific 1-to-1 agent."""
 
@@ -324,12 +336,6 @@ class AgentAssignedProfileTableView(
             .select_related('agent', 'workflow_definition')
             .order_by('workflow_definition__name')
         )
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the agent to the template context."""
-        context = super().get_context_data(**kwargs)
-        context['agent'] = get_object_or_404(TrustpointAgent, pk=self.kwargs['agent_id'])
-        return context
 
 
 class AgentAssignedProfileCreateView(
@@ -379,7 +385,8 @@ class AgentAssignedProfileCreateView(
 
 
 class AgentAssignedProfileEditView(
-    AgentSecurityMixin, PageContextMixin, LoggerMixin, UpdateView[AgentAssignedProfile, AgentAssignedProfileEditForm]
+    AgentContextMixin, AgentSecurityMixin, PageContextMixin, LoggerMixin,
+    UpdateView[AgentAssignedProfile, AgentAssignedProfileEditForm],
 ):
     """Edit an existing AgentAssignedProfile (renewal_threshold_days, subject, subject_alt_name)."""
 
@@ -394,12 +401,6 @@ class AgentAssignedProfileEditView(
     def get_queryset(self) -> QuerySet[AgentAssignedProfile]:
         """Restrict to profiles belonging to the specified agent."""
         return AgentAssignedProfile.objects.filter(agent_id=self.kwargs['agent_id'])
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the parent agent to the template context."""
-        context = super().get_context_data(**kwargs)
-        context['agent'] = get_object_or_404(TrustpointAgent, pk=self.kwargs['agent_id'])
-        return context
 
     def get_success_url(self) -> str:
         """Redirect to the assigned-profiles list after saving."""
@@ -419,7 +420,7 @@ class AgentAssignedProfileEditView(
         return HttpResponseRedirect(self.get_success_url())
 
 
-class AgentAssignedProfileDeleteView(AgentSecurityMixin, PageContextMixin, BulkDeleteView):
+class AgentAssignedProfileDeleteView(AgentContextMixin, AgentSecurityMixin, PageContextMixin, BulkDeleteView):
     """Confirm and execute bulk deletion of AgentAssignedProfile records."""
 
     model = AgentAssignedProfile
@@ -448,12 +449,6 @@ class AgentAssignedProfileDeleteView(AgentSecurityMixin, PageContextMixin, BulkD
             messages.error(request, 'No profiles selected for deletion.')
             return HttpResponseRedirect(self.ignore_url)
         return super().get(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the parent agent to context."""
-        context = super().get_context_data(**kwargs)
-        context['agent'] = get_object_or_404(TrustpointAgent, pk=self.kwargs['agent_id'])
-        return context
 
     def form_valid(self, form: Any) -> HttpResponse:
         """Delete selected assignments and redirect."""

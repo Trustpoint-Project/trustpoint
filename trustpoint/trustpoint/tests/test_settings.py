@@ -20,14 +20,22 @@ def set_test_env(monkeypatch):
     monkeypatch.setenv('DATABASE_ENGINE', 'django.db.backends.postgresql')
     monkeypatch.setenv('DATABASE_USER', 'test_user')
     monkeypatch.setenv('DATABASE_PASSWORD', 'test_password')
+    monkeypatch.delenv('DATABASE_PASSWORD_FILE', raising=False)
     monkeypatch.setenv('DATABASE_HOST', 'localhost')
     monkeypatch.setenv('DATABASE_PORT', '5432')
     monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_DATABASE', 'postgresql')
     monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
     yield
+    monkeypatch.delenv('DATABASE_PASSWORD_FILE', raising=False)
     monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
     monkeypatch.delenv('TRUSTPOINT_OPERATIONAL_DATABASE', raising=False)
     importlib.reload(settings)
+
+
+def test_secure_cookie_defaults_follow_container_mode():
+    """Docker UI cookies require TLS while direct native HTTP stays usable."""
+    assert settings.SESSION_COOKIE_SECURE is settings.DOCKER_CONTAINER
+    assert settings.CSRF_COOKIE_SECURE is settings.DOCKER_CONTAINER
 
 
 def test_debug_setting():
@@ -189,11 +197,14 @@ def test_env_value_reads_docker_secret_file(monkeypatch, tmp_path):
     monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
     monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret_file))
 
-    assert settings._env_value(
-        'DATABASE_PASSWORD',
-        'testing321',
-        file_var='DATABASE_PASSWORD_FILE',
-    ) == 'secret-password'
+    assert (
+        settings._env_value(
+            'DATABASE_PASSWORD',
+            'testing321',
+            file_var='DATABASE_PASSWORD_FILE',
+        )
+        == 'secret-password'
+    )
 
 
 def test_env_value_falls_back_when_secret_file_is_unreadable(monkeypatch, tmp_path):
@@ -202,11 +213,14 @@ def test_env_value_falls_back_when_secret_file_is_unreadable(monkeypatch, tmp_pa
     monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
     monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(missing_file))
 
-    assert settings._env_value(
-        'DATABASE_PASSWORD',
-        'testing321',
-        file_var='DATABASE_PASSWORD_FILE',
-    ) == 'testing321'
+    assert (
+        settings._env_value(
+            'DATABASE_PASSWORD',
+            'testing321',
+            file_var='DATABASE_PASSWORD_FILE',
+        )
+        == 'testing321'
+    )
 
 
 def test_database_settings(monkeypatch):
@@ -254,6 +268,7 @@ def test_bootstrap_database_settings(monkeypatch, tmp_path):
     assert databases['default']['NAME'] == str(bootstrap_db)
     assert 'trustpoint.middleware.Workflow2InlineDrainMiddleware' not in settings.MIDDLEWARE
 
+
 def test_secret_key():
     """Ensure the secret key is defined."""
     assert settings.SECRET_KEY is not None, 'SECRET_KEY must be defined.'
@@ -286,7 +301,6 @@ def test_installed_apps():
         assert app in installed_app_labels, f'App {app} should be in INSTALLED_APPS.'
 
 
-
 def test_logging_configuration():
     """Ensure logging configuration is properly configured."""
     logging_config = settings.LOGGING
@@ -295,9 +309,7 @@ def test_logging_configuration():
     assert 'formatters' in logging_config, 'Logging configuration must include formatters.'
 
     expected_log_file_path = os.path.abspath(str(settings.LOG_FILE_PATH))
-    actual_log_file_path = os.path.abspath(
-        logging_config['handlers']['rotatingFile']['filename']
-    )
+    actual_log_file_path = os.path.abspath(logging_config['handlers']['rotatingFile']['filename'])
 
     assert actual_log_file_path == expected_log_file_path, (
         f'Log file path should match the defined value in settings. '
@@ -318,13 +330,14 @@ def test_public_paths():
     expected_paths = [
         '/.well-known/cmp',
         '/.well-known/est',
+        '/.well-known/scep',
         '/rest',
         '/api',
         '/aoki',
         '/crl',
         '/setup-wizard',
         '/devices/browser',
-        '/prometheus/'
+        '/prometheus/',
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
@@ -345,3 +358,73 @@ def test_language_settings():
     assert settings.USE_TZ is True, 'USE_TZ should be enabled.'
     assert settings.TIME_ZONE == 'UTC', "TIME_ZONE should be set to 'UTC'."
     assert isinstance(settings.LANGUAGES, list), 'LANGUAGES should be a list.'
+
+
+def test_mailers_defaults_to_console(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Email stays local when no SMTP host is configured."""
+    monkeypatch.delenv('EMAIL_HOST', raising=False)
+    importlib.reload(settings)
+
+    assert settings.MAILERS == {'default': {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}}
+
+
+@pytest.mark.parametrize(('port', 'use_tls', 'use_ssl'), [(587, True, False), (465, False, True), (1025, False, False)])
+def test_mailers_smtp_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    port: int,
+    use_tls: bool,
+    use_ssl: bool,
+) -> None:
+    """SMTP environment variables retain their port-based security defaults."""
+    monkeypatch.setenv('EMAIL_HOST', 'smtp.example.com')
+    monkeypatch.setenv('EMAIL_PORT', str(port))
+    monkeypatch.setenv('EMAIL_HOST_USER', 'mailer')
+    monkeypatch.setenv('EMAIL_HOST_PASSWORD', 'secret')
+    monkeypatch.setenv('EMAIL_TIMEOUT', '15')
+    monkeypatch.delenv('EMAIL_USE_TLS', raising=False)
+    monkeypatch.delenv('EMAIL_USE_SSL', raising=False)
+    importlib.reload(settings)
+
+    assert settings.MAILERS['default'] == {
+        'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+        'OPTIONS': {
+            'host': 'smtp.example.com',
+            'port': port,
+            'username': 'mailer',
+            'password': 'secret',
+            'use_tls': use_tls,
+            'use_ssl': use_ssl,
+            'timeout': 15,
+        },
+    }
+
+
+def test_mailers_smtp_security_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit environment flags override the SMTP port's TLS defaults."""
+    monkeypatch.setenv('EMAIL_HOST', 'smtp.example.com')
+    monkeypatch.setenv('EMAIL_PORT', '587')
+    monkeypatch.setenv('EMAIL_USE_TLS', '0')
+    monkeypatch.setenv('EMAIL_USE_SSL', 'yes')
+    importlib.reload(settings)
+
+    options = settings.MAILERS['default']['OPTIONS']
+    assert options['use_tls'] is False
+    assert options['use_ssl'] is True
+
+
+def test_database_password_uses_mounted_secret_instead_of_inherited_default(monkeypatch, tmp_path):
+    """An explicitly configured mounted secret wins over container defaults."""
+    secret = tmp_path / 'mounted-db-password'
+    secret.write_text('mounted-test-password\n', encoding='utf-8')
+    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret))
+    monkeypatch.setenv('DATABASE_PASSWORD', 'inherited-default')
+    importlib.reload(settings)
+    assert settings.DATABASE_PASSWORD == 'mounted-test-password'
+    assert settings.DATABASES['default']['PASSWORD'] == 'mounted-test-password'
+
+
+def test_missing_mounted_database_secret_fails_closed(monkeypatch, tmp_path):
+    """A missing secret must not silently switch to an inherited password."""
+    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(tmp_path / 'missing-secret'))
+    with pytest.raises(FileNotFoundError):
+        importlib.reload(settings)

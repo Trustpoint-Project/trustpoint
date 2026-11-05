@@ -1,18 +1,30 @@
+{% load i18n %}
 {% load static %}
 <link rel="stylesheet" href="{% static 'css/truststore-subject-table.css' %}">
-<table class="subject-table">
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle subject-table">
+  <thead>
+    <tr>
+      <th scope="col">{% trans 'Name' %}</th>
+      <th scope="col">{% trans 'Object Identifier' %}</th>
+      <th scope="col">{% trans 'Value' %}</th>
+    </tr>
+  </thead>
+  <tbody>
   {% for entry in entries %}
   <tr>
       {% if entry.name %}
-        <td>{{ entry.name }}</td>
-        <td>({{ entry.oid }})</td>
+        <th scope="row">{{ entry.name }}</th>
+        <td class="font-monospace">{{ entry.oid }}</td>
       {% else %}
-        <td></td>
-        <td>({{ entry.oid }})</td>
+        <th scope="row" class="text-muted">—</th>
+        <td class="font-monospace">{{ entry.oid }}</td>
       {% endif %}
       <td>{{ entry.value }}</td>
   </tr>
   {% empty %}
-  <tr><td colspan="3">No entries</td></tr>
+  <tr><td colspan="3" class="text-center text-muted">{% trans 'No entries' %}</td></tr>
   {% endfor %}
+  </tbody>
 </table>
+</div>

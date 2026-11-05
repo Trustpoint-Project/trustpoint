@@ -66,6 +66,12 @@ Configure outgoing email delivery for workflow and system messages.
 | Username / Password | Optional SMTP authentication credentials. |
 | Test recipient | Address used to send a test email. |
 
+The saved SMTP password is encrypted using the configured application-secret
+backend and is never displayed in the form. Leave the password field blank to
+keep its stored value, enter a replacement to change it, or select **Clear stored
+password** to remove it. Test emails use the same keep/replace/clear choices
+without saving changes to the database.
+
 ## Logging
 
 Configure the application log level.

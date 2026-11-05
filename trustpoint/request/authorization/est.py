@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 """Provides the 'EstAuthorization' class using the Composite pattern for modular EST authorization."""
-from request.request_context import BaseRequestContext, EstBaseRequestContext
-from trustpoint.logger import LoggerMixin
+
+from pki.models import IssuedCredentialModel
+from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 
 from .base import (
-    AuthorizationComponent,
     CertificateProfileAuthorization,
     CompositeAuthorization,
     DomainScopeValidation,
@@ -14,45 +14,19 @@ from .base import (
     ProtocolAuthorization,
     SecurityConfigAuthorization,
 )
+from .http import HttpOperationAuthorization
 
 
-class EstOperationAuthorization(AuthorizationComponent, LoggerMixin):
-    """Ensures the request is authorized for the specified operation."""
+class EstOperationAuthorization(HttpOperationAuthorization):
+    """Authorize the requested operation for EstBaseRequestContext."""
 
-    def __init__(self, allowed_operations: list[str]) -> None:
-        """Initialize the authorization component with a list of allowed operations."""
-        self.allowed_operations = allowed_operations
-
-    def authorize(self, context: BaseRequestContext) -> None:
-        """Authorize the request based on the operation type."""
-        if not isinstance(context, EstBaseRequestContext):
-            exc_msg = 'EstOperationAuthorization requires an EstBaseRequestContext.'
-            raise TypeError(exc_msg)
-
-        operation = context.operation
-
-        if not operation:
-            error_message = 'Operation information is missing. Authorization denied.'
-            self.logger.warning('Operation authorization failed: Operation information is missing')
-            raise ValueError(error_message)
-
-        if operation not in self.allowed_operations:
-            error_message = (
-                f"Unauthorized operation: '{operation}'. "
-                f"Allowed operations: {', '.join(self.allowed_operations)}."
-            )
-            self.logger.warning(
-                'Operation authorization failed: %s not in allowed operations %s',
-                operation, self.allowed_operations
-            )
-            raise ValueError(error_message)
-
-        self.logger.debug('Operation authorization successful for operation: %s', operation)
-
+    context_type = EstBaseRequestContext
+    context_error_message = 'EstOperationAuthorization requires an EstBaseRequestContext.'
 
 
 class EstAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
+
     def __init__(self, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 
@@ -70,3 +44,18 @@ class EstAuthorization(CompositeAuthorization):
         self.add(ProtocolAuthorization(['est']))
         self.add(EstOperationAuthorization(allowed_operations))
         self.add(SecurityConfigAuthorization())
+
+    def authorize(self, context: BaseRequestContext) -> None:
+        """Keep renewal bound to the profile of the authenticated certificate."""
+        super().authorize(context)
+        if isinstance(context, EstCertificateRequestContext) and context.operation == 'simplereenroll':
+            certificate = context.client_certificate
+            if certificate is None:
+                message = 'Reenrollment requires the existing client certificate.'
+                context.error(message, http_status=401)
+                raise ValueError(message)
+            issued = IssuedCredentialModel.get_credential_for_certificate(certificate)
+            if context.certificate_profile_model != issued.certificate_profile:
+                message = 'Reenrollment must use the existing credential certificate profile.'
+                context.error(message, http_status=403)
+                raise ValueError(message)

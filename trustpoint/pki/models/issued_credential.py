@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import datetime
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import hashes
@@ -14,7 +13,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 
-from pki.models.certificate import CertificateModel, RevokedCertificateModel
+from pki.models.certificate import RevokedCertificateModel
 from util.db import CustomDeleteActionModel
 
 if TYPE_CHECKING:
@@ -42,9 +41,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     common_name = models.CharField(verbose_name=_('Common Name'), max_length=255)
     issued_credential_type = models.IntegerField(choices=IssuedCredentialType, verbose_name=_('Credential Type'))
-    issued_using_cert_profile = models.CharField(
-        max_length=255, verbose_name=_('Issued using Certificate Profile'), default=''
-    )
+    certificate_profile = models.ForeignKey('pki.CertificateProfileModel', on_delete=models.PROTECT, related_name='+')
     credential = models.OneToOneField(
         'pki.CredentialModel',
         verbose_name=_('Credential'),
@@ -79,6 +76,11 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         """Returns a human-readable string representation."""
         return f'IssuedCredentialModel(common_name={self.common_name})'
 
+    @property
+    def issued_using_cert_profile(self) -> str:
+        """Derive the legacy API/display label from the authoritative profile reference."""
+        return self.certificate_profile.display_name or self.certificate_profile.unique_name
+
     def clean(self) -> None:
         """Validate that the device FK is set."""
         if self.device_id is None:
@@ -86,19 +88,17 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     def revoke(self) -> None:
         """Revokes all active certificates associated with this credential."""
+        from pki.services.revocation import revoke_certificates  # noqa: PLC0415
+
         domain = self.domain
         if domain is None or domain.issuing_ca is None:
             return
-        ca = domain.issuing_ca
-        now = datetime.datetime.now(datetime.UTC)
-        cert: CertificateModel
-        for cert in self.credential.certificates.select_related('revoked_certificate').all():
-
-            if hasattr(cert, 'revoked_certificate') or cert.not_valid_after <= now:
-                continue
-            RevokedCertificateModel.objects.create(
-                certificate=cert, revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION, ca=ca
-            )
+        revoke_certificates(
+            self.credential.certificates.all(),
+            reason=RevokedCertificateModel.ReasonCode.CESSATION,
+            ca=domain.issuing_ca,
+            only_unexpired=True,
+        )
 
     def pre_delete(self) -> None:
         """Revoke all active certificates and delete the credential."""
@@ -195,10 +195,13 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
         choices=RemoteIssuedCredentialType,
         verbose_name=_('Credential Type'),
     )
-    issued_using_cert_profile = models.CharField(
-        max_length=255,
-        verbose_name=_('Issued using Certificate Profile'),
-        default='',
+    certificate_profile = models.ForeignKey(
+        'pki.CertificateProfileModel',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='+',
+        help_text=_('Empty for imported DevOwnerID credentials without an issuance profile.'),
     )
     credential = models.OneToOneField(
         'pki.CredentialModel',
@@ -250,6 +253,13 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
         """Returns a human-readable string representation."""
         return f'RemoteIssuedCredentialModel(common_name={self.common_name})'
 
+    @property
+    def issued_using_cert_profile(self) -> str:
+        """Derive the display label; imported credentials have no issuance profile."""
+        if self.certificate_profile is None:
+            return ''
+        return self.certificate_profile.display_name or self.certificate_profile.unique_name
+
     def clean(self) -> None:
         """Validate that exactly one owner (ca, owner_credential, or device) is set."""
         owners = [self.ca_id, self.owner_credential_id, self.device_id]
@@ -258,6 +268,16 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
             raise ValidationError(_('One of ca, owner_credential, or device must be set.'))
         if set_count > 1:
             raise ValidationError(_('Only one of ca, owner_credential, or device may be set.'))
+        owner = self.owner_credential
+        imported = (
+            self.issued_credential_type == self.RemoteIssuedCredentialType.DEV_OWNER_ID
+            and owner is not None
+            and owner.owner_credential_type == owner.OwnerCredentialTypeChoice.LOCAL
+        )
+        if self.certificate_profile_id is None and not imported:
+            raise ValidationError(
+                {'certificate_profile': _('A certificate profile is required for enrolled credentials.')}
+            )
 
     def pre_delete(self) -> None:
         """Delete the underlying credential (cascades back to this model)."""

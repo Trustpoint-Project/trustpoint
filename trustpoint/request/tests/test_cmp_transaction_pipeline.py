@@ -13,6 +13,7 @@ from cmp.models import CmpTransactionModel
 from devices.models import DeviceModel
 from request.authorization.cmp import CmpPollAuthorization
 from request.cmp_transaction_state import CmpTransactionState
+from request.enrollment import process_workflow_operation
 from request.operation_processor.cmp_certificate_request import CmpCertificateRequestProcessor
 from request.operation_processor.cmp_poll import CmpPollProcessor
 from request.request_context import CmpCertificateRequestContext, CmpPollRequestContext
@@ -20,7 +21,49 @@ from workflows2.events.request_events import Events
 from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome
 from request.workflow2_issuance import Workflow2IssuanceDecision
+from request.workflows2_handler import Workflow2CertificateRequestHandler
 from workflows2.services.request_decision import Workflow2RequestDecision
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('body_type', ['ir', 'cr', 'kur'])
+@pytest.mark.parametrize(
+    ('run_status', 'dispatch_status', 'transaction_status'),
+    [
+        (Workflow2Run.STATUS_AWAITING, 'blocked', CmpTransactionModel.Status.WAITING),
+        (Workflow2Run.STATUS_RUNNING, 'running', CmpTransactionModel.Status.WAITING),
+        (Workflow2Run.STATUS_REJECTED, 'terminal', CmpTransactionModel.Status.REJECTED),
+        (Workflow2Run.STATUS_CANCELLED, 'terminal', CmpTransactionModel.Status.CANCELLED),
+        (Workflow2Run.STATUS_STOPPED, 'terminal', CmpTransactionModel.Status.FAILED),
+    ],
+)
+def test_cmp_workflow_gate_persists_response_transaction(body_type, run_status, dispatch_status, transaction_status):
+    """A stopped workflow must reach CMP state processing without issuing a certificate."""
+    context = CmpCertificateRequestContext(
+        raw_message=Mock(body=b'cmp-request'),
+        protocol='cmp',
+        operation={'ir': 'initialization', 'cr': 'certification', 'kur': 'keyupdate'}[body_type],
+        event={'ir': Events.cmp_initialization, 'cr': Events.cmp_certification, 'kur': Events.cmp_keyupdate}[body_type],
+        cmp_body_type=body_type,
+        cmp_transaction_id='workflow-gated-request',
+        cert_profile_str='domain_credential',
+    )
+    outcome = DispatchOutcome(status=dispatch_status, run=Mock(id='workflow-run', status=run_status), instances=[])
+    with (
+        patch.object(Workflow2CertificateRequestHandler, '_build_dispatch_request', return_value=Mock()),
+        patch('request.workflows2_handler.WorkflowDispatchService') as service,
+        patch('request.operation_processor.cmp_certificate_request.CertificateIssueProcessor') as issuer,
+    ):
+        service.return_value.emit_event_outcome.return_value = outcome
+        process_workflow_operation(context, CmpCertificateRequestProcessor().process_operation)
+
+    issuer.assert_not_called()
+    assert context.issued_certificate is None
+    assert context.cmp_transaction is not None
+    context.cmp_transaction.refresh_from_db()
+    assert context.cmp_transaction.status == transaction_status
+    if transaction_status == CmpTransactionModel.Status.WAITING:
+        assert context.cmp_transaction.backend_reference == 'workflow-run'
 
 
 @pytest.mark.django_db
@@ -65,13 +108,19 @@ def test_cmp_poll_authorization_infers_operation_from_transaction() -> None:
 )
 def test_cmp_certificate_request_processor_persists_terminal_workflow_outcomes(decision, status) -> None:
     context = CmpCertificateRequestContext(
-        raw_message=Mock(body=b'cmp-ir-request'), protocol='cmp', operation='initialization',
-        domain_str='test-domain', cmp_body_type='ir', cmp_transaction_id='terminal-id',
+        raw_message=Mock(body=b'cmp-ir-request'),
+        protocol='cmp',
+        operation='initialization',
+        domain_str='test-domain',
+        cmp_body_type='ir',
+        cmp_transaction_id='terminal-id',
     )
     run = Mock(id='run-terminal', status=Workflow2Run.STATUS_FINISHED)
     context.workflow2_outcome = DispatchOutcome(status='terminal', run=run, instances=[])
 
-    with patch('request.operation_processor.cmp_certificate_request.get_workflow2_issuance_decision', return_value=decision):
+    with patch(
+        'request.operation_processor.cmp_certificate_request.get_workflow2_issuance_decision', return_value=decision
+    ):
         CmpCertificateRequestProcessor().process_operation(context)
 
     assert context.cmp_transaction.status == status
@@ -85,7 +134,10 @@ def test_cmp_certificate_request_processor_rejects_missing_transaction_or_body()
     with pytest.raises(ValueError, match='missing transactionID'):
         processor.process_operation(CmpCertificateRequestContext(protocol='cmp', cmp_body_type='ir'))
     context = CmpCertificateRequestContext(
-        protocol='cmp', cmp_body_type='ir', cmp_transaction_id='missing-body', raw_message=Mock(body=b''),
+        protocol='cmp',
+        cmp_body_type='ir',
+        cmp_transaction_id='missing-body',
+        raw_message=Mock(body=b''),
     )
     with pytest.raises(ValueError, match='body is empty'):
         processor.process_operation(context)
@@ -94,14 +146,20 @@ def test_cmp_certificate_request_processor_rejects_missing_transaction_or_body()
 def test_cmp_certificate_request_processor_rejects_missing_waiting_outcome() -> None:
     """A waiting decision must carry the workflow run needed for polling."""
     context = CmpCertificateRequestContext(
-        raw_message=Mock(body=bytearray(b'cmp-ir-request')), protocol='cmp', operation='initialization',
-        cmp_body_type='ir', cmp_transaction_id='missing-outcome',
+        raw_message=Mock(body=bytearray(b'cmp-ir-request')),
+        protocol='cmp',
+        operation='initialization',
+        cmp_body_type='ir',
+        cmp_transaction_id='missing-outcome',
     )
 
-    with patch(
-        'request.operation_processor.cmp_certificate_request.get_workflow2_issuance_decision',
-        return_value=Workflow2IssuanceDecision.WAIT,
-    ), pytest.raises(ValueError, match='requires a Workflow 2 outcome'):
+    with (
+        patch(
+            'request.operation_processor.cmp_certificate_request.get_workflow2_issuance_decision',
+            return_value=Workflow2IssuanceDecision.WAIT,
+        ),
+        pytest.raises(ValueError, match='requires a Workflow 2 outcome'),
+    ):
         CmpCertificateRequestProcessor().process_operation(context)
 
 
@@ -134,30 +192,52 @@ def test_cmp_pending_detail_distinguishes_awaiting_and_processing_runs() -> None
 
 
 @pytest.mark.django_db
-def test_cmp_certificate_request_processor_rejects_transaction_reuse() -> None:
-    CmpTransactionModel.objects.create(
-        transaction_id='reused', operation='initialization', request_body_type='ir', request_der=b'original',
+@pytest.mark.parametrize('lost_insert_race', [False, True])
+def test_cmp_certificate_request_processor_rejects_transaction_reuse(lost_insert_race: bool) -> None:
+    transaction_record = CmpTransactionModel.objects.create(
+        transaction_id='reused',
+        operation='initialization',
+        request_body_type='ir',
+        request_der=b'original',
         status=CmpTransactionModel.Status.WAITING,
     )
     context = CmpCertificateRequestContext(
-        raw_message=Mock(body=b'different'), protocol='cmp', operation='initialization',
-        cmp_body_type='ir', cmp_transaction_id='REUSED',
+        raw_message=Mock(body=b'different'),
+        protocol='cmp',
+        operation='initialization',
+        cmp_body_type='ir',
+        cmp_transaction_id='REUSED',
     )
 
-    with pytest.raises(ValueError, match='already in use'):
-        CmpCertificateRequestProcessor().process_operation(context)
+    processor = CmpCertificateRequestProcessor()
+    with (
+        patch.object(
+            processor,
+            '_get_existing_transaction',
+            side_effect=[None, transaction_record] if lost_insert_race else [transaction_record],
+        ),
+        pytest.raises(ValueError, match='already in use'),
+    ):
+        processor.process_operation(context)
 
 
 @pytest.mark.django_db
 def test_cmp_certificate_request_processor_hydrates_existing_issued_transaction() -> None:
     transaction_record = CmpTransactionModel.objects.create(
-        transaction_id='issued-replay', operation='initialization', request_body_type='ir',
-        request_der=b'issued-request', status=CmpTransactionModel.Status.ISSUED,
-        implicit_confirm=True, cert_profile='domain_credential',
+        transaction_id='issued-replay',
+        operation='initialization',
+        request_body_type='ir',
+        request_der=b'issued-request',
+        status=CmpTransactionModel.Status.ISSUED,
+        implicit_confirm=True,
+        cert_profile='domain_credential',
     )
     context = CmpCertificateRequestContext(
-        raw_message=Mock(body=b'issued-request'), protocol='cmp', operation='initialization',
-        cmp_body_type='ir', cmp_transaction_id='issued-replay',
+        raw_message=Mock(body=b'issued-request'),
+        protocol='cmp',
+        operation='initialization',
+        cmp_body_type='ir',
+        cmp_transaction_id='issued-replay',
     )
 
     with patch.object(CmpCertificateRequestProcessor, 'populate_success_context') as populate:
@@ -167,9 +247,61 @@ def test_cmp_certificate_request_processor_hydrates_existing_issued_transaction(
     populate.assert_called_once_with(context, transaction_record)
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'status',
+    [
+        CmpTransactionModel.Status.PROCESSING,
+        CmpTransactionModel.Status.WAITING,
+        CmpTransactionModel.Status.ISSUED,
+        CmpTransactionModel.Status.REJECTED,
+    ],
+)
+def test_cmp_concurrent_retry_reuses_transaction_without_issuing(status: str) -> None:
+    """A worker losing the insert race must reuse the winner's state."""
+    transaction_record = CmpTransactionModel.objects.create(
+        transaction_id='concurrent-retry',
+        operation='certification',
+        request_body_type='cr',
+        request_der=b'same-request',
+        status=status,
+        implicit_confirm=True,
+        cert_profile='tls_client',
+    )
+    context = CmpCertificateRequestContext(
+        raw_message=Mock(body=b'same-request'),
+        protocol='cmp',
+        operation='certification',
+        cmp_body_type='cr',
+        cmp_transaction_id='concurrent-retry',
+    )
+    processor = CmpCertificateRequestProcessor()
+    with (
+        # Both workers missed the first lookup; the winner has now inserted its row.
+        patch.object(processor, '_get_existing_transaction', side_effect=[None, transaction_record]),
+        patch.object(processor, 'populate_success_context') as populate,
+        patch('request.operation_processor.cmp_certificate_request.CertificateIssueProcessor') as issuer,
+    ):
+        processor.process_operation(context)
+
+    issuer.assert_not_called()
+    assert context.cmp_transaction == transaction_record
+    assert context.cert_profile_str == 'tls_client'
+    assert context.implicit_confirm is True
+    transaction_record.refresh_from_db()
+    assert transaction_record.status == status
+    assert CmpTransactionModel.objects.filter(transaction_id='concurrent-retry').count() == 1
+    if status == CmpTransactionModel.Status.ISSUED:
+        populate.assert_called_once_with(context, transaction_record)
+    else:
+        populate.assert_not_called()
+
+
 def test_cmp_certificate_request_processor_delegates_wrong_context_protocol_and_operation() -> None:
     processor = CmpCertificateRequestProcessor()
-    with patch('request.operation_processor.cmp_certificate_request.CertificateIssueProcessor.process_operation') as issue:
+    with patch(
+        'request.operation_processor.cmp_certificate_request.CertificateIssueProcessor.process_operation'
+    ) as issue:
         processor.process_operation(CmpCertificateRequestContext(protocol='est'))
         processor.process_operation(CmpCertificateRequestContext(protocol='cmp', cmp_body_type='pollReq'))
     assert issue.call_count == 2
@@ -211,10 +343,16 @@ def test_cmp_certificate_request_processor_persists_waiting_transaction_for_pend
 
 @pytest.mark.django_db
 @pytest.mark.parametrize('issue_side_effect', [RuntimeError('issue failed'), None])
-def test_cmp_certificate_request_processor_persists_failed_issuance_outcome(issue_side_effect: Exception | None) -> None:
+def test_cmp_certificate_request_processor_persists_failed_issuance_outcome(
+    issue_side_effect: Exception | None,
+) -> None:
     context = CmpCertificateRequestContext(
-        raw_message=Mock(body=b'cmp-ir-request'), protocol='cmp', operation='initialization',
-        domain_str='test-domain', cmp_body_type='ir', cmp_transaction_id=f'issue-{issue_side_effect is None}',
+        raw_message=Mock(body=b'cmp-ir-request'),
+        protocol='cmp',
+        operation='initialization',
+        domain_str='test-domain',
+        cmp_body_type='ir',
+        cmp_transaction_id=f'issue-{issue_side_effect is None}',
     )
     with patch(
         'request.operation_processor.cmp_certificate_request.CertificateIssueProcessor.process_operation',
@@ -319,10 +457,18 @@ def test_cmp_transaction_state_syncs_rejected_approval_even_when_run_status_is_f
 @pytest.mark.parametrize(
     ('decision', 'run_status', 'expected_status', 'detail'),
     [
-        (Workflow2RequestDecision.CONTINUE, Workflow2Run.STATUS_RUNNING, CmpTransactionModel.Status.PROCESSING,
-         'CMP poll finalization in progress.'),
-        (Workflow2RequestDecision.WAIT, Workflow2Run.STATUS_AWAITING, CmpTransactionModel.Status.WAITING,
-         'Enrollment request pending workflow approval.'),
+        (
+            Workflow2RequestDecision.CONTINUE,
+            Workflow2Run.STATUS_RUNNING,
+            CmpTransactionModel.Status.PROCESSING,
+            'CMP poll finalization in progress.',
+        ),
+        (
+            Workflow2RequestDecision.WAIT,
+            Workflow2Run.STATUS_AWAITING,
+            CmpTransactionModel.Status.WAITING,
+            'Enrollment request pending workflow approval.',
+        ),
     ],
 )
 def test_cmp_transaction_state_syncs_pending_workflow_decisions(
@@ -333,12 +479,20 @@ def test_cmp_transaction_state_syncs_pending_workflow_decisions(
 ) -> None:
     """Synchronize waiting transactions to processing or waiting state."""
     run = Workflow2Run.objects.create(
-        trigger_on='cmp.initialization', event_json={}, source_json={}, status=run_status,
+        trigger_on='cmp.initialization',
+        event_json={},
+        source_json={},
+        status=run_status,
     )
     transaction_record = CmpTransactionModel.objects.create(
-        transaction_id=f'sync-{decision.value}', operation='initialization', request_body_type='ir',
-        request_der=b'cmp-request', status=CmpTransactionModel.Status.WAITING,
-        backend=CmpTransactionModel.Backend.WORKFLOW2, backend_reference=str(run.pk), check_after_seconds=9,
+        transaction_id=f'sync-{decision.value}',
+        operation='initialization',
+        request_body_type='ir',
+        request_der=b'cmp-request',
+        status=CmpTransactionModel.Status.WAITING,
+        backend=CmpTransactionModel.Backend.WORKFLOW2,
+        backend_reference=str(run.pk),
+        check_after_seconds=9,
     )
 
     with patch('request.cmp_transaction_state.resolve_request_decision', return_value=decision):
@@ -366,12 +520,19 @@ def test_cmp_poll_refreshes_waiting_transaction_for_each_workflow_decision(
 ) -> None:
     """Refresh a waiting transaction for each workflow request decision."""
     run = Workflow2Run.objects.create(
-        trigger_on='cmp.initialization', event_json={}, source_json={}, status=run_status,
+        trigger_on='cmp.initialization',
+        event_json={},
+        source_json={},
+        status=run_status,
     )
     transaction_record = CmpTransactionModel.objects.create(
-        transaction_id=f'poll-{decision.value}', operation='initialization', request_body_type='ir',
-        request_der=b'cmp-request', status=CmpTransactionModel.Status.WAITING,
-        backend=CmpTransactionModel.Backend.WORKFLOW2, backend_reference=str(run.pk),
+        transaction_id=f'poll-{decision.value}',
+        operation='initialization',
+        request_body_type='ir',
+        request_der=b'cmp-request',
+        status=CmpTransactionModel.Status.WAITING,
+        backend=CmpTransactionModel.Backend.WORKFLOW2,
+        backend_reference=str(run.pk),
         check_after_seconds=12,
     )
     context = CmpPollRequestContext(cmp_transaction=transaction_record)
@@ -398,9 +559,13 @@ def test_cmp_poll_refreshes_waiting_transaction_for_each_workflow_decision(
 def test_cmp_poll_marks_missing_workflow_reference_failed(backend_reference: str) -> None:
     """Persist a failure when a waiting transaction cannot find its backend run."""
     transaction_record = CmpTransactionModel.objects.create(
-        transaction_id=f'missing-{backend_reference or "empty"}', operation='initialization', request_body_type='ir',
-        request_der=b'cmp-request', status=CmpTransactionModel.Status.WAITING,
-        backend=CmpTransactionModel.Backend.WORKFLOW2, backend_reference=backend_reference,
+        transaction_id=f'missing-{backend_reference or "empty"}',
+        operation='initialization',
+        request_body_type='ir',
+        request_der=b'cmp-request',
+        status=CmpTransactionModel.Status.WAITING,
+        backend=CmpTransactionModel.Backend.WORKFLOW2,
+        backend_reference=backend_reference,
     )
     context = CmpPollRequestContext(cmp_transaction=transaction_record)
 
@@ -417,8 +582,11 @@ def test_cmp_poll_marks_missing_workflow_reference_failed(backend_reference: str
 def test_cmp_poll_finalization_failures_are_persisted(issue_result: str) -> None:
     """Persist poll finalization exceptions and missing certificate results."""
     transaction_record = CmpTransactionModel.objects.create(
-        transaction_id=f'finalize-{issue_result}', operation='initialization', request_body_type='ir',
-        request_der=b'cmp-request', status=CmpTransactionModel.Status.PROCESSING,
+        transaction_id=f'finalize-{issue_result}',
+        operation='initialization',
+        request_body_type='ir',
+        request_der=b'cmp-request',
+        status=CmpTransactionModel.Status.PROCESSING,
     )
     context = CmpPollRequestContext(cmp_transaction=transaction_record)
     replay_context = Mock(issued_certificate=None)
@@ -439,17 +607,22 @@ def test_cmp_poll_finalization_failures_are_persisted(issue_result: str) -> None
 def test_cmp_poll_finalization_hydrates_successful_issuance() -> None:
     """Hydrate the poll context after the issuance boundary succeeds."""
     transaction_record = CmpTransactionModel.objects.create(
-        transaction_id='finalize-success', operation='initialization', request_body_type='ir',
-        request_der=b'cmp-request', status=CmpTransactionModel.Status.PROCESSING,
+        transaction_id='finalize-success',
+        operation='initialization',
+        request_body_type='ir',
+        request_der=b'cmp-request',
+        status=CmpTransactionModel.Status.PROCESSING,
     )
     context = CmpPollRequestContext(cmp_transaction=transaction_record)
     replay_context = Mock(issued_certificate=Mock())
     issued_transaction = Mock(status=CmpTransactionModel.Status.ISSUED)
 
-    with patch.object(CmpCertificateRequestProcessor, 'build_replay_context', return_value=replay_context), \
-        patch('request.operation_processor.cmp_poll.CertificateIssueProcessor.process_operation'), \
-        patch.object(CmpCertificateRequestProcessor, 'mark_transaction_issued', return_value=issued_transaction), \
-        patch.object(CmpCertificateRequestProcessor, 'populate_success_context') as populate:
+    with (
+        patch.object(CmpCertificateRequestProcessor, 'build_replay_context', return_value=replay_context),
+        patch('request.operation_processor.cmp_poll.CertificateIssueProcessor.process_operation'),
+        patch.object(CmpCertificateRequestProcessor, 'mark_transaction_issued', return_value=issued_transaction),
+        patch.object(CmpCertificateRequestProcessor, 'populate_success_context') as populate,
+    ):
         CmpPollProcessor().process_operation(context)
 
     assert context.cmp_transaction is issued_transaction

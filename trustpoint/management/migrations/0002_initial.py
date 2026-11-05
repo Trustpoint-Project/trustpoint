@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
@@ -9,7 +12,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('contenttypes', '0002_remove_content_type_name'),
-        ('devices', '0002_initial'),
+        ('devices', '0001_initial'),
         ('management', '0001_initial'),
         ('pki', '0002_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -25,6 +28,11 @@ class Migration(migrations.Migration):
             model_name='auditlog',
             name='target_content_type',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.contenttype', verbose_name='Target Content Type'),
+        ),
+        migrations.AddField(
+            model_name='certificateauthenticationconfig',
+            name='issuing_ca',
+            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='user_authentication_config', to='pki.camodel'),
         ),
         migrations.AddField(
             model_name='notificationmodel',
@@ -55,6 +63,10 @@ class Migration(migrations.Migration):
             model_name='notificationmodel',
             name='statuses',
             field=models.ManyToManyField(related_name='notifications', to='management.notificationstatus'),
+        ),
+        migrations.AddConstraint(
+            model_name='securityconfig',
+            constraint=models.CheckConstraint(condition=models.Q(('allow_user_defined_device_secrets', False), ('credential_ttl_seconds__isnull', True), _connector='OR'), name='custom_device_secrets_require_no_ttl'),
         ),
         migrations.AddIndex(
             model_name='auditlog',

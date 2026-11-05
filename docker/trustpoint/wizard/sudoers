@@ -1,5 +1,7 @@
 Defaults        env_reset
-Defaults        env_keep += "TP_* TRUSTPOINT_* DJANGO_SETTINGS_MODULE"
+# These values are consumed only after switching to www-data. Root paths and
+# ports come from /run/trustpoint/deployment.json, written by the entrypoint.
+Defaults        env_keep += "TP_* DATABASE_PASSWORD DATABASE_PASSWORD_FILE TRUSTPOINT_APPLICATION_ENV"
 Defaults        mail_badpass
 Defaults        secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -10,8 +12,8 @@ Defaults        use_pty
 # User privilege specification
 root    ALL=(ALL:ALL) ALL
 
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls_nginx.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls.sh ""
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls_nginx.sh hsm, /etc/trustpoint/wizard/update_tls_nginx.sh no_hsm
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/install_pkcs11_assets.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/wizard_restore.sh
-www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/switch_to_operational.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/wizard_restore.sh ""
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/switch_to_operational.sh --pending, /etc/trustpoint/wizard/switch_to_operational.sh --final

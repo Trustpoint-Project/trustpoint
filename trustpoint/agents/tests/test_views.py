@@ -43,6 +43,7 @@ from agents.models import AgentAssignedProfile, AgentProfileDefinition, Trustpoi
 from agents.web_views import AgentProfileDefinitionConfigView, AgentProfileDefinitionTableView
 from devices.models import DeviceModel, DomainModel
 from management.models import SecurityConfig
+from pki.models.cert_profile import CertificateProfileModel
 from pki.models import IssuedCredentialModel
 from onboarding.models import OnboardingProtocol
 
@@ -119,6 +120,7 @@ def agent(db: Any, device: DeviceModel) -> TrustpointAgent:
         poll_interval_seconds=300,
     )
 
+
 @pytest.fixture
 def workflow_definition(db: Any) -> AgentProfileDefinition:
     """Create a test workflow definition."""
@@ -137,7 +139,6 @@ def workflow_definition(db: Any) -> AgentProfileDefinition:
         profile=profile,
         is_active=True,
     )
-
 
 
 @pytest.fixture
@@ -163,9 +164,11 @@ def test_cert() -> x509.Certificate:
     """Generate a test certificate."""
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, 'test-cert'),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, 'test-cert'),
+        ]
+    )
 
     cert = (
         x509.CertificateBuilder()
@@ -216,6 +219,34 @@ class TestAgentCertificateAuthentication:
         with pytest.raises(AuthenticationFailed, match='Invalid HTTP_SSL_CLIENT_CERT'):
             _parse_client_cert(request)
 
+    def test_parse_client_cert_does_not_expose_parser_exception(self):
+        """Keep parser diagnostics in the exception chain, outside the public detail."""
+        request = RequestFactory().get('/test/', HTTP_SSL_CLIENT_CERT='invalid-cert-data')
+        parser_error = ValueError('internal parser detail: /private/server/path and sensitive input')
+
+        with patch('agents.api_views.x509.load_pem_x509_certificate', side_effect=parser_error):
+            with pytest.raises(AuthenticationFailed) as error:
+                _parse_client_cert(request)
+
+        assert str(error.value.detail) == 'Invalid HTTP_SSL_CLIENT_CERT header.'
+        assert error.value.__cause__ is parser_error
+
+    @pytest.mark.parametrize('method,endpoint', [('get', '/api/agents/jobs/'), ('post', '/api/agents/jobs/result/')])
+    @pytest.mark.parametrize('mock_parser', [False, True])
+    def test_invalid_certificate_api_response_is_generic(self, api_client, method, endpoint, mock_parser):
+        """Rendered API errors contain no parser exception details or certificate input."""
+        parser_error = ValueError('sensitive-parser-detail /private/server/path')
+        with patch('agents.api_views.x509.load_pem_x509_certificate', wraps=x509.load_pem_x509_certificate) as parser:
+            if mock_parser:
+                parser.side_effect = parser_error
+            response = getattr(api_client, method)(endpoint, HTTP_SSL_CLIENT_CERT='invalid-cert-data')
+
+        assert response.status_code == 401
+        assert response.json() == {'detail': 'Invalid HTTP_SSL_CLIENT_CERT header.'}
+        assert response['WWW-Authenticate'] == 'mTLS realm="Trustpoint Agent API"'
+        for private_detail in ('sensitive-parser-detail', '/private/server/path', 'invalid-cert-data', 'ValueError'):
+            assert private_detail not in response.content.decode()
+
     def test_authenticate_no_cert(self):
         """Test authentication fails when no certificate is provided."""
         auth = AgentCertificateAuthentication()
@@ -248,15 +279,18 @@ class TestAgentCertificateAuthentication:
 
         # Create a certificate
         cert_model = CertificateModel._save_certificate(test_cert)
-        
+
         # Create credential with certificate
         credential = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL
         )
         credential.certificates.add(cert_model)
-        
+
         # Create issued credential with wrong type (application instead of domain)
         IssuedCredentialModel.objects.create(
+            certificate_profile=CertificateProfileModel.objects.get_or_create(
+                unique_name='test_profile', defaults={'profile_json': {}}
+            )[0],
             common_name='test-credential',
             credential=credential,
             device=device,
@@ -280,7 +314,7 @@ class TestAgentCertificateAuthentication:
         # Create a certificate without device would fail FK constraint,
         # so we test with None device which should fail
         cert_model = CertificateModel._save_certificate(test_cert)
-        
+
         # Note: device is required (null=False), so this test  actually tests
         # the case where device exists but has no agent
         # The real "no device" case is caught by database constraints
@@ -288,6 +322,9 @@ class TestAgentCertificateAuthentication:
             credential = CredentialModel.objects.create(common_name='test-credential')
             credential.certificates.add(cert_model)
             IssuedCredentialModel.objects.create(
+                certificate_profile=CertificateProfileModel.objects.get_or_create(
+                    unique_name='test_profile', defaults={'profile_json': {}}
+                )[0],
                 common_name='test-credential',
                 credential=credential,
                 device=None,  # This will fail FK constraint
@@ -305,7 +342,7 @@ class TestAgentCertificateAuthentication:
 
         # Create valid credential but device has no agent
         cert_model = CertificateModel._save_certificate(test_cert)
-        
+
         credential = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
             certificate=cert_model,  # Set primary certificate FK
@@ -316,8 +353,11 @@ class TestAgentCertificateAuthentication:
             certificate=cert_model,
             is_primary=True,
         )
-        
+
         IssuedCredentialModel.objects.create(
+            certificate_profile=CertificateProfileModel.objects.get_or_create(
+                unique_name='test_profile', defaults={'profile_json': {}}
+            )[0],
             common_name='test-credential',
             credential=credential,
             device=device,
@@ -346,7 +386,7 @@ class TestAgentCertificateAuthentication:
 
         # Create valid credential and agent
         cert_model = CertificateModel._save_certificate(test_cert)
-        
+
         credential = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
             certificate=cert_model,  # Set primary certificate FK
@@ -357,8 +397,11 @@ class TestAgentCertificateAuthentication:
             certificate=cert_model,
             is_primary=True,
         )
-        
+
         IssuedCredentialModel.objects.create(
+            certificate_profile=CertificateProfileModel.objects.get_or_create(
+                unique_name='test_profile', defaults={'profile_json': {}}
+            )[0],
             common_name='test-credential',
             credential=credential,
             device=device,
@@ -404,7 +447,6 @@ class TestURLResolution:
         url = _resolve_enrollment_url(agent, 'domain_credential')
         assert url == '/rest/test-domain/domain_credential/enroll/'
 
-
     def test_resolve_enrollment_url_no_device(self, agent: TrustpointAgent):
         """Test enrollment URL is None when device is missing."""
         agent.device = None
@@ -441,7 +483,7 @@ class TestProfileResolution:
         mock_resolve_url.return_value = None  # Don't resolve URL in this test
         agent.device.domain = None  # Avoid issuing CA requirement
         agent.device.save()
-        
+
         raw_profile = {
             'certificate_request': {
                 'certificate_profile': 'domain_credential',
@@ -563,9 +605,7 @@ class TestAgentJobsView:
         response = api_client.get('/api/agents/jobs/')
 
         assert response.status_code == 403
-        assert response.json()['detail'] == (
-            'Agent functionality is disabled by the current security configuration.'
-        )
+        assert response.json()['detail'] == ('Agent functionality is disabled by the current security configuration.')
 
     @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
     def test_get_jobs_no_pending(
@@ -674,9 +714,7 @@ class TestAgentJobResultView:
         )
 
         assert response.status_code == 403
-        assert response.json()['detail'] == (
-            'Agent functionality is disabled by the current security configuration.'
-        )
+        assert response.json()['detail'] == ('Agent functionality is disabled by the current security configuration.')
 
     @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
     def test_post_result_success(
@@ -954,7 +992,7 @@ class TestAgentProfileDefinitionBulkDeleteView:
         wf2 = AgentProfileDefinition.objects.create(name='WF2', profile={})
 
         initial_count = AgentProfileDefinition.objects.count()
-        
+
         url = reverse('agents:profiles-delete_confirm', kwargs={'pks': f'{wf1.pk}/{wf2.pk}/'})
 
         response = web_client.post(url)

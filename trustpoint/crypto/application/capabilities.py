@@ -12,9 +12,10 @@ from pkcs11 import Mechanism
 
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
 from crypto.adapters.rest.capabilities import RestCapabilities
-from crypto.adapters.software.capabilities import SoftwareCapabilities
+from crypto.adapters.software.capabilities import SOFTWARE_CAPABILITIES, SoftwareCapabilities
 from crypto.application.backend_factory import BackendAdapterFactory, DefaultBackendAdapterFactory
-from crypto.domain.algorithms import EllipticCurveName
+from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
+from crypto.domain.specs import MlDsaVariant
 from crypto.models import BackendKind, CryptoProviderProfileModel
 from crypto.repositories import CryptoProviderProfileRepository
 
@@ -31,7 +32,7 @@ SOFTWARE_EC_CURVES = (
     EllipticCurveName.SECP384R1,
     EllipticCurveName.SECP521R1,
 )
-SOFTWARE_MLDSA_VARIANTS = ('mldsa44', 'mldsa65', 'mldsa87')
+SOFTWARE_MLDSA_VARIANTS = tuple(variant.value for variant in MlDsaVariant)
 
 
 class CapabilityRefreshingBackendAdapter(Protocol):
@@ -180,11 +181,7 @@ class BackendCapabilityService:
                 backend.close()
 
         if profile.backend_kind == BackendKind.SOFTWARE:
-            return SoftwareCapabilities(
-                supported_key_algorithms=('rsa', 'ec'),
-                supported_signature_algorithms=('rsa_pkcs1v15', 'ecdsa'),
-                supported_signing_execution_modes=('complete_backend', 'allow_application_hash'),
-            )
+            return SOFTWARE_CAPABILITIES
 
         return self._profile_repository.load_current_capabilities(profile=profile)
 
@@ -203,25 +200,15 @@ class BackendCapabilityService:
         if isinstance(capabilities, Pkcs11Capabilities):
             return self._pkcs11_report(profile=profile, capabilities=capabilities)
 
-        if isinstance(capabilities, SoftwareCapabilities):
-            return BackendCapabilityReport(
-                backend_kind=backend_kind,
-                profile_name=profile.name,
-                available=True,
-                rsa_key_sizes=SOFTWARE_RSA_KEY_SIZES,
-                ec_curves=SOFTWARE_EC_CURVES,
-                mldsa_variants=SOFTWARE_MLDSA_VARIANTS,
-            )
-
-        if isinstance(capabilities, RestCapabilities):
+        if isinstance(capabilities, (SoftwareCapabilities, RestCapabilities)):
             supported_algorithms = set(capabilities.supported_key_algorithms)
             return BackendCapabilityReport(
                 backend_kind=backend_kind,
                 profile_name=profile.name,
                 available=True,
-                rsa_key_sizes=SOFTWARE_RSA_KEY_SIZES if 'rsa' in supported_algorithms else (),
-                ec_curves=SOFTWARE_EC_CURVES if 'ec' in supported_algorithms else (),
-                mldsa_variants=SOFTWARE_MLDSA_VARIANTS if 'mldsa' in supported_algorithms else (),
+                rsa_key_sizes=SOFTWARE_RSA_KEY_SIZES if KeyAlgorithm.RSA in supported_algorithms else (),
+                ec_curves=SOFTWARE_EC_CURVES if KeyAlgorithm.EC in supported_algorithms else (),
+                mldsa_variants=SOFTWARE_MLDSA_VARIANTS if KeyAlgorithm.MLDSA in supported_algorithms else (),
             )
 
         return BackendCapabilityReport(

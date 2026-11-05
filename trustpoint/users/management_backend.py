@@ -14,6 +14,8 @@ from management.models import AccountSecurityConfig
 
 from .models import TrustpointUser
 
+INTERACTIVE_BACKEND = 'users.management_backend.TrustpointModelBackend'
+
 
 class TrustpointModelBackend(ModelBackend):
     """Authenticate human users and maintain consecutive failure state."""

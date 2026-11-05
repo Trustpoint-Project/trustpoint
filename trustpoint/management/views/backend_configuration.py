@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from django.contrib import messages
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.management import CommandError, call_command
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
@@ -20,7 +20,8 @@ from django.views.generic import TemplateView
 from appsecrets.models import AppSecretBackendModel
 from crypto.application.capabilities import BackendCapabilityReport, get_active_backend_capability_report
 from crypto.models import BackendKind, CryptoProviderProfileModel
-from pki.util.keys import supported_auto_gen_pki_key_algorithms
+from pki.services.key_generation import supported_key_type_choices
+from users.permissions import AppPermissions
 
 PKCS11_ASSET_DOWNLOADS = {
     'module': ('module_path', 'application/octet-stream'),
@@ -65,6 +66,13 @@ def _supported_key_capabilities(report: BackendCapabilityReport | None) -> list[
             {
                 'family': 'Elliptic Curve',
                 'values': ', '.join(curve.value.upper() for curve in report.ec_curves),
+            }
+        )
+    if report.mldsa_variants:
+        rows.append(
+            {
+                'family': 'ML-DSA',
+                'values': ', '.join(variant.upper().replace('MLDSA', 'ML-DSA-') for variant in report.mldsa_variants),
             }
         )
     return rows
@@ -201,6 +209,8 @@ class BackendConfigurationView(TemplateView):
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Manually refresh the provider capability snapshot for the active backend."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CRYPTO_BACKENDS):
+            raise PermissionDenied
         action = request.POST.get('action')
         if action != 'reprobe':
             return redirect('management:backend_configuration')
@@ -258,11 +268,9 @@ class BackendConfigurationView(TemplateView):
         context['capability_message'] = capability_message
         context['capability_diagnostics'] = capability_report.diagnostics if capability_report is not None else ()
         context['supported_key_capabilities'] = _supported_key_capabilities(capability_report)
-        context['supported_auto_gen_pki_algorithms'] = supported_auto_gen_pki_key_algorithms()
+        context['supported_auto_gen_pki_key_types'] = supported_key_type_choices(report=capability_report)
         pkcs11_capability_payload = (
-            getattr(pkcs11_probe_detail, 'snapshot_payload', None)
-            if pkcs11_probe_detail is not None
-            else None
+            getattr(pkcs11_probe_detail, 'snapshot_payload', None) if pkcs11_probe_detail is not None else None
         )
         context['pkcs11_capability_payload'] = pkcs11_capability_payload
         context['pkcs11_derived_features'] = (
@@ -286,9 +294,7 @@ class BackendConfigurationView(TemplateView):
             or '-'
         )
         pkcs11_config = context['pkcs11_config']
-        context['pkcs11_module_download_available'] = _path_is_downloadable(
-            getattr(pkcs11_config, 'module_path', None)
-        )
+        context['pkcs11_module_download_available'] = _path_is_downloadable(getattr(pkcs11_config, 'module_path', None))
         context['pkcs11_provider_config_download_available'] = _path_is_downloadable(
             getattr(pkcs11_config, 'provider_config_path', None)
         )

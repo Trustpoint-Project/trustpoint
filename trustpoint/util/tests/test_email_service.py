@@ -16,7 +16,7 @@ from util.email_service import EmailService
 @pytest.fixture(autouse=True)
 def locmem_email_backend(settings: Any) -> None:
     """Force Django to use locmem email backend for tests."""
-    settings.EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+    settings.MAILERS = {'default': {'BACKEND': 'django.core.mail.backends.locmem.EmailBackend'}}
 
 
 @pytest.fixture
@@ -367,8 +367,8 @@ class TestEmailService:
         html_content = msg.alternatives[0][0]
         assert 'HTML: Value1 and Value2' in html_content
 
-    def test_send_email_fail_silently_false(self, templates_dir: Any) -> None:
-        """Test that send is called with fail_silently=False."""
+    def test_send_email_uses_default_mailer(self, templates_dir: Any) -> None:
+        """Test that send uses the default configured mailer."""
         _write_template(templates_dir, 'emails/fail.txt', 'Test')
         _write_template(templates_dir, 'emails/fail.html', '<p>Test</p>')
         
@@ -380,7 +380,7 @@ class TestEmailService:
                 context={},
             )
             
-            mock_send.assert_called_once_with(fail_silently=False)
+            mock_send.assert_called_once_with(using='default')
 
     def test_send_email_special_characters_in_subject(self, templates_dir: Any) -> None:
         """Test sending email with special characters in subject."""

@@ -1,0 +1,96 @@
+{% load i18n internationalization_tags %}
+<div>
+    <div>
+        {% trans 'Serial Number' %}
+    </div>
+
+    <div class="font-monospace">
+        {{ certificate.serial_number }}
+    </div>
+</div>
+
+<div>
+    <div>
+        {% trans 'Fingerprint (SHA256)' %}
+    </div>
+
+    <div class="font-monospace">
+        {{ certificate.sha256_fingerprint }}
+    </div>
+</div>
+
+<div>
+    <div>
+        {% trans 'Not valid before' %}
+    </div>
+
+    <div>
+        {{ certificate.not_valid_before|local_datetime }}
+    </div>
+</div>
+
+<div>
+    <div>
+        {% trans 'Not valid after' %}
+    </div>
+
+    <div>
+        {{ certificate.not_valid_after|local_datetime }}
+    </div>
+</div>
+
+<div>
+    <div>
+        {% trans 'Public Key Algorithm' %}
+    </div>
+
+    <div>
+        {{ certificate.spki_algorithm }}
+    </div>
+</div>
+
+<div>
+    <div>
+        {% trans 'Public Key Algorithm OID' %}
+    </div>
+
+    <div class="font-monospace">
+        {{ certificate.spki_algorithm_oid }}
+    </div>
+</div>
+
+{% if not require_curve_issuer or curve_source.issuer %}
+    {% if curve_source.spki_ec_curve %}
+        <div>
+            <div>
+                {% trans 'Public Key Curve' %}
+            </div>
+
+            <div>
+                {{ certificate.spki_ec_curve }}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if curve_source.spki_ec_curve_oid != empty_curve_oid %}
+        <div>
+            <div>
+                {% trans 'Public Key Curve OID' %}
+            </div>
+
+            <div class="font-monospace">
+                {{ certificate.spki_ec_curve_oid }}
+            </div>
+        </div>
+    {% endif %}
+{% endif %}
+
+<div>
+    <div>
+        {% trans 'Public Key Size' %}
+    </div>
+
+    <div>
+        {{ certificate.spki_key_size }} {% trans 'Bits' %}
+    </div>
+</div>

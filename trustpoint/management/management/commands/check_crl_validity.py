@@ -13,7 +13,7 @@ CRL and event.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any, cast
+from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -64,26 +64,16 @@ class Command(BaseCommand):
                 self._create_notification(
                     crl=crl,
                     event=f'CRL_EXPIRED_{crl.pk}',
-                    notification_type=cast(
-                        'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.CRITICAL
-                    ),
-                    message_type=cast(
-                        'NotificationModel.NotificationMessageType',
-                        NotificationModel.NotificationMessageType.CRL_EXPIRED,
-                    ),
+                    notification_type=NotificationModel.NotificationTypes.CRITICAL,
+                    message_type=NotificationModel.NotificationMessageType.CRL_EXPIRED,
                     new_status=new_status,
                 )
             elif next_update <= expiring_threshold:
                 self._create_notification(
                     crl=crl,
                     event=f'CRL_EXPIRING_{crl.pk}',
-                    notification_type=cast(
-                        'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.WARNING
-                    ),
-                    message_type=cast(
-                        'NotificationModel.NotificationMessageType',
-                        NotificationModel.NotificationMessageType.CRL_EXPIRING,
-                    ),
+                    notification_type=NotificationModel.NotificationTypes.WARNING,
+                    message_type=NotificationModel.NotificationMessageType.CRL_EXPIRING,
                     new_status=new_status,
                 )
 
@@ -134,15 +124,14 @@ class Command(BaseCommand):
                         message_data=message_data,
                     )
                     notification.statuses.add(new_status)
-        else:
-            if not NotificationModel.objects.filter(event=event, issuing_ca=crl.ca, domain__isnull=True).exists():
-                notification = NotificationModel.objects.create(
-                    issuing_ca=crl.ca,
-                    created_at=timezone.now(),
-                    notification_source=NotificationModel.NotificationSource.ISSUING_CA,
-                    notification_type=notification_type,
-                    message_type=message_type,
-                    event=event,
-                    message_data=message_data,
-                )
-                notification.statuses.add(new_status)
+        elif not NotificationModel.objects.filter(event=event, issuing_ca=crl.ca, domain__isnull=True).exists():
+            notification = NotificationModel.objects.create(
+                issuing_ca=crl.ca,
+                created_at=timezone.now(),
+                notification_source=NotificationModel.NotificationSource.ISSUING_CA,
+                notification_type=notification_type,
+                message_type=message_type,
+                event=event,
+                message_data=message_data,
+            )
+            notification.statuses.add(new_status)

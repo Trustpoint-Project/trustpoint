@@ -2,73 +2,158 @@
 {% load i18n internationalization_tags %}
 
 {% block content %}
-
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+<div class="card">
     <div class="card-header">
-        <h1>{% trans "Agent Profile Definitions" %}</h1>
-    </div>
-    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th id="checkbox-column"><input type="checkbox"/></th>
-                    <th>
-                        <a href="?sort={% if current_sort == 'name' %}-{% endif %}name">
-                            {% trans "Unique Name" %}
-                        </a>
-                    </th>
-                    <th>
-                        <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                            {% trans "Created at" %}
-                        </a>
-                    </th>
-                    <th>
-                        <a href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at">
-                            {% trans "Updated at" %}
-                        </a>
-                    </th>
-                    <th>
-                        <a href="?sort={% if current_sort == 'is_active' %}-{% endif %}is_active">
-                            {% trans "Active" %}
-                        </a>
-                    </th>
-                    <th>{% trans "Config" %}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {# When adding or removing columns, please update the "colspan" attribute in the {% empty %} section accordingly #}
-                {% for profile in page_obj %}
-                    <tr>
-                        <td class="row_checkbox">
-                            <input type="checkbox" name="row_checkbox" value="{{ profile.id }}"/>
-                        </td>
-                        <td>{{ profile.name }}</td>
-                        <td>{{ profile.created_at|local_datetime }}</td>
-                        <td>{{ profile.updated_at|local_datetime }}</td>
-                        <td>{% if profile.is_active %} ✔ {% else %} ✘ {% endif %}</td>
-                        <td><a href="{% url 'agents:profiles-config' pk=profile.pk %}" class="btn btn-primary tp-table-btn w-100">{% trans "Edit" %}</a></td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="6" class="middle">{% trans "No workflow definitions found. Create one to get started." %}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <h1 class="mb-1">
+            {% trans "Agent Profile Definitions" %}
+        </h1>
 
-        {% include "trustpoint/pagination.html" %}
+        <p class="mb-0 text-muted">
+            {% trans "Manage reusable agent profiles and their current activation state." %}
+        </p>
     </div>
 
-    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-        <div class="tp-card-btn-footer m-1">
-            <button type="button" class="btn btn-danger tp-table-select-btn me-2" data-tp-url="{% url 'agents:profiles-delete_confirm' %}">{% trans "Delete selected" %}</button>
-        </div>
-        <div class="m-1">
-            <a class="btn btn-primary ms-2" href="{% url 'agents:profiles-create' %}">
-                {% trans "Create Profile" %}
-            </a>
-        </div>
+    <div class="card-body text-start">
+        <section>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th id="checkbox-column" scope="col">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all agent profiles' %}"
+                                >
+                            </th>
+
+                            <th scope="col">
+                                <a
+                                    href="?sort={% if current_sort == 'name' %}-{% endif %}name"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans "Unique Name" %}
+                                </a>
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                <a
+                                    href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans "Created at" %}
+                                </a>
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                <a
+                                    href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans "Updated at" %}
+                                </a>
+                            </th>
+
+                            <th scope="col">
+                                <a
+                                    href="?sort={% if current_sort == 'is_active' %}-{% endif %}is_active"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans "Status" %}
+                                </a>
+                            </th>
+
+                            <th scope="col" class="text-end">
+                                {% trans "Actions" %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for profile in page_obj %}
+                            <tr>
+                                <td class="row_checkbox">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ profile.id }}"
+                                        aria-label="{% blocktranslate with name=profile.name %}Select agent profile {{ name }}{% endblocktranslate %}"
+                                    >
+                                </td>
+
+                                <td>
+                                    {% if profile.name %}
+                                        {{ profile.name }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ profile.created_at|local_datetime }}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ profile.updated_at|local_datetime }}
+                                </td>
+
+                                <td>
+                                    {% if profile.is_active %}
+                                        <span class="badge text-bg-success">
+                                            {% trans "Active" %}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">
+                                            {% trans "Inactive" %}
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-end">
+                                    <a
+                                        href="{% url 'agents:profiles-config' pk=profile.pk %}"
+                                        class="btn btn-sm btn-outline-secondary"
+                                    >
+                                        {% trans "Edit" %}
+                                    </a>
+                                </td>
+                            </tr>
+
+                        {% empty %}
+                            <tr>
+                                <td
+                                    colspan="6"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans "No agent profiles have been created yet." %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include "trustpoint/pagination.html" %}
+        </section>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <button
+            type="button"
+            class="btn btn-outline-danger tp-table-select-btn"
+            data-tp-url="{% url 'agents:profiles-delete_confirm' %}"
+        >
+            {% trans "Delete Selected" %}
+        </button>
+
+        <a
+            href="{% url 'agents:profiles-create' %}"
+            class="btn btn-primary"
+        >
+            {% trans "Create Profile" %}
+        </a>
     </div>
 </div>
-
 {% endblock content %}

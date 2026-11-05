@@ -8,6 +8,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from cryptography import x509
+
 if TYPE_CHECKING:
     from pki.models.certificate import CertificateModel
 
@@ -23,7 +25,48 @@ DEVICE_TRACKED_FIELDS: tuple[str, ...] = (
     'no_onboarding_config_id',
     'opc_gds_push_enable_periodic_update',
     'opc_gds_push_renewal_interval',
+    'opc_gds_push_enable_domain_credential_renewal',
+    'opc_gds_push_domain_credential_renewal_interval',
 )
+
+
+def build_enrollment_request_snapshot(certificate: x509.Certificate) -> dict[str, Any]:
+    """Snapshot effective issued attributes, despite the historical ``request`` name.
+
+    As in credential saving, use the first subject attribute for each OID.
+    This deliberately does not preserve repeated RDNs or arbitrary OIDs.
+    Unsupported attribute values become null; unsupported SAN types are omitted.
+    """
+    subject: dict[str, str | None] = {}
+    for field, oid in (
+        ('common_name', x509.NameOID.COMMON_NAME),
+        ('serial_number', x509.NameOID.SERIAL_NUMBER),
+        ('organization', x509.NameOID.ORGANIZATION_NAME),
+        ('organizational_unit', x509.NameOID.ORGANIZATIONAL_UNIT_NAME),
+        ('country', x509.NameOID.COUNTRY_NAME),
+        ('state_or_province', x509.NameOID.STATE_OR_PROVINCE_NAME),
+        ('locality', x509.NameOID.LOCALITY_NAME),
+    ):
+        attributes = certificate.subject.get_attributes_for_oid(oid)
+        value = attributes[0].value if attributes else None
+        subject[field] = value if isinstance(value, str) else None
+
+    sans: dict[str, list[str]] = {
+        'dns_names': [], 'ip_addresses': [], 'uris': [], 'email_addresses': [],
+    }
+    try:
+        extension = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
+        return {'subject': subject, 'subject_alternative_names': sans}
+
+    for field, name_type in (
+        ('dns_names', x509.DNSName),
+        ('ip_addresses', x509.IPAddress),
+        ('uris', x509.UniformResourceIdentifier),
+        ('email_addresses', x509.RFC822Name),
+    ):
+        sans[field] = [str(value) for value in extension.get_values_for_type(name_type)]
+    return {'subject': subject, 'subject_alternative_names': sans}
 
 
 def _json_scalar(value: Any) -> str | int | float | bool | None:
@@ -58,7 +101,8 @@ def build_device_snapshot(device: Any) -> dict[str, Any]:
         'ip_address': str(ip) if (ip := getattr(device, 'ip_address', None)) is not None else None,
     }
     for field_name in DEVICE_TRACKED_FIELDS:
-        snapshot[field_name] = _json_scalar(getattr(device, field_name, None))
+        source = getattr(device, 'opc_ua_gds_push_config', None) if field_name.startswith('opc_') else device
+        snapshot[field_name] = _json_scalar(getattr(source, field_name, None))
     return snapshot
 
 

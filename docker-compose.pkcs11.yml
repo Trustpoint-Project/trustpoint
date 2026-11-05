@@ -1,0 +1,8 @@
+# PKCS#11-only deployment: omit the software KEK mount entirely.
+# docker compose -f docker-compose.yml -f docker-compose.pkcs11.yml up -d
+# For workers, use docker-compose.worker.yml as the first file instead.
+services:
+  trustpoint:
+    secrets: !override
+      - source: django_secret_key
+        target: "${DJANGO_SECRET_KEY_FILE:-/run/secrets/django_secret_key}"

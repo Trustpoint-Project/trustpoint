@@ -10,6 +10,10 @@ Rollover applies only to locally managed Issuing CAs. Remote Issuing CAs and RA 
 
 ## Rollover methods
 
+The available strategies are file import and generated-key EST/CMP requests.
+The separate `RemoteCaRolloverStrategy` class is an unregistered implementation
+stub; it is not an additional supported rollover option.
+
 A rollover can acquire the replacement credential using one of these methods:
 
 ### Import from file

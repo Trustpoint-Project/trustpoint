@@ -43,7 +43,10 @@ def get_installed_apps() -> list[str]:
     """Get list of Trustpoint apps (exclude Django contrib and third-party)."""
     trustpoint_apps = []
     for app in settings.INSTALLED_APPS:
-        if not app.startswith(('django.', 'rest_framework', 'drf_', 'crispy', 'dbbackup', 'django_')) and app != 'trustpoint_core':  # External dependency  # noqa: E501
+        if (
+            not app.startswith(('django.', 'rest_framework', 'drf_', 'crispy', 'dbbackup', 'django_'))
+            and app != 'trustpoint_core'
+        ):  # External dependency
             app_label = app.split('.')[0]
             trustpoint_apps.append(app_label)
     return trustpoint_apps
@@ -273,17 +276,15 @@ Model Index by Application
 
         for model_name, model_info in sorted(models.items()):
             rst_content += f'**{model_name}**\n\n'
-            rst_content += f"   *{model_info['verbose_name']}*\n\n"
-            rst_content += f"   Database table: ``{model_info['table_name']}``\n\n"
+            rst_content += f'   *{model_info["verbose_name"]}*\n\n'
+            rst_content += f'   Database table: ``{model_info["table_name"]}``\n\n'
 
             # List relationships
-            relationships = [
-                f for f in model_info['fields'] if 'related_to' in f
-            ]
+            relationships = [f for f in model_info['fields'] if 'related_to' in f]
             if relationships:
                 rst_content += '   Relationships:\n\n'
                 for rel in relationships:
-                    rst_content += f"   - ``{rel['name']}`` ({rel['type']}) → {rel['related_to']}\n"
+                    rst_content += f'   - ``{rel["name"]}`` ({rel["type"]}) → {rel["related_to"]}\n'
                 rst_content += '\n'
 
     (output_dir / 'model_relationships.rst').write_text(rst_content)
@@ -343,7 +344,7 @@ URL Patterns by App
             view = route.get('view', '').rsplit('.', 1)[-1] if 'view' in route else '-'
             name = route.get('name', '-')
 
-            rst_content += f'   * - ``{pattern}``\n'
+            rst_content += f'   * - ``{pattern or "/"}``\n'
             rst_content += f'     - ``{view}``\n'
             rst_content += f'     - ``{name}``\n'
 
@@ -409,9 +410,7 @@ Applications
 
 def main() -> None:
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description='Generate Trustpoint architecture documentation'
-    )
+    parser = argparse.ArgumentParser(description='Generate Trustpoint architecture documentation')
     parser.add_argument(
         '--output-dir',
         type=Path,
@@ -423,10 +422,8 @@ def main() -> None:
     output_dir: Path = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-
     model_data = analyze_models()
     url_data = analyze_urls()
-
 
     generate_app_overview_rst(output_dir, model_data, url_data)
     generate_app_dependency_rst(output_dir)
@@ -444,7 +441,6 @@ def main() -> None:
             f,
             indent=2,
         )
-
 
 
 if __name__ == '__main__':

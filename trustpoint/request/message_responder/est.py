@@ -2,11 +2,14 @@
 # SPDX-License-Identifier: MIT
 
 """EST-specific message responder classes."""
+
 import base64
+from http import HTTPStatus
 
-from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
+from cryptography.hazmat.primitives.serialization import Encoding
+from trustpoint_core.serializer import CertificateCollectionSerializer
 
-from onboarding.models import OnboardingStatus
+from devices.secrets import retire_onboarding_secrets
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from request.workflow2_issuance import (
     Workflow2IssuanceDecision,
@@ -51,6 +54,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
         run_status = str(workflow2_outcome.run.status)
         if decision == Workflow2IssuanceDecision.WAIT:
             status = 202
+            context.http_response_headers = {'Retry-After': '60'}
             detail = (
                 'Enrollment request pending workflow approval.'
                 if run_status == 'awaiting'
@@ -91,7 +95,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
             chain = [context.issued_certificate]
             if context.issued_certificate_chain:
                 chain.extend(context.issued_certificate_chain)
-            cert_bytes = pkcs7.serialize_certificates(chain, encoding=Encoding.DER)
+            cert_bytes = CertificateCollectionSerializer(chain).as_pkcs7_der()
         else:
             cert_bytes = context.issued_certificate.public_bytes(encoding=encoding)
 
@@ -106,7 +110,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
             return cert, 'application/x-pem-file'
         # Default to RFC 7030 compliant format: base64-encoded with line wrapping
         b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
-        cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)]) + '\n'
+        cert = '\n'.join([b64_cert[i : i + 64] for i in range(0, len(b64_cert), 64)]) + '\n'
         if context.est_encoding == 'base64_der':
             content_type = 'application/pkix-cert'
         else:
@@ -129,8 +133,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
         cert, content_type = EstCertificateMessageResponder._prepare_certificate_data(context)
 
         if context.device and context.device.onboarding_config:
-            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            context.device.onboarding_config.save()
+            retire_onboarding_secrets(context.device.onboarding_config)
         context.http_response_status = 200
         context.http_response_content = cert
         context.http_response_content_type = content_type
@@ -149,5 +152,10 @@ class EstErrorMessageResponder(EstMessageResponder):
             exc_msg = 'EstErrorMessageResponder requires an EstBaseRequestContext.'
             raise TypeError(exc_msg)
         context.http_response_status = context.http_response_status or 500
+        if context.http_response_status == HTTPStatus.UNAUTHORIZED and context.operation == 'simpleenroll':
+            context.http_response_headers = {
+                **(context.http_response_headers or {}),
+                'WWW-Authenticate': 'Basic realm="est", charset="UTF-8"',
+            }
         context.http_response_content = context.http_response_content or 'An error occurred processing the EST request.'
         context.http_response_content_type = context.http_response_content_type or 'text/plain'

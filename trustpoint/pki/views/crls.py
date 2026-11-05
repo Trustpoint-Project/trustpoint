@@ -23,7 +23,8 @@ from django.views.generic.edit import FormView
 from pki.filters import CrlFilter
 from pki.models import CaModel, CertificateModel, CrlModel
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
-from trustpoint.views.base import BulkDeleteView, ContextDataMixin
+from trustpoint.views.base import BulkDeleteView, ContextDataMixin, UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 
 
 class CrlContextMixin(ContextDataMixin):
@@ -69,11 +70,7 @@ class CrlTableView(ExportMixin, CrlContextMixin, ListView[CrlModel]):
 
     def get_queryset(self) -> QuerySet[CrlModel]:
         """Return CRL models with related CA information, respecting active filters."""
-        base_qs = (
-            super().get_queryset()
-            .select_related('ca')
-            .order_by('-this_update')
-        )
+        base_qs = super().get_queryset().select_related('ca').order_by('-this_update')
         return self.apply_filters(base_qs)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -81,15 +78,15 @@ class CrlTableView(ExportMixin, CrlContextMixin, ListView[CrlModel]):
         context = super().get_context_data(**kwargs)
         context['filter'] = getattr(self, 'filterset', None)
         context['filters_active'] = any(
-            self.request.GET.get(k)
-            for k in ('ca', 'is_active', 'this_update_from', 'this_update_to')
+            self.request.GET.get(k) for k in ('ca', 'is_active', 'this_update_from', 'this_update_to')
         )
         return context
 
 
-class CrlBulkDeleteConfirmView(BulkDeleteView):
+class CrlBulkDeleteConfirmView(UserPermissionRequiredMixin, BulkDeleteView):
     """View to confirm the deletion of multiple CRLs."""
 
+    permission_required = AppPermissions.MANAGE_CAS
     model = CrlModel
     success_url = reverse_lazy('pki:crls')
     ignore_url = reverse_lazy('pki:crls')
@@ -126,14 +123,8 @@ class CrlBulkDeleteConfirmView(BulkDeleteView):
         return response
 
 
-class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
-    """View for downloading a single CRL."""
-
-    model = CrlModel
-    success_url = reverse_lazy('pki:crls')
-    ignore_url = reverse_lazy('pki:crls')
-    template_name = 'pki/crls/download.html'
-    context_object_name = 'crl'
+class CrlObjectMixin(DetailView[CrlModel]):
+    """Resolve a CRL primary key, falling back to a CA's active CRL."""
 
     def get_queryset(self) -> QuerySet[CrlModel]:
         """Return all CRL models with related CA information."""
@@ -162,6 +153,16 @@ class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
             pass
 
         raise Http404
+
+
+class CrlDownloadView(CrlContextMixin, CrlObjectMixin):
+    """View for downloading a single CRL."""
+
+    model = CrlModel
+    success_url = reverse_lazy('pki:crls')
+    ignore_url = reverse_lazy('pki:crls')
+    template_name = 'pki/crls/download.html'
+    context_object_name = 'crl'
 
     def get(
         self,
@@ -203,9 +204,7 @@ class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
             file_extension = '.crl'
         elif file_format == 'der':
             pem_lines = [
-                line.strip()
-                for line in crl_model.crl_pem.splitlines()
-                if line and not line.startswith('-----')
+                line.strip() for line in crl_model.crl_pem.splitlines() if line and not line.startswith('-----')
             ]
             b64data = ''.join(pem_lines)
             try:
@@ -225,9 +224,7 @@ class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
                 file_extension = '.p7c'
             else:
                 pem_lines = [
-                    line.strip()
-                    for line in crl_model.crl_pem.splitlines()
-                    if line and not line.startswith('-----')
+                    line.strip() for line in crl_model.crl_pem.splitlines() if line and not line.startswith('-----')
                 ]
                 b64data = ''.join(pem_lines)
                 try:
@@ -255,7 +252,8 @@ class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
 
         return response
 
-class CrlDetailView(CrlContextMixin, DetailView[CrlModel]):
+
+class CrlDetailView(CrlContextMixin, CrlObjectMixin):
     """Detail view for a single CRL."""
 
     model = CrlModel
@@ -263,34 +261,6 @@ class CrlDetailView(CrlContextMixin, DetailView[CrlModel]):
     ignore_url = reverse_lazy('pki:crls')
     template_name = 'pki/crls/details.html'
     context_object_name = 'crl'
-
-    def get_queryset(self) -> QuerySet[CrlModel]:
-        """Return CRL models with related CA information."""
-        return super().get_queryset().select_related('ca')
-
-    def get_object(self, queryset: QuerySet[CrlModel] | None = None) -> CrlModel:
-        """Get the CRL object, handling both CRL primary keys and CA primary keys."""
-        if queryset is None:
-            queryset = self.get_queryset()
-
-        pk = self.kwargs.get('pk')
-        if pk is None:
-            raise Http404
-
-        try:
-            return queryset.get(pk=pk)
-        except CrlModel.DoesNotExist:
-            pass
-
-        try:
-            ca = CaModel.objects.get(pk=pk)
-            active_crl = ca.get_active_crl()
-            if active_crl:
-                return active_crl
-        except (CaModel.DoesNotExist, AttributeError):
-            pass
-
-        raise Http404
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data for the CRL detail view."""
@@ -318,13 +288,15 @@ class CrlDetailView(CrlContextMixin, DetailView[CrlModel]):
         for revoked_cert in crypto_crl:
             serial_hex = f'{revoked_cert.serial_number:x}'.upper()
             cert_id = certificates_by_serial.get(serial_hex)
-            revoked_certs.append({
-                'serial_number': revoked_cert.serial_number,
-                'serial_number_hex': serial_hex,
-                'revocation_date': revoked_cert.revocation_date_utc,
-                'reason': getattr(revoked_cert, 'reason', None),
-                'certificate_id': cert_id,
-            })
+            revoked_certs.append(
+                {
+                    'serial_number': revoked_cert.serial_number,
+                    'serial_number_hex': serial_hex,
+                    'revocation_date': revoked_cert.revocation_date_utc,
+                    'reason': getattr(revoked_cert, 'reason', None),
+                    'certificate_id': cert_id,
+                }
+            )
         context['revoked_certificates'] = revoked_certs
 
         extensions = [
@@ -373,9 +345,10 @@ class CrlImportForm(forms.Form):
             ca_field.label_from_instance = lambda obj: obj.common_name  # type: ignore[method-assign]
 
 
-class CrlImportView(CrlContextMixin, FormView[CrlImportForm]):
+class CrlImportView(UserPermissionRequiredMixin, CrlContextMixin, FormView[CrlImportForm]):
     """View for importing CRLs."""
 
+    permission_required = AppPermissions.MANAGE_CAS
     form_class = CrlImportForm
     template_name = 'pki/crls/import.html'
     success_url = reverse_lazy('pki:crls')
@@ -398,24 +371,15 @@ class CrlImportView(CrlContextMixin, FormView[CrlImportForm]):
             )
 
             if ca is not None:
-                messages.success(
-                    self.request,
-                    _('Successfully imported CRL for CA %(ca)s.') % {'ca': ca.unique_name}
-                )
+                messages.success(self.request, _('Successfully imported CRL for CA %(ca)s.') % {'ca': ca.unique_name})
             else:
-                messages.success(
-                    self.request,
-                    _('Successfully imported CRL with no associated CA.')
-                )
+                messages.success(self.request, _('Successfully imported CRL with no associated CA.'))
 
         except ValidationError as exc:
             messages.error(self.request, str(exc))
             return self.form_invalid(form)
         except (ValueError, UnicodeDecodeError) as exc:
-            messages.error(
-                self.request,
-                _('Failed to import CRL: %(error)s') % {'error': str(exc)}
-            )
+            messages.error(self.request, _('Failed to import CRL: %(error)s') % {'error': str(exc)})
             return self.form_invalid(form)
 
         return super().form_valid(form)
@@ -436,8 +400,6 @@ class CrlImportView(CrlContextMixin, FormView[CrlImportForm]):
         converters = [
             self._try_pem,
             self._try_der,
-            self._try_pkcs7_pem,
-            self._try_pkcs7_der,
         ]
 
         for converter in converters:
@@ -456,18 +418,5 @@ class CrlImportView(CrlContextMixin, FormView[CrlImportForm]):
 
     def _try_der(self, file_content: bytes) -> str:
         """Try to load as DER format."""
-        crl = x509.load_der_x509_crl(file_content)
-        return crl.public_bytes(serialization.Encoding.PEM).decode('utf-8')
-
-    def _try_pkcs7_pem(self, file_content: bytes) -> str:
-        """Try to load as PKCS#7 PEM format."""
-        pem_str = file_content.decode('utf-8')
-        # TODO (FHK): For now, assume the PKCS#7 contains a CRL and try to load it directly  # noqa: FIX002
-        x509.load_pem_x509_crl(pem_str.encode())
-        return pem_str
-
-    def _try_pkcs7_der(self, file_content: bytes) -> str:
-        """Try to load as PKCS#7 DER format."""
-        # TODO (FHK): For now, assume the PKCS#7 contains a CRL and try to load it directly  # noqa: FIX002
         crl = x509.load_der_x509_crl(file_content)
         return crl.public_bytes(serialization.Encoding.PEM).decode('utf-8')

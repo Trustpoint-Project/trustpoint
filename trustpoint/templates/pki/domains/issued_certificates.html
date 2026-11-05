@@ -2,18 +2,31 @@
 {% load i18n %}
 
 {% block content %}
-<div class="card tp-card-centered">
+<div class="card">
     <div class="card-header">
-        <h2>{% trans 'Issued Certificates for' %} {{ domain.unique_name }}</h2>
+        <h1 class="mb-1">
+            {% trans 'Issued Certificates' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% blocktranslate with name=domain.unique_name %}
+                Review certificates issued for domain "{{ name }}".
+            {% endblocktranslate %}
+        </p>
     </div>
 
-    <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%">
-        {% include 'pki/certificates/table.html' with certificates=issued_certificates %}
+    <div class="card-body text-start">
+        <section>
+            {% include 'pki/certificates/table.html' with certificates=issued_certificates %}
+        </section>
     </div>
 
     <div class="card-footer">
-        <a href="{% url 'pki:domains-config' pk=domain.pk %}" class="btn btn-secondary">
-            {% trans 'Back to Domain' %}
+        <a
+            href="{% url 'pki:domains-config' pk=domain.pk %}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Back to Domain Configuration' %}
         </a>
     </div>
 </div>

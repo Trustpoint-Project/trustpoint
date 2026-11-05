@@ -146,7 +146,7 @@ class DjangoEmailAdapterTests(SimpleTestCase):
     def test_send_locmem_is_deterministic(self) -> None:
         # Always keep one deterministic unit-style test
         with override_settings(
-            EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+            MAILERS={"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}},
             DEFAULT_FROM_EMAIL="no-reply@test.local",
         ):
             mail.outbox.clear()
@@ -183,12 +183,13 @@ class DjangoEmailAdapterTests(SimpleTestCase):
         subject = f"Workflows2 adapter mailpit test {time.time()}"
 
         with override_settings(
-            EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
-            EMAIL_HOST="mailpit",
-            EMAIL_PORT=1025,
-            EMAIL_USE_TLS=False,
-            EMAIL_USE_SSL=False,
-            EMAIL_TIMEOUT=10,
+            MAILERS={"default": {
+                "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+                "OPTIONS": {
+                    "host": "mailpit", "port": 1025, "use_tls": False,
+                    "use_ssl": False, "timeout": 10,
+                },
+            }},
             DEFAULT_FROM_EMAIL=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@trustpoint.local"),
         ):
             adapter = DjangoEmailAdapter()

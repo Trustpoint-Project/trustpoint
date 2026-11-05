@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 import django.db.models.deletion
 import pki.models.extension
 import trustpoint.logger
@@ -81,7 +84,7 @@ class Migration(migrations.Migration):
                 ('is_self_signed', models.BooleanField(verbose_name='Self-Signed')),
                 ('common_name', models.CharField(default='', max_length=256, verbose_name='Common Name')),
                 ('sha256_fingerprint', models.CharField(editable=False, max_length=256, unique=True, verbose_name='Fingerprint (SHA256)')),
-                ('signature_algorithm_oid', models.CharField(choices=[('1.2.840.113549.1.1.4', 'Rsa Md5'), ('1.2.840.113549.1.1.5', 'Rsa Sha1'), ('1.3.14.3.2.29', 'Rsa Sha1 Alt'), ('1.2.840.113549.1.1.14', 'Rsa Sha224'), ('1.2.840.113549.1.1.11', 'Rsa Sha256'), ('1.2.840.113549.1.1.12', 'Rsa Sha384'), ('1.2.840.113549.1.1.13', 'Rsa Sha512'), ('2.16.840.1.101.3.4.3.13', 'Rsa Sha3 224'), ('2.16.840.1.101.3.4.3.14', 'Rsa Sha3 256'), ('2.16.840.1.101.3.4.3.15', 'Rsa Sha3 384'), ('2.16.840.1.101.3.4.3.16', 'Rsa Sha3 512'), ('1.2.840.10045.4.1', 'Ecdsa Sha1'), ('1.2.840.10045.4.3.1', 'Ecdsa Sha224'), ('1.2.840.10045.4.3.2', 'Ecdsa Sha256'), ('1.2.840.10045.4.3.3', 'Ecdsa Sha384'), ('1.2.840.10045.4.3.4', 'Ecdsa Sha512'), ('2.16.840.1.101.3.4.3.9', 'Ecdsa Sha3 224'), ('2.16.840.1.101.3.4.3.10', 'Ecdsa Sha3 256'), ('2.16.840.1.101.3.4.3.11', 'Ecdsa Sha3 384'), ('2.16.840.1.101.3.4.3.12', 'Ecdsa Sha3 512'), ('1.2.840.113533.7.66.13', 'Password Based Mac')], editable=False, max_length=256, verbose_name='Signature Algorithm OID')),
+                ('signature_algorithm_oid', models.CharField(choices=[('1.2.840.113549.1.1.4', 'Rsa Md5'), ('1.2.840.113549.1.1.5', 'Rsa Sha1'), ('1.3.14.3.2.29', 'Rsa Sha1 Alt'), ('1.2.840.113549.1.1.14', 'Rsa Sha224'), ('1.2.840.113549.1.1.11', 'Rsa Sha256'), ('1.2.840.113549.1.1.12', 'Rsa Sha384'), ('1.2.840.113549.1.1.13', 'Rsa Sha512'), ('2.16.840.1.101.3.4.3.13', 'Rsa Sha3 224'), ('2.16.840.1.101.3.4.3.14', 'Rsa Sha3 256'), ('2.16.840.1.101.3.4.3.15', 'Rsa Sha3 384'), ('2.16.840.1.101.3.4.3.16', 'Rsa Sha3 512'), ('1.2.840.10045.4.1', 'Ecdsa Sha1'), ('1.2.840.10045.4.3.1', 'Ecdsa Sha224'), ('1.2.840.10045.4.3.2', 'Ecdsa Sha256'), ('1.2.840.10045.4.3.3', 'Ecdsa Sha384'), ('1.2.840.10045.4.3.4', 'Ecdsa Sha512'), ('2.16.840.1.101.3.4.3.9', 'Ecdsa Sha3 224'), ('2.16.840.1.101.3.4.3.10', 'Ecdsa Sha3 256'), ('2.16.840.1.101.3.4.3.11', 'Ecdsa Sha3 384'), ('2.16.840.1.101.3.4.3.12', 'Ecdsa Sha3 512'), ('1.2.840.113533.7.66.13', 'Password Based Mac'), ('2.16.840.1.101.3.4.3.17', 'Mldsa44'), ('2.16.840.1.101.3.4.3.18', 'Mldsa65'), ('2.16.840.1.101.3.4.3.19', 'Mldsa87')], editable=False, max_length=256, verbose_name='Signature Algorithm OID')),
                 ('signature_value', models.CharField(editable=False, max_length=65536, verbose_name='Signature Value')),
                 ('version', models.PositiveSmallIntegerField(choices=[(2, 'Version 3')], editable=False, verbose_name='Version')),
                 ('serial_number', models.CharField(editable=False, max_length=256, verbose_name='Serial Number')),
@@ -89,7 +92,7 @@ class Migration(migrations.Migration):
                 ('not_valid_before', models.DateTimeField(editable=False, verbose_name='Not Valid Before (UTC)')),
                 ('not_valid_after', models.DateTimeField(editable=False, verbose_name='Not Valid After (UTC)')),
                 ('subject_public_bytes', models.CharField(editable=False, max_length=2048, verbose_name='Subject Public Bytes')),
-                ('spki_algorithm_oid', models.CharField(choices=[('1.2.840.10045.2.1', 'Ecc'), ('1.2.840.113549.1.1.1', 'Rsa')], editable=False, max_length=256, verbose_name='Public Key Algorithm OID')),
+                ('spki_algorithm_oid', models.CharField(choices=[('1.2.840.10045.2.1', 'Ecc'), ('1.2.840.113549.1.1.1', 'Rsa'), ('2.16.840.1.101.3.4.3.17', 'Mldsa44'), ('2.16.840.1.101.3.4.3.18', 'Mldsa65'), ('2.16.840.1.101.3.4.3.19', 'Mldsa87')], editable=False, max_length=256, verbose_name='Public Key Algorithm OID')),
                 ('spki_algorithm', models.CharField(editable=False, max_length=256, verbose_name='Public Key Algorithm')),
                 ('spki_key_size', models.PositiveIntegerField(editable=False, verbose_name='Public Key Size')),
                 ('spki_ec_curve_oid', models.CharField(choices=[('', 'None'), ('1.2.840.10045.3.1.1', 'Secp192R1'), ('1.3.132.0.33', 'Secp224R1'), ('1.3.132.0.10', 'Secp256K1'), ('1.2.840.10045.3.1.7', 'Secp256R1'), ('1.3.132.0.34', 'Secp384R1'), ('1.3.132.0.35', 'Secp521R1'), ('1.3.36.3.3.2.8.1.1.7', 'Brainpoolp256R1'), ('1.3.36.3.3.2.8.1.1.11', 'Brainpoolp384R1'), ('1.3.36.3.3.2.8.1.1.13', 'Brainpoolp512R1')], default='', editable=False, max_length=256, verbose_name='Public Key Curve OID (ECC)')),
@@ -133,7 +136,7 @@ class Migration(migrations.Migration):
             name='CredentialModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('credential_type', models.IntegerField(choices=[(0, 'Trustpoint TLS Server'), (1, 'Root CA'), (2, 'Issuing CA'), (3, 'Issued Credential'), (4, 'DevOwnerID'), (5, 'Signer')], verbose_name='Credential Type')),
+                ('credential_type', models.IntegerField(choices=[(0, 'Trustpoint TLS Server'), (1, 'Root CA'), (2, 'Issuing CA'), (3, 'Issued Credential'), (4, 'DevOwnerID'), (5, 'Signer'), (6, 'SCEP Server')], verbose_name='Credential Type')),
                 ('private_key', util.encrypted_fields.EncryptedCharField(blank=True, default='', max_length=9500, verbose_name='Private key (PEM)')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
             ],
@@ -595,11 +598,12 @@ class Migration(migrations.Migration):
                 ('is_active', models.BooleanField(default=True, help_text='Whether this CA is currently active', verbose_name='Active')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated')),
-                ('ca_type', models.IntegerField(blank=True, choices=[(-1, 'Keyless CA'), (0, 'Auto-Generated Root'), (1, 'Auto-Generated'), (2, 'Local-Legacy Software'), (3, 'Local-Managed Backend'), (4, 'Remote-EST-RA'), (5, 'Remote-CMP-RA'), (6, 'Remote-Issuing-EST'), (7, 'Remote-Issuing-CMP')], help_text='Type of CA - KEYLESS for keyless CAs', null=True, verbose_name='CA Type')),
+                ('ca_type', models.IntegerField(blank=True, choices=[(-1, 'Keyless CA'), (0, 'Auto-Generated Root'), (1, 'Auto-Generated'), (2, 'Local-Legacy Software'), (3, 'Local-Managed Backend'), (4, 'Remote-EST-RA'), (5, 'Remote-CMP-RA'), (6, 'Remote-Issuing-EST'), (7, 'Remote-Issuing-CMP'), (8, 'Remote-Issuing-CSR')], help_text='Type of CA - KEYLESS for keyless CAs', null=True, verbose_name='CA Type')),
                 ('remote_host', models.CharField(blank=True, default='', help_text='The hostname or IP address of the remote PKI', max_length=253, verbose_name='Remote Host')),
                 ('remote_port', models.PositiveIntegerField(blank=True, help_text='The port number of the remote PKI', null=True, verbose_name='Remote Port')),
                 ('remote_path', models.CharField(blank=True, default='', help_text='The path on the remote PKI', max_length=255, verbose_name='Remote Path')),
                 ('est_username', models.CharField(blank=True, default='', help_text='Username for EST authentication', max_length=128, verbose_name='EST Username')),
+                ('cmp_sender_kid', models.PositiveIntegerField(blank=True, help_text='senderKID for CMP shared-secret authentication (e.g. the device ID on a Trustpoint upstream)', null=True, verbose_name='CMP Sender KID')),
                 ('crl_cycle_enabled', models.BooleanField(default=False, help_text='Enable automatic periodic CRL generation for this CA', verbose_name='Enable CRL Cycle Updates')),
                 ('crl_cycle_interval_hours', models.FloatField(default=24.0, help_text='The interval in hours between CRL generations (minimum ~5 minutes)', verbose_name='CRL Cycle Interval (hours)')),
                 ('crl_validity_hours', models.FloatField(default=24.0, help_text='The validity period in hours for generated CRLs (nextUpdate field)', verbose_name='CRL Validity (hours)')),

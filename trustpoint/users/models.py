@@ -10,19 +10,33 @@ is a foreign key to ``django.contrib.auth.models.Group``.
 
 from __future__ import annotations
 
+import hashlib
+import re
 import secrets
+import sys
+import time
 from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import available_timezones
 
 from django.apps import apps
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, Group, Permission, UserManager
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.core.validators import RegexValidator
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.debug import sensitive_variables
+from django_otp.models import Device, ThrottlingMixin, TimestampMixin
+from django_otp.oath import TOTP
+
+from util.encrypted_fields import EncryptedTextField
 
 if TYPE_CHECKING:
     from management.models.organization import OrganizationModel
+
+
+SERVICE_ACCOUNT_PERMISSION_CODENAMES = frozenset({'use_rest_api'})
 
 
 class BuiltinRole(models.TextChoices):
@@ -41,18 +55,17 @@ class BuiltinRole(models.TextChoices):
     @classmethod
     def get_service_group(cls) -> Group:
         """Return the dedicated group used by service accounts."""
-        group, _ = Group.objects.get_or_create(name=cls.SERVICE.value)
-        try:
-            permission = Permission.objects.get(
-                content_type__app_label='users',
-                content_type__model='apppermission',
-                codename='use_rest_api',
+        group, created = Group.objects.get_or_create(name=cls.SERVICE.value)
+        if created:
+            group.permissions.set(
+                Permission.objects.filter(
+                    content_type__app_label='users',
+                    content_type__model='apppermission',
+                    codename__in=SERVICE_ACCOUNT_PERMISSION_CODENAMES,
+                )
             )
-        except Permission.DoesNotExist:
-            pass
-        else:
-            group.permissions.set([permission])
         return group
+
 
 class GroupProfile(models.Model):
     """Extended attributes for a Django ``Group`` used as a role.
@@ -105,6 +118,21 @@ class GroupProfile(models.Model):
         """Return a human-readable representation of the profile."""
         return f'Profile for {self.group.name}'
 
+    @transaction.atomic
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Apply role grants to existing human accounts in the same transaction."""
+        super().save(*args, **kwargs)
+        self.refresh_from_db(fields=['grants_staff', 'grants_superuser'])
+        TrustpointUser.objects.filter(role_id=self.group_id, account_type=TrustpointUser.AccountType.HUMAN).update(
+            is_staff=self.grants_staff,
+            is_superuser=self.grants_superuser,
+        )
+
+
+def lock_admin_role() -> None:
+    """Serialize final-admin checks and writes; the caller must hold a transaction."""
+    Group.objects.select_for_update().filter(name=BuiltinRole.ADMIN).first()
+
 
 class TrustpointUserManager(UserManager['TrustpointUser']):
     """Custom manager that handles the required ``role`` field for ``createsuperuser``."""
@@ -112,7 +140,16 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
     def _get_default_org(self) -> OrganizationModel:
         """Create default organization."""
         org_model = apps.get_model('management', 'OrganizationModel')
-        org, _created = org_model.objects.get_or_create(pk=1, name='trustpoint', organization='trustpoint')
+        org, _created = org_model.objects.get_or_create(
+            pk=1,
+            defaults={
+                'name': 'trustpoint',
+                'organization': 'trustpoint',
+                'organization_unit': 'Industrial Security',
+                'state': 'BW',
+                'locality': 'Freudenstadt',
+            },
+        )
         return org
 
     def create_superuser(
@@ -135,6 +172,10 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
         """
         if 'role' not in extra_fields and 'role_id' not in extra_fields:
             admin_group, _ = Group.objects.get_or_create(name=BuiltinRole.ADMIN.value)
+            GroupProfile.objects.get_or_create(
+                group=admin_group,
+                defaults={'grants_staff': True, 'grants_superuser': True},
+            )
             extra_fields['role'] = admin_group
         if 'organization' not in extra_fields:
             extra_fields['organization'] = self._get_default_org()
@@ -172,10 +213,10 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
 class TrustpointUser(AbstractUser):
     """Custom user model that adds a role field to the standard Django user.
 
-    The ``role`` foreign key points to a ``Group`` instance.  On every
-    save the model synchronises Django's ``is_staff`` / ``is_superuser``
-    flags and the user's ``groups`` M2M relation so that the user belongs
-    to exactly the group referenced by ``role``.
+    The ``role`` foreign key points to a ``Group`` instance. Full saves and
+    changes to permission fields synchronise Django's ``is_staff`` /
+    ``is_superuser`` flags and the user's ``groups`` M2M relation so that
+    the user belongs to exactly the group referenced by ``role``.
     """
 
     class LanguageChoices(models.TextChoices):
@@ -235,7 +276,7 @@ class TrustpointUser(AbstractUser):
         null=True,
         blank=True,
         related_name='org_users',
-        verbose_name=_('organization')
+        verbose_name=_('organization'),
     )
 
     language = models.CharField(
@@ -312,37 +353,39 @@ class TrustpointUser(AbstractUser):
             msg = _('Service accounts cannot be staff or superusers.')
             raise ValidationError(msg)
 
+    @transaction.atomic
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Persist the user and synchronise Django permission flags and group membership.
+        """Synchronise role grants and membership only when saving permission fields.
 
-        Reads ``grants_staff`` and ``grants_superuser`` from the role's
-        :class:`GroupProfile` to set ``is_staff`` and ``is_superuser``.
-        Groups without a profile default to both flags being ``False``.
-
-        After saving, the user's ``groups`` M2M is set to contain
-        *exactly* the group pointed to by ``role``.
-
-        Service accounts are never staff or superusers.
+        Existing users lock their row before reading grants. New users lock the
+        role profile so a grant update cannot miss their uncommitted insertion.
         """
-        # Service accounts can never be staff or superusers
-        if self.account_type == self.AccountType.SERVICE:
-            self.is_staff = False
-            self.is_superuser = False
-        # Sync Django permission flags from the role's GroupProfile for human accounts
-        elif self.role_id:
-            profile: GroupProfile | None = getattr(self.role, 'profile', None)
-            self.is_superuser = profile.grants_superuser if profile else False
-            self.is_staff = profile.grants_staff if profile else False
-        else:
-            self.is_superuser = False
-            self.is_staff = False
+        update_fields = kwargs.get('update_fields')
+        sync_role = update_fields is None or bool(
+            set(update_fields) & {'role', 'role_id', 'account_type', 'is_staff', 'is_superuser'}
+        )
+        if sync_role:
+            existing_user = None
+            if self.pk:
+                existing_user = type(self).objects.select_for_update().filter(pk=self.pk).only('pk').first()
+            if self.account_type == self.AccountType.SERVICE:
+                self.is_staff = False
+                self.is_superuser = False
+            else:
+                profiles = GroupProfile.objects.filter(group_id=self.role_id)
+                if existing_user is None:
+                    profiles = profiles.select_for_update()
+                profile = profiles.first()
+                self.is_superuser = profile.grants_superuser if profile else False
+                self.is_staff = profile.grants_staff if profile else False
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {'is_staff', 'is_superuser'}
 
         if self.password_changed_at is None and self.has_usable_password():
             self.password_changed_at = self.date_joined or timezone.now()
         super().save(*args, **kwargs)
-
-        # Ensure the user belongs to exactly the role group.
-        self.groups.set([self.role])
+        if sync_role:
+            self.groups.set([self.role])
 
     def set_password(self, raw_password: str | None) -> None:
         """Hash a password while retaining only the immediately prior hash."""
@@ -353,8 +396,34 @@ class TrustpointUser(AbstractUser):
 
     def password_is_expired(self) -> bool:
         """Evaluate password expiry against the current global policy."""
-        config_model = apps.get_model('management', 'AccountSecurityConfig')
-        return config_model.get().password_expired(self.password_changed_at or self.date_joined)
+        if settings.TRUSTPOINT_IS_BOOTSTRAP:
+            return False
+        policy_model = apps.get_model('management', 'PasswordPolicy')
+        policy = policy_model.objects.filter(pk=1).first() or policy_model()
+        return policy.password_expired(self.password_changed_at or self.date_joined)
+
+
+def is_last_admin_user(user: TrustpointUser, *, lock: bool = False) -> bool:
+    """Return whether deleting or demoting this user would remove the final admin."""
+    if user.role.name != BuiltinRole.ADMIN:
+        return False
+    if lock:
+        # All deletion/demotion paths lock the same row until their transaction ends.
+        Group.objects.select_for_update().get(pk=user.role_id)
+        user.refresh_from_db(fields=['role', 'is_active', 'account_type'])
+    return (
+        user.role.name == BuiltinRole.ADMIN
+        and user.is_active
+        and user.account_type == TrustpointUser.AccountType.HUMAN
+        and not TrustpointUser.objects.filter(
+            role=user.role,
+            is_active=True,
+            account_type=TrustpointUser.AccountType.HUMAN,
+        )
+        .exclude(pk=user.pk)
+        .exists()
+    )
+
 
 class AppPermission(models.Model):
     """Host model for Trustpoint-wide application permissions.
@@ -381,8 +450,7 @@ class AppPermission(models.Model):
                 'manage_service_accounts',
                 _('Can manage service accounts'),
             ),
-                ('use_rest_api', _('Can use the REST API')),
-
+            ('use_rest_api', _('Can use the REST API')),
             # -----------------------------------------------------------------
             # PKI configuration
             # -----------------------------------------------------------------
@@ -398,7 +466,6 @@ class AppPermission(models.Model):
                 'manage_crypto_backends',
                 _('Can manage cryptographic backends'),
             ),
-
             # -----------------------------------------------------------------
             # Certificate lifecycle
             # -----------------------------------------------------------------
@@ -418,16 +485,13 @@ class AppPermission(models.Model):
                 'view_help_pages',
                 _('Can view help pages'),
             ),
-
             # -----------------------------------------------------------------
             # Device lifecycle
             # -----------------------------------------------------------------
             ('manage_devices', _('Can manage devices')),
-
             # -----------------------------------------------------------------
             # Automation and integration
             # -----------------------------------------------------------------
-
             (
                 'manage_certificate_discovery',
                 _('Can manage certificate discovery'),
@@ -449,7 +513,6 @@ class AppPermission(models.Model):
                 'approve_workflows',
                 _('Can approve workflows'),
             ),
-
             # -----------------------------------------------------------------
             # System administration
             # -----------------------------------------------------------------
@@ -470,7 +533,6 @@ class AppPermission(models.Model):
                 'manage_tls_webserver_configuration',
                 _('Can manage TLS webserver configuration'),
             ),
-
             # -----------------------------------------------------------------
             # Monitoring and audit
             # -----------------------------------------------------------------
@@ -587,8 +649,11 @@ class ServiceAccountCredential(models.Model):
     def record_usage(self) -> None:
         """Record the last usage time of this credential."""
         self.last_used = timezone.now()
-        self.usage_count += 1
-        self.save(update_fields=['last_used', 'usage_count'])
+        type(self).objects.filter(pk=self.pk).update(
+            last_used=self.last_used,
+            usage_count=models.F('usage_count') + 1,
+        )
+        self.refresh_from_db(fields=['usage_count'])
 
     @staticmethod
     def generate_client_id() -> str:
@@ -599,3 +664,177 @@ class ServiceAccountCredential(models.Model):
     def generate_secret() -> str:
         """Generate a secure random API secret."""
         return secrets.token_urlsafe(48)
+
+
+class UserClientCertificate(models.Model):
+    """Associate each client certificate with one user, allowing multiple certificates per user."""
+
+    identifier = models.CharField(max_length=255, verbose_name=_('Identifier'))
+    is_active = models.BooleanField(default=True, verbose_name=_('active'))
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='client_certificates',
+        verbose_name=_('user'),
+    )
+    certificate = models.OneToOneField(
+        'pki.CertificateModel',
+        on_delete=models.PROTECT,
+        related_name='user_client_certificate',
+        verbose_name=_('client certificate'),
+    )
+
+    class Meta:
+        """Model metadata."""
+
+        verbose_name = _('user client certificate')
+        verbose_name_plural = _('user client certificates')
+        constraints: ClassVar = [
+            models.UniqueConstraint(fields=['user', 'identifier'], name='unique_user_client_certificate_identifier'),
+        ]
+
+    def __str__(self) -> str:
+        """Identify the certificate and its associated user."""
+        return f'{self.identifier} for user {self.user_id}'
+
+
+MAX_TOKEN_LENGTH = 64
+RECOVERY_CODE_COUNT = 10
+
+
+def new_otp_key() -> str:
+    """Generate a cryptographically random 160-bit authenticator secret."""
+    return secrets.token_hex(20)
+
+
+class UserOTPDevice(TimestampMixin, ThrottlingMixin, Device):  # type: ignore[misc]
+    """One encrypted authenticator per human user.
+
+    Use django_otp.verify_token() for atomic verification of a freshly loaded,
+    locked device. For enrollment, load the unconfirmed device with
+    select_for_update() inside transaction.atomic(), verify its first code, then
+    set confirmed=True. Only confirmed devices may be used to complete a login.
+    Password checks and enrollment session expiry belong in the calling flow.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='otp_devices',
+        limit_choices_to={'account_type': 'HUMAN'},
+    )
+    name = models.CharField(max_length=64, default='Authenticator')
+    key = EncryptedTextField(
+        default=new_otp_key,
+        editable=False,
+        validators=[RegexValidator(r'\A[0-9a-f]{40}\Z', _('Invalid OTP secret.'))],
+    )
+    confirmed = models.BooleanField(default=False, editable=False)
+    last_t = models.BigIntegerField(default=-1, editable=False)
+
+    class Meta(Device.Meta):  # type: ignore[misc]
+        """Enforce one device per user and require verification before confirmation."""
+
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(fields=['user'], name='unique_user_otp_device'),
+            models.CheckConstraint(condition=models.Q(last_t__gte=-1), name='user_otp_valid_last_t'),
+            models.CheckConstraint(
+                condition=models.Q(confirmed=False) | models.Q(last_t__gte=0),
+                name='user_otp_confirmed_has_verified_token',
+            ),
+        ]
+
+    def get_throttle_factor(self) -> int:
+        """Use django-otp's exponential backoff, starting at one second."""
+        return 1
+
+    @sensitive_variables()
+    def verify_token(self, token: str) -> bool:
+        """Verify a TOTP or consume a recovery code; the caller must lock this device."""
+        if (
+            self.pk is None
+            or not settings.TRUSTPOINT_IS_OPERATIONAL
+            or settings.TRUSTPOINT_IS_BOOTSTRAP
+            or not self.user.is_active
+            or self.user.account_type != 'HUMAN'
+        ):
+            return False
+        allowed, _details = self.verify_is_allowed()
+        if not allowed:
+            return False
+        token = token.strip() if isinstance(token, str) and len(token) <= MAX_TOKEN_LENGTH else ''
+        verified = False
+        if re.fullmatch(r'[0-9]{6}', token):
+            totp = TOTP(bytes.fromhex(self.key), step=30, digits=6)
+            totp.time = time.time()
+            verified = totp.verify(int(token), tolerance=1, min_t=self.last_t + 1)
+            if verified:
+                self.last_t = totp.t()
+        elif self.confirmed and re.fullmatch(r'[0-9a-fA-F-]{32,35}', token):
+            digest = hashlib.sha256(token.replace('-', '').lower().encode('ascii')).hexdigest()
+            verified = (
+                self.recovery_codes.filter(code_hash=digest, used_at__isnull=True).update(
+                    used_at=timezone.now(),
+                )
+                == 1
+            )
+        if verified:
+            self.throttle_reset(commit=False)
+            self.set_last_used_timestamp(commit=False)
+            self.save(
+                update_fields=[
+                    'last_t',
+                    'last_used_at',
+                    'throttling_failure_count',
+                    'throttling_failure_timestamp',
+                ]
+            )
+        else:
+            self.throttle_increment()
+        return verified
+
+    @sensitive_variables()
+    def generate_recovery_codes(self) -> list[str]:
+        """Replace recovery codes after caller reauthentication; return plaintext once."""
+        if not settings.TRUSTPOINT_IS_OPERATIONAL or settings.TRUSTPOINT_IS_BOOTSTRAP:
+            raise ValidationError(_('OTP is unavailable during initial setup.'))
+        with transaction.atomic(using=self._state.db):
+            device = type(self).objects.using(self._state.db).select_for_update().get(pk=self.pk, user_id=self.user_id)
+            if not device.confirmed or not device.user.is_active or device.user.account_type != 'HUMAN':
+                raise ValidationError(_('Recovery codes require an active human account and confirmed authenticator.'))
+            # 128 random bits per code permit SHA-256 storage without a password-derived hash.
+            codes = [secrets.token_hex(16) for _index in range(RECOVERY_CODE_COUNT)]
+            device.recovery_codes.all().delete()
+            device.recovery_codes.bulk_create(
+                [
+                    UserOTPRecoveryCode(device=device, code_hash=hashlib.sha256(code.encode('ascii')).hexdigest())
+                    for code in codes
+                ]
+            )
+            return ['-'.join(code[i : i + 8] for i in range(0, len(code), 8)) for code in codes]
+
+
+class UserOTPRecoveryCode(models.Model):
+    """A single-use recovery-code hash belonging to an authenticator."""
+
+    device = models.ForeignKey(UserOTPDevice, on_delete=models.CASCADE, related_name='recovery_codes')
+    code_hash = models.CharField(max_length=64, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        """Keep recovery-code hashes unique within each device."""
+
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(fields=['device', 'code_hash'], name='unique_user_otp_recovery_code'),
+        ]
+
+    def __str__(self) -> str:
+        """Identify the record without exposing the hash."""
+        return f'OTP recovery code {self.pk} for device {self.device_id}'
+
+
+# Preserve the import path used by existing migrations without keeping a separate model module.
+sys.modules['users.otp_models'] = sys.modules[__name__]
+sys.modules['users'].__dict__['otp_models'] = sys.modules[__name__]

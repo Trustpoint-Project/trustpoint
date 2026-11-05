@@ -20,10 +20,19 @@ from trustpoint_core.serializer import (
 )
 
 from crypto.application.capabilities import get_active_backend_capability_report
-from crypto.domain.algorithms import EllipticCurveName
-from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.domain.specs import KeySpec
 from crypto.runtime import configured_private_key_location
+from pki.forms.credentials import (
+    encode_credential_password,
+    parse_certificate_chain_upload,
+    parse_certificate_upload,
+    parse_private_key_upload,
+    read_pkcs12_upload,
+)
+from pki.key_types import SIGNER_KEY_TYPE_CHOICES, key_spec_for_key_type
 from pki.models.certificate import CertificateModel
+from pki.services.credential_upload import parse_pkcs12
+from pki.services.key_generation import supported_key_type_choices
 from signer.models import SignerModel
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
@@ -69,11 +78,7 @@ class SignerGenerateForm(LoggerMixin, forms.Form):
     """Form for generating a backend-managed signer."""
 
     KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        ('rsa_2048', _('RSA 2048')),
-        ('rsa_3072', _('RSA 3072')),
-        ('rsa_4096', _('RSA 4096')),
-        ('ec_secp256r1', _('EC SECP256R1')),
-        ('ec_secp384r1', _('EC SECP384R1')),
+        (value, _(label)) for value, label in SIGNER_KEY_TYPE_CHOICES
     ]
 
     unique_name = forms.CharField(
@@ -89,29 +94,16 @@ class SignerGenerateForm(LoggerMixin, forms.Form):
 
     @staticmethod
     def _key_spec_for_key_type(key_type: str) -> KeySpec:
-        """Map form key choices to backend key specs."""
-        if key_type == 'rsa_2048':
-            return RsaKeySpec(key_size=2048)
-        if key_type == 'rsa_3072':
-            return RsaKeySpec(key_size=3072)
-        if key_type == 'rsa_4096':
-            return RsaKeySpec(key_size=4096)
-        if key_type == 'ec_secp256r1':
-            return EcKeySpec(curve=EllipticCurveName.SECP256R1)
-        if key_type == 'ec_secp384r1':
-            return EcKeySpec(curve=EllipticCurveName.SECP384R1)
-        msg = f'Unsupported signer key type {key_type!r}.'
-        raise ValueError(msg)
+        """Map the existing signer form values through the shared catalog."""
+        if key_type not in dict(SIGNER_KEY_TYPE_CHOICES):
+            msg = f'Unsupported signer key type {key_type!r}.'
+            raise ValueError(msg)
+        return key_spec_for_key_type(key_type)
 
     @classmethod
     def supported_key_type_choices(cls) -> list[tuple[str, str]]:
         """Return signer key choices supported by the active backend."""
-        report = get_active_backend_capability_report()
-        return [
-            (value, label)
-            for value, label in cls.KEY_TYPE_CHOICES
-            if report.supports_key_spec(cls._key_spec_for_key_type(value))
-        ]
+        return supported_key_type_choices(cls.KEY_TYPE_CHOICES, report=get_active_backend_capability_report())
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the form with backend-supported key choices."""
@@ -204,20 +196,13 @@ class SignerAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         self._save_signer(cleaned_data, credential_serializer)
 
     def _validate_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, bytes | None]:
-        """Validates and reads the PKCS#12 file."""
-        pkcs12_file = cleaned_data.get('pkcs12_file')
-        if pkcs12_file is None:
-            self._raise_validation_error('PKCS#12 file is required.')
-
-        try:
-            pkcs12_raw = pkcs12_file.read()
-            pkcs12_password = cleaned_data.get('pkcs12_password')
-            if pkcs12_password:
-                pkcs12_password = pkcs12_password.encode()
-        except (OSError, AttributeError, UnicodeEncodeError) as e:
-            raise ValidationError(_('Error reading PKCS#12 file or password.')) from e
-
-        return pkcs12_raw, pkcs12_password
+        """Read bounded PKCS#12 data while preserving signer validation messages."""
+        error_message = _('Error reading PKCS#12 file or password.')
+        raw = read_pkcs12_upload(
+            cleaned_data.get('pkcs12_file'), read_message=error_message, read_error_code=None,
+        )
+        password = encode_credential_password(cleaned_data.get('pkcs12_password'), error_message=error_message)
+        return raw, password
 
     def _process_pkcs12_file(
         self,
@@ -227,7 +212,7 @@ class SignerAddFileImportPkcs12Form(LoggerMixin, forms.Form):
     ) -> CredentialSerializer:
         """Processes the PKCS#12 file and returns a credential serializer."""
         try:
-            credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
+            credential_serializer = parse_pkcs12(pkcs12_raw, pkcs12_password)
             if credential_serializer.private_key is None:
                 self._raise_validation_error('Private key is missing from credential serializer.')
 
@@ -287,55 +272,19 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     )
 
     def clean_private_key_file(self) -> PrivateKeySerializer:
-        """Validates and parses the uploaded private key file."""
-        private_key_file = self.cleaned_data.get('private_key_file')
-        private_key_file_password = self.data.get('private_key_file_password') or None
-
-        if not private_key_file:
-            err_msg = 'No private key file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if private_key_file.size > max_size:
-            err_msg = 'Private key file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        if private_key_file_password:
-            try:
-                private_key_file_password = private_key_file_password.encode('utf-8')
-            except Exception as original_exception:
-                err_msg = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
-                raise ValidationError(err_msg) from original_exception
-        else:
-            private_key_file_password = None
-
-        try:
-            private_key_file = PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
-        except Exception:  # noqa: BLE001
-            err_msg = 'Failed to parse the private key file. Either wrong password or file corrupted.'
-            self._raise_validation_error(err_msg)
-        return private_key_file
+        """Validate and parse the uploaded private key file."""
+        return parse_private_key_upload(
+            self.cleaned_data.get('private_key_file'), self.data.get('private_key_file_password') or None
+        )
 
     def clean_signer_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded signer certificate file."""
-        signer_certificate = self.cleaned_data['signer_certificate']
-
-        if not signer_certificate:
-            err_msg = 'No signer certificate file was uploaded.'
-            raise forms.ValidationError(err_msg)
-
-        # max size: 64 kiB
-        max_size = 1024 * 64
-        if signer_certificate.size > max_size:
-            err_msg = 'Signer certificate file is too large, max. 64 kiB.'
-            raise ValidationError(err_msg)
-
-        try:
-            certificate_serializer = CertificateSerializer.from_bytes(signer_certificate.read())
-        except Exception:  # noqa: BLE001
-            err_msg = 'Failed to parse the signer certificate. Seems to be corrupted.'
-            self._raise_validation_error(err_msg)
+        certificate_serializer = parse_certificate_upload(
+            self.cleaned_data.get('signer_certificate'),
+            missing_message='No signer certificate file was uploaded.',
+            too_large_message='Signer certificate file is too large, max. 64 kiB.',
+            parse_message='Failed to parse the signer certificate. Seems to be corrupted.',
+        )
 
         cert_crypto = certificate_serializer.as_crypto()
         validate_signing_certificate(cert_crypto)
@@ -356,17 +305,11 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         return certificate_serializer
 
     def clean_signer_certificate_chain(self) -> CertificateCollectionSerializer | None:
-        """Validates and parses the uploaded signer certificate chain file."""
-        signer_certificate_chain = self.cleaned_data['signer_certificate_chain']
-
-        if signer_certificate_chain:
-            try:
-                return CertificateCollectionSerializer.from_bytes(signer_certificate_chain.read())
-            except Exception as exception:
-                err_msg = _('Failed to parse the signer certificate chain. Seems to be corrupted.')
-                raise ValidationError(err_msg) from exception
-
-        return None
+        """Parse an optional certificate chain using shared upload limits."""
+        return parse_certificate_chain_upload(
+            self.cleaned_data.get('signer_certificate_chain'),
+            parse_message=_('Failed to parse the signer certificate chain. Seems to be corrupted.'),
+        )
 
     def _raise_validation_error(self, message: str) -> None:
         """Helper method to raise a ValidationError with a given message."""

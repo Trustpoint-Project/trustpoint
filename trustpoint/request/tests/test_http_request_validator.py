@@ -3,8 +3,11 @@
 
 
 """Unit tests for the HTTP request validation module."""
+
 import base64
 from unittest.mock import MagicMock
+
+import pytest
 
 from request.request_validator.http_req import (
     AcceptHeaderValidation,
@@ -16,6 +19,7 @@ from request.request_validator.http_req import (
     EstHttpRequestValidator,
     IntermediateCertificatesValidation,
     PayloadSizeValidation,
+    TrustedProxyHeadersValidation,
 )
 from request.request_context import BaseRequestContext, EstCertificateRequestContext
 
@@ -166,22 +170,20 @@ class TestAcceptHeaderValidation:
         validator = AcceptHeaderValidation(allowed_content_types=allowed_types)
         assert validator.allowed_content_types == allowed_types
 
-    def test_validate_success_single_type(self):
+    def test_validate_success_single_type(self, rf):
         """Test successful validation with single matching type."""
         validator = AcceptHeaderValidation(allowed_content_types=['application/json'])
         context = BaseRequestContext()
-        context.raw_message = MagicMock()
-        context.raw_message.headers = {'Accept': 'application/json'}
+        context.raw_message = rf.get('/', HTTP_ACCEPT='application/json')
 
         # Should not raise any exception
         validator.validate(context)
 
-    def test_validate_success_multiple_types(self):
+    def test_validate_success_multiple_types(self, rf):
         """Test successful validation with multiple types."""
         validator = AcceptHeaderValidation(allowed_content_types=['application/json', 'application/xml'])
         context = BaseRequestContext()
-        context.raw_message = MagicMock()
-        context.raw_message.headers = {'Accept': 'application/json, application/xml'}
+        context.raw_message = rf.get('/', HTTP_ACCEPT='application/json, application/xml')
 
         # Should not raise any exception
         validator.validate(context)
@@ -196,12 +198,11 @@ class TestAcceptHeaderValidation:
         # Should not raise any exception
         validator.validate(context)
 
-    def test_validate_invalid_accept_header(self):
+    def test_validate_invalid_accept_header(self, rf):
         """Test ValueError when Accept header doesn't match allowed types."""
         validator = AcceptHeaderValidation(allowed_content_types=['application/json'])
         context = BaseRequestContext()
-        context.raw_message = MagicMock()
-        context.raw_message.headers = {'Accept': 'text/plain'}
+        context.raw_message = rf.get('/', HTTP_ACCEPT='text/plain')
 
         try:
             validator.validate(context)
@@ -298,6 +299,7 @@ class TestClientCertificateValidation:
 
         validator.validate(context)
 
+
 class TestIntermediateCertificatesValidation:
     """Test IntermediateCertificatesValidation class."""
 
@@ -353,7 +355,7 @@ class TestIntermediateCertificatesValidation:
             validator.validate(context)
             assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert 'Invalid SSL_CLIENT_CERT_CHAIN_0 PEM' in str(e)
+            assert 'Invalid SSL client certificate chain entry 0' in str(e)
 
     def test_validate_missing_raw_message(self):
         """Test ValueError when raw_message is None."""
@@ -372,17 +374,18 @@ class TestContentTransferEncodingValidation:
     """Test ContentTransferEncodingValidation class."""
 
     def test_validate_success_base64(self):
-        """Test successful validation and decoding of base64 content."""
+        """Validate Base64 while leaving decoding to the message parser."""
         validator = ContentTransferEncodingValidation()
         context = BaseRequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = {'Content-Transfer-Encoding': 'base64'}
         test_content = 'Hello World'
-        encoded_content = base64.b64encode(test_content.encode()).decode()
+        encoded_content = base64.b64encode(test_content.encode())
         context.raw_message.body = encoded_content
 
         validator.validate(context)
-        assert context.parsed_message == test_content.encode()
+        assert context.raw_message.body == encoded_content
+        assert context.parsed_message is None
 
     def test_validate_no_encoding(self):
         """Test that missing Content-Transfer-Encoding header passes."""
@@ -523,19 +526,18 @@ class TestCmpHttpRequestValidator:
     def test_init(self):
         """Test initialization with correct components."""
         validator = CmpHttpRequestValidator()
-        assert len(validator.components) == 2
-        assert isinstance(validator.components[0], PayloadSizeValidation)
-        assert isinstance(validator.components[1], ContentTypeValidation)
-        assert validator.components[0].max_payload_size == 131072
-        assert validator.components[1].expected_content_type == 'application/pkixcmp'
+        assert len(validator.components) == 3
+        assert isinstance(validator.components[0], TrustedProxyHeadersValidation)
+        assert isinstance(validator.components[1], PayloadSizeValidation)
+        assert isinstance(validator.components[2], ContentTypeValidation)
+        assert validator.components[1].max_payload_size == 131072
+        assert validator.components[2].expected_content_type == 'application/pkixcmp'
 
-    def test_validate_integration(self):
+    def test_validate_integration(self, rf):
         """Test integration with valid CMP request."""
         validator = CmpHttpRequestValidator()
         context = BaseRequestContext()
-        context.raw_message = MagicMock()
-        context.raw_message.body = b'test cmp payload'
-        context.raw_message.headers = {'Content-Type': 'application/pkixcmp'}
+        context.raw_message = rf.post('/', data=b'test cmp payload', content_type='application/pkixcmp')
 
         # Should not raise any exception
         validator.validate(context)
@@ -547,13 +549,14 @@ class TestEstHttpRequestValidator:
     def test_init(self):
         """Test initialization with correct components."""
         validator = EstHttpRequestValidator()
-        assert len(validator.components) == 6
-        assert isinstance(validator.components[0], PayloadSizeValidation)
-        assert isinstance(validator.components[1], ContentTypeValidation)
-        assert isinstance(validator.components[2], AcceptHeaderValidation)
-        assert isinstance(validator.components[3], ClientCertificateValidation)
-        assert isinstance(validator.components[4], IntermediateCertificatesValidation)
-        assert isinstance(validator.components[5], ContentTransferEncodingValidation)
+        assert len(validator.components) == 7
+        assert isinstance(validator.components[0], TrustedProxyHeadersValidation)
+        assert isinstance(validator.components[1], PayloadSizeValidation)
+        assert isinstance(validator.components[2], ContentTypeValidation)
+        assert isinstance(validator.components[3], AcceptHeaderValidation)
+        assert isinstance(validator.components[4], ClientCertificateValidation)
+        assert isinstance(validator.components[5], IntermediateCertificatesValidation)
+        assert isinstance(validator.components[6], ContentTransferEncodingValidation)
 
     def test_validate_integration(self):
         """Test integration with valid EST request."""
@@ -561,10 +564,43 @@ class TestEstHttpRequestValidator:
         context = EstCertificateRequestContext()
         context.raw_message = MagicMock()
         context.raw_message.body = b'test est payload'
-        context.raw_message.headers = {
-            'Content-Type': 'application/pkcs10',
-            'Accept': 'application/pkcs7-mime'
-        }
+        context.raw_message.headers = {'Content-Type': 'application/pkcs10', 'Accept': 'application/pkcs7-mime'}
         context.raw_message.META = {}
 
         validator.validate(context)
+
+
+@pytest.mark.parametrize(
+    ('validator_type', 'content_type'),
+    [(CmpHttpRequestValidator, 'application/pkixcmp'), (EstHttpRequestValidator, 'application/pkcs10')],
+)
+@pytest.mark.parametrize('remote_addr', ['198.51.100.10', '', 'invalid-peer'])
+def test_enrollment_rejects_proxy_headers_from_untrusted_or_invalid_peers(
+    rf, settings, validator_type, content_type, remote_addr
+):
+    """A forwarded loopback address cannot override the untrusted direct peer."""
+    settings.TRUSTPOINT_TRUSTED_PROXY_IPS = ('127.0.0.1', '::1')
+    context = EstCertificateRequestContext()
+    context.raw_message = rf.post(
+        '/',
+        data=b'payload',
+        content_type=content_type,
+        REMOTE_ADDR=remote_addr,
+        HTTP_X_FORWARDED_FOR='127.0.0.1',
+    )
+    with pytest.raises(ValueError, match='TrustedProxyHeadersValidation'):
+        validator_type().validate(context)
+
+
+def test_configured_proxy_network_can_supply_forwarded_headers(rf, settings):
+    """A direct peer in the configured network may supply proxy headers."""
+    settings.TRUSTPOINT_TRUSTED_PROXY_IPS = '198.51.100.0/24'
+    context = EstCertificateRequestContext()
+    context.raw_message = rf.post(
+        '/',
+        data=b'payload',
+        content_type='application/pkcs10',
+        REMOTE_ADDR='198.51.100.10',
+        HTTP_X_FORWARDED_FOR='203.0.113.10',
+    )
+    EstHttpRequestValidator().validate(context)

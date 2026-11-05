@@ -79,10 +79,10 @@ class HelpViewTest(TestCase):
             docs_dir.mkdir(parents=True)
 
             # Create a fresh lock file
-            lock_file = docs_dir / '.building'
+            lock_file = docs_dir / 'docs.building'
             lock_file.touch()
 
-            with override_settings(BASE_DIR=base_dir):
+            with override_settings(BASE_DIR=base_dir, MEDIA_ROOT=docs_dir):
                 context = self.view.get_context_data()
 
                 self.assertTrue(context['build_in_progress'])
@@ -99,14 +99,14 @@ class HelpViewTest(TestCase):
             docs_dir.mkdir(parents=True)
 
 
-            lock_file = docs_dir / '.building'
+            lock_file = docs_dir / 'docs.building'
             lock_file.touch()
 
 
             stale_time = time.time() - 400
             os.utime(lock_file, (stale_time, stale_time))
 
-            with override_settings(BASE_DIR=base_dir):
+            with override_settings(BASE_DIR=base_dir, MEDIA_ROOT=docs_dir):
                 context = self.view.get_context_data()
 
                 self.assertFalse(context['build_in_progress'])
@@ -123,6 +123,6 @@ class HelpViewTest(TestCase):
             docs_index.parent.mkdir(parents=True)
             docs_index.touch()
 
-            with override_settings(BASE_DIR=base_dir):
+            with override_settings(BASE_DIR=base_dir, MEDIA_ROOT=temp_path):
                 context = self.view.get_context_data()
                 self.assertTrue(context['local_docs_available'])

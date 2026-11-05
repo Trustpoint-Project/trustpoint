@@ -33,9 +33,6 @@ from crypto.models import (
     SoftwareKeyEncryptionSource,
 )
 
-LOCAL_DEVELOPMENT_DEK_LENGTH_BYTES = 32
-
-
 def _enable_local_dev_auto_config(settings: Any) -> None:
     """Enable the guarded local dev backend auto-configuration path."""
     settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
@@ -92,7 +89,8 @@ def test_local_dev_auto_configured_appsecret_backend_encrypts_fields(settings: A
     assert ciphertext.startswith(CIPHERTEXT_PREFIX)
     assert plaintext == 'local secret'
     assert backend.backend_kind == AppSecretBackendKind.SOFTWARE
-    assert len(bytes(software_config.raw_dek)) == LOCAL_DEVELOPMENT_DEK_LENGTH_BYTES
+    assert software_config.wrapped_dek
+    assert backend.dek_initialized
 
 
 @pytest.mark.django_db

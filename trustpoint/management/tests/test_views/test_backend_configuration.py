@@ -11,6 +11,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.http import Http404
+from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase
 from django.views.generic import TemplateView
 
@@ -56,7 +57,7 @@ class BackendConfigurationViewTest(TestCase):
     def test_get_context_data_with_software_config(self) -> None:
         """Test get_context_data with an active software backend profile."""
         profile = CryptoProviderProfileModel.objects.create(
-            name='software',
+            name='trustpoint-software-demo-testing-backend',
             backend_kind=BackendKind.SOFTWARE,
             active=True,
         )
@@ -72,8 +73,16 @@ class BackendConfigurationViewTest(TestCase):
         assert context['software_config'] == software_config
         assert context['is_software_backend']
         assert context['capability_badge'] == 'success'
-        assert context['supported_key_capabilities']
-        assert context['supported_auto_gen_pki_algorithms']
+        assert context['supported_key_capabilities'] == [
+            {'family': 'RSA', 'values': '2048, 3072, 4096'},
+            {'family': 'Elliptic Curve', 'values': 'SECP256R1, SECP384R1, SECP521R1'},
+            {'family': 'ML-DSA', 'values': 'ML-DSA-44, ML-DSA-65, ML-DSA-87'},
+        ]
+        html = render_to_string(self.view.template_name, context, request=self.view.request)
+        assert 'Supported CA Key Algorithms' in html
+        for label in ('RSA', 'Elliptic Curve', 'ML-DSA', 'ML-DSA-44', 'ML-DSA-65', 'ML-DSA-87'):
+            assert label in html
+        assert context['supported_auto_gen_pki_key_types']
         assert 'page_title' in context
 
     def test_get_context_data_with_softhsm_config(self) -> None:
@@ -110,6 +119,7 @@ class BackendConfigurationViewTest(TestCase):
         assert context['pkcs11_token_serial_display'] == '-'  # noqa: S105
         assert context['pkcs11_slot_id_display'] == 0
         assert context['capability_badge'] == 'warning'
+        assert context['supported_key_capabilities'] == []
         assert context['pkcs11_module_download_available']
         assert context['pkcs11_provider_config_download_available']
 

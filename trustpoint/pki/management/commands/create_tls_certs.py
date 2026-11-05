@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import ipaddress
 from pathlib import Path
 
@@ -26,10 +26,10 @@ class Command(BaseCommand):
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Executes the command."""
-        one_day = datetime.timedelta(1, 0, 0)
-        
+        one_day = dt.timedelta(1, 0, 0)
+
         ipv4_addresses_list = ['127.0.0.1', '192.168.88.10']
-        
+
         basic_constraints_extension = x509.BasicConstraints(ca=False, path_length=None)
         key_usage_extension = x509.KeyUsage(
             digital_signature=True,
@@ -43,7 +43,10 @@ class Command(BaseCommand):
             encipher_only=False,
         )
         extended_key_usage_extension = x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH])
-        subject_alt_name_content = [x509.DNSName('localhost'), x509.DNSName('trustpoint.local')]
+        subject_alt_name_content: list[x509.GeneralName] = [
+            x509.DNSName('localhost'),
+            x509.DNSName('trustpoint.local'),
+        ]
         subject_alt_name_content.extend(x509.IPAddress(ipaddress.IPv4Address(ipv4)) for ipv4 in ipv4_addresses_list)
         subject_alternative_names_extension = x509.SubjectAlternativeName(subject_alt_name_content)
 
@@ -65,8 +68,8 @@ class Command(BaseCommand):
         builder = x509.CertificateBuilder()
         builder = builder.subject_name(subject)
         builder = builder.issuer_name(issuer)
-        builder = builder.not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
-        builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * 365))
+        builder = builder.not_valid_before(dt.datetime.now(tz=dt.UTC) - one_day)
+        builder = builder.not_valid_after(dt.datetime.now(tz=dt.UTC) + (one_day * 365))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
         builder = builder.add_extension(basic_constraints_extension, critical=True)

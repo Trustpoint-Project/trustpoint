@@ -10,21 +10,27 @@ import logging
 import os
 import secrets
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand
 from django.db import connection
+from django.db.models import Field
 from packaging.version import InvalidVersion, Version
 
 from management.util.output_wrapper import CommandOutputWrapper
 from management.util.startup_strategies import BootstrapTlsMaterialStrategy, StartupContext, WizardState
 from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
+from setup_wizard.operational_handoff import build_operational_environment, write_operational_env_file
 from setup_wizard.tls_credential import load_staged_tls_credential
 from users.models import BuiltinRole
+
+if TYPE_CHECKING:
+    from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+    from django.db.models import Model
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +53,13 @@ class Command(BaseCommand):
         output.write('Preparing bootstrap database schema...')
         self._prepare_bootstrap_database()
         self._create_bootstrap_login(output)
-        self._trigger_auto_setup_if_requested(output)
 
         completed_row, _ = SetupWizardCompletedModel.objects.get_or_create(
             singleton_id=SetupWizardCompletedModel.SINGLETON_ID
         )
         config = SetupWizardConfigModel.get_singleton()
         self._seed_operational_database_defaults(config, output)
+        self._trigger_auto_setup_if_requested(output)
         current_step = config.FreshInstallCurrentStep(config.fresh_install_current_step)
         output.write(f'Bootstrap wizard completed: {completed_row.setup_completed_at is not None}')
         output.write(f'Bootstrap wizard current step: {current_step.name}')
@@ -84,20 +90,23 @@ class Command(BaseCommand):
         bootstrap_models = (SetupWizardCompletedModel, SetupWizardConfigModel)
         with connection.schema_editor() as schema_editor:
             for model in bootstrap_models:
-                if model._meta.db_table not in existing_tables:
+                if model._meta.db_table not in existing_tables:  # noqa: SLF001  # _meta is Django's public model API
                     schema_editor.create_model(model)
                 else:
                     Command._add_missing_bootstrap_columns(schema_editor, model)
 
     @staticmethod
-    def _add_missing_bootstrap_columns(schema_editor: object, model: type[object]) -> None:
+    def _add_missing_bootstrap_columns(schema_editor: BaseDatabaseSchemaEditor, model: type[Model]) -> None:
         """Add newly introduced bootstrap columns without running operational migrations."""
         with connection.cursor() as cursor:
             existing_columns = {
                 column.name
-                for column in connection.introspection.get_table_description(cursor, model._meta.db_table)
+                for column in connection.introspection.get_table_description(
+                    cursor,
+                    model._meta.db_table,  # noqa: SLF001  # _meta is Django's public model API
+                )
             }
-        for field in model._meta.local_fields:
+        for field in model._meta.local_fields:  # noqa: SLF001  # _meta is Django's public model API
             if field.primary_key or field.column in existing_columns:
                 continue
             schema_editor.add_field(model, field)
@@ -146,20 +155,23 @@ class Command(BaseCommand):
             'operational_db_host': os.getenv('DATABASE_HOST'),
             'operational_db_port': os.getenv('DATABASE_PORT'),
             'operational_db_name': os.getenv('POSTGRES_DB'),
-            'operational_db_user': os.getenv('DATABASE_USER'),
-            'operational_db_password': os.getenv('DATABASE_PASSWORD'),
+            'operational_db_user': settings.DATABASE_USER,
+            'operational_db_password': settings.DATABASE_PASSWORD,
         }
         update_fields = []
         for field_name, env_value in env_defaults.items():
             if env_value in (None, ''):
                 continue
 
-            field = config._meta.get_field(field_name)
+            field = config._meta.get_field(field_name)  # noqa: SLF001  # _meta is Django's public model API
+            if not isinstance(field, Field):
+                continue
             default_value = field.get_default()
             current_value = getattr(config, field_name)
             if current_value not in ('', None, default_value):
                 continue
 
+            value: int | str
             if field_name == 'operational_db_port':
                 try:
                     value = int(env_value)
@@ -200,18 +212,9 @@ class Command(BaseCommand):
             '/var/lib/trustpoint/bootstrap/operational.ready',
         )
 
-        env_content = f"""# Auto-generated operational environment from TP_AUTO_SETUP
-DATABASE_HOST={config.operational_db_host or os.getenv('DATABASE_HOST', 'postgres')}
-DATABASE_PORT={config.operational_db_port or os.getenv('DATABASE_PORT', '5432')}
-POSTGRES_DB={config.operational_db_name or os.getenv('POSTGRES_DB', 'trustpoint_db')}
-DATABASE_USER={config.operational_db_user or os.getenv('DATABASE_USER', 'admin')}
-DATABASE_PASSWORD={config.operational_db_password or os.getenv('DATABASE_PASSWORD', '')}
-"""
-
         try:
             env_file = Path(operational_env_path)
-            env_file.parent.mkdir(parents=True, exist_ok=True)
-            env_file.write_text(env_content)
+            write_operational_env_file(build_operational_environment(config), env_file)
             output.write(f'Created operational environment file: {operational_env_path}')
 
             # Create operational.ready marker
@@ -261,6 +264,9 @@ DATABASE_PASSWORD={config.operational_db_password or os.getenv('DATABASE_PASSWOR
     @staticmethod
     def _compile_messages(output: CommandOutputWrapper) -> None:
         """Compile translation messages."""
+        if settings.DOCKER_CONTAINER:
+            output.write('Using translation messages compiled into the image.')
+            return
         output.write('Compiling translation messages...')
         with io.StringIO() as fake_out:
             call_command('compilemessages', '-l', 'de', '-l', 'en', '--ignore', '.venv', stdout=fake_out)

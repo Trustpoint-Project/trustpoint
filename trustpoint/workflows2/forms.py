@@ -26,8 +26,7 @@ class Workflow2DefinitionForm(forms.Form):
                 'class': 'form-control font-monospace',
                 'rows': 26,
                 'spellcheck': 'false',
-                'style': 'white-space: pre; tab-size: 2;',
             }
         ),
-        help_text=_('YAML workflow definition (v2).'),
+        help_text=_('YAML workflow definition.'),
     )

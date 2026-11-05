@@ -20,7 +20,7 @@ HTTP_OK = 200
 
 
 def test_rest_enroll_view_dispatches_workflows2_before_processing() -> None:
-    """REST enroll should visibly dispatch workflows2 in the view."""
+    """REST enroll dispatches workflows2 through the shared orchestrator."""
     request = RequestFactory().post(
         '/rest/enroll/test_domain/domain_credential',
         data=b'{}',
@@ -38,13 +38,13 @@ def test_rest_enroll_view_dispatches_workflows2_before_processing() -> None:
     )
 
     with patch('rest_pki.views.RestCertificateRequestContext', return_value=context), patch(
-        'rest_pki.views.RestHttpRequestValidator'
-    ) as mock_validator, patch('rest_pki.views.RestMessageParser') as mock_parser, patch(
-        'rest_pki.views.RestAuthentication'
-    ) as mock_authentication, patch('rest_pki.views.RestAuthorization') as mock_authorization, patch(
-        'rest_pki.views.Workflow2Handler'
-    ) as mock_workflow2, patch('rest_pki.views.OperationProcessor') as mock_processor, patch(
-        'rest_pki.views.RestMessageResponder'
+        'request.enrollment.RestHttpRequestValidator'
+    ) as mock_validator, patch('request.enrollment.RestMessageParser') as mock_parser, patch(
+        'request.enrollment.RestAuthentication'
+    ) as mock_authentication, patch('request.enrollment.RestAuthorization') as mock_authorization, patch(
+        'request.enrollment.Workflow2Handler'
+    ) as mock_workflow2, patch('request.enrollment.OperationProcessor') as mock_processor, patch(
+        'request.enrollment.RestMessageResponder'
     ) as mock_responder:
         mock_parser.return_value.parse.return_value = context
         mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
@@ -61,7 +61,7 @@ def test_rest_enroll_view_dispatches_workflows2_before_processing() -> None:
 
 
 def test_rest_reenroll_view_dispatches_workflows2_before_processing() -> None:
-    """REST reenroll should visibly dispatch workflows2 in the view."""
+    """REST reenroll dispatches workflows2 through the shared orchestrator."""
     request = RequestFactory().post(
         '/rest/reenroll/test_domain/domain_credential',
         data=b'{}',
@@ -79,13 +79,13 @@ def test_rest_reenroll_view_dispatches_workflows2_before_processing() -> None:
     )
 
     with patch('rest_pki.views.RestCertificateRequestContext', return_value=context), patch(
-        'rest_pki.views.RestHttpRequestValidator'
-    ) as mock_validator, patch('rest_pki.views.RestMessageParser') as mock_parser, patch(
-        'rest_pki.views.RestAuthentication'
-    ) as mock_authentication, patch('rest_pki.views.RestAuthorization') as mock_authorization, patch(
-        'rest_pki.views.Workflow2Handler'
-    ) as mock_workflow2, patch('rest_pki.views.OperationProcessor') as mock_processor, patch(
-        'rest_pki.views.RestMessageResponder'
+        'request.enrollment.RestHttpRequestValidator'
+    ) as mock_validator, patch('request.enrollment.RestMessageParser') as mock_parser, patch(
+        'request.enrollment.RestAuthentication'
+    ) as mock_authentication, patch('request.enrollment.RestAuthorization') as mock_authorization, patch(
+        'request.enrollment.Workflow2Handler'
+    ) as mock_workflow2, patch('request.enrollment.OperationProcessor') as mock_processor, patch(
+        'request.enrollment.RestMessageResponder'
     ) as mock_responder:
         mock_parser.return_value.parse.return_value = context
         mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
@@ -102,7 +102,7 @@ def test_rest_reenroll_view_dispatches_workflows2_before_processing() -> None:
 
 
 def test_rest_api_pipeline_dispatches_workflows2_before_processing() -> None:
-    """REST API enrollment should visibly dispatch workflows2 before issuance processing."""
+    """REST API enrollment dispatches workflows2 before issuance processing."""
     context = Mock(spec=RestCertificateRequestContext)
     context.event = Mock()
     context.to_http_response.return_value = HttpResponse(
@@ -115,12 +115,12 @@ def test_rest_api_pipeline_dispatches_workflows2_before_processing() -> None:
     device = Mock()
     device.pk = 7
 
-    with patch('rest_pki.api_views.RestHttpRequestValidator') as mock_validator, patch(
-        'rest_pki.api_views.RestMessageParser'
-    ) as mock_parser, patch('rest_pki.api_views.RestAuthorization') as mock_authorization, patch(
-        'rest_pki.api_views.Workflow2Handler'
-    ) as mock_workflow2, patch('rest_pki.api_views.OperationProcessor') as mock_processor, patch(
-        'rest_pki.api_views.RestMessageResponder'
+    with patch('request.enrollment.RestHttpRequestValidator') as mock_validator, patch(
+        'request.enrollment.RestMessageParser'
+    ) as mock_parser, patch('request.enrollment.RestAuthorization') as mock_authorization, patch(
+        'request.enrollment.Workflow2Handler'
+    ) as mock_workflow2, patch('request.enrollment.OperationProcessor') as mock_processor, patch(
+        'request.enrollment.RestMessageResponder'
     ) as mock_responder:
         mock_parser.return_value.parse.return_value = context
         mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
@@ -154,13 +154,13 @@ def test_rest_enroll_view_skips_processing_when_workflow_blocks() -> None:
     )
 
     with patch('rest_pki.views.RestCertificateRequestContext', return_value=context), patch(
-        'rest_pki.views.RestHttpRequestValidator'
-    ), patch('rest_pki.views.RestMessageParser') as mock_parser, patch(
-        'rest_pki.views.RestAuthentication'
-    ), patch('rest_pki.views.RestAuthorization'), patch(
-        'rest_pki.views.Workflow2Handler'
-    ) as mock_workflow2, patch('rest_pki.views.OperationProcessor') as mock_processor, patch(
-        'rest_pki.views.RestMessageResponder'
+        'request.enrollment.RestHttpRequestValidator'
+    ), patch('request.enrollment.RestMessageParser') as mock_parser, patch(
+        'request.enrollment.RestAuthentication'
+    ), patch('request.enrollment.RestAuthorization'), patch(
+        'request.enrollment.Workflow2Handler'
+    ) as mock_workflow2, patch('request.enrollment.OperationProcessor') as mock_processor, patch(
+        'request.enrollment.RestMessageResponder'
     ) as mock_responder:
         mock_parser.return_value.parse.return_value = context
         mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.stop_processing()

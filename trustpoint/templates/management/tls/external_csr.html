@@ -1,0 +1,85 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n crispy_forms_filters static %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+            <div>
+                <h1 class="mb-1">{% trans 'External PKI' %}: {% trans 'TLS Certificate' %}</h1>
+                <p class="mb-0 text-muted">{% trans 'The TLS certificate is waiting for issuance by the external PKI.' %}</p>
+            </div>
+            <span class="badge text-bg-primary">{% trans 'CSR' %}</span>
+        </div>
+    </div>
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+        <div class="alert alert-info mb-5" role="alert">
+            <strong>{% trans 'Certificate pending' %}</strong><br>
+            {% trans 'Submit the generated CSR to your external PKI. Once the TLS certificate has been issued, upload it below to complete the setup.' %}
+        </div>
+        <section class="mb-5" aria-labelledby="request-section-title">
+        <div class="mb-3">
+            <h2 class="h4 mb-1" id="request-section-title">{% trans 'Certificate Content' %}</h2>
+            <p class="text-muted mb-0">{% trans 'Review the certificate content included in the generated request.' %}</p>
+        </div>
+        <hr class="mb-4">
+        <div class="alert alert-info mt-3" role="alert">
+        <div class="tp-kvp-list">
+            <div>
+                <div>{% trans 'Key Type' %}</div>
+                <div>{{ key_type }}</div>
+            </div>
+            <div>
+                <div>{% trans 'Certificate Profile' %}</div>
+                <div>{% if cert_profile.unique_name == 'tls_server' %}{% trans 'TLS Server' %}{% else %}{{ cert_profile.display_name|default:cert_profile.unique_name }}{% endif %}</div>
+            </div>
+            <div>
+                <div>{% trans 'Subject' %}</div>
+                <div class="font-monospace text-break">{{ subject }}</div>
+            </div>
+            <div>
+                <div>{% trans 'Subject Alternative Names' %}</div>
+                <div class="font-monospace text-break">{% for san in sans %}<div>{{ san.value }}</div>{% empty %}<span class="text-muted">&mdash;</span>{% endfor %}</div>
+            </div>
+        </div>
+        </div>
+        </section>
+        <section class="mb-5" aria-labelledby="csr-section-title">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <h2 class="h4 mb-1" id="csr-section-title">{% trans 'Certificate Signing Request' %}</h2>
+                <p class="text-muted mb-0">{% trans 'Copy or download the CSR and submit it to your external PKI.' %}</p>
+            </div>
+        </div>
+        <hr class="mb-4">
+        <label for="id_csr_pem" class="form-label">{% trans 'CSR in PEM format' %}</label>
+        <textarea id="id_csr_pem" class="form-control font-monospace" rows="12" readonly>{{ csr_pem }}</textarea>
+        <div class="d-flex flex-wrap gap-2 my-3">
+            <button type="button" class="btn btn-outline-primary" id="copy-csr-button">{% trans 'Copy CSR' %}</button>
+            <a href="?download=1" class="btn btn-outline-primary">{% trans 'Download CSR' %}</a>
+        </div>
+        </section>
+        <section aria-labelledby="upload-section-title">
+        <div class="mb-3">
+            <h2 class="h4 mb-1" id="upload-section-title">{% trans 'Upload Issued Certificate' %}</h2>
+            <p class="text-muted mb-0">{% trans 'Upload the TLS certificate returned by your external PKI.' %}</p>
+        </div>
+        <hr class="mb-4">
+        <form id="certificate-upload-form" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ form|crispy }}
+        </form>
+        </section>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <a href="{% url 'management:tls' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'management:tls-external-csr-content' credential.pk %}?cert_profile_pk={{ cert_profile.pk }}" class="btn btn-outline-secondary">{% trans 'Edit Certificate Content' %}</a>
+            <button type="submit" form="certificate-upload-form" class="btn btn-primary">{% trans 'Upload Certificate' %}</button>
+        </div>
+    </div>
+</div>
+<script src="{% static 'js/management/tls_external_csr.js' %}"></script>
+{% endblock content %}

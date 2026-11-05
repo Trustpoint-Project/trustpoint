@@ -13,6 +13,7 @@ from django.utils.translation import gettext_lazy as _
 from pki.models import CaModel, CertificateModel, CrlModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
+from pki.services.certificate_health import certificate_health_conditions
 
 
 class CertificateFilter(django_filters.FilterSet):
@@ -44,6 +45,7 @@ class CertificateFilter(django_filters.FilterSet):
             ('tomorrow', _('Tomorrow')),
             ('7_days', _('Within 7 Days')),
             ('30_days', _('Within 30 Days')),
+            ('90_days', _('Within 90 Days')),
             ('after_30_days', _('After 30 Days')),
         ),
         method='filter_expiry_window',
@@ -87,25 +89,13 @@ class CertificateFilter(django_filters.FilterSet):
         del name
 
         now = timezone.now()
-
-        if value == 'ok':
-            return queryset.filter(
-                revoked_certificate__isnull=True,
-                not_valid_before__lte=now,
-                not_valid_after__gt=now,
-            )
-        if value == 'expired':
-            return queryset.filter(
-                revoked_certificate__isnull=True,
-                not_valid_after__lte=now,
-            )
-        if value == 'revoked':
-            return queryset.filter(revoked_certificate__isnull=False)
-        if value == 'not_yet_valid':
-            return queryset.filter(
-                revoked_certificate__isnull=True,
-                not_valid_before__gt=now,
-            )
+        conditions = certificate_health_conditions(as_of=now, expiry_days=0)
+        condition = {
+            'ok': conditions['valid'], 'expired': conditions['expired'],
+            'revoked': conditions['revoked'], 'not_yet_valid': conditions['not_yet_valid'],
+        }.get(value)
+        if condition is not None:
+            return queryset.filter(condition)
         return queryset
 
     def filter_expiry_window(
@@ -120,14 +110,9 @@ class CertificateFilter(django_filters.FilterSet):
         now = timezone.now()
         next_1_day = now + timedelta(days=1)
         next_2_days = now + timedelta(days=2)
-        next_7_days = now + timedelta(days=7)
         next_30_days = now + timedelta(days=30)
 
-        base_queryset = queryset.filter(
-            revoked_certificate__isnull=True,
-            not_valid_before__lte=now,
-            not_valid_after__gt=now,
-        )
+        base_queryset = queryset.filter(certificate_health_conditions(as_of=now, expiry_days=0)['valid'])
 
         if value == 'today':
             return base_queryset.filter(not_valid_after__lte=next_1_day)
@@ -136,10 +121,9 @@ class CertificateFilter(django_filters.FilterSet):
                 not_valid_after__gt=next_1_day,
                 not_valid_after__lte=next_2_days,
             )
-        if value == '7_days':
-            return base_queryset.filter(not_valid_after__lte=next_7_days)
-        if value == '30_days':
-            return base_queryset.filter(not_valid_after__lte=next_30_days)
+        horizon_days = {'7_days': 7, '30_days': 30, '90_days': 90}.get(value)
+        if horizon_days is not None:
+            return base_queryset.filter(not_valid_after__lte=now + timedelta(days=horizon_days))
         if value == 'after_30_days':
             return base_queryset.filter(not_valid_after__gt=next_30_days)
         return queryset

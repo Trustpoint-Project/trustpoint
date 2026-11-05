@@ -12,6 +12,8 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
+from cmp.der import der_tlv as _der_tlv
+
 try:
     from cryptography.hazmat.primitives.asymmetric import mldsa
 except ImportError:
@@ -34,35 +36,12 @@ class CmpMessageBuilderError(Exception):
     """Base exception for CMP message builder errors."""
 
 
-
 CMP_MESSAGE_VERSION = 2
 TRANSACTION_ID_LENGTH = 16
 SENDER_NONCE_LENGTH = 16
 IMPLICIT_CONFIRM_OID = '1.3.6.1.5.5.7.4.13'
 PBM_OID = '1.2.840.113533.7.66.13'
 SHA256_OID = HashAlgorithm.SHA256.dotted_string
-
-# Threshold below which DER length fits in a single byte (short form).
-_DER_LENGTH_SHORT_FORM_MAX = 0x7F
-
-
-def _der_tlv(tag_byte: int, value: bytes) -> bytes:
-    """Construct a DER Tag-Length-Value triplet.
-
-    Handles both short-form (length < 128) and long-form DER lengths.
-
-    Args:
-        tag_byte: Single-byte ASN.1 tag (e.g. ``0xA4`` for ``[4] CONSTRUCTED``).
-        value: The encoded value octets.
-
-    Returns:
-        The complete TLV as ``bytes``.
-    """
-    length = len(value)
-    if length <= _DER_LENGTH_SHORT_FORM_MAX:
-        return bytes([tag_byte, length]) + value
-    length_payload = length.to_bytes((length.bit_length() + 7) // 8, 'big')
-    return bytes([tag_byte, 0x80 | len(length_payload)]) + length_payload + value
 
 
 class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
@@ -172,8 +151,14 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
             exc_msg = '_cert_template is missing - run CmpCertTemplateBuilding first.'
             raise ValueError(exc_msg)
 
+        # 'signature' (default, needs private_key) or 'ra_verified' (RA vouches for PoP, no private key)
+        pop_mode: str = request_data.get('proof_of_possession', 'signature')
+        if pop_mode not in ('signature', 'ra_verified'):
+            exc_msg = f'Unsupported proof_of_possession mode: {pop_mode}'
+            raise ValueError(exc_msg)
+
         private_key = request_data.get('private_key')
-        if private_key is None:
+        if pop_mode == 'signature' and private_key is None:
             exc_msg = 'private_key is required in request_data.'
             raise ValueError(exc_msg)
 
@@ -188,12 +173,14 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
             cert_req_msg = rfc4211.CertReqMsg()
             cert_req_msg['certReq'] = cert_request
 
-            if add_pop:
+            if pop_mode == 'ra_verified':
+                cert_req_msg.setComponentByName('popo', self._build_pop_ra_verified(), verifyConstraints=False)
+            elif add_pop:
                 pop = self._build_pop_signature(cert_request, private_key)
                 cert_req_msg.setComponentByName('popo', pop, verifyConstraints=False)
 
             pki_body = rfc4210.PKIBody()
-            body_choice = 'ir' if use_ir else 'cr'
+            body_choice = 'kur' if context.operation == 'keyupdate' else ('ir' if use_ir else 'cr')
 
             body_idx = pki_body.componentType.getPositionByName(body_choice)
             cert_req_messages = pki_body.componentType.getTypeByPosition(body_idx).clone()
@@ -205,12 +192,21 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
 
             self.logger.info(
                 'PKI body (%s) built successfully',
-                'IR' if use_ir else 'CR',
+                body_choice.upper(),
             )
 
         except Exception as e:
             msg = f'Failed to build CMP certification request body: {e!s}'
             raise CmpMessageBuilderError(msg) from e
+
+    @staticmethod
+    def _build_pop_ra_verified() -> rfc4211.ProofOfPossession:
+        """Build an ``raVerified`` Proof-of-Possession (RFC 4211 section 4.1)."""
+        pop = rfc4211.ProofOfPossession()
+        idx = pop.componentType.getPositionByName('raVerified')
+        schema = pop.componentType.getTypeByPosition(idx)
+        pop['raVerified'] = univ.Null('').clone(tagSet=schema.tagSet)
+        return pop
 
     @staticmethod
     def _build_pop_signature(
@@ -244,11 +240,14 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
                 ec.ECDSA(hashes.SHA256()),
             )
             algorithm_oid = AlgorithmIdentifier.ECDSA_SHA256.dotted_string
-        elif mldsa and isinstance(private_key, (
-            mldsa.MLDSA44PrivateKey,
-            mldsa.MLDSA65PrivateKey,
-            mldsa.MLDSA87PrivateKey,
-        )):
+        elif mldsa and isinstance(
+            private_key,
+            (
+                mldsa.MLDSA44PrivateKey,
+                mldsa.MLDSA65PrivateKey,
+                mldsa.MLDSA87PrivateKey,
+            ),
+        ):
             signature = private_key.sign(encoded_cert_request)
             if isinstance(private_key, mldsa.MLDSA44PrivateKey):
                 algorithm_oid = AlgorithmIdentifier.ML_DSA_44.dotted_string
@@ -269,7 +268,6 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
         binary_signature = f'{int.from_bytes(signature, byteorder="big"):b}'.zfill(len(signature) * 8)
         popo_signing_key['signature'] = univ.BitString(binary_signature)
 
-
         pop = rfc4211.ProofOfPossession()
         sig_idx = pop.componentType.getPositionByName('signature')
         sig_schema = pop.componentType.getTypeByPosition(sig_idx)
@@ -280,7 +278,6 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
         pop['signature'] = tagged_signing_key
 
         return pop
-
 
 
 class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
@@ -344,10 +341,12 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
             prepare_protection: bool = request_data.get('prepare_shared_secret_protection', False)
             if prepare_protection:
                 hmac_algorithm: HmacAlgorithm = request_data.get(
-                    'hmac_algorithm', HmacAlgorithm.HMAC_SHA256,
+                    'hmac_algorithm',
+                    HmacAlgorithm.HMAC_SHA256,
                 )
                 header = self._prepare_protection_algorithm_pbm(
-                    header, hmac_algorithm=hmac_algorithm,
+                    header,
+                    hmac_algorithm=hmac_algorithm,
                 )
 
             validated['_pki_header'] = header
@@ -421,11 +420,10 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
         owf_der = encoder.encode(owf)
 
         iteration_count_bytes = iteration_count.to_bytes(
-            (iteration_count.bit_length() + 7) // 8 or 1, 'big',
+            (iteration_count.bit_length() + 7) // 8 or 1,
+            'big',
         )
-        iteration_count_der = (
-            bytes([0x02]) + bytes([len(iteration_count_bytes)]) + iteration_count_bytes
-        )
+        iteration_count_der = bytes([0x02]) + bytes([len(iteration_count_bytes)]) + iteration_count_bytes
 
         mac_alg = rfc5280.AlgorithmIdentifier()
         mac_alg['algorithm'] = univ.ObjectIdentifier(hmac_algorithm.dotted_string)
@@ -434,7 +432,10 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
         pbm_der = (
             bytes([0x30])
             + bytes([len(salt_der + owf_der + iteration_count_der + mac_der)])
-            + salt_der + owf_der + iteration_count_der + mac_der
+            + salt_der
+            + owf_der
+            + iteration_count_der
+            + mac_der
         )
 
         prot_alg_idx = header.componentType.getPositionByName('protectionAlg')
@@ -445,7 +446,6 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
         header['protectionAlg'] = prot_alg
 
         return header
-
 
 
 class CmpPkiMessageAssembly(BuildingComponent, LoggerMixin):

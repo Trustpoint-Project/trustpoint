@@ -42,11 +42,10 @@ from management.models import (
     SecurityConfig,
     SmtpEmailConfig,
 )
-from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
-from pki.util.keys import AutoGenPkiKeyAlgorithm
+from management.security_change_audit import security_change
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 from trustpoint.views.base import UserPermissionRequiredMixin
@@ -295,7 +294,8 @@ def build_workflow_execution_context(
         'workflow_worker_latest_id': getattr(latest, 'worker_id', None),
         'workflow_worker_latest_seen': getattr(latest, 'last_seen', None),
         'workflow_worker_stale_after_seconds': stale_after,
-        'workflow_inline_takeover_enabled': str(workflow_config.mode).lower() in {
+        'workflow_inline_takeover_enabled': str(workflow_config.mode).lower()
+        in {
             WorkflowExecutionConfig.Mode.AUTO,
             WorkflowExecutionConfig.Mode.INLINE,
         },
@@ -318,12 +318,9 @@ def build_smtp_email_context(
     }
 
 
-class SettingsFormViewMixin[FormType: (
-    LoggingConfigForm
-    | NotificationConfigForm
-    | PrometheusConfigForm
-    | SecurityConfigForm
-)](
+class SettingsFormViewMixin[
+    FormType: (LoggingConfigForm | NotificationConfigForm | PrometheusConfigForm | SecurityConfigForm)
+](
     PageContextMixin,
     SecurityLevelMixin,
     LoggerMixin,
@@ -337,7 +334,7 @@ class SettingsFormViewMixin[FormType: (
 
     def get_success_url(self) -> str:
         """Return the URL to redirect to after successful form submission."""
-        return f"{reverse_lazy('management:settings')}?tab={self.setting_type}"
+        return f'{reverse_lazy("management:settings")}?tab={self.setting_type}'
 
     def form_valid(self, form: FormType) -> HttpResponse:
         """Handle valid form submission."""
@@ -415,10 +412,25 @@ class SettingsTabView(TemplateView):
         context['started_time'] = metrics_context['started_time']
         context['database_size'] = metrics_context['database_size']
         context['started_time_ts'] = int(APP_STARTED_AT.timestamp())
-        for key in ('memory_available', 'memory_message', 'memory_usage', 'memory_usage_number',
-                    'memory_usage_unit', 'memory_limit', 'memory_anon', 'memory_file', 'memory_kernel',
-                    'disk_available', 'disk_message', 'disk_read', 'disk_write',
-                    'network_available', 'network_message', 'network_received', 'network_transmitted'):
+        for key in (
+            'memory_available',
+            'memory_message',
+            'memory_usage',
+            'memory_usage_number',
+            'memory_usage_unit',
+            'memory_limit',
+            'memory_anon',
+            'memory_file',
+            'memory_kernel',
+            'disk_available',
+            'disk_message',
+            'disk_read',
+            'disk_write',
+            'network_available',
+            'network_message',
+            'network_received',
+            'network_transmitted',
+        ):
             context[key] = metrics_context[key]
 
         workflow_execution_form = kwargs.get('workflow_execution_form')
@@ -457,7 +469,7 @@ class SettingsTabView(TemplateView):
         if form.is_valid():
             form.save()
             messages.success(request, _('Account security settings saved.'))
-            return redirect(f"{reverse_lazy('management:settings')}?tab=account-security")
+            return redirect(f'{reverse_lazy("management:settings")}?tab=account-security')
 
         messages.error(request, _('Please correct the account security settings errors.'))
         context = self.get_context_data(
@@ -473,7 +485,7 @@ class SettingsTabView(TemplateView):
             smtp_config = smtp_email_form.save()
             smtp_config.apply_to_django_settings()
             messages.success(request, _('SMTP email settings saved.'))
-            return redirect(f"{reverse_lazy('management:settings')}?tab=smtp-email")
+            return redirect(f'{reverse_lazy("management:settings")}?tab=smtp-email')
 
         messages.error(request, _('Please correct the SMTP email settings errors.'))
         context = self.get_context_data(
@@ -550,7 +562,7 @@ class SettingsTabView(TemplateView):
                 )
             else:
                 messages.error(request, _('SMTP test email was not accepted by the email backend.'))
-        return redirect(f"{reverse_lazy('management:settings')}?tab=smtp-email")
+        return redirect(f'{reverse_lazy("management:settings")}?tab=smtp-email')
 
     def _post_workflow_execution(self, request: HttpRequest) -> HttpResponse:
         """Handle inline Workflow 2 execution settings updates from the settings tab page."""
@@ -558,7 +570,7 @@ class SettingsTabView(TemplateView):
         if workflow_execution_form.is_valid():
             workflow_execution_form.save()
             messages.success(request, _('Workflow execution settings saved.'))
-            return redirect(f"{reverse_lazy('management:settings')}?tab=workflow")
+            return redirect(f'{reverse_lazy("management:settings")}?tab=workflow')
 
         messages.error(request, _('Please correct the workflow execution settings errors.'))
         context = self.get_context_data(
@@ -590,55 +602,54 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
         if not self.request.user.has_perm(AppPermissions.MANAGE_SECURITY_CONFIGURATION):
             raise PermissionDenied
 
-        old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
-        form.save()
+        with security_change(target=form.instance, actor=self.request.user):
+            old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
+            form.save()
 
-        security_mode_display = form.instance.get_security_mode_display()
-        actor = self.request.user if self.request.user.is_authenticated else None
-        AuditLog.create_entry(
-            operation_type=AuditLog.OperationType.SECURITY_CONFIG_CHANGED,
-            target=form.instance,
-            target_display=f'SecurityConfig: {security_mode_display}',
-            actor=actor,
-        )
+            if 'security_mode' in form.changed_data:
+                old_value = getattr(old_conf, 'security_mode', None) if old_conf else None
+                new_value = form.cleaned_data.get('security_mode')
 
-        if 'security_mode' in form.changed_data:
-            old_value = getattr(old_conf, 'security_mode', None) if old_conf else None
-            new_value = form.cleaned_data.get('security_mode')
-
-            if new_value is None:
-                messages.error(self.request, 'Security mode value is missing.')
-                return redirect(self.success_url)
-
-            old_int = int(old_value) if old_value is not None else 0
-            new_int = int(new_value)
-
-            if new_int > old_int:
-                self.sec.reset_settings(new_value)
-
-
-
-        if 'auto_gen_pki' in form.changed_data:
-            old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
-            new_auto = form.cleaned_data.get('auto_gen_pki', None)
-            self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
-
-            if old_auto != new_auto and new_auto:
-                key_alg_value = form.cleaned_data.get('auto_gen_pki_key_algorithm')
-                if key_alg_value is None:
-                    messages.error(self.request, 'Auto-generated PKI key algorithm is missing.')
+                if new_value is None:
+                    messages.error(self.request, 'Security mode value is missing.')
                     return redirect(self.success_url)
-                key_alg = AutoGenPkiKeyAlgorithm(key_alg_value)
-                self.logger.info('Calling enable_feature for AutoGenPkiFeature with key_alg: %s', key_alg)
-                self.sec.enable_feature(AutoGenPkiFeature, {'key_algorithm': key_alg})
-                self.logger.info('Auto-generated PKI enabled with key algorithm: %s', key_alg.name)
 
-            elif old_auto != new_auto and not new_auto:
-                AutoGenPkiFeature.disable()
-                self.logger.info('Auto-generated PKI disabled')
+                old_int = int(old_value) if old_value is not None else 0
+                new_int = int(new_value)
 
-        messages.success(self.request, _('Your changes were saved successfully.'))
-        return redirect(self.get_success_url())
+                mode_defaults = SecurityConfig._MODE_DEFAULTS.get(str(new_value))  # noqa: SLF001
+                if mode_defaults is not None:
+                    form.instance.allow_auto_gen_pki = mode_defaults['allow_auto_gen_pki']
+                    form.instance.not_permitted_ecc_curve_oids = list(mode_defaults['not_permitted_ecc_curve_oids'])
+                    form.instance.not_permitted_mldsa_variant_oids = list(
+                        mode_defaults['not_permitted_mldsa_variant_oids']
+                    )
+                    form.instance.not_permitted_signature_algorithm_oids = list(
+                        mode_defaults['not_permitted_signature_algorithm_oids']
+                    )
+                    form.instance.save(
+                        update_fields=[
+                            'allow_auto_gen_pki',
+                            'not_permitted_ecc_curve_oids',
+                            'not_permitted_mldsa_variant_oids',
+                            'not_permitted_signature_algorithm_oids',
+                        ]
+                    )
+
+                if new_int > old_int:
+                    self.sec.reset_settings(new_value)
+
+            if 'auto_gen_pki' in form.changed_data:
+                old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
+                new_auto = form.cleaned_data.get('auto_gen_pki', None)
+                self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
+
+                if old_auto != new_auto and not new_auto:
+                    AutoGenPkiFeature.disable()
+                    self.logger.info('Auto-generated PKI disabled')
+
+            messages.success(self.request, _('Your changes were saved successfully.'))
+            return redirect(self.get_success_url())
 
     def form_invalid(self, form: SecurityConfigForm) -> HttpResponse:
         """Handle invalid security form submission."""
@@ -815,7 +826,6 @@ class MetricsSettingsView(UserPermissionRequiredMixin, SettingsFormViewMixin[Pro
     setting_type = 'metrics'
     permission_required = AppPermissions.VIEW_METRICS
 
-
     def get_form_kwargs(self) -> dict[str, Any]:
         """Load the singleton PrometheusConfig instance into the form."""
         kwargs = super().get_form_kwargs()
@@ -842,11 +852,14 @@ class MetricsSettingsView(UserPermissionRequiredMixin, SettingsFormViewMixin[Pro
         context.update(get_network_metrics())
         return context
 
+
 class ChangeLogLevelView(View):
     """Deprecated view for changing the logging level."""
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Handle POST requests to change the logging level."""
+        if not request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION):
+            raise PermissionDenied
         form = LoggingConfigForm(request.POST)
         if not form.is_valid():
             normalized_data = request.POST.copy()

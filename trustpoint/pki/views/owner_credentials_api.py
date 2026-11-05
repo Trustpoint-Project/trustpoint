@@ -7,9 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cryptography import x509
-from cryptography.hazmat.primitives import serialization
-from cryptography.x509 import load_pem_x509_certificate
 from django.db.models import ProtectedError
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
@@ -21,15 +18,12 @@ from drf_spectacular.utils import (
 from rest_framework import filters, status, viewsets
 from rest_framework import serializers as drf_serializers
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 from rest_framework.response import Response
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
-from trustpoint_core.serializer import PrivateKeySerializer
 
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
-from pki.models.certificate import CertificateModel
-from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
+from pki.models.credential import CredentialModel
 from pki.serializer.owner_credential import (
     CertificateIssuanceContentSerializer,
     OwnerCredentialEstBasicAuthSerializer,
@@ -37,12 +31,21 @@ from pki.serializer.owner_credential import (
     OwnerCredentialFileImportSerializer,
     OwnerCredentialSerializer,
 )
+from pki.services.owner_credential import (
+    build_domain_credential_est_context_kwargs,
+    build_owner_credential_est_context_kwargs,
+    enroll_owner_credential_est,
+)
+from pki.services.owner_credential import (
+    create_pending_owner_credential as _create_key_only_credential,
+)
+from pki.util import certificate_request
 from pki.util.cert_profile import ProfileValidationError
-from request.clients import EstClient, EstClientError
-from request.operation_processor.csr_build import ProfileAwareCsrBuilder
-from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
+from pki.util.certificate_request import build_request_data as _build_request_data
+from request.clients import EstClientError
 from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
@@ -53,44 +56,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _build_request_data(cert_content_data: dict[str, Any]) -> dict[str, Any]:
-    """Convert flat serializer data into the nested structure expected by the profile verifier."""
-    request_data: dict[str, Any] = {
-        'subj': {},
-        'ext': {'subject_alternative_name': {}},
-        'validity': {},
-    }
-    for field in (
-        'common_name', 'organization_name', 'organizational_unit_name',
-        'country_name', 'state_or_province_name', 'locality_name', 'email_address',
-    ):
-        value = cert_content_data.get(field)
-        if value:
-            request_data['subj'][field] = value
-    for field in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
-        value = cert_content_data.get(field)
-        if value:
-            if isinstance(value, list):
-                items = [v.strip() for v in value if str(v).strip()]
-            else:
-                items = [v.strip() for v in str(value).split(',') if v.strip()]
-            if items:
-                request_data['ext']['subject_alternative_name'][field] = items
-    for field in ('days', 'hours', 'minutes', 'seconds'):
-        value = cert_content_data.get(field)
-        if value is not None:
-            request_data['validity'][field] = int(value)
-    return request_data
-
-
-def _public_key_info_from_key_type(key_type: str) -> PublicKeyInfo:
-    """Convert a key_type string (e.g. 'RSA-2048', 'ECC-SECP256R1') to a PublicKeyInfo."""
-    if key_type.startswith('RSA-'):
-        key_size = int(key_type.split('-')[1])
-        return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=key_size)
-    curve_name = key_type.split('-', 1)[1]
-    named_curve = NamedCurve[curve_name.upper()]
-    return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=named_curve)
+_public_key_info_from_key_type = certificate_request.public_key_info_from_key_type
 
 
 def _resolve_cert_profile(
@@ -112,30 +78,22 @@ def _resolve_cert_profile(
         return first
 
 
-def _create_key_only_credential(
-    owner_credential: OwnerCredentialModel,
-    cert_profile: CertificateProfileModel,
-    cred_type: RemoteIssuedCredentialModel.RemoteIssuedCredentialType,
-    credential_model_type: CredentialModel.CredentialTypeChoice,
-) -> RemoteIssuedCredentialModel:
-    """Generate a fresh key pair and create a key-only RemoteIssuedCredentialModel."""
-    key_type = owner_credential.key_type or 'ECC-SECP256R1'
-    private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(
-        _public_key_info_from_key_type(key_type)
-    )
-    private_key_pem = PrivateKeySerializer(private_key).as_pkcs8_pem().decode()
-    credential_model = CredentialModel.objects.create(
-        credential_type=credential_model_type,
-        private_key=private_key_pem,
-        certificate=None,
-    )
-    return RemoteIssuedCredentialModel.objects.create(
-        common_name=owner_credential.unique_name,
-        issued_credential_type=cred_type,
-        issued_using_cert_profile=cert_profile.unique_name,
-        credential=credential_model,
-        owner_credential=owner_credential,
-    )
+class CanManageOwnerCredentials(BasePermission):
+    """Keep reads authenticated and guard management and enrollment separately."""
+
+    def has_permission(self, request: Request, view: Any) -> bool:
+        """Apply the existing device-management and issuance permissions."""
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        permission = (
+            AppPermissions.ISSUE_CERTIFICATES
+            if view.action in ('request_domain_credential', 'request_devownerid')
+            else AppPermissions.MANAGE_DEVICES
+        )
+        return request.user.has_perm(permission)
+
 
 @extend_schema(tags=['DevOwnerID'])
 class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialModel]):
@@ -153,7 +111,7 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
 
     queryset = OwnerCredentialModel.objects.order_by('-created_at')
     serializer_class = OwnerCredentialSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanManageOwnerCredentials,)
     filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -240,25 +198,19 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         )
 
     def _create_file_import(self, request: Request) -> Response:
-        serializer = OwnerCredentialFileImportSerializer(
-            data=request.data, context={'request': request}
-        )
+        serializer = OwnerCredentialFileImportSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         return Response(OwnerCredentialSerializer(instance).data, status=status.HTTP_201_CREATED)
 
     def _create_est_basic_auth(self, request: Request) -> Response:
-        serializer = OwnerCredentialEstBasicAuthSerializer(
-            data=request.data, context={'request': request}
-        )
+        serializer = OwnerCredentialEstBasicAuthSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         return Response(OwnerCredentialSerializer(instance).data, status=status.HTTP_201_CREATED)
 
     def _create_est_mtls(self, request: Request) -> Response:
-        serializer = OwnerCredentialEstMtlsSerializer(
-            data=request.data, context={'request': request}
-        )
+        serializer = OwnerCredentialEstMtlsSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         return Response(OwnerCredentialSerializer(instance).data, status=status.HTTP_201_CREATED)
@@ -314,7 +266,6 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         detail=True,
         methods=['post'],
         url_path='request/domain_credential',
-        permission_classes=[IsAuthenticated],
     )
     def request_domain_credential(self, request: Request, pk: int | None = None, **_kwargs: Any) -> Response:
         """Enroll a Domain Credential for this DevOwnerID via EST."""
@@ -330,9 +281,7 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        content_serializer = CertificateIssuanceContentSerializer(
-            data=request.data, context={'request': request}
-        )
+        content_serializer = CertificateIssuanceContentSerializer(data=request.data, context={'request': request})
         content_serializer.is_valid(raise_exception=True)
         cert_content = content_serializer.validated_data
 
@@ -380,9 +329,7 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         pending_issued.refresh_from_db()
         return Response(
             {
-                'message': (
-                    f'Successfully enrolled Domain Credential for "{owner_credential.unique_name}" via EST.'
-                ),
+                'message': (f'Successfully enrolled Domain Credential for "{owner_credential.unique_name}" via EST.'),
                 'issued_credential_id': pending_issued.pk,
                 'common_name': pending_issued.common_name,
             },
@@ -396,55 +343,18 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         pending_issued: RemoteIssuedCredentialModel,
         cert_content: dict[str, Any],
     ) -> None:
-        """Perform the EST enrollment for a Domain Credential."""
-        signing_credential = pending_issued.credential
-        onboarding_config = owner_credential.onboarding_config
-
+        """Enroll the selected pending credential through the shared EST pipeline."""
         context = EstCertificateRequestContext(
-            operation='simpleenroll',
-            protocol='est',
-            domain=None,
-            cert_profile_str=cert_profile.unique_name,
-            certificate_profile_model=cert_profile,
-            allow_ca_certificate_request=False,
-            est_server_host=owner_credential.remote_host,
-            est_server_port=owner_credential.remote_port,
-            est_server_path=owner_credential.remote_path_domain_credential,
-            est_username=owner_credential.est_username,
-            est_password=onboarding_config.est_password if onboarding_config else None,
-            est_server_truststore=onboarding_config.trust_store if onboarding_config else None,
+            **build_domain_credential_est_context_kwargs(owner_credential, cert_profile)
         )
         context.request_data = _build_request_data(cert_content)
-        context.owner_credential = signing_credential
-
-        csr_builder = ProfileAwareCsrBuilder()
-        csr_builder.process_operation(context)
-        csr = csr_builder.get_csr()
-        context.cert_requested = csr
-
-        csr_signer = EstDeviceCsrSignProcessor()
-        csr_signer.process_operation(context)
-        signed_csr = csr_signer.get_signed_csr()
-
-        est_client = EstClient(context)
-        issued_cert = est_client.simple_enroll(signed_csr)
-
-        cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode()
-        cert_obj = load_pem_x509_certificate(cert_pem.encode())
-        cert_model = CertificateModel.save_certificate(cert_obj)
-
-        signing_credential.certificate = cert_model
-        signing_credential.save()
-        PrimaryCredentialCertificate.objects.get_or_create(
-            credential=signing_credential,
-            certificate=cert_model,
-            defaults={'is_primary': True},
+        enroll_owner_credential_est(
+            context,
+            owner_credential,
+            pending_issued,
+            logger=self.logger,
+            domain_credential=True,
         )
-
-        cn = cert_model.common_name or owner_credential.unique_name
-        pending_issued.common_name = cn
-        pending_issued.issued_using_cert_profile = cert_profile.unique_name
-        pending_issued.save(update_fields=['common_name', 'issued_using_cert_profile'])
 
     @extend_schema(
         summary='Request DevOwnerID certificate via EST',
@@ -475,7 +385,6 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         detail=True,
         methods=['post'],
         url_path='request/devownerid',
-        permission_classes=[IsAuthenticated],
     )
     def request_devownerid(self, request: Request, pk: int | None = None, **_kwargs: Any) -> Response:
         """Enroll a DevOwnerID certificate for this DevOwnerID via EST."""
@@ -487,15 +396,10 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
             OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING,
         )
         if owner_credential.owner_credential_type not in allowed_types:
-            msg = (
-                'DevOwnerID certificate request is only available for '
-                'REMOTE_EST or REMOTE_EST_ONBOARDING types.'
-            )
+            msg = 'DevOwnerID certificate request is only available for REMOTE_EST or REMOTE_EST_ONBOARDING types.'
             return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
-        content_serializer = CertificateIssuanceContentSerializer(
-            data=request.data, context={'request': request}
-        )
+        content_serializer = CertificateIssuanceContentSerializer(data=request.data, context={'request': request})
         content_serializer.is_valid(raise_exception=True)
         cert_content = content_serializer.validated_data
 
@@ -557,47 +461,8 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         owner_credential: OwnerCredentialModel,
         cert_profile: CertificateProfileModel,
     ) -> dict[str, Any]:
-        """Build keyword arguments for EstCertificateRequestContext."""
-        kwargs: dict[str, Any] = {
-            'operation': 'simpleenroll',
-            'protocol': 'est',
-            'domain': None,
-            'cert_profile_str': cert_profile.unique_name,
-            'certificate_profile_model': cert_profile,
-            'allow_ca_certificate_request': True,
-            'est_server_host': owner_credential.remote_host,
-            'est_server_port': owner_credential.remote_port,
-            'est_server_path': owner_credential.remote_path,
-        }
-
-        is_onboarding = (
-            owner_credential.owner_credential_type
-            == OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
-        )
-
-        if is_onboarding:
-            onboarding_config = owner_credential.onboarding_config
-            kwargs['est_server_truststore'] = onboarding_config.trust_store if onboarding_config else None
-            domain_cred_issued = owner_credential.domain_credential
-            if domain_cred_issued is None or domain_cred_issued.credential is None:
-                msg = (
-                    'No domain credential found for this owner credential. '
-                    'Please issue a domain credential first.'
-                )
-                raise ValueError(msg)
-            dc = domain_cred_issued.credential
-            if dc.certificate is None:
-                msg = 'The domain credential has no certificate. Please issue a domain credential first.'
-                raise ValueError(msg)
-            kwargs['est_client_cert_pem'] = dc.certificate.cert_pem
-            kwargs['est_client_key_pem'] = dc.private_key
-        else:
-            no_onboarding = owner_credential.no_onboarding_config
-            kwargs['est_username'] = owner_credential.est_username
-            kwargs['est_password'] = no_onboarding.est_password if no_onboarding else None
-            kwargs['est_server_truststore'] = no_onboarding.trust_store if no_onboarding else None
-
-        return kwargs
+        """Build EST authentication and truststore arguments for this credential."""
+        return build_owner_credential_est_context_kwargs(owner_credential, cert_profile)
 
     def _enroll_devownerid(
         self,
@@ -606,52 +471,13 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         pending_issued: RemoteIssuedCredentialModel,
         cert_content: dict[str, Any],
     ) -> None:
-        """Perform the EST enrollment for a DevOwnerID certificate."""
-        signing_credential = pending_issued.credential
-        est_kwargs = self._build_est_context_kwargs(owner_credential, cert_profile)
-        context = EstCertificateRequestContext(**est_kwargs)
+        """Enroll the selected pending credential through the shared EST pipeline."""
+        context = EstCertificateRequestContext(**self._build_est_context_kwargs(owner_credential, cert_profile))
         context.request_data = _build_request_data(cert_content)
-        context.owner_credential = signing_credential
-
-        csr_builder = ProfileAwareCsrBuilder()
-        csr_builder.process_operation(context)
-        csr = csr_builder.get_csr()
-        context.cert_requested = csr
-
-        csr_signer = EstDeviceCsrSignProcessor()
-        csr_signer.process_operation(context)
-        signed_csr = csr_signer.get_signed_csr()
-
-        est_client = EstClient(context)
-        issued_cert = est_client.simple_enroll(signed_csr)
-
-        cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode()
-        cert_obj = load_pem_x509_certificate(cert_pem.encode())
-        cert_model = CertificateModel.save_certificate(cert_obj)
-
-        signing_credential.certificate = cert_model
-        signing_credential.save()
-        PrimaryCredentialCertificate.objects.get_or_create(
-            credential=signing_credential,
-            certificate=cert_model,
-            defaults={'is_primary': True},
+        enroll_owner_credential_est(
+            context,
+            owner_credential,
+            pending_issued,
+            logger=self.logger,
+            domain_credential=False,
         )
-
-        cn = cert_model.common_name or owner_credential.unique_name
-        pending_issued.common_name = cn
-        pending_issued.save(update_fields=['common_name'])
-
-        try:
-            san_ext = cert_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-            for san in san_ext.value:
-                if isinstance(san, x509.UniformResourceIdentifier) and san.value.startswith('dev-owner:'):
-                    IDevIDReferenceModel.objects.get_or_create(
-                        dev_owner_id=owner_credential,
-                        idevid_ref=san.value,
-                        defaults={'dev_owner_id_certificate': cert_model},
-                    )
-        except x509.ExtensionNotFound:
-            self.logger.warning(
-                'Issued DevOwnerID certificate for "%s" has no SAN; no IDevID refs stored.',
-                owner_credential.unique_name,
-            )

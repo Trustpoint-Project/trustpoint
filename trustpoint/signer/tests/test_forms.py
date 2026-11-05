@@ -37,8 +37,7 @@ def app_secret_config():
     backend.backend_kind = AppSecretBackendKind.SOFTWARE
     backend.save()
     config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
-    config.raw_dek = b'a' * 32
-    config.save()
+    # The shared fixture supplies an externally wrapped DEK.
     return config
 
 
@@ -216,7 +215,7 @@ class TestSignerAddFileImportPkcs12Form:
         with pytest.raises(ValidationError, match='already taken'):
             form.clean_unique_name()
 
-    @patch('signer.forms.CredentialSerializer.from_pkcs12_bytes')
+    @patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes')
     @patch('signer.forms.SignerModel.create_new_signer')
     def test_form_valid_submission(self, mock_create, mock_from_pkcs12, app_secret_config, sample_pkcs12_data):
         """Test successful form submission."""
@@ -249,7 +248,7 @@ class TestSignerAddFileImportPkcs12Form:
         assert not form.is_valid()
         assert 'pkcs12_file' in form.errors
 
-    @patch('signer.forms.CredentialSerializer.from_pkcs12_bytes')
+    @patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes')
     def test_form_invalid_pkcs12_file(self, mock_from_pkcs12, app_secret_config):
         """Test form validation fails with invalid PKCS#12 file."""
         mock_from_pkcs12.side_effect = Exception('Invalid PKCS#12')
@@ -492,7 +491,7 @@ class TestSignerAddFileImportPkcs12FormAdvanced:
 
     def test_clean_with_missing_certificate_in_pkcs12(self, app_secret_config):
         """Test clean raises error when PKCS#12 has no certificate."""
-        with patch('signer.forms.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
+        with patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
             mock_cred = Mock()
             mock_cred.certificate = None
             mock_cred.private_key = Mock()
@@ -508,7 +507,7 @@ class TestSignerAddFileImportPkcs12FormAdvanced:
 
     def test_clean_with_missing_private_key_in_credential(self, app_secret_config):
         """Test clean raises error when credential has no private key."""
-        with patch('signer.forms.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
+        with patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
             mock_cred = Mock()
             mock_cred.certificate = Mock()
             mock_cred.private_key = None
@@ -542,7 +541,7 @@ class TestSignerAddFileImportPkcs12FormAdvanced:
             .sign(private_key, SHA256())
         )
         
-        with patch('signer.forms.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
+        with patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
             mock_cred = Mock()
             mock_cred.certificate = cert_no_keyusage
             mock_cred.private_key = private_key
@@ -591,7 +590,7 @@ class TestSignerAddFileImportPkcs12FormAdvanced:
             .sign(private_key, SHA256())
         )
         
-        with patch('signer.forms.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
+        with patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
             mock_cred = Mock()
             mock_cred.certificate = cert_no_digsig
             mock_cred.private_key = private_key

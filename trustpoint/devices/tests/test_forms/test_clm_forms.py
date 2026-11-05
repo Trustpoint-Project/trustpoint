@@ -8,7 +8,12 @@ from typing import Any
 import pytest
 from django.forms import ValidationError
 
-from devices.forms import ClmDeviceModelNoOnboardingForm, ClmDeviceModelOnboardingForm, ClmDeviceModelOpcUaGdsPushOnboardingForm
+from devices.forms import (
+    ClmAgentDeviceForm,
+    ClmDeviceModelNoOnboardingForm,
+    ClmDeviceModelOnboardingForm,
+    ClmDeviceModelOpcUaGdsPushOnboardingForm,
+)
 from devices.models import (
     DeviceModel,
     NoOnboardingPkiProtocol,
@@ -16,6 +21,20 @@ from devices.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+
+
+@pytest.mark.parametrize('form_type', [ClmDeviceModelOnboardingForm, ClmDeviceModelNoOnboardingForm, ClmAgentDeviceForm])
+def test_clm_name_validation_excludes_the_current_device(form_type, device_instance):
+    """All CLM edit forms retain the current name and reject another device's name."""
+    device = device_instance['device']
+    form = form_type(instance=device)
+    form.cleaned_data = {'common_name': device.common_name}
+    assert form.clean_common_name() == device.common_name
+
+    other = DeviceModel.objects.create(common_name='occupied-device')
+    form.cleaned_data = {'common_name': other.common_name}
+    with pytest.raises(ValidationError, match='Device with this common name already exists'):
+        form.clean_common_name()
 
 
 @pytest.mark.django_db
@@ -493,7 +512,7 @@ class TestClmDeviceModelOpcUaGdsPushOnboardingForm:
         # Modify device to be GDS push type
         device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
         device.ip_address = '192.168.1.100'
-        device.opc_server_port = 4840
+        device.save()
         device.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
         device.onboarding_config.clear_pki_protocols()
         device.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
@@ -519,7 +538,7 @@ class TestClmDeviceModelOpcUaGdsPushOnboardingForm:
         # Modify device to be GDS push type
         device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
         device.ip_address = '192.168.1.100'
-        device.opc_server_port = 4840
+        device.save()
         device.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
         device.onboarding_config.clear_pki_protocols()
         device.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
@@ -532,8 +551,8 @@ class TestClmDeviceModelOpcUaGdsPushOnboardingForm:
         assert form.initial['serial_number'] == device.serial_number
         assert form.initial['domain'] == device.domain
         assert form.initial['ip_address'] == device.ip_address
-        assert form.initial['opc_server_port'] == device.opc_server_port
-        assert form.initial['opc_trust_store'] == device.onboarding_config.opc_trust_store
+        assert form.initial['opc_server_port'] == device.opc_ua_gds_push_config.opc_server_port
+        assert form.initial['opc_trust_store'] == device.opc_ua_gds_push_config.opc_trust_store
         assert 'OPC - GDS Push' in form.initial['onboarding_protocol']
         assert form.initial['pki_protocol_opc_gds_push'] is True
 
@@ -543,7 +562,7 @@ class TestClmDeviceModelOpcUaGdsPushOnboardingForm:
         # Modify device to be GDS push type
         device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
         device.ip_address = '192.168.1.100'
-        device.opc_server_port = 4840
+        device.save()
         device.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
         device.onboarding_config.clear_pki_protocols()
         device.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
@@ -573,8 +592,8 @@ class TestClmDeviceModelOpcUaGdsPushOnboardingForm:
         assert device.serial_number == 'NEW-SN-123'
         assert device.domain == new_domain
         assert device.ip_address == '10.0.0.100'
-        assert device.opc_server_port == 4841
-        assert device.onboarding_config.opc_trust_store is None
+        assert device.opc_ua_gds_push_config.opc_server_port == 4841
+        assert device.opc_ua_gds_push_config.opc_trust_store is None
         assert device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
 
     def test_save_without_onboarding_config_raises_error(self, device_instance: dict[str, Any]) -> None:
@@ -594,7 +613,7 @@ class TestClmDeviceModelOpcUaGdsPushOnboardingForm:
         # Modify device to be GDS push type
         device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
         device.ip_address = '192.168.1.100'
-        device.opc_server_port = 4840
+        device.save()
         device.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
         device.onboarding_config.clear_pki_protocols()
         device.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
@@ -604,7 +623,7 @@ class TestClmDeviceModelOpcUaGdsPushOnboardingForm:
         form_data = {
             'common_name': device.common_name,
             'ip_address': 'invalid-ip-address',
-            'opc_server_port': device.opc_server_port,
+            'opc_server_port': device.opc_ua_gds_push_config.opc_server_port,
             'pki_protocol_opc_gds_push': True,
         }
 
@@ -618,7 +637,7 @@ class TestClmDeviceModelOpcUaGdsPushOnboardingForm:
         # Modify device to be GDS push type
         device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
         device.ip_address = '192.168.1.100'
-        device.opc_server_port = 4840
+        device.save()
         device.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
         device.onboarding_config.clear_pki_protocols()
         device.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)

@@ -43,6 +43,13 @@ flowchart LR
 - `X-SSL-Client-Verify`: Verification status
 - `X-SSL-Client-S-DN`: Client certificate subject DN
 
+Upstream EST/CMP certificates undergo shared path validation before storage,
+including CA signing permissions, validity, path length, name constraints and
+critical extensions. Configured truststore entries are explicit CA trust anchors;
+response certificates cannot add trust. Unsupported certificate-policy constraints
+fail closed. Profile checks separately bind the issued key, identity and extensions
+to the authorized request; path validation does not fetch CRLs or OCSP responses.
+
 ## Authentication Mechanisms
 
 ### Web UI Authentication
@@ -78,6 +85,27 @@ flowchart LR
 | **Client certificate** | Renewal/rekeying | mTLS certificate-based |
 
 **Endpoints:** `/.well-known/cmp/<domain>/`
+
+Upstream CMP transactions currently use PBM shared-secret protection. Replies
+must authenticate and match the request's transaction ID, nonces, operation and
+certificate request ID before status handling or certificate extraction. PBM work
+is bounded; unprotected replies and unsupported protection modes are rejected.
+TLS certificate verification remains disabled for these upstream connections.
+
+#### Explicit CMP certificate confirmation
+
+CMP responses advertise a persisted confirmation deadline; retries do not extend
+it. `TRUSTPOINT_CMP_CONFIRMATION_TIMEOUT_SECONDS` defaults to `300` (must be positive).
+`TRUSTPOINT_CMP_CONFIRMATION_TIMEOUT_POLICY` selects `revoke` (default) or `log`
+(retain the certificate), as allowed by
+[RFC 9483 §4.1.1](https://www.rfc-editor.org/rfc/rfc9483.html#section-4.1.1).
+Expiry rejects the transaction and invalidates initialization bootstrap secrets,
+leaving onboarding pending. Late confirmations are rejected.
+
+Apply migrations before deployment; existing pending confirmations receive a
+five-minute grace period. Cleanup runs every minute through Django-Q (`qcluster`
+with scheduling enabled), or run `python trustpoint/manage.py expire_cmp_confirmations`
+from an external scheduler. Transaction lookups and secret rotation also trigger cleanup.
 
 ### Other Protocols
 

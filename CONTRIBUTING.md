@@ -36,10 +36,19 @@ Please refer to our [Security Policy](SECURITY.md) for instructions on how to re
 
 4. **Ensure all tests pass** before submitting a pull request:
    ```bash
-   uv run pytest tests/
-   uv run mypy .
-   uv run ruff check .
+   # From the repository root, after configuring test secrets:
+   uv run pytest trustpoint/ tests/
+   uv run trustpoint/manage.py behave trustpoint/features/
+   uv run --frozen mypy .
+   uv run --frozen ruff check .
    ```
+
+   Follow the [development setup and test-secret instructions](docs/source/development/index.rst).
+   The project requires Python 3.13 or newer; Docker and shared CI currently use
+   Python 3.14. Use `uv sync --locked --python 3.14` to match that interpreter.
+   Database tests need a synthetic software KEK, and networking tests need local
+   socket access. Inspect failures and skipped tests; SQLite does not exercise
+   PostgreSQL row locks, and hardware/provider tests need their own configuration.
 
 5. **Update documentation** if you're adding new features or changing existing behavior.
 
@@ -54,19 +63,31 @@ Please follow the guidelines which include:
 ### Code Style
 - Follow PEP 8 and Django's coding style guide
 - Add type annotations to all functions and methods
-- Include descriptive docstrings in reStructuredText (reST) style
+- Include descriptive docstrings following the project's Google-style Ruff convention
 - Use Django's built-in features wherever possible
 
 ### Testing
-- Write tests for new functionality in `tests/`
+- Put application tests in the relevant `trustpoint/<app>/tests/` directory;
+  root utility tests live in `tests/` and Behave scenarios in `trustpoint/features/`
 - Test file naming: `test_<module>.py`
 - Test function naming: Start with `test_`
 - Run the full test suite before submitting
 
 ### Linting and Type Checking
 Before submitting your pull request, ensure your code passes:
-- **Ruff linting**: `uv run ruff check .`
-- **MyPy type checking**: `uv run mypy .`
+- **Ruff linting**: `uv run --frozen ruff check .`
+- **MyPy type checking**: `uv run --frozen mypy .`
+
+Use tools from the locked project environment. The local Ruff/mypy hooks and CI
+run the same repository-wide checks with `uv run --frozen`, including Django and
+runtime typing dependencies. Run `uv sync --frozen` before using the hooks.
+
+Format new or edited Python files with `uv run --frozen ruff format path/to/file.py`.
+Pre-commit checks staged Python files; Ruff CI checks Python files changed by the
+pull request. Both honor the project's Ruff exclusions. Untouched legacy files
+remain outside the formatting gate, so `ruff format --check .` is a backlog
+assessment rather than a required passing check. Keep repository-wide formatting
+cleanup separate from functional and security changes.
 
 ## Testing Policy
 

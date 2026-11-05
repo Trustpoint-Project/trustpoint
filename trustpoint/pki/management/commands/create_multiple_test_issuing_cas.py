@@ -29,7 +29,7 @@ from management.models import SecurityConfig
 from management.models.audit_log import AuditLog
 from pki.models import CaModel, CredentialModel
 from pki.util.x509 import CertificateVerifier
-from trustpoint.logger import LoggerMixin
+from util.commands import CommandLoggingMixin
 
 from .base_commands import CertificateCreationCommandMixin
 
@@ -37,35 +37,11 @@ if TYPE_CHECKING:
     from cryptography import x509
 
 
-class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
+class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin):
     """Adds a Root CA, Intermediate CAs, and Issuing CAs to the database."""
 
     help = 'Adds a Root CA, Intermediate CAs, and Issuing CAs to the database.'
     _capability_report: BackendCapabilityReport | None = None
-
-    def log_and_stdout(self, message: str, level: str = 'info') -> None:
-        """Log a message and write it to stdout.
-
-        Parameters
-        ----------
-        message : str
-            The message to log and print.
-        level : str
-            The logging level ('info', 'warning', 'error', etc.).
-        """
-        # Log the message
-        log_method = getattr(self.logger, level, self.logger.info)
-        log_method(message)
-
-        # Write to stdout
-        if level == 'error':
-            self.stdout.write(self.style.ERROR(message))
-        elif level == 'warning':
-            self.stdout.write(self.style.WARNING(message))
-        elif level == 'info':
-            self.stdout.write(self.style.SUCCESS(message))
-        else:
-            self.stdout.write(message)
 
     def get_ca_type_from_storage_config(self) -> CaModel.CaTypeChoice:
         """Return the legacy local managed-CA type for generated demo CAs."""

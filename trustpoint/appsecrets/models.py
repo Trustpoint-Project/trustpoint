@@ -39,6 +39,7 @@ class AppSecretBackendModel(models.Model):
         help_text='Singleton primary key. Always 1.',
     )
     backend_kind = models.CharField(max_length=16, choices=AppSecretBackendKind.choices)
+    dek_initialized = models.BooleanField(default=False, editable=False)
 
     class Meta:
         """Database options for the app-secret backend singleton."""
@@ -51,6 +52,10 @@ class AppSecretBackendModel(models.Model):
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Persist after validation while keeping singleton semantics."""
+        existing = type(self).objects.filter(pk=self.SINGLETON_ID, dek_initialized=True).first()
+        if existing and (existing.backend_kind != self.backend_kind or not self.dek_initialized):
+            msg = 'An initialized application-secret backend cannot be changed or reset.'
+            raise ValidationError(msg)
         self.full_clean()
         self.singleton_id = self.SINGLETON_ID
         super().save(*args, **kwargs)
@@ -155,7 +160,7 @@ class AppSecretPkcs11ConfigModel(models.Model):
 
 
 class AppSecretSoftwareConfigModel(models.Model):
-    """Development-only software config for application secrets."""
+    """Software envelope-encryption configuration; key material remains external."""
 
     backend = models.OneToOneField(
         AppSecretBackendModel,
@@ -163,10 +168,10 @@ class AppSecretSoftwareConfigModel(models.Model):
         on_delete=models.CASCADE,
         related_name='software_config',
     )
-    raw_dek = models.BinaryField(
+    wrapped_dek = models.BinaryField(
         blank=True,
         null=True,
-        help_text='Development-only DEK storage.',
+        help_text='Versioned DEK wrapped by the external software KEK.',
     )
 
     class Meta:

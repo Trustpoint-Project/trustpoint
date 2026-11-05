@@ -5,24 +5,25 @@
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 from typing import TYPE_CHECKING, Any
 
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, mldsa, padding, rsa, utils
+from cryptography.hazmat.primitives.asymmetric import ec, mldsa, rsa
 
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding, SoftwareManagedKeyVerification
-from crypto.adapters.software.capabilities import SoftwareCapabilities
+from crypto.adapters.software.capabilities import SOFTWARE_CAPABILITIES, SoftwareCapabilities
 from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
 from crypto.domain.errors import (
     KeyNotFoundError,
     MechanismUnsupportedError,
+    ProviderConfigurationError,
     ProviderUnavailableError,
     UnsupportedKeySpecError,
 )
-from crypto.domain.policies import SigningExecutionMode
+from crypto.domain.public_keys import public_key_fingerprint_sha256
 from crypto.domain.refs import ManagedKeyVerificationStatus
+from crypto.domain.signing import sign_with_rsa_or_ec_key
 from crypto.domain.specs import (
     EcKeySpec,
     KeySpec,
@@ -78,14 +79,7 @@ class SoftwareBackend:
         """Resolve secret material and return the software backend capabilities."""
         self._profile.require_encryption_material()
         if self._capabilities is None:
-            self._capabilities = SoftwareCapabilities(
-                supported_key_algorithms=('rsa', 'ec', 'mldsa'),
-                supported_signature_algorithms=('rsa_pkcs1v15', 'ecdsa', 'mldsa'),
-                supported_signing_execution_modes=(
-                    SigningExecutionMode.COMPLETE_BACKEND.value,
-                    SigningExecutionMode.ALLOW_APPLICATION_HASH.value,
-                ),
-            )
+            self._capabilities = SOFTWARE_CAPABILITIES
         return self._capabilities
 
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> SoftwareManagedKeyBinding:
@@ -108,6 +102,17 @@ class SoftwareBackend:
             public_key_fingerprint_sha256=self._fingerprint_public_key(public_key),
             signing_execution_mode=policy.signing_execution_mode,
             provider_label=alias,
+        )
+
+    def export_private_key_pkcs8(self, key: SoftwareManagedKeyBinding) -> bytes:
+        """Export unencrypted PKCS#8 PEM after the application checks the key policy."""
+        if not self._profile.allow_exportable_private_keys:
+            msg = 'The software provider does not allow private-key export.'
+            raise ProviderConfigurationError(msg)
+        return self._load_private_key(key).private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
         )
 
     def verify_managed_key(self, key: SoftwareManagedKeyBinding) -> SoftwareManagedKeyVerification:
@@ -158,25 +163,11 @@ class SoftwareBackend:
         private_key = self._load_private_key(key)
         hash_algorithm = self._hash_algorithm(request.hash_algorithm)
 
-        if key.algorithm is KeyAlgorithm.RSA and isinstance(private_key, rsa.RSAPrivateKey):
-            algorithm = utils.Prehashed(hash_algorithm) if request.prehashed else hash_algorithm
-            if request.signature_algorithm is not SignatureAlgorithm.RSA_PKCS1V15:
-                msg = f'Unsupported RSA signature algorithm {request.signature_algorithm.value!r}.'
-                raise MechanismUnsupportedError(msg)
-            return bytes(
-                private_key.sign(
-                    data,
-                    padding.PKCS1v15(),
-                    algorithm,
-                ),
-            )
-
-        if key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey):
-            if request.signature_algorithm is not SignatureAlgorithm.ECDSA:
-                msg = f'Unsupported EC signature algorithm {request.signature_algorithm.value!r}.'
-                raise MechanismUnsupportedError(msg)
-            algorithm = utils.Prehashed(hash_algorithm) if request.prehashed else hash_algorithm
-            return bytes(private_key.sign(data, ec.ECDSA(algorithm)))
+        if (
+            (key.algorithm is KeyAlgorithm.RSA and isinstance(private_key, rsa.RSAPrivateKey))
+            or (key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey))
+        ):
+            return sign_with_rsa_or_ec_key(private_key, data, request, hash_algorithm)
 
         if key.algorithm is KeyAlgorithm.MLDSA and isinstance(
             private_key,
@@ -268,11 +259,4 @@ class SoftwareBackend:
             msg = f'Unsupported hash algorithm {value!r} for the software backend.'
             raise MechanismUnsupportedError(msg) from exc
 
-    @staticmethod
-    def _fingerprint_public_key(public_key: SupportedPublicKey) -> str:
-        """Return the SHA-256 fingerprint of a public key SPKI DER encoding."""
-        der = public_key.public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return hashlib.sha256(der).hexdigest()
+    _fingerprint_public_key = staticmethod(public_key_fingerprint_sha256)

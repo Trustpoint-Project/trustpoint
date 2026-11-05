@@ -1,12 +1,19 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
+import django.db.models.deletion
 import django.utils.timezone
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
 
+
     initial = True
 
     dependencies = [
+        ('devices', '0001_initial'),
+        ('pki', '0001_initial'),
     ]
 
     operations = [
@@ -22,6 +29,8 @@ class Migration(migrations.Migration):
                 ('cert_req_id', models.PositiveIntegerField(default=0, help_text='CertResponse identifier referenced by pollReq / pollRep.', verbose_name='certReqId')),
                 ('request_der', models.BinaryField(help_text='Original CMP enrollment PKIMessage in DER form.', verbose_name='Original Request (DER)')),
                 ('implicit_confirm', models.BooleanField(default=False, verbose_name='Implicit Confirm Requested')),
+                ('last_client_nonce', models.BinaryField(blank=True, help_text='Most recently authenticated CMP senderNonce for this transaction.', null=True, verbose_name='Last Client Nonce')),
+                ('last_server_nonce', models.BinaryField(blank=True, help_text='Most recently emitted CMP senderNonce for this transaction.', null=True, verbose_name='Last Server Nonce')),
                 ('status', models.CharField(choices=[('processing', 'Processing'), ('waiting', 'Waiting'), ('issued', 'Issued'), ('rejected', 'Rejected'), ('failed', 'Failed'), ('cancelled', 'Cancelled')], db_index=True, default='processing', max_length=16, verbose_name='Status')),
                 ('detail', models.TextField(blank=True, default='', verbose_name='Detail')),
                 ('check_after_seconds', models.PositiveIntegerField(default=5, verbose_name='Check After (Seconds)')),
@@ -29,7 +38,15 @@ class Migration(migrations.Migration):
                 ('backend_reference', models.CharField(blank=True, default='', max_length=128, verbose_name='Backend Reference')),
                 ('created_at', models.DateTimeField(default=django.utils.timezone.now, verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated At')),
+                ('confirmed_at', models.DateTimeField(blank=True, null=True)),
                 ('finalized_at', models.DateTimeField(blank=True, null=True, verbose_name='Finalized At')),
+                ('device', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='cmp_transactions', to='devices.devicemodel', verbose_name='Device')),
+                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='cmp_transactions', to='pki.domainmodel', verbose_name='Domain')),
+                ('final_certificate', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cmp_transaction_records', to='pki.certificatemodel', verbose_name='Final Certificate')),
+                ('issuer_credential', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cmp_transaction_issuer_records', to='pki.credentialmodel', verbose_name='Issuer Credential')),
             ],
+            options={
+                'indexes': [models.Index(fields=['status'], name='cmp_cmptran_status_bca250_idx'), models.Index(fields=['backend', 'backend_reference'], name='cmp_cmptran_backend_ba899c_idx'), models.Index(fields=['device', 'status'], name='cmp_cmptran_device__000381_idx'), models.Index(fields=['domain', 'status'], name='cmp_cmptran_domain__3132e9_idx')],
+            },
         ),
     ]

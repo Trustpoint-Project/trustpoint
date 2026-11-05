@@ -146,20 +146,17 @@ class NotificationMarkSolvedViewTests(TestCase):
         """Set up test fixtures."""
         self.factory = RequestFactory()
 
+    @patch('management.views.notifications.get_object_or_404')
     @patch('management.views.notifications.NotificationStatus.objects.get_or_create')
-    def test_get_context_data_adds_solved_status(self, mock_get_or_create: Mock) -> None:
-        """Test that get_context_data adds SOLVED status."""
+    def test_post_adds_solved_status(self, mock_get_or_create: Mock, mock_get_object: Mock) -> None:
+        """An explicit submission changes status and redirects to the details page."""
         solved_status = Mock(spec=NotificationStatus)
         mock_get_or_create.return_value = (solved_status, False)
-
         notification = Mock(spec=NotificationModel)
-        notification.statuses.all.return_value = [solved_status]
+        notification.pk = 123
+        mock_get_object.return_value = notification
 
-        view = NotificationMarkSolvedView()
-        view.object = notification
-        view.kwargs = {}
-
-        context = view.get_context_data()
+        response = NotificationMarkSolvedView().post(self.factory.post('/'), pk=notification.pk)
 
         notification.statuses.add.assert_called_once_with(solved_status)
-        assert context['is_solved'] is True
+        assert response.status_code == 302

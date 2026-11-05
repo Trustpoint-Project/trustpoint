@@ -4,24 +4,29 @@
 """Tests for GDS Push service."""
 
 import datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
 import pytest
+from asgiref.sync import async_to_sync
 from asyncua import ua
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ObjectIdentifier
+from django.db import IntegrityError
 
 from devices.models import DeviceModel
 from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
-from pki.models import CaModel, TruststoreModel
+from pki.models import CaModel, CertificateModel, TruststoreModel
+from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import TruststoreOrderModel
+from pki.tests.credential_helpers import issue_test_credential
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 from request.gds_push.gds_push_service import GdsPushError, GdsPushService
+from request.tests.test_est_client import certificate_and_csr
 
 
 @pytest.fixture
@@ -57,6 +62,7 @@ def mock_ca_with_crl(settings: Any) -> CaModel:
 def mock_domain(mock_ca_with_crl):
     """Create a mock domain."""
     from pki.models import DomainModel
+
     domain = DomainModel(unique_name='test_gds_domain', issuing_ca=mock_ca_with_crl)
     domain.save()
     return domain
@@ -65,7 +71,9 @@ def mock_domain(mock_ca_with_crl):
 @pytest.fixture
 def mock_truststore():
     """Create a mock truststore."""
-    truststore = TruststoreModel(unique_name='test_opc_truststore', intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH)
+    truststore = TruststoreModel(
+        unique_name='test_opc_truststore', intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+    )
     truststore.save()
     return truststore
 
@@ -75,24 +83,34 @@ def mock_server_certificate(mock_truststore):
     """Create a mock server certificate in the truststore."""
     # Generate a server certificate
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    subject = x509.Name([
-        x509.NameAttribute(x509.NameOID.COMMON_NAME, 'opc-server.test.com'),
-    ])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'opc-server.test.com'),
+        ]
+    )
 
-    cert = x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(
-        private_key.public_key()
-    ).serial_number(x509.random_serial_number()).not_valid_before(
-        datetime.datetime.now(datetime.UTC)
-    ).not_valid_after(
-        datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
-    ).add_extension(
-        x509.SubjectAlternativeName([
-            x509.DNSName('opc-server.test.com'),
-        ]), critical=False
-    ).sign(private_key, hashes.SHA256())
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.UTC))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName('opc-server.test.com'),
+                ]
+            ),
+            critical=False,
+        )
+        .sign(private_key, hashes.SHA256())
+    )
 
     # Save certificate to database using proper method
     from pki.models import CertificateModel
+
     cert_model = CertificateModel.save_certificate(cert)
 
     # Add to truststore at order 0
@@ -108,38 +126,78 @@ def mock_opc_device(mock_domain, mock_truststore, mock_server_certificate):
     # Create onboarding config
     onboarding_config = OnboardingConfigModel(
         onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-        opc_trust_store=mock_truststore
     )
     onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
     onboarding_config.save()
 
     device = DeviceModel(
+        device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
         common_name='test-opc-device',
         serial_number='OPC123456',
         ip_address='192.168.1.100',
-        opc_server_port=4840,
         domain=mock_domain,
         onboarding_config=onboarding_config,
-        device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH
     )
     device.save()
+    device.opc_ua_gds_push_config.opc_trust_store = mock_truststore
+    device.opc_ua_gds_push_config.save()
 
     return device
 
 
 @pytest.fixture
-def mock_domain_credential(mock_opc_device, mock_domain):
+def mock_domain_credential(mock_opc_device):
     """Create a mock domain credential for the device."""
-    from devices.issuer import LocalDomainCredentialIssuer
-
-    issuer = LocalDomainCredentialIssuer(device=mock_opc_device, domain=mock_domain)
-    credential = issuer.issue_domain_credential()
+    credential = issue_test_credential(mock_opc_device, 'domain_credential', common_name='Trustpoint Domain Credential')
 
     return credential
 
 
 class TestGdsPushService:
     """Test cases for GdsPushService."""
+
+    @pytest.mark.parametrize('failure', ['missing_server', 'missing_ca', 'malformed_ca', 'insert', None])
+    def test_truststore_replacement_is_atomic(self, mock_opc_device, mock_truststore, failure):
+        """Keep the old entries and revocation state when replacement fails."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service.server_truststore = mock_truststore
+        original_entries = list(mock_truststore.truststoreordermodel_set.values_list('certificate_id', 'order'))
+        old_certificate_id = original_entries[0][0]
+        _, server_certificate, _ = certificate_and_csr()
+        _, ca_certificate, _ = certificate_and_csr()
+        if failure != 'missing_server':
+            server_model = CertificateModel.save_certificate(server_certificate)
+        if failure != 'missing_ca':
+            ca_model = CertificateModel.save_certificate(ca_certificate)
+        server_der = server_certificate.public_bytes(serialization.Encoding.DER)
+        ca_der = ca_certificate.public_bytes(serialization.Encoding.DER)
+        if failure == 'malformed_ca':
+            ca_der = b'invalid certificate'
+
+        create_order = TruststoreOrderModel.objects.create
+
+        def insert_order(**kwargs):
+            if failure == 'insert' and kwargs['order'] == 1:
+                raise IntegrityError('replacement insert failed')
+            return create_order(**kwargs)
+
+        with patch.object(TruststoreOrderModel.objects, 'create', side_effect=insert_order) as create:
+            if failure is None:
+                async_to_sync(service._update_truststore_with_new_certificate)(server_der, [ca_der])
+            else:
+                with pytest.raises(GdsPushError, match='Failed to update truststore'):
+                    async_to_sync(service._update_truststore_with_new_certificate)(server_der, [ca_der])
+
+        if failure == 'insert':
+            assert create.call_count == 2
+        entries = list(mock_truststore.truststoreordermodel_set.values_list('certificate_id', 'order'))
+        revoked = RevokedCertificateModel.objects.filter(certificate_id=old_certificate_id).exists()
+        if failure is None:
+            assert entries == [(server_model.pk, 0), (ca_model.pk, 1)]
+            assert revoked
+        else:
+            assert entries == original_entries
+            assert not revoked
 
     def test_init_insecure_mode(self, mock_opc_device):
         """Test initialization in insecure mode."""
@@ -150,12 +208,13 @@ class TestGdsPushService:
         assert service.domain_credential is None
         assert service.server_truststore is None
 
-    def test_get_server_truststore_rejects_missing_onboarding_config(self, mock_opc_device):
-        mock_opc_device.onboarding_config = None
+    def test_get_server_truststore_rejects_missing_opc_config(self, mock_opc_device):
+        mock_opc_device.opc_ua_gds_push_config.delete()
+        mock_opc_device.refresh_from_db()
         service = GdsPushService.__new__(GdsPushService)
         service.device = mock_opc_device
 
-        with pytest.raises(GdsPushError, match='has no onboarding config'):
+        with pytest.raises(GdsPushError, match='has no OPC UA GDS Push config'):
             service._get_server_truststore()
 
     def test_init_secure_mode(self, mock_opc_device, mock_domain_credential, mock_truststore):
@@ -171,16 +230,15 @@ class TestGdsPushService:
         """Test initialization with device missing IP address."""
         onboarding_config = OnboardingConfigModel(
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-            opc_trust_store=mock_truststore
         )
         onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-ip',
-            opc_server_port=4840,
             domain=mock_domain,
-            onboarding_config=onboarding_config
+            onboarding_config=onboarding_config,
         )
         device.save()
 
@@ -191,18 +249,19 @@ class TestGdsPushService:
         """Test initialization with device missing OPC server port."""
         onboarding_config = OnboardingConfigModel(
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-            opc_trust_store=mock_truststore
         )
         onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-port',
             ip_address='192.168.1.100',
             domain=mock_domain,
-            onboarding_config=onboarding_config
+            onboarding_config=onboarding_config,
         )
         device.save()
+        device.opc_ua_gds_push_config.opc_server_port = 0
 
         with pytest.raises(GdsPushError, match='must have IP address and OPC server port configured'):
             GdsPushService(device)
@@ -210,10 +269,10 @@ class TestGdsPushService:
     def test_init_device_no_onboarding_config(self, mock_domain):
         """Test initialization with device missing onboarding config."""
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-config',
             ip_address='192.168.1.100',
-            opc_server_port=4840,
-            domain=mock_domain
+            domain=mock_domain,
         )
         device.save()
 
@@ -225,11 +284,11 @@ class TestGdsPushService:
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-truststore',
             ip_address='192.168.1.100',
-            opc_server_port=4840,
             domain=mock_domain,
-            onboarding_config=onboarding_config
+            onboarding_config=onboarding_config,
         )
         device.save()
 
@@ -238,29 +297,30 @@ class TestGdsPushService:
 
     def test_init_device_empty_truststore(self, mock_domain):
         """Test initialization with empty OPC truststore."""
-        truststore = TruststoreModel(unique_name='empty_truststore', intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH)
+        truststore = TruststoreModel(
+            unique_name='empty_truststore', intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+        )
         truststore.save()
 
         onboarding_config = OnboardingConfigModel(
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-            opc_trust_store=truststore
         )
         onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-empty-truststore',
             ip_address='192.168.1.100',
-            opc_server_port=4840,
             domain=mock_domain,
-            onboarding_config=onboarding_config
+            onboarding_config=onboarding_config,
         )
         device.save()
+        device.opc_ua_gds_push_config.opc_trust_store = truststore
+        device.opc_ua_gds_push_config.save()
 
         # Create a domain credential for the device
-        from devices.issuer import LocalDomainCredentialIssuer
-        issuer = LocalDomainCredentialIssuer(device=device, domain=mock_domain)
-        issuer.issue_domain_credential()
+        issue_test_credential(device, 'domain_credential', common_name='Trustpoint Domain Credential')
 
         with pytest.raises(GdsPushError, match='Server truststore.*is empty'):
             GdsPushService(device)
@@ -269,17 +329,16 @@ class TestGdsPushService:
         """Test initialization when no domain credential exists."""
         onboarding_config = OnboardingConfigModel(
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
-            opc_trust_store=mock_truststore
         )
         onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
             common_name='test-device-no-credential',
             ip_address='192.168.1.100',
-            opc_server_port=4840,
             domain=mock_domain,
-            onboarding_config=onboarding_config
+            onboarding_config=onboarding_config,
         )
         device.save()
 
@@ -322,7 +381,7 @@ class TestGdsPushService:
             {
                 'EndpointUrl': 'opc.tcp://192.168.1.100:4840',
                 'SecurityPolicyUri': 'http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256',
-                'SecurityMode': 'SignAndEncrypt'
+                'SecurityMode': 'SignAndEncrypt',
             }
         ]
 
@@ -336,9 +395,9 @@ class TestGdsPushService:
                         'url': 'opc.tcp://192.168.1.100:4840',
                         'security_policy': 'http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256',
                         'security_mode': 'SignAndEncrypt',
-                        'has_server_cert': True
+                        'has_server_cert': True,
                     }
-                ]
+                ],
             }
 
             success, message, server_info = await service.discover_server()
@@ -355,7 +414,7 @@ class TestGdsPushService:
         mock_client_class.return_value = mock_client
 
         # Mock async context manager to raise exception
-        mock_client.__aenter__ = AsyncMock(side_effect=Exception('Connection failed'))
+        mock_client.connect_and_get_server_endpoints = AsyncMock(side_effect=Exception('Connection failed'))
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -373,12 +432,9 @@ class TestGdsPushService:
         endpoints = [
             {
                 'security_policy': 'http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256',
-                'security_mode': 'SignAndEncrypt'
+                'security_mode': 'SignAndEncrypt',
             },
-            {
-                'security_policy': 'http://opcfoundation.org/UA/SecurityPolicy#None',
-                'security_mode': 'None'
-            }
+            {'security_policy': 'http://opcfoundation.org/UA/SecurityPolicy#None', 'security_mode': 'None'},
         ]
         result = service._analyze_endpoints(endpoints)
 
@@ -389,7 +445,9 @@ class TestGdsPushService:
     @patch('request.gds_push.gds_push_service.Client')
     @patch('request.gds_push.gds_push_service.sync_to_async')
     @pytest.mark.asyncio
-    async def test_update_trustlist_success(self, mock_sync_to_async, mock_client_class, mock_opc_device, mock_domain_credential, mock_ca_with_crl):
+    async def test_update_trustlist_success(
+        self, mock_sync_to_async, mock_client_class, mock_opc_device, mock_domain_credential, mock_ca_with_crl
+    ):
         """Test successful trustlist update."""
         # Mock OPC UA client
         mock_client = Mock()
@@ -404,12 +462,13 @@ class TestGdsPushService:
         service = GdsPushService(mock_opc_device, insecure=True)
 
         # Mock the CA chain building
-        with patch.object(service, '_build_ca_chain') as mock_build_chain, \
-             patch.object(service, '_build_trustlist_for_server') as mock_build_trustlist, \
-             patch.object(service, '_discover_trustlist_nodes') as mock_discover, \
-             patch.object(service, '_update_single_trustlist') as mock_update_single, \
-             patch.object(service, '_create_secure_client') as mock_create_client:
-
+        with (
+            patch.object(service, '_build_ca_chain') as mock_build_chain,
+            patch.object(service, '_build_trustlist_for_server') as mock_build_trustlist,
+            patch.object(service, '_discover_trustlist_nodes') as mock_discover,
+            patch.object(service, '_update_single_trustlist') as mock_update_single,
+            patch.object(service, '_create_secure_client') as mock_create_client,
+        ):
             mock_build_chain.return_value = [mock_ca_with_crl]
             mock_build_trustlist.return_value = Mock(spec=ua.TrustListDataType)
             mock_discover.return_value = [{'group_name': 'Default', 'trustlist_node': mock_trustlist_node}]
@@ -424,11 +483,13 @@ class TestGdsPushService:
 
     @patch('request.gds_push.gds_push_service.Client')
     @pytest.mark.asyncio
-    async def test_update_trustlist_connection_failure(self, mock_client_class, mock_opc_device, mock_domain_credential):
+    async def test_update_trustlist_connection_failure(
+        self, mock_client_class, mock_opc_device, mock_domain_credential
+    ):
         """Test trustlist update with connection failure."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_client.__aenter__ = AsyncMock(side_effect=Exception('Connection failed'))
+        mock_client.connect_and_get_server_endpoints = AsyncMock(side_effect=Exception('Connection failed'))
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -445,34 +506,37 @@ class TestGdsPushService:
         # Create a valid certificate
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')])
-        ).public_key(private_key.public_key()).serial_number(1).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
-        ).add_extension(
-            x509.KeyUsage(
-                digital_signature=True,
-                key_encipherment=True,
-                data_encipherment=True,
-                key_cert_sign=False,
-                crl_sign=False,
-                content_commitment=False,
-                key_agreement=False,
-                encipher_only=False,
-                decipher_only=False
-            ), critical=True
-        ).add_extension(
-            x509.ExtendedKeyUsage([ObjectIdentifier("1.3.6.1.5.5.7.3.2")]), critical=False
-        ).add_extension(
-            x509.SubjectAlternativeName([
-                x509.UniformResourceIdentifier('urn:test:device'),
-                x509.DNSName('test-device.local')
-            ]), critical=False
-        ).sign(private_key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')]))
+            .public_key(private_key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=True,
+                    key_encipherment=True,
+                    data_encipherment=True,
+                    key_cert_sign=False,
+                    crl_sign=False,
+                    content_commitment=False,
+                    key_agreement=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
+            .add_extension(x509.ExtendedKeyUsage([ObjectIdentifier('1.3.6.1.5.5.7.3.2')]), critical=False)
+            .add_extension(
+                x509.SubjectAlternativeName(
+                    [x509.UniformResourceIdentifier('urn:test:device'), x509.DNSName('test-device.local')]
+                ),
+                critical=False,
+            )
+            .sign(private_key, hashes.SHA256())
+        )
 
         # Should not raise an exception
         service._validate_client_certificate(cert)
@@ -483,15 +547,16 @@ class TestGdsPushService:
 
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')])
-        ).public_key(private_key.public_key()).serial_number(1).not_valid_before(
-            datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=365)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1)
-        ).sign(private_key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')]))
+            .public_key(private_key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=365))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1))
+            .sign(private_key, hashes.SHA256())
+        )
 
         with pytest.raises(GdsPushError, match='Certificate expired'):
             service._validate_client_certificate(cert)
@@ -502,15 +567,16 @@ class TestGdsPushService:
 
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')])
-        ).public_key(private_key.public_key()).serial_number(1).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
-        ).sign(private_key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')]))
+            .public_key(private_key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .sign(private_key, hashes.SHA256())
+        )
 
         with pytest.raises(GdsPushError, match='Key Usage extension is missing'):
             service._validate_client_certificate(cert)
@@ -521,19 +587,24 @@ class TestGdsPushService:
 
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')])
-        ).public_key(private_key.public_key()).serial_number(1).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
-        ).add_extension(
-            x509.SubjectAlternativeName([
-                x509.UniformResourceIdentifier('urn:test:application:uri'),
-            ]), critical=False
-        ).sign(private_key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')]))
+            .public_key(private_key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .add_extension(
+                x509.SubjectAlternativeName(
+                    [
+                        x509.UniformResourceIdentifier('urn:test:application:uri'),
+                    ]
+                ),
+                critical=False,
+            )
+            .sign(private_key, hashes.SHA256())
+        )
 
         uri = service._extract_application_uri(cert)
         assert uri == 'urn:test:application:uri'
@@ -544,19 +615,24 @@ class TestGdsPushService:
 
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')])
-        ).public_key(private_key.public_key()).serial_number(1).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
-        ).add_extension(
-            x509.SubjectAlternativeName([
-                x509.DNSName('test-device.local'),
-            ]), critical=False
-        ).sign(private_key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')]))
+            .public_key(private_key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .add_extension(
+                x509.SubjectAlternativeName(
+                    [
+                        x509.DNSName('test-device.local'),
+                    ]
+                ),
+                critical=False,
+            )
+            .sign(private_key, hashes.SHA256())
+        )
 
         with pytest.raises(GdsPushError, match='No application URI found'):
             service._extract_application_uri(cert)
@@ -567,15 +643,16 @@ class TestGdsPushService:
 
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')])
-        ).public_key(private_key.public_key()).serial_number(1).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
-        ).sign(private_key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')]))
+            .public_key(private_key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .sign(private_key, hashes.SHA256())
+        )
 
         # Should not raise an exception
         service._verify_certificate_key_match(cert, private_key)
@@ -587,15 +664,16 @@ class TestGdsPushService:
         private_key1 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         private_key2 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')])
-        ).public_key(private_key1.public_key()).serial_number(1).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
-        ).sign(private_key1, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-device')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')]))
+            .public_key(private_key1.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .sign(private_key1, hashes.SHA256())
+        )
 
         with pytest.raises(GdsPushError, match='Certificate and private key do not match'):
             service._verify_certificate_key_match(cert, private_key2)
@@ -606,7 +684,9 @@ class TestGdsPushService:
 
     @patch('request.gds_push.gds_push_service.Client')
     @pytest.mark.asyncio
-    async def test_update_server_certificate_success(self, mock_client_class, mock_opc_device, mock_domain_credential, mock_ca_with_crl):
+    async def test_update_server_certificate_success(
+        self, mock_client_class, mock_opc_device, mock_domain_credential, mock_ca_with_crl
+    ):
         """Test successful server certificate update."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -616,16 +696,14 @@ class TestGdsPushService:
         service = GdsPushService(mock_opc_device, insecure=True)
 
         # Mock certificate groups discovery
-        mock_group = {
-            'name': 'DefaultApplicationGroup',
-            'node_id': ua.NodeId.from_string('ns=0;i=12555')
-        }
+        mock_group = {'name': 'DefaultApplicationGroup', 'node_id': ua.NodeId.from_string('ns=0;i=12555')}
 
-        with patch.object(service, '_create_secure_client') as mock_create_client, \
-             patch.object(service, '_discover_certificate_groups') as mock_discover_groups, \
-             patch.object(service, '_update_single_certificate') as mock_update_single, \
-             patch.object(service, '_update_truststore_with_new_certificate') as mock_update_truststore:
-
+        with (
+            patch.object(service, '_create_secure_client') as mock_create_client,
+            patch.object(service, '_discover_certificate_groups') as mock_discover_groups,
+            patch.object(service, '_update_single_certificate') as mock_update_single,
+            patch.object(service, '_update_truststore_with_new_certificate') as mock_update_truststore,
+        ):
             mock_create_client.return_value = mock_client
             mock_discover_groups.return_value = [mock_group]
             mock_update_single.return_value = (True, b'cert_data', [b'issuer_cert'])
@@ -639,7 +717,9 @@ class TestGdsPushService:
 
     @patch('request.gds_push.gds_push_service.Client')
     @pytest.mark.asyncio
-    async def test_update_server_certificate_no_groups(self, mock_client_class, mock_opc_device, mock_domain_credential):
+    async def test_update_server_certificate_no_groups(
+        self, mock_client_class, mock_opc_device, mock_domain_credential
+    ):
         """Test server certificate update with no certificate groups found."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -648,9 +728,10 @@ class TestGdsPushService:
 
         service = GdsPushService(mock_opc_device, insecure=True)
 
-        with patch.object(service, '_create_secure_client') as mock_create_client, \
-             patch.object(service, '_discover_certificate_groups') as mock_discover_groups:
-
+        with (
+            patch.object(service, '_create_secure_client') as mock_create_client,
+            patch.object(service, '_discover_certificate_groups') as mock_discover_groups,
+        ):
             mock_create_client.return_value = mock_client
             mock_discover_groups.return_value = []
 
@@ -699,19 +780,19 @@ class TestGdsPushService:
 
         mock_client.get_node.return_value = mock_server_node
         mock_server_node.get_child = AsyncMock(return_value=mock_server_config)
-        mock_server_config.get_child = AsyncMock(side_effect=[
-            mock_create_csr_method,
-            mock_update_certificate_method,
-            mock_apply_changes_method
-        ])
+        mock_server_config.get_child = AsyncMock(
+            side_effect=[mock_create_csr_method, mock_update_certificate_method, mock_apply_changes_method]
+        )
 
         # Mock CSR creation
         mock_csr_der = b'csr_data'
-        mock_server_config.call_method = AsyncMock(side_effect=[
-            mock_csr_der,  # CreateSigningRequest
-            True,  # UpdateCertificate returns apply_changes_required
-            None  # ApplyChanges
-        ])
+        mock_server_config.call_method = AsyncMock(
+            side_effect=[
+                mock_csr_der,  # CreateSigningRequest
+                True,  # UpdateCertificate returns apply_changes_required
+                None,  # ApplyChanges
+            ]
+        )
 
         # Mock CSR signing
         signed_cert = b'signed_cert'
@@ -721,9 +802,7 @@ class TestGdsPushService:
             mock_sign_csr.return_value = (signed_cert, issuer_chain, Mock())
 
             cert_group_id = ua.NodeId.from_string('ns=0;i=12555')
-            success, cert_data, chain_data = await service._update_single_certificate(
-                mock_client, cert_group_id
-            )
+            success, cert_data, chain_data = await service._update_single_certificate(mock_client, cert_group_id)
 
             assert success is True
             assert cert_data == signed_cert
@@ -784,25 +863,23 @@ class TestGdsPushService:
         mock_close_method = Mock()
         mock_apply_method = Mock()
 
-        mock_trustlist_node.get_child = AsyncMock(side_effect=[
-            mock_open_method,
-            mock_write_method,
-            mock_close_method
-        ])
-        
+        mock_trustlist_node.get_child = AsyncMock(side_effect=[mock_open_method, mock_write_method, mock_close_method])
+
         mock_file_handle = 12345
-        mock_trustlist_node.call_method = AsyncMock(side_effect=[
-            mock_file_handle,  # Open
-            None,  # Write
-            True,  # CloseAndUpdate returns apply_changes_required
-            None  # ApplyChanges
-        ])
+        mock_trustlist_node.call_method = AsyncMock(
+            side_effect=[
+                mock_file_handle,  # Open
+                None,  # Write
+                True,  # CloseAndUpdate returns apply_changes_required
+                None,  # ApplyChanges
+            ]
+        )
 
         # Mock parent nodes for ApplyChanges
         mock_group_node = Mock()
         mock_cert_groups_node = Mock()
         mock_server_config_node = Mock()
-        
+
         mock_trustlist_node.get_parent = AsyncMock(return_value=mock_group_node)
         mock_group_node.get_parent = AsyncMock(return_value=mock_cert_groups_node)
         mock_cert_groups_node.get_parent = AsyncMock(return_value=mock_server_config_node)
@@ -821,17 +898,17 @@ class TestGdsPushService:
         assert success is True
 
     # ========================================================================
-    # Error Handling Tests  
+    # Error Handling Tests
     # ========================================================================
 
     @pytest.mark.asyncio
     async def test_update_truststore_no_truststore_configured(self, mock_opc_device):
         """Test truststore update with no truststore configured."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        
+
         # Ensure server_truststore is None
         service.server_truststore = None
-        
+
         with pytest.raises(GdsPushError, match='No server truststore configured'):
             await service._update_truststore_with_new_certificate(b'cert_data', [b'issuer_cert'])
 
@@ -839,10 +916,15 @@ class TestGdsPushService:
     async def test_build_trustlist_rejects_malformed_crl(self, mock_opc_device, mock_ca_with_crl):
         """Reject a CA trustlist when its CRL cannot be parsed."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        with patch.object(
-            type(mock_ca_with_crl), 'crl_pem', new_callable=PropertyMock,
-            return_value='not-a-certificate',
-        ), patch.object(service, '_build_ca_chain', new=AsyncMock(return_value=[mock_ca_with_crl])):
+        with (
+            patch.object(
+                type(mock_ca_with_crl),
+                'crl_pem',
+                new_callable=PropertyMock,
+                return_value='not-a-certificate',
+            ),
+            patch.object(service, '_build_ca_chain', new=AsyncMock(return_value=[mock_ca_with_crl])),
+        ):
             with pytest.raises(GdsPushError, match='Failed to load CRL'):
                 await service._build_trustlist_for_server()
 
@@ -875,20 +957,21 @@ class TestGdsPushService:
     async def test_validate_client_certificate_raises_error(self, mock_opc_device):
         """Test certificate validation raises error for invalid certificate."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        
+
         # Create certificate without SAN extension
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'no-san-cert')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')])
-        ).public_key(private_key.public_key()).serial_number(1).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
-        ).sign(private_key, hashes.SHA256())
-        
+
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'no-san-cert')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test-ca')]))
+            .public_key(private_key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .sign(private_key, hashes.SHA256())
+        )
+
         # This should raise GdsPushError due to missing extensions
         with pytest.raises(GdsPushError, match='Client certificate does not meet OPC UA requirements'):
             service._validate_client_certificate(cert)
@@ -897,34 +980,31 @@ class TestGdsPushService:
     async def test_discover_certificate_groups_empty(self, mock_opc_device):
         """Test certificate groups discovery with no groups."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        
+
         mock_client = Mock()
         mock_server_node = Mock()
         mock_server_config = Mock()
         mock_cert_groups_node = Mock()
-        
+
         mock_client.get_node.return_value = mock_server_node
         mock_server_node.get_child = AsyncMock(return_value=mock_server_config)
         mock_server_config.get_child = AsyncMock(return_value=mock_cert_groups_node)
         mock_cert_groups_node.get_children = AsyncMock(return_value=[])
-        
+
         groups = await service._discover_certificate_groups(mock_client)
-        
+
         assert len(groups) == 0
 
     @pytest.mark.asyncio
     async def test_analyze_endpoints_with_none_policy(self, mock_opc_device):
         """Test endpoint analysis with None security policy."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        
+
         # Create endpoint dict with None policy (as returned from discover_server)
-        endpoint = {
-            'security_policy': 'None',
-            'security_mode': 'None'
-        }
-        
+        endpoint = {'security_policy': 'None', 'security_mode': 'None'}
+
         analysis = service._analyze_endpoints([endpoint])
-        
+
         assert 'security_policies' in analysis
         assert 'has_insecure_endpoints' in analysis
         assert analysis['has_insecure_endpoints'] is True
@@ -933,35 +1013,32 @@ class TestGdsPushService:
     async def test_update_single_trustlist_open_failure(self, mock_opc_device):
         """Test trustlist update with open failure."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        
+
         mock_trustlist_node = Mock()
         mock_open_method = Mock()
-        
+
         mock_trustlist_node.get_child = AsyncMock(return_value=mock_open_method)
         mock_trustlist_node.call_method = AsyncMock(side_effect=Exception('Open failed'))
-        
+
         trustlist_data = ua.TrustListDataType()
         trustlist_data.TrustedCertificates = []
         trustlist_data.IssuerCertificates = []
         trustlist_data.TrustedCrls = []
         trustlist_data.IssuerCrls = []
-        
+
         success = await service._update_single_trustlist(mock_trustlist_node, trustlist_data)
-        
+
         assert success is False
 
     @pytest.mark.asyncio
     async def test_analyze_endpoints_with_secure_policy(self, mock_opc_device):
         """Test endpoint analysis with secure policy."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        
-        endpoint = {
-            'security_policy': 'Basic256Sha256',
-            'security_mode': 'SignAndEncrypt'
-        }
-        
+
+        endpoint = {'security_policy': 'Basic256Sha256', 'security_mode': 'SignAndEncrypt'}
+
         analysis = service._analyze_endpoints([endpoint])
-        
+
         assert 'has_secure_endpoints' in analysis
         assert analysis['has_secure_endpoints'] is True
         assert 'has_insecure_endpoints' in analysis
@@ -971,57 +1048,55 @@ class TestGdsPushService:
     async def test_discover_server_with_endpoint_url(self, mock_opc_device):
         """Test server discovery with endpoint URL."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        
+
         with patch('request.gds_push.gds_push_service.Client') as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
-            
+
             mock_endpoint1 = Mock()
             mock_endpoint1.EndpointUrl = 'opc.tcp://localhost:4840'
             mock_endpoint1.SecurityPolicyUri = 'http://opcfoundation.org/UA/SecurityPolicy#None'
             mock_endpoint1.SecurityMode = 1
-            
+
             mock_client.connect_and_get_server_endpoints.return_value = [mock_endpoint1]
-            
+
             # Mock the _gather_server_info method to avoid the async mock warning
             with patch.object(service, '_gather_server_info', new_callable=AsyncMock) as mock_gather:
                 mock_gather.return_value = {'product_name': 'Test Server'}
-                
+
                 endpoints = await service.discover_server()
-                
+
                 assert len(endpoints) > 0
 
     @pytest.mark.asyncio
     async def test_update_single_trustlist_close_and_update_false(self, mock_opc_device):
         """Test trustlist update when CloseAndUpdate returns False."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        
+
         mock_trustlist_node = Mock()
         mock_open_method = Mock()
         mock_write_method = Mock()
         mock_close_method = Mock()
-        
-        mock_trustlist_node.get_child = AsyncMock(side_effect=[
-            mock_open_method,
-            mock_write_method,
-            mock_close_method
-        ])
-        
+
+        mock_trustlist_node.get_child = AsyncMock(side_effect=[mock_open_method, mock_write_method, mock_close_method])
+
         mock_file_handle = 12345
-        mock_trustlist_node.call_method = AsyncMock(side_effect=[
-            mock_file_handle,  # Open
-            None,  # Write
-            False  # CloseAndUpdate returns False (apply_changes_required=False)
-        ])
-        
+        mock_trustlist_node.call_method = AsyncMock(
+            side_effect=[
+                mock_file_handle,  # Open
+                None,  # Write
+                False,  # CloseAndUpdate returns False (apply_changes_required=False)
+            ]
+        )
+
         trustlist_data = ua.TrustListDataType()
         trustlist_data.TrustedCertificates = []
         trustlist_data.IssuerCertificates = []
         trustlist_data.TrustedCrls = []
         trustlist_data.IssuerCrls = []
-        
+
         success = await service._update_single_trustlist(mock_trustlist_node, trustlist_data)
-        
+
         assert success is True
 
 
@@ -1049,7 +1124,7 @@ class TestGdsPushServiceAdditionalCoverage:
         mock_endpoint.SecurityMode = ua.MessageSecurityMode.None_
         mock_endpoint.SecurityPolicyUri = 'http://opcfoundation.org/UA/SecurityPolicy#None'
 
-        mock_client.get_endpoints = AsyncMock(return_value=[mock_endpoint])
+        mock_client.connect_and_get_server_endpoints = AsyncMock(return_value=[mock_endpoint])
         mock_client.find_servers = AsyncMock(return_value=[])
 
         server_info = await service._gather_server_info(mock_client)
@@ -1104,11 +1179,22 @@ class TestGdsPushServiceAdditionalCoverage:
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         public_key = private_key.public_key()
 
-        subject = x509.Name([
-            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test.example.com'),
-        ])
+        subject = x509.Name(
+            [
+                x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test.example.com'),
+            ]
+        )
 
-        cert = x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(public_key).serial_number(1).not_valid_before(datetime.datetime.now(tz=datetime.UTC)).not_valid_after(datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365)).sign(private_key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(public_key)
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(tz=datetime.UTC))
+            .not_valid_after(datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365))
+            .sign(private_key, hashes.SHA256())
+        )
 
         with pytest.raises(GdsPushError, match='Subject Alternative Name extension is missing'):
             service._validate_client_certificate(cert)
@@ -1121,11 +1207,22 @@ class TestGdsPushServiceAdditionalCoverage:
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         public_key = private_key.public_key()
 
-        subject = x509.Name([
-            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test.example.com'),
-        ])
+        subject = x509.Name(
+            [
+                x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test.example.com'),
+            ]
+        )
 
-        cert = x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(public_key).serial_number(1).not_valid_before(datetime.datetime.now(tz=datetime.UTC)).not_valid_after(datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365)).sign(private_key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(public_key)
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(tz=datetime.UTC))
+            .not_valid_after(datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365))
+            .sign(private_key, hashes.SHA256())
+        )
 
         with pytest.raises(GdsPushError, match='No application URI found'):
             service._extract_application_uri(cert)
@@ -1135,9 +1232,10 @@ class TestGdsPushServiceAdditionalCoverage:
         service = GdsPushService(mock_opc_device, insecure=True)
 
         # Mock device with no onboarding config
-        service.device.onboarding_config = None
+        service.device.opc_ua_gds_push_config.delete()
+        service.device.refresh_from_db()
 
-        with pytest.raises(GdsPushError, match='has no onboarding config'):
+        with pytest.raises(GdsPushError, match='has no OPC UA GDS Push config'):
             service._get_server_truststore()
 
     @pytest.mark.asyncio
@@ -1166,18 +1264,19 @@ class TestGdsPushServiceAdditionalCoverage:
                 await service._build_trustlist_for_server()
 
     @pytest.mark.asyncio
-    async def test_get_client_credentials_rejects_invalid_credential(
-        self, mock_opc_device, mock_domain_credential
-    ):
+    async def test_get_client_credentials_rejects_invalid_credential(self, mock_opc_device, mock_domain_credential):
         """Reject an invalid domain credential before reading its key."""
         service = GdsPushService(mock_opc_device, insecure=True)
         service.domain_credential = mock_domain_credential
 
-        with patch.object(
-            mock_domain_credential,
-            'is_valid_domain_credential',
-            return_value=(False, 'revoked'),
-        ), patch.object(service, '_validate_client_certificate') as validate:
+        with (
+            patch.object(
+                mock_domain_credential,
+                'is_valid_domain_credential',
+                return_value=(False, 'revoked'),
+            ),
+            patch.object(service, '_validate_client_certificate') as validate,
+        ):
             with pytest.raises(GdsPushError, match='Invalid domain credential: revoked'):
                 await service._get_client_credentials()
 
@@ -1209,8 +1308,8 @@ class TestGdsPushServiceAdditionalCoverage:
                 await service._create_secure_client()
 
     @pytest.mark.asyncio
-    async def test_gather_server_info_reads_list_server_name(self, mock_opc_device):
-        """Normalize a list-valued ServerName property."""
+    async def test_gather_server_info_reads_endpoint_application_name(self, mock_opc_device):
+        """Read the server name from discovery without reading session-bound nodes."""
         service = GdsPushService(mock_opc_device, insecure=True)
         endpoint = Mock(
             EndpointUrl='opc.tcp://server:4840',
@@ -1218,11 +1317,9 @@ class TestGdsPushServiceAdditionalCoverage:
             SecurityMode=ua.MessageSecurityMode.None_,
             ServerCertificate=b'',
         )
-        server_name_node = Mock()
-        server_name_node.read_value = AsyncMock(return_value=['Server A', 'ignored'])
+        endpoint.Server = ua.ApplicationDescription(ApplicationName=ua.LocalizedText('Server A'))
         client = Mock()
-        client.get_endpoints = AsyncMock(return_value=[endpoint])
-        client.get_node.return_value = server_name_node
+        client.connect_and_get_server_endpoints = AsyncMock(return_value=[endpoint])
 
         info = await service._gather_server_info(client)
 
@@ -1235,9 +1332,11 @@ class TestGdsPushServiceAdditionalCoverage:
         service = GdsPushService(mock_opc_device, insecure=True)
         client = AsyncMock()
 
-        with patch.object(service, '_build_trustlist_for_server', return_value=Mock()), \
-             patch.object(service, '_create_secure_client', return_value=client), \
-             patch.object(service, '_discover_trustlist_nodes', return_value=[]):
+        with (
+            patch.object(service, '_build_trustlist_for_server', return_value=Mock()),
+            patch.object(service, '_create_secure_client', return_value=client),
+            patch.object(service, '_discover_trustlist_nodes', return_value=[]),
+        ):
             success, message = await service.update_trustlist()
 
         assert success is False
@@ -1268,7 +1367,7 @@ class TestGdsPushServiceAdditionalCoverage:
         assert node.call_method.await_args_list[1].args[2] == b'ab'
         assert node.call_method.await_args_list[2].args[2] == b'cd'
         assert node.call_method.await_args_list[3].args[2] == b'ef'
-        config_node.call_method.assert_awaited_once_with(apply_method)
+        config_node.call_method.assert_awaited_once_with(apply_method.nodeid)
 
     @pytest.mark.asyncio
     async def test_update_server_certificate_skips_user_token_and_reports_failures(self, mock_opc_device):
@@ -1280,9 +1379,11 @@ class TestGdsPushServiceAdditionalCoverage:
             {'name': 'ApplicationGroup', 'node_id': ua.NodeId(1, 2)},
         ]
 
-        with patch.object(service, '_create_secure_client', return_value=client), \
-             patch.object(service, '_discover_certificate_groups', return_value=groups), \
-             patch.object(service, '_update_single_certificate', return_value=(False, None, None)) as update:
+        with (
+            patch.object(service, '_create_secure_client', return_value=client),
+            patch.object(service, '_discover_certificate_groups', return_value=groups),
+            patch.object(service, '_update_single_certificate', return_value=(False, None, None)) as update,
+        ):
             success, message, cert_data = await service.update_server_certificate()
 
         assert (success, cert_data) == (False, None)
@@ -1315,21 +1416,22 @@ class TestGdsPushServiceAdditionalCoverage:
         service.server_truststore = Mock(unique_name='server-store')
         service.server_truststore.truststoreordermodel_set.get.side_effect = TruststoreOrderModel.DoesNotExist
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'new-server')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'new-server')])
-        ).public_key(key.public_key()).serial_number(1).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1)
-        ).sign(key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'new-server')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'new-server')]))
+            .public_key(key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1))
+            .sign(key, hashes.SHA256())
+        )
 
-        with patch('request.gds_push.gds_push_service.CertificateModel.get_cert_by_sha256_fingerprint', return_value=None):
+        with patch(
+            'request.gds_push.gds_push_service.CertificateModel.get_cert_by_sha256_fingerprint', return_value=None
+        ):
             with pytest.raises(GdsPushError, match='Server certificate not found in database'):
-                await service._update_truststore_with_new_certificate(
-                    cert.public_bytes(serialization.Encoding.DER), []
-                )
+                await service._update_truststore_with_new_certificate(cert.public_bytes(serialization.Encoding.DER), [])
 
     @pytest.mark.asyncio
     async def test_update_trustlist_reports_mixed_group_results(self, mock_opc_device):
@@ -1341,11 +1443,14 @@ class TestGdsPushServiceAdditionalCoverage:
             {'group_name': 'Https', 'trustlist_node': Mock()},
         ]
 
-        with patch.object(service, '_build_trustlist_for_server', new_callable=AsyncMock), \
-             patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client), \
-             patch.object(service, '_discover_trustlist_nodes', new_callable=AsyncMock, return_value=nodes), \
-             patch.object(service, '_update_single_trustlist', new_callable=AsyncMock,
-                          side_effect=[True, False]) as update:
+        with (
+            patch.object(service, '_build_trustlist_for_server', new_callable=AsyncMock),
+            patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
+            patch.object(service, '_discover_trustlist_nodes', new_callable=AsyncMock, return_value=nodes),
+            patch.object(
+                service, '_update_single_trustlist', new_callable=AsyncMock, side_effect=[True, False]
+            ) as update,
+        ):
             success, message = await service.update_trustlist()
 
         assert success is True
@@ -1375,40 +1480,63 @@ class TestGdsPushServiceAdditionalCoverage:
 
         nodes = await service._discover_trustlist_nodes(service_client)
 
-        assert nodes == [{
-            'group_name': 'Application',
-            'group_node': good_group,
-            'trustlist_node': good_trustlist,
-        }]
+        assert nodes == [
+            {
+                'group_name': 'Application',
+                'group_node': good_group,
+                'trustlist_node': good_trustlist,
+            }
+        ]
 
     @pytest.mark.asyncio
-    async def test_create_secure_client_sets_credentials_and_security_payload(self, mock_opc_device):
-        """Configure the client with the certificate chain, key, URI, and user."""
+    @pytest.mark.parametrize('security_fails', [False, True])
+    async def test_create_secure_client_sets_credentials_and_security_payload(self, mock_opc_device, security_fails):
+        """Load security files and remove them on both success and failure."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        service.device.onboarding_config.opc_user = 'opc-user'
-        service.device.onboarding_config.opc_password = 'opc-password'
+        service.device.opc_ua_gds_push_config.opc_user = 'opc-user'
+        service.device.opc_ua_gds_push_config.opc_password = 'opc-password'
         client = Mock()
         client.set_security = AsyncMock()
         certificate = Mock()
 
-        with patch('request.gds_push.gds_push_service.Client', return_value=client), \
-             patch.object(service, '_get_client_credentials', new_callable=AsyncMock,
-                          return_value=(certificate, b'private-key')), \
-             patch.object(service, '_get_server_certificate', new_callable=AsyncMock,
-                          return_value=b'server-cert'), \
-             patch.object(service, '_extract_application_uri', return_value='urn:test:app'), \
-             patch.object(service, '_build_client_certificate_chain', new_callable=AsyncMock,
-                          return_value=b'client-chain'):
-            result = await service._create_secure_client()
+        async def load_security_files(*args, **kwargs):
+            assert Path(kwargs['certificate']).read_bytes() == b'client-chain'
+            assert Path(kwargs['private_key']).read_bytes() == b'private-key'
+            assert Path(kwargs['server_certificate']).read_bytes() == b'server-cert'
+            if security_fails:
+                raise RuntimeError('security setup failed')
 
-        assert result is client
+        client.set_security.side_effect = load_security_files
+
+        with (
+            patch('request.gds_push.gds_push_service.Client', return_value=client),
+            patch.object(
+                service, '_get_client_credentials', new_callable=AsyncMock, return_value=(certificate, b'private-key')
+            ),
+            patch.object(service, '_get_server_certificate', new_callable=AsyncMock, return_value=b'server-cert'),
+            patch.object(service, '_extract_application_uri', return_value='urn:test:app'),
+            patch.object(
+                service, '_build_client_certificate_chain', new_callable=AsyncMock, return_value=b'client-chain'
+            ),
+        ):
+            if security_fails:
+                with pytest.raises(GdsPushError, match='security setup failed'):
+                    await service._create_secure_client()
+            else:
+                assert await service._create_secure_client() is client
+
         assert client.application_uri == 'urn:test:app'
-        client.set_user.assert_called_once_with('opc-user')
-        client.set_password.assert_called_once_with('opc-password')
+        if not security_fails:
+            client.set_user.assert_called_once_with('opc-user')
+            client.set_password.assert_called_once_with('opc-password')
         client.set_security.assert_awaited_once()
         security_args = client.set_security.await_args.kwargs
         assert security_args['mode'] == ua.MessageSecurityMode.SignAndEncrypt
         assert security_args['server_certificate'].endswith('.der')
+        paths = [Path(security_args[name]) for name in ('certificate', 'private_key', 'server_certificate')]
+        assert all(not path.exists() for path in paths)
+        assert len({path.parent for path in paths}) == 1
+        assert not paths[0].parent.exists()
 
     @pytest.mark.asyncio
     async def test_update_server_certificate_logs_certificate_mismatch(self, mock_opc_device):
@@ -1418,8 +1546,10 @@ class TestGdsPushServiceAdditionalCoverage:
         client.__aenter__.side_effect = Exception('certificate mismatch')
         log_details = AsyncMock()
 
-        with patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client), \
-             patch.object(service, '_log_certificate_mismatch_details', log_details):
+        with (
+            patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
+            patch.object(service, '_log_certificate_mismatch_details', log_details),
+        ):
             success, message, certificate = await service.update_server_certificate()
 
         assert (success, certificate) == (False, None)
@@ -1432,9 +1562,11 @@ class TestGdsPushServiceAdditionalCoverage:
         """Turn a domain without the OPC UA profile into a GDS error."""
         service = GdsPushService(mock_opc_device, insecure=True)
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        csr = x509.CertificateSigningRequestBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'server')])
-        ).sign(key, hashes.SHA256())
+        csr = (
+            x509.CertificateSigningRequestBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'server')]))
+            .sign(key, hashes.SHA256())
+        )
         context = Mock(domain=mock_opc_device.domain)
         mock_opc_device.domain.get_allowed_cert_profile = Mock(return_value=None)
 
@@ -1452,35 +1584,45 @@ class TestGdsPushServiceAdditionalCoverage:
         truststore.truststoreordermodel_set.all.return_value.delete.return_value = (2, {})
         service.server_truststore = truststore
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'new-server')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'new-server')])
-        ).public_key(key.public_key()).serial_number(2).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1)
-        ).sign(key, hashes.SHA256())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'new-server')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'new-server')]))
+            .public_key(key.public_key())
+            .serial_number(2)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1))
+            .sign(key, hashes.SHA256())
+        )
         cert_der = cert.public_bytes(serialization.Encoding.DER)
         ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        ca_cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'ca')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'ca')])
-        ).public_key(ca_key.public_key()).serial_number(3).not_valid_before(
-            datetime.datetime.now(datetime.UTC)
-        ).not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1)).sign(
-            ca_key, hashes.SHA256()
+        ca_cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'ca')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'ca')]))
+            .public_key(ca_key.public_key())
+            .serial_number(3)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1))
+            .sign(ca_key, hashes.SHA256())
         )
         ca_der = ca_cert.public_bytes(serialization.Encoding.DER)
 
-        with patch('request.gds_push.gds_push_service.RevokedCertificateModel.objects.create') as revoke, \
-             patch('request.gds_push.gds_push_service.CertificateModel.get_cert_by_sha256_fingerprint',
-                   side_effect=[Mock(), Mock()]), \
-             patch('request.gds_push.gds_push_service.TruststoreOrderModel.objects.create') as create_order:
+        with (
+            patch('request.gds_push.gds_push_service.revoke_certificate', return_value=True) as revoke,
+            patch(
+                'request.gds_push.gds_push_service.CertificateModel.get_cert_by_sha256_fingerprint',
+                side_effect=[Mock(), Mock()],
+            ),
+            patch('request.gds_push.gds_push_service.TruststoreOrderModel.objects.create') as create_order,
+        ):
             await service._update_truststore_with_new_certificate(cert_der, [ca_der])
 
-        revoke.assert_called_once()
+        revoke.assert_called_once_with(
+            old_order.certificate,
+            reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
+            ca=mock_opc_device.domain.issuing_ca,
+        )
         truststore.truststoreordermodel_set.all.return_value.delete.assert_called_once_with()
         assert [call.kwargs['order'] for call in create_order.call_args_list] == [0, 1]
 
@@ -1488,7 +1630,7 @@ class TestGdsPushServiceAdditionalCoverage:
     async def test_get_server_certificate_reports_missing_order_zero_entry(self, mock_opc_device):
         """Reject a truststore that has no server certificate at order zero."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        service.server_truststore = mock_opc_device.onboarding_config.opc_trust_store
+        service.server_truststore = mock_opc_device.opc_ua_gds_push_config.opc_trust_store
 
         with pytest.raises(GdsPushError, match='has no certificate at order 0'):
             await service._get_server_certificate()
@@ -1521,17 +1663,20 @@ class TestGdsPushServiceAdditionalCoverage:
                 await service._get_client_credentials()
 
     @pytest.mark.asyncio
-    async def test_log_certificate_mismatch_details_logs_expected_and_actual(self, mock_opc_device, mock_server_certificate,
-                                                                               caplog):
+    async def test_log_certificate_mismatch_details_logs_expected_and_actual(
+        self, mock_opc_device, mock_server_certificate, caplog
+    ):
         """Log both certificates when the OPC UA client exposes the presented certificate."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        service.server_truststore = mock_opc_device.onboarding_config.opc_trust_store
+        service.server_truststore = mock_opc_device.opc_ua_gds_push_config.opc_trust_store
         client = Mock()
         client.uaclient.security_policy.server_certificate = mock_server_certificate.public_bytes(
             serialization.Encoding.DER
         )
 
-        with patch.object(service, '_get_server_certificate', return_value=client.uaclient.security_policy.server_certificate):
+        with patch.object(
+            service, '_get_server_certificate', return_value=client.uaclient.security_policy.server_certificate
+        ):
             with caplog.at_level('ERROR'):
                 await service._log_certificate_mismatch_details(client)
 
@@ -1545,11 +1690,17 @@ class TestGdsPushServiceAdditionalCoverage:
         client = AsyncMock()
         groups = [{'name': 'ApplicationGroup', 'node_id': ua.NodeId(1, 2)}]
 
-        with patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client), \
-             patch.object(service, '_discover_certificate_groups', new_callable=AsyncMock, return_value=groups), \
-             patch.object(service, '_update_single_certificate', new_callable=AsyncMock,
-                          return_value=(True, b'new-cert', [b'issuer'])), \
-             patch.object(service, '_update_truststore_with_new_certificate', new_callable=AsyncMock) as update:
+        with (
+            patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
+            patch.object(service, '_discover_certificate_groups', new_callable=AsyncMock, return_value=groups),
+            patch.object(
+                service,
+                '_update_single_certificate',
+                new_callable=AsyncMock,
+                return_value=(True, b'new-cert', [b'issuer']),
+            ),
+            patch.object(service, '_update_truststore_with_new_certificate', new_callable=AsyncMock) as update,
+        ):
             success, message, certificate = await service.update_server_certificate()
 
         assert (success, certificate) == (True, b'new-cert')

@@ -8,8 +8,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from cryptography.hazmat.primitives import hashes
-from trustpoint_core.oid import HashAlgorithm
 
 from pki.models import IssuedCredentialModel
 
@@ -86,6 +84,7 @@ class TestCmpRevocationAuthorization:
         ctx.domain = Mock()
 
         from pki.models import IssuedCredentialModel
+
         with patch.object(
             IssuedCredentialModel,
             'get_credential_for_certificate',
@@ -96,8 +95,7 @@ class TestCmpRevocationAuthorization:
 
     def test_self_revocation_authorizes_matching_signer_certificate(self) -> None:
         ctx = CmpRevocationRequestContext(
-            operation='revocation', cert_serial_number='1234',
-            client_certificate=Mock(), domain=Mock()
+            operation='revocation', cert_serial_number='1234', client_certificate=Mock(), domain=Mock()
         )
         issued = Mock(credential=Mock(certificate_or_error=Mock(serial_number='1234')))
         with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
@@ -107,12 +105,16 @@ class TestCmpRevocationAuthorization:
     def test_domain_credential_revocation_rejects_other_device(self) -> None:
         target_device = Mock()
         ctx = CmpRevocationRequestContext(
-            operation='revocation', cert_serial_number='1234',
-            client_certificate=Mock(), domain=Mock(), device=target_device
+            operation='revocation',
+            cert_serial_number='1234',
+            client_certificate=Mock(),
+            domain=Mock(),
+            device=target_device,
         )
         issued = Mock(
             credential=Mock(certificate_or_error=Mock(serial_number='5678')),
-            device=Mock(), is_valid_domain_credential=Mock(return_value=(True, None)),
+            device=Mock(),
+            is_valid_domain_credential=Mock(return_value=(True, None)),
         )
         with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
             with pytest.raises(ValueError, match='Signer device does not match'):
@@ -131,8 +133,11 @@ class TestCmpRevocationAuthorization:
         def test_domain_credential_revocation_rejects_other_device(self) -> None:
             target_device = Mock()
             ctx = CmpRevocationRequestContext(
-                operation='revocation', cert_serial_number='1234', client_certificate=Mock(),
-                domain=Mock(), device=target_device,
+                operation='revocation',
+                cert_serial_number='1234',
+                client_certificate=Mock(),
+                domain=Mock(),
+                device=target_device,
             )
             issued = Mock(
                 credential=Mock(certificate_or_error=Mock(serial_number='5678')),
@@ -183,12 +188,18 @@ class TestCmpCertConfAuthorization:
         with pytest.raises(ValueError, match='certHash is missing'):
             CmpCertConfAuthorization().authorize(ctx)
 
-    def test_rejection_with_unknown_cert_hash_raises_value_error(self) -> None:
-        """Rejection with certHash that matches no issued credential raises ValueError."""
+    def test_rejection_with_unknown_transaction_certificate_raises_value_error(self) -> None:
+        """Rejection requires an issued credential for the transaction certificate."""
         cert_hash = b'\xde\xad\xbe\xef' * 8
-        ctx = CmpCertConfRequestContext(operation='certconf', cert_conf_status=2, cert_hash=cert_hash)
+        ctx = CmpCertConfRequestContext(
+            operation='certconf',
+            cert_conf_status=2,
+            cert_hash=cert_hash,
+            cmp_transaction=Mock(final_certificate=Mock()),
+        )
 
         from pki.models import IssuedCredentialModel
+
         mock_qs = Mock()
         mock_qs.select_related.return_value.first.return_value = None
         with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs):
@@ -198,59 +209,36 @@ class TestCmpCertConfAuthorization:
     def test_rejection_with_known_cert_hash_sets_credential_to_revoke(self) -> None:
         """Rejection with a matching certHash populates context.credential_to_revoke."""
         cert_hash = bytes.fromhex('aa' * 32)
-        ctx = CmpCertConfRequestContext(operation='certconf', cert_conf_status=2, cert_hash=cert_hash)
-
-        mock_cred = Mock()
-        mock_cred.common_name = 'test-device-cert'
-        mock_qs = Mock()
-        mock_qs.select_related.return_value.first.return_value = mock_cred
-        with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs):
-            with patch('request.authorization.cmp.SignatureSuite.from_certificate') as suite_mock:
-                suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=HashAlgorithm.SHA256))
-                CmpCertConfAuthorization().authorize(ctx)
-
-        assert ctx.credential_to_revoke is mock_cred
-
-    def test_rejection_with_declared_hash_alg_matches_certificate_digest(self) -> None:
-        """Rejection lookup must honor certConf hashAlg when provided."""
-        cert_der = b'certificate-der-bytes'
-        digest = hashes.Hash(hashes.SHA384())
-        digest.update(cert_der)
-        cert_hash = digest.finalize()
-
         ctx = CmpCertConfRequestContext(
             operation='certconf',
             cert_conf_status=2,
             cert_hash=cert_hash,
-            cert_hash_algorithm_oid=HashAlgorithm.SHA384.dotted_string,
+            cmp_transaction=Mock(final_certificate=Mock()),
         )
 
         mock_cred = Mock()
         mock_cred.common_name = 'test-device-cert'
-        mock_cred.credential.get_certificate.return_value = Mock(public_bytes=Mock(return_value=cert_der))
-
-        mock_qs = Mock()
-        mock_qs.iterator.return_value = [mock_cred]
-        with patch.object(IssuedCredentialModel.objects, 'select_related', return_value=mock_qs):
-            CmpCertConfAuthorization().authorize(ctx)
-
-        assert ctx.credential_to_revoke is mock_cred
-
-    def test_rejection_requires_hash_alg_for_no_implicit_hash_signature(self) -> None:
-        """Rejection without hashAlg must be denied for no-implicit-digest signature suites."""
-        cert_hash = bytes.fromhex('aa' * 32)
-        ctx = CmpCertConfRequestContext(operation='certconf', cert_conf_status=2, cert_hash=cert_hash)
-
-        mock_cred = Mock()
-        mock_cred.credential.get_certificate.return_value = Mock()
-
         mock_qs = Mock()
         mock_qs.select_related.return_value.first.return_value = mock_cred
-        with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs):
-            with patch('request.authorization.cmp.SignatureSuite.from_certificate') as suite_mock:
-                suite_mock.return_value = Mock(algorithm_identifier=Mock(hash_algorithm=None))
-                with pytest.raises(ValueError, match='hashAlg is required'):
-                    CmpCertConfAuthorization().authorize(ctx)
+        with patch.object(IssuedCredentialModel.objects, 'filter', return_value=mock_qs) as lookup:
+            CmpCertConfAuthorization().authorize(ctx)
+
+        lookup.assert_called_once_with(credential__certificate=ctx.cmp_transaction.final_certificate)
+        assert ctx.credential_to_revoke is mock_cred
+
+    @pytest.mark.parametrize('transaction', [None, Mock(final_certificate=None)])
+    def test_rejection_requires_transaction_certificate(self, transaction) -> None:
+        """A hash alone must never select the credential to revoke."""
+        ctx = CmpCertConfRequestContext(
+            operation='certconf',
+            cert_conf_status=2,
+            cert_hash=b'hash',
+            cmp_transaction=transaction,
+        )
+        with pytest.raises(ValueError, match='not bound to an issued CMP transaction'):
+            CmpCertConfAuthorization().authorize(ctx)
+        assert ctx.credential_to_revoke is None
+        assert ctx.http_response_status == 403
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +269,7 @@ class TestCmpPollAuthorization:
         """pollReq for a transaction that does not exist raises ValueError."""
         ctx = CmpPollRequestContext(cmp_body_type='pollReq', cmp_transaction_id='unknown-tx')
         from request.cmp_transaction_state import CmpTransactionState
+
         with patch.object(CmpTransactionState, 'get_by_transaction_id', return_value=None):
             with pytest.raises(ValueError, match='No CMP transaction found'):
                 CmpPollAuthorization().authorize(ctx)
@@ -289,8 +278,7 @@ class TestCmpPollAuthorization:
         from request.cmp_transaction_state import CmpTransactionState
 
         ctx = CmpPollRequestContext(
-            cmp_body_type='pollReq', cmp_transaction_id='tx',
-            poll_cert_req_id=0, operation='certification'
+            cmp_body_type='pollReq', cmp_transaction_id='tx', poll_cert_req_id=0, operation='certification'
         )
         transaction = Mock(operation='initialization', cert_req_id=0, device_id=None, domain_id=None)
         with patch.object(CmpTransactionState, 'get_by_transaction_id', return_value=transaction):
@@ -309,7 +297,9 @@ class TestCmpPollAuthorization:
             self, field: str, value: object, message: str
         ) -> None:
             ctx = CmpPollRequestContext(
-                cmp_body_type='pollReq', cmp_transaction_id='tx', poll_cert_req_id=0,
+                cmp_body_type='pollReq',
+                cmp_transaction_id='tx',
+                poll_cert_req_id=0,
                 operation='initialization',
             )
             setattr(ctx, field, value)
@@ -321,8 +311,11 @@ class TestCmpPollAuthorization:
 
         def test_poll_request_device_and_domain_mismatches_are_rejected(self) -> None:
             ctx = CmpPollRequestContext(
-                cmp_body_type='pollReq', cmp_transaction_id='tx', poll_cert_req_id=0,
-                device=Mock(id=1), domain=Mock(id=2),
+                cmp_body_type='pollReq',
+                cmp_transaction_id='tx',
+                poll_cert_req_id=0,
+                device=Mock(id=1),
+                domain=Mock(id=2),
             )
             transaction = Mock(operation='initialization', cert_req_id=0, device_id=3, domain_id=4)
             with patch('request.authorization.cmp.CmpTransactionState.get_by_transaction_id', return_value=transaction):
@@ -334,6 +327,7 @@ class TestCmpPollAuthorization:
     def test_valid_poll_request_hydrates_context(self) -> None:
         """A valid pollReq loads the stored transaction into the context."""
         from cmp.models import CmpTransactionModel
+
         transaction = CmpTransactionModel.objects.create(
             transaction_id='deadbeef01',
             operation='initialization',
@@ -371,6 +365,7 @@ class TestCmpOperationAuthorization:
     def test_wrong_context_type_raises_type_error(self) -> None:
         """Non-CmpBaseRequestContext raises TypeError."""
         from request.request_context import BaseRequestContext
+
         ctx = Mock(spec=BaseRequestContext)
         with pytest.raises(TypeError, match='CmpOperationAuthorization requires'):
             CmpOperationAuthorization(['initialization']).authorize(ctx)
@@ -403,6 +398,7 @@ class TestCmpOperationAuthorization:
     def test_body_type_mismatch_raises_value_error(self) -> None:
         """Body type that does not match the declared operation raises ValueError."""
         from pyasn1_modules.rfc4210 import PKIMessage
+
         msg = MagicMock()
         msg.__class__ = PKIMessage  # makes isinstance(msg, PKIMessage) return True
         msg['body'].getName.return_value = 'cr'  # CR body, but operation is 'initialization'
@@ -415,6 +411,7 @@ class TestCmpOperationAuthorization:
     def test_matching_ir_body_passes(self) -> None:
         """initialization operation with IR body passes without raising."""
         from pyasn1_modules.rfc4210 import PKIMessage
+
         msg = MagicMock()
         msg.__class__ = PKIMessage
         msg['body'].getName.return_value = 'ir'
@@ -426,6 +423,7 @@ class TestCmpOperationAuthorization:
     def test_matching_cr_body_passes(self) -> None:
         """certification operation with CR body passes without raising."""
         from pyasn1_modules.rfc4210 import PKIMessage
+
         msg = MagicMock()
         msg.__class__ = PKIMessage
         msg['body'].getName.return_value = 'cr'
@@ -471,7 +469,7 @@ class TestCmpAuthorization:
         assert op_comp.allowed_operations == ['revocation']
 
     def test_default_allowed_operations(self) -> None:
-        """Default allowed operations are certification and initialization."""
+        """Default allowed operations include certificate updates."""
         auth = CmpAuthorization()
         op_comp = next(c for c in auth.components if isinstance(c, CmpOperationAuthorization))
-        assert set(op_comp.allowed_operations) == {'certification', 'initialization'}
+        assert set(op_comp.allowed_operations) == {'certification', 'initialization', 'keyupdate', 'getcacerts'}

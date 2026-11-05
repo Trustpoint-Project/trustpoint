@@ -1,0 +1,190 @@
+name: CI/CD / Publish Container Images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to publish (for example v1.0.0); blank builds the selected ref'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  artifact-metadata: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.get_version.outputs.ghcr_namespace }}/trustpoint@${{ steps.push-trustpoint.outputs.digest }}
+      sbom_version: ${{ steps.get_version.outputs.sbom_version }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag != '' && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
+
+      - name: Verify package version and Git release tag
+        id: get_version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          import subprocess
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path('pyproject.toml').read_text())['project']['version']
+          packages = tomllib.loads(Path('uv.lock').read_text())['package']
+          locked = next(package['version'] for package in packages if package['name'] == 'trustpoint')
+          if locked != version:
+              raise SystemExit('Project version and uv.lock disagree')
+          tag = f'v{version}'
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          ref = f'refs/tags/{release_tag}' if release_tag else os.environ['GITHUB_REF']
+          if ref.startswith('refs/tags/') and ref != f'refs/tags/{tag}':
+              raise SystemExit(f'Git release tag must match package version: expected {tag}')
+          revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          is_release = ref.startswith('refs/tags/')
+          publish_latest = is_release or ref == 'refs/heads/main'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'package_version={version}\nversion={tag}\n')
+              output.write(f'revision={revision}\n')
+              output.write(f'is_release={str(is_release).lower()}\n')
+              output.write(f'publish_latest={str(publish_latest).lower()}\n')
+              output.write(f'sbom_version={tag if is_release else revision}\n')
+              output.write(f'ghcr_namespace=ghcr.io/{os.environ["GITHUB_REPOSITORY_OWNER"].lower()}\n')
+          print(f'Package version: {version}; source ref: {ref}; commit: {revision}')
+          PYTHON
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Generate Docker metadata for trustpoint
+        id: meta-trustpoint
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ${{ steps.get_version.outputs.ghcr_namespace }}/trustpoint
+            docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable=${{ steps.get_version.outputs.publish_latest == 'true' }}
+            type=raw,value=${{ steps.get_version.outputs.version }},enable=${{ steps.get_version.outputs.is_release == 'true' }}
+            type=raw,value=sha-${{ steps.get_version.outputs.revision }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.get_version.outputs.package_version }}
+            org.opencontainers.image.revision=${{ steps.get_version.outputs.revision }}
+
+      - name: Generate Docker metadata for postgres
+        id: meta-postgres
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ${{ steps.get_version.outputs.ghcr_namespace }}/trustpoint-postgres
+            docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/postgres
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable=${{ steps.get_version.outputs.publish_latest == 'true' }}
+            type=raw,value=${{ steps.get_version.outputs.version }},enable=${{ steps.get_version.outputs.is_release == 'true' }}
+            type=raw,value=sha-${{ steps.get_version.outputs.revision }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.get_version.outputs.package_version }}
+            org.opencontainers.image.revision=${{ steps.get_version.outputs.revision }}
+
+      - name: Build and push trustpoint image
+        id: push-trustpoint
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/trustpoint/Dockerfile
+          push: true
+          tags: ${{ steps.meta-trustpoint.outputs.tags }}
+          labels: ${{ steps.meta-trustpoint.outputs.labels }}
+          cache-from: type=registry,ref=${{ steps.get_version.outputs.ghcr_namespace }}/trustpoint:latest
+          cache-to: type=inline
+
+      - name: Generate attestation for trustpoint
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.get_version.outputs.ghcr_namespace }}/trustpoint
+          subject-digest: ${{ steps.push-trustpoint.outputs.digest }}
+          push-to-registry: true
+
+      - name: Generate Docker Hub attestation for trustpoint
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/trustpoint
+          subject-digest: ${{ steps.push-trustpoint.outputs.digest }}
+          push-to-registry: true
+
+      - name: Build and push postgres image
+        id: push-postgres
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/db/Dockerfile
+          push: true
+          tags: ${{ steps.meta-postgres.outputs.tags }}
+          labels: ${{ steps.meta-postgres.outputs.labels }}
+          cache-from: type=registry,ref=${{ steps.get_version.outputs.ghcr_namespace }}/trustpoint-postgres:latest
+          cache-to: type=inline
+
+      - name: Generate attestation for postgres
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.get_version.outputs.ghcr_namespace }}/trustpoint-postgres
+          subject-digest: ${{ steps.push-postgres.outputs.digest }}
+          push-to-registry: true
+
+      - name: Generate Docker Hub attestation for postgres
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/postgres
+          subject-digest: ${{ steps.push-postgres.outputs.digest }}
+          push-to-registry: true
+
+      - name: Show published image tags
+        env:
+          TRUSTPOINT_IMAGE_TAGS: ${{ steps.meta-trustpoint.outputs.tags }}
+          POSTGRES_IMAGE_TAGS: ${{ steps.meta-postgres.outputs.tags }}
+        run: |
+          printf '%s\n' "$TRUSTPOINT_IMAGE_TAGS" "$POSTGRES_IMAGE_TAGS"
+
+  sbom:
+    needs: publish
+    permissions:
+      contents: write
+      packages: read
+    uses: ./.github/workflows/sbom.yml
+    with:
+      image: ${{ needs.publish.outputs.image }}
+      version: ${{ needs.publish.outputs.sbom_version }}

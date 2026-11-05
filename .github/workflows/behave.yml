@@ -1,0 +1,26 @@
+name: Tests / Behave
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  capability-tests:
+    name: Behave / ${{ matrix.capability }}
+    strategy:
+      fail-fast: false
+      matrix:
+        capability:
+          - devices
+          - pki
+          - api
+          - security
+          - system
+
+    uses: ./.github/workflows/behave-test-template.yml
+    permissions:
+      contents: read
+    with:
+      feature_path: ${{ matrix.capability }}

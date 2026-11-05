@@ -48,7 +48,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         if context.protocol != 'cmp':
             CertificateIssueProcessor().process_operation(context)
             return
-        if context.cmp_body_type not in {'ir', 'cr'}:
+        if context.cmp_body_type not in {'ir', 'cr', 'kur'}:
             CertificateIssueProcessor().process_operation(context)
             return
 
@@ -56,12 +56,14 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         request_der = self._require_request_der(context)
 
         transaction_record = self._get_existing_transaction(transaction_id)
-        if transaction_record is not None:
+        if transaction_record is None:
+            transaction_record, created = self._create_processing_transaction(context, transaction_id, request_der)
+        else:
             self._validate_existing_request(transaction_record, context, request_der)
+            created = False
+        if not created:
             self._apply_existing_transaction(context, transaction_record)
             return
-
-        transaction_record = self._create_processing_transaction(context, transaction_id, request_der)
         context.cmp_transaction = transaction_record
 
         workflow_decision = get_workflow2_issuance_decision(context)
@@ -261,8 +263,8 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         context: CmpCertificateRequestContext,
         transaction_id: str,
         request_der: bytes,
-    ) -> CmpTransactionModel:
-        """Create the initial CMP transaction row or reuse the one won by a race."""
+    ) -> tuple[CmpTransactionModel, bool]:
+        """Return the CMP transaction and whether this worker created it."""
         defaults = {
             'operation': str(context.operation or ''),
             'request_body_type': str(context.cmp_body_type or ''),
@@ -279,13 +281,13 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         }
         try:
             with transaction.atomic():
-                return CmpTransactionModel.objects.create(transaction_id=transaction_id, **defaults)
+                return CmpTransactionModel.objects.create(transaction_id=transaction_id, **defaults), True
         except IntegrityError:
             existing = self._get_existing_transaction(transaction_id)
             if existing is None:
                 raise
             self._validate_existing_request(existing, context, request_der)
-            return existing
+            return existing, False
 
     def _mark_transaction_waiting(
         self,

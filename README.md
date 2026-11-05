@@ -1,4 +1,4 @@
-![Trustpoint](.github-assets/trustpoint_banner.png)
+![Trustpoint](.github-assets/trustpoint_github_banner.svg)
 
 <div align="center">
 
@@ -13,7 +13,6 @@ Trustpoint is an open-source PKI and machine identity platform built for operati
 [**Get Started**](#quickstart) · [**Documentation**](https://trustpoint.readthedocs.io/en/latest/) · [**Latest Release**](https://github.com/Trustpoint-Project/trustpoint/releases/latest) · [**Website**](https://industrial-security.io)
 
 [![GitHub stars](https://img.shields.io/github/stars/Trustpoint-Project/trustpoint?style=social)](https://github.com/Trustpoint-Project/trustpoint/stargazers)
-[![Status](https://img.shields.io/badge/status-technology%20preview-red)](https://github.com/Trustpoint-Project/trustpoint)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Read the Docs](https://img.shields.io/readthedocs/trustpoint)](https://trustpoint.readthedocs.io)
 [![Docker](https://img.shields.io/docker/automated/trustpointproject/trustpoint)](https://hub.docker.com/r/trustpointproject/trustpoint)
@@ -31,21 +30,6 @@ Trustpoint is an open-source PKI and machine identity platform built for operati
        alt="Trustpoint machine identity demo"
        width="900">
 </p>
-
-> [!CAUTION]
-> Trustpoint is currently a **technology preview (beta)** and is **not intended for production use**.
-
-<!--
-Recommended: add a short 15-30 second GIF here showing:
-1. Add/onboard a device
-2. Issue a certificate
-3. View it in the dashboard
-4. Show an automated renewal
-Example:
-<p align="center">
-  <img src=".github-assets/trustpoint_demo.gif" alt="Trustpoint machine identity demo" width="900">
-</p>
--->
 
 ## Why Trustpoint?
 
@@ -76,23 +60,39 @@ Trustpoint is designed to help you:
 
 ## Quickstart
 
-The fastest way to explore Trustpoint is the guided setup wizard on a **Linux host**.
+Deploy Trustpoint with **Docker Compose on a Linux host**. The web setup wizard configures the application.
 
 ### Prerequisites
 
 - Docker 20.10+
 - Docker Compose 2.32.4+
-- Git
+- Git and Python 3
 
 ### Start Trustpoint
+
+> [!IMPORTANT]
+> Trustpoint 1.0.0 is the first stable version. Start with a fresh database and
+> installation-specific secrets. Preserve the database, keys, and runtime state
+> for subsequent updates and recovery.
+> See the [1.0 release notes](CHANGELOG.md) and
+> [upgrade guide](https://trustpoint.readthedocs.io/en/latest/features/management/upgrading.html).
 
 ```bash
 git clone https://github.com/Trustpoint-Project/trustpoint.git
 cd trustpoint
-./tp_wizard.sh
+cp .env.example .env
+# Set database credentials and TLS names in .env.
+sudo python3 docker/init_secret.py --type all
+docker compose up -d --build
 ```
 
-The wizard guides you through the Docker-based setup.
+The one-time initializer creates an installation-specific Django signing key and
+an independent software database key-encryption key (KEK). Preserve
+`secrets/django_secret_key`, `secrets/trustpoint_software_kek`, `.env`, and all
+deployment volumes when updating a compatible 1.0 installation. A database backup
+alone cannot recover encrypted credentials. PKCS#11 installations instead need
+their original HSM KEK/token, provider configuration, and authentication material;
+SoftHSM also needs its token/configuration volumes and original PIN files.
 
 
 
@@ -141,6 +141,7 @@ Application Certificates
 | **AOKI** *(proof of concept)* | Zero-touch industrial device onboarding | IDevID / DevOwnerID based trust | Initial device onboarding and identity establishment |
 | **EST** | Standards-based certificate enrollment | Username/password, IDevID, client certificate | Onboarding, application certificates, renewal, re-enrollment |
 | **CMP** | Flexible enrollment for industrial or constrained devices | Shared secret, IDevID, client certificate | Onboarding, enrollment, renewal, rekeying |
+| **SCEP** | Certificate enrollment for industrial and other devices | Per-device challengePassword for initial enrollment, client certificate for renewal | Application certificate enrollment and renewal |
 | **OPC UA GDS Push** | OPC UA certificate and trust-list distribution | Secure device registration and certificate authentication | Server certificate and trust-anchor distribution, cyclic updates |
 | **Manual / remote download** | Operator-driven or browser-assisted issuance | Operator workflow / one-time password | PKCS#12 or PEM credential delivery |
 
@@ -149,6 +150,7 @@ Learn more:
 - [AOKI — Automated Onboarding Key Infrastructure](https://trustpoint.readthedocs.io/en/latest/features/aoki/index.html)
 - [EST API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/est.html)
 - [CMP API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/cmp.html)
+- [SCEP API documentation](https://trustpoint.readthedocs.io/en/latest/features/apis/scep.html)
 - [OPC UA GDS Push specification](https://reference.opcfoundation.org/GDS/v105/docs/7.4)
 
 ## Core capabilities
@@ -277,23 +279,16 @@ See the **[Trustpoint documentation](https://trustpoint.readthedocs.io/en/latest
 | [Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) | Published Trustpoint container images |
 | [Releases](https://github.com/Trustpoint-Project/trustpoint/releases) | Release notes and project milestones |
 
-## Release highlights — v0.6.0
+## Trustpoint 1.0.0
 
-Trustpoint v0.6.0 introduced major capabilities for machine identity automation and industrial deployment, including:
+Trustpoint 1.0.0 is the first stable release. The [release notes](CHANGELOG.md)
+describe its capabilities, installation, key-recovery requirements, and known
+limitations. See the
+[capability and limitations guide](https://trustpoint.readthedocs.io/en/latest/features/capabilities.html)
+for available operations and backend-specific deployment requirements.
 
-- Trustpoint Agent v1
-- PKCS#11 HSM integration
-- CA rollover
-- users, roles, and organizations
-- audit logging
-- REST APIs and headless integration
-- Prometheus metrics
-- certificate discovery
-- mDNS support
-- redesigned workflow capabilities
-- improved automated setup and deployment
-
-See **[GitHub Releases](https://github.com/Trustpoint-Project/trustpoint/releases)** for the complete changelog.
+See **[GitHub Releases](https://github.com/Trustpoint-Project/trustpoint/releases)**
+for published version notes.
 
 ## Development
 

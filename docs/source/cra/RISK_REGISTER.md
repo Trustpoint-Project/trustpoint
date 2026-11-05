@@ -1,26 +1,25 @@
 <p align="center">
-  <img src="../_static/trustpoint_banner.png" alt="Trustpoint Logo" width="600">
+  <img src="../_static/trustpoint_github_banner.svg" alt="Trustpoint Logo" width="600">
 </p>
 
 # Risk Register
 
 <p>
-  <a href="#"><img src="https://img.shields.io/badge/Owner-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Owner"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Version"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Effective-2026--07--01-success?style=for-the-badge" alt="Effective Date"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/Review-Quarterly-orange?style=for-the-badge" alt="Review Cycle"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Maintained_by-Trustpoint_Project-0A66C2?style=for-the-badge" alt="Maintained by Trustpoint Project"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Version-1.0-555?style=for-the-badge" alt="Document Version"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Last_Updated-2026--09--22-success?style=for-the-badge" alt="Last Updated"/></a>
 </p>
-
-**📋 Document Owner:** Trustpoint Project Maintainers | **📄 Version:** 1.0 | **📅 Last Updated:** 2026-07-01
-**🔄 Review Cycle:** Quarterly | **⏰ Next Review:** 2026-09-26
 
 ---
 
+> **Note:** This document is provided as part of Trustpoint's open-source security documentation. It may support CRA-related assessments but does not constitute a formal conformity assessment, certification, or declaration of conformity.
+
+
 ## **Purpose**
 
-Risk register documenting identified cybersecurity risks for Trustpoint's PKI management platform, supporting CRA readiness, BSI TR-03183-aligned risk management, and security excellence.
+Risk register documenting identified cybersecurity risks for Trustpoint's PKI management platform. It provides security evidence that may support CRA-related assessments, BSI TR-03183-aligned risk management, and broader security assurance activities.
 
-This document evaluates and treats risks derived from the threats identified in [`THREAT_MODEL.md`](./THREAT_MODEL.md).
+This document evaluates and defines treatment measures for risks derived from the threats identified in [`THREAT_MODEL.md`](./THREAT_MODEL.md).
 
 ---
 
@@ -35,7 +34,7 @@ Threat Model → Risk Register → Controls → Evidence → Review
 | Step             | Document                                                                                                                       | Purpose                                                                                                               |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | 1. Threat Model  | [`THREAT_MODEL.md`](./THREAT_MODEL.md)                                                                                         | Identifies threats to Trustpoint                                  |
-| 2. Risk Register | [`RISK_REGISTER.md`](./RISK_REGISTER.md)  -  [![Critical][badge-you-are-here]]()                                                                                   | Groups threats into cybersecurity risks
+| 2. Risk Register | [`RISK_REGISTER.md`](./RISK_REGISTER.md)  -  ![Current document][badge-you-are-here]                                                                                   | Groups threats into cybersecurity risks
 | 3. Controls      | [`CONTROLS.md`](./CONTROLS.md)                                                                                        | Documents implemented and planned controls                               |
 | 4. Evidence      | [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) · [`SECURITY.md`][security] · CI/CD artifacts · SBOM                           | Provides evidence for implemented controls, vulnerability handling, release processes, and security maintenance       |
 | 5. Review        | [`THREAT_MODEL.md`](./THREAT_MODEL.md) · [`RISK_REGISTER.md`](./RISK_REGISTER.md) · [`CONTROLS.md`](./CONTROLS.md) · [`CRA_COMPLIANCE.md`](./CRA_COMPLIANCE.md) | Ensures that threats, risks, controls, and evidence remain current over time                                          |

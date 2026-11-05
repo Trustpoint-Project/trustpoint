@@ -7,10 +7,11 @@ from typing import Any
 
 import pytest
 
-from devices.issuer import LocalDomainCredentialIssuer
 from devices.models import DeviceModel, RemoteDeviceCredentialDownloadModel
+from management.models import SecurityConfig
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import CaModel, DomainModel
+from pki.tests.credential_helpers import issue_test_credential
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 
@@ -27,6 +28,14 @@ def configure_local_crypto_backend_for_device_tests(settings: Any) -> None:
     settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
     settings.TRUSTPOINT_IS_OPERATIONAL = True
     settings.DOCKER_CONTAINER = False
+
+
+@pytest.fixture
+def permissive_protocol_policy() -> SecurityConfig:
+    """Provide explicit protocol permissions for successful creation tests."""
+    config = SecurityConfig.objects.create()
+    config.apply_security_settings()
+    return config
 
 
 @pytest.fixture
@@ -57,9 +66,7 @@ def create_mock_models() -> dict[str, Any]:
     mock_domain = DomainModel(unique_name='test_domain', issuing_ca=mock_ca)
     mock_domain.save()
 
-    no_onboarding_pki_protocols = [
-        NoOnboardingPkiProtocol.MANUAL
-    ]
+    no_onboarding_pki_protocols = [NoOnboardingPkiProtocol.MANUAL]
     no_onboarding_config_model = NoOnboardingConfigModel()
     no_onboarding_config_model.set_pki_protocols(no_onboarding_pki_protocols)
 
@@ -74,8 +81,11 @@ def create_mock_models() -> dict[str, Any]:
     )
     mock_device.save()
 
-    credential_issuer = LocalDomainCredentialIssuer(device=mock_device, domain=mock_domain)
-    mock_issued_credential = credential_issuer.issue_domain_credential()
+    mock_issued_credential = issue_test_credential(
+        mock_device,
+        'domain_credential',
+        common_name='Trustpoint Domain Credential',
+    )
 
     mock_remote_credential_download = RemoteDeviceCredentialDownloadModel(
         issued_credential_model=mock_issued_credential, device=mock_device

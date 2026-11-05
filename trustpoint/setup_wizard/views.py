@@ -17,11 +17,12 @@ import subprocess
 import sys
 import uuid
 import zipfile
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import psycopg
-from cryptography.hazmat.primitives import hashes
+from cryptography.exceptions import InvalidTag
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
@@ -42,22 +43,24 @@ from appsecrets.models import (
     AppSecretBackendModel,
     AppSecretPkcs11AuthSource,
     AppSecretPkcs11ConfigModel,
-    AppSecretSoftwareConfigModel,
 )
 from appsecrets.service import (
-    DEK_LENGTH_BYTES,
     AppSecretConfigurationError,
+    BaseAppSecretService,
     Pkcs11AppSecretService,
+    SoftwareAppSecretService,
     clear_app_secret_cache,
-    get_app_secret_service,
+    load_software_kek,
 )
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
+from crypto.adapters.protected_import.bindings import ProtectedImportManagedKeyBinding
 from crypto.adapters.software.backend import SoftwareBackend
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
 from crypto.adapters.software.config import SoftwareProviderProfile
+from crypto.application.protected_import import ProtectedImportKeyOperations
 from crypto.domain.algorithms import KeyAlgorithm
 from crypto.domain.errors import CryptoError
 from crypto.domain.policies import SigningExecutionMode
@@ -65,10 +68,7 @@ from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.models import (
     BackendKind,
     CryptoProviderPkcs11ConfigModel,
-    CryptoProviderProfileModel,
-    CryptoProviderSoftwareConfigModel,
     Pkcs11AuthSource,
-    SoftwareKeyEncryptionSource,
 )
 from management.backup_artifacts import BackupManifestError, backup_manifest_path, verify_backup_manifest
 from management.nginx_paths import (
@@ -76,11 +76,13 @@ from management.nginx_paths import (
     NGINX_CERT_PATH,
     NGINX_KEY_PATH,
 )
-from pki.models import CredentialModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from management.security_change_audit import provider_configuration_changes
+from management.tls_files import write_tls_pem_files
+from setup_wizard.backend_configuration import BackendConfigurationMixin
 from setup_wizard.operational_attach import (
     CompatibilityCheck,
     CompatibilitySeverity,
+    OperationalAppSecretMaterial,
     OperationalAttachmentValidator,
     OperationalAttachMode,
     OperationalBackendBinding,
@@ -108,6 +110,7 @@ from setup_wizard.pkcs11_staging import (
     existing_wizard_pkcs11_staged_file,
     wizard_pkcs11_staging_root,
 )
+from setup_wizard.tls_activation import activate_staged_tls_credential
 from setup_wizard.tls_credential import (
     TlsServerCredentialFileParser,
     TlsServerCredentialGenerator,
@@ -138,6 +141,7 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import CertificateSerializer
 
     from crypto.application.provider_backend import ManagedKeyBackendAdapter
+    from pki.models import CredentialModel
 
 logger = logging.getLogger(__name__)
 
@@ -227,8 +231,8 @@ def _restore_archive_is_custom_pg_dump(archive_path: Path) -> bool:
         return bool(archive_file.read(5) == b'PGDMP')
 
 
-def _materialize_custom_restore_archive(archive_path: Path) -> Path:
-    """Return a filesystem path containing an uncompressed PostgreSQL custom dump."""
+def _materialize_restore_archive(archive_path: Path) -> Path:
+    """Return an uncompressed file that restore subprocesses can read by file descriptor."""
     if not _looks_like_gzip(archive_path):
         return archive_path
 
@@ -444,6 +448,7 @@ def restore_operational_database_from_backup(
         decrypted_path = _decrypt_restore_archive_if_needed(archive_path, backup_password)
         extracted_path = _extract_restore_bundle_if_needed(decrypted_path or archive_path)
         restore_source_path = extracted_path or decrypted_path or archive_path
+        materialized_restore_path = _materialize_restore_archive(restore_source_path)
 
         env = os.environ.copy()
         env['PGPASSWORD'] = config_model.operational_db_password
@@ -457,8 +462,7 @@ def restore_operational_database_from_backup(
             '--dbname',
             config_model.operational_db_name,
         ]
-        if _restore_archive_is_custom_pg_dump(restore_source_path):
-            materialized_restore_path = _materialize_custom_restore_archive(restore_source_path)
+        if _restore_archive_is_custom_pg_dump(materialized_restore_path):
             command = [
                 'pg_restore',
                 '--format=custom',
@@ -485,7 +489,7 @@ def restore_operational_database_from_backup(
                 )
         else:
             command = ['psql', '--set', 'ON_ERROR_STOP=1', '--single-transaction', *common_args]
-            with _open_restore_archive(restore_source_path) as archive_file:
+            with materialized_restore_path.open('rb') as archive_file:
                 completed_process = subprocess.run(  # noqa: S603
                     command,
                     stdin=archive_file,
@@ -627,7 +631,7 @@ def _persist_local_dev_pkcs11_config_if_available(
     current_config_path: str,
     current_config_exists: bool,
 ) -> None:
-    """Persist the local-dev PKCS#11 provider config when tp_wizard exposed one."""
+    """Persist the local-dev PKCS#11 provider config when Docker Compose exposed one."""
     if current_staged_config is not None or not local_dev_pkcs11_config_available():
         return
 
@@ -766,9 +770,9 @@ def persist_valid_pkcs11_fields_from_invalid_form(
         form.instance.fresh_install_pkcs11_slot_id = int(raw_slot_id)
         update_fields.append('fresh_install_pkcs11_slot_id')
     if 'fresh_install_pkcs11_enforce_app_secret_protection' not in form.errors:
-        form.instance.fresh_install_pkcs11_enforce_app_secret_protection = (
-            form.data.get('fresh_install_pkcs11_enforce_app_secret_protection') in {'on', 'true', 'True', '1'}
-        )
+        form.instance.fresh_install_pkcs11_enforce_app_secret_protection = form.data.get(
+            'fresh_install_pkcs11_enforce_app_secret_protection'
+        ) in {'on', 'true', 'True', '1'}
         update_fields.append('fresh_install_pkcs11_enforce_app_secret_protection')
 
     if update_fields:
@@ -1091,9 +1095,7 @@ def validate_staged_pkcs11_app_secret_protection(
 def _format_pkcs11_probe_process_output(completed_process: subprocess.CompletedProcess[str]) -> str:
     """Return bounded stdout/stderr from an isolated PKCS#11 probe process."""
     output = '\n'.join(
-        part.strip()
-        for part in (completed_process.stdout, completed_process.stderr)
-        if part and part.strip()
+        part.strip() for part in (completed_process.stdout, completed_process.stderr) if part and part.strip()
     )
     if len(output) > MAX_PKCS11_PROBE_OUTPUT_LENGTH:
         return output[-MAX_PKCS11_PROBE_OUTPUT_LENGTH:]
@@ -1402,12 +1404,8 @@ class FreshInstallFormBaseView[FormT: BaseForm](LoginRequiredMixin, LoggerMixin,
         config_model = SetupWizardConfigModel.get_singleton()
         current_state = config_model.get_current_step()
         viewed_step = self.step_state
-        admin_user_submitted = config_model.is_step_submitted(
-            SetupWizardConfigModel.FreshInstallCurrentStep.ADMIN_USER
-        )
-        database_submitted = config_model.is_step_submitted(
-            SetupWizardConfigModel.FreshInstallCurrentStep.DATABASE
-        )
+        admin_user_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.ADMIN_USER)
+        database_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.DATABASE)
         crypto_storage_submitted = config_model.is_step_submitted(
             SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE
         )
@@ -1929,7 +1927,7 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
             return self.form_invalid(form)
 
 
-class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryModelForm]):
+class FreshInstallSummaryView(BackendConfigurationMixin, FreshInstallModelFormBaseView[FreshInstallSummaryModelForm]):
     """Render the fresh-install step for the summary."""
 
     form_class = FreshInstallSummaryModelForm
@@ -1962,193 +1960,26 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
     @staticmethod
     def _write_pem_files(credential_model: CredentialModel) -> None:
-        """Writes the private key, certificate, and trust store PEM files to disk.
-
-        Args:
-            credential_model (CredentialModel): The credential model instance containing
-            the keys and certificates.
-        """
-        private_key_pem = credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
-        certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
-        trust_store_pem = credential_model.get_certificate_chain_serializer().as_pem().decode()
-
-        NGINX_KEY_PATH.write_text(private_key_pem)
-        NGINX_CERT_PATH.write_text(certificate_pem)
-
-        # Only write chain file if there's actually a chain (not empty)
-        if trust_store_pem.strip():
-            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
-        elif NGINX_CERT_CHAIN_PATH.exists():
-            # Remove chain file if it exists but chain is empty
-            NGINX_CERT_CHAIN_PATH.unlink()
+        """Write the TLS credential to the configured Nginx paths."""
+        write_tls_pem_files(
+            credential_model,
+            key_path=NGINX_KEY_PATH,
+            cert_path=NGINX_CERT_PATH,
+            chain_path=NGINX_CERT_CHAIN_PATH,
+        )
 
     def _apply_staged_tls_credential(self) -> None:
-        """Promote the staged TLS credential to active and apply it for nginx."""
+        """Promote the staged TLS credential and apply it using this caller's I/O hooks."""
         staged_tls_serializer = load_staged_tls_credential()
         if staged_tls_serializer is None:
-            err_msg = 'No staged TLS Server Credential found.'
-            raise ValueError(err_msg)
-
-        staged_tls_credential = CredentialModel.save_credential_serializer(
-            credential_serializer=staged_tls_serializer,
-            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            msg = 'No staged TLS Server Credential found.'
+            raise ValueError(msg)
+        activate_staged_tls_credential(
+            staged_tls_serializer,
+            write_pem_files=self._write_pem_files,
+            apply_to_nginx=lambda: execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm'),
+            logger=self.logger,
         )
-
-        active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-        active_tls.credential = staged_tls_credential
-        active_tls.save()
-
-        self._write_pem_files(staged_tls_credential)
-        execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm')
-        sha256_fingerprint = staged_tls_credential.get_certificate().fingerprint(hashes.SHA256())
-        formatted_fingerprint = ':'.join(f'{byte:02X}' for byte in sha256_fingerprint)
-        self.logger.info('TLS SHA256 fingerprint: %s', formatted_fingerprint)
-        clear_staged_tls_credential()
-
-    @staticmethod
-    def _load_existing_backend_profile(backend_kind: BackendKind) -> CryptoProviderProfileModel | None:
-        """Return an existing profile for the given backend kind when one already exists."""
-        return (
-            CryptoProviderProfileModel.objects.filter(backend_kind=backend_kind)
-            .order_by('-active', 'id')
-            .first()
-        )
-
-    @classmethod
-    def _ensure_backend_kind_matches_instance(cls, backend_kind: BackendKind) -> None:
-        """Reject mixing backend kinds within one Trustpoint instance."""
-        existing_kinds = set(CryptoProviderProfileModel.objects.values_list('backend_kind', flat=True))
-        if existing_kinds and backend_kind.value not in existing_kinds:
-            configured_backend_kind = min(existing_kinds)
-            err_msg = (
-                'This Trustpoint instance already contains crypto backend '
-                f'configuration for {configured_backend_kind!r}.'
-            )
-            raise DjangoValidationError(err_msg)
-
-    @classmethod
-    def _activate_profile(
-        cls,
-        *,
-        backend_kind: BackendKind,
-        default_name: str,
-    ) -> CryptoProviderProfileModel:
-        """Activate or create the singleton profile for the chosen backend kind."""
-        cls._ensure_backend_kind_matches_instance(backend_kind)
-        existing_profile = cls._load_existing_backend_profile(backend_kind)
-        if existing_profile is not None:
-            CryptoProviderProfileModel.objects.filter(active=True).exclude(pk=existing_profile.pk).update(active=False)
-            existing_profile.active = True
-            _save_untyped_model(existing_profile)
-            return existing_profile
-
-        CryptoProviderProfileModel.objects.filter(active=True).update(active=False)
-        profile = CryptoProviderProfileModel(
-            name=default_name,
-            backend_kind=backend_kind,
-            active=True,
-        )
-        _save_untyped_model(profile)
-        return profile
-
-    @classmethod
-    def _configure_software_backend(cls) -> None:
-        """Configure the software backend for the instance."""
-        profile = cls._activate_profile(
-            backend_kind=BackendKind.SOFTWARE,
-            default_name='trustpoint-software-demo-testing-backend',
-        )
-        defaults = {
-            'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
-            'encryption_source_ref': '',
-            'allow_exportable_private_keys': False,
-        }
-        config, created = CryptoProviderSoftwareConfigModel.objects.get_or_create(
-            profile=profile,
-            defaults=defaults,
-        )
-        if not created:
-            for field_name, value in defaults.items():
-                setattr(config, field_name, value)
-        config.full_clean()
-        _save_untyped_model(config)
-
-    @staticmethod
-    def _configure_software_app_secret_backend() -> None:
-        """Configure the software app-secret backend."""
-        backend = AppSecretBackendModel.get_singleton()
-        backend.backend_kind = AppSecretBackendKind.SOFTWARE
-        _save_untyped_model(backend)
-
-        AppSecretPkcs11ConfigModel.objects.filter(backend=backend).delete()
-        software_config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
-        software_config.full_clean()
-        _save_untyped_model(software_config)
-
-        clear_app_secret_cache()
-        get_app_secret_service().ensure_backend_ready()
-
-    @staticmethod
-    def _configure_pkcs11_app_secret_backend() -> None:
-        """Configure the PKCS#11-backed app-secret subsystem from the active crypto profile."""
-        crypto_profile = CryptoProviderProfileModel.objects.get(active=True, backend_kind=BackendKind.PKCS11)
-        crypto_config = crypto_profile.pkcs11_config
-
-        backend = AppSecretBackendModel.get_singleton()
-        backend.backend_kind = AppSecretBackendKind.PKCS11
-        _save_untyped_model(backend)
-
-        AppSecretSoftwareConfigModel.objects.filter(backend=backend).delete()
-        secret_config, created = AppSecretPkcs11ConfigModel.objects.get_or_create(
-            backend=backend,
-            defaults={
-                'module_path': crypto_config.module_path,
-                'token_label': crypto_config.token_label,
-                'token_serial': crypto_config.token_serial,
-                'slot_id': crypto_config.slot_id,
-                'auth_source': AppSecretPkcs11AuthSource(crypto_config.auth_source),
-                'auth_source_ref': crypto_config.auth_source_ref,
-            },
-        )
-
-        changed_runtime = False
-        desired_values = {
-            'module_path': crypto_config.module_path,
-            'token_label': crypto_config.token_label,
-            'token_serial': crypto_config.token_serial,
-            'slot_id': crypto_config.slot_id,
-            'auth_source': AppSecretPkcs11AuthSource(crypto_config.auth_source),
-            'auth_source_ref': crypto_config.auth_source_ref,
-        }
-        if not created:
-            for field_name, value in desired_values.items():
-                if getattr(secret_config, field_name) != value:
-                    changed_runtime = True
-                setattr(secret_config, field_name, value)
-            if changed_runtime:
-                secret_config.wrapped_dek = None
-                secret_config.backup_encrypted_dek = None
-
-        secret_config.full_clean()
-        _save_untyped_model(secret_config)
-
-        clear_app_secret_cache()
-        get_app_secret_service().ensure_backend_ready()
-
-    @staticmethod
-    def _map_pkcs11_install_exit_code_to_message(return_code: int) -> str:
-        """Map PKCS#11 asset-install script exit codes to user-facing error messages."""
-        error_messages = {
-            1: 'The PKCS#11 install script did not receive the required staged setup values.',
-            2: 'The staged PKCS#11 library is missing or no longer belongs to this wizard session.',
-            3: 'The staged PKCS#11 user PIN file is missing or no longer belongs to this wizard session.',
-            4: 'Failed to install the PKCS#11 library into the protected HSM area.',
-            5: 'Failed to create the protected PKCS#11 user PIN file.',
-            6: 'Failed to persist the installed PKCS#11 module path for the instance.',
-            7: 'The staged PKCS#11 provider config is missing or no longer belongs to this wizard session.',
-            8: 'Failed to install the PKCS#11 provider config into the protected HSM area.',
-        }
-        return error_messages.get(return_code, 'An unknown error occurred while installing PKCS#11 assets.')
 
     @staticmethod
     def _ensure_local_dev_pkcs11_module(config_model: SetupWizardConfigModel) -> Path:
@@ -2406,8 +2237,8 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
         token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
         slot_id = config_model.fresh_install_pkcs11_slot_id
-        auth_source_ref = (
-            (config_model.fresh_install_pkcs11_auth_source_ref or '').strip() or str(FINAL_WIZARD_PKCS11_PIN_PATH)
+        auth_source_ref = (config_model.fresh_install_pkcs11_auth_source_ref or '').strip() or str(
+            FINAL_WIZARD_PKCS11_PIN_PATH
         )
         fallback_pin_path = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
         if auth_source_ref and not _path_exists(Path(auth_source_ref)) and _path_exists(fallback_pin_path):
@@ -2572,10 +2403,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
         messages.success(
             self.request,
-            (
-                'Operational configuration was applied successfully. '
-                f'{handoff_marker_message}{switch_result.detail}'
-            ),
+            (f'Operational configuration was applied successfully. {handoff_marker_message}{switch_result.detail}'),
         )
         return redirect('setup_wizard:fresh_install_summary')
 
@@ -2602,8 +2430,11 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
                     config_model,
                     profile_name='setup-wizard-pkcs11-pre-apply-app-secret',
                 )
-            self._configure_instance_crypto_backend(config_model)
-            self._configure_app_secret_backend(config_model)
+            with provider_configuration_changes(
+                actor=self.request.user if self.request.user.is_authenticated else None
+            ):
+                self._configure_instance_crypto_backend(config_model)
+                self._configure_app_secret_backend(config_model)
             call_command('create_default_cert_profiles')
             call_command('create_default_agent_profile_definitions')
             call_command('seed_discovery_ports')
@@ -2920,7 +2751,7 @@ class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBa
         response = run_staged_pkcs11_connection_test(
             self,
             form,
-            success_redirect_name=f"setup_wizard:{self.step_url_names['backend-config']}",
+            success_redirect_name=f'setup_wizard:{self.step_url_names["backend-config"]}',
         )
         if response.status_code in {301, 302}:
             return self._step_redirect('backend-config')
@@ -3078,6 +2909,36 @@ def _build_staged_pkcs11_app_secret_config(
     )
 
 
+def _software_dek_is_decryptable(wrapped_dek: bytes) -> bool:
+    """Validate the target software envelope without generating or persisting keys."""
+    try:
+        SoftwareAppSecretService.unwrap_dek(load_software_kek(), wrapped_dek)
+    except AppSecretConfigurationError:
+        return False
+    return True
+
+
+def _recover_target_app_secret_dek(
+    config_model: SetupWizardConfigModel,
+    material: OperationalAppSecretMaterial,
+) -> bytes:
+    """Recover target key material without consulting or changing the bootstrap encryption state."""
+    if material.backend_kind == BackendKind.SOFTWARE.value:
+        return SoftwareAppSecretService.unwrap_dek(load_software_kek(), material.wrapped_dek)
+    if material.backend_kind != BackendKind.PKCS11.value:
+        msg = 'The target application-secret backend is unsupported.'
+        raise AppSecretConfigurationError(msg)
+    if config_model.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+        msg = 'The target application-secret backend requires staged HSM storage.'
+        raise AppSecretConfigurationError(msg)
+    secret_config = _build_staged_pkcs11_app_secret_config(
+        config_model,
+        wrapped_dek=material.wrapped_dek,
+        kek_label=material.kek_label,
+    )
+    return Pkcs11AppSecretService(secret_config).recover_existing_dek()
+
+
 def app_secret_decryptability_checks(  # noqa: PLR0911
     *,
     config_model: SetupWizardConfigModel,
@@ -3119,13 +2980,13 @@ def app_secret_decryptability_checks(  # noqa: PLR0911
         )
 
     if material.backend_kind == BackendKind.SOFTWARE.value:
-        if len(material.raw_dek) == DEK_LENGTH_BYTES:
+        if _software_dek_is_decryptable(material.wrapped_dek):
             return (
                 CompatibilityCheck(
                     code='appsecret.decryptability_ok',
                     label='Application Secrets',
                     severity=CompatibilitySeverity.INFO,
-                    message='The target software app-secret DEK is present and has the expected length.',
+                    message='The target software app-secret DEK can be unwrapped with the configured KEK.',
                 ),
             )
         return (
@@ -3133,7 +2994,10 @@ def app_secret_decryptability_checks(  # noqa: PLR0911
                 code='appsecret.decryptability_failed',
                 label='Application Secrets',
                 severity=CompatibilitySeverity.ERROR,
-                message='The target software app-secret DEK is missing or has an invalid length.',
+                message=(
+                    'The target software app-secret DEK cannot be unwrapped. '
+                    'Restore the original KEK and intact database.'
+                ),
             ),
         )
 
@@ -3168,12 +3032,7 @@ def app_secret_decryptability_checks(  # noqa: PLR0911
         )
 
     try:
-        secret_config = _build_staged_pkcs11_app_secret_config(
-            config_model,
-            wrapped_dek=material.wrapped_dek,
-            kek_label=material.kek_label,
-        )
-        Pkcs11AppSecretService(secret_config).recover_existing_dek()
+        _recover_target_app_secret_dek(config_model, material)
     except (AppSecretConfigurationError, DjangoValidationError, OSError, RuntimeError, ValueError) as exception:
         error_detail = str(exception).strip() or type(exception).__name__
         return (
@@ -3222,6 +3081,17 @@ def _managed_key_binding_from_material(material: Any) -> object:
     algorithm = KeyAlgorithm(material.algorithm)
     signing_execution_mode = SigningExecutionMode(material.signing_execution_mode)
     provider_label = material.provider_label or None
+
+    if material.backend_kind == 'protected_import':
+        return ProtectedImportManagedKeyBinding(
+            key_handle=str(material.binding['key_handle']),
+            algorithm=algorithm,
+            encrypted_private_key_pkcs8_der_b64=str(material.binding['encrypted_private_key_pkcs8_der_b64']),
+            encryption_metadata=dict(material.binding.get('encryption_metadata') or {}),
+            public_key_fingerprint_sha256=material.public_key_fingerprint_sha256,
+            signing_execution_mode=signing_execution_mode,
+            provider_label=provider_label,
+        )
 
     if material.backend_kind == BackendKind.PKCS11.value:
         return Pkcs11ManagedKeyBinding(
@@ -3349,7 +3219,7 @@ def managed_key_backend_reconciliation_checks(  # noqa: C901, PLR0911, PLR0912
             target=target,
             backend_kind=snapshot.crypto_backend_kind,
         )
-    except DjangoValidationError as exception:
+    except (CryptoError, DjangoValidationError) as exception:
         error_detail = '; '.join(exception.messages) if hasattr(exception, 'messages') else str(exception)
         return (
             CompatibilityCheck(
@@ -3363,21 +3233,42 @@ def managed_key_backend_reconciliation_checks(  # noqa: C901, PLR0911, PLR0912
     missing_count = 0
     mismatch_count = 0
     error_count = 0
+    imported_key_operations: ProtectedImportKeyOperations | None = None
     verification_backend = cast('ManagedKeyBackendAdapter', backend)
     try:
         for material in materials:
             try:
                 binding = _managed_key_binding_from_material(material)
-                verification = verification_backend.verify_managed_key(binding)
-            except (CryptoError, DjangoValidationError, KeyError, TypeError, ValueError):
+                if isinstance(binding, ProtectedImportManagedKeyBinding):
+                    if imported_key_operations is None:
+                        secret_material = OperationalTargetInspector().inspect_app_secret_material(target.database)
+                        dek = _recover_target_app_secret_dek(config_model, secret_material)
+                        imported_key_operations = ProtectedImportKeyOperations(
+                            decrypt_secret=partial(BaseAppSecretService().decrypt_text, dek=dek),
+                        )
+                    verification_status = imported_key_operations.verify_managed_key(binding).status
+                else:
+                    verification_status = verification_backend.verify_managed_key(binding).status
+            except (
+                CryptoError,
+                DjangoValidationError,
+                AppSecretConfigurationError,
+                InvalidTag,
+                OSError,
+                RuntimeError,
+                psycopg.Error,
+                KeyError,
+                TypeError,
+                ValueError,
+            ):
                 error_count += 1
                 continue
 
-            if verification.status == ManagedKeyVerificationStatus.MISSING:
+            if verification_status == ManagedKeyVerificationStatus.MISSING:
                 missing_count += 1
-            elif verification.status == ManagedKeyVerificationStatus.MISMATCH:
+            elif verification_status == ManagedKeyVerificationStatus.MISMATCH:
                 mismatch_count += 1
-            elif verification.status != ManagedKeyVerificationStatus.PRESENT:
+            elif verification_status != ManagedKeyVerificationStatus.PRESENT:
                 error_count += 1
     finally:
         backend.close()
@@ -3589,13 +3480,15 @@ class RestoreBackupImportView(ConnectExistingWizardMixin[RestoreBackupImportForm
             config_model.restore_backup_import_submitted = False
             config_model.restore_backup_restored_at = None
             config_model.restore_backup_restore_error = ''
-            config_model.save(update_fields=[
-                'restore_backup_archive_path',
-                'restore_backup_archive_original_name',
-                'restore_backup_import_submitted',
-                'restore_backup_restored_at',
-                'restore_backup_restore_error',
-            ])
+            config_model.save(
+                update_fields=[
+                    'restore_backup_archive_path',
+                    'restore_backup_archive_original_name',
+                    'restore_backup_import_submitted',
+                    'restore_backup_restored_at',
+                    'restore_backup_restore_error',
+                ]
+            )
             messages.success(request, 'The staged backup archive was removed for this wizard session.')
             return self._step_redirect('backup-import')
         return super().post(request, *args, **kwargs)
@@ -3629,22 +3522,26 @@ class RestoreBackupImportView(ConnectExistingWizardMixin[RestoreBackupImportForm
             config_model.restore_backup_restore_error = str(exception)
             config_model.restore_backup_restored_at = None
             config_model.restore_backup_import_submitted = True
-            config_model.save(update_fields=[
-                'restore_backup_restore_error',
-                'restore_backup_restored_at',
-                'restore_backup_import_submitted',
-            ])
+            config_model.save(
+                update_fields=[
+                    'restore_backup_restore_error',
+                    'restore_backup_restored_at',
+                    'restore_backup_import_submitted',
+                ]
+            )
             form.add_error('backup_archive', exception)
             return self.render_to_response(self.get_context_data(form=form))
 
         config_model.restore_backup_restored_at = timezone.now()
         config_model.restore_backup_restore_error = ''
         config_model.restore_backup_import_submitted = True
-        config_model.save(update_fields=[
-            'restore_backup_restored_at',
-            'restore_backup_restore_error',
-            'restore_backup_import_submitted',
-        ])
+        config_model.save(
+            update_fields=[
+                'restore_backup_restored_at',
+                'restore_backup_restore_error',
+                'restore_backup_import_submitted',
+            ]
+        )
         messages.success(self.request, 'Backup restored into the configured PostgreSQL database.')
         return super().form_valid(form)
 

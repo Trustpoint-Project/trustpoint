@@ -23,13 +23,67 @@ class AuditLog(models.Model):
     class OperationType(models.TextChoices):
         """Allowed operation types recorded in the audit log."""
 
+        DEVICE_SECRET_CHANGED = 'DEVICE_SECRET_CHANGED', _('Device Secret Changed')
         CREDENTIAL_ISSUED = 'CREDENTIAL_ISSUED', _('Credential Issued')
         CREDENTIAL_RENEWED = 'CREDENTIAL_RENEWED', _('Credential Renewed')
         CREDENTIAL_REVOKED = 'CREDENTIAL_REVOKED', _('Credential Revoked')
         CREDENTIAL_DELETED = 'CREDENTIAL_DELETED', _('Credential Deleted')
-        MODEL_CREATED = 'MODEL_CREATED', _('Model Created')
-        MODEL_UPDATED = 'MODEL_UPDATED', _('Model Updated')
-        MODEL_DELETED = 'MODEL_DELETED', _('Model Deleted')
+        MODEL_CREATED = 'MODEL_CREATED', _('Model Created (Legacy)')
+        MODEL_UPDATED = 'MODEL_UPDATED', _('Model Updated (Legacy)')
+        MODEL_DELETED = 'MODEL_DELETED', _('Model Deleted (Legacy)')
+        # Generic model operations above are retained only for historical audit rows.
+        APPSECRET_BACKEND_CREATED = 'APPSECRET_BACKEND_CREATED', _('Application Secret Backend Created')
+        APPSECRET_BACKEND_UPDATED = 'APPSECRET_BACKEND_UPDATED', _('Application Secret Backend Updated')
+        APPSECRET_BACKEND_DELETED = 'APPSECRET_BACKEND_DELETED', _('Application Secret Backend Deleted')
+        APPSECRET_PKCS11_CREATED = 'APPSECRET_PKCS11_CREATED', _('Application Secret PKCS#11 Configuration Created')
+        APPSECRET_PKCS11_UPDATED = 'APPSECRET_PKCS11_UPDATED', _('Application Secret PKCS#11 Configuration Updated')
+        APPSECRET_PKCS11_DELETED = 'APPSECRET_PKCS11_DELETED', _('Application Secret PKCS#11 Configuration Deleted')
+        APPSECRET_SOFTWARE_CREATED = (
+            'APPSECRET_SOFTWARE_CREATED',
+            _('Application Secret Software Configuration Created'),
+        )
+        APPSECRET_SOFTWARE_UPDATED = (
+            'APPSECRET_SOFTWARE_UPDATED',
+            _('Application Secret Software Configuration Updated'),
+        )
+        APPSECRET_SOFTWARE_DELETED = (
+            'APPSECRET_SOFTWARE_DELETED',
+            _('Application Secret Software Configuration Deleted'),
+        )
+        CRYPTO_PROVIDER_CREATED = 'CRYPTO_PROVIDER_CREATED', _('Crypto Provider Created')
+        CRYPTO_PROVIDER_UPDATED = 'CRYPTO_PROVIDER_UPDATED', _('Crypto Provider Updated')
+        CRYPTO_PROVIDER_DELETED = 'CRYPTO_PROVIDER_DELETED', _('Crypto Provider Deleted')
+        CRYPTO_PKCS11_CONFIG_CREATED = 'CRYPTO_PKCS11_CONFIG_CREATED', _('Crypto PKCS#11 Configuration Created')
+        CRYPTO_PKCS11_CONFIG_UPDATED = 'CRYPTO_PKCS11_CONFIG_UPDATED', _('Crypto PKCS#11 Configuration Updated')
+        CRYPTO_PKCS11_CONFIG_DELETED = 'CRYPTO_PKCS11_CONFIG_DELETED', _('Crypto PKCS#11 Configuration Deleted')
+        CRYPTO_SOFTWARE_CONFIG_CREATED = 'CRYPTO_SOFTWARE_CONFIG_CREATED', _('Crypto Software Configuration Created')
+        CRYPTO_SOFTWARE_CONFIG_UPDATED = 'CRYPTO_SOFTWARE_CONFIG_UPDATED', _('Crypto Software Configuration Updated')
+        CRYPTO_SOFTWARE_CONFIG_DELETED = 'CRYPTO_SOFTWARE_CONFIG_DELETED', _('Crypto Software Configuration Deleted')
+        CRYPTO_REST_CONFIG_CREATED = 'CRYPTO_REST_CONFIG_CREATED', _('Crypto REST Configuration Created')
+        CRYPTO_REST_CONFIG_UPDATED = 'CRYPTO_REST_CONFIG_UPDATED', _('Crypto REST Configuration Updated')
+        CRYPTO_REST_CONFIG_DELETED = 'CRYPTO_REST_CONFIG_DELETED', _('Crypto REST Configuration Deleted')
+        SECURITY_CONFIG_CREATED = 'SECURITY_CONFIG_CREATED', _('Security Configuration Created')
+        SECURITY_CONFIG_DELETED = 'SECURITY_CONFIG_DELETED', _('Security Configuration Deleted')
+        CA_UPDATED = 'CA_UPDATED', _('CA Updated')
+        TRUSTSTORE_CREATED = 'TRUSTSTORE_CREATED', _('Truststore Created')
+        TRUSTSTORE_UPDATED = 'TRUSTSTORE_UPDATED', _('Truststore Updated')
+        TRUSTSTORE_DELETED = 'TRUSTSTORE_DELETED', _('Truststore Deleted')
+        TRUSTSTORE_ENTRY_CREATED = 'TRUSTSTORE_ENTRY_CREATED', _('Truststore Certificate Created')
+        TRUSTSTORE_ENTRY_UPDATED = 'TRUSTSTORE_ENTRY_UPDATED', _('Truststore Certificate Updated')
+        TRUSTSTORE_ENTRY_DELETED = 'TRUSTSTORE_ENTRY_DELETED', _('Truststore Certificate Deleted')
+        DOMAIN_UPDATED = 'DOMAIN_UPDATED', _('Domain Updated')
+        DOMAIN_PROFILE_CREATED = 'DOMAIN_PROFILE_CREATED', _('Domain Certificate Profile Assignment Created')
+        DOMAIN_PROFILE_UPDATED = 'DOMAIN_PROFILE_UPDATED', _('Domain Certificate Profile Assignment Updated')
+        DOMAIN_PROFILE_DELETED = 'DOMAIN_PROFILE_DELETED', _('Domain Certificate Profile Assignment Deleted')
+        CERT_PROFILE_CREATED = 'CERT_PROFILE_CREATED', _('Certificate Profile Created')
+        CERT_PROFILE_UPDATED = 'CERT_PROFILE_UPDATED', _('Certificate Profile Updated')
+        CERT_PROFILE_DELETED = 'CERT_PROFILE_DELETED', _('Certificate Profile Deleted')
+        DEVID_REGISTRATION_CREATED = 'DEVID_REGISTRATION_CREATED', _('DevID Registration Created')
+        DEVID_REGISTRATION_UPDATED = 'DEVID_REGISTRATION_UPDATED', _('DevID Registration Updated')
+        DEVID_REGISTRATION_DELETED = 'DEVID_REGISTRATION_DELETED', _('DevID Registration Deleted')
+        AGENT_PROFILE_CREATED = 'AGENT_PROFILE_CREATED', _('Agent Profile Created')
+        AGENT_PROFILE_UPDATED = 'AGENT_PROFILE_UPDATED', _('Agent Profile Updated')
+        AGENT_PROFILE_DELETED = 'AGENT_PROFILE_DELETED', _('Agent Profile Deleted')
         SECURITY_CONFIG_CHANGED = 'SECURITY_CONFIG_CHANGED', _('Security Config Changed')
         DEVICE_ADDED = 'DEVICE_ADDED', _('Device Added')
         DEVICE_DELETED = 'DEVICE_DELETED', _('Device Deleted')
@@ -56,6 +110,11 @@ class AuditLog(models.Model):
         CRYPTO_GET_PUBLIC_KEY = 'CRYPTO_GET_PUBLIC_KEY', _('Crypto: Get Public Key')
         CRYPTO_SIGN = 'CRYPTO_SIGN', _('Crypto: Sign')
         CRYPTO_DESTROY_MANAGED_KEY = 'CRYPTO_DESTROY_MANAGED_KEY', _('Crypto: Destroy Managed Key')
+        SCEP_ENROLLMENT = 'SCEP_ENROLLMENT', _('SCEP: Enrollment')
+        SCEP_RENEWAL = 'SCEP_RENEWAL', _('SCEP: Renewal')
+        SCEP_RETRY = 'SCEP_RETRY', _('SCEP: Verified Retry')
+        SCEP_REJECTED = 'SCEP_REJECTED', _('SCEP: Request Rejected')
+        SCEP_SECRET_PROVISIONED = 'SCEP_SECRET_PROVISIONED', _('SCEP: Enrollment Secret Provisioned')
 
     timestamp = models.DateTimeField(
         verbose_name=_('Timestamp'),

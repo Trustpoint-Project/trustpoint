@@ -32,11 +32,7 @@ class TestRequestContext:
         operation = 'certificate_request'
         protocol = 'est'
 
-        context = BaseRequestContext(
-            domain_str=domain_str,
-            operation=operation,
-            protocol=protocol
-        )
+        context = BaseRequestContext(domain_str=domain_str, operation=operation, protocol=protocol)
 
         assert context.domain_str == domain_str
         assert context.operation == operation
@@ -46,11 +42,7 @@ class TestRequestContext:
 
     def test_to_dict(self):
         """Test that to_dict returns a dictionary representation of the context."""
-        context = BaseRequestContext(
-            operation='test_operation',
-            protocol='test_protocol',
-            domain_str='test.domain.com'
-        )
+        context = BaseRequestContext(operation='test_operation', protocol='test_protocol', domain_str='test.domain.com')
 
         result = context.to_dict()
 
@@ -67,10 +59,7 @@ class TestRequestContext:
         mock_device = Mock(spec=DeviceModel)
         mock_domain = Mock(spec=DomainModel)
 
-        context = BaseRequestContext(
-            device=mock_device,
-            domain=mock_domain
-        )
+        context = BaseRequestContext(device=mock_device, domain=mock_domain)
 
         result = context.to_dict()
 
@@ -83,14 +72,9 @@ class TestRequestContext:
         assert context.device is mock_device
         assert context.domain is mock_domain
 
-
     def test_clear(self):
         """Test that clear() resets all attributes to None."""
-        context = BaseRequestContext(
-            operation='test_operation',
-            protocol='est',
-            domain_str='example.com'
-        )
+        context = BaseRequestContext(operation='test_operation', protocol='est', domain_str='example.com')
 
         # Verify some fields are set
         assert context.operation == 'test_operation'
@@ -121,7 +105,7 @@ class TestRequestContext:
             domain=mock_domain,
             device=mock_device,
             client_certificate=mock_cert,
-            client_intermediate_certificate=mock_cert_list
+            client_intermediate_certificate=mock_cert_list,
         )
 
         # Verify all fields are set correctly
@@ -161,11 +145,19 @@ class TestRequestContext:
         field_names = [field.name for field in fields(context)]
 
         expected_fields = [
-            'operation', 'protocol', 'parsed_message',
-            'domain_str', 'domain', 'device',
-            'owner_credential', 'issuer_credential',
-            'client_certificate', 'client_intermediate_certificate',
-            'event', 'event_payload', 'workflow2_outcome'
+            'operation',
+            'protocol',
+            'parsed_message',
+            'domain_str',
+            'domain',
+            'device',
+            'owner_credential',
+            'issuer_credential',
+            'client_certificate',
+            'client_intermediate_certificate',
+            'event',
+            'event_payload',
+            'workflow2_outcome',
         ]
 
         assert len(field_names) == len(expected_fields)
@@ -173,11 +165,7 @@ class TestRequestContext:
 
     def test_to_dict_after_clear(self):
         """Test that to_dict works correctly after clear()."""
-        context = BaseRequestContext(
-            operation='test',
-            protocol='est',
-            domain_str='domain'
-        )
+        context = BaseRequestContext(operation='test', protocol='est', domain_str='domain')
 
         context.clear()
         result = context.to_dict()
@@ -192,22 +180,51 @@ class TestRequestContext:
         field_names = [field.name for field in fields(context)]
 
         expected_fields = [
-            'raw_message', 'parsed_message', 'operation', 'protocol',
-            'cert_profile_str', 'est_encoding',
-            'domain_str', 'domain', 'device', 'certificate_profile_model', 'cert_requested',
-            'est_username', 'est_password',
-            'client_certificate', 'client_intermediate_certificate',
-            'cert_requested_profile_validated', 'issued_certificate',
+            'raw_message',
+            'parsed_message',
+            'operation',
+            'protocol',
+            'cert_profile_str',
+            'est_encoding',
+            'domain_str',
+            'domain',
+            'device',
+            'certificate_profile_model',
+            'cert_requested',
+            'est_username',
+            'est_password',
+            'est_channel_binding_verified',
+            'client_certificate',
+            'client_intermediate_certificate',
+            'cert_requested_profile_validated',
+            'issued_certificate',
             'csr_strict',
-            'owner_credential', 'issuer_credential',
+            'owner_credential',
+            'issuer_credential',
             'actor',
-            'http_response_status', 'http_response_content',
+            'http_response_status',
+            'http_response_content',
             'http_response_content_type',
-            'event', 'event_payload', 'workflow2_outcome',
-            'allow_ca_certificate_request', 'request_data', 'validated_request_data',
-            'est_server_host', 'est_server_port', 'est_server_path', 'est_server_truststore',
-            'est_client_cert_pem', 'est_client_key_pem',
-            'issued_certificate_chain', 'http_response_headers',
+            'event',
+            'event_payload',
+            'workflow2_outcome',
+            'failure_notification_sent',
+            'request_failed',
+            'authenticated_secret_field',
+            'authenticated_secret_version',
+            'authenticated_secret_config',
+            'authenticated_secret_pk',
+            'allow_ca_certificate_request',
+            'request_data',
+            'validated_request_data',
+            'est_server_host',
+            'est_server_port',
+            'est_server_path',
+            'est_server_truststore',
+            'est_client_cert_pem',
+            'est_client_key_pem',
+            'issued_certificate_chain',
+            'http_response_headers',
         ]
 
         assert len(field_names) == len(expected_fields)

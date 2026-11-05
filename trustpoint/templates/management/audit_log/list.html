@@ -3,89 +3,296 @@
 {% load internationalization_tags %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+<div class="card">
+
+    {# ============================================================ #}
+    {# Header                                                      #}
+    {# ============================================================ #}
     <div class="card-header">
-        <h1>{% trans 'Audit Log' %}</h1>
+        <h1 class="mb-1">
+            {% trans 'Audit Log' %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% trans 'Review security-relevant operations and changes recorded by Trustpoint.' %}
+        </p>
     </div>
-    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
 
-        {# Filter form #}
-        <form method="get" class="row g-2 mb-3 align-items-end">
-            <div class="col-auto">
-                {{ filter.form.operation_type.label_tag }}
-                {{ filter.form.operation_type }}
-            </div>
-            <div class="col-auto">
-                {{ filter.form.target_content_type.label_tag }}
-                {{ filter.form.target_content_type }}
-            </div>
-            <div class="col-auto">
-                {{ filter.form.target_object_id.label_tag }}
-                {{ filter.form.target_object_id }}
-            </div>
-            <div class="col-auto">
-                {{ filter.form.actor.label_tag }}
-                {{ filter.form.actor }}
-            </div>
-            <div class="col-auto">
-                {{ filter.form.timestamp_after.label_tag }}
-                {{ filter.form.timestamp_after }}
-            </div>
-            <div class="col-auto">
-                {{ filter.form.timestamp_before.label_tag }}
-                {{ filter.form.timestamp_before }}
-            </div>
-            <div class="col-auto d-flex gap-2">
-                <button type="submit" class="btn btn-primary btn-sm">{% trans 'Filter' %}</button>
-                <a href="{% url 'management:audit-log' %}" class="btn btn-outline-secondary btn-sm">{% trans 'Reset' %}</a>
-            </div>
-        </form>
 
-        {# Results table #}
-        <table class="table table-sm table-hover">
-            <thead>
-                <tr>
-                    <th>{% trans 'Timestamp' %}</th>
-                    <th>{% trans 'Operation' %}</th>
-                    <th>{% trans 'Target Type' %}</th>
-                    <th>{% trans 'Target' %}</th>
-                    <th>{% trans 'Actor' %}</th>
-                    <th>{% trans 'Details' %}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for entry in audit_log_entries %}
-                <tr>
-                    <td class="text-nowrap">{{ entry.timestamp|local_datetime }}</td>
-                    <td>{{ entry.get_operation_type_display }}</td>
-                    <td>{{ entry.target_content_type }}</td>
-                    <td>{{ entry.target_display }}</td>
-                    <td>{{ entry.actor|default:_('System') }}</td>
-                    <td>
-                        {% if entry.details %}
-                            <details>
-                                <summary>{% trans 'View' %}</summary>
-                                <ul class="list-unstyled mb-0 small">
-                                    {% for key, value in entry.details.items %}
-                                        <li><span class="text-muted">{{ key }}:</span> {{ value }}</li>
-                                    {% endfor %}
-                                </ul>
-                            </details>
-                        {% else %}
-                            <span class="text-muted">-</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="6" class="text-center text-muted">{% trans 'No audit log entries found.' %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {# ============================================================ #}
+    {# Content                                                     #}
+    {# ============================================================ #}
+    <div class="card-body text-start">
 
-        {% include 'trustpoint/pagination.html' %}
+        {# ======================================================== #}
+        {# Filters                                                 #}
+        {# ======================================================== #}
+        <section class="mb-5">
+
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Filter Audit Log' %}
+                </h2>
+
+                <p class="text-muted mb-0">
+                    {% trans 'Limit the displayed audit events by operation, target, actor or time range.' %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+
+            <form method="get">
+
+                <div class="row g-3">
+
+                    <div class="col-md-6 col-xl-3">
+                        <label
+                            for="{{ filter.form.operation_type.id_for_label }}"
+                            class="form-label"
+                        >
+                            {{ filter.form.operation_type.label }}
+                        </label>
+
+                        {{ filter.form.operation_type }}
+                    </div>
+
+
+                    <div class="col-md-6 col-xl-3">
+                        <label
+                            for="{{ filter.form.target_content_type.id_for_label }}"
+                            class="form-label"
+                        >
+                            {{ filter.form.target_content_type.label }}
+                        </label>
+
+                        {{ filter.form.target_content_type }}
+                    </div>
+
+
+                    <div class="col-md-6 col-xl-3">
+                        <label
+                            for="{{ filter.form.target_object_id.id_for_label }}"
+                            class="form-label"
+                        >
+                            {{ filter.form.target_object_id.label }}
+                        </label>
+
+                        {{ filter.form.target_object_id }}
+                    </div>
+
+
+                    <div class="col-md-6 col-xl-3">
+                        <label
+                            for="{{ filter.form.actor.id_for_label }}"
+                            class="form-label"
+                        >
+                            {{ filter.form.actor.label }}
+                        </label>
+
+                        {{ filter.form.actor }}
+                    </div>
+
+
+                    <div class="col-md-6 col-xl-3">
+                        <label
+                            for="{{ filter.form.timestamp_after.id_for_label }}"
+                            class="form-label"
+                        >
+                            {{ filter.form.timestamp_after.label }}
+                        </label>
+
+                        {{ filter.form.timestamp_after }}
+                    </div>
+
+
+                    <div class="col-md-6 col-xl-3">
+                        <label
+                            for="{{ filter.form.timestamp_before.id_for_label }}"
+                            class="form-label"
+                        >
+                            {{ filter.form.timestamp_before.label }}
+                        </label>
+
+                        {{ filter.form.timestamp_before }}
+                    </div>
+
+                </div>
+
+
+                <div class="d-flex gap-2 mt-4">
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                    >
+                        {% trans 'Apply Filters' %}
+                    </button>
+
+                    <a
+                        href="{% url 'management:audit-log' %}"
+                        class="btn btn-outline-secondary"
+                    >
+                        {% trans 'Reset' %}
+                    </a>
+
+                </div>
+
+            </form>
+
+        </section>
+
+
+        {# ======================================================== #}
+        {# Audit Log Entries                                       #}
+        {# ======================================================== #}
+        <section>
+
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Audit Log Entries' %}
+                </h2>
+
+                <p class="text-muted mb-0">
+                    {% trans 'Recorded operations are shown in chronological order according to the current query.' %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+
+            <div class="table-responsive">
+
+                <table class="table table-hover align-middle">
+
+                    <thead>
+                        <tr>
+                            <th class="text-nowrap">
+                                {% trans 'Timestamp' %}
+                            </th>
+
+                            <th>
+                                {% trans 'Operation' %}
+                            </th>
+
+                            <th>
+                                {% trans 'Target Type' %}
+                            </th>
+
+                            <th>
+                                {% trans 'Target' %}
+                            </th>
+
+                            <th>
+                                {% trans 'Actor' %}
+                            </th>
+
+                            <th>
+                                {% trans 'Details' %}
+                            </th>
+                        </tr>
+                    </thead>
+
+
+                    <tbody>
+
+                        {% for entry in audit_log_entries %}
+
+                            <tr>
+
+                                <td class="text-nowrap">
+                                    {{ entry.timestamp|local_datetime }}
+                                </td>
+
+                                <td>
+                                    {{ entry.get_operation_type_display }}
+                                </td>
+
+                                <td>
+                                    {{ entry.target_content_type }}
+                                </td>
+
+                                <td>
+                                    {{ entry.target_display }}
+                                </td>
+
+                                <td>
+                                    {% if entry.actor %}
+                                        {{ entry.actor }}
+                                    {% else %}
+                                        <span class="text-muted">
+                                            {% trans 'System' %}
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if entry.details %}
+
+                                        <details>
+                                            <summary class="text-primary">
+                                                {% trans 'View Details' %}
+                                            </summary>
+
+                                            <div class="mt-2">
+                                                <dl class="mb-0 small">
+
+                                                    {% for key, value in entry.details.items %}
+                                                        <div class="mb-1">
+                                                            <dt class="d-inline text-muted">
+                                                                {{ key }}:
+                                                            </dt>
+
+                                                            <dd class="d-inline mb-0">
+                                                                {{ value }}
+                                                            </dd>
+                                                        </div>
+                                                    {% endfor %}
+
+                                                </dl>
+                                            </div>
+
+                                        </details>
+
+                                    {% else %}
+                                        <span class="text-muted">
+                                            —
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                            </tr>
+
+                        {% empty %}
+
+                            <tr>
+                                <td
+                                    colspan="6"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans 'No audit log entries found.' %}
+                                </td>
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+
+            {# ==================================================== #}
+            {# Pagination                                          #}
+            {# ==================================================== #}
+            <div class="mt-3">
+                {% include 'trustpoint/pagination.html' %}
+            </div>
+
+        </section>
 
     </div>
+
 </div>
 {% endblock %}

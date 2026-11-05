@@ -18,18 +18,14 @@ from trustpoint_core.serializer import (
 
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingPkiProtocol, OnboardingProtocol
 from onboarding.models import NoOnboardingConfigModel, OnboardingConfigModel
+from pki.key_types import OWNER_CREDENTIAL_KEY_TYPE_CHOICES
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
+from pki.services import credential_upload as uploads
+from pki.util.san import SAN_FIELDS, SanValidationError, normalize_san_values
 from util.field import UniqueNameValidator
 
-_KEY_TYPE_CHOICES = [
-    'RSA-2048',
-    'RSA-3072',
-    'RSA-4096',
-    'ECC-SECP256R1',
-    'ECC-SECP384R1',
-    'ECC-SECP521R1',
-]
+_KEY_TYPE_CHOICES = [value for value, _label in OWNER_CREDENTIAL_KEY_TYPE_CHOICES]
 
 class OwnerCredentialSerializer(serializers.ModelSerializer[OwnerCredentialModel]):
     """Read-only serializer for OwnerCredentialModel instances."""
@@ -110,28 +106,35 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
     )
 
     def _parse_private_key(self, attrs: dict[str, Any]) -> PrivateKeySerializer:
-        """Parse and return the private key serializer from uploaded file."""
-        pk_file = attrs.get('private_key_file')
-        if pk_file is None:
-            raise serializers.ValidationError({'private_key_file': 'No private key file provided.'})
-        pw = attrs.get('private_key_file_password') or None
-        if isinstance(pw, str):
-            pw = pw.encode('utf-8')
+        """Parse bounded private-key input and retain DRF field-level errors."""
         try:
-            return PrivateKeySerializer.from_bytes(pk_file.read(), pw)
-        except Exception as exc:
-            msg = 'Failed to parse the private key file. Wrong password or corrupted.'
+            data = uploads.read_credential_upload(
+                attrs.get('private_key_file'), kind=uploads.CredentialFileKind.PRIVATE_KEY,
+            )
+            password = uploads.encode_upload_password(attrs.get('private_key_file_password'))
+            return uploads.parse_private_key(data, password)
+        except uploads.CredentialUploadError as exc:
+            messages = {
+                uploads.CredentialUploadErrorCode.MISSING: 'No private key file provided.',
+                uploads.CredentialUploadErrorCode.TOO_LARGE: 'Private key file is too large, max. 64 kiB.',
+                uploads.CredentialUploadErrorCode.INVALID_PASSWORD: (
+                    'The private key password contains invalid data that cannot be encoded in UTF-8.'
+                ),
+            }
+            msg = messages.get(exc.code, 'Failed to parse the private key file. Wrong password or corrupted.')
             raise serializers.ValidationError({'private_key_file': msg}) from exc
 
     def _parse_certificate(self, attrs: dict[str, Any]) -> CertificateSerializer:
-        """Parse and return the certificate serializer from uploaded file."""
-        cert_file = attrs.get('certificate')
-        if cert_file is None:
-            raise serializers.ValidationError({'certificate': 'No certificate file provided.'})
+        """Parse a bounded certificate and retain DRF field-level errors."""
         try:
-            return CertificateSerializer.from_bytes(cert_file.read())
-        except Exception as exc:
-            msg = 'Failed to parse the certificate. Seems to be corrupted.'
+            data = uploads.read_credential_upload(attrs.get('certificate'), kind=uploads.CredentialFileKind.CERTIFICATE)
+            return uploads.parse_certificate(data)
+        except uploads.CredentialUploadError as exc:
+            messages = {
+                uploads.CredentialUploadErrorCode.MISSING: 'No certificate file provided.',
+                uploads.CredentialUploadErrorCode.TOO_LARGE: 'Certificate file is too large, max. 64 kiB.',
+            }
+            msg = messages.get(exc.code, 'Failed to parse the certificate. Seems to be corrupted.')
             raise serializers.ValidationError({'certificate': msg}) from exc
 
     def _check_duplicate_certificate(self, certificate_serializer: CertificateSerializer) -> None:
@@ -156,14 +159,17 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
             raise serializers.ValidationError({'certificate': msg})
 
     def _parse_chain(self, attrs: dict[str, Any]) -> CertificateCollectionSerializer | None:
-        """Parse and return the optional certificate chain serializer."""
-        chain_file = attrs.get('certificate_chain')
-        if not chain_file:
+        """Parse an optional bounded chain and retain DRF field-level errors."""
+        upload = attrs.get('certificate_chain')
+        if not upload:
             return None
         try:
-            return CertificateCollectionSerializer.from_bytes(chain_file.read())
-        except Exception as exc:
-            msg = 'Failed to parse the certificate chain.'
+            data = uploads.read_credential_upload(upload, kind=uploads.CredentialFileKind.CHAIN)
+            return uploads.parse_certificate_chain(data)
+        except uploads.CredentialUploadError as exc:
+            msg = 'Certificate chain file is too large, max. 256 kiB.' if (
+                exc.code == uploads.CredentialUploadErrorCode.TOO_LARGE
+            ) else 'Failed to parse the certificate chain.'
             raise serializers.ValidationError({'certificate_chain': msg}) from exc
 
     def _resolve_unique_name(
@@ -210,7 +216,41 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
             errors = exc.message_dict if hasattr(exc, 'message_dict') else exc.messages
             raise serializers.ValidationError(errors) from exc
 
-class OwnerCredentialEstBasicAuthSerializer(serializers.Serializer[Any]):
+class OwnerCredentialEstSerializer(serializers.Serializer[Any]):
+    """Validate common owner-credential names and EST truststore references."""
+
+    def validate_unique_name(self, value: str) -> str:
+        """Validate that the unique name is not already in use."""
+        if value and OwnerCredentialModel.objects.filter(unique_name=value).exists():
+            msg = f'An owner credential with name "{value}" already exists.'
+            raise serializers.ValidationError(msg)
+        return value
+
+    def validate_truststore_id(self, value: int | None) -> int | None:
+        """Validate that the truststore exists if provided."""
+        if value is not None:
+            from pki.models.truststore import TruststoreModel  # noqa: PLC0415
+            if not TruststoreModel.objects.filter(pk=value).exists():
+                msg = f'Truststore with id {value} does not exist.'
+                raise serializers.ValidationError(msg)
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Derive unique_name if not provided."""
+        unique_name = attrs.get('unique_name') or ''
+        if not unique_name:
+            host = attrs['remote_host']
+            candidate = host
+            counter = 1
+            while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
+                candidate = f'{host}-{counter}'
+                counter += 1
+            unique_name = candidate
+        attrs['_unique_name'] = unique_name
+        return attrs
+
+
+class OwnerCredentialEstBasicAuthSerializer(OwnerCredentialEstSerializer):
     """Serializer for creating an OwnerCredential via EST with Basic Auth (username/password)."""
 
     unique_name = serializers.CharField(
@@ -255,36 +295,6 @@ class OwnerCredentialEstBasicAuthSerializer(serializers.Serializer[Any]):
         help_text='Optional ID of a TLS truststore to verify the EST server certificate.',
     )
 
-    def validate_unique_name(self, value: str) -> str:
-        """Validate that the unique name is not already in use."""
-        if value and OwnerCredentialModel.objects.filter(unique_name=value).exists():
-            msg = f'An owner credential with name "{value}" already exists.'
-            raise serializers.ValidationError(msg)
-        return value
-
-    def validate_truststore_id(self, value: int | None) -> int | None:
-        """Validate that the truststore exists if provided."""
-        if value is not None:
-            from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-            if not TruststoreModel.objects.filter(pk=value).exists():
-                msg = f'Truststore with id {value} does not exist.'
-                raise serializers.ValidationError(msg)
-        return value
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """Derive unique_name if not provided."""
-        unique_name = attrs.get('unique_name') or ''
-        if not unique_name:
-            host = attrs['remote_host']
-            candidate = host
-            counter = 1
-            while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
-                candidate = f'{host}-{counter}'
-                counter += 1
-            unique_name = candidate
-        attrs['_unique_name'] = unique_name
-        return attrs
-
     def create(self, validated_data: dict[str, Any]) -> OwnerCredentialModel:
         """Create an OwnerCredentialModel with EST Basic Auth config."""
         from pki.models.truststore import TruststoreModel  # noqa: PLC0415
@@ -309,7 +319,7 @@ class OwnerCredentialEstBasicAuthSerializer(serializers.Serializer[Any]):
             owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST,
         )
 
-class OwnerCredentialEstMtlsSerializer(serializers.Serializer[Any]):
+class OwnerCredentialEstMtlsSerializer(OwnerCredentialEstSerializer):
     """Serializer for creating an OwnerCredential via EST with IDevID-based mTLS onboarding."""
 
     unique_name = serializers.CharField(
@@ -358,36 +368,6 @@ class OwnerCredentialEstMtlsSerializer(serializers.Serializer[Any]):
         allow_null=True,
         help_text='Optional ID of a TLS truststore to verify the EST server certificate.',
     )
-
-    def validate_unique_name(self, value: str) -> str:
-        """Validate that the unique name is not already in use."""
-        if value and OwnerCredentialModel.objects.filter(unique_name=value).exists():
-            msg = f'An owner credential with name "{value}" already exists.'
-            raise serializers.ValidationError(msg)
-        return value
-
-    def validate_truststore_id(self, value: int | None) -> int | None:
-        """Validate that the truststore exists if provided."""
-        if value is not None:
-            from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-            if not TruststoreModel.objects.filter(pk=value).exists():
-                msg = f'Truststore with id {value} does not exist.'
-                raise serializers.ValidationError(msg)
-        return value
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """Derive unique_name if not provided."""
-        unique_name = attrs.get('unique_name') or ''
-        if not unique_name:
-            host = attrs['remote_host']
-            candidate = host
-            counter = 1
-            while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
-                candidate = f'{host}-{counter}'
-                counter += 1
-            unique_name = candidate
-        attrs['_unique_name'] = unique_name
-        return attrs
 
     def create(self, validated_data: dict[str, Any]) -> OwnerCredentialModel:
         """Create an OwnerCredentialModel with EST onboarding config."""
@@ -458,3 +438,17 @@ class CertificateIssuanceContentSerializer(serializers.Serializer[Any]):
             msg = f'Certificate profile with pk {value} does not exist.'
             raise serializers.ValidationError(msg)
         return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Normalize editable SAN content and return field-level errors for malformed identities."""
+        errors = {}
+        for field in SAN_FIELDS:
+            if field not in attrs:
+                continue
+            try:
+                attrs[field] = ', '.join(normalize_san_values(field, attrs[field]))
+            except SanValidationError as exc:
+                errors[field] = str(exc)
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs

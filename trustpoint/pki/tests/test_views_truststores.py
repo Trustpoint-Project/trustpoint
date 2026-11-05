@@ -232,6 +232,13 @@ class TestTruststoreCreateViewFormValid:
         view.request.user = Mock(has_perm=Mock(return_value=True))
         return view
 
+    @pytest.fixture(autouse=True)
+    def mock_creation_audit(self, monkeypatch):
+        # These branch tests use a fake truststore; integration tests exercise persistence.
+        audit = Mock()
+        monkeypatch.setattr('pki.views.truststores.audit_security_change', audit)
+        return audit
+
     @pytest.fixture
     def mock_form(self):
         mock_form = Mock(spec=TruststoreAddForm)

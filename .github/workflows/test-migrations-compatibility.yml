@@ -7,10 +7,10 @@ on:
     paths:
       - "**/migrations/**"
       - .github/workflows/test-migrations-compatibility.yml
+      - .github/actions/setup-uv-action/**
 
 env:
   TRUSTPOINT_OPERATIONAL_DATABASE: "sqlite"
-  SECRET_KEY: "test-secret-key-for-ci"
 
 permissions:
   contents: read
@@ -18,7 +18,6 @@ permissions:
 jobs:
   test-migrations:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -26,9 +25,16 @@ jobs:
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action
 
+      - name: Keep the database outside checkout cleanup
+        run: echo "TRUSTPOINT_OPERATIONAL_SQLITE_PATH=$RUNNER_TEMP/migration-compatibility.sqlite3" >> "$GITHUB_ENV"
+
       - name: Apply current branch migrations
         run: uv run manage.py migrate
         working-directory: trustpoint
+
+      - name: Seed a row to verify after checkout
+        run: |
+          uv run trustpoint/manage.py shell -c "from management.models.organization import OrganizationModel; OrganizationModel.objects.create(name='migration-compatibility-probe')"
 
       - name: Checkout base branch
         uses: actions/checkout@v7
@@ -40,9 +46,8 @@ jobs:
 
       - name: Verify base code works with new schema
         run: |
-          # Check that Django can load with the new schema
           uv run manage.py check
-          # Show migration status
           uv run manage.py showmigrations
+          uv run manage.py shell -c "from management.models.organization import OrganizationModel; from django.apps import apps; assert OrganizationModel.objects.get(name='migration-compatibility-probe').organization == 'trustpoint'; [list(model._default_manager.all()[:1]) for model in apps.get_models() if model._meta.managed and not model._meta.proxy]"
           echo "✅ Migrations are compatible with base branch"
         working-directory: trustpoint

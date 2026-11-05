@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
@@ -9,7 +12,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('crypto', '0001_initial'),
-        ('devices', '0002_initial'),
+        ('devices', '0001_initial'),
+        ('management', '0001_initial'),
         ('onboarding', '0002_initial'),
         ('pki', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -150,6 +154,11 @@ class Migration(migrations.Migration):
             model_name='domainmodel',
             name='issuing_ca',
             field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, related_name='domains', to='pki.camodel', verbose_name='Issuing CA'),
+        ),
+        migrations.AddField(
+            model_name='domainmodel',
+            name='organization',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='domains', to='management.organizationmodel', verbose_name='Organization'),
         ),
         migrations.AddField(
             model_name='domainallowedcertificateprofilemodel',
@@ -571,7 +580,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='camodel',
-            constraint=models.CheckConstraint(condition=models.Q(models.Q(('ca_type', -1), ('certificate__isnull', False), ('credential__isnull', True)), models.Q(('ca_type__in', [4, 5]), ('credential__isnull', True)), models.Q(('ca_type__in', [0, 1, 2, 3, 6, 7]), ('certificate__isnull', True), ('credential__isnull', False)), _connector='OR'), name='ca_mode_constraint', violation_error_message='Invalid CA configuration'),
+            constraint=models.CheckConstraint(condition=models.Q(models.Q(('ca_type', -1), ('certificate__isnull', False), ('credential__isnull', True)), models.Q(('ca_type__in', [4, 5]), ('credential__isnull', True)), models.Q(('ca_type__in', [0, 1, 2, 3, 6, 7, 8]), ('certificate__isnull', True), ('credential__isnull', False)), _connector='OR'), name='ca_mode_constraint', violation_error_message='Invalid CA configuration'),
         ),
         migrations.AlterUniqueTogether(
             name='truststoreordermodel',

@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.conf import settings
 from django.http import Http404
@@ -24,12 +25,19 @@ from help_pages.base import (
     build_keygen_section,
     build_tls_trust_store_section,
 )
-from help_pages.commands import CmpClientCertificateCommandBuilder, EstClientCertificateCommandBuilder
+from help_pages.commands import (
+    CmpClientCertificateCommandBuilder,
+    EstClientCertificateCommandBuilder,
+    EstUsernamePasswordCommandBuilder,
+)
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import TlsSettings
 from pki.models import CaModel, DevIdRegistration, DomainModel, IssuedCredentialModel, OwnerCredentialModel
 from trustpoint.views.base import UserPermissionRequiredMixin
 from users.permissions import AppPermissions
+
+if TYPE_CHECKING:
+    from django_stubs_ext import StrPromise
 
 PKI_PAGE_DOMAIN_SUBCATEGORY = 'pki:domain'
 PKI_PAGE_TRUSTSTORES_SUBCATEGORY = 'pki:truststores'
@@ -55,7 +63,7 @@ class BaseHelpView(UserPermissionRequiredMixin, DetailView[DevIdRegistration]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -81,10 +89,15 @@ class BaseHelpView(UserPermissionRequiredMixin, DetailView[DevIdRegistration]):
             err_msg = _('No strategy configured.')
             raise RuntimeError(err_msg)
         help_context = self._make_context()
+        if help_context.domain is None:
+            raise Http404(_('Failed to get domain from DevidRegistration.'))
         sections, heading = self.strategy.build_sections(help_context)
         context['help_page'] = HelpPage(heading=heading, sections=sections)
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
+        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
+        context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
         context['back_url'] = 'pki:domains-config'
+        context['back_url_pk'] = help_context.domain.pk
         return context
 
 
@@ -182,8 +195,8 @@ class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
                     value_render_type=ValueRenderType.CODE,
                 ),
                 HelpRow(
-                    key=_non_lazy('Convert DER to PEM'),
-                    value=EstClientCertificateCommandBuilder.get_idevid_der_pem_conversion_command(),
+                    key=_non_lazy('Convert PKCS#7 to PEM'),
+                    value=EstUsernamePasswordCommandBuilder.get_domain_credential_conversion_p7_pem_command(),
                     value_render_type=ValueRenderType.CODE,
                 ),
             ],
@@ -251,7 +264,7 @@ class DevIdRegistrationDetailView(UserPermissionRequiredMixin, DetailView[DevIdR
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -303,7 +316,7 @@ class DevIdRegistrationHelpView(DevIdRegistrationDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -366,7 +379,7 @@ class DomainDetailView(DetailView[DomainModel]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -415,7 +428,7 @@ class DomainHelpView(DomainDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         public_key_info = domain.public_key_info
@@ -461,34 +474,31 @@ class DomainHelpView(DomainDetailView):
         )
 
 
-class IssuedCredentialDetailView(DetailView[IssuedCredentialModel]):
-    """View to display details of an IssuedCredential."""
-
-    model = IssuedCredentialModel
-    template_name = 'help/issued_credential_detail.html'
-    context_object_name = 'issued_credential'
+class CredentialDetailView[CredentialT: (IssuedCredentialModel, OwnerCredentialModel)](DetailView[CredentialT]):
+    """Build device, domain, and help-section context for either credential type."""
 
     page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
     strategy: HelpPageStrategy
+    credential_context_name: ClassVar[str]
+    missing_device_message: ClassVar[StrPromise]
+    keygen_file_name: str | None = None
 
     def _make_context(self) -> HelpContext:
-        issued_credential = self.object
-        device = getattr(issued_credential, 'device', None)
+        device = getattr(self.object, 'device', None)
         if not device:
-            raise Http404(_('Failed to get device from IssuedCredential.'))
+            raise Http404(self.missing_device_message)
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
-
         public_key_info = device.public_key_info
         if not public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
-        return HelpContext(
+        credential_fields: dict[str, Any] = {self.credential_context_name: self.object}
+        help_context = HelpContext(
             device=device,
-            issued_credential=issued_credential,
             allowed_app_profiles=[],
             domain=device.domain,
             domain_unique_name=device.domain.unique_name,
@@ -499,17 +509,28 @@ class IssuedCredentialDetailView(DetailView[IssuedCredentialModel]):
             cred_count=0,
             page_name=self.page_name,
             help_sections=[],
+            **credential_fields,
+        )
+        if self.keygen_file_name is None:
+            return help_context
+        return replace(
+            help_context,
+            help_sections=[
+                build_keygen_section(help_context=help_context, file_name=self.keygen_file_name),
+                build_issuing_ca_cert_section(domain=device.domain),
+                build_tls_trust_store_section(),
+            ],
         )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Get the context data for the IssuedCredential detail view."""
+        """Expose the credential-specific field and shared help context."""
         context = super().get_context_data(**kwargs)
         help_context = self._make_context()
         context.update(
             {
                 'page_name': help_context.page_name,
                 'device': help_context.device,
-                'issued_credential': help_context.issued_credential,
+                self.credential_context_name: getattr(help_context, self.credential_context_name),
                 'domain': help_context.domain,
                 'domain_unique_name': help_context.domain_unique_name,
                 'public_key_info': help_context.public_key_info,
@@ -518,193 +539,38 @@ class IssuedCredentialDetailView(DetailView[IssuedCredentialModel]):
             }
         )
         return context
+
+
+class IssuedCredentialDetailView(CredentialDetailView[IssuedCredentialModel]):
+    """View to display details of an IssuedCredential."""
+
+    model = IssuedCredentialModel
+    template_name = 'help/issued_credential_detail.html'
+    credential_context_name = context_object_name = 'issued_credential'
+    missing_device_message = _('Failed to get device from IssuedCredential.')
 
 
 class IssuedCredentialHelpView(IssuedCredentialDetailView):
     """View to display help pages for IssuedCredential."""
 
     template_name = 'help/help_page.html'
-    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
-
-    def _make_context(self) -> HelpContext:
-        issued_credential = self.object
-        device = getattr(issued_credential, 'device', None)
-        if not device:
-            raise Http404(_('Failed to get device from IssuedCredential.'))
-
-        host_base = (
-            f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
-        )
-
-        public_key_info = device.public_key_info
-        if not public_key_info:
-            raise Http404(PublicKeyInfoMissingErrorMsg)
-
-        help_context = HelpContext(
-            device=device,
-            issued_credential=issued_credential,
-            allowed_app_profiles=[],
-            domain=device.domain,
-            domain_unique_name=device.domain.unique_name,
-            public_key_info=public_key_info,
-            host_base=host_base,
-            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
-            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
-            cred_count=0,
-            page_name=self.page_name,
-        )
-
-        keygen_section = build_keygen_section(
-            help_context=help_context,
-            file_name='app_cert',
-        )
-
-        issuing_ca_cert_section = build_issuing_ca_cert_section(domain=device.domain)
-
-        tls_trust_store_section = build_tls_trust_store_section()
-
-        return HelpContext(
-            device=device,
-            issued_credential=issued_credential,
-            allowed_app_profiles=[],
-            domain=device.domain,
-            domain_unique_name=device.domain.unique_name,
-            public_key_info=public_key_info,
-            host_base=host_base,
-            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
-            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
-            cred_count=0,
-            page_name=self.page_name,
-            help_sections=[
-                keygen_section,
-                issuing_ca_cert_section,
-                tls_trust_store_section,
-            ],
-        )
+    keygen_file_name = 'app_cert'
 
 
-class OwnerCredentialDetailView(DetailView[OwnerCredentialModel]):
+class OwnerCredentialDetailView(CredentialDetailView[OwnerCredentialModel]):
     """View to display details of an OwnerCredential."""
 
     model = OwnerCredentialModel
     template_name = 'help/owner_credential_detail.html'
-    context_object_name = 'owner_credential'
-
-    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
-    strategy: HelpPageStrategy
-
-    def _make_context(self) -> HelpContext:
-        owner_credential = self.object
-        device = getattr(owner_credential, 'device', None)
-        if not device:
-            raise Http404(_('Failed to get device from OwnerCredential.'))
-
-        host_base = (
-            f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
-        )
-
-        public_key_info = device.public_key_info
-        if not public_key_info:
-            raise Http404(PublicKeyInfoMissingErrorMsg)
-
-        return HelpContext(
-            device=device,
-            owner_credential=owner_credential,
-            allowed_app_profiles=[],
-            domain=device.domain,
-            domain_unique_name=device.domain.unique_name,
-            public_key_info=public_key_info,
-            host_base=host_base,
-            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
-            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
-            cred_count=0,
-            page_name=self.page_name,
-            help_sections=[],
-        )
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Get the context data for the OwnerCredential detail view."""
-        context = super().get_context_data(**kwargs)
-        help_context = self._make_context()
-        context.update(
-            {
-                'page_name': help_context.page_name,
-                'device': help_context.device,
-                'owner_credential': help_context.owner_credential,
-                'domain': help_context.domain,
-                'domain_unique_name': help_context.domain_unique_name,
-                'public_key_info': help_context.public_key_info,
-                'host_base': help_context.host_base,
-                'help_sections': help_context.help_sections,
-            }
-        )
-        return context
+    credential_context_name = context_object_name = 'owner_credential'
+    missing_device_message = _('Failed to get device from OwnerCredential.')
 
 
 class OwnerCredentialHelpView(OwnerCredentialDetailView):
     """View to display help pages for OwnerCredential."""
 
     template_name = 'help/help_page.html'
-    page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
-
-    def _make_context(self) -> HelpContext:
-        owner_credential = self.object
-        device = getattr(owner_credential, 'device', None)
-        if not device:
-            raise Http404(_('Failed to get device from OwnerCredential.'))
-
-        host_base = (
-            f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
-        )
-
-        public_key_info = device.public_key_info
-        if not public_key_info:
-            raise Http404(PublicKeyInfoMissingErrorMsg)
-
-        help_context = HelpContext(
-            device=device,
-            owner_credential=owner_credential,
-            allowed_app_profiles=[],
-            domain=device.domain,
-            domain_unique_name=device.domain.unique_name,
-            public_key_info=public_key_info,
-            host_base=host_base,
-            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
-            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
-            cred_count=0,
-            page_name=self.page_name,
-        )
-
-        keygen_section = build_keygen_section(
-            help_context=help_context,
-            file_name='owner_cert',
-        )
-
-        issuing_ca_cert_section = build_issuing_ca_cert_section(domain=device.domain)
-
-        tls_trust_store_section = build_tls_trust_store_section()
-
-        return HelpContext(
-            device=device,
-            owner_credential=owner_credential,
-            allowed_app_profiles=[],
-            domain=device.domain,
-            domain_unique_name=device.domain.unique_name,
-            public_key_info=public_key_info,
-            host_base=host_base,
-            host_cmp_path=f'{host_base}/.well-known/cmp/p/{device.domain.unique_name}',
-            host_est_path=f'{host_base}/.well-known/est/{device.domain.unique_name}',
-            cred_count=0,
-            page_name=self.page_name,
-            help_sections=[
-                keygen_section,
-                issuing_ca_cert_section,
-                tls_trust_store_section,
-            ],
-        )
+    keygen_file_name = 'owner_cert'
 
 
 class CaDetailView(DetailView[CaModel]):
@@ -722,7 +588,7 @@ class CaDetailView(DetailView[CaModel]):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         # Create a minimal HelpContext for CA views
@@ -768,7 +634,7 @@ class CaHelpView(CaDetailView):
 
         host_base = (
             f'https://{TlsSettings.get_first_ipv4_address()}:'
-            f'{self.request.META.get('HTTP_X_FORWARDED_PORT', getattr(settings, 'TP_HTTPS_PORT', '443'))}'
+            f'{self.request.META.get("HTTP_X_FORWARDED_PORT", getattr(settings, "TP_HTTPS_PORT", "443"))}'
         )
 
         ca_cert_section = HelpSection(
@@ -874,9 +740,7 @@ class CrlDownloadHelpView(CaDetailView):
             ],
         )
         download_pem_cmd = (
-            f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
-            f'  -o {ca.unique_name}.pem.crl \\\n'
-            f'  "{crl_endpoint}"'
+            f'curl --cacert trustpoint-tls-trust-store.pem \\\n  -o {ca.unique_name}.pem.crl \\\n  "{crl_endpoint}"'
         )
         download_der_cmd = (
             f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
@@ -918,6 +782,7 @@ class CrlDownloadHelpView(CaDetailView):
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
         context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
         context['back_url'] = 'pki:issuing_cas-config'
+        context['back_url_pk'] = ca.pk
         context['back_button_text'] = _non_lazy('Back to Issuing CA Configuration')
 
         return context

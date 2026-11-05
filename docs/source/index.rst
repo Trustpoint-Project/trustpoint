@@ -3,16 +3,12 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-.. image:: /_static/trustpoint_banner.png
+.. image:: /_static/trustpoint_github_banner.svg
    :align: center
 
 ======================================
 Welcome to Trustpoint's documentation!
 ======================================
-
-.. warning::
-
-      Trustpoint is currently in a technology preview (beta) state. Do not use it in production.
 
 
 .. toctree::
@@ -34,12 +30,12 @@ Welcome to Trustpoint's documentation!
    :caption: Features
 
    features/apis/index
+   features/capabilities
 
    features/aoki/index
    features/aoki/mdns
 
-   features/devices/onboarding
-   features/devices/agents
+   features/devices/index
 
    features/pki/index
 
@@ -70,8 +66,15 @@ Welcome to Trustpoint's documentation!
    development/auto_restore
    development/sbom
    development/pipeline
+   development/security-response-headers
    development/release-checklist
-   development/rest_api
    development/testing/test_plan
    development/testing/ci_cd
    development/testing/test_report
+   development/trustpoint_view_design_guidelines
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Release Notes
+
+   release_notes

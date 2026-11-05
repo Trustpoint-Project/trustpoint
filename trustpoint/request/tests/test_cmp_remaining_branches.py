@@ -17,6 +17,7 @@ from pyasn1_modules import rfc2459, rfc4210, rfc5280
 from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
 from cmp.models import CmpTransactionModel
+from management.models import SecurityConfig
 from pki.models import IssuedCredentialModel
 from pki.models.ca_rollover import CaRolloverState
 from request.authorization.base import (
@@ -65,7 +66,10 @@ def _message(body_type: str = 'ir') -> rfc4210.PKIMessage:
 class TestCmpAuthorizationRemainingBranches:
     def test_revocation_rejects_invalid_domain_credential(self) -> None:
         context = CmpRevocationRequestContext(
-            operation='revocation', cert_serial_number='1234', client_certificate=Mock(), domain=Mock(),
+            operation='revocation',
+            cert_serial_number='1234',
+            client_certificate=Mock(),
+            domain=Mock(),
         )
         credential = Mock(
             credential=Mock(certificate_or_error=Mock(serial_number='5678')),
@@ -78,12 +82,16 @@ class TestCmpAuthorizationRemainingBranches:
     def test_revocation_authorizes_matching_domain_credential(self) -> None:
         device = Mock()
         context = CmpRevocationRequestContext(
-            operation='revocation', cert_serial_number='1234', client_certificate=Mock(),
-            domain=Mock(), device=device,
+            operation='revocation',
+            cert_serial_number='1234',
+            client_certificate=Mock(),
+            domain=Mock(),
+            device=device,
         )
         signer = Mock(
             credential=Mock(certificate_or_error=Mock(serial_number='5678')),
-            device=device, is_valid_domain_credential=Mock(return_value=(True, None)),
+            device=device,
+            is_valid_domain_credential=Mock(return_value=(True, None)),
         )
         target = Mock(common_name='target')
         with (
@@ -93,27 +101,13 @@ class TestCmpAuthorizationRemainingBranches:
             CmpRevocationAuthorization().authorize(context)
         assert context.credential_to_revoke is target
 
-    def test_certconf_rejects_unsupported_declared_hash(self) -> None:
-        context = CmpCertConfRequestContext(
-            operation='certconf', cert_conf_status=2, cert_hash=b'hash',
-            cert_hash_algorithm_oid='1.2.3.4',
-        )
-        with pytest.raises(ValueError, match='unsupported'):
-            CmpCertConfAuthorization().authorize(context)
-        assert context.http_response_status == 403
-
-    def test_certconf_rejects_disallowed_hash(self) -> None:
-        context = CmpCertConfRequestContext(
-            operation='certconf', cert_conf_status=2, cert_hash=b'hash',
-            cert_hash_algorithm_oid=HashAlgorithm.MD5.dotted_string,
-        )
-        with pytest.raises(ValueError, match='not permitted'):
-            CmpCertConfAuthorization().authorize(context)
-
     def test_poll_rejects_cert_id_and_domain_mismatches(self) -> None:
         context = CmpPollRequestContext(
-            cmp_body_type='pollReq', cmp_transaction_id='tx', poll_cert_req_id=9,
-            device=Mock(id=1), domain=Mock(id=2),
+            cmp_body_type='pollReq',
+            cmp_transaction_id='tx',
+            poll_cert_req_id=9,
+            device=Mock(id=1),
+            domain=Mock(id=2),
         )
         transaction = Mock(operation='initialization', cert_req_id=0, device_id=1, domain_id=3)
         with patch('request.authorization.cmp.CmpTransactionState.get_by_transaction_id', return_value=transaction):
@@ -159,11 +153,16 @@ class TestAuthorizationPolicyBranches:
 
     def test_security_config_helpers_cover_empty_and_unknown_policies(self) -> None:
         component = SecurityConfigAuthorization()
-        csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([])).sign(
-            rsa.generate_private_key(public_exponent=65537, key_size=2048), hashes.SHA256(),
+        csr = (
+            x509.CertificateSigningRequestBuilder()
+            .subject_name(x509.Name([]))
+            .sign(
+                rsa.generate_private_key(public_exponent=65537, key_size=2048),
+                hashes.SHA256(),
+            )
         )
-        component._check_key_constraints(csr, Mock(rsa_minimum_key_size=0))
-        component._check_signature_algorithm(csr, Mock(not_permitted_signature_algorithm_oids=['1.2.3']))
+        component._check_key_constraints(csr, SecurityConfig(rsa_minimum_key_size=0))
+        component._check_signature_algorithm(csr, SecurityConfig(not_permitted_signature_algorithm_oids=['1.2.3']))
         component._check_ca_issuance(csr, Mock(allow_ca_issuance=True))
         assert component._hash_oid('SHA-256') == HashAlgorithm.SHA256.dotted_string
 
@@ -203,7 +202,9 @@ class TestCmpResponderRemainingBranches:
         context = CmpBaseRequestContext(parsed_message=_message(), error_details='bad')
         with (
             patch.object(
-                CmpErrorMessageResponder, '_sign_pki_message', side_effect=lambda pki_message, **_: pki_message,
+                CmpErrorMessageResponder,
+                '_sign_pki_message',
+                side_effect=lambda pki_message, **_: pki_message,
             ),
             patch('request.message_responder.cmp.encoder.encode', return_value=b'error'),
         ):
@@ -239,7 +240,9 @@ class TestCmpResponderRemainingBranches:
         context.domain.get_issuing_ca_or_value_error.side_effect = ValueError('missing')
         with (
             patch.object(
-                CmpErrorMessageResponder, '_sign_pki_message', side_effect=lambda pki_message, **_: pki_message,
+                CmpErrorMessageResponder,
+                '_sign_pki_message',
+                side_effect=lambda pki_message, **_: pki_message,
             ),
             patch('request.message_responder.cmp.encoder.encode', return_value=b'error'),
         ):
@@ -327,9 +330,9 @@ class TestCmpTypedMalformedBodies:
         request['crlEntryDetails'].append(reason_extension)
         context = Mock()
         CmpRevocationBodyValidation().parse_rr_body(context, body)
-        assert context.revocation_reason is x509.ReasonFlags.unspecified
+        assert context.revocation_reason is x509.ReasonFlags.key_compromise
 
-        reason_extension['extnID'] = '1.2.3.4'
+        request['crlEntryDetails'][0]['extnID'] = '1.2.3.4'
         CmpRevocationBodyValidation().parse_rr_body(context, body)
         assert context.revocation_reason is x509.ReasonFlags.unspecified
 

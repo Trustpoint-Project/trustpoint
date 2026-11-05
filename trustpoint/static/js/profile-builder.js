@@ -95,7 +95,7 @@ class CertificateProfileBuilder {
     this.fieldsContainer.innerHTML = '';
 
     if (this.filteredFields.length === 0) {
-      this.fieldsContainer.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">No fields found</div>';
+      this.fieldsContainer.innerHTML = '<div class="tp-profile-empty">No fields found</div>';
       return;
     }
 
@@ -188,7 +188,7 @@ class CertificateProfileBuilder {
     let descriptionHtml = '';
     if (field.description) {
       descriptionHtml = `
-        <div style="background:#f8f9fa; padding:10px; border-radius:6px; margin-bottom:16px; border:1px solid #e9ecef; color:#555; font-size:13px; line-height:1.4;">
+        <div class="tp-profile-description">
           <strong>Description:</strong> ${this.escapeHtml(field.description)}
         </div>
       `;
@@ -217,7 +217,7 @@ class CertificateProfileBuilder {
 
       formContent = `
         ${descriptionHtml}
-        <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="tp-profile-fields">
           <div class="pb-input-wrapper">
             <label>Value / Default</label>
             <input type="text" id="pp-value" class="pb-input-child"
@@ -225,21 +225,21 @@ class CertificateProfileBuilder {
                    value="${this.escapeHtml(val)}" placeholder="Value or Default...">
             <div class="pb-input-desc">The specific value for this field.</div>
           </div>
-          <div style="display:flex; gap:24px; padding:4px 0;">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <div class="tp-profile-flags">
+            <label class="tp-profile-checkbox">
               <input type="checkbox" id="pp-mutable" ${mut ? 'checked' : ''}>
-              <span style="font-weight:500;">Mutable</span>
+              <span class="tp-profile-label">Mutable</span>
             </label>
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <label class="tp-profile-checkbox">
               <input type="checkbox" id="pp-required" ${req ? 'checked' : ''}>
-              <span style="font-weight:500;">Required</span>
+              <span class="tp-profile-label">Required</span>
             </label>
           </div>
         </div>`;
     }
 
     else if (hasChildren) {
-      formContent = `${descriptionHtml}<div style="max-height:400px; overflow-y:auto; padding-right:5px;">`;
+      formContent = `${descriptionHtml}<div class="tp-profile-children">`;
       childFields.forEach(child => {
         const childResolved = this.resolveFieldPath(currentJson, child);
         const childVal = childResolved.value;
@@ -291,9 +291,9 @@ class CertificateProfileBuilder {
 
           formContent += `
             <div class="pb-input-wrapper">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <label style="margin:0;">${this.escapeHtml(child.name)}</label>
-                <label style="font-weight:normal; font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <div class="tp-profile-child-heading">
+                <label class="tp-profile-child-label">${this.escapeHtml(child.name)}</label>
+                <label class="tp-profile-mutable">
                   <input type="checkbox" class="pb-child-mutable"
                          data-path="${this.escapeHtml(childPath)}" ${mutChecked}>
                   Mutable
@@ -320,20 +320,20 @@ class CertificateProfileBuilder {
           let enumControl;
           if (field.options.length <= 3) {
             const radiosHtml = field.options.map(o => `
-              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0;">
+              <label class="tp-profile-radio">
                 <input type="radio" name="pb-enum-radio" value="${this.escapeHtml(o)}"
                        data-path="${this.escapeHtml(targetPath)}" data-type="enum"
                        ${o === selectedVal ? 'checked' : ''}>
                 <span>${this.escapeHtml(o)}</span>
               </label>`).join('');
             const noneHtml = `
-              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0; color:#888;">
+              <label class="tp-profile-radio-muted">
                 <input type="radio" name="pb-enum-radio" value=""
                        data-path="${this.escapeHtml(targetPath)}" data-type="enum"
                        ${selectedVal === '' ? 'checked' : ''}>
                 <span><em>none</em></span>
               </label>`;
-            enumControl = `<div id="pb-single-input" data-path="${this.escapeHtml(targetPath)}" data-type="enum" style="display:flex; flex-direction:column; gap:2px;">${noneHtml}${radiosHtml}</div>`;
+            enumControl = `<div id="pb-single-input" data-path="${this.escapeHtml(targetPath)}" data-type="enum" class="tp-profile-radios">${noneHtml}${radiosHtml}</div>`;
           } else {
             const optionsHtml = ['', ...field.options].map(o =>
               `<option value="${this.escapeHtml(o)}" ${o === selectedVal ? 'selected' : ''}>${o === '' ? '-- select --' : this.escapeHtml(o)}</option>`

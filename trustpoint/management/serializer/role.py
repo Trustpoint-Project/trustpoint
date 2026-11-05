@@ -6,6 +6,7 @@
 from typing import Any
 
 from django.contrib.auth.models import Group, Permission
+from django.db import transaction
 from rest_framework import serializers
 
 from users.models import GroupProfile
@@ -72,6 +73,7 @@ class RoleSerializer(serializers.ModelSerializer[Group]):
         data['grants_superuser'] = bool(profile.grants_superuser) if profile else False
         return data
 
+    @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> Group:
         """Create a new role, its permissions, and its GroupProfile grants."""
         grants_staff = validated_data.pop('grants_staff', False)
@@ -86,8 +88,11 @@ class RoleSerializer(serializers.ModelSerializer[Group]):
         )
         return group
 
+    @transaction.atomic
     def update(self, instance: Group, validated_data: dict[str, Any]) -> Group:
         """Update a role's name, permissions, and GroupProfile grants."""
+        # Match the profile-first lock order used by new-user creation.
+        GroupProfile.objects.select_for_update().filter(group_id=instance.pk).first()
         grants_staff = validated_data.pop('grants_staff', None)
         grants_superuser = validated_data.pop('grants_superuser', None)
         permissions = validated_data.pop('permissions', None)

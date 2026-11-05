@@ -143,6 +143,21 @@ export function createWorkflowEditor({
       doc: initialDoc,
       extensions: [
         basicSetup,
+        EditorView.cspNonce.of(document.getElementById('workflow-editor-script')?.nonce || ''),
+        // Native replacement of highlighted text can copy computed colors into
+        // inline style attributes. Insert ordinary text through CodeMirror's
+        // transaction API; leave IME composition, paste and other edits to it.
+        EditorView.domEventHandlers({
+          beforeinput(event, editor) {
+            if (event.inputType !== 'insertText' || event.isComposing || event.data === null) return false;
+            editor.dispatch(editor.state.replaceSelection(event.data), {
+              userEvent: 'input.type',
+              scrollIntoView: true,
+            });
+            event.preventDefault();
+            return true;
+          },
+        }),
         EditorState.tabSize.of(2),
         indentUnit.of('  '),
         yamlLanguage(),

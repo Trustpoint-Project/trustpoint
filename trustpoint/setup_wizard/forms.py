@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import contextlib
-import ipaddress
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast, override
@@ -17,6 +16,9 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy
+
+from pki.forms.san import clean_dns_sans, clean_ipv4_sans, clean_ipv6_sans
+from pki.util.san import SanValidationError, normalize_dns_name, split_san_values
 
 from .models import SetupWizardConfigModel
 from .pkcs11_local_dev import (
@@ -29,6 +31,7 @@ from .pkcs11_staging import existing_wizard_pkcs11_staged_file
 from .tls_credential import extract_staged_tls_sans, staged_tls_common_name
 
 if TYPE_CHECKING:
+    import ipaddress
     from collections.abc import Iterable, Mapping
 
     from django.utils.functional import Promise
@@ -76,7 +79,6 @@ TLS_CONFIG_TYPE_CHOICES = tuple(
     (choice.value, choice.label) for choice in SetupWizardConfigModel.FreshInstallTlsConfigType
 )
 
-MAX_DNS_NAME_LENGTH = 253
 
 
 def _safe_existing_file(path: Path) -> Path | None:
@@ -888,8 +890,6 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
 class FreshInstallTlsConfigForm(forms.Form):
     """Form for configuring TLS during the fresh-install wizard."""
 
-    _dns_label_pattern = re.compile(r'^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
-
     tls_mode = forms.ChoiceField(
         label=gettext_lazy('TLS configuration method'),
         choices=TLS_CONFIG_TYPE_CHOICES,
@@ -960,62 +960,35 @@ class FreshInstallTlsConfigForm(forms.Form):
 
     @staticmethod
     def _parse_comma_separated_values(value: str) -> list[str]:
-        """Normalize a comma-separated string into a list of trimmed values."""
-        return [item.strip() for item in value.split(',') if item.strip()]
+        """Normalize CSV input through the shared SAN splitter."""
+        return split_san_values(value)
 
     @classmethod
     def _validate_dns_name(cls, value: str) -> str:
-        """Validate and normalize a DNS name.
-
-        Python has no dedicated standard-library DNS validator, so this uses
-        the stdlib IDNA codec plus conservative hostname-label checks.
-        """
+        """Normalize a setup hostname without permitting wildcard identities."""
         try:
-            normalized_value = value.rstrip('.').encode('idna').decode('ascii').lower()
-        except UnicodeError as exception:
-            err_msg = gettext_lazy('Contains an invalid DNS name.')
-            raise forms.ValidationError(err_msg) from exception
-
-        if not normalized_value or len(normalized_value) > MAX_DNS_NAME_LENGTH:
-            err_msg = gettext_lazy('Contains an invalid DNS name.')
-            raise forms.ValidationError(err_msg)
-
-        labels = normalized_value.split('.')
-        if any(not label or not cls._dns_label_pattern.fullmatch(label) for label in labels):
-            err_msg = gettext_lazy('Contains an invalid DNS name.')
-            raise forms.ValidationError(err_msg)
-        return normalized_value
+            return normalize_dns_name(value, allow_wildcard=False)
+        except SanValidationError as exc:
+            raise forms.ValidationError(gettext_lazy('Contains an invalid DNS name.')) from exc
 
     def clean_ipv4_addresses(self) -> list[str]:
-        """Validate and normalize IPv4 SAN entries."""
-        data = self.cleaned_data['ipv4_addresses'].strip()
-        if not data:
-            return []
-
-        try:
-            return [str(ipaddress.IPv4Address(address)) for address in self._parse_comma_separated_values(data)]
-        except ipaddress.AddressValueError as exception:
-            err_msg = gettext_lazy('Contains an invalid IPv4 address.')
-            raise forms.ValidationError(err_msg) from exception
+        """Normalize and validate IPv4 SAN input."""
+        return [str(address) for address in clean_ipv4_sans(
+            self.cleaned_data['ipv4_addresses'], error_message=gettext_lazy('Contains an invalid IPv4 address.'),
+        )]
 
     def clean_ipv6_addresses(self) -> list[str]:
-        """Validate and normalize IPv6 SAN entries."""
-        data = self.cleaned_data['ipv6_addresses'].strip()
-        if not data:
-            return []
-
-        try:
-            return [str(ipaddress.IPv6Address(address)) for address in self._parse_comma_separated_values(data)]
-        except ipaddress.AddressValueError as exception:
-            err_msg = gettext_lazy('Contains an invalid IPv6 address.')
-            raise forms.ValidationError(err_msg) from exception
+        """Normalize and validate IPv6 SAN input."""
+        return [str(address) for address in clean_ipv6_sans(
+            self.cleaned_data['ipv6_addresses'], error_message=gettext_lazy('Contains an invalid IPv6 address.'),
+        )]
 
     def clean_domain_names(self) -> list[str]:
-        """Normalize DNS SAN entries."""
-        data = self.cleaned_data['domain_names'].strip()
-        if not data:
-            return []
-        return [self._validate_dns_name(name) for name in self._parse_comma_separated_values(data)]
+        """Normalize and validate DNS SANs using setup's hostname-only policy."""
+        return clean_dns_sans(
+            self.cleaned_data['domain_names'], allow_wildcard=False,
+            error_message=gettext_lazy('Contains an invalid DNS name.'),
+        )
 
     def clean(self) -> dict[str, Any]:
         """Validate the field set required for the selected TLS mode."""
@@ -1061,58 +1034,23 @@ class StartupWizardTlsCertificateForm(forms.Form):
     )
 
     def clean_ipv4_addresses(self) -> list[ipaddress.IPv4Address]:
-        """Splits the IPv4 addresses and returns them as a list of strings.
-
-        Returns:
-            A list of the IPv4 addresses or an empty list.
-
-        Raises:
-            ValidationError: If it contains a term that is not a valid IPv4 address.
-        """
-        data = self.cleaned_data['ipv4_addresses'].strip()
-        if not data:
-            return []
-
-        addresses = data.split(',')
-        try:
-            return [ipaddress.IPv4Address(address.strip()) for address in addresses if address.strip() != '']
-        except ipaddress.AddressValueError as exception:
-            err_msg = 'Contains an invalid IPv4-Address.'
-            raise forms.ValidationError(err_msg) from exception
+        """Normalize and validate IPv4 SAN input."""
+        return clean_ipv4_sans(
+            self.cleaned_data['ipv4_addresses'], error_message='Contains an invalid IPv4-Address.',
+        )
 
     def clean_ipv6_addresses(self) -> list[ipaddress.IPv6Address]:
-        """Splits the IPv6 addresses and returns them as a list of strings.
-
-        Returns:
-            A list of the IPv6 addresses or an empty list.
-
-        Raises:
-            ValidationError: If it contains a term that is not a valid IPv6 address.
-        """
-        data = self.cleaned_data['ipv6_addresses'].strip()
-        if not data:
-            return []
-
-        addresses = data.split(',')
-        try:
-            return [ipaddress.IPv6Address(address.strip()) for address in addresses if address.strip() != '']
-        except ipaddress.AddressValueError as exception:
-            err_msg = 'Contains an invalid IPv6-Address.'
-            raise forms.ValidationError(err_msg) from exception
+        """Normalize and validate IPv6 SAN input."""
+        return clean_ipv6_sans(
+            self.cleaned_data['ipv6_addresses'], error_message='Contains an invalid IPv6-Address.',
+        )
 
     def clean_domain_names(self) -> list[str]:
-        """Splits the domain names and returns them as a list of strings.
-
-        Returns:
-            A list of the domain names or an empty list.
-        """
-        data = self.cleaned_data['domain_names'].strip()
-        if not data:
-            return []
-
-        domain_names = data.split(',')
-        # TODO(AlexHx8472): Check for valid domains.    # noqa: FIX002
-        return [domain_name.strip() for domain_name in domain_names if domain_name.strip() != '']
+        """Normalize and validate DNS SANs using setup's hostname-only policy."""
+        return clean_dns_sans(
+            self.cleaned_data['domain_names'], allow_wildcard=False,
+            error_message=gettext_lazy('Contains an invalid DNS name.'),
+        )
 
     def clean(self) -> dict[str, Any]:
         """Checks that at least one SAN entry is set.

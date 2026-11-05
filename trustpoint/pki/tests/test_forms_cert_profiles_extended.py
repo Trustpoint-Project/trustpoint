@@ -6,19 +6,26 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import Any
 
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
 from django.core.exceptions import ValidationError
 
 from management.models import SecurityConfig
 from pki.forms.cert_profiles import (
+    CertificateIssuanceForm,
     CertProfileConfigForm,
     ProfileBasedFormFieldBuilder,
     _validity_days_from_components,
     check_validity_days_against_security_config,
 )
 from pki.models.cert_profile import CertificateProfileModel
+from request.profile_validator import ProfileValidator
+from request.request_context import ManualCredentialRequestContext
 
 pytestmark = pytest.mark.django_db
 
@@ -56,6 +63,48 @@ class TestValidityComponents:
     def test_components_are_summed_in_days(self, kwargs: dict[str, Any], expected: float) -> None:
         """Each supported component contributes its share of a day."""
         assert _validity_days_from_components(**kwargs) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ('policy', 'expected_days', 'disabled'),
+    [
+        ({}, 10, True),
+        ({'validity': {'days': 10, 'mutable': True}}, 3, False),
+        ({'mutable': True}, 3, False),
+        ({'mutable': True, 'validity': {'days': 10, 'mutable': False}}, 10, True),
+    ],
+)
+def test_manual_issuance_validity_reaches_signed_certificate(
+    policy: dict[str, Any], expected_days: int, *, disabled: bool,
+) -> None:
+    """Manual validity survives form building and authorization's second profile validation."""
+    profile_json = _profile(**policy)
+    form = CertificateIssuanceForm(profile_json, data={'days': 3})
+    assert form.fields['days'].disabled is disabled
+    assert form.is_valid(), form.errors
+
+    context = ManualCredentialRequestContext(
+        certificate_profile_model=CertificateProfileModel(profile_json=json.dumps(profile_json)),
+    )
+    context.cert_requested = form.get_certificate_builder(request_context=context)
+    ProfileValidator.validate(context)
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    builder = context.cert_requested_profile_validated
+    assert builder is not None
+    cert = builder.public_key(key.public_key()).issuer_name(x509.Name([])).serial_number(1).sign(key, hashes.SHA256())
+    # Relative validity includes the converter's one-hour backdate for clock skew.
+    assert cert.not_valid_after_utc - cert.not_valid_before_utc == timedelta(days=expected_days, hours=1)
+
+
+def test_manual_mutable_validity_respects_security_policy() -> None:
+    """Enabling validity edits still enforces the maximum certificate lifetime."""
+    SecurityConfig.objects.all().delete()
+    SecurityConfig.objects.create(security_mode=True, max_cert_validity_days=30)
+    form = CertificateIssuanceForm(_profile(validity={'days': 10, 'mutable': True}), data={'days': 31})
+
+    assert not form.is_valid()
+    assert 'exceeds the maximum' in str(form.errors)
 
 
 class TestValidityPolicyCheck:

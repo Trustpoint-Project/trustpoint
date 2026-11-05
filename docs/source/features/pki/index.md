@@ -26,7 +26,6 @@ add_cas
 rollover
 add_ras
 certificate_profiles
-crl_management
 crls
 domains
 issued_certificates

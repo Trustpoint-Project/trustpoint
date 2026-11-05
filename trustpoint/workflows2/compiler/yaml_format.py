@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, override
 
 import yaml
 
-from workflows2.compiler.yaml_loader import TrustpointYamlLoader
+from workflows2.compiler.yaml_loader import safe_load_yaml
 
 if TYPE_CHECKING:
     from yaml.nodes import ScalarNode
@@ -66,7 +66,7 @@ TrustpointYamlDumper.add_representer(bool, _repr_bool)
 
 def parse_yaml_text(yaml_text: str) -> Any:
     """Parse YAML text using the Trustpoint loader behavior."""
-    return yaml.load(_normalize_newlines(yaml_text), Loader=TrustpointYamlLoader)  # noqa: S506
+    return safe_load_yaml(_normalize_newlines(yaml_text))
 
 
 def dump_yaml_text(obj: Any) -> str:

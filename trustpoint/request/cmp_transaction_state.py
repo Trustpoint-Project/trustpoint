@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import hashes
 from django.db import transaction
 from django.utils import timezone
 
+from cmp.confirmation import confirmation_is_due, expire_confirmation, start_confirmation_wait
 from cmp.models import CmpTransactionModel
 from pki.models import CertificateModel
 from workflows2.models import Workflow2Run
@@ -26,11 +27,15 @@ class CmpTransactionState:
     @staticmethod
     def get_by_transaction_id(transaction_id: str) -> CmpTransactionModel | None:
         """Return one CMP transaction by transaction ID, if present."""
-        return (
+        record = (
             CmpTransactionModel.objects.select_related('device', 'domain', 'final_certificate', 'issuer_credential')
             .filter(transaction_id=transaction_id)
             .first()
         )
+        if record is not None and confirmation_is_due(record, timezone.now()):
+            expire_confirmation(record.pk)
+            record.refresh_from_db()
+        return record
 
     @staticmethod
     def load_locked(transaction_pk: int) -> CmpTransactionModel:
@@ -172,6 +177,7 @@ class CmpTransactionState:
             transaction_record.final_certificate = final_certificate
             transaction_record.issuer_credential = context.issuer_credential
             transaction_record.finalized_at = timezone.now()
+            start_confirmation_wait(transaction_record)
             transaction_record.save(
                 update_fields=[
                     'status',
@@ -179,6 +185,8 @@ class CmpTransactionState:
                     'final_certificate',
                     'issuer_credential',
                     'finalized_at',
+                    'confirmation_deadline',
+                    'confirmation_timeout_policy',
                     'updated_at',
                 ]
             )

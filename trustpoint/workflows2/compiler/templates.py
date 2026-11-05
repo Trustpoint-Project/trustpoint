@@ -4,13 +4,10 @@
 """Compile `${...}` templates into template IR fragments."""
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from .errors import CompileError
 from .expr import CallExpr, RefExpr, parse_expr
-
-EXPR_PATTERN = re.compile(r'\$\{([^}]+)\}')
 
 
 def compile_template(value: Any, *, path: str) -> Any:
@@ -23,22 +20,32 @@ def compile_template(value: Any, *, path: str) -> Any:
     if not isinstance(value, str):
         return value
 
-    matches = list(EXPR_PATTERN.finditer(value))
-    if not matches:
-        return value
-
     parts: list[dict[str, Any]] = []
     last = 0
+    search_from = 0
 
-    for m in matches:
-        if m.start() > last:
-            parts.append({'kind': 'text', 'value': value[last:m.start()]})
+    # Scan disjoint spans so repeated, unclosed '${' prefixes cannot cause
+    # the same suffix to be searched repeatedly by regex backtracking.
+    while (start := value.find('${', search_from)) != -1:
+        end = value.find('}', start + 2)
+        if end == -1:
+            break
+        search_from = end + 1
+        if end == start + 2:
+            # Empty placeholders stay literal, as with the previous matcher.
+            continue
 
-        inner = m.group(1)
+        if start > last:
+            parts.append({'kind': 'text', 'value': value[last:start]})
+
+        inner = value[start + 2:end]
         expr_ast = parse_expr(inner, path=path)
         parts.append({'kind': 'expr', 'expr': _expr_to_ir(expr_ast)})
 
-        last = m.end()
+        last = end + 1
+
+    if not parts:
+        return value
 
     if last < len(value):
         parts.append({'kind': 'text', 'value': value[last:]})

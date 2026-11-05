@@ -21,7 +21,7 @@ class HelpView(TemplateView):
 
         docs_dir = settings.BASE_DIR.parent / 'docs'
         docs_index = docs_dir / 'build' / 'html' / 'index.html'
-        lock_file = docs_dir / '.building'
+        lock_file = settings.MEDIA_ROOT / 'docs.building'
 
 
         is_building = False

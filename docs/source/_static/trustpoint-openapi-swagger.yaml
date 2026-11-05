@@ -4,6 +4,46 @@ info:
   version: v0.0.5
   description: API documentation for Trustpoint project
 paths:
+  /api/rest-pki/revoke/:
+    post:
+      operationId: api_rest_pki_revoke_create
+      description: Revoke the certificate of the given issued credential.
+      summary: Revoke a certificate belonging to an issued credential
+      tags:
+      - REST PKI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateRevokeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CertificateRevokeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CertificateRevokeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateRevokeResponse'
+          description: ''
+        '400':
+          description: Bad Request - validation error or invalid revocation reason
+        '401':
+          description: Unauthorized - authentication required
+        '403':
+          description: Forbidden - user lacks the revoke_certificates permission
+        '404':
+          description: Not Found - issued credential does not exist
+        '422':
+          description: Unprocessable Entity - certificate already revoked or expired
+        '500':
+          description: Internal Server Error - revocation failed
   /api/backups/:
     get:
       operationId: api_backups_list
@@ -423,43 +463,10 @@ paths:
                 items:
                   $ref: '#/components/schemas/Certificate'
           description: ''
-    post:
-      operationId: api_certificates_create
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
-      tags:
-      - Certificate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Certificate'
-          description: ''
   /api/certificates/{id}/:
     get:
       operationId: api_certificates_retrieve
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
+      description: List, inspect, download, and delete stored certificates.
       parameters:
       - in: path
         name: id
@@ -469,78 +476,6 @@ paths:
         required: true
       tags:
       - Certificate
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Certificate'
-          description: ''
-    put:
-      operationId: api_certificates_update
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this certificate model.
-        required: true
-      tags:
-      - Certificate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Certificate'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Certificate'
-          description: ''
-    patch:
-      operationId: api_certificates_partial_update
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this certificate model.
-        required: true
-      tags:
-      - Certificate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedCertificate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedCertificate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedCertificate'
       security:
       - jwtAuth: []
       responses:
@@ -552,11 +487,7 @@ paths:
           description: ''
     delete:
       operationId: api_certificates_destroy
-      description: |-
-        ViewSet for managing Certificate instances.
-
-        Supports standard CRUD operations such as list, retrieve,
-        create, update, and delete.
+      description: List, inspect, download, and delete stored certificates.
       parameters:
       - in: path
         name: id
@@ -1839,6 +1770,86 @@ paths:
           description: ''
 components:
   schemas:
+    CertificateRevokeRequest:
+      type: object
+      description: Serializer for certificate revocation requests.
+      properties:
+        issued_credential_id:
+          type: integer
+          description: Primary key of the issued credential whose certificate shall be revoked.
+        revocation_reason:
+          allOf:
+          - $ref: '#/components/schemas/RevocationReasonEnum'
+          default: unspecified
+          description: 'RFC 5280 revocation reason code. Defaults to "unspecified".
+
+
+            * `unspecified` - Unspecified
+
+            * `keyCompromise` - Key Compromise
+
+            * `cACompromise` - CA Compromise
+
+            * `affiliationChanged` - Affiliation Changed
+
+            * `superseded` - Superseded
+
+            * `cessationOfOperation` - Cessation of Operation
+
+            * `certificateHold` - Certificate Hold
+
+            * `privilegeWithdrawn` - Privilege Withdrawn
+
+            * `aACompromise` - AA Compromise
+
+            * `removeFromCRL` - Remove from CRL'
+      required:
+      - issued_credential_id
+    CertificateRevokeResponse:
+      type: object
+      description: Serializer for the certificate revocation response.
+      properties:
+        detail:
+          type: string
+          description: Human-readable outcome of the revocation.
+        issued_credential_id:
+          type: integer
+          description: Primary key of the issued credential that was revoked.
+      required:
+      - detail
+      - issued_credential_id
+    RevocationReasonEnum:
+      enum:
+      - unspecified
+      - keyCompromise
+      - cACompromise
+      - affiliationChanged
+      - superseded
+      - cessationOfOperation
+      - certificateHold
+      - privilegeWithdrawn
+      - aACompromise
+      - removeFromCRL
+      type: string
+      description: '* `unspecified` - Unspecified
+
+        * `keyCompromise` - Key Compromise
+
+        * `cACompromise` - CA Compromise
+
+        * `affiliationChanged` - Affiliation Changed
+
+        * `superseded` - Superseded
+
+        * `cessationOfOperation` - Cessation of Operation
+
+        * `certificateHold` - Certificate Hold
+
+        * `privilegeWithdrawn` - Privilege Withdrawn
+
+        * `aACompromise` - AA Compromise
+
+        * `removeFromCRL` - Remove from CRL'
     Backup:
       type: object
       description: |-
@@ -1969,11 +1980,13 @@ components:
     DeviceTypeEnum:
       enum:
       - 0
-      - 1
+      - 2
+      - 3
       type: integer
       description: |-
         * `0` - Generic Device
-        * `1` - OPC UA GDS
+        * `2` - OPC UA GDS Push
+        * `3` - Agent (1-to-1)
     Domain:
       type: object
       description: |-
@@ -2122,19 +2135,6 @@ components:
         unique_name:
           type: string
           maxLength: 255
-    PatchedCertificate:
-      type: object
-      description: |-
-        Serializer for Certificate instances.
-
-        Handles conversion between Certificate model objects and JSON representations.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        common_name:
-          type: string
-          maxLength: 256
     PatchedCredential:
       type: object
       description: |-
@@ -2317,6 +2317,11 @@ components:
         password:
           type: string
           writeOnly: true
+        otp:
+          type: string
+          writeOnly: true
+          maxLength: 64
+          description: Authenticator or unused recovery code, required for human login when OTP is enabled.
         access:
           type: string
           readOnly: true

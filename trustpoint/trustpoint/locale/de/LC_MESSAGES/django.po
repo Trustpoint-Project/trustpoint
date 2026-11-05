@@ -1646,7 +1646,6 @@ msgstr "Onboarding-Mechanismus auswählen"
 
 #: trustpoint/templates/devices/add_onboarding_type.html:10
 #: trustpoint/templates/devices/create_choose_onboarding.html:10
-#: trustpoint/templates/devices/opc_ua_gds.html:27
 #: trustpoint/templates/devices/opc_ua_gds_push.html:27
 msgid "Create new OPC UA GDS"
 msgstr "Neues OPC UA GDS erstellen"
@@ -2324,13 +2323,11 @@ msgid "Devices"
 msgstr "Geräte"
 
 #: trustpoint/templates/devices/devices.html:25
-#: trustpoint/templates/devices/opc_ua_gds.html:21
 #: trustpoint/templates/devices/opc_ua_gds_push.html:21
 msgid "Revoke selected"
 msgstr "Ausgewählte widerrufen"
 
 #: trustpoint/templates/devices/devices.html:30
-#: trustpoint/templates/devices/opc_ua_gds.html:23
 #: trustpoint/templates/devices/opc_ua_gds_push.html:23
 #: trustpoint/templates/pki/cas/cas.html:102
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:76
@@ -2361,11 +2358,6 @@ msgstr "Zertifikatsverwaltung"
 #: trustpoint/templates/devices/devices_table.html:77
 msgid "No devices have been added yet."
 msgstr "Es sind noch keine Geräte hinzugefügt worden."
-
-#: trustpoint/templates/devices/opc_ua_gds.html:9
-#: trustpoint/templates/trustpoint/base.html:55
-msgid "OPC UA GDS"
-msgstr "OPC UA-GDS"
 
 #: trustpoint/templates/devices/opc_ua_gds_push.html:9
 msgid "OPC UA GDS Push"

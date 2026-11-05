@@ -1,37 +1,17 @@
 # Copyright (c) 2025 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""Module to handle revocation logic for devices and device credentials."""
+"""Compatibility entry point for device credential revocation."""
 
 from __future__ import annotations
 
-from pki.models import IssuedCredentialModel
-from pki.models.certificate import RevokedCertificateModel
+from pki.services.revocation import revoke_primary_certificate
 
 
 class DeviceCredentialRevocation:
-    """Class to handle revocation logic for devices and device credentials."""
+    """Delegate existing device callers to the shared PKI service."""
 
     @staticmethod
     def revoke_certificate(issued_credential_id: int, reason: str) -> tuple[bool, str]:
         """Revokes a certificate given an ID of an IssuedCredentialModel instance."""
-        try:
-            issued_credential = IssuedCredentialModel.objects.select_related(
-                'credential__certificate__revoked_certificate',
-                'domain__issuing_ca',
-            ).get(id=issued_credential_id)
-        except IssuedCredentialModel.DoesNotExist:
-            return False, 'The credential to revoke does not exist.'
-
-        primary_cert = issued_credential.credential.certificate
-
-        if not primary_cert:
-            return False, 'The associated certificate to revoke was not found.'
-
-        if hasattr(primary_cert, 'revoked_certificate'):
-            return False, 'The certificate is already revoked.'
-
-        RevokedCertificateModel.objects.create(
-            certificate=primary_cert, revocation_reason=reason, ca=issued_credential.domain.issuing_ca  # type: ignore[union-attr]
-        )
-        return True, 'Certificate successfully revoked.'
+        return revoke_primary_certificate(issued_credential_id, reason)

@@ -3,90 +3,184 @@
 {% load internationalization_tags %}
 
 {% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans "Certificate Revocation Lists" %}
+        </h1>
 
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h1>{% trans "Certificate Revocation Lists" %}</h1>
-    </div>
-    {% include 'pki/crls/table_filter.html' with table_url='pki:crls' %}
-    <div class="card-body text-start pt-0" style="overflow-y: auto; flex: 1;">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th id="checkbox-column"><input type="checkbox"/></th>
-                    <th>{% trans 'CRL Number' %}</th>
-                    <th>{% trans 'CA Name' %}</th>
-                    <th>{% trans 'This Update' %}</th>
-                    <th>{% trans 'Next Update' %}</th>
-                    <th>{% trans 'Status' %}</th>
-                    <th>{% trans 'Revoked Certificates' %}</th>
-                    <th>{% trans 'Download' %}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for crl in page_obj|default:crls %}
-                    <tr{% if not crl.is_active %} class="text-muted"{% endif %}>
-                        <td class="row_checkbox">
-                            <input type="checkbox" name="row_checkbox" value="{{ crl.id }}"/>
-                        </td>
-                        <td>
-                            {% if crl.crl_number %}
-                                <a href="{% url 'pki:crl-detail' pk=crl.id %}">{{ crl.crl_number }}</a>
-                            {% else %}
-                                <a href="{% url 'pki:crl-detail' pk=crl.id %}">{% trans 'No number' %}</a>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{% if crl.ca.is_issuing_ca %}{% url 'pki:issuing_cas-config' crl.ca.id %}{% elif crl.ca.is_keyless_ca %}{% url 'pki:keyless_cas-config' crl.ca.id %}{% endif %}">
-                                {{ crl.ca.unique_name }}
-                            </a>
-                        </td>
-                        <td>{{ crl.this_update|local_datetime }}</td>
-                        <td>
-                            {% if crl.next_update %}
-                                {{ crl.next_update|local_datetime }}
-                            {% else %}
-                                {% trans 'Not set' %}
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if crl.is_active %}
-                                <span class="badge bg-success">{% trans 'Active' %}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{% trans 'Inactive' %}</span>
-                            {% endif %}
-                            {% if crl.is_expired %}
-                                <br><span class="badge bg-warning text-dark">{% trans 'Expired' %}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {{ crl.get_revoked_serial_numbers|length }}
-                        </td>
-                        <td>
-                            <a href="{% url 'pki:crl-download' pk=crl.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Download' %}</a>
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="9" class="middle">{% trans 'No CRLs have been created yet.' %}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        {% include 'trustpoint/pagination.html' %}
+        <p class="mb-0 text-muted">
+            {% trans "Review, import and manage Certificate Revocation Lists associated with Certificate Authorities." %}
+        </p>
     </div>
 
-    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-        <div class="tp-card-btn-footer m-1">
-            <button type="button" class="btn btn-danger tp-table-select-btn me-2" data-tp-url="delete">{% trans 'Delete selected' %}</button>
-        </div>
-        <div class="m-1">
-            <a href="{% url 'pki:crl-import' %}" class="btn btn-primary">
-                <i class="fas fa-upload"></i> {% trans 'Import CRL' %}
-            </a>
-        </div>
+    <div class="card-body text-start">
+        <section>
+
+            {% include 'pki/crls/table_filter.html' with table_url='pki:crls' %}
+
+            <div class="table-responsive mt-4">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th id="checkbox-column" scope="col">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all CRLs' %}"
+                                >
+                            </th>
+
+                            <th scope="col">
+                                {% trans 'CRL Number' %}
+                            </th>
+
+                            <th scope="col">
+                                {% trans 'CA Name' %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans 'This Update' %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans 'Next Update' %}
+                            </th>
+
+                            <th scope="col">
+                                {% trans 'Status' %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans 'Revoked Certificates' %}
+                            </th>
+
+                            <th scope="col" class="text-end">
+                                {% trans 'Actions' %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for crl in page_obj|default:crls %}
+                            <tr{% if not crl.is_active %} class="text-muted"{% endif %}>
+                                <td class="row_checkbox">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ crl.id }}"
+                                        aria-label="{% blocktranslate with number=crl.crl_number %}Select CRL {{ number }}{% endblocktranslate %}"
+                                    >
+                                </td>
+
+                                <td>
+                                    <a href="{% url 'pki:crl-detail' pk=crl.id %}">
+                                        {% if crl.crl_number %}
+                                            {{ crl.crl_number }}
+                                        {% else %}
+                                            {% trans 'No number' %}
+                                        {% endif %}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    {% if crl.ca.is_issuing_ca %}
+                                        <a href="{% url 'pki:issuing_cas-config' crl.ca.id %}">
+                                            {{ crl.ca.unique_name }}
+                                        </a>
+
+                                    {% elif crl.ca.is_keyless_ca %}
+                                        <a href="{% url 'pki:keyless_cas-config' crl.ca.id %}">
+                                            {{ crl.ca.unique_name }}
+                                        </a>
+
+                                    {% else %}
+                                        {{ crl.ca.unique_name }}
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ crl.this_update|local_datetime }}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {% if crl.next_update %}
+                                        {{ crl.next_update|local_datetime }}
+                                    {% else %}
+                                        <span class="text-muted">
+                                            {% trans 'Not set' %}
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% if crl.is_active %}
+                                            <span class="badge text-bg-success">
+                                                {% trans 'Active' %}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge text-bg-secondary">
+                                                {% trans 'Inactive' %}
+                                            </span>
+                                        {% endif %}
+
+                                        {% if crl.is_expired %}
+                                            <span class="badge text-bg-warning">
+                                                {% trans 'Expired' %}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <td>
+                                    {{ crl.get_revoked_serial_numbers|length }}
+                                </td>
+
+                                <td class="text-end">
+                                    <a
+                                        href="{% url 'pki:crl-download' pk=crl.id %}"
+                                        class="btn btn-sm btn-outline-secondary"
+                                    >
+                                        {% trans 'Download' %}
+                                    </a>
+                                </td>
+                            </tr>
+
+                        {% empty %}
+                            <tr>
+                                <td
+                                    colspan="8"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans 'No CRLs have been created yet.' %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include 'trustpoint/pagination.html' %}
+        </section>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <button
+            type="button"
+            class="btn btn-outline-danger tp-table-select-btn"
+            data-tp-url="delete"
+        >
+            {% trans 'Delete Selected' %}
+        </button>
+
+        <a
+            href="{% url 'pki:crl-import' %}"
+            class="btn btn-primary"
+        >
+            {% trans 'Import CRL' %}
+        </a>
     </div>
 </div>
-
 {% endblock content %}

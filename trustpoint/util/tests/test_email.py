@@ -46,7 +46,7 @@ def templates_dir(settings: Any, tmp_path: Path) -> Path:
 @pytest.fixture(autouse=True)
 def locmem_email_backend(settings: Any) -> None:
     """Force Django to use locmem email backend for tests."""
-    settings.EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+    settings.MAILERS = {'default': {'BACKEND': 'django.core.mail.backends.locmem.EmailBackend'}}
 
 
 @pytest.mark.django_db

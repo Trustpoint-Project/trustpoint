@@ -1,107 +1,43 @@
-# Copyright (c) 2025 The Trustpoint Project Authors
+# Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""To be added to trustpoint_core as trustpoint_core.oid.CertificateExtensionOid."""
+"""Extension aliases used by Trustpoint profiles alongside Core's OID metadata."""
 
 import enum
-from dataclasses import dataclass
 
+from trustpoint_core import oid
 
-@dataclass(frozen=True)
-class CertificateExtensionOidData:
-    """The Certificate Extension OID Data class holding all of the information."""
+CertificateExtensionOid = oid.CertificateExtensionOid
 
-    dotted_string: str
-    abbreviation: str | None
-    full_name: str
-    verbose_name: str
-
-
-class CertificateExtensionOid(enum.Enum):
-    """Certificate Extension OID Enum holding extension metadata as dataclass instances and lookup helpers."""
-
-    SUBJECT_DIRECTORY_ATTRIBUTES = CertificateExtensionOidData(
-        '2.5.29.9', None, 'subjectDirectoryAttributes', 'Subject Directory Attributes')
-    SUBJECT_KEY_IDENTIFIER = CertificateExtensionOidData(
-        '2.5.29.14', 'ski', 'subjectKeyIdentifier', 'Subject Key Identifier')
-    KEY_USAGE = CertificateExtensionOidData('2.5.29.15', 'ku', 'keyUsage', 'Key Usage')
-    SUBJECT_ALTERNATIVE_NAME = CertificateExtensionOidData(
-        '2.5.29.17', 'san', 'subjectAlternativeName', 'Subject Alternative Name')
-    ISSUER_ALTERNATIVE_NAME = CertificateExtensionOidData(
-        '2.5.29.18', 'ian', 'issuerAlternativeName', 'Issuer Alternative Name')
-    BASIC_CONSTRAINTS = CertificateExtensionOidData('2.5.29.19', 'bc', 'basicConstraints', 'Basic Constraints')
-    NAME_CONSTRAINTS = CertificateExtensionOidData('2.5.29.30', 'nc', 'nameConstraints', 'Name Constraints')
-    CRL_DISTRIBUTION_POINTS = CertificateExtensionOidData(
-        '2.5.29.31', 'crl', 'crlDistributionPoints', 'CRL Distribution Points')
-    CERTIFICATE_POLICIES = CertificateExtensionOidData('2.5.29.32', 'cp', 'certificatePolicies', 'Certificate Policies')
-    POLICY_MAPPINGS = CertificateExtensionOidData('2.5.29.33', 'pm', 'policyMappings', 'Policy Mappings')
-    AUTHORITY_KEY_IDENTIFIER = CertificateExtensionOidData(
-        '2.5.29.35', 'aki', 'authorityKeyIdentifier', 'Authority Key Identifier')
-    POLICY_CONSTRAINTS = CertificateExtensionOidData('2.5.29.36', 'pc', 'policyConstraints', 'Policy Constraints')
-    EXTENDED_KEY_USAGE = CertificateExtensionOidData('2.5.29.37', 'eku', 'extendedKeyUsage', 'Extended Key Usage')
-    FRESHEST_CRL = CertificateExtensionOidData('2.5.29.46', None, 'freshestCRL', 'Freshest CRL')
-    INHIBIT_ANY_POLICY = CertificateExtensionOidData('2.5.29.54', 'iap', 'inhibitAnyPolicy','Inhibit Any Policy')
-    ISSUING_DISTRIBUTION_POINT = CertificateExtensionOidData(
-        '2.5.29.28', None, 'issuingDistributionPoint', 'Issuing Distribution Point')
-    AUTHORITY_INFORMATION_ACCESS = CertificateExtensionOidData(
-        '1.3.6.1.5.5.7.1.1', 'aia', 'authorityInformationAccess','Authority Information Access')
-    SUBJECT_INFORMATION_ACCESS = CertificateExtensionOidData(
-        '1.3.6.1.5.5.7.1.11', 'sia', 'subjectInformationAccess','Subject Information Access')
-    OCSP_NO_CHECK = CertificateExtensionOidData('1.3.6.1.5.5.7.48.1.5', None, 'ocspNoCheck','OCSP No Check')
-    TLS_FEATURE = CertificateExtensionOidData('1.3.6.1.5.5.7.1.24', None, 'tlsFeature','TLS Feature')
-    CRL_NUMBER = CertificateExtensionOidData('2.5.29.20', None, 'crlNumber','CRL Number')
-    DELTA_CRL_INDICATOR = CertificateExtensionOidData('2.5.29.27', None, 'deltaCrlIndicator','Delta CRL Indicator')
-    PRECERT_SIGNED_CERTIFICATE_TIMESTAMPS = CertificateExtensionOidData(
-        '1.3.6.1.4.1.11129.2.4.2',
-        None,
-        'precertSignedCertificateTimestamps',
-        'Precert Signed Certificate Timestamps',
-    )
-    PRECERT_POISON = CertificateExtensionOidData('1.3.6.1.4.1.11129.2.4.3', None, 'precertPoison', 'Precert Poison')
-    SIGNED_CERTIFICATE_TIMESTAMPS = CertificateExtensionOidData(
-        '1.3.6.1.4.1.11129.2.4.5',
-        None,
-        'signedCertificateTimestamps',
-        'Signed Certificate Timestamps',
-    )
-    MS_CERTIFICATE_TEMPLATE = CertificateExtensionOidData(
-        '1.3.6.1.4.1.311.21.7', None, 'microsoftCertificateTemplate','Microsoft Certificate Template')
-
-    @property
-    def dotted_string(self) -> str:
-        """Return the dotted string OID.
-
-        Returns:
-            The dotted string OID.
-        """
-        return self.value.dotted_string
-
-    @property
-    def abbreviation(self) -> str | None:
-        """Return the abbreviation for the NameOid, if any.
-
-        Returns:
-            The abbreviation, or None if not defined.
-        """
-        return self.value.abbreviation
-
-    @property
-    def full_name(self) -> str:
-        """Return the full name for the NameOid.
-
-        Returns:
-            The full name.
-        """
-        return self.value.full_name
-
-    @property
-    def verbose_name(self) -> str:
-        """Return the verbose name for display.
-
-        Returns:
-            The verbose name.
-        """
-        return self.value.verbose_name
+# Core 0.4.1 supplies the OIDs and display names; profile aliases remain local.
+CERTIFICATE_EXTENSION_ALIASES: dict[str, tuple[str | None, str]] = {
+    'SUBJECT_DIRECTORY_ATTRIBUTES': (None, 'subjectDirectoryAttributes'),
+    'SUBJECT_KEY_IDENTIFIER': ('ski', 'subjectKeyIdentifier'),
+    'KEY_USAGE': ('ku', 'keyUsage'),
+    'SUBJECT_ALTERNATIVE_NAME': ('san', 'subjectAlternativeName'),
+    'ISSUER_ALTERNATIVE_NAME': ('ian', 'issuerAlternativeName'),
+    'BASIC_CONSTRAINTS': ('bc', 'basicConstraints'),
+    'NAME_CONSTRAINTS': ('nc', 'nameConstraints'),
+    'CRL_DISTRIBUTION_POINTS': ('crl', 'crlDistributionPoints'),
+    'CERTIFICATE_POLICIES': ('cp', 'certificatePolicies'),
+    'POLICY_MAPPINGS': ('pm', 'policyMappings'),
+    'AUTHORITY_KEY_IDENTIFIER': ('aki', 'authorityKeyIdentifier'),
+    'POLICY_CONSTRAINTS': ('pc', 'policyConstraints'),
+    'EXTENDED_KEY_USAGE': ('eku', 'extendedKeyUsage'),
+    'FRESHEST_CRL': (None, 'freshestCRL'),
+    'INHIBIT_ANY_POLICY': ('iap', 'inhibitAnyPolicy'),
+    'ISSUING_DISTRIBUTION_POINT': (None, 'issuingDistributionPoint'),
+    'AUTHORITY_INFORMATION_ACCESS': ('aia', 'authorityInformationAccess'),
+    'SUBJECT_INFORMATION_ACCESS': ('sia', 'subjectInformationAccess'),
+    'OCSP_NO_CHECK': (None, 'ocspNoCheck'),
+    'TLS_FEATURE': (None, 'tlsFeature'),
+    'CRL_NUMBER': (None, 'crlNumber'),
+    'DELTA_CRL_INDICATOR': (None, 'deltaCrlIndicator'),
+    'PRECERT_SIGNED_CERTIFICATE_TIMESTAMPS': (None, 'precertSignedCertificateTimestamps'),
+    'PRECERT_POISON': (None, 'precertPoison'),
+    'SIGNED_CERTIFICATE_TIMESTAMPS': (None, 'signedCertificateTimestamps'),
+    'MS_CERTIFICATE_TEMPLATE': (None, 'microsoftCertificateTemplate'),
+}
 
 
 class ExtendedKeyUsageOid(enum.Enum):

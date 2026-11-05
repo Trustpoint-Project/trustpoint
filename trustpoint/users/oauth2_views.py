@@ -9,25 +9,52 @@ import base64
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import update_last_login
+from django.db import transaction
+from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import serializers, status
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import default_user_authentication_rule
+from rest_framework_simplejwt.serializers import TokenObtainSerializer
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import TrustpointUser
+from management.models import PasswordPolicy
+
+from .models import MAX_TOKEN_LENGTH, TrustpointUser, UserOTPDevice
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
 
 
+def api_user_authentication_rule(user: TrustpointUser | None) -> bool:
+    """Require active accounts and enforce human password rotation for login and refresh."""
+    if user is None or not default_user_authentication_rule(user):
+        return False
+    if user.account_type == TrustpointUser.AccountType.HUMAN and (
+        user.must_change_password or user.password_is_expired()
+    ):
+        msg = 'Change your password in the web interface before requesting API tokens.'
+        raise AuthenticationFailed(msg, code='password_change_required')
+    return True
+
+
 class TokenObtainRequestSerializer(serializers.Serializer[Any]):
     """Serializer for token request - supports both authentication methods."""
+
     username = serializers.CharField(required=False, help_text='Username (for human users)')
     password = serializers.CharField(required=False, help_text='Password (for human users)')
-    grant_type = serializers.CharField(
+    otp = serializers.CharField(
         required=False,
-        help_text='Grant type (use "client_credentials" for service accounts)'
+        write_only=True,
+        max_length=MAX_TOKEN_LENGTH,
+        help_text='Authenticator or recovery code, required for human login when OTP is enabled.',
+    )
+    grant_type = serializers.CharField(
+        required=False, help_text='Grant type (use "client_credentials" for service accounts)'
     )
     client_id = serializers.CharField(required=False, help_text='Client ID (for service accounts)')
     client_secret = serializers.CharField(required=False, help_text='Client secret (for service accounts)')
@@ -35,13 +62,45 @@ class TokenObtainRequestSerializer(serializers.Serializer[Any]):
 
 class TokenObtainResponseSerializer(serializers.Serializer[Any]):
     """Serializer for token response."""
+
     access = serializers.CharField(help_text='JWT access token')
     refresh = serializers.CharField(required=False, help_text='JWT refresh token (only for username/password)')
     token_type = serializers.CharField(required=False, help_text='Token type (only for service accounts)')
     expires_in = serializers.IntegerField(
-        required=False,
-        help_text='Token expiration in seconds (only for service accounts)'
+        required=False, help_text='Token expiration in seconds (only for service accounts)'
     )
+
+
+class HumanUserTokenObtainPairSerializer(TokenObtainSerializer):
+    """Authenticate once and check API access and OTP before creating tokens."""
+
+    otp = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=MAX_TOKEN_LENGTH)
+
+    @sensitive_variables()
+    def validate(self, attrs: dict[str, Any]) -> dict[str, str]:
+        """Use the existing locked OTP verifier, retaining failed-attempt throttling."""
+        super().validate(attrs)
+        if self.user is None or not self.user.has_perm('users.use_rest_api'):
+            msg = 'User is not permitted to use the REST API.'
+            raise PermissionDenied(msg)
+
+        if PasswordPolicy.is_otp_required():
+            otp = attrs.get('otp', '')
+            with transaction.atomic():
+                device = UserOTPDevice.objects.select_for_update().filter(user=self.user, confirmed=True).first()
+                verified = device is not None and bool(otp) and device.verify_token(otp)
+            # Raise after committing so invalid codes cannot roll back throttling.
+            if device is None:
+                msg = 'Set up OTP in the web interface before requesting API tokens.'
+                raise AuthenticationFailed(msg, code='otp_not_configured')
+            if not verified:
+                msg = 'A valid authenticator code or unused recovery code is required.'
+                raise AuthenticationFailed(msg, code='otp_invalid')
+
+        refresh = RefreshToken.for_user(self.user)
+        if api_settings.UPDATE_LAST_LOGIN:
+            update_last_login(TrustpointUser, self.user)
+        return {'refresh': str(refresh), 'access': str(refresh.access_token)}
 
 
 @extend_schema_view(
@@ -53,7 +112,8 @@ class TokenObtainResponseSerializer(serializers.Serializer[Any]):
         description=(
             'Obtain a JWT access token for API authentication. '
             'Supports two authentication methods:\n\n'
-            '1. **Human Users**: Use username and password to get access and refresh tokens.\n'
+            '1. **Human Users**: Use username and password, plus otp when required by policy, '
+            'to get access and refresh tokens. Enroll an authenticator through the web UI first.\n'
             '2. **Service Accounts**: Use OAuth 2.0 client credentials grant to get an access token.'
         ),
         examples=[
@@ -62,9 +122,10 @@ class TokenObtainResponseSerializer(serializers.Serializer[Any]):
                 value={
                     'username': 'admin',
                     'password': 'your_password',
+                    'otp': '012345',
                 },
                 request_only=True,
-                description='Authenticate using username and password (for human users)',
+                description='Human login; omit otp when the global OTP requirement is disabled.',
             ),
             OpenApiExample(
                 'Service Account Authentication',
@@ -134,6 +195,8 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
         }
     """
 
+    serializer_class = HumanUserTokenObtainPairSerializer
+
     def post(self, request: Request, *args: tuple[Any, ...], **kwargs: dict[str, Any]) -> Response:
         """Handle token request for both human users and service accounts."""
         data = request.data
@@ -147,6 +210,11 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
             )
 
         grant_type = data.get('grant_type')
+        if any(not isinstance(data.get(field, ''), str) for field in ('client_id', 'client_secret')):
+            return Response(
+                {'error': 'invalid_request', 'error_description': 'Client credentials must be strings.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         client_id = (data.get('client_id') or '').strip()
         client_secret = (data.get('client_secret') or '').strip()
 
@@ -172,24 +240,9 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
                 )
             return self._handle_service_account(request, client_id, client_secret)
 
-        user = authenticate(
-            request=request,
-            username=data.get('username'),
-            password=data.get('password'),
-        )
-        if user is not None and not user.has_perm('users.use_rest_api'):
-            return Response(
-                {
-                    'detail': 'User is not permitted to use the REST API.',
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         return super().post(request, *args, **kwargs)
 
-    def _handle_service_account(
-        self, request: Request, client_id: str, client_secret: str
-    ) -> Response:
+    def _handle_service_account(self, request: Request, client_id: str, client_secret: str) -> Response:
         """Handle OAuth 2.0 client credentials grant for service accounts."""
         user = authenticate(request=request, client_id=client_id, secret=client_secret)
 

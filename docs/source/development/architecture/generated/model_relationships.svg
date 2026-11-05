@@ -119,7 +119,7 @@
 <text xml:space="preserve" text-anchor="start" x="1470.84" y="-3335.4" font-family="Roboto" font-weight="bold" font-size="8.00">OneToOneField (singleton_id)</text>
 <text xml:space="preserve" text-anchor="start" x="1588.59" y="-3335.4" font-family="Roboto" font-size="8.00"> &#160;&#160;&#160;</text>
 <text xml:space="preserve" text-anchor="start" x="1406.09" y="-3322.4" font-family="Roboto" font-size="8.00"> &#160;&#160;&#160;</text>
-<text xml:space="preserve" text-anchor="start" x="1415.09" y="-3322.4" font-family="Roboto" font-size="8.00" fill="#7b7b7b">raw_dek</text>
+<text xml:space="preserve" text-anchor="start" x="1415.09" y="-3322.4" font-family="Roboto" font-size="8.00" fill="#7b7b7b">wrapped_dek</text>
 <text xml:space="preserve" text-anchor="start" x="1445.84" y="-3322.4" font-family="Roboto" font-size="8.00"> &#160;&#160;&#160;</text>
 <text xml:space="preserve" text-anchor="start" x="1461.84" y="-3322.4" font-family="Roboto" font-size="8.00"> &#160;&#160;&#160;</text>
 <text xml:space="preserve" text-anchor="start" x="1470.84" y="-3322.4" font-family="Roboto" font-size="8.00" fill="#7b7b7b">BinaryField</text>

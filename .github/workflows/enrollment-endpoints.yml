@@ -20,6 +20,8 @@ jobs:
       TLS_CERT: tests/data/x509/https_server.crt
       TLS_KEY: tests/data/x509/https_server.pem
       ENV_FILE: var/protocol_test_env.json
+      # Exercise shared-secret enrollment under an explicit test policy.
+      TP_SECURITY_MODE: LAB
       # The CMP test enrolls an ML-DSA-65 certificate, which needs OpenSSL >= 3.5.
       OPENSSL_VERSION: 3.6.0
 
@@ -75,8 +77,41 @@ jobs:
         with:
           run_migrations: true
 
+      - name: Initialize the security policy
+        run: uv run trustpoint/manage.py sync_security_config
+
       - name: Create CAs, domains and test devices
         run: uv run trustpoint/manage.py create_protocol_test_env --output "${ENV_FILE}"
+
+      - name: Create EST and CMP RA setup
+        run: |
+          uv run trustpoint/manage.py create_ra_setup \
+            --host "${TRUSTPOINT_HOST%%:*}" \
+            --port "${TRUSTPOINT_HOST##*:}" \
+            --output "${ENV_FILE}"
+
+      - name: Register HTTPS certificate for profile URL templates
+        run: |
+          uv run trustpoint/manage.py shell <<'PY'
+          import os
+          from pathlib import Path
+          from cryptography import x509
+          from cryptography.hazmat.primitives.serialization import load_pem_private_key
+          from trustpoint_core.serializer import CredentialSerializer
+          from pki.models.credential import CredentialModel
+          from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+
+          serializer = CredentialSerializer(
+              private_key=load_pem_private_key(Path(os.environ['TLS_KEY']).read_bytes(), password=None),
+              certificate=x509.load_pem_x509_certificate(Path(os.environ['TLS_CERT']).read_bytes()),
+              additional_certificates=[],
+          )
+          credential = CredentialModel.save_credential_serializer(
+              credential_serializer=serializer,
+              credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+          )
+          ActiveTrustpointTlsServerCredentialModel.objects.update_or_create(pk=1, defaults={'credential': credential})
+          PY
 
       - name: Start Trustpoint HTTPS development server
         run: |
@@ -99,13 +134,47 @@ jobs:
           cat reports/server.log >&2
           exit 1
 
-      - name: Test CMP, EST and REST enrollment
+      - name: Test EST CA certificates and CSR attributes over HTTPS
+        env:
+          EST_DISCOVERY_BASE_URL: https://${{ env.TRUSTPOINT_HOST }}
+        run: |
+          uv run pytest tests/test_est_discovery.py -v \
+            -o md_report=false \
+            --junitxml=reports/est-discovery.xml
+
+      - name: Test EST TLS channel binding over HTTPS
+        env:
+          EST_DISCOVERY_BASE_URL: https://${{ env.TRUSTPOINT_HOST }}
+        run: |
+          uv run pytest tests/test_est_channel_binding_https.py -v \
+            -o md_report=false \
+            --junitxml=reports/est-channel-binding.xml
+
+      - name: Test CMP, EST, REST and RA enrollment
         run: |
           bash tests/scripts/test_protocol_endpoints.sh \
             --host "${TRUSTPOINT_HOST}" \
             --env-file "${ENV_FILE}" \
             --tls-cert "${TLS_CERT}" \
             --work-dir reports/enrollment
+
+      - name: Test CMP CA certificate retrieval (genm/genp)
+        run: |
+          bash tests/scripts/test_protocol_endpoints.sh \
+            --host "${TRUSTPOINT_HOST}" \
+            --env-file "${ENV_FILE}" \
+            --tls-cert "${TLS_CERT}" \
+            --work-dir reports/enrollment \
+            --cmp-ca-certs-only
+
+      - name: Test CMP key updates (KUR/KUP)
+        run: |
+          bash tests/scripts/test_protocol_endpoints.sh \
+            --host "${TRUSTPOINT_HOST}" \
+            --env-file "${ENV_FILE}" \
+            --tls-cert "${TLS_CERT}" \
+            --work-dir reports/enrollment \
+            --cmp-key-update-only
 
       - name: Stop Trustpoint development server
         if: always()

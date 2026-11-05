@@ -19,11 +19,11 @@ from django.core.management.base import BaseCommand, CommandError
 from trustpoint_core.serializer import CredentialSerializer
 
 from aoki.management.commands.aoki_gen_test_certs import AokiTestCertGenerator
+from aoki.management.setup_helpers import AokiCommandLoggingMixin
 from pki.management.commands.base_commands import CertificateCreationCommandMixin
 from pki.models import CaModel, CertificateModel, DevIdRegistration, DomainModel
 from pki.models.credential import OwnerCredentialModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any
@@ -51,10 +51,8 @@ DOMAIN_UNIQUE_NAME = 'aoki'
 TEST_SERIAL_NUMBER = '4212'
 SERIAL_NUMBER_PATTERN = TEST_SERIAL_NUMBER
 
-# ruff: noqa: T201  # use of print is fine in management commands
 
-
-class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
+class Command(CertificateCreationCommandMixin, AokiCommandLoggingMixin, BaseCommand):
     """Sets up a Trustpoint test environment for AOKI IDevID-based onboarding testing."""
 
     help = (
@@ -63,19 +61,6 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         'onboarding testing. Run ``aoki_gen_test_certs`` first to generate the required certs.'
     )
 
-    def log_and_stdout(self, message: str, level: str = 'info') -> None:
-        """Log a message and print it to stdout.
-
-        :param message: The message to log and print.
-        :param level: The log level (``'info'``, ``'warning'``, or ``'error'``).
-        """
-        print(message)
-        if level == 'warning':
-            self.logger.warning(message)
-        elif level == 'error':
-            self.logger.error(message)
-        else:
-            self.logger.info(message)
 
     def handle(self, *args: Any, **kwargs: Any) -> None:
         """Execute the command."""

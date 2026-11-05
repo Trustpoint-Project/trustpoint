@@ -1,0 +1,24 @@
+{% load i18n %}
+{% block extended_key_usage_extension %}
+ <h2>{% trans 'Extended Key Usage Extension' %}</h2><hr class="hr-m">
+    {% if cert.extended_key_usage_extension %}
+
+        <div class="tp-kvp-list">
+            <div>
+                <div>{% trans 'Extension OID' %}</div>
+                <div>{{ cert.extended_key_usage_extension.extension_oid }}</div>
+            </div>
+            <div>
+                <div>{% trans 'Critical' %}</div>
+                <div>{{ cert.extended_key_usage_extension.critical }}</div>
+            </div>
+            {% for key_purpose in cert.extended_key_usage_extension.key_purpose_ids.all %}
+            <div>
+                <div>{{ key_purpose.name }}</div>
+                <div>{{ key_purpose.oid }}</div>
+            </div>
+            {% endfor %}
+        </div>
+
+    {% endif %}
+{% endblock extended_key_usage_extension %}

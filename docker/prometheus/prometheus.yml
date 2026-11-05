@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: trustpoint
+    metrics_path: /prometheus/metrics
+    scheme: https
+    # Local demo Trustpoint instances often use a self-signed certificate.
+    # Do not disable verification in production.
+    tls_config:
+      insecure_skip_verify: true
+    static_configs:
+      - targets: ["trustpoint:443"]

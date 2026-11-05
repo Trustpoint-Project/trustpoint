@@ -5,22 +5,23 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from unittest.mock import Mock, patch
 
-from django.http import Http404, HttpResponse
 import pytest
+from django.http import Http404, HttpResponse
 from django.test import RequestFactory
 from django.urls import resolve
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 
 from cmp.views import CmpRequestView
-from devices.issuer import LocalTlsClientCredentialIssuer
 from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import RevokedCertificateModel
+from pki.tests.credential_helpers import issue_test_credential
 from request.authorization.cmp import CmpOperationAuthorization
 from request.operation_processor.general import OperationProcessor
-from request.request_context import CmpRevocationRequestContext
-from workflows2.events.request_events import Events
+from request.request_context import CmpCertificateRequestContext, CmpRevocationRequestContext
+from request.workflows2_handler import Workflow2HandleResult
 
 
 @pytest.fixture
@@ -30,11 +31,27 @@ def request_factory():
 
 
 @pytest.fixture
+def security_helpers():
+    """Isolate security state and issuance in view orchestration tests."""
+    helpers = (
+        'validate_cmp_transaction_freshness',
+        'require_single_security_config',
+        'validate_cmp_proof_of_possession',
+        'mark_cmp_client_nonce',
+        'process_certificate_operation_atomically',
+        'record_cmp_response_nonce',
+        'release_delivered_workflow2_request',
+    )
+    with ExitStack() as stack:
+        yield {name: stack.enter_context(patch(f'cmp.views.{name}')) for name in helpers}
+
+
+@pytest.fixture
 def mock_request_context():
     """Mock CmpCertificateRequestContext."""
     from django.http import HttpResponse
 
-    ctx = Mock()
+    ctx = Mock(spec=CmpCertificateRequestContext)
     ctx.http_response_content = b'test response'
     ctx.http_response_status = 200
     ctx.http_response_content_type = 'application/pkixcmp'
@@ -44,9 +61,7 @@ def mock_request_context():
 
     # Mock to_http_response to return actual HttpResponse
     ctx.to_http_response.return_value = HttpResponse(
-        content=ctx.http_response_content,
-        status=ctx.http_response_status,
-        content_type=ctx.http_response_content_type
+        content=ctx.http_response_content, status=ctx.http_response_status, content_type=ctx.http_response_content_type
     )
 
     return ctx
@@ -94,9 +109,9 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -105,25 +120,27 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
         mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test POST request to initialization endpoint with domain name only."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/initialization/test_domain')
         view = CmpRequestView()
-        
+
         response = view.post(request, domain='test_domain')
-        
+
         # Verify CmpCertificateRequestContext was created with correct parameters
         mock_context_cls.assert_called_once()
         call_kwargs = mock_context_cls.call_args[1]
@@ -131,16 +148,23 @@ class TestCmpInitializationRequestView:
         assert call_kwargs['protocol'] == 'cmp'
         assert call_kwargs['operation'] == None
         assert call_kwargs['cert_profile_str'] is None
-        
+
         # Verify all processors were called
         mock_validator_cls.return_value.validate.assert_called_once()
         mock_parser_cls.return_value.parse.assert_called_once()
-        mock_auth_cls.return_value.authenticate.assert_called_once()
+        security_helpers['validate_cmp_transaction_freshness'].assert_called_once_with(mock_request_context)
+        security_helpers['require_single_security_config'].assert_called_once_with(mock_request_context)
+        mock_authenticate.assert_called_once_with(mock_request_context)
+        security_helpers['validate_cmp_proof_of_possession'].assert_called_once_with(mock_request_context)
+        security_helpers['mark_cmp_client_nonce'].assert_called_once_with(mock_request_context)
         mock_authz_cls.return_value.authorize.assert_called_once()
         mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
-        mock_processor_cls.return_value.process_operation.assert_called_once()
+        security_helpers['process_certificate_operation_atomically'].assert_called_once_with(
+            mock_request_context, mock_processor_cls.return_value
+        )
+        mock_processor_cls.return_value.process_operation.assert_not_called()
         mock_responder_cls.build_response.assert_called_once()
-        
+
         # Verify response
         assert response.status_code == 200
         assert response.content == b'test response'
@@ -148,9 +172,9 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -159,17 +183,19 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
         mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """IR requests should visibly dispatch workflows2 before operation processing."""
         mock_request_context.cmp_body_type = 'ir'
         mock_request_context.operation = 'initialization'
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
 
@@ -179,14 +205,17 @@ class TestCmpInitializationRequestView:
         response = view.post(request, domain='test_domain')
 
         mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
-        mock_processor_cls.return_value.process_operation.assert_called_once_with(mock_request_context)
+        security_helpers['process_certificate_operation_atomically'].assert_called_once_with(
+            mock_request_context, mock_processor_cls.return_value
+        )
+        mock_processor_cls.return_value.process_operation.assert_not_called()
         assert response.status_code == 200
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
-    @patch('cmp.views.Workflow2Handler')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -195,17 +224,19 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
         mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """CR requests should visibly dispatch workflows2 as cmp.certification."""
         mock_request_context.cmp_body_type = 'cr'
         mock_request_context.operation = 'certification'
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
 
@@ -220,13 +251,17 @@ class TestCmpInitializationRequestView:
         )
 
         mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
-        mock_processor_cls.return_value.process_operation.assert_called_once_with(mock_request_context)
+        security_helpers['process_certificate_operation_atomically'].assert_called_once_with(
+            mock_request_context, mock_processor_cls.return_value
+        )
+        mock_processor_cls.return_value.process_operation.assert_not_called()
         assert response.status_code == 200
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -235,44 +270,48 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test POST request to initialization endpoint with certificate profile."""
         # Mock to_http_response to return actual HttpResponse
         mock_request_context.to_http_response.return_value = HttpResponse(
             content=mock_request_context.http_response_content,
             status=mock_request_context.http_response_status,
-            content_type=mock_request_context.http_response_content_type
+            content_type=mock_request_context.http_response_content_type,
         )
 
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        #parser_instance = mock_parser_cls.return_value
-        #context = parser_instance.parse.return_value
-        
+        # parser_instance = mock_parser_cls.return_value
+        # context = parser_instance.parse.return_value
+
         request = request_factory.post('/cmp/p/test_domain/tls_client/initialization')
         view = CmpRequestView()
-        
+
         response = view.post(request, domain='test_domain', cert_profile='tls_client')
-        
+
         # Verify CmpCertificateRequestContext was created with correct profile
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['cert_profile_str'] == 'tls_client'
-        
+
         # Verify response
         assert response.status_code == 200
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -281,26 +320,31 @@ class TestCmpInitializationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test that authorization is called with correct operations for initialization."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/initialization/test_domain')
         view = CmpRequestView()
-        
+
         view.post(request, domain='test_domain')
 
         # Verify CmpAuthorization was initialized with correct operations
-        mock_authz_cls.assert_called_once_with(['initialization', 'certification', 'revocation', 'certconf'])
+        mock_authz_cls.assert_called_once_with(
+            ['initialization', 'certification', 'keyupdate', 'getcacerts', 'revocation', 'certconf']
+        )
 
 
 class TestCmpCertificationRequestView:
@@ -308,8 +352,9 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -318,24 +363,27 @@ class TestCmpCertificationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test POST request to certification endpoint with domain name only."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/p/test_domain/certification')
         view = CmpRequestView()
-        
+
         response = view.post(request, domain='test_domain')
-        
+
         # Verify CmpCertificateRequestContext was created with correct parameters
         mock_context_cls.assert_called_once()
         call_kwargs = mock_context_cls.call_args[1]
@@ -343,15 +391,22 @@ class TestCmpCertificationRequestView:
         assert call_kwargs['protocol'] == 'cmp'
         assert call_kwargs['operation'] == None
         assert call_kwargs['cert_profile_str'] is None  # Resolved later by CertProfileParsing from domain
-        
+
         # Verify all processors were called
         mock_validator_cls.return_value.validate.assert_called_once()
         mock_parser_cls.return_value.parse.assert_called_once()
-        mock_auth_cls.return_value.authenticate.assert_called_once()
+        security_helpers['validate_cmp_transaction_freshness'].assert_called_once_with(mock_request_context)
+        security_helpers['require_single_security_config'].assert_called_once_with(mock_request_context)
+        mock_authenticate.assert_called_once_with(mock_request_context)
+        security_helpers['validate_cmp_proof_of_possession'].assert_called_once_with(mock_request_context)
+        security_helpers['mark_cmp_client_nonce'].assert_called_once_with(mock_request_context)
         mock_authz_cls.return_value.authorize.assert_called_once()
-        mock_processor_cls.return_value.process_operation.assert_called_once()
+        security_helpers['process_certificate_operation_atomically'].assert_called_once_with(
+            mock_request_context, mock_processor_cls.return_value
+        )
+        mock_processor_cls.return_value.process_operation.assert_not_called()
         mock_responder_cls.build_response.assert_called_once()
-        
+
         # Verify response
         assert response.status_code == 200
         assert response.content == b'test response'
@@ -359,8 +414,9 @@ class TestCmpCertificationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -369,35 +425,39 @@ class TestCmpCertificationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test POST request to certification endpoint with certificate profile."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/p/test_domain/tls_server/certification')
         view = CmpRequestView()
-        
+
         response = view.post(request, domain='test_domain', cert_profile='tls_server')
-        
+
         # Verify CmpCertificateRequestContext was created with correct profile
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['cert_profile_str'] == 'tls_server'
-        
+
         # Verify response
         assert response.status_code == 200
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('request.enrollment.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
-    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.authenticate_cmp_request')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
     @patch('cmp.views.CmpCertificateRequestContext')
@@ -406,24 +466,27 @@ class TestCmpCertificationRequestView:
         mock_context_cls,
         mock_validator_cls,
         mock_parser_cls,
-        mock_auth_cls,
+        mock_authenticate,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
         mock_request_context,
+        security_helpers,
     ):
         """Test that authorization is called with correct operations for certification."""
+        mock_workflow2_cls.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/p/test_domain/certification')
         view = CmpRequestView()
-        
+
         view.post(request, domain='test_domain')
-        
+
         mock_authz_cls.assert_called_once()
 
 
@@ -524,7 +587,7 @@ class TestCmpRequestViewPathParamExtraction:
         assert domain == 'test_domain'
         assert profile is None
         assert operation == 'initialization'
-    
+
     def test_extract_path_all(self, request_factory):
         """Test extraction with domain name, certificate profile, and operation."""
 
@@ -575,8 +638,7 @@ class TestCmpRevocationRequestView:
         device = domain_credential_cmp_onboarding['device']
         domain_credential = domain_credential_cmp_onboarding['domain_credential']
 
-        issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
-        app_credential = issuer.issue_tls_client_credential(common_name='App Credential', validity_days=30)
+        app_credential = issue_test_credential(device, 'tls_client', common_name='App Credential')
 
         context = _build_revocation_context(
             device=device,
@@ -587,9 +649,7 @@ class TestCmpRevocationRequestView:
         CmpOperationAuthorization(['revocation']).authorize(context)
         OperationProcessor().process_operation(context)
 
-        revoked = RevokedCertificateModel.objects.filter(
-            certificate=app_credential.credential.certificate
-        ).first()
+        revoked = RevokedCertificateModel.objects.filter(certificate=app_credential.credential.certificate).first()
         assert revoked is not None, 'The application credential should be revoked.'
 
     @pytest.mark.django_db
@@ -597,8 +657,7 @@ class TestCmpRevocationRequestView:
         """Test that an application credential can self-revoke via CMP RR."""
         device = domain_credential_cmp_onboarding['device']
 
-        issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
-        app_credential = issuer.issue_tls_client_credential(common_name='Self Revoke Credential', validity_days=30)
+        app_credential = issue_test_credential(device, 'tls_client', common_name='Self Revoke Credential')
 
         context = _build_revocation_context(
             device=device,
@@ -609,9 +668,7 @@ class TestCmpRevocationRequestView:
         CmpOperationAuthorization(['revocation']).authorize(context)
         OperationProcessor().process_operation(context)
 
-        revoked = RevokedCertificateModel.objects.filter(
-            certificate=app_credential.credential.certificate
-        ).first()
+        revoked = RevokedCertificateModel.objects.filter(certificate=app_credential.credential.certificate).first()
         assert revoked is not None, 'The credential should be revoked via self-revocation.'
 
     @pytest.mark.django_db
@@ -619,9 +676,8 @@ class TestCmpRevocationRequestView:
         """Test revocation fails if CMP signer cert is not authorized for the target credential."""
         device = domain_credential_cmp_onboarding['device']
 
-        issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
-        signer_credential = issuer.issue_tls_client_credential(common_name='Signer Credential', validity_days=30)
-        target_credential = issuer.issue_tls_client_credential(common_name='Target Credential', validity_days=30)
+        signer_credential = issue_test_credential(device, 'tls_client', common_name='Signer Credential')
+        target_credential = issue_test_credential(device, 'tls_client', common_name='Target Credential')
 
         context = _build_revocation_context(
             device=device,
@@ -632,9 +688,7 @@ class TestCmpRevocationRequestView:
         with pytest.raises(ValueError):
             CmpOperationAuthorization(['revocation']).authorize(context)
 
-        revoked = RevokedCertificateModel.objects.filter(
-            certificate=target_credential.credential.certificate
-        ).first()
+        revoked = RevokedCertificateModel.objects.filter(certificate=target_credential.credential.certificate).first()
         assert revoked is None, 'Unauthorized revocation should not revoke the target credential.'
 
     @pytest.mark.django_db
@@ -654,10 +708,7 @@ class TestCmpRevocationRequestView:
             no_onboarding_config=other_no_onboarding,
         )
 
-        other_issuer = LocalTlsClientCredentialIssuer(device=other_device, domain=other_device.domain)
-        other_credential = other_issuer.issue_tls_client_credential(
-            common_name='Other Device Credential', validity_days=30
-        )
+        other_credential = issue_test_credential(other_device, 'tls_client', common_name='Other Device Credential')
 
         context = _build_revocation_context(
             device=device,
@@ -668,9 +719,7 @@ class TestCmpRevocationRequestView:
         with pytest.raises(ValueError):
             CmpOperationAuthorization(['revocation']).authorize(context)
 
-        revoked = RevokedCertificateModel.objects.filter(
-            certificate=other_credential.credential.certificate
-        ).first()
+        revoked = RevokedCertificateModel.objects.filter(certificate=other_credential.credential.certificate).first()
         assert revoked is None, 'Revocation should fail for credentials belonging to another device.'
 
     @pytest.mark.django_db
@@ -679,8 +728,7 @@ class TestCmpRevocationRequestView:
         device = domain_credential_cmp_onboarding['device']
         domain_credential = domain_credential_cmp_onboarding['domain_credential']
 
-        issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
-        app_credential = issuer.issue_tls_client_credential(common_name='Already Revoked', validity_days=30)
+        app_credential = issue_test_credential(device, 'tls_client', common_name='Already Revoked')
 
         app_credential.revoke()
         revoked_before = RevokedCertificateModel.objects.filter(

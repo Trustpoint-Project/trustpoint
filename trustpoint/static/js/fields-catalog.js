@@ -72,8 +72,8 @@ function initializeFieldCatalog() {
         { name: 'Emails', fullPath: 'ext.subject_alternative_name.rfc822_names', aliases: ['ext.subject_alternative_name.email', 'ext.subject_alternative_name.rfc822'], valueType: 'list', description: 'RFC822 Names (Emails)' },
         { name: 'URIs', fullPath: 'ext.subject_alternative_name.uris', aliases: ['ext.subject_alternative_name.uri'], valueType: 'list', description: 'Uniform Resource Identifiers (URIs)' },
 
-        { name: 'CRL Dist Points', fullPath: 'ext.crl_distribution_points', valueType: 'object', description: 'CRL Distribution Points' },
-        { name: 'URIs', fullPath: 'ext.crl_distribution_points.uris', valueType: 'list', description: 'List of CRL URLs' }
+        { name: 'CRL Dist Points', fullPath: 'ext.crl_distribution_points', valueType: 'object', description: 'CRL Distribution Points. Configure fixed URLs or URLs with issuing CA and active TLS certificate placeholders.' },
+        { name: 'URIs', fullPath: 'ext.crl_distribution_points.uris', valueType: 'list', description: 'Comma-separated absolute URLs, e.g. http://2.2.2.2/crl/{issuing_ca.id} or http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}. IP SAN indices start at 1. Enable Mutable to allow edits during issuance.' }
       ]
     },
 

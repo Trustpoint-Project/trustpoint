@@ -5,67 +5,26 @@
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import json
-from typing import Never
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.hazmat.primitives.asymmetric.ec import ECDSA
-from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
 
-try:
-    from cryptography.hazmat.primitives.asymmetric import mldsa
-except ImportError:
-    mldsa = None  # type: ignore[assignment]
-
+from pki.services.csr import decode_base64_csr, load_csr, validate_csr_size
 from request.request_context import BaseRequestContext, RestBaseRequestContext, RestCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
+from .csr import CsrSignatureVerification
+from .http import BasicAuthHeaderParsing
 
 
-class RestAuthorizationHeaderParsing(ParsingComponent, LoggerMixin):
-    """Parse the HTTP Basic Auth Authorization header for REST requests."""
+class RestAuthorizationHeaderParsing(BasicAuthHeaderParsing):
+    """Parse Basic Auth credentials for REST requests."""
 
-    def parse(self, context: BaseRequestContext) -> None:
-        """Extract username and password from the Basic Auth Authorization header."""
-        if not isinstance(context, RestBaseRequestContext):
-            exc_msg = 'RestAuthorizationHeaderParsing requires a RestBaseRequestContext.'
-            raise TypeError(exc_msg)
-
-        if context.raw_message is None:
-            error_message = 'Raw message is missing from the context.'
-            self.logger.warning('REST auth header parsing failed: Raw message is missing')
-            raise ValueError(error_message)
-
-        if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
-            error_message = 'Raw message is missing headers.'
-            self.logger.warning('REST auth header parsing failed: Headers are missing')
-            raise ValueError(error_message)
-
-        auth_header = context.raw_message.headers.get('Authorization')
-        if not auth_header:
-            self.logger.debug('REST auth header parsing skipped: No Authorization header present')
-            return
-
-        if not auth_header.lower().startswith('basic '):
-            error_message = "Authorization header must start with 'Basic'."
-            self.logger.warning("REST auth header parsing failed: Header does not start with 'Basic'")
-            raise ValueError(error_message)
-
-        try:
-            credentials = base64.b64decode(auth_header.split(' ', 1)[1].strip()).decode('utf-8')
-            rest_username, rest_password = credentials.split(':', 1)
-            context.rest_username = rest_username
-            context.rest_password = rest_password
-            self.logger.debug("REST auth header parsing successful: Extracted credentials for user '%s'", rest_username)
-        except Exception as e:
-            error_message = "Malformed 'Authorization' header credentials."
-            self.logger.warning('REST auth header parsing failed: Malformed credentials - %s', e)
-            context.error(error_message, http_status=401)
-            raise ValueError(error_message) from e
+    context_type = RestBaseRequestContext
+    context_error_message = 'RestAuthorizationHeaderParsing requires a RestBaseRequestContext.'
+    protocol = 'rest'
 
 
 class RestPkiMessageParsing(ParsingComponent, LoggerMixin):
@@ -79,148 +38,62 @@ class RestPkiMessageParsing(ParsingComponent, LoggerMixin):
     """
 
     def parse(self, context: BaseRequestContext) -> None:
-        """Parse the JSON body and extract the CSR."""
+        """Decode REST JSON/CSR transport and parse a single PKCS#10 request."""
         if not isinstance(context, RestCertificateRequestContext):
             exc_msg = 'RestPkiMessageParsing requires a RestCertificateRequestContext.'
             raise TypeError(exc_msg)
-
         if context.raw_message is None:
-            error_message = 'Raw message is missing from the context.'
-            self.logger.warning('REST PKI message parsing failed: Raw message is missing')
-            raise ValueError(error_message)
-
+            msg = 'Raw message is missing from the context.'
+            raise ValueError(msg)
         if not hasattr(context.raw_message, 'body') or not context.raw_message.body:
-            error_message = 'Raw message is missing body.'
-            self.logger.warning('REST PKI message parsing failed: Body is missing')
-            raise ValueError(error_message)
-
+            msg = 'Raw message is missing body.'
+            raise ValueError(msg)
+        error_message = 'Failed to parse JSON body.'
         try:
             body = context.raw_message.body
+            validate_csr_size(len(body), transport=True)
             data = json.loads(body.decode('utf-8') if isinstance(body, bytes) else body)
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            error_message = 'Failed to parse JSON body.'
-            self.logger.warning('REST PKI message parsing failed: Invalid JSON - %s', e)
+        except (ValueError, TypeError) as exc:
             context.error(error_message, http_status=400)
-            raise ValueError(error_message) from e
-
+            raise ValueError(error_message) from exc
+        if not isinstance(data, dict):
+            context.error(error_message, http_status=400)
+            raise ValueError(error_message)  # noqa: TRY004 - HTTP parsers expose validation failures as ValueError.
         csr_value = data.get('csr')
         if not csr_value:
             error_message = "Missing 'csr' field in JSON body."
-            self.logger.warning('REST PKI message parsing failed: Missing csr field')
             context.error(error_message, http_status=400)
             raise ValueError(error_message)
-
+        error_message = 'Failed to parse the CSR from JSON body.'
+        if not isinstance(csr_value, str):
+            context.error(error_message, http_status=400)
+            raise ValueError(error_message)  # noqa: TRY004 - Preserve the parser's validation error contract.
         try:
-            csr_bytes = csr_value.encode('utf-8') if isinstance(csr_value, str) else csr_value
-
-            if b'CERTIFICATE REQUEST' in csr_bytes:
-                csr = x509.load_pem_x509_csr(csr_bytes)
-                self.logger.debug('REST PKI message parsing: Detected PEM CSR')
-            else:
-                # Assume Base64-encoded DER
-                der_data = base64.b64decode(csr_bytes)
-                csr = x509.load_der_x509_csr(der_data)
-                self.logger.debug('REST PKI message parsing: Detected Base64-DER CSR')
-
+            csr_bytes = csr_value.encode('utf-8')
+            csr = (
+                load_csr(csr_bytes, encoding='pem') if csr_bytes.lstrip().startswith(b'-----BEGIN')
+                else load_csr(decode_base64_csr(csr_bytes), encoding='der')
+            )
             context.cert_requested = csr
-
             subject_cn = 'unknown'
             with contextlib.suppress(IndexError, AttributeError):
                 cn_value = csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
                 subject_cn = cn_value if isinstance(cn_value, str) else cn_value.decode('utf-8')
-
             self.logger.info('REST PKI message parsing successful: subject CN: %s', subject_cn)
-
-        except Exception as e:
-            error_message = 'Failed to parse the CSR from JSON body.'
+        except Exception as exc:
             self.logger.exception('REST PKI message parsing failed')
             context.error(error_message, http_status=400)
-            raise ValueError(error_message) from e
+            raise ValueError(error_message) from exc
 
 
-class RestCsrSignatureVerification(ParsingComponent, LoggerMixin):
-    """Verify the CSR signature for REST requests."""
+class RestCsrSignatureVerification(CsrSignatureVerification):
+    """Verify CSR signatures for REST certificate requests."""
 
-    def _raise_validation_error(self, message: str) -> Never:
-        """Raise a ValueError with the given message."""
-        raise ValueError(message)
-
-    def parse(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0912
-        """Validate the signature of the CSR stored in the context."""
-        if not isinstance(context, RestCertificateRequestContext):
-            exc_msg = 'RestCsrSignatureVerification requires a RestCertificateRequestContext.'
-            raise TypeError(exc_msg)
-
-        csr = context.cert_requested
-        if csr is None:
-            err_msg = 'CSR not found in the parsing context.'
-            self.logger.warning('REST CSR signature verification failed: CSR not found')
-            self._raise_validation_error(err_msg)
-
-        if not isinstance(csr, x509.CertificateSigningRequest):
-            err_msg = 'Expected a CertificateSigningRequest object.'
-            self.logger.warning('REST CSR signature verification failed: Wrong type %s', type(csr).__name__)
-            raise TypeError(err_msg)
-
-        public_key = csr.public_key()
-        signature_hash_algorithm = csr.signature_hash_algorithm
-
-        is_mldsa = mldsa and isinstance(public_key, (
-            mldsa.MLDSA44PublicKey,
-            mldsa.MLDSA65PublicKey,
-            mldsa.MLDSA87PublicKey,
-        ))
-
-        if signature_hash_algorithm is None and not is_mldsa:
-            error_message = 'CSR does not contain a signature hash algorithm.'
-            self.logger.warning('REST CSR signature verification failed: No signature hash algorithm')
-            self._raise_validation_error(error_message)
-
-        if not isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)) and not is_mldsa:
-            error_message = 'Unsupported public key type for CSR signature verification.'
-            self.logger.warning('REST CSR signature verification failed: Unsupported public key type %s',
-                                type(public_key).__name__)
-            raise TypeError(error_message)
-
-        try:
-            if isinstance(public_key, rsa.RSAPublicKey):
-                key_type = 'RSA'
-                public_key.verify(
-                    csr.signature,
-                    csr.tbs_certrequest_bytes,
-                    PKCS1v15(),
-                    signature_hash_algorithm,  # type: ignore[arg-type]
-                )
-                hash_info = f' with {signature_hash_algorithm.name}' if signature_hash_algorithm else ''
-            elif isinstance(public_key, ec.EllipticCurvePublicKey):
-                key_type = 'EC'
-                public_key.verify(
-                    csr.signature,
-                    csr.tbs_certrequest_bytes,
-                    ECDSA(signature_hash_algorithm),  # type: ignore[arg-type]
-                )
-                hash_info = f' with {signature_hash_algorithm.name}' if signature_hash_algorithm else ''
-            elif is_mldsa:
-                if isinstance(public_key, mldsa.MLDSA44PublicKey):
-                    key_type = 'ML-DSA-44'
-                elif isinstance(public_key, mldsa.MLDSA65PublicKey):
-                    key_type = 'ML-DSA-65'
-                else:  # MLDSA87PublicKey
-                    key_type = 'ML-DSA-87'
-                public_key.verify(  # type: ignore[union-attr,call-arg]
-                    signature=csr.signature,
-                    data=csr.tbs_certrequest_bytes,
-                )
-                hash_info = ''  # ML-DSA is a pure signature scheme
-            else:
-                error_message = 'Unsupported key type for signature verification.'
-                raise TypeError(error_message)  # noqa: TRY301
-
-            self.logger.info('REST CSR signature verification successful: %s key%s', key_type, hash_info)
-        except Exception as e:
-            error_message = 'Failed to verify the CSR signature.'
-            self.logger.exception('REST CSR signature verification failed')
-            raise ValueError(error_message) from e
+    context_type = RestCertificateRequestContext
+    protocol = 'REST'
+    missing_csr_message = 'CSR not found in the parsing context.'
+    invalid_csr_message = 'Expected a CertificateSigningRequest object.'
+    invalid_csr_exception = TypeError
 
 
 class RestMessageParser(CompositeParsing):

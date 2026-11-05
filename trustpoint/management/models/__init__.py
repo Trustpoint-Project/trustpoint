@@ -7,6 +7,7 @@ from management.models.account_security import AccountSecurityConfig
 from management.models.appversion import AppVersion
 from management.models.audit_log import AuditLog
 from management.models.backup import BackupOptions
+from management.models.certificate_authentication import CertificateAuthenticationConfig
 from management.models.email import SmtpEmailConfig
 from management.models.traceability import (
     TraceabilityCredentialGenerationModel,
@@ -23,6 +24,7 @@ from management.models.notifications import (
     WeakSignatureAlgorithm,
 )
 from management.models.organization import OrganizationModel
+from management.models.password_policy import PasswordPolicy
 from management.models.prometheus import PrometheusConfig
 from management.models.security import SecurityConfig
 from management.models.tls import TlsSettings
@@ -34,6 +36,7 @@ __all__ = [
     'BackupOptions',
     'TraceabilityCredentialGenerationModel',
     'TraceabilityCredentialModel',
+    'CertificateAuthenticationConfig',
     'LoggingConfig',
     'NotificationConfig',
     'NotificationMessage',
@@ -41,6 +44,7 @@ __all__ = [
     'NotificationModel',
     'NotificationStatus',
     'OrganizationModel',
+    'PasswordPolicy',
     'PrometheusConfig',
     'SecurityConfig',
     'SmtpEmailConfig',

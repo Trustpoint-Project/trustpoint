@@ -5,9 +5,8 @@
 
 from cmp.util import PKIFailureInfo
 from management.models.audit_log import AuditLog
-from pki.models.ca_rollover import CaRolloverState
 from pki.models.certificate import CertificateModel
-from pki.services.ca_rollover import CaRolloverService
+from pki.services.revocation import resolve_revocation_ca, revoke_certificates
 from request.request_context import (
     BaseRequestContext,
     BaseRevocationRequestContext,
@@ -54,27 +53,20 @@ class LocalCaCertificateRevocationProcessor(CertificateRevocationProcessor, Logg
 
         ca = context.domain.get_issuing_ca_or_value_error()
 
-        active_rollover = CaRolloverService.get_active_rollover(ca)
         cred_cert = context.credential_to_revoke.credential.certificate_or_error
-
-        if (active_rollover
-            and active_rollover.state in (CaRolloverState.PREPARATION, CaRolloverState.TRANSITION)
-            and active_rollover.new_issuing_ca
-            and active_rollover.new_issuing_ca.credential):
-            new_ca_cert = active_rollover.new_issuing_ca.credential.get_certificate()
-            if cred_cert.issuer == new_ca_cert.subject:
-                ca = active_rollover.new_issuing_ca
-                self.logger.info(
-                    'Using new CA for certificate revocation (certificate issued by new CA)'
-                )
-
-        context.issuer_credential = ca.get_credential()
+        resolved_ca = resolve_revocation_ca(cred_cert, ca)
+        context.issuer_credential = resolved_ca.get_credential() if resolved_ca is not None else None
 
         if (cred_cert.certificate_status == CertificateModel.CertificateStatus.REVOKED):
             exc_msg = 'The certificate is already revoked.'
             context.error(exc_msg, http_status=422, cmp_code=PKIFailureInfo.CERT_REVOKED)
             raise ValueError(exc_msg)
-        context.credential_to_revoke.revoke()
+        revoke_certificates(
+            context.credential_to_revoke.credential.certificates.all(),
+            reason=context.revocation_reason,
+            ca=resolved_ca,
+            only_unexpired=True,
+        )
 
         domain_name = context.domain.unique_name
         device_name = context.device.common_name

@@ -157,3 +157,14 @@ def test_profile_bulk_delete_get_redirects_without_selection() -> None:
     assert response.status_code == HTTPStatus.FOUND
     error.assert_called_once()
     redirect.assert_called_once()
+
+
+def test_api_rejects_deleting_a_profile_used_by_a_credential(tls_client_credential_instance):
+    from rest_framework.exceptions import ValidationError
+
+    profile = tls_client_credential_instance['issued_credential'].certificate_profile
+    view = CertProfileViewSet()
+    view.request = SimpleNamespace(user=None)
+    with pytest.raises(ValidationError, match='referenced by issued credentials'):
+        view.perform_destroy(profile)
+    assert CertificateProfileModel.objects.filter(pk=profile.pk).exists()

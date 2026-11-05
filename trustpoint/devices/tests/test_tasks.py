@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from devices.models import OpcUaGdsPushConfig
 from devices.tasks import perform_gds_push_update
 
 from request.gds_push import GdsPushError, GdsPushService
@@ -28,8 +29,10 @@ class TestPerformGdsPushUpdate:
     def test_periodic_update_disabled(self, mock_models):
         """Test that task returns early when periodic updates are disabled."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = False
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = False
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         with patch('devices.tasks.GdsPushService') as mock_service_class:
             perform_gds_push_update(device.pk)
@@ -40,9 +43,11 @@ class TestPerformGdsPushUpdate:
     def test_successful_trustlist_and_certificate_update(self, mock_models):
         """Test successful trustlist and certificate updates."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
-        device.opc_gds_push_renewal_interval = 168
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
+        device.opc_ua_gds_push_config.opc_gds_push_renewal_interval = 168
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -61,8 +66,10 @@ class TestPerformGdsPushUpdate:
     def test_failed_trustlist_update(self, mock_models):
         """Test that task continues despite failed trustlist update."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(False, 'Trustlist update failed'))
@@ -72,7 +79,7 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
-                with patch.object(device, 'schedule_next_gds_push_update'):
+                with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                     perform_gds_push_update(device.pk)
 
                     # Both methods should still be called
@@ -82,8 +89,10 @@ class TestPerformGdsPushUpdate:
     def test_failed_certificate_update(self, mock_models):
         """Test that task continues despite failed certificate update."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -93,7 +102,7 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
-                with patch.object(device, 'schedule_next_gds_push_update'):
+                with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                     perform_gds_push_update(device.pk)
 
                     mock_service.update_trustlist.assert_called_once()
@@ -102,8 +111,10 @@ class TestPerformGdsPushUpdate:
     def test_gds_push_error_during_trustlist_update(self, mock_models):
         """Test that GdsPushError during trustlist update is caught and logged."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(side_effect=GdsPushError('Connection failed'))
@@ -113,7 +124,7 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
-                with patch.object(device, 'schedule_next_gds_push_update'):
+                with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                     perform_gds_push_update(device.pk)
 
                     mock_service.update_trustlist.assert_called_once()
@@ -122,8 +133,10 @@ class TestPerformGdsPushUpdate:
     def test_gds_push_error_during_certificate_update(self, mock_models):
         """Test that GdsPushError during certificate update is caught and logged."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -133,7 +146,7 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
-                with patch.object(device, 'schedule_next_gds_push_update'):
+                with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                     perform_gds_push_update(device.pk)
 
                     mock_service.update_trustlist.assert_called_once()
@@ -142,8 +155,10 @@ class TestPerformGdsPushUpdate:
     def test_unexpected_error_during_trustlist_update_reraises(self, mock_models):
         """Test that unexpected errors during trustlist update are re-raised."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(side_effect=RuntimeError('Unexpected error'))
@@ -153,15 +168,17 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
-                with patch.object(device, 'schedule_next_gds_push_update'):
+                with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                     with pytest.raises(RuntimeError, match='Unexpected error'):
                         perform_gds_push_update(device.pk)
 
     def test_unexpected_error_during_certificate_update_reraises(self, mock_models):
         """Test that unexpected errors during certificate update are re-raised."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -171,16 +188,18 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
-                with patch.object(device, 'schedule_next_gds_push_update'):
+                with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                     with pytest.raises(RuntimeError, match='Unexpected error'):
                         perform_gds_push_update(device.pk)
 
     def test_device_refresh_and_reschedule(self, mock_models):
         """Test that device is refreshed and next update is scheduled."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
-        device.opc_gds_push_renewal_interval = 24
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
+        device.opc_ua_gds_push_config.opc_gds_push_renewal_interval = 24
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -200,8 +219,10 @@ class TestPerformGdsPushUpdate:
     def test_atomic_transaction_for_trustlist_update(self, mock_models):
         """Test that trustlist update is wrapped in atomic transaction."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -214,7 +235,7 @@ class TestPerformGdsPushUpdate:
                 mock_atomic.return_value.__enter__ = Mock()
                 mock_atomic.return_value.__exit__ = Mock(return_value=None)
                 with patch.object(device, 'refresh_from_db'):
-                    with patch.object(device, 'schedule_next_gds_push_update'):
+                    with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                         perform_gds_push_update(device.pk)
 
                         # Atomic should be called at least once
@@ -226,8 +247,10 @@ class TestPerformGdsPushUpdate:
         caplog.set_level(logging.INFO)
 
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -237,7 +260,7 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
-                with patch.object(device, 'schedule_next_gds_push_update'):
+                with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                     perform_gds_push_update(device.pk)
 
                     # Check that success messages are logged
@@ -250,8 +273,10 @@ class TestPerformGdsPushUpdate:
         caplog.set_level(logging.WARNING)
 
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(False, 'Trustlist update failed'))
@@ -261,7 +286,7 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
-                with patch.object(device, 'schedule_next_gds_push_update'):
+                with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                     perform_gds_push_update(device.pk)
 
                     # Check that warning messages are logged
@@ -271,8 +296,10 @@ class TestPerformGdsPushUpdate:
     def test_asyncio_run_for_update_trustlist(self, mock_models):
         """Test that asyncio.run is used to execute update_trustlist."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -283,7 +310,7 @@ class TestPerformGdsPushUpdate:
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch('devices.tasks.asyncio.run', wraps=asyncio.run) as mock_asyncio_run:
                 with patch.object(device, 'refresh_from_db'):
-                    with patch.object(device, 'schedule_next_gds_push_update'):
+                    with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                         perform_gds_push_update(device.pk)
 
                         # asyncio.run should be called at least twice (for both updates)
@@ -292,8 +319,10 @@ class TestPerformGdsPushUpdate:
     def test_asyncio_run_for_update_server_certificate(self, mock_models):
         """Test that asyncio.run is used to execute update_server_certificate."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -304,7 +333,7 @@ class TestPerformGdsPushUpdate:
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch('devices.tasks.asyncio.run', wraps=asyncio.run) as mock_asyncio_run:
                 with patch.object(device, 'refresh_from_db'):
-                    with patch.object(device, 'schedule_next_gds_push_update'):
+                    with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                         perform_gds_push_update(device.pk)
 
                         # Verify asyncio.run was called with the update_server_certificate coroutine
@@ -314,8 +343,10 @@ class TestPerformGdsPushUpdate:
     def test_multiple_consecutive_updates(self, mock_models):
         """Test multiple consecutive task executions."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
@@ -325,7 +356,7 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
-                with patch.object(device, 'schedule_next_gds_push_update'):
+                with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                     # Run the task multiple times
                     for _ in range(3):
                         perform_gds_push_update(device.pk)
@@ -337,8 +368,10 @@ class TestPerformGdsPushUpdate:
     def test_mixed_success_and_failure_results(self, mock_models):
         """Test handling of mixed success/failure results."""
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = True
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         mock_service = Mock(spec=GdsPushService)
         # Trustlist succeeds, certificate fails
@@ -373,8 +406,10 @@ class TestPerformGdsPushUpdate:
         caplog.set_level(logging.INFO)
 
         device = mock_models['device']
-        device.opc_gds_push_enable_periodic_update = False
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = False
         device.save()
+        device.opc_ua_gds_push_config.save()
 
         with patch('devices.tasks.GdsPushService') as mock_service:
             perform_gds_push_update(device.pk)

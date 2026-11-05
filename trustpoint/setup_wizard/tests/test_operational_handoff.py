@@ -25,6 +25,8 @@ def test_build_operational_environment_preserves_local_softhsm_config(monkeypatc
     """Local SoftHSM config paths are passed through instead of rewritten as uploaded configs."""
     softhsm_config_path = '/var/lib/trustpoint/hsm/config/softhsm2.conf'
     monkeypatch.setenv('TRUSTPOINT_LOCAL_HSM_SOFTHSM2_CONF', softhsm_config_path)
+    monkeypatch.setenv('DATABASE_PASSWORD', 'testing321')
+    monkeypatch.delenv('DATABASE_PASSWORD_FILE', raising=False)
 
     config_model = SetupWizardConfigModel(
         operational_db_host='postgres',

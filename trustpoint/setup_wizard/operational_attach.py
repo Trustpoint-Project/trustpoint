@@ -92,7 +92,6 @@ class OperationalAppSecretMaterial:
     """Raw app-secret material read from the target database for validation only."""
 
     backend_kind: str | None
-    raw_dek: bytes = b''
     wrapped_dek: bytes = b''
     kek_label: str = 'trustpoint-app-secret-kek'
 
@@ -580,14 +579,17 @@ class OperationalTargetInspector:
         database: OperationalDatabaseConfig,
     ) -> tuple[OperationalManagedKeyMaterial, ...]:
         """Read managed-key binding material needed for live backend reconciliation."""
-        with psycopg.connect(
-            dbname=database.name,
-            user=database.user,
-            password=database.password,
-            host=database.host,
-            port=database.port,
-            connect_timeout=5,
-        ) as connection, connection.cursor() as cursor:
+        with (
+            psycopg.connect(
+                dbname=database.name,
+                user=database.user,
+                password=database.password,
+                host=database.host,
+                port=database.port,
+                connect_timeout=5,
+            ) as connection,
+            connection.cursor() as cursor,
+        ):
             crypto_backend_kind = self._read_active_crypto_backend_kind(cursor)
             if crypto_backend_kind is None:
                 return ()
@@ -598,31 +600,37 @@ class OperationalTargetInspector:
         database: OperationalDatabaseConfig,
     ) -> OperationalSoftwareBackendMaterial | None:
         """Read active software backend config needed for software-key reconciliation."""
-        with psycopg.connect(
-            dbname=database.name,
-            user=database.user,
-            password=database.password,
-            host=database.host,
-            port=database.port,
-            connect_timeout=5,
-        ) as connection, connection.cursor() as cursor:
+        with (
+            psycopg.connect(
+                dbname=database.name,
+                user=database.user,
+                password=database.password,
+                host=database.host,
+                port=database.port,
+                connect_timeout=5,
+            ) as connection,
+            connection.cursor() as cursor,
+        ):
             return self._read_software_backend_material(cursor)
 
     def inspect_app_secret_material(self, database: OperationalDatabaseConfig) -> OperationalAppSecretMaterial:
         """Read app-secret material needed for pre-attach decryptability validation."""
-        with psycopg.connect(
-            dbname=database.name,
-            user=database.user,
-            password=database.password,
-            host=database.host,
-            port=database.port,
-            connect_timeout=5,
-        ) as connection, connection.cursor() as cursor:
+        with (
+            psycopg.connect(
+                dbname=database.name,
+                user=database.user,
+                password=database.password,
+                host=database.host,
+                port=database.port,
+                connect_timeout=5,
+            ) as connection,
+            connection.cursor() as cursor,
+        ):
             app_secret_backend_kind = self._read_app_secret_backend_kind(cursor)
             if app_secret_backend_kind == 'software':  # noqa: S105 - backend kind value, not a secret.
                 return OperationalAppSecretMaterial(
                     backend_kind=app_secret_backend_kind,
-                    raw_dek=self._read_software_app_secret_dek(cursor),
+                    wrapped_dek=self._read_software_app_secret_dek(cursor),
                 )
             if app_secret_backend_kind == 'pkcs11':  # noqa: S105 - backend kind value, not a secret.
                 wrapped_dek, kek_label = self._read_pkcs11_app_secret_material(cursor)
@@ -635,14 +643,17 @@ class OperationalTargetInspector:
 
     def inspect_database(self, database: OperationalDatabaseConfig) -> OperationalStateSnapshot:
         """Connect to the target database and return the operational metadata snapshot."""
-        with psycopg.connect(
-            dbname=database.name,
-            user=database.user,
-            password=database.password,
-            host=database.host,
-            port=database.port,
-            connect_timeout=5,
-        ) as connection, connection.cursor() as cursor:
+        with (
+            psycopg.connect(
+                dbname=database.name,
+                user=database.user,
+                password=database.password,
+                host=database.host,
+                port=database.port,
+                connect_timeout=5,
+            ) as connection,
+            connection.cursor() as cursor,
+        ):
             app_version = self._read_app_version(cursor)
             active_crypto_profile_count = self._read_active_crypto_profile_count(cursor)
             crypto_backend_kind = self._read_active_crypto_backend_kind(cursor)
@@ -660,11 +671,9 @@ class OperationalTargetInspector:
                 cursor,
                 crypto_backend_kind=crypto_backend_kind,
             )
-            managed_key_binding_profile_mismatch_count = (
-                self._read_managed_key_binding_profile_mismatch_count(
-                    cursor,
-                    crypto_backend_kind=crypto_backend_kind,
-                )
+            managed_key_binding_profile_mismatch_count = self._read_managed_key_binding_profile_mismatch_count(
+                cursor,
+                crypto_backend_kind=crypto_backend_kind,
             )
             managed_key_orphan_binding_count = self._read_managed_key_orphan_binding_count(
                 cursor,
@@ -773,13 +782,57 @@ class OperationalTargetInspector:
         if not cls._table_exists(cursor, table_name='crypto_managed_key'):
             return ()
 
-        if crypto_backend_kind == 'pkcs11':
-            return cls._read_pkcs11_managed_key_material(cursor)
-        if crypto_backend_kind == 'software':
-            return cls._read_software_managed_key_material(cursor)
-        if crypto_backend_kind == 'rest':
-            return cls._read_rest_managed_key_material(cursor)
-        return ()
+        readers = {
+            'pkcs11': cls._read_pkcs11_managed_key_material,
+            'software': cls._read_software_managed_key_material,
+            'rest': cls._read_rest_managed_key_material,
+        }
+        reader = readers.get(crypto_backend_kind)
+        if reader is None:
+            return ()
+        materials = reader(cursor)
+        if crypto_backend_kind in {'pkcs11', 'software'}:
+            materials += cls._read_protected_import_managed_key_material(cursor)
+        return materials
+
+    @classmethod
+    def _read_protected_import_managed_key_material(cls, cursor: Any) -> tuple[OperationalManagedKeyMaterial, ...]:
+        """Read imported keys, whose storage is independent of the native provider binding."""
+        if not cls._table_exists(cursor, table_name='crypto_managed_key_protected_import_binding'):
+            return ()
+        cursor.execute(
+            """
+            SELECT
+                managed_key.alias,
+                managed_key.provider_label,
+                managed_key.algorithm,
+                managed_key.public_key_fingerprint_sha256,
+                managed_key.signing_execution_mode,
+                binding.key_handle,
+                binding.encrypted_private_key_pkcs8_der_b64,
+                binding.encryption_metadata
+            FROM crypto_managed_key managed_key
+            JOIN crypto_managed_key_protected_import_binding binding
+              ON binding.managed_key_id = managed_key.id
+            ORDER BY managed_key.alias ASC
+            """
+        )
+        return tuple(
+            OperationalManagedKeyMaterial(
+                backend_kind='protected_import',
+                alias=str(row[0]),
+                provider_label=str(row[1] or ''),
+                algorithm=str(row[2]),
+                public_key_fingerprint_sha256=str(row[3]),
+                signing_execution_mode=str(row[4]),
+                binding={
+                    'key_handle': str(row[5]),
+                    'encrypted_private_key_pkcs8_der_b64': str(row[6] or ''),
+                    'encryption_metadata': dict(row[7] or {}),
+                },
+            )
+            for row in cursor.fetchall()
+        )
 
     @classmethod
     def _read_pkcs11_managed_key_material(cls, cursor: Any) -> tuple[OperationalManagedKeyMaterial, ...]:
@@ -893,9 +946,8 @@ class OperationalTargetInspector:
     @classmethod
     def _read_software_backend_material(cls, cursor: Any) -> OperationalSoftwareBackendMaterial | None:
         """Read active software backend configuration from the target database."""
-        if (
-            not cls._table_exists(cursor, table_name='crypto_provider_profile')
-            or not cls._table_exists(cursor, table_name='crypto_provider_software_config')
+        if not cls._table_exists(cursor, table_name='crypto_provider_profile') or not cls._table_exists(
+            cursor, table_name='crypto_provider_software_config'
         ):
             return None
         cursor.execute(
@@ -924,42 +976,47 @@ class OperationalTargetInspector:
     @classmethod
     def _read_managed_key_binding_count(cls, cursor: Any, *, crypto_backend_kind: str | None) -> int:
         """Read backend-specific managed-key binding count for reconciliation."""
-        table_by_backend = {
-            'pkcs11': 'crypto_managed_key_pkcs11_binding',
-            'software': 'crypto_managed_key_software_binding',
-            'rest': 'crypto_managed_key_rest_binding',
-        }
-        table_name = table_by_backend.get(crypto_backend_kind or '')
-        if table_name is None:
-            return 0
-        return cls._read_count(cursor, table_name=table_name)
+        return sum(
+            cls._read_count(cursor, table_name=table)
+            for table in cls._managed_key_binding_tables(crypto_backend_kind=crypto_backend_kind)
+        )
 
     @classmethod
-    def _managed_key_binding_table(cls, *, crypto_backend_kind: str | None) -> str | None:
-        """Return the backend-specific managed-key binding table name."""
+    def _managed_key_binding_tables(cls, *, crypto_backend_kind: str | None) -> tuple[str, ...]:
+        """Return native and imported-key storage tables allowed for this backend."""
         table_by_backend = {
             'pkcs11': 'crypto_managed_key_pkcs11_binding',
             'software': 'crypto_managed_key_software_binding',
             'rest': 'crypto_managed_key_rest_binding',
         }
-        return table_by_backend.get(crypto_backend_kind or '')
+        native_table = table_by_backend.get(crypto_backend_kind or '')
+        if native_table is None:
+            return ()
+        if crypto_backend_kind in {'pkcs11', 'software'}:
+            return native_table, 'crypto_managed_key_protected_import_binding'
+        return (native_table,)
 
     @classmethod
     def _read_managed_key_missing_binding_count(cls, cursor: Any, *, crypto_backend_kind: str | None) -> int:
         """Read managed keys without a backend-specific binding row."""
-        table_name = cls._managed_key_binding_table(crypto_backend_kind=crypto_backend_kind)
-        if table_name is None or not cls._table_exists(cursor, table_name='crypto_managed_key'):
+        allowed_tables = cls._managed_key_binding_tables(crypto_backend_kind=crypto_backend_kind)
+        if not allowed_tables or not cls._table_exists(cursor, table_name='crypto_managed_key'):
             return 0
-        if not cls._table_exists(cursor, table_name=table_name):
+        tables = [table for table in allowed_tables if cls._table_exists(cursor, table_name=table)]
+        if not tables:
             return cls._read_count(cursor, table_name='crypto_managed_key')
+        joins = ' '.join(
+            f'LEFT JOIN {table} binding_{index} ON binding_{index}.managed_key_id = managed_key.id'
+            for index, table in enumerate(tables)
+        )
+        missing = ' AND '.join(f'binding_{index}.managed_key_id IS NULL' for index in range(len(tables)))
         cursor.execute(
             f"""
             SELECT COUNT(*)
             FROM crypto_managed_key managed_key
-            LEFT JOIN {table_name} binding
-              ON binding.managed_key_id = managed_key.id
-            WHERE binding.managed_key_id IS NULL
-            """  # noqa: S608 - table name is selected from fixed literals above.
+            {joins}
+            WHERE {missing}
+            """  # noqa: S608 - joins and predicates use only fixed table names and generated aliases.
         )
         row = cursor.fetchone()
         return int(row[0]) if row else 0
@@ -972,46 +1029,44 @@ class OperationalTargetInspector:
         crypto_backend_kind: str | None,
     ) -> int:
         """Read bindings whose provider profile disagrees with the owning managed key."""
-        table_name = cls._managed_key_binding_table(crypto_backend_kind=crypto_backend_kind)
-        if (
-            table_name is None
-            or not cls._table_exists(cursor, table_name='crypto_managed_key')
-            or not cls._table_exists(cursor, table_name=table_name)
-        ):
+        if not cls._table_exists(cursor, table_name='crypto_managed_key'):
             return 0
-        cursor.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM {table_name} binding
-            JOIN crypto_managed_key managed_key
-              ON managed_key.id = binding.managed_key_id
-            WHERE binding.provider_profile_id <> managed_key.provider_profile_id
-            """  # noqa: S608 - table name is selected from fixed literals above.
-        )
-        row = cursor.fetchone()
-        return int(row[0]) if row else 0
+        count = 0
+        for table in cls._managed_key_binding_tables(crypto_backend_kind=crypto_backend_kind):
+            if not cls._table_exists(cursor, table_name=table):
+                continue
+            cursor.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM {table} binding
+                JOIN crypto_managed_key managed_key ON managed_key.id = binding.managed_key_id
+                WHERE binding.provider_profile_id <> managed_key.provider_profile_id
+                """  # noqa: S608 - table names come from fixed literals.
+            )
+            row = cursor.fetchone()
+            count += int(row[0]) if row else 0
+        return count
 
     @classmethod
     def _read_managed_key_orphan_binding_count(cls, cursor: Any, *, crypto_backend_kind: str | None) -> int:
         """Read backend binding rows without an owning managed-key record."""
-        table_name = cls._managed_key_binding_table(crypto_backend_kind=crypto_backend_kind)
-        if (
-            table_name is None
-            or not cls._table_exists(cursor, table_name='crypto_managed_key')
-            or not cls._table_exists(cursor, table_name=table_name)
-        ):
+        if not cls._table_exists(cursor, table_name='crypto_managed_key'):
             return 0
-        cursor.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM {table_name} binding
-            LEFT JOIN crypto_managed_key managed_key
-              ON managed_key.id = binding.managed_key_id
-            WHERE managed_key.id IS NULL
-            """  # noqa: S608 - table name is selected from fixed literals above.
-        )
-        row = cursor.fetchone()
-        return int(row[0]) if row else 0
+        count = 0
+        for table in cls._managed_key_binding_tables(crypto_backend_kind=crypto_backend_kind):
+            if not cls._table_exists(cursor, table_name=table):
+                continue
+            cursor.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM {table} binding
+                LEFT JOIN crypto_managed_key managed_key ON managed_key.id = binding.managed_key_id
+                WHERE managed_key.id IS NULL
+                """  # noqa: S608 - table names come from fixed literals.
+            )
+            row = cursor.fetchone()
+            count += int(row[0]) if row else 0
+        return count
 
     @classmethod
     def _read_managed_key_binding_issue_count(cls, cursor: Any, *, crypto_backend_kind: str | None) -> int:
@@ -1024,17 +1079,28 @@ class OperationalTargetInspector:
             ),
             'rest': ('crypto_managed_key_rest_binding', "remote_key_id IS NULL OR remote_key_id = ''"),
         }
-        table_config = table_by_backend.get(crypto_backend_kind or '')
-        if table_config is None:
-            return 0
-        table_name, issue_predicate = table_config
-        if not cls._table_exists(cursor, table_name=table_name):
-            return 0
-        cursor.execute(
-            f'SELECT COUNT(*) FROM {table_name} WHERE {issue_predicate}'  # noqa: S608 - fixed literals above.
-        )
-        row = cursor.fetchone()
-        return int(row[0]) if row else 0
+        configurations = []
+        native_config = table_by_backend.get(crypto_backend_kind or '')
+        if native_config is not None:
+            configurations.append(native_config)
+        if crypto_backend_kind in {'pkcs11', 'software'}:
+            configurations.append(
+                (
+                    'crypto_managed_key_protected_import_binding',
+                    (
+                        "key_handle IS NULL OR key_handle = '' OR encrypted_private_key_pkcs8_der_b64 IS NULL "
+                        "OR encrypted_private_key_pkcs8_der_b64 = ''"
+                    ),
+                )
+            )
+        count = 0
+        for table, predicate in configurations:
+            if not cls._table_exists(cursor, table_name=table):
+                continue
+            cursor.execute(f'SELECT COUNT(*) FROM {table} WHERE {predicate}')  # noqa: S608 - fixed literals above.
+            row = cursor.fetchone()
+            count += int(row[0]) if row else 0
+        return count
 
     @classmethod
     def _read_app_secret_material_present(cls, cursor: Any, *, app_secret_backend_kind: str | None) -> bool:
@@ -1044,7 +1110,7 @@ class OperationalTargetInspector:
                 return False
             cursor.execute(
                 """
-                SELECT raw_dek IS NOT NULL AND OCTET_LENGTH(raw_dek) = 32
+                SELECT wrapped_dek IS NOT NULL AND OCTET_LENGTH(wrapped_dek) > 0
                 FROM app_secret_software_config
                 WHERE backend_id = 1
                 LIMIT 1
@@ -1071,12 +1137,12 @@ class OperationalTargetInspector:
 
     @classmethod
     def _read_software_app_secret_dek(cls, cursor: Any) -> bytes:
-        """Read the software app-secret DEK from the target database."""
+        """Read the wrapped software app-secret DEK from the target database."""
         if not cls._table_exists(cursor, table_name='app_secret_software_config'):
             return b''
         cursor.execute(
             """
-            SELECT raw_dek
+            SELECT wrapped_dek
             FROM app_secret_software_config
             WHERE backend_id = 1
             LIMIT 1

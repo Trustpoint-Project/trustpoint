@@ -86,7 +86,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
             form.full_clean()
             # Note: This might not raise error depending on validator implementation
 
-    @patch('management.forms.CredentialSerializer.from_pkcs12_bytes')
+    @patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes')
     @patch('management.forms.CertificateVerifier.verify_server_cert')
     @patch('management.forms.CredentialModel.save_credential_serializer')
     def test_clean_with_valid_pkcs12_file(self, mock_save, mock_verify, mock_from_pkcs12):
@@ -119,7 +119,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
         form = TlsAddFileImportPkcs12Form(data=form_data, files={})
         self.assertFalse(form.is_valid())
 
-    @patch('management.forms.CredentialSerializer.from_pkcs12_bytes')
+    @patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes')
     def test_clean_with_oversized_pkcs12_file(self, mock_from_pkcs12):
         """Oversized PKCS#12 uploads are rejected before parsing."""
         pkcs12_file = SimpleUploadedFile(
@@ -136,7 +136,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
         self.assertIn('PKCS#12 file is too large', str(form.errors))
         mock_from_pkcs12.assert_not_called()
 
-    @patch('management.forms.CredentialSerializer.from_pkcs12_bytes')
+    @patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes')
     def test_clean_with_invalid_pkcs12_file(self, mock_from_pkcs12):
         """Test clean method handles corrupted PKCS#12 file."""
         mock_from_pkcs12.side_effect = Exception("Invalid PKCS#12 data")
@@ -152,7 +152,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('Failed to parse and load the uploaded file', str(form.errors))
 
-    @patch('management.forms.CredentialSerializer.from_pkcs12_bytes')
+    @patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes')
     def test_clean_with_password_encoding_error(self, mock_from_pkcs12):
         """Test clean method handles password encoding errors."""
         pkcs12_file = SimpleUploadedFile('test.p12', b'dummy_data', content_type='application/x-pkcs12')
@@ -167,7 +167,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
         # This should trigger the encoding error in _encode_password
         self.assertFalse(form.is_valid())
 
-    @patch('management.forms.CredentialSerializer.from_pkcs12_bytes')
+    @patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes')
     @patch('management.forms.CertificateVerifier.verify_server_cert')
     def test_clean_with_none_certificate(self, mock_verify, mock_from_pkcs12):
         """Test clean method when certificate is None."""
@@ -186,7 +186,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('does not contain a valid certificate', str(form.errors))
 
-    @patch('management.forms.CredentialSerializer.from_pkcs12_bytes')
+    @patch('pki.services.credential_upload.CredentialSerializer.from_pkcs12_bytes')
     @patch('management.forms.CertificateVerifier.verify_server_cert')
     def test_clean_with_invalid_certificate_type(self, mock_verify, mock_from_pkcs12):
         """Test clean method when certificate is not x509.Certificate."""
@@ -322,7 +322,7 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         form.full_clean()
         self.assertIn('too large', str(form.errors.get('tls_certificate', '')))
 
-    @patch('management.forms.CertificateSerializer.from_bytes')
+    @patch('pki.services.credential_upload.CertificateSerializer.from_bytes')
     def test_clean_tls_certificate_corrupted(self, mock_from_bytes):
         """Test clean_tls_certificate handles corrupted certificate."""
         mock_from_bytes.side_effect = Exception("Parse error")
@@ -336,7 +336,7 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         form.full_clean()
         self.assertIn('corrupted', str(form.errors.get('tls_certificate', '')).lower())
 
-    @patch('management.forms.CertificateSerializer.from_bytes')
+    @patch('pki.services.credential_upload.CertificateSerializer.from_bytes')
     def test_clean_tls_certificate_valid(self, mock_from_bytes):
         """Test clean_tls_certificate with valid certificate."""
         mock_serializer = Mock()
@@ -352,7 +352,7 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         # Should have cleaned data for tls_certificate
         self.assertEqual(form.cleaned_data.get('tls_certificate'), mock_serializer)
 
-    @patch('management.forms.CertificateCollectionSerializer.from_bytes')
+    @patch('pki.services.credential_upload.CertificateCollectionSerializer.from_bytes')
     def test_clean_tls_certificate_chain_valid(self, mock_from_bytes):
         """Test clean_tls_certificate_chain with valid chain."""
         mock_serializer = Mock()
@@ -367,7 +367,7 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         form.full_clean()
         self.assertEqual(form.cleaned_data.get('tls_certificate_chain'), mock_serializer)
 
-    @patch('management.forms.CertificateCollectionSerializer.from_bytes')
+    @patch('pki.services.credential_upload.CertificateCollectionSerializer.from_bytes')
     def test_clean_tls_certificate_chain_corrupted(self, mock_from_bytes):
         """Test clean_tls_certificate_chain handles corrupted chain."""
         mock_from_bytes.side_effect = Exception("Parse error")
@@ -395,8 +395,8 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         form.saved_credential = mock_credential
         self.assertEqual(form.get_saved_credential(), mock_credential)
 
-    @patch('management.forms.PrivateKeySerializer.from_bytes')
-    @patch('management.forms.CertificateSerializer.from_bytes')
+    @patch('pki.services.credential_upload.PrivateKeySerializer.from_bytes')
+    @patch('pki.services.credential_upload.CertificateSerializer.from_bytes')
     @patch('management.forms.CredentialSerializer.from_serializers')
     @patch('management.forms.CertificateVerifier.verify_server_cert')
     @patch('management.forms.CredentialModel.save_credential_serializer')

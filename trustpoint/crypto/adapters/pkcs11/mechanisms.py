@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from trustpoint_core.oid import NamedCurve
+
 from crypto.domain.algorithms import EllipticCurveName, HashAlgorithmName, KeyAlgorithm
 from crypto.domain.errors import MechanismUnsupportedError
 from crypto.domain.policies import KeyPolicy, KeyUsage
@@ -48,11 +50,6 @@ _ECDSA_MECHANISMS = _build_hash_mechanism_map(
     }
 )
 
-_CURVE_OIDS = {
-    EllipticCurveName.SECP256R1: '1.2.840.10045.3.1.7',
-    EllipticCurveName.SECP384R1: '1.3.132.0.34',
-    EllipticCurveName.SECP521R1: '1.3.132.0.35',
-}
 
 
 def key_type_for_algorithm(algorithm: KeyAlgorithm) -> KeyType:
@@ -67,7 +64,7 @@ def key_type_for_algorithm(algorithm: KeyAlgorithm) -> KeyType:
 
 def ec_parameters_for_curve(curve: EllipticCurveName) -> bytes:
     """Return DER-encoded EC domain parameters for a named curve."""
-    return encode_named_curve_parameters(_CURVE_OIDS[curve])
+    return encode_named_curve_parameters(NamedCurve[curve.name].dotted_string)
 
 
 def private_key_template(*, key_id: bytes, label: str, policy: KeyPolicy) -> dict[Attribute, object]:

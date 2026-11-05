@@ -31,7 +31,6 @@ from pki.models.credential import CredentialModel
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
 from users.permissions import AppPermissions
@@ -44,6 +43,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
+
 
 class DownloadTokenRequiredAuthenticationMixin:
     """Mixin which checks the token included in the URL for browser download views."""
@@ -81,6 +81,7 @@ class DownloadTokenRequiredAuthenticationMixin:
 
         return cast('HttpResponseBase', super_dispatch(request, *args, **kwargs))
 
+
 class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[IssuedCredentialModel]):
     """View to download a password protected application credential in the desired format.
 
@@ -90,6 +91,7 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
     http_method_names = ('get', 'post')
 
     model = IssuedCredentialModel
+    queryset = IssuedCredentialModel.objects.select_related('certificate_profile')
     template_name = 'devices/credentials/credential_download.html'
     context_object_name = 'credential'
 
@@ -165,7 +167,6 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
         form = self.form_class(self.request.POST)
 
         if form.is_valid():
-
             password = form.cleaned_data['password'].encode()
 
             try:
@@ -246,6 +247,7 @@ class DeviceBrowserCredentialDownloadView(
 
     is_browser_download = True
 
+
 #  ----------------------------------- Certificate Lifecycle Management - Downloads ------------------------------------
 
 
@@ -297,12 +299,6 @@ class DeviceDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
-    """Download dispatcher view for the OPC UA GDS pages."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class OpcUaGdsPushDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     """Download dispatcher view for the OPC UA GDS Push pages."""
 
@@ -344,15 +340,7 @@ class DeviceCertificateDownloadView(AbstractCertificateDownloadView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsCertificateDownloadView(AbstractCertificateDownloadView):
-    """Certificate download view for the OPC UA GDS pages."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 class OpcUaGdsPushCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the OPC UA GDS Push pages."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-

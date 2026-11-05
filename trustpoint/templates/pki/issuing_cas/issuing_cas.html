@@ -3,83 +3,183 @@
 {% load internationalization_tags %}
 
 {% block content %}
+<div class="card">
+    <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+        <div>
+            <h1 class="mb-1">
+                {% trans "Issuing CAs" %}
+            </h1>
 
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h1>{% trans "Issuing CAs" %}</h1>
-        <a href="{% url 'pki:cas' %}" class="btn btn-outline-primary btn-sm">
-            {% trans "CA hierarchy view" %}
+            <p class="mb-0 text-muted">
+                {% trans "Review and manage Issuing Certificate Authorities and their assigned domains." %}
+            </p>
+        </div>
+
+        <a
+            href="{% url 'pki:cas' %}"
+            class="btn btn-sm btn-outline-secondary flex-shrink-0"
+        >
+            {% trans "CA Hierarchy View" %}
         </a>
     </div>
-    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th id="checkbox-column"><input type="checkbox"/></th>
-                    <th>
-                            {% trans 'Domain' %}
-                    </th>
-                    <th>
-                        <a href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
-                            {% trans 'Common Name' %}
-                        </a>
-                    </th>
-                    <th>
-                        <a href="?sort={% if current_sort == 'certificate__not_valid_after' %}-{% endif %}certificate__not_valid_after">
-                            {% trans 'Not valid after' %}
-                        </a>
-                    </th>
-                    <th>
-                            {% trans 'Signature Suite' %}
-                    </th>
-                    <th>
-                        <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                            {% trans 'Created at' %}
-                        </a>
-                    </th>
-                    <th>{% trans 'Config' %}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {# When adding or removing columns, please update the "colspan" attribute in the {% empty %} section accordingly #}
-                {% for ca in page_obj %}
-                    <tr{% if not ca.is_active %} class="text-muted"{% endif %}>
-                        <td class="row_checkbox">
-                            <input type="checkbox" name="row_checkbox" value="{{ ca.id }}"/>
-                        </td>
-                        <td>{% for domain in ca.domains.all %}<a href="{% url 'pki:domains-config' pk=domain.id %}">{{ domain.unique_name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-                        <td>{{ ca.common_name }}</td>
-                        <td>
-                            {% if ca.is_issuing_ca %}
-                                {{ ca.credential.certificate.not_valid_after|local_datetime }}
-                            {% else %}
-                                {{ ca.certificate.not_valid_after|local_datetime }}
-                            {% endif %}
-                        </td>                        <td>{{ ca.signature_suite_display }}</td>
-                        <td>{{ ca.created_at|local_datetime }}</td>
-                        <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a></td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="8" class="middle">{% trans 'No Issuing CA has been added yet.' %}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
 
-        {% include 'trustpoint/pagination.html' %}
+    <div class="card-body text-start">
+        <section>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th id="checkbox-column" scope="col">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    aria-label="{% trans 'Select all Issuing CAs' %}"
+                                >
+                            </th>
+
+                            <th scope="col">
+                                {% trans 'Domain' %}
+                            </th>
+
+                            <th scope="col">
+                                <a
+                                    href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans 'Common Name' %}
+                                </a>
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                <a
+                                    href="?sort={% if current_sort == 'certificate__not_valid_after' %}-{% endif %}certificate__not_valid_after"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans 'Not valid after' %}
+                                </a>
+                            </th>
+
+                            <th scope="col">
+                                {% trans 'Signature Suite' %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                <a
+                                    href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at"
+                                    class="text-decoration-none text-body"
+                                >
+                                    {% trans 'Created at' %}
+                                </a>
+                            </th>
+
+                            <th scope="col" class="text-end">
+                                {% trans 'Actions' %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for ca in page_obj %}
+                            <tr{% if not ca.is_active %} class="text-muted"{% endif %}>
+                                <td class="row_checkbox">
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input"
+                                        name="row_checkbox"
+                                        value="{{ ca.id }}"
+                                        aria-label="{% blocktranslate with name=ca.common_name %}Select Issuing CA {{ name }}{% endblocktranslate %}"
+                                    >
+                                </td>
+
+                                <td>
+                                    {% for domain in ca.domains.all %}
+                                        <a href="{% url 'pki:domains-config' pk=domain.id %}">
+                                            {{ domain.unique_name }}
+                                        </a>{% if not forloop.last %}, {% endif %}
+                                    {% empty %}
+                                        <span class="text-muted">—</span>
+                                    {% endfor %}
+                                </td>
+
+                                <td>
+                                    {% if ca.common_name %}
+                                        {{ ca.common_name }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {% if ca.is_issuing_ca %}
+                                        {% if ca.credential.certificate.not_valid_after %}
+                                            {{ ca.credential.certificate.not_valid_after|local_datetime }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if ca.certificate.not_valid_after %}
+                                            {{ ca.certificate.not_valid_after|local_datetime }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if ca.signature_suite_display %}
+                                        {{ ca.signature_suite_display }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ ca.created_at|local_datetime }}
+                                </td>
+
+                                <td class="text-end">
+                                    <a
+                                        href="config/{{ ca.id }}/"
+                                        class="btn btn-sm btn-outline-secondary"
+                                    >
+                                        {% trans 'Configure' %}
+                                    </a>
+                                </td>
+                            </tr>
+
+                        {% empty %}
+                            <tr>
+                                <td
+                                    colspan="7"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans 'No Issuing CA has been added yet.' %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include 'trustpoint/pagination.html' %}
+        </section>
     </div>
 
-    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-        <div class="tp-card-btn-footer m-1">
-            <button type="button" class="btn btn-danger tp-table-select-btn me-2" data-tp-url="delete">{% trans 'Delete selected' %}</button>
-        </div>
-        <div class="m-1">
-            <a class="btn btn-primary ms-2" href="{% url 'pki:issuing_cas-add-method_select' %}">
-                {% trans 'Add new Issuing CA' %}
-            </a>
-        </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <button
+            type="button"
+            class="btn btn-outline-danger tp-table-select-btn"
+            data-tp-url="delete"
+        >
+            {% trans 'Delete Selected' %}
+        </button>
+
+        <a
+            href="{% url 'pki:issuing_cas-add-method_select' %}"
+            class="btn btn-primary"
+        >
+            {% trans 'Add Issuing CA' %}
+        </a>
     </div>
 </div>
-
 {% endblock content %}

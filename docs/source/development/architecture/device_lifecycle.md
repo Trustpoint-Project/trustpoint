@@ -122,3 +122,7 @@ stateDiagram-v2
 - Plan for certificate rollover events
 - Archive historical credentials for compliance
 - Monitor lifecycle metrics (enrollment rates, renewal rates, revocations)
+
+### OPC UA device types
+
+External OPC UA GDS instances use the generic device type (`0`) and standard enrollment mechanisms such as CMP or EST. OPC UA GDS Push uses device type `2`, managed within **Devices → Devices**, with deployment, trust-list, and periodic update operations. Agent devices use type `3`.

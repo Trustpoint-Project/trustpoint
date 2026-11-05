@@ -12,14 +12,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import requests
+from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.serialization import pkcs7
+from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
-    from cryptography import x509
     from cryptography.x509 import CertificateSigningRequest
 
     from request.request_context import EstBaseRequestContext
@@ -101,15 +101,21 @@ class EstClient(LoggerMixin):
 
         content_type = 'application/pkcs10'
 
-        self.logger.debug(
-            'Prepared CSR: %d bytes DER, %d bytes base64-encoded',
-            len(csr_der),
-            len(csr_b64)
-        )
+        self.logger.debug('Prepared CSR: %d bytes DER, %d bytes base64-encoded', len(csr_der), len(csr_b64))
 
         return csr_b64, content_type
 
-    def _parse_response(self, response_data: bytes, content_type: str) -> x509.Certificate:
+    @staticmethod
+    def _is_ca_certificate(cert: x509.Certificate) -> bool:
+        """Return whether the certificate asserts BasicConstraints cA=TRUE."""
+        try:
+            return cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca
+        except x509.ExtensionNotFound:
+            return False
+
+    def _parse_response(
+        self, response_data: bytes, content_type: str
+    ) -> tuple[x509.Certificate, list[x509.Certificate]]:
         """Parse the EST server response containing the issued certificate.
 
         Args:
@@ -117,7 +123,7 @@ class EstClient(LoggerMixin):
             content_type: Content-Type header from the response.
 
         Returns:
-            The issued certificate.
+            The issued certificate and the other certificates supplied by the server.
 
         Raises:
             EstClientError: If the response cannot be parsed.
@@ -129,23 +135,21 @@ class EstClient(LoggerMixin):
         try:
             pkcs7_der = base64.b64decode(response_data)
 
-            certificates = pkcs7.load_der_pkcs7_certificates(pkcs7_der)
+            certificates = CertificateCollectionSerializer.from_pkcs7_der(pkcs7_der).as_crypto()
 
             if not certificates:
                 msg = 'No certificates found in PKCS#7 response'
                 raise EstClientError(msg)
 
-            issued_cert = certificates[0]
+            # PKCS#7 certificate order is not guaranteed; the issued certificate is the non-CA one.
+            issued_cert = next((cert for cert in certificates if not self._is_ca_certificate(cert)), certificates[0])
 
         except (ValueError, TypeError) as e:
             msg = f'Failed to parse EST server response: {e!s}'
             raise EstClientError(msg) from e
         else:
-            self.logger.info(
-                'Successfully parsed issued certificate: %s',
-                issued_cert.subject.rfc4514_string()
-            )
-            return issued_cert
+            self.logger.info('Successfully parsed issued certificate: %s', issued_cert.subject.rfc4514_string())
+            return issued_cert, [cert for cert in certificates if cert != issued_cert]
 
     def _write_temp_pem(self, content: str | bytes, suffix: str = '.pem') -> str:
         """Write PEM content to a temporary file and return its path."""
@@ -181,7 +185,7 @@ class EstClient(LoggerMixin):
 
         return None, None, temp_files
 
-    def simple_enroll(self, csr: CertificateSigningRequest) -> x509.Certificate:
+    def simple_enroll(self, csr: CertificateSigningRequest) -> tuple[x509.Certificate, list[x509.Certificate]]:
         """Perform simple enrollment by sending a CSR to the EST server.
 
         This implements the /simpleenroll operation defined in RFC 7030 section 4.2.
@@ -190,7 +194,7 @@ class EstClient(LoggerMixin):
             csr: The Certificate Signing Request to enroll.
 
         Returns:
-            The issued certificate from the EST server.
+            The issued certificate and the other certificates supplied by the EST server.
 
         Raises:
             EstClientError: If the enrollment fails.
@@ -233,20 +237,18 @@ class EstClient(LoggerMixin):
             )
 
             if response.status_code != 200:  # noqa: PLR2004
-                msg = (
-                    f'EST server returned error status {response.status_code}: {response.text}'
-                )
+                msg = f'EST server returned error status {response.status_code}: {response.text}'
                 raise EstClientError(msg)
 
             content_type_header = response.headers.get('Content-Type', '')
-            issued_cert = self._parse_response(response.content, content_type_header)
+            issued_cert, chain = self._parse_response(response.content, content_type_header)
 
         except requests.exceptions.RequestException as e:
             msg = f'Failed to communicate with EST server: {e!s}'
             raise EstClientError(msg) from e
         else:
             self.logger.info('Successfully enrolled certificate via EST')
-            return issued_cert
+            return issued_cert, chain
         finally:
             Path(temp_ca_bundle_path).unlink()
             for path in auth_temp_files:
@@ -294,7 +296,7 @@ class EstClient(LoggerMixin):
 
             pkcs7_data = base64.b64decode(response.content)
 
-            ca_certs = pkcs7.load_der_pkcs7_certificates(pkcs7_data)
+            ca_certs = CertificateCollectionSerializer.from_pkcs7_der(pkcs7_data).as_crypto()
 
         except requests.exceptions.RequestException as e:
             msg = f'Failed to retrieve CA certificates: {e!s}'

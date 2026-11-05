@@ -2,19 +2,23 @@
 # SPDX-License-Identifier: MIT
 
 """Django backup view."""
-import datetime
-import io
+
+import datetime as dt
 import tarfile
 import zipfile
+from contextlib import ExitStack
 from pathlib import Path
-from typing import Any, ClassVar
+from shutil import copyfileobj
+from tempfile import TemporaryFile
+from typing import Any, BinaryIO, ClassVar
+from uuid import uuid4
 
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
@@ -64,8 +68,8 @@ def get_backup_file_data(filename: str) -> dict[str, Any]:
     if file_path is None:
         return {}
     stat = file_path.stat()
-    created_dt = datetime.datetime.fromtimestamp(stat.st_ctime, datetime.UTC)
-    modified_dt = datetime.datetime.fromtimestamp(stat.st_mtime, datetime.UTC)
+    created_dt = dt.datetime.fromtimestamp(stat.st_ctime, dt.UTC)
+    modified_dt = dt.datetime.fromtimestamp(stat.st_mtime, dt.UTC)
     size_kb = stat.st_size / 1024
     return {
         'filename': filename,
@@ -91,13 +95,13 @@ def create_db_backup(path: Path) -> str:
         CalledProcessError: If the `dbbackup` command fails.
     """
     path.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d_%H-%M-%S')
-    filename = f'backup_{timestamp}.dump.gz'
+    timestamp = dt.datetime.now(dt.UTC).strftime('%Y-%m-%d_%H-%M-%S')
+    filename = f'backup_{timestamp}_{uuid4().hex}.dump.gz'
     call_command('trustpointbackup', filename=filename)
     return filename
 
 
-class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # type: ignore[type-arg,misc]
+class BackupManageView(UserPermissionRequiredMixin, SortableTableFromListMixin, LoggerMixin, ListView):  # type: ignore[type-arg,misc]
     """Display existing backups and handle backup-related actions.
 
     GET:
@@ -112,22 +116,22 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
         - save_backup_settings: Saves or updates BackupOptions.
         - reset_backup_settings: Deletes existing BackupOptions, reverting to defaults.
     """
+
     template_name = 'management/backups/manage_backups.html'
+    permission_required = AppPermissions.MANAGE_BACKUPS
     context_object_name = 'backup_files'
     paginate_by = 20
     default_sort_param = 'filename'
     success_url = reverse_lazy('management:backups')
 
-    def get_queryset(self) -> Any: # list[dict[str, Any]]
+    def get_queryset(self) -> Any:  # list[dict[str, Any]]
         """Collect metadata for all backup_*.dump.gz files under BACKUP_FILE_PATH."""
         backup_dir: Path = settings.BACKUP_FILE_PATH
         try:
             files = [p.name for p in backup_dir.iterdir() if p.is_file()]
         except (FileNotFoundError, NotADirectoryError):
             return []
-        backups = [
-            f for f in files if f.startswith('backup_') and f.endswith('.dump.gz')
-        ]
+        backups = [f for f in files if f.startswith('backup_') and f.endswith('.dump.gz')]
         data: list[dict[str, Any]] = [get_backup_file_data(f) for f in backups]
         self.object_list = data
         return data
@@ -138,11 +142,7 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
         instance, _ = BackupOptions.objects.get_or_create(pk=1)
         context['backup_options_form'] = BackupOptionsForm(instance=instance)
         # Check if settings have been saved (not default values)
-        context['has_saved_settings'] = (
-            instance.enable_sftp_storage and
-            bool(instance.host) and
-            bool(instance.user)
-        )
+        context['has_saved_settings'] = instance.enable_sftp_storage and bool(instance.host) and bool(instance.user)
         return context
 
     def post(self, request: Any, *_args: Any, **_kwargs: Any) -> HttpResponse:
@@ -212,6 +212,7 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
 
         overrides = {
             'host': opts.host,
+            'host_key': opts.host_key,
             'port': opts.port,
             'user': opts.user,
             'auth_method': opts.auth_method,
@@ -256,6 +257,7 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
             cd = form.cleaned_data
             overrides = {
                 'host': cd['host'],
+                'host_key': cd.get('host_key', ''),
                 'port': cd['port'],
                 'user': cd['user'],
                 'auth_method': cd['auth_method'],
@@ -334,7 +336,7 @@ class BackupFileDownloadView(UserPermissionRequiredMixin, View):
             return f'{filename.removesuffix(".dump.gz")}.zip'
         return f'{filename}.zip'
 
-    def get(self, _request: Any, filename: str) -> HttpResponse:
+    def get(self, _request: Any, filename: str) -> FileResponse:
         """Return the requested backup file as an attachment.
 
         If the backup manifest sidecar exists, the response is a ZIP bundle containing both the database dump and the
@@ -345,7 +347,7 @@ class BackupFileDownloadView(UserPermissionRequiredMixin, View):
             filename: Name of the backup file to download.
 
         Returns:
-            An HttpResponse with the file contents.
+            A FileResponse streaming the file contents.
 
         Raises:
             Http404: If the requested file does not exist.
@@ -358,21 +360,25 @@ class BackupFileDownloadView(UserPermissionRequiredMixin, View):
 
         manifest_path = backup_manifest_path(file_path)
         if manifest_path.is_file():
-            buffer = io.BytesIO()
-            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_archive:
-                zip_archive.write(file_path, arcname=filename)
-                zip_archive.write(manifest_path, arcname=manifest_path.name)
-            buffer.seek(0)
+            with ExitStack() as stack:
+                output = stack.enter_context(TemporaryFile())
+                _build_zip_backup_artifact(filename, file_path, manifest_path, output)
+                output.seek(0)
+                response = FileResponse(
+                    output,
+                    as_attachment=True,
+                    filename=self._bundle_filename(filename),
+                    content_type='application/zip',
+                )
+                stack.pop_all()  # FileResponse owns the open file until the response closes.
+                return response
 
-            bundle_filename = self._bundle_filename(filename)
-            response = HttpResponse(buffer.read(), content_type='application/zip')
-            response['Content-Disposition'] = f'attachment; filename="{bundle_filename}"'
-            return response
-
-        content = file_path.read_bytes()
-        response = HttpResponse(content, content_type='application/octet-stream')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
+        return FileResponse(
+            file_path.open('rb'),
+            as_attachment=True,
+            filename=filename,
+            content_type='application/octet-stream',
+        )
 
 
 def _backup_artifact_filename(filename: str, archive_format: str) -> str:
@@ -396,24 +402,20 @@ def _backup_payload_paths(backup_dir: Path, filename: str) -> tuple[Path, Path |
     return path, manifest_path if manifest_path.is_file() else None
 
 
-def _build_zip_backup_artifact(filename: str, path: Path, manifest_path: Path | None) -> tuple[str, bytes]:
-    """Build one self-contained ZIP artifact for a backup payload."""
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_archive:
+def _build_zip_backup_artifact(filename: str, path: Path, manifest_path: Path | None, output: BinaryIO) -> None:
+    """Write one self-contained ZIP artifact to the supplied file."""
+    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zip_archive:
         zip_archive.write(path, arcname=filename)
         if manifest_path is not None:
             zip_archive.write(manifest_path, arcname=manifest_path.name)
-    return _backup_artifact_filename(filename, 'zip'), buffer.getvalue()
 
 
-def _build_tar_gz_backup_artifact(filename: str, path: Path, manifest_path: Path | None) -> tuple[str, bytes]:
-    """Build one self-contained tar.gz artifact for a backup payload."""
-    buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode='w:gz') as tar_archive:
+def _build_tar_gz_backup_artifact(filename: str, path: Path, manifest_path: Path | None, output: BinaryIO) -> None:
+    """Write one self-contained tar.gz artifact to the supplied file."""
+    with tarfile.open(fileobj=output, mode='w:gz') as tar_archive:
         tar_archive.add(path, arcname=filename)
         if manifest_path is not None:
             tar_archive.add(manifest_path, arcname=manifest_path.name)
-    return _backup_artifact_filename(filename, 'tar.gz'), buffer.getvalue()
 
 
 class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
@@ -421,7 +423,7 @@ class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
 
     permission_required = AppPermissions.MANAGE_BACKUPS
 
-    def post(self, request: Any, archive_format: str) -> HttpResponse:
+    def post(self, request: Any, archive_format: str) -> FileResponse | HttpResponse:
         """Bundle selected backups into an archive.
 
         Args:
@@ -429,7 +431,7 @@ class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
             archive_format: Either 'zip' or 'tar.gz'.
 
         Returns:
-            An HttpResponse containing the archive.
+            A FileResponse streaming the archive, or a redirect for an empty selection.
 
         Raises:
             Redirect to management:backups with an error if no valid files are selected.
@@ -440,44 +442,49 @@ class BackupFilesDownloadMultipleView(UserPermissionRequiredMixin, View):
             return redirect('management:backups')
 
         backup_dir: Path = settings.BACKUP_FILE_PATH
-        backup_artifacts: list[tuple[str, bytes]] = []
-        for filename in filenames:
-            payload_paths = _backup_payload_paths(backup_dir, filename)
-            if payload_paths is None:
-                continue
-            path, manifest_path = payload_paths
-            if archive_format.lower() == 'zip':
-                backup_artifacts.append(_build_zip_backup_artifact(filename, path, manifest_path))
-            else:
-                backup_artifacts.append(_build_tar_gz_backup_artifact(filename, path, manifest_path))
-
-        if not backup_artifacts:
-            messages.error(request, 'No valid files to download.')
-            return redirect('management:backups')
-
-        buffer = io.BytesIO()
         ext = archive_format.lower()
+        with ExitStack() as stack:
+            output = stack.enter_context(TemporaryFile())
+            has_files = False
+            with zipfile.ZipFile(output, 'w') if ext == 'zip' else tarfile.open(fileobj=output, mode='w:gz') as archive:
+                for filename in filenames:
+                    payload_paths = _backup_payload_paths(backup_dir, filename)
+                    if payload_paths is None:
+                        continue
+                    path, manifest_path = payload_paths
+                    with TemporaryFile() as artifact:
+                        artifact_name = _backup_artifact_filename(filename, 'zip' if ext == 'zip' else 'tar.gz')
+                        if isinstance(archive, zipfile.ZipFile):
+                            _build_zip_backup_artifact(filename, path, manifest_path, artifact)
+                            artifact.seek(0)
+                            with archive.open(artifact_name, 'w', force_zip64=True) as member:
+                                copyfileobj(artifact, member)
+                        else:
+                            _build_tar_gz_backup_artifact(filename, path, manifest_path, artifact)
+                            info = tarfile.TarInfo(artifact_name)
+                            info.size = artifact.tell()
+                            artifact.seek(0)
+                            archive.addfile(info, artifact)
+                    has_files = True
 
-        if ext == 'zip':
-            with zipfile.ZipFile(buffer, 'w') as zip_archive:
-                for fname, data in backup_artifacts:
-                    zip_archive.writestr(fname, data)
-        else:
-            with tarfile.open(fileobj=buffer, mode='w:gz') as tar_archive:
-                for fname, data in backup_artifacts:
-                    info = tarfile.TarInfo(name=fname)
-                    info.size = len(data)
-                    tar_archive.addfile(info, io.BytesIO(data))
+            if not has_files:
+                messages.error(request, 'No valid files to download.')
+                return redirect('management:backups')
 
-        buffer.seek(0)
-        archive_name = f'backups.{ext}'
-        response = HttpResponse(buffer.read(), content_type='application/octet-stream')
-        response['Content-Disposition'] = f'attachment; filename={archive_name}'
-        return response
+            output.seek(0)
+            response = FileResponse(
+                output,
+                as_attachment=True,
+                filename=f'backups.{ext}',
+                content_type='application/octet-stream',
+            )
+            stack.pop_all()  # FileResponse owns the open file until the response closes.
+            return response
 
 
 class BackupFilesDeleteMultipleView(UserPermissionRequiredMixin, View, LoggerMixin):
     """Delete multiple selected backup files and notify the user."""
+
     permission_required = AppPermissions.MANAGE_BACKUPS
 
     def post(self, request: Any) -> HttpResponse:
@@ -521,11 +528,12 @@ class BackupFilesDeleteMultipleView(UserPermissionRequiredMixin, View, LoggerMix
                 errors.append(fname)
 
         if deleted:
-            messages.success(request, f"Deleted: {', '.join(deleted)}")
+            messages.success(request, f'Deleted: {", ".join(deleted)}')
         if errors:
-            messages.error(request, f"Errors deleting: {', '.join(errors)}")
+            messages.error(request, f'Errors deleting: {", ".join(errors)}')
 
         return redirect('management:backups')
+
 
 class CanManageBackup(BasePermission):
     """Allow only users permitted to manage backup settings."""
@@ -533,10 +541,9 @@ class CanManageBackup(BasePermission):
     def has_permission(self, request: HttpRequest, _view: Any) -> bool:
         """Check if the user has permission to manage backup settings."""
         return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.has_perm(AppPermissions.MANAGE_BACKUPS)
+            request.user and request.user.is_authenticated and request.user.has_perm(AppPermissions.MANAGE_BACKUPS)
         )
+
 
 @extend_schema(tags=['Backup'])
 @extend_schema_view(
@@ -545,7 +552,7 @@ class CanManageBackup(BasePermission):
     create=extend_schema(description='Create a backup.'),
     update=extend_schema(description='Update an existing backup.'),
     partial_update=extend_schema(description='Partially update an existing backup.'),
-    destroy=extend_schema(description='Delete a backup.')
+    destroy=extend_schema(description='Delete a backup.'),
 )
 class BackupViewSet(viewsets.ModelViewSet[Any]):
     """ViewSet for managing Backup instances.
@@ -553,13 +560,14 @@ class BackupViewSet(viewsets.ModelViewSet[Any]):
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
     """
+
     queryset = BackupOptions.objects.all().order_by('-user')
     serializer_class = BackupSerializer
-    permission_classes: ClassVar = [CanManageBackup] # type: ignore[misc]
-    filter_backends: ClassVar = [ # type: ignore[misc]
+    permission_classes: ClassVar = [CanManageBackup]  # type: ignore[misc]
+    filter_backends: ClassVar = [  # type: ignore[misc]
         DjangoFilterBackend,
         filters.SearchFilter,
-        filters.OrderingFilter
+        filters.OrderingFilter,
     ]
     filterset_fields: ClassVar = ['user']
     search_fields: ClassVar = ['user']

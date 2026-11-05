@@ -95,14 +95,14 @@ def test_get_credential_type_for_template_distinguishes_domain_and_application(
     )
 
     context = CmpCertificateRequestContext(domain=domain, certificate_profile_model=domain_profile)  # type: ignore[arg-type]
-    credential_type, display_name = CertificateIssueProcessor._get_credential_type_for_template(context)  # noqa: SLF001
+    credential_type, profile = CertificateIssueProcessor._get_credential_type_for_template(context)  # noqa: SLF001
     assert credential_type == IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
-    assert display_name == (domain_profile.display_name or domain_profile.unique_name)
+    assert profile == domain_profile
 
     context.certificate_profile_model = tls_profile
-    credential_type, display_name = CertificateIssueProcessor._get_credential_type_for_template(context)  # noqa: SLF001
+    credential_type, profile = CertificateIssueProcessor._get_credential_type_for_template(context)  # noqa: SLF001
     assert credential_type == IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
-    assert display_name == (tls_profile.display_name or tls_profile.unique_name)
+    assert profile == tls_profile
 
     context.certificate_profile_model = None
     with pytest.raises(ValueError, match='Certificate profile model is required'):
@@ -152,15 +152,14 @@ def test_local_certificate_issue_saves_issued_credential_and_sets_context(
         cert_requested_profile_validated=_validated_builder(),
         certificate_profile_model=profile,
     )
-    with patch('request.operation_processor.issue_cert.CredentialSaver') as saver_class, patch(
-        'request.operation_processor.issue_cert.AuditLog.create_entry'
+    with (
+        patch('request.operation_processor.issue_cert.CredentialSaver') as saver_class,
+        patch('request.operation_processor.issue_cert.AuditLog.create_entry'),
     ):
         LocalCaCertificateIssueProcessor().process_operation(context)
 
     assert context.issued_certificate is not None
-    common_name = context.issued_certificate.subject.get_attributes_for_oid(
-        x509.NameOID.COMMON_NAME
-    )[0].value
+    common_name = context.issued_certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
     assert common_name == 'issued-device'
     assert context.issued_certificate_chain
     saver_class.return_value.save_keyless_credential.assert_called_once()
@@ -184,11 +183,51 @@ def test_local_certificate_issue_rejects_disabled_domain(device_instance: dict[s
     domain = device_instance['domain']
     domain.is_active = False
     context = CmpCertificateRequestContext(
-        device=device_instance['device'], domain=domain, cert_requested=csr,
+        device=device_instance['device'],
+        domain=domain,
+        cert_requested=csr,
     )
 
     with pytest.raises(ValueError, match='currently disabled'):
         LocalCaCertificateIssueProcessor().process_operation(context)
+
+
+@pytest.mark.parametrize(
+    'ca_type, protocol',
+    [
+        (CaModel.CaTypeChoice.REMOTE_EST_RA, 'est'),
+        (CaModel.CaTypeChoice.REMOTE_CMP_RA, 'cmp'),
+    ],
+)
+@pytest.mark.parametrize('direct', [False, True])
+@pytest.mark.parametrize('is_active', [False, True])
+def test_remote_certificate_issue_checks_domain_before_forwarding(
+    ca_type: str,
+    protocol: str,
+    direct: bool,
+    is_active: bool,
+    device_instance: dict[str, object],
+) -> None:
+    """Reject disabled domains before forwarding through either issuance entry point."""
+    _, _, csr = certificate_and_csr()
+    domain = device_instance['domain']
+    domain.is_active = is_active
+    domain.issuing_ca.ca_type = ca_type
+    context = CmpCertificateRequestContext(
+        device=device_instance['device'],
+        domain=domain,
+        cert_requested=csr,
+    )
+    processor = RemoteCaCertificateIssueProcessor(ca_type=protocol) if direct else CertificateIssueProcessor()
+
+    with patch.object(RemoteCaCertificateIssueProcessor, f'_process_{protocol}_enrollment') as forward:
+        if is_active:
+            processor.process_operation(context)
+            forward.assert_called_once_with(context)
+        else:
+            with pytest.raises(ValueError, match='currently disabled'):
+                processor.process_operation(context)
+            forward.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -230,13 +269,12 @@ def test_remote_est_translates_client_errors_and_does_not_save(
     ca.remote_path = '/.well-known/est/simpleenroll'
     ca.chain_truststore = Mock()
     domain = Mock(issuing_ca=ca, unique_name='remote-domain')
-    context = CmpCertificateRequestContext(
-        device=device_instance['device'], domain=domain, cert_requested=csr
-    )
+    context = CmpCertificateRequestContext(device=device_instance['device'], domain=domain, cert_requested=csr)
 
-    with patch('request.operation_processor.issue_cert.EstClient') as client_class, patch(
-        'request.operation_processor.issue_cert.CredentialSaver'
-    ) as saver_class:
+    with (
+        patch('request.operation_processor.issue_cert.EstClient') as client_class,
+        patch('request.operation_processor.issue_cert.CredentialSaver') as saver_class,
+    ):
         client_class.return_value.simple_enroll.side_effect = RuntimeError('connection refused')
         with pytest.raises(ValueError, match='EST enrollment failed: connection refused'):
             RemoteCaCertificateIssueProcessor().process_operation(context)
@@ -244,28 +282,15 @@ def test_remote_est_translates_client_errors_and_does_not_save(
     saver_class.assert_not_called()
 
 
-def test_remote_cmp_is_explicitly_unimplemented(
-    device_instance: dict[str, object],
-    issuing_ca_instance: dict[str, object],
-) -> None:
-    """Report that remote CMP certificate issuance is not implemented."""
-    _, _, csr = certificate_and_csr()
-    ca = issuing_ca_instance['issuing_ca']
-    ca.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
-    context = CmpCertificateRequestContext(
-        device=device_instance['device'], domain=device_instance['domain'], cert_requested=csr
-    )
-    with pytest.raises(NotImplementedError, match='CMP remote certificate issuance'):
-        RemoteCaCertificateIssueProcessor(ca_type='cmp').process_operation(context)
-
-
 def test_local_certificate_issue_rejects_unsupported_request_key(device_instance: dict[str, object]) -> None:
     context = CmpCertificateRequestContext(
         device=device_instance['device'], domain=device_instance['domain'], cert_requested=Mock()
     )
-    with patch('request.operation_processor.issue_cert.CaRolloverService.get_active_rollover', return_value=None), patch(
-        'request.operation_processor.issue_cert.is_supported_public_key', return_value=False
-    ), pytest.raises(TypeError, match='unsupported type'):
+    with (
+        patch('request.operation_processor.issue_cert.CaRolloverService.get_active_rollover', return_value=None),
+        patch('request.operation_processor.issue_cert.is_supported_public_key', return_value=False),
+        pytest.raises(TypeError, match='unsupported type'),
+    ):
         LocalCaCertificateIssueProcessor().process_operation(context)
 
 
@@ -274,11 +299,10 @@ def test_local_certificate_issue_rejects_ca_without_credential(device_instance: 
     ca = Mock()
     ca.get_credential.return_value = None
     domain = Mock(is_active=True, get_issuing_ca_or_value_error=Mock(return_value=ca))
-    context = CmpCertificateRequestContext(
-        device=device_instance['device'], domain=domain, cert_requested=csr
-    )
-    with patch('request.operation_processor.issue_cert.CaRolloverService.get_active_rollover', return_value=None), pytest.raises(
-        ValueError, match='does not have a credential'
+    context = CmpCertificateRequestContext(device=device_instance['device'], domain=domain, cert_requested=csr)
+    with (
+        patch('request.operation_processor.issue_cert.CaRolloverService.get_active_rollover', return_value=None),
+        pytest.raises(ValueError, match='does not have a credential'),
     ):
         LocalCaCertificateIssueProcessor().process_operation(context)
 
@@ -286,8 +310,11 @@ def test_local_certificate_issue_rejects_ca_without_credential(device_instance: 
 def test_remote_est_context_prefers_configured_truststore(device_instance: dict[str, object]) -> None:
     ca = Mock(
         no_onboarding_config=Mock(est_password='secret', trust_store=Mock()),
-        chain_truststore=Mock(), remote_host='est.example.test', remote_port=443,
-        remote_path='/enroll', est_username='user',
+        chain_truststore=Mock(),
+        remote_host='est.example.test',
+        remote_port=443,
+        remote_path='/enroll',
+        est_username='user',
     )
     context = CmpCertificateRequestContext(device=device_instance['device'], cert_profile_str='tls_client')
 

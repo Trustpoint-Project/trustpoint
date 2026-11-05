@@ -17,6 +17,7 @@ from .cmp import CmpAuthorization
 from .est import EstAuthorization
 from .manual import ManualAuthorization
 from .rest import RestAuthorization
+from .scep import ScepAuthorization
 
 __all__ = [
     'AuthorizationComponent',
@@ -30,5 +31,6 @@ __all__ = [
     'OnboardingDomainCredentialAuthorization',
     'ProtocolAuthorization',
     'RestAuthorization',
+    'ScepAuthorization',
     'SecurityConfigAuthorization',
 ]

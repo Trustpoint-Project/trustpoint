@@ -7,91 +7,227 @@
 {% endblock head %}
 
 {% block content %}
-<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+<div class="card">
     <div class="card-header">
-        <h1>{% trans "Signed Messages for" %} {{ signer.unique_name }}</h1>
+        <h1 class="mb-1">
+            {% trans "Signed Messages" %}
+        </h1>
+
+        <p class="mb-0 text-muted">
+            {% blocktrans with signer_name=signer.unique_name %}
+                Review hashes and signatures created by signer "{{ signer_name }}".
+            {% endblocktrans %}
+        </p>
     </div>
 
-    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
-        <table class="table">
-            <thead>
-            <tr>
-                <th>{% trans "Hash Value" %}</th>
-                <th>{% trans "Signature" %}</th>
-                <th>{% trans "Created At" %}</th>
-            </tr>
-            </thead>
-            <tbody>
-                {% for message in signed_messages %}
-                    <tr>
-                        <td style="max-width: 300px; word-break: break-all; font-family: monospace; font-size: 0.9em;">
-                            {{ message.hash_value }}
-                        </td>
-                        <td style="max-width: 300px; word-break: break-all; font-family: monospace; font-size: 0.9em;">
-                            <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#signatureModal{{ message.pk }}" style="cursor: pointer;">
-                                {{ message.signature|truncatechars:50 }}
-                            </a>
-                        </td>
-                        <td>{{ message.created_at|local_datetime }}</td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="3" class="text-center">{% trans "No signed messages found" %}</td>
-                    </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    <div class="card-body text-start">
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans "Signing Log" %}
+                </h2>
+
+                <p class="mb-0 text-muted">
+                    {% trans "Each entry contains the signed hash, resulting signature and creation time." %}
+                </p>
+            </div>
+
+            <hr class="mb-4">
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">
+                                {% trans "Hash Value" %}
+                            </th>
+
+                            <th scope="col">
+                                {% trans "Signature" %}
+                            </th>
+
+                            <th scope="col" class="text-nowrap">
+                                {% trans "Created At" %}
+                            </th>
+
+                            <th scope="col" class="text-end">
+                                {% trans "Actions" %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for message in signed_messages %}
+                            <tr>
+                                <td>
+                                    <code class="font-monospace text-break">
+                                        {{ message.hash_value }}
+                                    </code>
+                                </td>
+
+                                <td>
+                                    <code class="font-monospace">
+                                        {{ message.signature|truncatechars:50 }}
+                                    </code>
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ message.created_at|local_datetime }}
+                                </td>
+
+                                <td class="text-end">
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#signatureModal{{ message.pk }}"
+                                    >
+                                        {% trans "Details" %}
+                                    </button>
+                                </td>
+                            </tr>
+
+                        {% empty %}
+                            <tr>
+                                <td
+                                    colspan="4"
+                                    class="text-center text-muted py-5"
+                                >
+                                    {% trans "No signed messages found." %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </div>
 
-    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-        <div class="tp-card-btn-footer m-1">
-            <a href="{% url 'signer:signer-config' signer.pk %}" class="btn btn-secondary">{% trans "Back to Signer" %}</a>
-        </div>
+    <div class="card-footer">
+        <a
+            href="{% url 'signer:signer-config' signer.pk %}"
+            class="btn btn-secondary"
+        >
+            {% trans "Back to Signer" %}
+        </a>
     </div>
 </div>
 
-<!-- Modals for each signature -->
+
+{# ============================================================ #}
+{# Signature Detail Modals                                      #}
+{# ============================================================ #}
 {% for message in signed_messages %}
-<div class="modal fade" id="signatureModal{{ message.pk }}" tabindex="-1" aria-labelledby="signatureModalLabel{{ message.pk }}" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="signatureModalLabel{{ message.pk }}">{% trans "Signature Details" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <h6>{% trans "Hash Value" %}</h6>
-                <div class="copy-container mb-3" style="position: relative;">
-                    <code class="command-text language-bash d-block p-2 rounded" style="word-break: break-all; font-size: 0.85em;">{{ message.hash_value }}</code>
-                    <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard" style="position: absolute; top: 5px; right: 5px;">
-                        <svg class="icon icon-copy" width="24" height="24" fill="currentColor">
-                            <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
-                        </svg>
-                    </button>
-                </div>
-                
-                <h6>{% trans "Signature (Hexadecimal)" %}</h6>
-                <div class="copy-container" style="position: relative;">
-                    <code class="command-text language-bash d-block p-2 rounded" style="word-break: break-all; font-size: 0.85em;">{{ message.signature }}</code>
-                    <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard" style="position: absolute; top: 5px; right: 5px;">
-                        <svg class="icon icon-copy" width="24" height="24" fill="currentColor">
-                            <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
-                        </svg>
-                    </button>
+    <div
+        class="modal fade"
+        id="signatureModal{{ message.pk }}"
+        tabindex="-1"
+        aria-labelledby="signatureModalLabel{{ message.pk }}"
+        aria-hidden="true"
+    >
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2
+                        class="modal-title h5"
+                        id="signatureModalLabel{{ message.pk }}"
+                    >
+                        {% trans "Signature Details" %}
+                    </h2>
+
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="{% trans 'Close' %}"
+                    ></button>
                 </div>
 
-                <div class="mt-3">
-                    <small class="text-muted">
-                        <strong>{% trans "Created" %}:</strong> {{ message.created_at|local_datetime }}
-                    </small>
+                <div class="modal-body">
+                    <section class="mb-4">
+                        <h3 class="h6 mb-2">
+                            {% trans "Hash Value" %}
+                        </h3>
+
+                        <div class="copy-container position-relative">
+                            <code class="command-text d-block p-3 rounded text-break">
+                                {{ message.hash_value }}
+                            </code>
+
+                            <button
+                                type="button"
+                                class="copy-button"
+                                data-tooltip="{% trans 'Copy to clipboard' %}"
+                                aria-label="{% trans 'Copy hash value to clipboard' %}"
+                            >
+                                <svg
+                                    class="icon icon-copy"
+                                    width="24"
+                                    height="24"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                >
+                                    <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                                </svg>
+                            </button>
+                        </div>
+                    </section>
+
+
+                    <section class="mb-4">
+                        <h3 class="h6 mb-2">
+                            {% trans "Signature (Hexadecimal)" %}
+                        </h3>
+
+                        <div class="copy-container position-relative">
+                            <code class="command-text d-block p-3 rounded text-break">
+                                {{ message.signature }}
+                            </code>
+
+                            <button
+                                type="button"
+                                class="copy-button"
+                                data-tooltip="{% trans 'Copy to clipboard' %}"
+                                aria-label="{% trans 'Copy signature to clipboard' %}"
+                            >
+                                <svg
+                                    class="icon icon-copy"
+                                    width="24"
+                                    height="24"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                >
+                                    <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                                </svg>
+                            </button>
+                        </div>
+                    </section>
+
+
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>
+                                {% trans "Created" %}
+                            </div>
+
+                            <div>
+                                {{ message.created_at|local_datetime }}
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Close" %}</button>
+
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal"
+                    >
+                        {% trans "Close" %}
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 {% endfor %}
-
 {% endblock content %}

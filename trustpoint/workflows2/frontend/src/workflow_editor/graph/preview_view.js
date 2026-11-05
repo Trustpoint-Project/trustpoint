@@ -132,6 +132,15 @@ export function renderGraphPreview(refs, state) {
     );
   }
 
+  // Position via CSSOM: inline style attributes are blocked by CSP.
+  refs.overlay.querySelectorAll('[data-overlay-left]').forEach((element) => {
+    for (const property of ['left', 'top', 'width', 'height', 'maxWidth', 'maxHeight']) {
+      const key = 'overlay' + property[0].toUpperCase() + property.slice(1);
+      const value = Number(element.dataset[key]);
+      if (Number.isFinite(value)) element.style[property] = `${value}px`;
+    }
+  });
+
   const nextOverlayKey = getOverlayStateKey(state);
   if (nextOverlayKey && nextOverlayKey === previousOverlayKey && state.overlayScroll) {
     restoreOverlayScroll(refs.overlay, state.overlayScroll);

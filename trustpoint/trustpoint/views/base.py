@@ -16,7 +16,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.db import models
-from django.http import Http404, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView
@@ -40,7 +40,7 @@ class SuperuserRequiredMixin:
     redirected to the management index.
     """
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Check superuser status before dispatching the request.
 
         Args:
@@ -74,7 +74,7 @@ class UserPermissionRequiredMixin:
             return True
         return bool(self.request.user.has_perm(self.permission_required))
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Check user permission before dispatching the request.
 
         Args:

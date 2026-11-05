@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """CMP-owned transaction persistence for delayed delivery and polling."""
+
 from __future__ import annotations
 
 from django.db import models
@@ -71,6 +72,18 @@ class CmpTransactionModel(models.Model):
         verbose_name=_('Implicit Confirm Requested'),
         default=False,
     )
+    last_client_nonce = models.BinaryField(
+        verbose_name=_('Last Client Nonce'),
+        null=True,
+        blank=True,
+        help_text=_('Most recently authenticated CMP senderNonce for this transaction.'),
+    )
+    last_server_nonce = models.BinaryField(
+        verbose_name=_('Last Server Nonce'),
+        null=True,
+        blank=True,
+        help_text=_('Most recently emitted CMP senderNonce for this transaction.'),
+    )
 
     device = models.ForeignKey(
         'devices.DeviceModel',
@@ -139,6 +152,13 @@ class CmpTransactionModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created At'), default=timezone.now)
     updated_at = models.DateTimeField(verbose_name=_('Updated At'), auto_now=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmation_deadline = models.DateTimeField(null=True, blank=True, db_index=True)
+    confirmation_timeout_policy = models.CharField(
+        max_length=16,
+        choices=[('revoke', _('Revoke')), ('log', _('Log rejection'))],
+        default='revoke',
+    )
     finalized_at = models.DateTimeField(verbose_name=_('Finalized At'), null=True, blank=True)
 
     class Meta:

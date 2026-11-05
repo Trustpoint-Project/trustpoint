@@ -1,0 +1,28 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Ruff: Format current branch",
+			"type": "shell",
+			"command": "git diff --name-only -z --diff-filter=ACMR origin/main -- '*.py' | xargs -0 -r uv run --frozen ruff format",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared",
+				"clear": true
+			}
+		},
+		{
+			"label": "Ruff: Check current branch",
+			"type": "shell",
+			"command": "git diff --name-only -z --diff-filter=ACMR origin/main -- '*.py' | xargs -0 -r uv run --frozen ruff format --check",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": []
+		}
+	]
+}

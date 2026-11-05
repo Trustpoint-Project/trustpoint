@@ -2,21 +2,21 @@
 # SPDX-License-Identifier: MIT
 
 """Provides the 'CmpAuthorization' class using the Composite pattern for modular CMP authorization."""
-from typing import Never
 
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.serialization import Encoding
+from typing import Never, cast
+
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
-from trustpoint_core.oid import HashAlgorithm, SignatureSuite
 
 from cmp.models import CmpTransactionModel
 from cmp.util import PKI_STATUS_REJECTION, PKIFailureInfo
 from pki.models import IssuedCredentialModel
+from request.cmp_key_update import validate_key_update_identity
 from request.cmp_transaction_state import CmpTransactionState
 from request.request_context import (
     BaseRequestContext,
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
+    CmpCertificateRequestContext,
     CmpPollRequestContext,
     CmpRevocationRequestContext,
 )
@@ -32,17 +32,6 @@ from .base import (
     ProtocolAuthorization,
     SecurityConfigAuthorization,
 )
-
-CERTCONF_ALLOWED_DIGESTS: dict[HashAlgorithm, type[hashes.HashAlgorithm]] = {
-    HashAlgorithm.SHA224: hashes.SHA224,
-    HashAlgorithm.SHA256: hashes.SHA256,
-    HashAlgorithm.SHA384: hashes.SHA384,
-    HashAlgorithm.SHA512: hashes.SHA512,
-    HashAlgorithm.SHA3_224: hashes.SHA3_224,
-    HashAlgorithm.SHA3_256: hashes.SHA3_256,
-    HashAlgorithm.SHA3_384: hashes.SHA3_384,
-    HashAlgorithm.SHA3_512: hashes.SHA3_512,
-}
 
 
 class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
@@ -80,8 +69,9 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
             signer_cert = signer_credential.credential.certificate_or_error
             if signer_cert.serial_number == str(context.cert_serial_number):
                 context.credential_to_revoke = signer_credential
-                self.logger.debug('Revocation authorized: Self-revocation of credential %s',
-                                  context.credential_to_revoke.common_name)
+                self.logger.debug(
+                    'Revocation authorized: Self-revocation of credential %s', context.credential_to_revoke.common_name
+                )
                 return
             valid, _reason = signer_credential.is_valid_domain_credential()
             if valid:
@@ -91,9 +81,7 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
                 'Unauthorized revocation request: Signer certificate does not match '
                 'the certificate to be revoked or the device domain credential.'
             )
-            self.logger.warning(
-                'Revocation authorization failed: Signer certificate unauthorized for revocation'
-            )
+            self.logger.warning('Revocation authorization failed: Signer certificate unauthorized for revocation')
             self._raise_authorization_error(error_message, context)
         except IssuedCredentialModel.DoesNotExist:
             error_message = 'Signer certificate is not associated with any issued credential. Authorization denied.'
@@ -148,8 +136,8 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
     """Authorization component for certConf messages.
 
     When the EE signals rejection (statusInfo.status == 2) the component looks
-    up the ``IssuedCredentialModel`` whose certificate hash matches the
-    ``cert_hash`` carried in the certConf body and stores it in
+    up the ``IssuedCredentialModel`` for the authenticated transaction's
+    final certificate and stores it in
     ``context.credential_to_revoke`` so that the operation processor can
     revoke the certificate via the standard revocation pipeline.
 
@@ -159,7 +147,7 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
 
     def authorize(self, context: BaseRequestContext) -> None:
         """Authorize and, on rejection, identify the credential to revoke."""
-        if context.operation not in ('certconf', 'initialization', 'certification'):
+        if context.operation not in ('certconf', 'initialization', 'certification', 'keyupdate'):
             return
         if not isinstance(context, CmpCertConfRequestContext):
             return
@@ -174,17 +162,20 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
             self._raise_authorization_error(error_message, context)
 
         cert_hash_hex: str = context.cert_hash.hex().upper()
-        hash_algorithm = self._resolve_certconf_hash_algorithm(context)
-        cert_model = self._resolve_issued_credential_by_cert_hash(context=context, hash_algorithm=hash_algorithm)
+        transaction = context.cmp_transaction
+        if transaction is None or transaction.final_certificate is None:
+            self._raise_authorization_error('certConf rejection is not bound to an issued CMP transaction.', context)
+        cert_model = (
+            IssuedCredentialModel.objects.filter(credential__certificate=transaction.final_certificate)
+            .select_related('domain', 'device', 'credential__certificate')
+            .first()
+        )
 
         if cert_model is None:
             error_message = (
-                f'certConf rejection: no issued credential found for certHash {cert_hash_hex}. '
-                'Authorization denied.'
+                f'certConf rejection: no issued credential found for certHash {cert_hash_hex}. Authorization denied.'
             )
-            self.logger.warning(
-                'certConf authorization failed: no credential found for certHash %s', cert_hash_hex
-            )
+            self.logger.warning('certConf authorization failed: no credential found for certHash %s', cert_hash_hex)
             self._raise_authorization_error(error_message, context)
 
         context.credential_to_revoke = cert_model
@@ -193,70 +184,6 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
             cert_model.common_name,
             cert_hash_hex,
         )
-
-    def _resolve_certconf_hash_algorithm(self, context: CmpCertConfRequestContext) -> hashes.HashAlgorithm:
-        """Resolve the digest declared by certConf hashAlg, defaulting to SHA-256."""
-        if not context.cert_hash_algorithm_oid:
-            return hashes.SHA256()
-
-        try:
-            hash_algorithm = HashAlgorithm.from_dotted_string(context.cert_hash_algorithm_oid)
-        except ValueError as exc:
-            msg = f'certConf hashAlg OID {context.cert_hash_algorithm_oid!r} is unsupported.'
-            self._raise_authorization_error(msg, context)
-            raise ValueError(msg) from exc
-
-        digest_factory = CERTCONF_ALLOWED_DIGESTS.get(hash_algorithm)
-        if digest_factory is None:
-            msg = f'certConf hashAlg OID {context.cert_hash_algorithm_oid!r} is not permitted.'
-            self._raise_authorization_error(msg, context)
-            raise ValueError(msg)
-        return digest_factory()
-
-    def _resolve_issued_credential_by_cert_hash(
-        self,
-        *,
-        context: CmpCertConfRequestContext,
-        hash_algorithm: hashes.HashAlgorithm,
-    ) -> IssuedCredentialModel | None:
-        """Resolve the issued credential by certHash using the declared digest algorithm."""
-        cert_hash = context.cert_hash
-        if cert_hash is None:
-            msg = 'certConf rejection received but certHash is missing. Authorization denied.'
-            self._raise_authorization_error(msg, context)
-
-        cert_hash_hex = cert_hash.hex().upper()
-
-        if isinstance(hash_algorithm, hashes.SHA256):
-            issued_cred = (
-                IssuedCredentialModel.objects.filter(
-                    credential__certificate__sha256_fingerprint=cert_hash_hex
-                )
-                .select_related('credential', 'device', 'domain')
-                .first()
-            )
-            if issued_cred is None:
-                return None
-            if context.cert_hash_algorithm_oid is None:
-                signature_hash = SignatureSuite.from_certificate(
-                    issued_cred.credential.get_certificate()
-                ).algorithm_identifier.hash_algorithm
-                if signature_hash is None:
-                    self._raise_authorization_error(
-                        'certConf hashAlg is required for certificates whose signature algorithm has no implicit hash.',
-                        context,
-                    )
-            return issued_cred
-
-        issued_credentials = IssuedCredentialModel.objects.select_related('credential', 'device', 'domain')
-        for issued_cred in issued_credentials.iterator():
-            certificate = issued_cred.credential.get_certificate()
-            certificate_der = certificate.public_bytes(Encoding.DER)
-            digest_ctx = hashes.Hash(hash_algorithm)
-            digest_ctx.update(certificate_der)
-            if digest_ctx.finalize() == cert_hash:
-                return issued_cred
-        return None
 
     def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> Never:
         """Set a generic error on the context and raise ValueError."""
@@ -367,12 +294,12 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
         if operation not in self.allowed_operations:
             error_message = (
-                f"Unauthorized operation: '{operation}'. "
-                f"Allowed operations: {', '.join(self.allowed_operations)}."
+                f"Unauthorized operation: '{operation}'. Allowed operations: {', '.join(self.allowed_operations)}."
             )
             self.logger.warning(
                 'Operation authorization failed: %(operation)s not in allowed operations %(allowed_operations)s',
-                extra={'operation': operation, 'allowed_operations': self.allowed_operations})
+                extra={'operation': operation, 'allowed_operations': self.allowed_operations},
+            )
             raise ValueError(error_message)
 
         if not isinstance(context.parsed_message, PKIMessage):
@@ -382,27 +309,36 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
         body_type = context.parsed_message['body'].getName()
 
-        if context.operation == 'initialization' and body_type == 'ir':
-            self.logger.info('CMP body type validation successful: IR body extracted')
-        elif context.operation == 'certification' and body_type == 'cr':
-            self.logger.info('CMP body type validation successful: CR body extracted')
+        if (context.operation, body_type) in {
+            ('initialization', 'ir'),
+            ('certification', 'cr'),
+            ('keyupdate', 'kur'),
+            ('getcacerts', 'genm'),
+        }:
+            if context.operation == 'keyupdate':
+                validate_key_update_identity(cast('CmpCertificateRequestContext', context), profile_validated=True)
+            self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
         elif context.operation == 'revocation' and body_type == 'rr':
             CmpRevocationAuthorization().authorize(context)
             self.logger.info('CMP body type validation successful: RR body extracted')
-        elif context.operation in ('initialization', 'certification', 'certconf') and body_type == 'certConf':
+        elif (
+            context.operation in ('initialization', 'certification', 'keyupdate', 'certconf')
+            and body_type == 'certConf'
+        ):
             # certConf is sent to the same endpoint as the original enrollment
             # operation (RFC 9483 Section 6.1).  The CmpCertConfAuthorization
             # component handles credential lookup for rejection-case revocation.
             CmpCertConfAuthorization().authorize(context)
             self.logger.info('CMP certConf body received for operation: %s', context.operation)
-        elif context.operation in ('initialization', 'certification') and body_type == 'pollReq':
+        elif context.operation in ('initialization', 'certification', 'keyupdate') and body_type == 'pollReq':
             self.logger.info('CMP pollReq body received for operation: %s', context.operation)
         else:
             err_msg = f'Expected CMP {context.operation} body, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)
 
-        self.logger.debug('Operation authorization successful for operation: %(operation)s',
-                          extra={'operation': operation})
+        self.logger.debug(
+            'Operation authorization successful for operation: %(operation)s', extra={'operation': operation}
+        )
 
     def _raise_value_error(self, message: str) -> Never:
         """Raise a ValueError with the given message."""
@@ -410,17 +346,18 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
 
 class CmpAuthorization(CompositeAuthorization):
-    """Composite authorization handler for EST requests."""
+    """Composite authorization handler for CMP requests."""
+
     def __init__(self, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
-            allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
+            allowed_operations: Allowed CMP operations; defaults to enrollment, key update, and CA retrieval.
         """
         super().__init__()
 
         if allowed_operations is None:
-            allowed_operations = ['certification', 'initialization']
+            allowed_operations = ['certification', 'initialization', 'keyupdate', 'getcacerts']
 
         self.add(ProtocolAuthorization(['cmp']))
         self.add(CmpPollAuthorization())

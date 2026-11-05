@@ -3,10 +3,14 @@
 
 """Tests for the RemoteDeviceCredential model."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from queue import Queue
+from time import monotonic, sleep
 from typing import Any
 
 import pytest
+from django.db import connection, connections, transaction
 
 from devices.models import RemoteDeviceCredentialDownloadModel
 
@@ -125,6 +129,104 @@ def test_check_token_expired(remote_device_credential_download_instance: dict[st
 
 
 #  ----------------------------------- check_otp-----------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Requires PostgreSQL row locks')
+def test_check_otp_concurrent_requests_accept_only_once(
+    remote_device_credential_download_instance: dict[str, Any],
+) -> None:
+    """Overlapping connections consume the OTP once and preserve the winner's token."""
+    download = remote_device_credential_download_instance['remote_credential']
+    otp = download.otp
+    backend_pids: Queue[int] = Queue()
+
+    def check_otp() -> tuple[bool, str]:
+        try:
+            current = RemoteDeviceCredentialDownloadModel.objects.get(pk=download.pk)
+            with connection.cursor() as cursor:
+                cursor.execute("SET lock_timeout = '10s'")
+                cursor.execute('SELECT pg_backend_pid()')
+                backend_pids.put(cursor.fetchone()[0])
+            return current.check_otp(otp), current.download_token
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        with transaction.atomic():
+            RemoteDeviceCredentialDownloadModel.objects.select_for_update().get(pk=download.pk)
+            futures = [pool.submit(check_otp) for _ in range(2)]
+            pids = [backend_pids.get(timeout=10) for _ in futures]
+            assert len(set(pids)) == 2
+
+            # Hold both requests before writes, so removing the OTP read lock makes both succeed.
+            deadline = monotonic() + 5
+            with connection.cursor() as cursor:
+                while True:
+                    cursor.execute(
+                        'SELECT cardinality(pg_blocking_pids(%s)), cardinality(pg_blocking_pids(%s))',
+                        pids,
+                    )
+                    if all(cursor.fetchone()):
+                        break
+                    assert monotonic() < deadline, 'Both OTP requests must overlap while blocked on the row'
+                    sleep(0.01)
+
+        results = [future.result(timeout=15) for future in futures]
+
+    assert sum(accepted for accepted, _token in results) == 1
+    winning_token = next(token for accepted, token in results if accepted)
+    download.refresh_from_db()
+    assert download.otp == '-'
+    assert download.download_token == winning_token
+    assert download.check_token(winning_token)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('valid_attempt', [True, False])
+def test_check_otp_stale_copy_cannot_change_used_code(
+    remote_device_credential_download_instance: dict[str, Any],
+    valid_attempt: bool,
+) -> None:
+    """A stale request cannot reuse a consumed OTP or overwrite its download token."""
+    download = remote_device_credential_download_instance['remote_credential']
+    stale_download = RemoteDeviceCredentialDownloadModel.objects.get(pk=download.pk)
+    otp = download.otp
+
+    assert download.check_otp(otp)
+    token = download.download_token
+    token_created_at = download.token_created_at
+
+    assert not stale_download.check_otp(otp if valid_attempt else 'wrong-otp')
+
+    download.refresh_from_db()
+    assert download.otp == '-'
+    assert download.download_token == token
+    assert download.token_created_at == token_created_at
+    assert download.attempts == 0
+
+
+@pytest.mark.django_db
+def test_check_otp_stale_copies_share_attempt_limit(
+    remote_device_credential_download_instance: dict[str, Any],
+) -> None:
+    """Independently loaded requests count every failure and cannot revive a deleted OTP."""
+    download = remote_device_credential_download_instance['remote_credential']
+    otp = download.otp
+    copies = [
+        RemoteDeviceCredentialDownloadModel.objects.get(pk=download.pk)
+        for _ in range(download.BROWSER_MAX_OTP_ATTEMPTS)
+    ]
+
+    for attempt, stale_download in enumerate(copies, start=1):
+        assert not stale_download.check_otp('wrong-otp')
+        if attempt < download.BROWSER_MAX_OTP_ATTEMPTS:
+            download.refresh_from_db()
+            assert download.attempts == attempt
+
+    assert not RemoteDeviceCredentialDownloadModel.objects.filter(pk=download.pk).exists()
+    assert not download.check_otp(otp)
+    assert not RemoteDeviceCredentialDownloadModel.objects.filter(pk=download.pk).exists()
 
 
 @pytest.mark.django_db

@@ -36,8 +36,7 @@ def app_secret_config():
     backend.backend_kind = AppSecretBackendKind.SOFTWARE
     backend.save()
     config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
-    config.raw_dek = b'a' * 32
-    config.save()
+    # The shared fixture supplies an externally wrapped DEK.
     return config
 
 

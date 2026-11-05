@@ -11,6 +11,11 @@
 {% block content %}
 
     <section class="tp-setup-form-shell">
+        {% if certificate_login_error %}
+            <div class="alert alert-danger" role="alert">
+                {{ certificate_login_error }} {% trans "Please sign in with your username and password." %}
+            </div>
+        {% endif %}
         {% if show_bootstrap_hint %}
             <div class="alert alert-info d-flex" role="alert">
                 <div>

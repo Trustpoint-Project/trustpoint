@@ -1,3 +1,4 @@
+import { uniqStrings } from '../shared/utils.js';
 import { escapeHtml, renderChips } from '../shared/dom.js';
 import { WEBHOOK_CAPTURE_SOURCE_OPTIONS } from '../document/webhook_capture_sources.js';
 import {
@@ -18,23 +19,6 @@ function findFieldMeta(catalog, context) {
   return [...commonFields, ...specificFields].find((field) => field.key === context.fieldKey) || null;
 }
 
-function uniqStrings(values) {
-  const out = [];
-  const seen = new Set();
-
-  for (const value of values || []) {
-    if (typeof value !== 'string' || !value.trim()) {
-      continue;
-    }
-    const s = value.trim();
-    if (!seen.has(s)) {
-      seen.add(s);
-      out.push(s);
-    }
-  }
-
-  return out;
-}
 
 function renderOutcomeSetterButtons(context) {
   const fromCurrentStep =

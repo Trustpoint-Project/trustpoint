@@ -11,7 +11,7 @@ from cmp.util import PKIFailureInfo as CMPErrs
 from pki.services.csr import csr_to_request
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
-from request.request_context import BaseCertificateRequestContext, BaseRequestContext
+from request.request_context import BaseCertificateRequestContext, BaseRequestContext, ManualCredentialRequestContext
 from request.template_vars import resolve_template_variables
 from trustpoint.logger import LoggerMixin
 
@@ -39,6 +39,9 @@ class ProfileValidator(LoggerMixin):
             cert_request_json = csr_to_request(context.cert_requested)
         else:
             cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
+            # Builder conversion omits validity; retain the form's relative values for profile enforcement.
+            if isinstance(context, ManualCredentialRequestContext) and context.requested_validity is not None:
+                cert_request_json['validity'] = context.requested_validity
         cls.logger.info('Cert Request JSON: %s', cert_request_json)
 
         if not context.certificate_profile_model:
@@ -59,15 +62,14 @@ class ProfileValidator(LoggerMixin):
 
         try:
             validated_request = JSONProfileVerifier(cert_profile).apply_profile_to_request(cert_request_json)
-        except (ValidationError, ProfileValidationError) as e:
+            validated_request = resolve_template_variables(validated_request, context)
+        except (ValidationError, ProfileValidationError, ValueError) as e:
             exc_msg = f'Certificate request validation against profile failed: {e}'
             context.error('Request does not match the certificate profile.',
                           http_status=400, cmp_code=CMPErrs.UNACCEPTED_POLICY)
             raise ValueError(exc_msg) from e
 
         cls.logger.info('Validated Cert Request JSON: %s', validated_request)
-
-        validated_request = resolve_template_variables(validated_request, context)
 
         context.cert_requested_profile_validated = JSONCertRequestConverter.from_json(
             validated_request,

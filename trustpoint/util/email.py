@@ -10,7 +10,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, get_connection
+from django.core.mail import EmailMultiAlternatives, mailers
 from django.template.exceptions import TemplateDoesNotExist
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -167,14 +167,13 @@ def send_email(payload: EmailPayload, *, connection: Any = None) -> int:
         bcc=list(payload.bcc),
         headers=dict(payload.headers),
         reply_to=list(payload.reply_to),
-        connection=connection,
     )
     msg.attach_alternative(html, 'text/html')
 
     for name, content, mimetype in payload.attachments:
         msg.attach(name, content, mimetype)
 
-    return msg.send()
+    return (connection if connection is not None else mailers.default).send_messages([msg])
 
 
 def send_simple(  # noqa: PLR0913 - Email service requires multiple parameters for standard email fields
@@ -196,11 +195,10 @@ def send_simple(  # noqa: PLR0913 - Email service requires multiple parameters f
         to=list(to),
         cc=list(cc),
         bcc=list(bcc),
-        connection=connection,
     )
     for name, content, mimetype in attachments:
         msg.attach(name, content, mimetype)
-    return msg.send()
+    return (connection if connection is not None else mailers.default).send_messages([msg])
 
 
 def normalize_addresses(value: Any) -> tuple[str, ...]:
@@ -214,7 +212,7 @@ def normalize_addresses(value: Any) -> tuple[str, ...]:
 def send_bulk(payloads: Iterable[EmailPayload]) -> int:
     """Send multiple template-based emails reusing one SMTP connection."""
     sent = 0
-    with get_connection() as conn:
+    with mailers.default as conn:
         for p in payloads:
             sent += send_email(p, connection=conn)
     return sent

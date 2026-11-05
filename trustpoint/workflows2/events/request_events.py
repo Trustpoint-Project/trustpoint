@@ -63,6 +63,13 @@ class Events:
         handler='certificate_request',
     )
 
+    cmp_keyupdate = Event(
+        key='cmp_keyupdate',
+        protocol='cmp',
+        operation='keyupdate',
+        handler='certificate_request',
+    )
+
     cmp_certconf = Event(
         key='cmp_certconf',
         protocol='cmp',
@@ -106,11 +113,7 @@ class Events:
         """Return all operations for the given protocol."""
         normalized_protocol = (protocol or '').strip().lower()
         return sorted(
-            {
-                event.operation
-                for event in cls.all()
-                if event.protocol == normalized_protocol and event.operation
-            }
+            {event.operation for event in cls.all() if event.protocol == normalized_protocol and event.operation}
         )
 
     @classmethod

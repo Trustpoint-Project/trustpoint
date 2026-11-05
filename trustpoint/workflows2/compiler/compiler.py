@@ -9,6 +9,7 @@ from typing import Any, ClassVar, Literal, NoReturn, cast
 
 from workflows2.compiler.step_types import StepTypes
 from workflows2.events.registry import get_event_registry
+from workflows2.events.triggers import Triggers
 
 from .conditions import compile_condition
 from .errors import CompileError
@@ -82,13 +83,17 @@ class TriggerIR:
 
     on: str
     sources: dict[str, Any]
+    phase: str = 'before_issuance'
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the trigger IR to a plain dictionary."""
-        return {
+        result = {
             'on': self.on,
             'sources': self.sources,
         }
+        if self.phase == 'after_issuance':
+            result['phase'] = self.phase
+        return result
 
 
 @dataclass(frozen=True)
@@ -234,6 +239,14 @@ class WorkflowCompiler:
                 path=f'{path}.on',
             )
 
+        phase = trigger.get('phase', 'before_issuance')
+        if phase not in ('before_issuance', 'after_issuance'):
+            msg = '"trigger.phase" must be before_issuance or after_issuance'
+            raise CompileError(msg, path=f'{path}.phase')
+        if 'phase' in trigger and on not in Triggers.ENROLLMENT:
+            msg = '"trigger.phase" is only supported for protocol enrollment triggers'
+            raise CompileError(msg, path=f'{path}.phase')
+
         sources = trigger.get('sources', {}) or {}
         if not isinstance(sources, dict):
             msg = '"trigger.sources" must be a mapping'
@@ -263,6 +276,7 @@ class WorkflowCompiler:
 
         return TriggerIR(
             on=on,
+            phase=phase,
             sources={
                 'trustpoint': trustpoint,
                 'ca_ids': ca_ids,
@@ -272,6 +286,11 @@ class WorkflowCompiler:
         )
 
     def _validate_steps_allowed_for_trigger(self, trigger_ir: TriggerIR, steps_ir: dict[str, Any]) -> None:
+        if trigger_ir.phase == 'after_issuance':
+            for step_id, step in steps_ir.items():
+                if step.get('type') == StepTypes.APPROVAL:
+                    msg = 'Approval is not available after certificate issuance'
+                    raise CompileError(msg, path=f'workflow.steps.{step_id}.type')
         spec = get_event_registry().get(trigger_ir.on)
         if spec is None:
             return

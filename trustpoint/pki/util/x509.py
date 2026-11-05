@@ -5,15 +5,17 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import itertools
 import logging
 import urllib.parse
 from datetime import UTC
+from ipaddress import ip_address
 from typing import TYPE_CHECKING, TypeGuard, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 try:
     from cryptography.hazmat.primitives.asymmetric import mldsa
@@ -26,12 +28,12 @@ from cryptography.x509 import load_pem_x509_certificate
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos, PrivateKey
-from trustpoint_core.oid import NamedCurve
 
 from crypto.application.private_keys import ManagedECPrivateKey, ManagedMLDSAPrivateKey, ManagedRSAPrivateKey
 from crypto.models import CryptoManagedKeyModel, CryptoProviderSoftwareConfigModel
 from management.models import SecurityConfig
 from pki.models import CaModel, CredentialModel
+from pki.security_policy import CryptographicPolicy, enforce_cryptographic_policy, public_key_facts, signature_facts
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
@@ -95,9 +97,7 @@ def _unwrap_mldsa_managed_key(private_key: object) -> object:
         msg = f'Only software-backed managed ML-DSA keys can be unwrapped, got {backend_kind!r}.'
         raise NotImplementedError(msg)
 
-    software_config = CryptoProviderSoftwareConfigModel.objects.get(
-        profile=managed_key_model.provider_profile
-    )
+    software_config = CryptoProviderSoftwareConfigModel.objects.get(profile=managed_key_model.provider_profile)
     profile = software_config.build_provider_profile()
 
     binding = managed_key_model.software_binding
@@ -168,7 +168,7 @@ class CertificateGenerator:
         Returns:
             Tuple of (certificate, private_key).
         """
-        one_day = datetime.timedelta(1, 0, 0)
+        one_day = dt.timedelta(1, 0, 0)
         if private_key is None:
             private_key = rsa.generate_private_key(
                 public_exponent=65537,
@@ -207,8 +207,8 @@ class CertificateGenerator:
                 ]
             )
         )
-        builder = builder.not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
-        builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * validity_days))
+        builder = builder.not_valid_before(dt.datetime.now(tz=dt.UTC) - one_day)
+        builder = builder.not_valid_after(dt.datetime.now(tz=dt.UTC) + (one_day * validity_days))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
         is_root_ca = issuer_private_key == private_key
@@ -273,11 +273,11 @@ class CertificateGenerator:
         Returns:
             Tuple of (certificate, private_key).
         """
-        one_day = datetime.timedelta(1, 0, 0)
+        one_day = dt.timedelta(1, 0, 0)
         if private_key is None:
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        not_valid_before = datetime.datetime.now(tz=datetime.UTC) - one_day
+        not_valid_before = dt.datetime.now(tz=dt.UTC) - one_day
         not_valid_after = not_valid_before + (one_day * validity_days)
 
         public_key = private_key.public_key()
@@ -332,24 +332,26 @@ class CertificateGenerator:
         """Get a test PKI chain with a specified depth (excluding root CA). depth=0 is a self-signed EE."""
         ee_extensions = [
             (x509.SubjectAlternativeName([x509.UniformResourceIdentifier('test_ee.alt')]), False),
-            (x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=False,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=True,
-                key_cert_sign=False,
-                crl_sign=False,
-                encipher_only=False,
-                decipher_only=False,
-            ), True),
+            (
+                x509.KeyUsage(
+                    digital_signature=True,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=True,
+                    key_cert_sign=False,
+                    crl_sign=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                True,
+            ),
         ]
-        if (chain_depth == 0):
+        if chain_depth == 0:
             # Create a self-signed EE
             ee_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
             ee_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Test End Entity')])
-            cert, _key = CertificateGenerator.create_ee(
-                ee_key, ee_name, 'Test End Entity', ee_key, ee_extensions)
+            cert, _key = CertificateGenerator.create_ee(ee_key, ee_name, 'Test End Entity', ee_key, ee_extensions)
             return ([cert], [ee_key])
 
         certs = []
@@ -362,9 +364,7 @@ class CertificateGenerator:
         for i in range(chain_depth - 1):
             ca_cn = f'Test Intermediate CA {i + 1}'
             parent_cn = str(parent_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
-            (cert, key) = CertificateGenerator.create_issuing_ca(
-                parent_key, parent_cn, ca_cn
-            )
+            (cert, key) = CertificateGenerator.create_issuing_ca(parent_key, parent_cn, ca_cn)
             parent_key = key
             parent_cert = cert
             certs.append(cert)
@@ -478,7 +478,7 @@ class NginxTLSClientCertExtractor:
             error_message = f'Invalid HTTP_SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-         # Extract intermediate CAs from NGINX variables
+        # Extract intermediate CAs from NGINX variables
         intermediate_cas = []
 
         for i in itertools.count():
@@ -494,80 +494,30 @@ class NginxTLSClientCertExtractor:
 
         return (client_cert, intermediate_cas)
 
+
 class CertificateVerifier:
     """Methods for verifying client, server, and CA certificates."""
 
     @staticmethod
-    def _check_rsa_key_size(certificate: x509.Certificate) -> None:
-        """Check if an RSA certificate meets the minimum key size requirement.
-
-        Non-RSA certificates (ECC, etc.) automatically pass this check.
-
-        Args:
-            certificate (x509.Certificate): The certificate to validate.
-
-        Raises:
-            ValueError: If the certificate is RSA but the key size is below the minimum,
-                       or if SecurityConfig is not configured.
-        """
-        security_config = SecurityConfig.objects.first()
-        if not security_config or not security_config.security_mode:
+    def _active_cryptographic_policy() -> CryptographicPolicy:
+        """Read one configuration snapshot for the whole verification operation."""
+        config = SecurityConfig.objects.first()
+        if config is None or not config.security_mode:
             msg = 'SecurityConfig or security_mode is not configured.'
             raise ValueError(msg)
-
-        public_key = certificate.public_key()
-
-        if isinstance(public_key, rsa.RSAPublicKey):
-            minimum_key_size = security_config.rsa_minimum_key_size
-            if minimum_key_size is None:
-                msg = 'RSA keys are not permitted by the active security policy.'
-                raise ValueError(msg)
-            if minimum_key_size > 0 and public_key.key_size < minimum_key_size:
-                err_msg = (
-                    f'RSA certificate key size ({public_key.key_size} bits) is below the minimum '
-                    f'required by security policy ({minimum_key_size} bits).'
-                )
-                raise ValueError(err_msg)
+        return CryptographicPolicy.from_config(config)
 
     @staticmethod
-    def _check_ecc_curve(certificate: x509.Certificate) -> None:
-        """Check if an ECC certificate uses a weak curve according to security policy.
-
-        RSA and other key types automatically pass this check.
-
-        Args:
-            certificate (x509.Certificate): The certificate to validate.
-
-        Raises:
-            ValueError: If the certificate uses an ECC curve listed as weak in security policy,
-                       or if SecurityConfig is not configured.
-        """
-        security_config = SecurityConfig.objects.first()
-        if not security_config or not security_config.security_mode:
-            msg = 'SecurityConfig or security_mode is not configured.'
-            raise ValueError(msg)
-
-        public_key = certificate.public_key()
-
-        if isinstance(public_key, ec.EllipticCurvePublicKey):
-            curve_name = public_key.curve.name
-            for not_permitted_curve_oid in security_config.not_permitted_ecc_curve_oids:
-                try:
-                    named_curve = NamedCurve.from_dotted_string(not_permitted_curve_oid)
-                except (KeyError, StopIteration):
-                    continue
-                if named_curve.ossl_curve_name == curve_name:
-                    err_msg = (
-                        f'ECC certificate uses a weak curve ({curve_name}) according to '
-                        f'security policy ({security_config.get_security_mode_display()}).'
-                    )
-                    raise ValueError(err_msg)
+    def _check_security_policy(certificate: x509.Certificate) -> None:
+        """Apply every cryptographic policy rule, including ML-DSA variants."""
+        enforce_cryptographic_policy(
+            CertificateVerifier._active_cryptographic_policy(),
+            key=public_key_facts(certificate.public_key()),
+            signature=signature_facts(certificate),
+        )
 
     @staticmethod
-    def _check_ca_key_usage(
-        certificate: x509.Certificate,
-        required_key_usage: x509.KeyUsage | None = None
-    ) -> None:
+    def _check_ca_key_usage(certificate: x509.Certificate, required_key_usage: x509.KeyUsage | None = None) -> None:
         """Check if a certificate has valid CA key usage.
 
         Validates that the certificate has:
@@ -626,34 +576,11 @@ class CertificateVerifier:
 
     @staticmethod
     def _check_signature_algorithm(certificate: x509.Certificate) -> None:
-        """Check if a certificate uses a weak signature algorithm according to security policy.
-
-        Args:
-            certificate (x509.Certificate): The certificate to validate.
-
-        Raises:
-            ValueError: If the certificate uses a signature algorithm listed as weak in security policy,
-                       or if SecurityConfig is not properly configured.
-        """
-        security_config = SecurityConfig.objects.first()
-        if not security_config or not security_config.security_mode:
-            msg = 'SecurityConfig or security_mode is not configured.'
-            raise ValueError(msg)
-
-        signature_algorithm_oid = certificate.signature_algorithm_oid
-
-        for weak_algo_oid in security_config.not_permitted_signature_algorithm_oids:
-            # Compare the certificate's signature algorithm OID against the stored weak OIDs
-            if weak_algo_oid == str(signature_algorithm_oid):
-                hash_algo = certificate.signature_hash_algorithm
-                algo_name = (
-                    hash_algo.__class__.__name__ if hash_algo else 'unknown'
-                )
-                err_msg = (
-                    f'Certificate uses a weak signature algorithm ({algo_name}) according to '
-                    f'security policy ({security_config.get_security_mode_display()}).'
-                )
-                raise ValueError(err_msg)
+        """Compatibility adapter for checking the signature's algorithm and digest."""
+        enforce_cryptographic_policy(
+            CertificateVerifier._active_cryptographic_policy(),
+            signature=signature_facts(certificate),
+        )
 
     @staticmethod
     def verify_server_cert(
@@ -661,7 +588,7 @@ class CertificateVerifier:
         subject: str,
         trusted_roots: list[x509.Certificate] | None = None,
         untrusted_intermediates: list[x509.Certificate] | None = None,
-        verification_time: datetime.datetime | None = None
+        verification_time: dt.datetime | None = None,
     ) -> list[x509.Certificate]:
         """Verifies a server's TLS certificate against a trusted certificate store.
 
@@ -698,9 +625,7 @@ class CertificateVerifier:
             ValueError: If the certificate is RSA but the key size is below the minimum required by security policy,
                 if the ECC curve is weak according to security policy, or if the signature algorithm is weak.
         """
-        CertificateVerifier._check_rsa_key_size(cert)
-        CertificateVerifier._check_ecc_curve(cert)
-        CertificateVerifier._check_signature_algorithm(cert)
+        CertificateVerifier._check_security_policy(cert)
 
         if trusted_roots is None:
             trusted_roots = []
@@ -708,14 +633,14 @@ class CertificateVerifier:
         trust_store = Store(trusted_roots)
 
         if verification_time is None:
-            verification_time = datetime.datetime.now(UTC)
+            verification_time = dt.datetime.now(UTC)
 
-        verifier = (
-            PolicyBuilder()
-            .store(trust_store)
-            .time(verification_time)
-            .build_server_verifier(x509.DNSName(subject))
-        )
+        try:
+            identity: x509.DNSName | x509.IPAddress = x509.IPAddress(ip_address(subject))
+        except ValueError:
+            identity = x509.DNSName(subject)
+
+        verifier = PolicyBuilder().store(trust_store).time(verification_time).build_server_verifier(identity)
 
         if untrusted_intermediates is None:
             untrusted_intermediates = []
@@ -731,55 +656,13 @@ class CertificateVerifier:
             issuer_cert: The issuer certificate containing the public key.
 
         Raises:
-            ValueError: If the signature verification fails or the hash algorithm is missing.
-            TypeError: If the issuer public key type is unsupported.
+            ValueError: If issuer names or the encoded certificate signature do not verify.
         """
-        issuer_public_key = issuer_cert.public_key()
-
-        is_mldsa = mldsa and isinstance(issuer_public_key, (
-            mldsa.MLDSA44PublicKey,
-            mldsa.MLDSA65PublicKey,
-            mldsa.MLDSA87PublicKey,
-        ))
-
-        hash_algorithm = cert.signature_hash_algorithm
-        if hash_algorithm is None and not is_mldsa:
-            err_msg = 'Certificate signature algorithm is not supported or is missing'
-            raise ValueError(err_msg)
-
-        if isinstance(issuer_public_key, rsa.RSAPublicKey):
-            try:
-                issuer_public_key.verify(
-                    cert.signature,
-                    cert.tbs_certificate_bytes,
-                    padding.PKCS1v15(),
-                    hash_algorithm,  # type: ignore[arg-type]
-                )
-            except Exception as e:
-                err_msg = f'Certificate signature verification failed: {e}'
-                raise ValueError(err_msg) from e
-        elif isinstance(issuer_public_key, ec.EllipticCurvePublicKey):
-            try:
-                issuer_public_key.verify(
-                    cert.signature,
-                    cert.tbs_certificate_bytes,
-                    ec.ECDSA(hash_algorithm),  # type: ignore[arg-type]
-                )
-            except Exception as e:
-                err_msg = f'Certificate signature verification failed: {e}'
-                raise ValueError(err_msg) from e
-        elif is_mldsa:
-            try:
-                issuer_public_key.verify(  # type: ignore[union-attr,call-arg]
-                    signature=cert.signature,
-                    data=cert.tbs_certificate_bytes,
-                )
-            except Exception as e:
-                err_msg = f'Certificate signature verification failed: {e}'
-                raise ValueError(err_msg) from e
-        else:
-            err_msg = f'Unsupported issuer public key type: {type(issuer_public_key)}'
-            raise TypeError(err_msg)
+        try:
+            cert.verify_directly_issued_by(issuer_cert)
+        except (InvalidSignature, ValueError, TypeError) as exc:
+            msg = f'Certificate signature verification failed: {exc}'
+            raise ValueError(msg) from exc
 
     @staticmethod
     def _try_verify_against_issuer(
@@ -876,7 +759,7 @@ class CertificateVerifier:
         cert: x509.Certificate,
         trusted_roots: list[x509.Certificate] | None = None,
         untrusted_intermediates: list[x509.Certificate] | None = None,
-        verification_time: datetime.datetime | None = None,
+        verification_time: dt.datetime | None = None,
         required_key_usage: x509.KeyUsage | None = None,
     ) -> list[x509.Certificate]:
         """Verifies a CA certificate against a trusted certificate store.
@@ -920,21 +803,16 @@ class CertificateVerifier:
         CertificateVerifier._check_ca_key_usage(cert, required_key_usage)
 
         # Validate certificate security properties
-        CertificateVerifier._check_rsa_key_size(cert)
-        CertificateVerifier._check_ecc_curve(cert)
-        CertificateVerifier._check_signature_algorithm(cert)
+        CertificateVerifier._check_security_policy(cert)
 
         if verification_time is None:
-            verification_time = datetime.datetime.now(UTC)
+            verification_time = dt.datetime.now(UTC)
 
         # Validate validity period
         not_before = cert.not_valid_before_utc
         not_after = cert.not_valid_after_utc
         if not (not_before <= verification_time <= not_after):
-            err_msg = (
-                f'Certificate is not valid at {verification_time}. '
-                f'Valid from {not_before} to {not_after}.'
-            )
+            err_msg = f'Certificate is not valid at {verification_time}. Valid from {not_before} to {not_after}.'
             raise ValueError(err_msg)
 
         if trusted_roots is None:

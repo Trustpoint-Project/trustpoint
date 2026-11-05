@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 
+from management.models import SecurityConfig
 from pki.forms.truststores import (
     TruststoreAddForm,
     _create_or_get_keyless_ca,
@@ -28,6 +29,15 @@ pytestmark = pytest.mark.django_db
 def _pem(*certificates: x509.Certificate) -> bytes:
     """Concatenate certificates into a single PEM bundle."""
     return b''.join(cert.public_bytes(serialization.Encoding.PEM) for cert in certificates)
+
+
+@pytest.fixture
+def security_config() -> SecurityConfig:
+    """Provide an explicit policy for successful trust-establishing imports."""
+    config = SecurityConfig(security_mode=SecurityConfig.SecurityModeChoices.LAB)
+    config.apply_security_settings(save=False)
+    config.save()
+    return config
 
 
 @pytest.fixture
@@ -167,7 +177,7 @@ class TestValidateAndCreateCaChain:
         _second, second_key = CertificateGenerator.create_root_ca('Unrelated B')
         leaf_b, _ = CertificateGenerator.create_issuing_ca(second_key, 'Unrelated B', 'Leaf B')
 
-        with pytest.raises(ValidationError, match='do not form a valid chain'):
+        with pytest.raises(ValidationError, match='do not form a single complete chain'):
             validate_and_create_ca_chain([leaf_a, leaf_b], TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN)
 
     def test_single_non_self_signed_certificate_is_incomplete(self) -> None:
@@ -190,10 +200,12 @@ class TestValidateAndCreateCaChain:
             intermediate_key, 'Missing Intermediate', 'Missing Leaf'
         )
 
-        with pytest.raises(ValidationError, match='do not form a valid chain'):
+        with pytest.raises(ValidationError, match='do not form a single complete chain'):
             validate_and_create_ca_chain([leaf, intermediate], TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN)
 
-    def test_valid_chain_creates_keyless_ca_hierarchy(self, chain: tuple[x509.Certificate, ...]) -> None:
+    def test_valid_chain_creates_keyless_ca_hierarchy(
+        self, chain: tuple[x509.Certificate, ...], security_config: SecurityConfig
+    ) -> None:
         """A full chain creates keyless CAs for every issuer above the leaf."""
         root, intermediate, leaf = chain
 
@@ -206,7 +218,7 @@ class TestValidateAndCreateCaChain:
         assert root_ca.parent_ca is None
         assert intermediate_ca.parent_ca == root_ca
 
-    def test_self_signed_root_only_chain_creates_no_parent_cas(self) -> None:
+    def test_self_signed_root_only_chain_creates_no_parent_cas(self, security_config: SecurityConfig) -> None:
         """A single self-signed root is a valid chain with no issuer above it."""
         root, _ = CertificateGenerator.create_root_ca('Solo Root')
 

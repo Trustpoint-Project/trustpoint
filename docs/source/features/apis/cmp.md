@@ -7,9 +7,11 @@ Certificate Management Protocol (CMP) is a standard PKI protocol defined in RFC 
 Trustpoint implements CMP endpoints that allow devices and clients to:
 
 - Request initial certificates (Initialization Request - IR)
-- Request certificate updates (Key Update Request - KUR / Certificate Request - CR)
+- Request additional certificates (Certificate Request - CR)
+- Update valid certificates (Key Update Request - KUR / Key Update Response - KUP)
 - Confirm certificate acceptance (Certificate Confirm - certConf)
 - Revoke certificates (Revocation Request - RR)
+- Retrieve domain CA certificates (General Message / Response - genm / genp)
 
 ## Base URL
 
@@ -21,7 +23,30 @@ https://<trustpoint-host>/.well-known/cmp/
 
 ## URL Structure
 
-Trustpoint supports flexible CMP URL structures according to RFC 9480 Section 3.3:
+RFC 9480 Section 3.3 and RFC 9483 Section 6.1 define the following URI shapes:
+
+```
+/.well-known/cmp
+/.well-known/cmp/<operation>
+/.well-known/cmp/p/<name>
+/.well-known/cmp/p/<name>/<operation>
+```
+
+`<name>` is one path segment whose meaning is configured by the server. Trustpoint
+can encode a domain and profile in that segment as `<domain>~<cert_profile>`.
+For example, the standard form for a key update is:
+
+```
+POST /.well-known/cmp/p/production~tls_server/keyupdate
+```
+
+The HTTP operation label is `keyupdate`, while the request and response bodies are
+`kur` and `kup`. Send `pollReq` and `certConf` to the same enrollment endpoint,
+including its `/keyupdate` suffix. Operation labels are optional; when absent,
+Trustpoint infers the operation from the CMP body.
+
+Trustpoint accepts the routes below. Separate domain and profile path segments
+are compatibility extensions beyond the standard URI shapes above.
 
 ### Basic Endpoints
 
@@ -61,7 +86,7 @@ POST /.well-known/cmp/p/<domain>~<cert_profile>/<operation>
 |-----------|-------------|----------|---------|
 | `domain` | The Trustpoint domain name | No | `production`, `iot_domain` |
 | `cert_profile` | Certificate profile identifier | No | `device_cert`, `server_cert` |
-| `operation` | CMP operation type | No | `ir`, `cr`, `kur`, `rr` |
+| `operation` | HTTP operation label | No | `initialization`, `certification`, `keyupdate`, `revocation` |
 
 **Special domain values:**
 - `.` or `_` represents an empty domain segment (default domain)
@@ -70,11 +95,14 @@ POST /.well-known/cmp/p/<domain>~<cert_profile>/<operation>
 
 | Operation | Description | RFC Reference |
 |-----------|-------------|---------------|
-| `ir` | Initialization Request - Request initial certificate | RFC 4210 Section 5.1.1 |
-| `cr` | Certificate Request - Request certificate | RFC 4210 Section 5.1.2 |
-| `kur` | Key Update Request - Update certificate with new key | RFC 4210 Section 5.1.8 |
-| `rr` | Revocation Request - Revoke a certificate | RFC 4210 Section 5.1.11 |
-| `certConf` | Certificate Confirmation - Confirm receipt of certificate | RFC 4210 Section 5.1.13 |
+| `initialization` | Initialization Request / Response (`ir` / `ip`) | RFC 9483 Section 4.1.1 |
+| `certification` | Certificate Request / Response (`cr` / `cp`) | RFC 9483 Section 4.1.2 |
+| `keyupdate` | Key Update Request / Response (`kur` / `kup`) | RFC 9483 Section 4.1.3 |
+| `revocation` | Revocation Request / Response (`rr` / `rp`) | RFC 9483 Section 4.2 |
+| `getcacerts` | CA certificate retrieval (`genm` / `genp`, `id-it-caCerts`) | RFC 9483 Section 4.3.1 |
+
+`certConf` and `pollReq` are follow-up message bodies, not separate HTTP operation
+labels. Use the endpoint of the original enrollment operation for both.
 
 ## Request Format
 
@@ -146,6 +174,21 @@ Devices can authenticate using their Initial Device Identifier (IDevID) certific
 
 ## Examples
 
+Select **Permitted CMP HMAC algorithms** in Management → Settings → Advanced security settings
+(`SecurityConfig.permitted_cmp_hmac_algorithms`). The selected algorithm OIDs determine which
+shared-secret requests are accepted; an empty selection disables CMP shared-secret authentication.
+The Lab and Brownfield presets select HMAC-SHA1, HMAC-SHA256, HMAC-SHA384, and HMAC-SHA512.
+Industrial, Hardened, and Critical select SHA256/384/512 and prevent enabling other algorithms.
+Lab / Custom allows selecting all implemented HMACs, including SHA224, SHA3 variants, and MD5.
+
+OpenSSL defaults to HMAC-SHA1. Select it to accept that default, or explicitly set
+`-mac hmacWithSHA256` when HMAC-SHA256 is permitted by your policy.
+The environment restriction `TP_SECURITY_PERMITTED_CMP_HMAC_ALGORITHMS` accepts comma-separated
+names such as `HMAC_SHA384,HMAC_SHA512`; an empty value disables all shared-secret MACs.
+Environment synchronization may only restrict the selected preset, except in Lab / Custom.
+The previous `TP_SECURITY_ALLOW_CMP_HMAC_SHA1` restriction remains supported for compatibility.
+The CMP MAC policy is separate from certificate signature hashes and the PBM one-way function.
+
 ### Example 1: Initial Certificate Request with Shared Secret
 
 ```bash
@@ -154,6 +197,7 @@ openssl cmp \
   -server https://trustpoint.example.com/.well-known/cmp/p/production \
   -ref device-12345 \
   -secret pass:MySharedSecret \
+  -mac hmacWithSHA256 \
   -subject "/CN=Device 12345" \
   -newkey device_key.pem \
   -certout device_cert.pem \
@@ -168,6 +212,7 @@ openssl cmp \
   -server https://trustpoint.example.com/.well-known/cmp/p/~iot_device \
   -ref device-12345 \
   -secret pass:MySharedSecret \
+  -mac hmacWithSHA256 \
   -subject "/CN=IoT Device 12345" \
   -newkey device_key.pem \
   -certout device_cert.pem
@@ -175,10 +220,24 @@ openssl cmp \
 
 ### Example 3: Key Update Request
 
+Use the certificate being updated to sign the request. It must be active, issued by
+the addressed CA, and associated with the authenticated device and domain. The
+requested subject and SAN must preserve the existing identity; the selected
+certificate profile must preserve that identity as well. The optional CRMF
+`oldCertID` control must identify the signing certificate. PBM-protected key
+updates are rejected.
+
+The HTTP operation label is `keyupdate`; `kur` and `kup` are CMP body types.
+The response uses `kup`, including `waiting` and authenticated request rejection
+responses. Send subsequent polling and confirmation messages to the same endpoint,
+using the original signing certificate. Both implicit and explicit confirmation
+are supported. Successful updates leave the old certificate valid until its normal
+expiry or an explicit revocation.
+
 ```bash
 openssl cmp \
   -cmd kur \
-  -server https://trustpoint.example.com/.well-known/cmp/p/production/kur \
+  -server https://trustpoint.example.com/.well-known/cmp/p/production~tls_server/keyupdate \
   -cert current_cert.pem \
   -key current_key.pem \
   -newkey new_key.pem \
@@ -190,10 +249,41 @@ openssl cmp \
 ```bash
 openssl cmp \
   -cmd rr \
-  -server https://trustpoint.example.com/.well-known/cmp/p/production/rr \
+  -server https://trustpoint.example.com/.well-known/cmp/p/production/revocation \
   -cert cert_to_revoke.pem \
   -key cert_key.pem
 ```
+
+### Example 5: Retrieve CA Certificates
+
+Send a signed general message containing exactly one `InfoTypeAndValue` with
+`infoType` set to `id-it-caCerts` (`1.3.6.1.5.5.7.4.17`) and no `infoValue`.
+The HTTP operation label is `getcacerts`. For example:
+
+```bash
+openssl cmp \
+  -cmd genm -infotype caCerts \
+  -server https://trustpoint.example.com/.well-known/cmp/p/production/getcacerts \
+  -tls_used -tls_trusted https_root_ca.pem \
+  -cert current_cert.pem -key current_key.pem \
+  -trusted cmp_root_ca.pem \
+  -cacertsout ca_certificates.pem
+```
+
+The request must be signed with an active Trustpoint-issued application or domain
+certificate belonging to the requested domain. Shared-secret and unprotected
+requests are rejected. If the domain label is omitted, authentication determines
+the device's domain. No certificate profile is required.
+
+The signed `genp` response contains the domain's issuing CA certificate and its
+chain, plus any prepared rollover chain, with duplicates removed. Its single
+`InfoTypeAndValue` uses the same OID and carries a DER sequence of `CMPCertificate`
+values; `infoValue` is omitted when the certificate list is empty. The response
+includes its signing certificate and chain in `extraCerts`.
+
+This operation currently requires a local CA signing credential. It does not
+issue certificates, consume onboarding secrets, or create enrollment transactions.
+Other general-message OIDs are not implemented and receive CMP error responses.
 
 ## Error Handling
 
@@ -221,13 +311,15 @@ Detailed error information is provided in the PKIStatusInfo structure within the
 
 ## Integration with Trustpoint Workflows
 
-CMP requests can trigger Trustpoint Workflow2 approval processes for:
+The registered CMP request triggers are `cmp.initialization`, `cmp.certification`,
+`cmp.keyupdate`, and `cmp.certconf`. Enrollment and key update workflows can gate issuance and
+use CMP transaction/polling handling while waiting for approval. Certificate
+confirmation has its own trigger.
 
-- Certificate issuance
-- Certificate renewal
-- Certificate revocation
-
-Workflows allow automated or manual approval based on configurable policies.
+There is no registered CMP revocation-request trigger. A `certificate.revoked`
+lifecycle event reports a revocation; it is not a pre-revocation approval gate.
+See the [workflow guide](../workflows/index.md) for the available triggers and
+their exact request/response behavior.
 
 ## Further Reading
 

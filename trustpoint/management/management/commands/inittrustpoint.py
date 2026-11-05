@@ -7,8 +7,8 @@ import io
 from pathlib import Path
 
 from django.conf import settings as django_settings
-from django.core.management import call_command
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandParser
 from django.utils.translation import gettext as _
 

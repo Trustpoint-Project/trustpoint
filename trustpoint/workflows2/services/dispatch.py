@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Dispatch workflow runs from incoming events using inline or worker execution."""
+
 from __future__ import annotations
 
 import time
@@ -18,6 +19,7 @@ from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.engine.context import RuntimeContext
 from workflows2.engine.eval import eval_condition
 from workflows2.engine.executor import WorkflowExecutor
+from workflows2.events.triggers import Triggers
 from workflows2.models import (
     Workflow2Definition,
     Workflow2Instance,
@@ -309,14 +311,15 @@ class WorkflowDispatchService:
                 return existing
 
         try:
-            return Workflow2Run.objects.create(
-                trigger_on=on,
-                event_json=event,
-                source_json=asdict(source),
-                idempotency_key=normalized_idempotency_key,
-                status=Workflow2Run.STATUS_QUEUED,
-                finalized=False,
-            )
+            with transaction.atomic():
+                return Workflow2Run.objects.create(
+                    trigger_on=on,
+                    event_json=event,
+                    source_json=asdict(source),
+                    idempotency_key=normalized_idempotency_key,
+                    status=Workflow2Run.STATUS_QUEUED,
+                    finalized=False,
+                )
         except IntegrityError:
             if not normalized_idempotency_key:
                 raise
@@ -410,6 +413,11 @@ class WorkflowDispatchService:
                 continue
 
             trig = ir.get('trigger', {}) if isinstance(ir, dict) else {}
+            if on in Triggers.ENROLLMENT and trig.get('phase', 'before_issuance') != event.get(
+                'phase',
+                'before_issuance',
+            ):
+                continue
             sources = trig.get('sources', {}) if isinstance(trig, dict) else {}
             if not self._matches_sources(sources, source):
                 continue

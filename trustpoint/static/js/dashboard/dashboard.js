@@ -1,902 +1,396 @@
-function formatDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+/* Copyright (c) 2026 The Trustpoint Project Authors; SPDX-License-Identifier: MIT */
+/* Dashboard: tab navigation, overview, notifications, security and analytics. */
 
-function generatePeriodDate(period) {
-  const today = new Date();
-  const periodStartDate = new Date(today);
-  if (period === "today") {
-    return formatDate(periodStartDate);
-  } else if (period === "last_week") {
-    periodStartDate.setDate(periodStartDate.getDate() - 7);
-  } else if (period === "last_month") {
-    periodStartDate.setMonth(periodStartDate.getMonth() - 1);
-  } else {
-    return "2023-01-01";
-  }
+// Use the same strftime pattern and timezone as the server's user date formatter.
+const formatDashboardDate = (() => {
+  const root = document.getElementById('dashboard');
+  const pattern = root?.dataset.dateFormat || '%Y-%m-%d %H:%M:%S';
+  const timeZone = root?.dataset.timezone || 'UTC';
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  });
+  const monthFormatter = /%[bB]/.test(pattern) ? new Intl.DateTimeFormat('en-US', {
+    timeZone, month: pattern.includes('%b') ? 'short' : 'long'
+  }) : null;
+  return value => {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const parts = Object.fromEntries(formatter.formatToParts(date).map(part => [part.type, part.value]));
+    const hour = Number(parts.hour);
+    const tokens = {
+      '%Y': parts.year.padStart(4, '0'), '%m': parts.month, '%d': parts.day,
+      '%H': parts.hour, '%M': parts.minute, '%S': parts.second,
+      '%I': String(hour % 12 || 12).padStart(2, '0'), '%p': hour < 12 ? 'AM' : 'PM',
+      '%b': monthFormatter?.format(date), '%B': monthFormatter?.format(date)
+    };
+    return pattern.replace(/%[YmdHMSIpbB]/g, token => tokens[token]);
+  };
+})();
 
-  return formatDate(periodStartDate);
-}
+// Tab navigation is independent of API fetches.
+  (function () {
+    'use strict';
+    const root = document.getElementById('dashboard');
+    if (!root) return;
+    const panelIds = {
+      overview: 'dashboard-overview',
+      certificates: 'dashboard-certificates',
+      devices: 'dashboard-devices-panel',
+      cas: 'dashboard-cas-panel'
+    };
+    const buttons = Array.from(root.querySelectorAll('[data-dashboard-tab]'));
+    const panels = Object.fromEntries(
+      Object.entries(panelIds).map(([name, id]) => [name, document.getElementById(id)])
+    );
 
-function generateReferenceDate(preset) {
-  const today = new Date();
-  const referenceDate = new Date(today);
-
-  if (preset === "in_7_days") {
-    referenceDate.setDate(referenceDate.getDate() + 7);
-  } else if (preset === "in_30_days") {
-    referenceDate.setDate(referenceDate.getDate() + 30);
-  }
-
-  return formatDate(referenceDate);
-}
-
-function getDashboardRequestParams(filterType, preset = "", options = {}) {
-  if (filterType === "date_range") {
-    const params = {};
-
-    if (options.startDate) {
-      params.start_date = options.startDate;
-    }
-
-    if (options.endDate) {
-      params.end_date = options.endDate;
-    }
-
-    return params;
-  }
-
-  if (filterType === "period") {
-    return { start_date: generatePeriodDate(preset) };
-  }
-
-  if (filterType === "as_of") {
-    return { reference_date: generateReferenceDate(preset) };
-  }
-
-  return {};
-}
-
-async function fetchDashboardData(requestParams = {}) {
-  try {
-    const queryParams = new URLSearchParams();
-
-    Object.entries(requestParams).forEach(([key, value]) => {
-      if (value) {
-        queryParams.set(key, value);
+    function activate(name, save = true) {
+      if (!Object.prototype.hasOwnProperty.call(panelIds, name)) name = 'overview';
+      buttons.forEach(button => {
+        const selected = button.dataset.dashboardTab === name;
+        button.classList.toggle('is-active', selected);
+        button.setAttribute('aria-selected', String(selected));
+        button.setAttribute('tabindex', selected ? '0' : '-1');
+      });
+      Object.entries(panels).forEach(([key, panel]) => {
+        if (panel) panel.hidden = key !== name;
+      });
+      root.dataset.activeTab = name;
+      const detailControls = document.getElementById('dashboard-detail-controls');
+      if (detailControls) detailControls.hidden = name === 'overview' || name === 'devices';
+      if (save) {
+        root.dispatchEvent(new CustomEvent('dashboard:tab-changed', {detail:{tab:name}}));
+        try { localStorage.setItem('trustpoint.dashboard.tab', name); } catch (_) { /* storage optional */ }
       }
-    });
-
-    const queryString = queryParams.toString();
-    const url = queryString ? `/home/dashboard_data?${queryString}` : "/home/dashboard_data";
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
     }
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching dashboard data:", error);
-    return null;
-  }
-}
-
-function updateDeltaIcon(id, value) {
-  const valueEl = document.getElementById(id);
-  if (!valueEl) return;
-
-  const iconEl = valueEl.nextElementSibling;
-  if (!iconEl) return;
-
-  const num = parseFloat(value);
-
-  if (num > 0) {
-    iconEl.classList.remove("bi-caret-down-fill", "bi-dash-lg");
-    iconEl.classList.add("bi-caret-up-fill");
-  } else if (num < 0) {
-    iconEl.classList.remove("bi-caret-up-fill", "bi-dash-lg");
-    iconEl.classList.add("bi-caret-down-fill");
-  } else {
-    iconEl.classList.remove("bi-caret-up-fill", "bi-caret-down-fill");
-    iconEl.classList.add("bi-dash-lg");
-  }
-}
-
-async function loadDashboardData(){
-  try{
-    const [todayData, weekData, totalData] = await Promise.all([
-      fetchDashboardData({ start_date: generatePeriodDate('today') }),
-      fetchDashboardData({ start_date: generatePeriodDate('last_week') }),
-      fetchDashboardData({ start_date: generatePeriodDate('total') })
-    ]);
-
-    const event = new CustomEvent('dashboardData', {
-      detail:{
-        today: todayData,
-        week: weekData,
-        total: totalData
-      }
+    // Use delegated clicks, so an unrelated JS exception cannot disable navigation.
+    root.querySelector('.dashboard-tabs').addEventListener('click', event => {
+      const button = event.target.closest('[data-dashboard-tab]');
+      if (button && root.contains(button)) activate(button.dataset.dashboardTab);
     });
+    root.querySelector('.dashboard-tabs').addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      const current = buttons.indexOf(document.activeElement);
+      if (current < 0) return;
+      event.preventDefault();
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 :
+        (current + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+      activate(buttons[next].dataset.dashboardTab);
+      buttons[next].focus();
+    });
+    let initial = 'overview';
+    try { initial = localStorage.getItem('trustpoint.dashboard.tab') || 'overview'; } catch (_) { /* storage optional */ }
+    activate(initial, false);
+    root.dataset.activeTab = initial;
+  })();
 
-    document.dispatchEvent(event);
-  }catch(error){
-    console.error("Error loadDashboardEvent", error)
+
+/* Copyright (c) 2026 The Trustpoint Project Authors; SPDX-License-Identifier: MIT */
+(() => {
+  'use strict';
+  const root = document.getElementById('dashboard');
+  if (!root) return;
+  const endpoint = root.dataset.overviewUrl;
+  const notificationsEndpoint = root.dataset.notificationsUrl;
+  const activityDays = document.getElementById('dashboard-activity-days');
+  const horizon = document.getElementById('dashboard-expiry-days');
+  const freshness = document.getElementById('dashboard-freshness');
+  const colors = {valid:'#198754',expiring:'#e1a12c',expired:'#dc3545',revoked:'#7657a6',not_yet_valid:'#6c757d'};
+  const labels = {valid:'Valid',expiring:'Expiring',expired:'Expired',revoked:'Revoked',not_yet_valid:'Not yet valid'};
+  const keys = Object.keys(labels);
+  let inFlight = null;
+  let lastSuccess = null;
+
+  function renderNotifications(data) {
+    const counts = data.alerts.counts;
+    document.getElementById('dashboard-alerts-counts').textContent =
+      `${counts.critical} Critical · ${counts.warning} Warning · ${data.alerts.total} open`;
+    function fillList(id, items, emptyText) {
+      const list = document.getElementById(id);
+      list.replaceChildren();
+      if (!items.length) { const p = document.createElement('p'); p.className='text-body-secondary mb-0'; p.textContent=emptyText; list.append(p); return; }
+      items.forEach(item => {
+        const a = document.createElement('a'); a.className='list-group-item list-group-item-action';
+        // Links come from the same-origin Django reverse() output, never from the notification body.
+        const url = new URL(item.url, window.location.origin);
+        if (url.origin !== window.location.origin) return;
+        a.href=url.pathname+url.search;
+        const label=document.createElement('div'); label.className='fw-semibold'; label.textContent=item.title;
+        const info=document.createElement('small'); info.className='text-body-secondary';
+        info.textContent=`${item.source}${item.associated_object ? ' · '+item.associated_object : ''} · ${formatDashboardDate(item.created_at)}`;
+        a.append(label,info);list.append(a);
+      });
+    }
+    fillList('dashboard-alerts-list',data.alerts.items,'No unresolved critical or warning notifications.');
+    fillList('dashboard-activity-list',data.activity.items,'No Info or Setup notifications in this period.');
+
   }
-}
 
-function normalizeChartValue(value) {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? numericValue : 0;
-}
+  let notificationsInFlight = null;
+  async function refreshNotifications() {
+    if (notificationsInFlight) notificationsInFlight.abort();
+    const req = new AbortController(); notificationsInFlight=req;
+    try {
+      const url=new URL(notificationsEndpoint, window.location.href);
+      url.searchParams.set('activity_days',activityDays.value);
+      const response=await fetch(url,{signal:req.signal,credentials:'same-origin',headers:{Accept:'application/json'}});
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data=await response.json();
+      if(req===notificationsInFlight && data.alerts && data.activity) renderNotifications(data);
+    } catch (e) {
+      if(e.name!=='AbortError') document.getElementById('dashboard-alerts-counts').textContent='Notification data unavailable or stale';
+    } finally {if(req===notificationsInFlight) notificationsInFlight=null;}
+  }
 
-function truncateChartLabel(label, maxLength = 34) {
-  const safeLabel = String(label || 'Unknown');
-  return safeLabel.length > maxLength
-    ? `${safeLabel.slice(0, maxLength - 1)}…`
-    : safeLabel;
-}
+  function render(data) {
+    const c = data.certificates;
+    document.getElementById('dashboard-total').textContent = c.total;
+    document.getElementById('dashboard-expiring').textContent = c.expiring;
+    document.getElementById('dashboard-expiring-label').textContent = `Expiring in ${data.expiry_days} days`;
+    document.getElementById('dashboard-devices').textContent = data.devices.managed;
+    document.getElementById('dashboard-cas').textContent = data.issuing_cas.enabled;
+    document.getElementById('dashboard-devices-detail').textContent = data.devices.managed;
+    document.getElementById('dashboard-cas-detail').textContent = data.issuing_cas.enabled;
+    const breakdown=document.getElementById('dashboard-certs-breakdown');
+    breakdown.replaceChildren();
+    keys.forEach(key=>{
+      const outer=document.createElement('div');outer.className='col-6 col-lg';
+      const tile=document.createElement('div');tile.className='dashboard-health-tile h-100';
+      const label=document.createElement('div');label.className='dashboard-health-title text-body-secondary';label.textContent=labels[key];
+      const value=document.createElement('div');value.className='dashboard-health-value';value.textContent=String(c[key]);
+      tile.style.borderTop=`4px solid ${colors[key]}`;tile.append(label,value);outer.append(tile);breakdown.append(outer);
+    });
+    const bar = document.getElementById('dashboard-health-bar');
+    const legend = document.getElementById('dashboard-health-legend');
+    bar.replaceChildren(); legend.replaceChildren();
+    keys.forEach(key => {
+      const part = Number(c[key]) || 0;
+      if (part > 0) {
+        const segment = document.createElement('span');
+        segment.style.flex = `${part} 1 0`;
+        segment.style.background = colors[key];
+        segment.title = `${labels[key]}: ${part}`;
+        bar.appendChild(segment);
+      }
+      const entry = document.createElement('span');
+      entry.textContent = `${labels[key]}: ${part}`;
+      entry.style.borderLeft = `8px solid ${colors[key]}`;
+      entry.style.paddingLeft = '8px';
+      legend.appendChild(entry);
+    });
+    document.getElementById('dashboard-health-note').textContent = c.unclassified
+      ? `${c.unclassified} certificate(s) not classified; review invalid validity records.`
+      : `${c.total} certificates classified as of ${formatDashboardDate(data.as_of)}.`;
+    bar.setAttribute('aria-label', keys.map(k => `${labels[k]} ${c[k]}`).join(', '));
+    lastSuccess = new Date();
+    freshness.textContent = `Updated ${formatDashboardDate(lastSuccess)}`;
+  }
 
-function getVisibleChartValues(chart) {
-  const dataset = chart?.data?.datasets?.[0];
-  if (!dataset || !Array.isArray(dataset.data)) {
+  function updateExpiryLinks() {
+    const url = new URL(root.dataset.certificateListUrl, window.location.origin);
+    url.searchParams.set('status', 'ok');
+    url.searchParams.set('expiry_window', `${horizon.value}_days`);
+    const href = url.pathname + url.search;
+    document.getElementById('dashboard-expiring-card').href = href;
+    const detailLink = document.getElementById('dashboard-expiring-link');
+    detailLink.href = href;
+    detailLink.textContent = `View certificates expiring in ${horizon.value} days`;
+  }
+
+  async function refresh() {
+    updateExpiryLinks();
+    if (inFlight) inFlight.abort();
+    const request = new AbortController();
+    inFlight = request;
+    freshness.textContent = 'Refreshing...';
+    try {
+      const url = new URL(endpoint, window.location.href);
+      url.searchParams.set('expiry_days', horizon.value);
+      const response = await fetch(url, {signal: request.signal, headers: {'Accept':'application/json'}, credentials:'same-origin'});
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (request !== inFlight) return;
+      if (!data.certificates || typeof data.certificates.total !== 'number') throw new Error('Invalid payload');
+      render(data);
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        freshness.textContent = lastSuccess ? `Stale data — last updated ${formatDashboardDate(lastSuccess)}` : 'Data unavailable';
+      }
+    } finally {
+      if (inFlight === request) inFlight = null;
+    }
+  }
+  // Tab interactions are handled by the navigation block above.
+  try { const saved = window.localStorage.getItem('trustpoint.dashboard.expiry_days'); if (['7','30','90'].includes(saved)) horizon.value = saved; } catch (_) { /* storage unavailable */ }
+  horizon.addEventListener('change', () => { try { window.localStorage.setItem('trustpoint.dashboard.expiry_days', horizon.value); } catch (_) { /* optional */ } refresh(); });
+  try { const saved=localStorage.getItem('trustpoint.dashboard.activity_days'); if(['7','30','90'].includes(saved)) activityDays.value=saved; } catch (_) { /* optional */ }
+  activityDays.addEventListener('change',()=>{try{localStorage.setItem('trustpoint.dashboard.activity_days',activityDays.value);}catch(_){} refreshNotifications();});
+  document.getElementById('dashboard-refresh').addEventListener('click', () => { refresh(); refreshNotifications(); });
+  window.setInterval(()=>{if(!document.hidden)refreshNotifications();},60*1000);
+  window.setInterval(() => { if (!document.hidden) refresh(); }, 5 * 60 * 1000);
+  refresh();
+  refreshNotifications();
+})();
+
+// Additional read-only TLS and crypto-provider indicators.
+(() => {
+  const root = document.getElementById('dashboard');
+  const host = document.getElementById('dashboard-security-indicators');
+  if (!root || !host) return;
+  const card = (title, value, detail, href) => {
+    const outer = document.createElement('div'); outer.className = 'col-12 col-md-4';
+    const node = document.createElement('a');
+    node.className = 'border rounded p-3 h-100 d-block text-body text-decoration-none dashboard-security-card';
+    node.href = href;
+    node.setAttribute('aria-label', `${title}: ${value}. Open settings`);
+    const heading = document.createElement('div'); heading.className = 'fw-semibold'; heading.textContent = title;
+    const main = document.createElement('div'); main.className = 'fs-5'; main.textContent = value;
+    const desc = document.createElement('div'); desc.className = 'small text-body-secondary'; desc.textContent = detail;
+    const action = document.createElement('div'); action.className = 'small text-primary mt-2'; action.textContent = 'Open settings ↗';
+    node.append(heading, main, desc, action); outer.append(node); return outer;
+  };
+  async function refresh() {
+    try {
+      const response = await fetch(root.dataset.securityUrl, {credentials:'same-origin',headers:{Accept:'application/json'}});
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const tls = data.tls_certificate;
+      const detail = tls.expires_at ? `Expires ${formatDashboardDate(tls.expires_at)} · ${tls.days_remaining} days remaining` : 'No active TLS certificate found';
+      host.replaceChildren(
+        card('Active TLS certificate', tls.state.replaceAll('_',' '), detail, root.dataset.tlsSettingsUrl),
+        card('Crypto backend', data.crypto_backend.kind, `Last capability probe: ${data.crypto_backend.probe_status}`, root.dataset.cryptoSettingsUrl),
+        card('Security configuration', data.security_config?.label || 'Not configured', 'Configured security mode (not a security score)', root.dataset.securitySettingsUrl)
+      );
+    } catch (error) {host.textContent = `Security indicators unavailable (${error.message}).`;}
+  }
+  refresh();
+  document.getElementById('dashboard-refresh')?.addEventListener('click', refresh);
+})();
+
+
+/* Copyright (c) 2026 The Trustpoint Project Authors; SPDX-License-Identifier: MIT */
+(() => {
+  'use strict';
+  const root = document.getElementById('dashboard');
+  if (!root) return;
+  const url = root.dataset.analyticsUrl;
+  const select = document.getElementById('dashboard-detail-activity-days');
+  const expiry = document.getElementById('dashboard-detail-expiry-days');
+  const names = {
+    by_profile:'Certificates by profile (period)',
+    by_issuing_ca:'Certificates issued by CA (period)',
+    by_status:'Certificates by status',
+    by_enrollment:'Devices by Enrollment Status',
+    by_domain_credential:'Domain Credentials · Onboarding Devices',
+    by_application_certificate:'Application Certificates · All Devices',
+    by_protocol:'Enrollment Protocols · Onboarding Devices',
+    by_domain:'Devices by domain', expiring_domain_credentials:'Expiring Domain Credentials · Onboarding Devices',
+    status:'Issuing CA Status', signature_suites:'Issuing CA Signature Suites', ca_types:'CA Configuration Types', crl_freshness:'Active CRL Freshness'
+  };
+  const labels = {
+    expiring_within_selected_horizon: 'Expiring within selected horizon',
+    no_onboarding: 'Without onboarding', pending: 'Pending onboarding', onboarded: 'Onboarded',
+    total: 'Total devices', none: 'None', valid: 'Valid',
+    expired: 'Expired', expired_or_revoked_only: 'Only expired/revoked certificates',
+    revoked: 'Revoked', not_yet_valid: 'Not yet valid',
+    no_domain_credential: 'No domain credential',
+    expiring_in_1_day: 'Expiring within 24 hours',
+    expiring_in_7_days: 'Expiring in 1–7 days',
+    expiring_in_30_days: 'Expiring in 8–30 days',
+    none: 'No application certificate',
+    active: 'Active / valid',
+    expiring: 'Expiring soon',
+    disabled: 'Disabled', current: 'Up to date', missing: 'No active CRL', no_certificate: 'Missing CA certificate',
+  };
+  const readable = text => labels[text] || String(text).replaceAll('_', ' ').replace(/\b\w/g, c=>c.toUpperCase());
+  const tabs = new Set(['certificates','devices','cas']);
+  let controller = null;
+  function rows(value) {
+    if (Array.isArray(value)) return value.map((x, i) => {
+      if (x && typeof x === 'object') {
+        const count = x.cert_count ?? x.device_count ?? x.onboarded_device_count ?? x.count ?? x.total;
+        const name = x.ca_name ?? x.domain_name ?? x.name ?? x.protocol ?? x.label ?? `Group ${i+1}`;
+        return {label:readable(name), count:Number(count), domainId:x.domain_id ?? null};
+      }
+      return {label:String(i+1), count:Number(x), domainId:null};
+    }).filter(x=>Number.isFinite(x.count));
+    if (value && typeof value==='object') return Object.entries(value).filter(([,v])=>typeof v==='number' && Number.isFinite(v)).map(([k,v])=>({label:readable(k),count:v,domainId:null,key:k}));
     return [];
   }
+  function render(tab, data) {
+    const host = document.getElementById('dashboard-analytics-'+tab);
+    if (!host) return;
+    host.replaceChildren();
 
-  return dataset.data
-    .map((value, index) => {
-      if (typeof chart.getDataVisibility === 'function' && !chart.getDataVisibility(index)) {
-        return 0;
-      }
-      return normalizeChartValue(value);
-    });
-}
-
-function getVisibleChartTotal(chart) {
-  return getVisibleChartValues(chart).reduce((sum, value) => sum + value, 0);
-}
-
-function hasVisibleChartData(chart) {
-  return getVisibleChartValues(chart).some(value => value > 0);
-}
-
-function toggleChartItemVisibility(chart, index, hiddenIndices = null) {
-  if (!chart || index == null || typeof chart.toggleDataVisibility !== 'function') {
-    return;
-  }
-
-  chart.toggleDataVisibility(index);
-
-  if (hiddenIndices) {
-    if (chart.getDataVisibility(index)) {
-      hiddenIndices.delete(index);
-    } else {
-      hiddenIndices.add(index);
-    }
-  }
-
-  chart.update();
-}
-
-function applyHiddenIndices(chart, hiddenIndices) {
-  if (!chart || !hiddenIndices?.size || typeof chart.toggleDataVisibility !== 'function') {
-    return;
-  }
-
-  hiddenIndices.forEach((index) => {
-    if (chart.getDataVisibility(index)) {
-      chart.toggleDataVisibility(index);
-    }
-  });
-
-  chart.update();
-}
-
-function renderBarLegend(legendEl, items, hiddenIndices, colorForIndex, onToggle) {
-  if (!legendEl) {
-    return;
-  }
-
-  legendEl.innerHTML = '';
-
-  if (!items.length) {
-    return;
-  }
-
-  const ul = document.createElement('ul');
-  ul.className = 'bar-chart-legend-list';
-
-  items.forEach((item, index) => {
-    const li = document.createElement('li');
-
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `bar-chart-legend-item${hiddenIndices.has(index) ? ' is-hidden' : ''}`;
-    button.title = `${item.fullLabel || item.label} (${item.value})`;
-    button.addEventListener('click', () => onToggle(index));
-
-    const dot = document.createElement('span');
-    dot.className = 'bar-chart-legend-dot';
-    dot.style.background = colorForIndex(index);
-
-    const label = document.createElement('span');
-    label.className = 'bar-chart-legend-label';
-    label.textContent = item.fullLabel || item.label;
-
-    const value = document.createElement('span');
-    value.className = 'bar-chart-legend-value';
-    value.textContent = item.value;
-
-    button.append(dot, label, value);
-    li.appendChild(button);
-    ul.appendChild(li);
-  });
-
-  legendEl.appendChild(ul);
-}
-
-function setBarChartContainerHeight(canvasEl, itemCount) {
-  const containerEl = canvasEl?.closest('.bar-chart-container');
-  const scrollContentEl = canvasEl?.closest('.bar-chart-scroll-content');
-  if (!containerEl || !scrollContentEl) {
-    return;
-  }
-
-  const minimumViewportHeight = 220;
-  const viewportHeight = Math.max(containerEl.clientHeight || 0, minimumViewportHeight);
-  const minimumContentHeight = viewportHeight;
-  const basePadding = 24;
-  const rowHeight = 44;
-  const calculatedHeight = itemCount > 0
-    ? basePadding + (itemCount * rowHeight)
-    : minimumContentHeight;
-
-  scrollContentEl.style.height = `${Math.max(minimumContentHeight, calculatedHeight)}px`;
-}
-
-function createHorizontalBarChart(
-  items,
-  canvasId,
-  legendId,
-  chartInstanceName,
-  hiddenIndices,
-  onToggle,
-  options = {}
-) {
-  // Farben immer beim Zeichnen neu auslesen
-  const style = getComputedStyle(document.documentElement);
-  const gridColor = style.getPropertyValue('--chart-grid-color').trim() || 'rgba(222, 226, 230, 0.2)';
-  const borderColor = style.getPropertyValue('--chart-border-color').trim() || '#dee2e6';
-  const textColor = style.getPropertyValue('--chart-text-color').trim() || '#dee2e6';
-
-  // Validation of input parameters
-  if (!Array.isArray(items)) {
-    console.error('Invalid data: items must be an array');
-    return;
-  }
-
-  if (!canvasId || !legendId) {
-    console.error('Canvas ID and Legend ID are required');
-    return;
-  }
-
-  const canvasEl = document.getElementById(canvasId);
-  const legendEl = document.getElementById(legendId);
-
-  if (!canvasEl) {
-    console.error(`Canvas element with ID '${canvasId}' not found`);
-    return;
-  }
-
-  // The plugin then handles the "No Data" display.
-  const visibleItems = items.filter((item) => !hiddenIndices.has(item.sourceIndex));
-  const hasData = visibleItems.length > 0;
-
-  setBarChartContainerHeight(canvasEl, visibleItems.length);
-
-  const palette = [
-    '#0B5ED7', '#86B7FE', '#A6C8FF',
-    '#CFE2FF', '#6C757D', '#ADB5BD', '#E9ECEF'
-  ];
-  const colorForIndex = (i) => palette[i % palette.length];
-
-  // Value Labels Plugin
-  const valueLabels = {
-    id: `valueLabels${chartInstanceName}`,
-    afterDatasetsDraw(chart) {
-      const { ctx } = chart;
-      const ds = chart.data.datasets[0];
-      const meta = chart.getDatasetMeta(0);
-
-      meta.data.forEach((bar, i) => {
-        const val = ds.data[i];
-        if (val == null) return;
-
-        ctx.save();
-        ctx.font = '600 12px system-ui,-apple-system,Segoe UI,Roboto,Arial';
-        ctx.fillStyle =
-          getComputedStyle(document.documentElement)
-            .getPropertyValue('--bs-body-color')
-            .trim() || '#000';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(val), bar.x + 6, bar.y);
-        ctx.restore();
+    Object.entries(data.groups).forEach(([groupKey, group]) => {
+      const outer=document.createElement('div');outer.className='col-12 col-xl-6';
+      const card=document.createElement('div');card.className='card h-100';
+      const body=document.createElement('div');body.className='card-body';
+      const heading=document.createElement('h3');heading.className='h6'; heading.textContent=names[groupKey]||groupKey;body.append(heading);
+      const values=rows(group).sort((a,b)=>b.count-a.count);
+      const nonzero = values.filter(item=>item.count>0);
+      const displayValues = (groupKey==='by_profile'||groupKey==='by_issuing_ca'||groupKey==='by_protocol') ? nonzero : values;
+      if (!displayValues.length) {const p=document.createElement('p');p.className='text-body-secondary small';p.textContent='No matching records in the selected period';body.append(p);}
+      const maximum=Math.max(1,...displayValues.map(x=>x.count));
+      displayValues.slice(0,12).forEach(({label,count,domainId,key})=>{
+        const line=document.createElement('div');line.className='mb-2';
+        const meta=document.createElement('div');meta.className='d-flex justify-content-between small gap-2';
+        const title=document.createElement('span');
+        const linkUrl = (() => {
+          if (tab === 'devices' && groupKey === 'by_enrollment' && ['no_onboarding', 'pending', 'onboarded'].includes(key)) {
+            const target = new URL(root.dataset.deviceListUrl, location.href);
+            target.searchParams.set('enrollment_state', key);
+            return target.href;
+          }
+          if (tab === 'devices' && groupKey === 'by_domain' && domainId !== null) {
+            const target = new URL(root.dataset.deviceListUrl, location.href);
+            target.searchParams.set('domain', String(domainId));
+            return target.href;
+          }
+          return null;
+        })();
+        if (linkUrl) {
+          const link = document.createElement('a'); link.href = linkUrl;
+          link.textContent = label; link.className = 'link-primary';
+          link.setAttribute('aria-label', groupKey === 'by_enrollment'
+            ? `Show devices: ${label}`
+            : `Show devices in domain ${label}`);
+          title.append(link);
+        } else title.textContent=label;
+        const number=document.createElement('strong');number.textContent=String(count);meta.append(title,number);
+        const track=document.createElement('div');track.className='progress mt-1';track.style.height='8px';
+        const bar=document.createElement('div');bar.className='progress-bar';bar.style.width=`${Math.max(0,Math.min(100,count/maximum*100))}%`;bar.setAttribute('aria-label',`${label}: ${count}`);track.append(bar);
+        line.append(meta,track);body.append(line);
       });
-    }
-  };
-
-  // Destroy old chart if it exists
-  const chartInstanceKey = `_${chartInstanceName}Chart`;
-  if (window[chartInstanceKey]) {
-    window[chartInstanceKey].destroy();
-  }
-
-  // Create new chart
-  window[chartInstanceKey] = new Chart(canvasEl, {
-    type: 'bar',
-    data: {
-      labels: visibleItems.map(i => i.fullLabel || i.label),
-      datasets: [{
-        data: visibleItems.map(i => i.value),
-        backgroundColor: visibleItems.map((item) => colorForIndex(item.sourceIndex)),
-        borderColor: 'transparent',
-        borderRadius: 12,
-        barPercentage: 0.6,
-        categoryPercentage: 0.7
-      }]
-    },
-    options: {
-      layout: {
-        padding: {
-          right: hasData ? 40 : 0
-        }        
-      },
-      responsive: true,
-      maintainAspectRatio: false,
-      indexAxis: 'y',
-      scales: {
-        x: {
-          display: hasData,
-          beginAtZero: true,
-          grid: { 
-            color: gridColor 
-          },
-          border: {
-            display: true,
-            color: borderColor 
-          },
-          ticks: { 
-            precision: 0, 
-            color: textColor 
-          }
-        },
-        y: {
-          display: hasData,
-          grid: { display: false },
-          border: {
-            display: true,
-            color: borderColor 
-          },
-          ticks: {
-            color: textColor,
-            callback: function(value) {
-              const label = this.getLabelForValue(value);
-              return truncateChartLabel(label, 34);
-            }
-          }
-        }
-      },
-      plugins: {
-        legend: { display: false },
-        noDataImagePlugin: {
-          text: 'No Data',
-          zeroValuesAreData: options.zeroValuesAreData === true,
-        },
-        tooltip: {
-          callbacks: {
-            title: (context) => context?.[0]?.label || '',
-            label: (context) => `Count: ${context.parsed.x ?? context.raw ?? 0}`
-          }
-        }
-      }
-    },
-    plugins: [valueLabels, noDataImagePlugin]
-  });
-
-  renderBarLegend(legendEl, items, hiddenIndices, colorForIndex, onToggle);
-
-  return window[chartInstanceKey];
-}
-
-const noDataImagePlugin = {
-  id: 'noDataImagePlugin',
-  afterDraw(chart, args, pluginOptions) {
-    const opts = pluginOptions || {};
-    const imageSrc = opts.imageSrc;
-    const text = opts.text ?? 'No Data';
-
-    // Check if there is any meaningful data
-    const hasData = opts.zeroValuesAreData
-      ? (chart?.data?.labels?.length ?? 0) > 0
-      : hasVisibleChartData(chart);
-
-    if (hasData) return;
-
-    const { ctx, chartArea } = chart;
-    if (!chartArea) return;
-
-    const { left, top, right, bottom } = chartArea;
-    const width = right - left;
-    const height = bottom - top;
-
-    ctx.save();
-    // Clear drawing area so no axes etc. interfere
-    ctx.clearRect(left, top, width, height);
-
-    const drawTextOnly = () => {
-      ctx.save();
-      ctx.font = '500 14px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-      ctx.fillStyle = '#6c757d';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, left + width / 2, top + height / 2);
-      ctx.restore();
-    };
-
-    if (!imageSrc) {
-      drawTextOnly();
-      ctx.restore();
-      return;
-    }
-
-    // Image caching in plugin options object
-    if (!opts._img) {
-      const img = new Image();
-      img.src = imageSrc;
-      opts._img = img;
-      opts._imgLoaded = false;
-
-      img.onload = () => {
-        opts._imgLoaded = true;
-        // Reload → Redraw canvas
-        chart.draw();
-      };
-      img.onerror = () => {
-        opts._imgLoaded = false;
-      };
-    }
-
-    if (opts._img && opts._imgLoaded) {
-      const img = opts._img;
-
-      // Constrain to 50% of container dimensions to ensure it fits
-      const scale = Math.min((width * 0.5) / img.width, (height * 0.5) / img.height);
-
-      const imgWidth = img.width * scale;
-      const imgHeight = img.height * scale;
-
-      const x = left + (width - imgWidth) / 2;
-      const y = top + (height - imgHeight) / 2 - 10;
-
-      ctx.drawImage(img, x, y, imgWidth, imgHeight);
-
-      // Optional text below
-      ctx.save();
-      ctx.font = '500 14px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-      ctx.fillStyle = '#6c757d';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillText(text, left + width / 2, y + imgHeight + 8);
-      ctx.restore();
-    } else {
-      // While the image is not yet loaded → Show text
-      drawTextOnly();
-    }
-
-    ctx.restore();
-  }
-};
-
-function createDonutChart(data, canvasId, chartInstanceName, options = {}, hiddenIndices = new Set()) {
-  // Dynamically read colors
-  const style = getComputedStyle(document.documentElement);
-  const textColor = style.getPropertyValue('--chart-text-color').trim() || '#dee2e6';
-
-  const colorMap = {
-    no_onboarding: '#198754',
-    pending: '#CFE2FF',
-    onboarded: '#0B5ED7',
-    none: '#E9ECEF',
-    valid: '#0B5ED7',
-    active: '#198754',
-    expiring: '#DC3545',
-    expired: '#ADB5BD'
-  };
-
-  const showLegend = true;
-  const {
-    centerText = 'Certificates',
-    labels = ['Active Certificates', 'Expiring Certificates', 'Expired Certificates'],
-    dataKeys = ['active', 'expiring', 'expired']
-  } = options;
-
-  const chartDataArray = dataKeys.map((key) => normalizeChartValue(data[key]));
-  const hasData = chartDataArray.some(value => normalizeChartValue(value) > 0);
-
-  const chartColors = dataKeys.map(key => key === 'expiring' ? '#FFE8E8' : (colorMap[key] || '#0B5ED7'));
-  const borderColors = dataKeys.map(key => key === 'expiring' ? '#FFB3B3' : 'transparent');
-
-  const centerTextPlugin = {
-    id: `centerText${chartInstanceName}`,
-    afterDraw(chart) {
-      const visibleTotal = getVisibleChartTotal(chart);
-      if (!visibleTotal) return;
-
-      const meta = chart.getDatasetMeta(0);
-      if (!meta?.data?.length) return;
-      const { ctx } = chart;
-      const { x, y } = meta.data[0];
-
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      const currentTextColor = getComputedStyle(document.documentElement)
-        .getPropertyValue('--bs-body-color')
-        .trim() || '#000';
-
-      ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-      ctx.fillStyle = currentTextColor;
-      ctx.fillText(visibleTotal, x, y - 8);
-
-      ctx.font = '500 12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-      ctx.globalAlpha = 0.85;
-      ctx.fillText(centerText, x, y + 16);
-      ctx.restore();
-    }
-  };
-
-  const chartInstanceKey = `_${chartInstanceName}Chart`;
-  if (window[chartInstanceKey]) {
-    window[chartInstanceKey].destroy();
-  }
-
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) {
-    console.error(`Canvas element with ID '${canvasId}' not found`);
-    return;
-  }
-
-  window[chartInstanceKey] = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: labels,
-      datasets: [{
-        data: chartDataArray,
-        backgroundColor: chartColors,
-        borderColor: borderColors,
-        borderWidth: 2,
-        borderRadius: 5,
-        spacing: 3
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '72%',
-      plugins: {
-        legend: {
-          display: showLegend && hasData,
-          position: 'bottom',
-          align: 'start',
-          onClick: (_event, legendItem, legend) => {
-            toggleChartItemVisibility(legend.chart, legendItem.index, hiddenIndices);
-          },
-          onHover: (event) => {
-            event.native.target.style.cursor = 'pointer';
-          },
-          onLeave: (event) => {
-            event.native.target.style.cursor = 'default';
-          },
-          labels: {
-            usePointStyle: true,
-            pointStyle: 'circle',
-            boxWidth: 10,
-            boxHeight: 10,
-            padding: 14,
-            color: textColor,
-            font: { size: 12 }
-          }
-        },
-        noDataImagePlugin: { 
-          text: 'No Data' 
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => {
-              const value = context.parsed || 0;
-              const visibleTotal = getVisibleChartTotal(context.chart);
-              const percentage = visibleTotal ? Math.round((value / visibleTotal) * 100) : 0;
-              return `${context.label}: ${value} (${percentage}%)`;
-            }
-          }
-        }
-      }
-    },
-    plugins: [centerTextPlugin, noDataImagePlugin]
-  });
-
-  applyHiddenIndices(window[chartInstanceKey], hiddenIndices);
-
-  return window[chartInstanceKey];
-}
-
-document.addEventListener("DOMContentLoaded", loadDashboardData)
-
-function getDonutChartConfig(datasetName, chartTitle) {
-  const chartConfigs = {
-    device_enrollment_counts: {
-      centerText: chartTitle,
-      dataKeys: ['no_onboarding', 'pending', 'onboarded'],
-      labels: ['No Onboarding', 'Pending', 'Onboarded'],
-    },
-    device_domain_credential_counts: {
-      centerText: chartTitle,
-      dataKeys: ['none', 'valid', 'expiring', 'expired'],
-      labels: ['No Domain Credentials', 'Valid Domain Credentials', 'Expiring Domain Credentials', 'Expired Domain Credentials'],
-    },
-    device_application_certificate_counts: {
-      centerText: chartTitle,
-      dataKeys: ['none', 'active', 'expired'],
-      labels: ['No Application Certificates', 'Active Application Certificates', 'Expired Application Certificates'],
-    },
-    cert_counts: {
-      centerText: chartTitle,
-      dataKeys: ['active', 'expiring', 'expired'],
-      labels: ['Active Certificates', 'Expiring Certificates', 'Expired Certificates'],
-      mapData: (sourceData) => ({
-        active: sourceData.active || 0,
-        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0) + (sourceData.expiring_in_30_days || 0),
-        expired: sourceData.expired || 0,
-      }),
-    },
-    issuing_ca_counts: {
-      centerText: chartTitle,
-      dataKeys: ['active', 'expiring', 'expired'],
-      labels: ['Active Issuing CAs', 'Expiring Issuing CAs', 'Expired Issuing CAs'],
-      mapData: (sourceData) => ({
-        active: sourceData.active || 0,
-        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0) + (sourceData.expiring_in_30_days || 0),
-        expired: sourceData.expired || 0,
-      }),
-    },
-  };
-
-  return chartConfigs[datasetName] || {
-    centerText: chartTitle,
-    dataKeys: ['active', 'expiring', 'expired'],
-    labels: ['Active', 'Expiring', 'Expired'],
-  };
-}
-
-function getBarChartConfig(datasetName, dataVariant = "default") {
-  const expiringWindowItems = (sourceData) => ([
-    { label: "24 Hours", value: sourceData.expiring_in_1_day || 0 },
-    { label: "2-7 Days", value: sourceData.expiring_in_7_days || 0 },
-    { label: "8-30 Days", value: sourceData.expiring_in_30_days || 0 },
-  ]);
-
-  const mapArrayItems = (sourceData) => sourceData.map(item => {
-    const labelKey = Object.keys(item).find(key => key.includes('name'));
-    const valueKey = Object.keys(item).find(key => key.includes('count'));
-    return {
-      label: labelKey ? item[labelKey] : 'Unknown',
-      value: valueKey ? item[valueKey] : 0
-    };
-  });
-
-  const mapObjectItems = (sourceData) => Object.entries(sourceData).map(([key, value]) => ({
-    label: key || 'Unknown',
-    value: value || 0
-  }));
-
-  const chartConfigs = {
-    "cert_counts_by_issuing_ca:default": { mapData: mapArrayItems, keepZeroValues: true, zeroValuesAreData: true },
-    "cert_counts_by_status:default": { mapData: mapObjectItems },
-    "cert_counts_by_profile:default": { mapData: mapObjectItems },
-    "device_counts_by_op:default": { mapData: mapObjectItems },
-    "device_counts_by_domain:default": { mapData: mapArrayItems },
-    "cert_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
-    "device_dashboard_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
-    "expiring_application_certificate_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
-    "issuing_ca_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
-  };
-
-  return chartConfigs[`${datasetName}:${dataVariant}`] || {
-    mapData: (sourceData) => Array.isArray(sourceData) ? mapArrayItems(sourceData) : mapObjectItems(sourceData || {}),
-    limit: 5,
-  };
-}
-
-function buildBarChartItems(dataSource, datasetName, dataVariant = "default") {
-  const config = getBarChartConfig(datasetName, dataVariant);
-  const items = config.mapData(Array.isArray(dataSource) ? dataSource : (dataSource || {}))
-    .map((item) => {
-      const fullLabel = item.label || 'Unknown';
-      return {
-        label: fullLabel,
-        fullLabel,
-        value: normalizeChartValue(item.value),
-      };
-    })
-    .filter((item) => config.keepZeroValues || item.value > 0);
-
-  const orderedItems = config.sortItems === false
-    ? items
-    : items.sort((a, b) => b.value - a.value);
-
-  return orderedItems
-    .slice(0, config.limit || 5)
-    .map((item, index) => ({
-      ...item,
-      sourceIndex: index,
-    }));
-}
-
-function initializeBarChart(identifier, dataset, filterType = "", defaultPreset = "", dataVariant = "default") {
-  const chartCanvasId = `chart_${identifier}`;
-  const legendContainerId = `legend_${identifier}`;
-  const filterSelect = document.getElementById(`chart_filter_${identifier}`);
-  const startDateInput = document.getElementById(`chart_filter_start_${identifier}`);
-  const endDateInput = document.getElementById(`chart_filter_end_${identifier}`);
-  const applyButton = document.getElementById(`chart_filter_apply_${identifier}`);
-  const resetButton = document.getElementById(`chart_filter_reset_${identifier}`);
-
-  let chartInstance = null;
-  let chartItems = [];
-  const hiddenIndices = new Set();
-
-  function drawChart() {
-    if (chartInstance && typeof chartInstance.destroy === 'function') {
-      chartInstance.destroy();
-    }
-
-    chartInstance = createHorizontalBarChart(
-      chartItems,
-      chartCanvasId,
-      legendContainerId,
-      identifier,
-      hiddenIndices,
-      (index) => {
-        if (hiddenIndices.has(index)) {
-          hiddenIndices.delete(index);
-        } else {
-          hiddenIndices.add(index);
-        }
-        drawChart();
-      },
-      getBarChartConfig(dataset, dataVariant),
-    );
-  }
-
-  function updateChartItems(responseData) {
-    const sourceData = responseData?.[dataset] || [];
-    chartItems = buildBarChartItems(sourceData, dataset, dataVariant);
-    hiddenIndices.clear();
-    drawChart();
-  }
-
-  if (filterType === 'date_range' && startDateInput && endDateInput) {
-    const loadDateRangeChart = async () => {
-      const responseData = await fetchDashboardData(
-        getDashboardRequestParams(filterType, '', {
-          startDate: startDateInput.value,
-          endDate: endDateInput.value,
-        })
-      );
-      updateChartItems(responseData || {});
-    };
-
-    const applyDateRange = () => {
-      loadDateRangeChart();
-    };
-
-    applyButton?.addEventListener('click', applyDateRange);
-    resetButton?.addEventListener('click', () => {
-      startDateInput.value = '';
-      endDateInput.value = '';
-      loadDateRangeChart();
-    });
-
-    [startDateInput, endDateInput].forEach((input) => {
-      input.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          applyDateRange();
-        }
-      });
-    });
-
-    loadDateRangeChart();
-  } else if (filterType && filterSelect) {
-    const loadFilteredChart = async () => {
-      const responseData = await fetchDashboardData(
-        getDashboardRequestParams(filterType, filterSelect.value || defaultPreset)
-      );
-      updateChartItems(responseData || {});
-    };
-
-    filterSelect.addEventListener('change', loadFilteredChart);
-    loadFilteredChart();
-  } else {
-    document.addEventListener('dashboardData', (event) => {
-      const total = event.detail.total || {};
-      updateChartItems(total);
+      if (displayValues.length>12) {const p=document.createElement('p');p.className='small text-body-secondary';p.textContent=`Showing 12 of ${displayValues.length} groups`;body.append(p);}
+      card.append(body);outer.append(card);host.append(outer);
     });
   }
-
-  const observer = new MutationObserver(() => {
-    drawChart(); 
-  });
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
-}
-
-function initializeDonutChart(identifier, datasetName, chartTitle, filterType = "", defaultPreset = "") {
-  const chartCanvasId = `chart_dount_${identifier}`;
-  const filterSelect = document.getElementById(`chart_filter_${identifier}`);
-  
-  let chartInstance = null;
-  let chartData = null;
-  let chartOptions = null;
-  const hiddenIndices = new Set();
-
-  function drawChart() {
-    if (chartInstance && typeof chartInstance.destroy === 'function') {
-      chartInstance.destroy();
-    }
-    if (chartData) {
-      chartInstance = createDonutChart(chartData, chartCanvasId, identifier, chartOptions, hiddenIndices);
-    }
+  async function load(tab) {
+    if (!tabs.has(tab)) return;
+    if(controller) controller.abort();
+    const request=new AbortController();controller=request;
+    const host=document.getElementById('dashboard-analytics-'+tab);
+    host.textContent='Loading analytics…';
+    try {
+      const endpoint=new URL(url,location.href);endpoint.searchParams.set('tab',tab);endpoint.searchParams.set('activity_days',select.value);endpoint.searchParams.set('expiry_days',expiry.value);
+      const response=await fetch(endpoint,{signal:request.signal,credentials:'same-origin',headers:{Accept:'application/json'}});
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      const data=await response.json();
+      if(controller===request)render(tab,data);
+    } catch(error) { if(error.name!=='AbortError')host.textContent=`Analytics unavailable (${error.message}).`; }
+    finally {if(controller===request)controller=null;}
   }
-
-  function updateChartData(responseData) {
-    const sourceData = responseData?.[datasetName] || {};
-    const config = getDonutChartConfig(datasetName, chartTitle);
-
-    if (!Array.isArray(sourceData)) {
-      chartData = config.mapData ? config.mapData(sourceData) : sourceData;
-      chartOptions = {
-        centerText: config.centerText,
-        labels: config.labels,
-        dataKeys: config.dataKeys,
-      };
-    }
-    hiddenIndices.clear();
-    
-    drawChart();
-  }
-
-  if (filterType && filterSelect) {
-    const loadFilteredChart = async () => {
-      const responseData = await fetchDashboardData(
-        getDashboardRequestParams(filterType, filterSelect.value || defaultPreset)
-      );
-      updateChartData(responseData || {});
-    };
-
-    filterSelect.addEventListener('change', loadFilteredChart);
-    loadFilteredChart();
-  } else {
-    document.addEventListener("dashboardData", (event) => {
-      const today = event.detail.today || {};
-      updateChartData(today);
-    });
-  }
-
-  const observer = new MutationObserver(() => {
-    drawChart(); 
-  });
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
-}
+  root.addEventListener('dashboard:tab-changed', e=>load(e.detail.tab));
+  select.addEventListener('change',()=>load(root.dataset.activeTab));
+  expiry.addEventListener('change',()=>{const overview=document.getElementById('dashboard-expiry-days'); overview.value=expiry.value; overview.dispatchEvent(new Event('change'));});
+  document.getElementById('dashboard-expiry-days').addEventListener('change',e=>{expiry.value=e.target.value;document.getElementById('dashboard-device-expiry-days').value=e.target.value;load(root.dataset.activeTab);});
+  document.getElementById('dashboard-activity-days').addEventListener('change',e=>{select.value=e.target.value;load(root.dataset.activeTab);});
+  document.getElementById('dashboard-refresh').addEventListener('click',()=>load(root.dataset.activeTab));
+  document.getElementById('dashboard-device-expiry-days').addEventListener('change', e => {document.getElementById('dashboard-expiry-days').value=e.target.value;document.getElementById('dashboard-expiry-days').dispatchEvent(new Event('change'));});
+  expiry.value=document.getElementById('dashboard-expiry-days').value;
+  select.value=document.getElementById('dashboard-activity-days').value;
+  document.getElementById('dashboard-device-expiry-days').value=expiry.value;
+  load(root.dataset.activeTab);
+})();

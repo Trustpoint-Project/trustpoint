@@ -24,5 +24,5 @@ class BackupSerializer(serializers.ModelSerializer[BackupOptions]):
         """Metadata for BackupSerializer, defining model and serialized fields."""
 
         model = BackupOptions
-        fields: ClassVar[list[str]] = ['id', 'remote_directory']
+        fields: ClassVar[list[str]] = ['id', 'remote_directory', 'host_key']
         read_only_fields: ClassVar[list[str]] = ['id']

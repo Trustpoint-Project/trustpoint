@@ -13,12 +13,13 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.translation import gettext as _
 from django.views import View
 
+from trustpoint.logger import LoggerMixin
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.compiler.errors import CompileError
 from workflows2.services.graph import WorkflowGraphService
 
 
-class Workflow2GraphFromYamlView(LoginRequiredMixin, View):
+class Workflow2GraphFromYamlView(LoginRequiredMixin, LoggerMixin, View):
     """Compile draft YAML and return the same graph structure as saved definitions.
 
     The editor uses this endpoint to keep the graph usable while the YAML is
@@ -29,8 +30,11 @@ class Workflow2GraphFromYamlView(LoginRequiredMixin, View):
         """Return graph JSON for the posted YAML draft."""
         try:
             payload = json.loads(request.body.decode('utf-8') or '{}')
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             return JsonResponse({'error': _('Invalid JSON body')}, status=400)
+
+        if not isinstance(payload, dict):
+            return JsonResponse({'error': _('JSON body must be an object')}, status=400)
 
         yaml_text = payload.get('yaml_text', '')
         if not isinstance(yaml_text, str) or not yaml_text.strip():
@@ -41,8 +45,9 @@ class Workflow2GraphFromYamlView(LoginRequiredMixin, View):
             graph = WorkflowGraphService().graph_from_ir(ir=ir)
             return JsonResponse(graph)
 
-        except (CompileError, ValueError, TypeError, KeyError) as exc:
+        except (CompileError, ValueError, TypeError, KeyError):
+            self.logger.exception('Could not generate the draft workflow graph.')
             return JsonResponse(
-                {'error': f'{type(exc).__name__}: {exc!s}'},
+                {'error': _('Unable to generate a graph from this workflow YAML.')},
                 status=400,
             )

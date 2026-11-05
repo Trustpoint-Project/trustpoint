@@ -113,7 +113,12 @@ def build_keygen_section(help_context: HelpContext, file_name: str) -> HelpSecti
     )
 
 
-def build_profile_select_section(app_cert_profiles: list[DomainAllowedCertificateProfileModel]) -> HelpSection:
+def build_profile_select_section(
+    app_cert_profiles: list[DomainAllowedCertificateProfileModel],
+    *,
+    select_id: str = 'cert-profile-select',
+    selected_profile: str | None = None,
+) -> HelpSection:
     """Builds the profile select section.
 
     Returns:
@@ -125,15 +130,18 @@ def build_profile_select_section(app_cert_profiles: list[DomainAllowedCertificat
         options += format_html(
             '<option value="{}"{}>{}</option>',
             unique_name,
-            ' selected' if i == 0 else '',
+            ' selected' if unique_name == selected_profile or (selected_profile is None and i == 0) else '',
             display_name,
         )
 
     if not options:
-        options = format_html('<option value="" selected disabled>{}</option>',
-                              _('No application certificate profiles allowed in domain.'))
+        options = format_html(
+            '<option value="" selected disabled>{}</option>',
+            _('No application certificate profiles allowed in domain.'),
+        )
     select = format_html(
-        '<select id="cert-profile-select" class="form-select" aria-label="Certificate Profile Select">{}</select>',
+        '<select id="{}" class="form-select cert-profile-select" aria-label="Certificate Profile Select">{}</select>',
+        select_id,
         options,
     )
     return HelpSection(
@@ -155,10 +163,10 @@ def build_tls_trust_store_section() -> HelpSection:
     if not tls or not tls.credential:
         msg = format_html(
             '<div class="tp-message alert alert-danger d-flex" role="alert">'
-                '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" '
-                'fill="currentColor" role="img" aria-label="error:">'
-                    '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
-                '<div>{}<br>{}</div>'
+            '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" '
+            'fill="currentColor" role="img" aria-label="error:">'
+            '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
+            '<div>{}<br>{}</div>'
             '</div>',
             'This onboarding method is not securely available without TLS.',
             'Please ensure you are running Trustpoint within the correctly configured Docker environment!',
@@ -224,7 +232,9 @@ def build_issuing_ca_cert_section(domain: DomainModel) -> HelpSection:
     if not issuing_ca:
         err_msg = 'Issuing CA not configured'
         raise ValueError(err_msg)
-    issuing_ca_pk = issuing_ca.pk
+    certificate = issuing_ca.ca_certificate_model
+    if certificate is None:
+        raise Http404(_('Issuing CA certificate is missing.'))
 
     download_issuing_ca_cert_row = HelpRow(
         key=_non_lazy('Download Issuing CA Certificate'),
@@ -232,7 +242,7 @@ def build_issuing_ca_cert_section(domain: DomainModel) -> HelpSection:
             '<a href="{}" class="btn btn-primary w-100">{}</a>',
             reverse(
                 'pki:certificate-file-download-file-name',
-                kwargs={'file_format': 'pem', 'pk': issuing_ca_pk, 'file_name': 'issuing_ca_cert.pem'},
+                kwargs={'file_format': 'pem', 'pk': certificate.pk, 'file_name': 'issuing_ca_cert.pem'},
             ),
             _non_lazy('Download Issuing CA Certificate'),
         ),

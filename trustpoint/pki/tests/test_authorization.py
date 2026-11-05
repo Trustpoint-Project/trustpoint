@@ -109,13 +109,14 @@ def test_ecc_curve_strategy_checks_blocked_and_allowed_curves() -> None:
 
 
 def test_signature_algorithm_strategy_handles_unknown_and_blocked_hashes() -> None:
-    """Signature policy handles unknown, allowed, and blocked algorithms."""
+    """Signature policy rejects unknown and blocked algorithms and accepts allowed ones."""
     strategy = _NotPermittedSignatureAlgorithmsStrategy()
     strategy.check(ca(), config(not_permitted_signature_algorithm_oids=['2.3.4']))
-    strategy.check(
-        ca(certificate(signature_algorithm_oid='2.3.4')),
-        config(not_permitted_signature_algorithm_oids=['2.3.4']),
-    )
+    with pytest.raises(ValueError, match='unknown signature algorithm'):
+        strategy.check(
+            ca(certificate(signature_algorithm_oid='2.3.4')),
+            config(not_permitted_signature_algorithm_oids=['2.3.4']),
+        )
     with pytest.raises(ValueError, match='not permitted'):
         strategy.check(
             ca(certificate()),

@@ -8,6 +8,8 @@ import re
 import socket
 from urllib.parse import ParseResult, urlparse
 
+from pki.util.san import SanValidationError, normalize_uri_name
+
 MIN_USER_PORT = 1024
 MAX_PORT = 65535
 STANDARD_HTTP_PORTS = (80, 8080, 8888)
@@ -57,6 +59,11 @@ def validate_application_uri(application_uri: str) -> None:
     if parsed.scheme == 'urn' and not parsed.path:
         msg = 'URN must have content after the scheme.'
         raise ValidationError(msg)
+
+    try:
+        normalize_uri_name(application_uri)
+    except SanValidationError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 def _is_ip_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:

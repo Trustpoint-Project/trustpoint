@@ -56,6 +56,6 @@ class Command(BaseCommand):
             )
 
             if created:
-                self.stdout.write(f'Created certificate profile: {unique_name}')
+                self.stdout.write(self.style.SUCCESS(f'Created certificate profile: {unique_name}'))
             else:
                 self.stdout.write(f'Updated certificate profile: {unique_name}')

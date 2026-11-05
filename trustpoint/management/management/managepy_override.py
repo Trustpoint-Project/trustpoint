@@ -15,7 +15,7 @@ COPYRIGHT_HEADER = '# Copyright (c) {year} The Trustpoint Project Authors\n# SPD
 
 
 def _check_migration_name_duplicates(migration_name: str, base_path: Path, *_args: tuple[object, ...]) -> None:
-    """Check for multiple migration files and warn if found."""
+    """Report versioned migration splits without treating them as errors."""
     for root, _dirs, files in os.walk(base_path):
         if 'migrations' in root:
             mig_name_counts: dict[str, int] = {}
@@ -26,8 +26,8 @@ def _check_migration_name_duplicates(migration_name: str, base_path: Path, *_arg
                 dir_name = Path(root).parent.name
                 if count > 1:
                     sys.stderr.write(
-                        f'Warning: {count} migrations with name {name} exist in {dir_name}.\n'
-                        'Please combine them before finishing your PR using the "reset_db" command.\n'
+                        f'Note: {dir_name} has {count} migrations for {name}. '
+                        'Splits can be required to avoid circular dependencies between apps.\n'
                     )
 
 

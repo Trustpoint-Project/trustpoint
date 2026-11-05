@@ -17,8 +17,10 @@ from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
 from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
-from crypto.domain.errors import UnsupportedKeySpecError
+from crypto.domain.errors import ProviderUnavailableError, UnsupportedKeySpecError
 from crypto.domain.policies import KeyPolicy
+from crypto.domain.public_keys import public_key_fingerprint_sha256
+from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import EcKeySpec, MlDsaKeySpec, MlDsaVariant, RsaKeySpec, SignRequest
 
 if TYPE_CHECKING:
@@ -271,7 +273,7 @@ def _build_backend(session: FakeSession) -> Pkcs11Backend:
     profile = Pkcs11ProviderProfile(
         name='demo',
         module_path='/usr/lib/libpkcs11-proxy.so',
-        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM'),  # noqa: S106
+        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', token_serial='soft-serial'),  # noqa: S106
         user_pin='1234',
     )
     token = FakeToken(session)
@@ -279,16 +281,16 @@ def _build_backend(session: FakeSession) -> Pkcs11Backend:
     return Pkcs11Backend(profile=profile, library_loader=lambda _path: FakeLibrary(slot))
 
 
-def test_token_resolution_falls_back_to_label_when_slot_id_mismatches_label() -> None:
-    """A stale slot id should not prevent selection by a still-valid token label."""
+def test_token_resolution_follows_pinned_serial_when_slot_id_changes() -> None:
+    """A stale slot id must not prevent selection of the pinned token at a new slot."""
     session = FakeSession()
-    wrong_slot = FakeSlot(FakeToken(session, label='Wrong-Token'), slot_id=5)
+    wrong_slot = FakeSlot(FakeToken(session, label='Wrong-Token', serial='wrong-serial'), slot_id=5)
     expected_token = FakeToken(session, label='Trustpoint-SoftHSM')
     expected_slot = FakeSlot(expected_token, slot_id=9)
     profile = Pkcs11ProviderProfile(
         name='demo',
         module_path='/usr/lib/libpkcs11-proxy.so',
-        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', slot_id=5),  # noqa: S106
+        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', token_serial='soft-serial', slot_id=5),  # noqa: S106
         user_pin='1234',
     )
     backend = Pkcs11Backend(
@@ -309,7 +311,7 @@ def test_token_resolution_retries_full_scan_when_token_present_scan_fails() -> N
     profile = Pkcs11ProviderProfile(
         name='demo',
         module_path='/usr/lib/libpkcs11-proxy.so',
-        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', slot_id=5),  # noqa: S106
+        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', token_serial='soft-serial', slot_id=5),  # noqa: S106
         user_pin='1234',
     )
     backend = Pkcs11Backend(
@@ -452,6 +454,60 @@ def test_get_public_key_loads_rsa_public_key() -> None:
 
     assert isinstance(public_key, rsa.RSAPublicKey)
     assert public_key.key_size == RSA_2048_KEY_SIZE
+
+
+@pytest.mark.parametrize('state', ['present', 'missing-private', 'missing-public', 'mismatch'])
+def test_verify_managed_key_requires_both_key_objects(state, rsa_private_key) -> None:
+    """An intact public object alone must not make a signing key usable."""
+    key_id = b'verification-key'
+    numbers = rsa_private_key.public_key().public_numbers()
+    session = FakeSession(
+        private_key=FakePrivateKey(attributes={Attribute.ID: key_id}),
+        public_key=FakePublicKey(
+            {
+                Attribute.ID: key_id,
+                Attribute.MODULUS: numbers.n.to_bytes((numbers.n.bit_length() + 7) // 8, 'big'),
+                Attribute.PUBLIC_EXPONENT: numbers.e.to_bytes((numbers.e.bit_length() + 7) // 8, 'big'),
+            }
+        ),
+    )
+    if state == 'missing-private':
+        session.private_key = None
+    elif state == 'missing-public':
+        session.public_key = None
+    fingerprint = public_key_fingerprint_sha256(rsa_private_key.public_key())
+    binding = Pkcs11ManagedKeyBinding(
+        key_id=key_id,
+        algorithm=KeyAlgorithm.RSA,
+        public_key_fingerprint_sha256='0' * 64 if state == 'mismatch' else fingerprint,
+    )
+    backend = _build_backend(session)
+    try:
+        result = backend.verify_managed_key(binding)
+    finally:
+        backend.close()
+
+    expected = {
+        'present': ManagedKeyVerificationStatus.PRESENT,
+        'missing-private': ManagedKeyVerificationStatus.MISSING,
+        'missing-public': ManagedKeyVerificationStatus.MISSING,
+        'mismatch': ManagedKeyVerificationStatus.MISMATCH,
+    }
+    assert result.status is expected[state]
+
+
+def test_verify_managed_key_maps_private_lookup_errors(monkeypatch) -> None:
+    """Provider failures must remain errors rather than missing-key reports."""
+    session = FakeSession()
+    backend = _build_backend(session)
+
+    def fail_lookup(*args, **kwargs):
+        raise GeneralError
+
+    monkeypatch.setattr(session, 'get_key', fail_lookup)
+    with pytest.raises(ProviderUnavailableError):
+        backend.verify_managed_key(Pkcs11ManagedKeyBinding(key_id=b'key', algorithm=KeyAlgorithm.RSA))
+    backend.close()
 
 
 def test_sign_encodes_ecdsa_signature_as_der() -> None:

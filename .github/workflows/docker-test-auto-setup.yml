@@ -24,8 +24,9 @@ jobs:
           echo "TP_ADMIN_PASSWORD=testing321" >> .env
           echo "TP_INJECT_DEMO_DATA=true" >> .env
           
-          echo "Environment variables set in .env:"
-          grep "TP_" .env || true
+
+      - name: Initialize deployment signing key
+        run: sudo python3 docker/init_secret.py --type all
 
       - name: Run Docker compose
         run: |
@@ -289,41 +290,20 @@ jobs:
         run: |
           echo "## Test 4: Authenticated Dashboard Access" >> "$GITHUB_STEP_SUMMARY"
           
-          echo "Current cookies:" | tee -a "$GITHUB_STEP_SUMMARY"
-          cat cookies.txt | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "" | tee -a "$GITHUB_STEP_SUMMARY"
-          
-          dashboard_response=$(curl -k -L -s -b cookies.txt -c cookies.txt -w "%{http_code}" -o dashboard.txt \
-            "https://127.0.0.1/")
-          
-          echo "Dashboard response code: $dashboard_response" | tee -a "$GITHUB_STEP_SUMMARY"
-          
-          if [ "$dashboard_response" = "200" ]; then
-            if grep -q "login" dashboard.txt; then
-              echo "⚠️  Got 200 but appears to be login page - session may have been lost" | tee -a "$GITHUB_STEP_SUMMARY"
-              echo "Dashboard content (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
-              head -c 500 dashboard.txt | tee -a "$GITHUB_STEP_SUMMARY"
-            else
-              echo "✅ Dashboard accessible with authenticated session" | tee -a "$GITHUB_STEP_SUMMARY"
-            fi
-          else
-            echo "❌ Dashboard access failed with code $dashboard_response" | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "Dashboard content (first 500 chars):" | tee -a "$GITHUB_STEP_SUMMARY"
-            head -c 500 dashboard.txt | tee -a "$GITHUB_STEP_SUMMARY"
+          dashboard_response=$(curl -fkSs --connect-timeout 10 --max-time 30 \
+            -b cookies.txt -w "%{http_code}" -o dashboard.txt \
+            "https://127.0.0.1/home/dashboard/")
+          if [ "$dashboard_response" != "200" ] || ! grep -q 'id="dashboard"' dashboard.txt; then
+            echo "❌ Authenticated dashboard was not served" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+          echo "✅ Authenticated dashboard verified" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Test 5 - Check demo data injection
         run: |
-          echo "## Test 5: Demo Data Verification" >> "$GITHUB_STEP_SUMMARY"
-          
-          demo_check=$(curl -k -s -b cookies.txt "https://127.0.0.1/" | grep -i "demo" || echo "")
-          
-          if [ -n "$demo_check" ]; then
-            echo "✅ Demo data appears to be injected" | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            echo "ℹ️  Demo data check inconclusive (depends on UI)" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
+          docker compose exec -T --user www-data -e TRUSTPOINT_PHASE=operational trustpoint \
+            .venv/bin/python trustpoint/manage.py shell -c \
+            "from devices.models import DeviceModel; assert DeviceModel.objects.filter(domain__unique_name='arburg', common_name='freeformer-3D-Printer').exists(), 'Expected demo device is missing'"
 
       - name: Test 6 - Check container logs for errors
         if: always()
@@ -348,7 +328,7 @@ jobs:
           db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
             -c "SELECT COUNT(*) FROM users_trustpointuser WHERE username='admin';" -t || echo "0")
           
-          if [ $(echo "$db_check" | tr -d ' ') -ge 1 ]; then
+          if [ "$(echo "$db_check" | tr -d ' ')" -ge 1 ]; then
             echo "✅ Admin user found in database" | tee -a "$GITHUB_STEP_SUMMARY"
           else
             echo "❌ Admin user not found in database" | tee -a "$GITHUB_STEP_SUMMARY"

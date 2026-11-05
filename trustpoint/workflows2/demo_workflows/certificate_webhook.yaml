@@ -1,0 +1,71 @@
+# Requires successful CMP initialization issuance from any domain. Uses webhook-echo from
+# docker-compose.demo.yml. Start the demo services, enable this workflow, and Save & Compile.
+# Inspect requests with: docker compose -p trustpoint-demo -f docker-compose.demo.yml logs -f webhook-echo
+# When Trustpoint runs on the host instead of Docker, use http://localhost:8081/trustpoint/certificates.
+# Posts final certificate attributes after profile processing. subject_serial_number is the subject
+# serialNumber (OID 2.5.4.5), rendered as an empty string if absent. It is independent of the stored
+# device serial and the CA-assigned integer certificate serial. Branches on HTTP response status.
+# This post-issuance workflow cannot block certificate delivery.
+
+schema: trustpoint.workflow.v2
+name: '[Demo] Final certificate webhook'
+enabled: false
+trigger:
+  on: cmp.initialization
+  phase: after_issuance
+  sources:
+    trustpoint: true
+workflow:
+  start: forward
+  steps:
+    forward:
+      type: webhook
+      title: Forward final certificate attributes
+      method: POST
+      url: http://webhook-echo:8080/trustpoint/certificates
+      timeout_seconds: 10
+      headers:
+        Content-Type: application/json
+      body:
+        common_name: ${event.request.subject.common_name}
+        subject_serial_number: ${event.request.subject.serial_number}
+        device_id: ${event.device.id}
+        profile: ${event.cmp.cert_profile}
+      capture:
+        vars.http_status: status_code
+    check_response:
+      type: logic
+      title: Was the receiver successful?
+      cases:
+        - when:
+            and:
+              - compare:
+                  left: ${vars.http_status}
+                  op: '>='
+                  right: 200
+              - compare:
+                  left: ${vars.http_status}
+                  op: '<'
+                  right: 300
+          outcome: delivered
+      default: failed
+    delivered:
+      type: set_status
+      title: Delivery complete
+      status: finished
+      message: 'Receiver returned HTTP ${vars.http_status}.'
+    failed:
+      type: set_status
+      title: Inspect receiver response
+      status: stopped
+      reason: webhook_delivery_failed
+      message: 'Receiver returned HTTP ${vars.http_status}. Inspect the receiver and run history.'
+  flow:
+    - from: forward
+      to: check_response
+    - from: check_response
+      on: delivered
+      to: delivered
+    - from: check_response
+      on: failed
+      to: failed

@@ -9,31 +9,13 @@ from zoneinfo import available_timezones
 from django import forms
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import Group, Permission
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from management.models.organization import OrganizationModel
 from users.permissions import AppPermissions
 
-from .models import BuiltinRole, GroupProfile, TrustpointUser
-
-
-class TrustpointSuperUserCreationForm(UserCreationForm[TrustpointUser]):
-    """Form for creating the initial superuser during setup.
-
-    This form is used in the setup wizard to create the first superuser.
-    """
-
-    class Meta(UserCreationForm.Meta):
-        """Metaclass extending the standard UserCreationForm with the TrustpointUser model."""
-
-        model = TrustpointUser
-        fields = UserCreationForm.Meta.fields
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Apply Bootstrap form-control class to every field widget."""
-        super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs['class'] = 'form-control'
+from .models import BuiltinRole, GroupProfile, TrustpointUser, UserClientCertificate, is_last_admin_user
 
 
 class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
@@ -132,10 +114,7 @@ class TrustpointUserProfileForm(forms.ModelForm[TrustpointUser]):
         if not can_manage_users:
             self.fields['role'].disabled = True
             self.fields['organization'].disabled = True
-        elif (
-            self.instance.role.name == BuiltinRole.ADMIN
-            and TrustpointUser.objects.filter(role__name=BuiltinRole.ADMIN).count() == 1
-        ):
+        elif is_last_admin_user(self.instance):
             self.fields['role'].disabled = True
 
         role_field = self.fields.get('role')
@@ -186,6 +165,47 @@ class TrustpointPasswordSetForm(SetPasswordForm[TrustpointUser]):
             field.widget.attrs['class'] = 'form-control'
 
 
+class TrustpointUserDetailsForm(forms.ModelForm[TrustpointUser]):
+    """Edit a user's name and email address."""
+
+    class Meta:
+        """Limit this form to personal details."""
+
+        model = TrustpointUser
+        fields: ClassVar = ['first_name', 'last_name', 'email']
+
+
+class UserClientCertificateForm(forms.ModelForm[UserClientCertificate]):
+    """Choose an identifier that is unique among the current user's certificates."""
+
+    class Meta:
+        """Expose only the user-chosen identifier."""
+
+        model = UserClientCertificate
+        fields: ClassVar = ['identifier']
+
+    def clean_identifier(self) -> str:
+        """Reject identifiers already assigned to this user, including disabled certificates."""
+        identifier: str = self.cleaned_data['identifier']
+        if UserClientCertificate.objects.filter(user_id=self.instance.user_id, identifier=identifier).exists():
+            raise forms.ValidationError(_('You already have a client certificate with this identifier.'))
+        return identifier
+
+
+class TrustpointUserSetPasswordForm(SetPasswordForm[TrustpointUser]):
+    """Set a user's password and optionally reset their authenticator."""
+
+    reset_otp = forms.BooleanField(
+        required=False,
+        initial=True,
+        label=_('Reset authenticator'),
+        help_text=_(
+            'The user will need to set up their authenticator again when signing in. '
+            'Existing recovery codes will stop working.'
+        ),
+    )
+
+
 class TrustpointUserRoleForm(forms.ModelForm[TrustpointUser]):
     """Form for changing a user's role and optional organization."""
 
@@ -193,23 +213,17 @@ class TrustpointUserRoleForm(forms.ModelForm[TrustpointUser]):
         """Metaclass limiting the form to role and organization fields."""
 
         model = TrustpointUser
-        fields: ClassVar = ['first_name', 'last_name', 'email', 'role', 'organization']
+        fields: ClassVar = ['role', 'organization']
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Apply Bootstrap form-control class to role and organization widgets."""
+        """Configure the organization choices and style both select widgets."""
         super().__init__(*args, **kwargs)
-        self.fields['first_name'].required = False
-        self.fields['first_name'].label = _('First name (optional)')
-        self.fields['last_name'].required = False
-        self.fields['last_name'].label = _('Last name (optional)')
-        self.fields['email'].required = False
-        self.fields['email'].label = _('Email (optional)')
         organization_field = cast('forms.ModelChoiceField[OrganizationModel]', self.fields['organization'])
         organization_field.required = False
         organization_field.queryset = OrganizationModel.objects.all()
         organization_field.empty_label = _('No organization')
         for field in self.fields.values():
-            field.widget.attrs['class'] = 'form-control'
+            field.widget.attrs['class'] = 'form-select'
 
 
 class _PermissionMultipleChoiceField(forms.ModelMultipleChoiceField[Permission]):
@@ -241,9 +255,7 @@ class GroupPermissionForm(forms.ModelForm[Group]):
     """
 
     permissions = _PermissionMultipleChoiceField(
-        queryset=Permission.objects.select_related('content_type').filter(
-             content_type__model='apppermission'
-        ),
+        queryset=Permission.objects.select_related('content_type').filter(content_type__model='apppermission'),
         required=False,
         widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '15'}),
         label=_('Permissions'),
@@ -281,6 +293,7 @@ class GroupPermissionForm(forms.ModelForm[Group]):
                 self.fields['grants_staff'].initial = profile.grants_staff
                 self.fields['grants_superuser'].initial = profile.grants_superuser
 
+    @transaction.atomic
     def save(self, *, commit: bool = True) -> Group:  # type: ignore[override]
         """Save the Group and create or update its GroupProfile.
 
@@ -290,6 +303,9 @@ class GroupPermissionForm(forms.ModelForm[Group]):
         Returns:
             The saved Group instance.
         """
+        if commit and self.instance.pk:
+            # New-user creation locks the profile before inserting group references.
+            GroupProfile.objects.select_for_update().filter(group_id=self.instance.pk).first()
         group = super().save(commit=commit)
         if commit:
             GroupProfile.objects.update_or_create(

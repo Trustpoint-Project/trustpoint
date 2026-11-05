@@ -1,25 +1,6 @@
 import { parseDocument } from 'yaml';
 
-export function uniqStrings(values) {
-  const out = [];
-  const seen = new Set();
-
-  for (const value of values || []) {
-    if (typeof value !== 'string') {
-      continue;
-    }
-
-    const normalized = value.trim();
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-
-    seen.add(normalized);
-    out.push(normalized);
-  }
-
-  return out;
-}
+export { uniqStrings } from '../shared/utils.js';
 
 export function normalizeVarsTarget(rawValue, fallback = 'vars.value') {
   const trimmed = String(rawValue || '').trim();

@@ -7,7 +7,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from pki.services.csr import CsrValidationError, parse_csr
+from pki.services.csr import MAX_CSR_SIZE, CsrValidationError, parse_csr
 
 
 class CsrIssuanceForm(forms.Form):
@@ -34,7 +34,7 @@ class CsrIssuanceForm(forms.Form):
             read_uploaded = getattr(uploaded, 'read', None)
             if not callable(read_uploaded):
                 raise ValidationError(_('Provide exactly one CSR by pasting it or uploading a file.'))
-            data = read_uploaded()
+            data = read_uploaded(MAX_CSR_SIZE + 1)
         try:
             cleaned_data['csr'] = parse_csr(data)
         except CsrValidationError as exc:

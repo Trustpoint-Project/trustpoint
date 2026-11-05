@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core.serializer import CredentialSerializer
 
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.errors import ProviderConfigurationError
+from pki.forms.credentials import encode_credential_password, read_pkcs12_upload
 from pki.forms.issuing_cas import (
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaImportMixin,
@@ -21,6 +21,7 @@ from pki.forms.issuing_cas import (
 from pki.models.ca_rollover import CaRolloverStrategyType
 from pki.rollover.base import RolloverStrategy
 from pki.rollover.registry import rollover_registry
+from pki.services.credential_upload import parse_pkcs12
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -81,23 +82,14 @@ class ImportCaRolloverForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
         pkcs12_file = cleaned_data.get('pkcs12_file')
         pkcs12_password = cleaned_data.get('pkcs12_password')
 
-        if pkcs12_file is None:
-            msg = _('PKCS#12 file is required.')
-            raise forms.ValidationError(msg)
-
+        pkcs12_raw = read_pkcs12_upload(
+            pkcs12_file, missing_message=_('PKCS#12 file is required.'),
+            read_message=_('Failed to read the uploaded file.'), read_error_code=None,
+        )
+        password_bytes = encode_credential_password(pkcs12_password, pkcs12=True)
         try:
-            pkcs12_raw = pkcs12_file.read()
-        except (OSError, AttributeError) as exc:
-            msg = _('Failed to read the uploaded file.')
-            raise forms.ValidationError(msg) from exc
-
-        password_bytes: bytes | None = None
-        if pkcs12_password:
-            password_bytes = pkcs12_password.encode('utf-8')
-
-        try:
-            credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, password_bytes)
-        except Exception as exc:
+            credential_serializer = parse_pkcs12(pkcs12_raw, password_bytes)
+        except ValueError as exc:
             msg = _('Failed to parse the PKCS#12 file. Wrong password or corrupted file.')
             raise forms.ValidationError(msg) from exc
 

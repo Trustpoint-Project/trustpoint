@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Protocol authorization for the onboarding app."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -14,12 +15,12 @@ if TYPE_CHECKING:
     from management.models import SecurityConfig
     from onboarding.models import NoOnboardingConfigModel, OnboardingConfigModel
 
+
 class HasOnboardingConfig(Protocol):
     """Structural type for any model that carries onboarding / no-onboarding config FKs."""
 
     onboarding_config: OnboardingConfigModel | None
     no_onboarding_config: NoOnboardingConfigModel | None
-
 
 
 class ProtocolCheckStrategy(ABC):
@@ -37,6 +38,7 @@ class ProtocolCheckStrategy(ABC):
         Raises:
             ValueError: If the protocol used by *subject* is not permitted by *cfg*.
         """
+
 
 class _OnboardingProtocolStrategy(ProtocolCheckStrategy, LoggerMixin):
     """Validates the subject's onboarding protocol against ``SecurityConfig.permitted_onboarding_protocols``."""
@@ -67,7 +69,7 @@ class _OnboardingProtocolStrategy(ProtocolCheckStrategy, LoggerMixin):
             allowed_labels = [str(OnboardingProtocol(v).label) for v in permitted if v in OnboardingProtocol.values]
             msg = (
                 f"Onboarding protocol '{protocol_label}' is not permitted by the active security policy. "
-                f"Allowed: {', '.join(allowed_labels)}."
+                f'Allowed: {", ".join(allowed_labels)}.'
             )
             self.logger.warning('OnboardingProtocolAuthorization: %s', msg)
             raise ValueError(msg)
@@ -98,14 +100,12 @@ class _NoOnboardingPkiProtocolStrategy(ProtocolCheckStrategy, LoggerMixin):
 
         if denied:
             allowed_labels = [
-                str(NoOnboardingPkiProtocol(v).label)
-                for v in permitted
-                if v in NoOnboardingPkiProtocol.values
+                str(NoOnboardingPkiProtocol(v).label) for v in permitted if v in NoOnboardingPkiProtocol.values
             ]
             msg = (
-                f"No-onboarding PKI protocol(s) {', '.join(denied)} are not permitted "
-                f"by the active security policy. "
-                f"Allowed: {', '.join(allowed_labels) if allowed_labels else 'none'}."
+                f'No-onboarding PKI protocol(s) {", ".join(denied)} are not permitted '
+                f'by the active security policy. '
+                f'Allowed: {", ".join(allowed_labels) if allowed_labels else "none"}.'
             )
             self.logger.warning('NoOnboardingPkiProtocolAuthorization: %s', msg)
             raise ValueError(msg)
@@ -114,6 +114,7 @@ class _NoOnboardingPkiProtocolStrategy(ProtocolCheckStrategy, LoggerMixin):
             'NoOnboardingPkiProtocolAuthorization: all active protocols permitted (%s).',
             ', '.join(str(p.label) for p in active_protocols) if active_protocols else 'none',
         )
+
 
 class OnboardingProtocolAuthorization(LoggerMixin):
     """Checks that the subject's onboarding protocol is permitted by the active security config."""
@@ -128,16 +129,10 @@ class OnboardingProtocolAuthorization(LoggerMixin):
 
         try:
             cfg: SecurityConfig = SecurityConfig.objects.get()
-        except SecurityConfig.DoesNotExist:
-            self.logger.warning(
-                'OnboardingProtocolAuthorization: no SecurityConfig found; skipping check.'
-            )
-            return
-        except SecurityConfig.MultipleObjectsReturned:
-            cfg = SecurityConfig.objects.first()  # type: ignore[assignment]
-            self.logger.warning(
-                'OnboardingProtocolAuthorization: multiple SecurityConfig rows found; using first.'
-            )
+        except (SecurityConfig.DoesNotExist, SecurityConfig.MultipleObjectsReturned) as exc:
+            msg = 'Exactly one security policy is required to authorize onboarding protocols.'
+            self.logger.warning(msg)
+            raise ValueError(msg) from exc
 
         self._strategy.check(subject, cfg)
 
@@ -155,16 +150,10 @@ class NoOnboardingPkiProtocolAuthorization(LoggerMixin):
 
         try:
             cfg: SecurityConfig = SecurityConfig.objects.get()
-        except SecurityConfig.DoesNotExist:
-            self.logger.warning(
-                'NoOnboardingPkiProtocolAuthorization: no SecurityConfig found; skipping check.'
-            )
-            return
-        except SecurityConfig.MultipleObjectsReturned:
-            cfg = SecurityConfig.objects.first()  # type: ignore[assignment]
-            self.logger.warning(
-                'NoOnboardingPkiProtocolAuthorization: multiple SecurityConfig rows found; using first.'
-            )
+        except (SecurityConfig.DoesNotExist, SecurityConfig.MultipleObjectsReturned) as exc:
+            msg = 'Exactly one security policy is required to authorize enrollment protocols.'
+            self.logger.warning(msg)
+            raise ValueError(msg) from exc
 
         self._strategy.check(subject, cfg)
 
@@ -197,7 +186,6 @@ class PermittedProtocolsAuthorization(LoggerMixin):
             self._no_onboarding_auth.check(subject)
         else:
             self.logger.debug(
-                'PermittedProtocolsAuthorization: %s has neither onboarding_config '
-                'nor no_onboarding_config; skipping.',
+                'PermittedProtocolsAuthorization: %s has neither onboarding_config nor no_onboarding_config; skipping.',
                 subject,
             )

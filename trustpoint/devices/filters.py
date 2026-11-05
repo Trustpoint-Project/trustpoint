@@ -5,9 +5,13 @@
 
 Defines the `DeviceFilter` used to filter the devices list view.
 """
+from datetime import datetime
+from typing import Any
+
 import django_filters
 from django import forms
 from django.db.models import QuerySet
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from devices.dashboard_filters import (
@@ -23,12 +27,19 @@ from devices.dashboard_filters import (
     filter_onboarded_devices,
     filter_pending_devices,
 )
+from devices.health import filter_credential_health
 from devices.models import DeviceModel
-from pki.models import DomainModel
+from pki.models import DomainModel, IssuedCredentialModel
 
 
 class DeviceFilter(django_filters.FilterSet):
     """FilterSet for the devices list page."""
+
+    def __init__(self, *args: Any, reference_time: datetime | None = None, **kwargs: Any) -> None:
+        """Evaluate all health filters at the view's snapshot time."""
+        self.health_as_of = reference_time if reference_time is not None else timezone.now()
+        super().__init__(*args, **kwargs)
+
     common_name = django_filters.CharFilter(
         label='Device',
         lookup_expr='icontains',
@@ -84,7 +95,9 @@ class DeviceFilter(django_filters.FilterSet):
             ('none', _('None')),
             ('valid', _('Valid')),
             ('expiring', _('Expiring')),
-            ('expired', _('Expired')),
+            ('not_yet_valid', _('Not yet valid')),
+            ('expired', _('Expired / revoked')),
+            ('revoked', _('Revoked')),
         ),
         method='filter_domain_credential_state',
         widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
@@ -94,7 +107,9 @@ class DeviceFilter(django_filters.FilterSet):
         choices=(
             ('none', _('None')),
             ('active', _('Active')),
-            ('expired', _('Expired')),
+            ('not_yet_valid', _('Not yet valid')),
+            ('expired', _('Expired / revoked')),
+            ('revoked', _('Revoked')),
         ),
         method='filter_application_certificate_state',
         widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
@@ -128,11 +143,16 @@ class DeviceFilter(django_filters.FilterSet):
         if value == 'none':
             return filter_devices_without_domain_credential(queryset)
         if value == 'valid':
-            return filter_devices_with_valid_domain_credential(queryset)
+            return filter_devices_with_valid_domain_credential(queryset, self.health_as_of)
         if value == 'expiring':
-            return filter_devices_with_expiring_domain_credential(queryset)
+            return filter_devices_with_expiring_domain_credential(queryset, self.health_as_of)
         if value == 'expired':
-            return filter_devices_with_expired_or_revoked_domain_credential(queryset)
+            return filter_devices_with_expired_or_revoked_domain_credential(queryset, self.health_as_of)
+        if value in ('not_yet_valid', 'revoked'):
+            return filter_credential_health(
+                queryset, IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                ['not_yet_valid'] if value == 'not_yet_valid' else ['revoked'], as_of=self.health_as_of,
+            )
         return queryset
 
     def filter_application_certificate_state(
@@ -147,9 +167,14 @@ class DeviceFilter(django_filters.FilterSet):
         if value == 'none':
             return filter_devices_without_application_certificates(queryset)
         if value == 'active':
-            return filter_devices_with_active_application_certificates(queryset)
+            return filter_devices_with_active_application_certificates(queryset, self.health_as_of)
         if value == 'expired':
-            return filter_devices_with_expired_or_revoked_application_certificates(queryset)
+            return filter_devices_with_expired_or_revoked_application_certificates(queryset, self.health_as_of)
+        if value in ('not_yet_valid', 'revoked'):
+            return filter_credential_health(
+                queryset, IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+                ['not_yet_valid'] if value == 'not_yet_valid' else ['revoked'], as_of=self.health_as_of,
+            )
         return queryset
 
     def filter_expired_device(
@@ -162,7 +187,7 @@ class DeviceFilter(django_filters.FilterSet):
         del name
 
         if value:
-            return filter_expired_or_revoked_devices(queryset)
+            return filter_expired_or_revoked_devices(queryset, self.health_as_of)
         return queryset
 
     class Meta:

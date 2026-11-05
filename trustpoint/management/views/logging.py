@@ -5,12 +5,9 @@
 
 from __future__ import annotations
 
-import datetime
-import io
+import datetime as dt
 import os
 import re
-import tarfile
-import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +21,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
+from trustpoint_core.archiver import ArchiveFormat
 
 from management.serializer.logging import LoggingSerializer
 from trustpoint.logger import LoggerMixin
@@ -31,9 +29,9 @@ from trustpoint.page_context import PageContextMixin
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
 from trustpoint.views.base import SortableTableFromListMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
+from util.archives import archive_named_files
 
 if TYPE_CHECKING:
-
     from django.http import HttpRequest
     from rest_framework.request import Request
 
@@ -139,14 +137,14 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
     @staticmethod
     def _get_first_and_last_entry_date(
         log_file_path: Path,
-    ) -> tuple[datetime.datetime | None, datetime.datetime | None]:
+    ) -> tuple[dt.datetime | None, dt.datetime | None]:
         log_file = log_file_path.read_text(encoding='utf-8', errors='backslashreplace')
 
         date_regex = re.compile(r'\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\b')
         matches = re.findall(date_regex, log_file)
         if matches:
-            first_date = datetime.datetime.strptime(matches[0], DATE_FORMAT).replace(tzinfo=datetime.UTC)
-            last_date = datetime.datetime.strptime(matches[-1], DATE_FORMAT).replace(tzinfo=datetime.UTC)
+            first_date = dt.datetime.strptime(matches[0], DATE_FORMAT).replace(tzinfo=dt.UTC)
+            last_date = dt.datetime.strptime(matches[-1], DATE_FORMAT).replace(tzinfo=dt.UTC)
         else:
             first_date = None
             last_date = None
@@ -154,9 +152,9 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
         return first_date, last_date
 
     @classmethod
-    def _get_log_file_data(cls, log_filename: str) -> dict[str, str | datetime.datetime | None]:
+    def _get_log_file_data(cls, log_filename: str) -> dict[str, str | dt.datetime | None]:
         try:
-         log_file_path = _validate_log_filename(log_filename)
+            log_file_path = _validate_log_filename(log_filename)
         except Http404:
             return {}
 
@@ -166,34 +164,27 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
             'filename': log_filename,
             'created_at': first_date,
             'updated_at': last_date,
-    }
+        }
 
-    def get_queryset(self) -> list[dict[str, str | datetime.datetime | None]]:  # type: ignore[override]
+    def get_queryset(self) -> list[dict[str, str | dt.datetime | None]]:  # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
         all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
 
         file_data_list = [self._get_log_file_data(log_file_name) for log_file_name in all_files]
 
-        queryset: list[dict[str, str | datetime.datetime | None]] = [
-            data for data in file_data_list if data
-        ]
+        queryset: list[dict[str, str | dt.datetime | None]] = [data for data in file_data_list if data]
 
-        def sort_key(item: dict[str, str | datetime.datetime | None]) -> datetime.datetime:
+        def sort_key(item: dict[str, str | dt.datetime | None]) -> dt.datetime:
             updated_at = item.get('updated_at')
-            if not isinstance(updated_at, datetime.datetime):
-                return datetime.datetime.min.replace(tzinfo=datetime.UTC)
+            if not isinstance(updated_at, dt.datetime):
+                return dt.datetime.min.replace(tzinfo=dt.UTC)
             return updated_at
 
         queryset.sort(key=sort_key, reverse=True)
         return queryset
 
 
-class LoggingFilesDetailsView(
-    UserPermissionRequiredMixin,
-    PageContextMixin,
-    LoggerMixin,
-    TemplateView
-):
+class LoggingFilesDetailsView(UserPermissionRequiredMixin, PageContextMixin, LoggerMixin, TemplateView):
     """Log file detail view, allows to view the content of a single log file without download."""
 
     http_method_names = ('get',)
@@ -220,12 +211,7 @@ class LoggingFilesDetailsView(
         return context
 
 
-class LoggingFilesDownloadView(
-    UserPermissionRequiredMixin,
-    PageContextMixin,
-    LoggerMixin,
-    TemplateView
-):
+class LoggingFilesDownloadView(UserPermissionRequiredMixin, PageContextMixin, LoggerMixin, TemplateView):
     """View to download a single log file."""
 
     http_method_names = ('get',)
@@ -252,12 +238,7 @@ class LoggingFilesDownloadView(
         return response
 
 
-class LoggingFilesDownloadMultipleView(
-    UserPermissionRequiredMixin,
-    PageContextMixin,
-    LoggerMixin,
-    View
-):
+class LoggingFilesDownloadMultipleView(UserPermissionRequiredMixin, PageContextMixin, LoggerMixin, View):
     """View to download multiple log files as a single archive."""
 
     http_method_names = ('get',)
@@ -293,28 +274,12 @@ class LoggingFilesDownloadMultipleView(
 
         file_collection = [(filename, resolved_path.read_bytes()) for filename, resolved_path in valid_log_files]
 
-        if archive_format.lower() == 'zip':
-            bytes_io = io.BytesIO()
-            zip_file = zipfile.ZipFile(bytes_io, 'w')
-            for filename, data in file_collection:
-                zip_file.writestr(filename, data)
-            zip_file.close()
-
-            response = HttpResponse(bytes_io.getvalue(), content_type='application/zip')
-            response['Content-Disposition'] = 'attachment; filename=trustpoint-logs.zip'
-            return response
-
-        bytes_io = io.BytesIO()
-        with tarfile.open(fileobj=bytes_io, mode='w:gz') as tar:
-            for filename, data in file_collection:
-                file_io_bytes = io.BytesIO(data)
-                file_io_bytes_info = tarfile.TarInfo(filename)
-                file_io_bytes_info.size = len(data)
-                tar.addfile(file_io_bytes_info, file_io_bytes)
-
-        response = HttpResponse(bytes_io.getvalue(), content_type='application/gzip')
-        response['Content-Disposition'] = 'attachment; filename=trustpoint-logs.tar.gz'
+        selected_format = ArchiveFormat.ZIP if archive_format == 'zip' else ArchiveFormat.TAR_GZ
+        archive_bytes = archive_named_files(file_collection, selected_format)
+        response = HttpResponse(archive_bytes, content_type=selected_format.mime_type)
+        response['Content-Disposition'] = f'attachment; filename=trustpoint-logs{selected_format.file_extension}'
         return response
+
 
 class CanManageLogging(BasePermission):
     """Allow only users permitted to manage logging settings."""
@@ -327,6 +292,7 @@ class CanManageLogging(BasePermission):
             and request.user.has_perm(AppPermissions.MANAGE_SYSTEM_CONFIGURATION)
         )
 
+
 @extend_schema(tags=['Logging'])
 class LoggingViewSet(viewsets.GenericViewSet[Any]):
     """ViewSet for managing Backup instances.
@@ -334,6 +300,7 @@ class LoggingViewSet(viewsets.GenericViewSet[Any]):
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
     """
+
     serializer_class = LoggingSerializer
     permission_classes = (CanManageLogging,)
     filter_backends = ()
@@ -351,11 +318,13 @@ class LoggingViewSet(viewsets.GenericViewSet[Any]):
             file_path = LOG_DIR_PATH / Path(filename)
             if file_path.is_file():
                 stat = file_path.stat()
-                files_info.append({
-                    'name': filename,
-                    'size': stat.st_size,
-                    'modified': datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC)
-                })
+                files_info.append(
+                    {
+                        'name': filename,
+                        'size': stat.st_size,
+                        'modified': dt.datetime.fromtimestamp(stat.st_mtime, tz=dt.UTC),
+                    }
+                )
 
         serializer = self.get_serializer(files_info, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -367,48 +336,28 @@ class LoggingViewSet(viewsets.GenericViewSet[Any]):
         /logs/download/trustpoint.log/
         """
         if not file_name:
-            return Response(
-                {'error': "Missing 'file_name' path parameter"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': "Missing 'file_name' path parameter"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Prevent path traversal
         safe_file_name = Path(file_name)
         file_path = LOG_DIR_PATH / safe_file_name
         if not file_path.exists() or not file_path.is_file():
-            return Response(
-                {'error': 'File not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        return FileResponse(
-            file_path.read_text(encoding='utf-8', errors='backslashreplace'),
-            as_attachment=True,
-            filename=file_name
-        )
+        return FileResponse(file_path.open('rb'), as_attachment=True, filename=file_name)
 
-    @action(
-        detail=False,
-        methods=['delete'],
-        url_path=r'delete/(?P<file_name>[^/]+)'
-    )
+    @action(detail=False, methods=['delete'], url_path=r'delete/(?P<file_name>[^/]+)')
     def delete(self, _request: Request, file_name: str) -> Response:
         """Delete a log file by name.
 
         DELETE /logs/delete/trustpoint.log/
         """
         if not file_name:
-            return Response(
-                {'error': 'File name is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': 'File name is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate file name against allowed log file pattern
         if not re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(file_name):
-            return Response(
-                {'error': 'Invalid file name'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': 'Invalid file name'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Prevent path traversal by restricting to a filename within LOG_DIR_PATH
         safe_file_name = Path(file_name).name
@@ -417,25 +366,16 @@ class LoggingViewSet(viewsets.GenericViewSet[Any]):
 
         # Ensure the resolved file path is within the log directory
         if log_root not in file_path.parents:
-            return Response(
-                {'error': 'Invalid file name'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': 'Invalid file name'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not file_path.exists() or not file_path.is_file():
-            return Response(
-                {'error': 'File not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
 
         try:
             file_path.unlink()
-            return Response(
-                {'message': f"File '{safe_file_name}' deleted successfully"},
-                status=status.HTTP_200_OK
-            )
-        except Exception: # noqa: BLE001
+            return Response({'message': f"File '{safe_file_name}' deleted successfully"}, status=status.HTTP_200_OK)
+        except Exception:  # noqa: BLE001
             return Response(
                 {'error': 'An internal error occurred while deleting the file.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

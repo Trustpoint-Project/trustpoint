@@ -3,6 +3,7 @@
 
 """Comprehensive tests for EST urls.py module."""
 
+import pytest
 from django.urls import resolve, reverse
 
 from est import views
@@ -11,12 +12,34 @@ from est import views
 EST_PREFIX = '/.well-known/est/'
 
 
+@pytest.mark.parametrize(
+    'suffix',
+    [
+        'cacerts',
+        'cacerts/',
+        'test_domain/cacerts',
+        'test_domain/cacerts/',
+        'test_domain/tls_client/cacerts',
+        'test_domain/tls_client/cacerts/',
+    ],
+)
+def test_cacerts_routes_without_redirect(suffix):
+    """Resolve both slash forms directly for default and labeled CA requests."""
+    resolved = resolve(EST_PREFIX + suffix)
+    assert resolved.func.view_class == views.EstCACertsView
+
+
+def test_reverse_default_cacerts():
+    assert reverse('est:ca-certs-default') == EST_PREFIX + 'cacerts'
+
+
 class TestEstUrlPatterns:
     """Test EST URL pattern resolution and reverse URL lookup."""
 
     def test_app_name(self):
         """Test that the app_name is correctly set."""
         from est import urls
+
         assert urls.app_name == 'est'
 
     def test_simple_enrollment_default_url(self):
@@ -155,17 +178,19 @@ class TestEstUrlPatterns:
     def test_reverse_csrattrs(self):
         """Test reverse URL lookup for csrattrs."""
         url = reverse('est:csrattrs', kwargs={'domain': 'test_domain', 'cert_profile': 'tls_client'})
-        assert url == EST_PREFIX + 'test_domain/tls_client/csrattrs/'
+        assert url == EST_PREFIX + 'test_domain/tls_client/csrattrs'
 
     def test_urlpatterns_list_length(self):
         """Test that urlpatterns contains expected number of patterns."""
         from est import urls
-        # Should have 9 URL patterns (including duplicate csrattrs)
-        assert len(urls.urlpatterns) == 9
+
+        # Includes default and profile-only CSR attribute routes.
+        assert len(urls.urlpatterns) == 11
 
     def test_urlpatterns_all_have_names(self):
         """Test that all URL patterns have names."""
         from est import urls
+
         for pattern in urls.urlpatterns:
             assert hasattr(pattern, 'name')
             assert pattern.name is not None

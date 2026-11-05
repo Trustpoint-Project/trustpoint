@@ -134,11 +134,13 @@ graph TB
 - TLS: Self-signed certificate
 - Tools: Django Debug Toolbar, hot reload, HTTP access
 
-**Command:** `docker-compose up`
+**Command:** `docker compose up -d --build`
 
 **Pros:** Fast setup, integrated environment, isolated
 
-**Cons:** Not production-suitable, no persistent storage, no hardware security
+**Cons:** SoftHSM does not provide hardware-backed security; use the deployment guide for production configuration.
+
+Provision the read-only signing-key secret first; see [Docker deployment](../../features/management/docker_deployment.rst).
 
 ---
 

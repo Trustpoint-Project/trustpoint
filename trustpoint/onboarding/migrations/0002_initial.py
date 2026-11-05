@@ -1,3 +1,6 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
 import django.db.models.deletion
 from django.db import migrations, models
 
@@ -21,11 +24,6 @@ class Migration(migrations.Migration):
             model_name='onboardingconfigmodel',
             name='idevid_trust_store',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='idevid_onboarding_configs', to='pki.truststoremodel', verbose_name='IDevID Manufacturer Truststore'),
-        ),
-        migrations.AddField(
-            model_name='onboardingconfigmodel',
-            name='opc_trust_store',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='opc_onboarding_configs', to='pki.truststoremodel', verbose_name='OPC Server Truststore'),
         ),
         migrations.AddField(
             model_name='onboardingconfigmodel',
