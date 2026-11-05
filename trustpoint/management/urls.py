@@ -60,17 +60,26 @@ urlpatterns = [
     ),
     # TLS views
     path('tls/', tls.TlsView.as_view(), name='tls'),
-        path('tls/add/external-csr/key/', tls_external_csr.TlsExternalCsrKeyView.as_view(),
-            name='tls-external-csr-key'),
-        path('tls/add/external-csr/<int:pk>/truststore/', tls_external_csr.TlsExternalCsrTruststoreView.as_view(),
-            name='tls-external-csr-truststore'),
-        path('tls/add/external-csr/<int:pk>/content/', tls_external_csr.TlsExternalCsrContentView.as_view(),
-            name='tls-external-csr-content'),
-        path('tls/add/external-csr/<int:pk>/', tls_external_csr.TlsExternalCsrView.as_view(), name='tls-external-csr'),
-    path('tls/add/method-select/', tls.TlsAddMethodSelectView.as_view(),
+    path('tls/add/external-csr/key/', tls_external_csr.TlsExternalCsrKeyView.as_view(), name='tls-external-csr-key'),
+    path(
+        'tls/add/external-csr/<int:pk>/truststore/',
+        tls_external_csr.TlsExternalCsrTruststoreView.as_view(),
+        name='tls-external-csr-truststore',
+    ),
+    path(
+        'tls/add/external-csr/<int:pk>/content/',
+        tls_external_csr.TlsExternalCsrContentView.as_view(),
+        name='tls-external-csr-content',
+    ),
+    path('tls/add/external-csr/<int:pk>/', tls_external_csr.TlsExternalCsrView.as_view(), name='tls-external-csr'),
+    path(
+        'tls/add/method-select/',
+        tls.TlsAddMethodSelectView.as_view(),
         name='tls-add-method_select',
     ),
-    path('tls/add/generate-tls', tls.GenerateTlsCertificateView.as_view(),
+    path(
+        'tls/add/generate-tls',
+        tls.GenerateTlsCertificateView.as_view(),
         name='tls-generate',
     ),
     path(
@@ -93,13 +102,13 @@ urlpatterns = [
     path(
         'backups/',
         backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
-        name='backups'
+        name='backups',
     ),
     path('backups/download/<str:filename>/', backup.BackupFileDownloadView.as_view(), name='backup-download'),
     path(
         'backups/download-multiple/<str:archive_format>/',
         backup.BackupFilesDownloadMultipleView.as_view(),
-        name='backup-download-multiple'
+        name='backup-download-multiple',
     ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
     # Other views
@@ -157,21 +166,23 @@ urlpatterns = [
     path('role_management/<int:pk>/delete/', role_management.RoleDeleteView.as_view(), name='delete_role'),
     path('notifications/', notifications.NotificationsListView.as_view(), name='notifications'),
     path('notifications/<int:pk>/', notifications.NotificationDetailsView.as_view(), name='notification_details'),
-    path('notifications/<int:pk>/mark-as-solved/',
-        notifications.NotificationMarkSolvedView.as_view(), name='mark_as_solved'),
-    path('notifications/<int:pk>/toggle-read/',
-        notifications.NotificationToggleReadView.as_view(), name='notification_toggle_read'),
+    path(
+        'notifications/<int:pk>/mark-as-solved/',
+        notifications.NotificationMarkSolvedView.as_view(),
+        name='mark_as_solved',
+    ),
+    path(
+        'notifications/<int:pk>/toggle-read/',
+        notifications.NotificationToggleReadView.as_view(),
+        name='notification_toggle_read',
+    ),
     # Audit log
     path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
     # Organization
     path('organization/', organization.OrganizationTableView.as_view(), name='organization'),
     path('organization/add/', organization.OrganizationCreateView.as_view(), name='add_organization'),
     path('organization/<int:pk>/edit/', organization.OrganizationEditView.as_view(), name='edit_organization'),
-    path(
-        'organization/<int:pk>/delete/',
-        organization.OrganizationDeleteView.as_view(),
-        name='delete_organization'
-    ),
+    path('organization/<int:pk>/delete/', organization.OrganizationDeleteView.as_view(), name='delete_organization'),
     # Traceability Credentials
     path(
         'traceability-credentials/',
@@ -211,33 +222,25 @@ urlpatterns = [
     # Service Accounts
     path('service-accounts/', service_accounts.ServiceAccountListView.as_view(), name='service_account_list'),
     path(
-        'service-accounts/create/',
-        service_accounts.ServiceAccountCreateView.as_view(),
-        name='service_account_create'
+        'service-accounts/create/', service_accounts.ServiceAccountCreateView.as_view(), name='service_account_create'
     ),
+    path('service-accounts/created/', service_accounts.service_account_created_view, name='service_account_created'),
     path(
-        'service-accounts/created/',
-        service_accounts.service_account_created_view,
-        name='service_account_created'
-    ),
-    path(
-        'service-accounts/<int:pk>/',
-        service_accounts.ServiceAccountDetailView.as_view(),
-        name='service_account_detail'
+        'service-accounts/<int:pk>/', service_accounts.ServiceAccountDetailView.as_view(), name='service_account_detail'
     ),
     path(
         'service-accounts/<int:pk>/generate-credential/',
         service_accounts.generate_credential_view,
-        name='generate_credential'
+        name='generate_credential',
     ),
     path(
         'service-accounts/<int:pk>/delete/',
         service_accounts.ServiceAccountDeleteView.as_view(),
-        name='delete_service_account'
+        name='delete_service_account',
     ),
     path(
         'service-accounts/credentials/<int:pk>/revoke/',
         service_accounts.revoke_credential_view,
-        name='revoke_credential'
+        name='revoke_credential',
     ),
 ]

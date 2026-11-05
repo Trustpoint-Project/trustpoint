@@ -107,8 +107,12 @@ def test_opc_ua_domain_profile_loads_with_required_uri(domain_instance: dict[str
     assert form.fields['uris'].required
     assert not form.fields['uris'].disabled
     assert form['days'].value() == profile.profile['validity']['days']
-    form = CertificateIssuanceForm(profile=profile.profile, domain=domain, data={
-        'common_name': 'Trustpoint Domain Credential',
-    })
+    form = CertificateIssuanceForm(
+        profile=profile.profile,
+        domain=domain,
+        data={
+            'common_name': 'Trustpoint Domain Credential',
+        },
+    )
     assert not form.is_valid()
     assert 'uris' in form.errors

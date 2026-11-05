@@ -16,6 +16,7 @@ class CertificateProfileModel(models.Model):
 
     class ProfileCredentialType(models.TextChoices):
         """Enum for credential types."""
+
         APPLICATION = 'application', _('Application Credential')
         DOMAIN = 'domain', _('Domain Credential')
         EVIDENCE_SIGNING_CREDENTIAL = 'traceability_credential', _('Traceability Credential')

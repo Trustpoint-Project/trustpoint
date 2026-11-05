@@ -134,6 +134,7 @@ class TraceabilityCredentialCreateView(
     template_name = 'management/traceability_credential/form.html'
     success_url = reverse_lazy('management:traceability_credentials')
     permission_required = AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS
+
     def form_valid(self, form: TraceabilityCredentialSettingsForm) -> HttpResponse:
         """Keep logical settings in the session until certificate configuration completes."""
         self.request.session['traceability_signing_settings'] = {
@@ -238,9 +239,7 @@ class TraceabilityCredentialEditView(
 
     def form_valid(self, form: TraceabilityCredentialDescriptionForm) -> HttpResponse:
         """Delegate the metadata mutation to the service."""
-        credential = TraceabilityCredentialService.update_description(
-            self.credential, form.cleaned_data['description']
-        )
+        credential = TraceabilityCredentialService.update_description(self.credential, form.cleaned_data['description'])
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.MODEL_UPDATED,
             target=credential,

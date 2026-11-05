@@ -504,7 +504,6 @@ class AppPermission(models.Model):
                 'manage_traceability_credentials',
                 _('Can manage Traceability Credentials'),
             ),
-
             # -----------------------------------------------------------------
             # Workflow engine
             # -----------------------------------------------------------------

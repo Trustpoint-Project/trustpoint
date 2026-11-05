@@ -237,7 +237,8 @@ class TraceabilityCredentialService:
                 .not_valid_after(certificate_data.not_valid_after)
             )
         existing_extensions = {
-            extension.oid: extension.value for extension in builder._extensions  # noqa: SLF001
+            extension.oid: extension.value
+            for extension in builder._extensions  # noqa: SLF001
         }
         extension_oids = set(existing_extensions)
         builder = cls._apply_basic_constraints(builder, existing_extensions)
@@ -249,8 +250,11 @@ class TraceabilityCredentialService:
             builder = builder.add_extension(
                 x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key), critical=False
             )
-        return builder.issuer_name(subject).serial_number(x509.random_serial_number()).public_key(public_key).sign(
-            private_key, digest
+        return (
+            builder.issuer_name(subject)
+            .serial_number(x509.random_serial_number())
+            .public_key(public_key)
+            .sign(private_key, digest)
         )
 
     @staticmethod
@@ -384,9 +388,7 @@ class TraceabilityCredentialService:
         certificate_data: TraceabilityCertificateData | None = None,
     ) -> TraceabilityCredentialGenerationModel:
         """Create and activate a fresh generation while retiring the previous one."""
-        logical = TraceabilityCredentialModel.objects.select_for_update().get(
-            pk=traceability_credential.pk
-        )
+        logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=traceability_credential.pk)
         if logical.status != TraceabilityCredentialModel.Status.ACTIVE:
             raise ValidationError(NOT_USABLE)
         cls._validate_canonical_profile()
@@ -437,9 +439,7 @@ class TraceabilityCredentialService:
     @transaction.atomic
     def retire(traceability_credential: TraceabilityCredentialModel) -> None:
         """Retire a logical credential and its current generation irreversibly."""
-        logical = TraceabilityCredentialModel.objects.select_for_update().get(
-            pk=traceability_credential.pk
-        )
+        logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=traceability_credential.pk)
         if logical.status == TraceabilityCredentialModel.Status.RETIRED:
             raise ValidationError(ALREADY_RETIRED)
         generation = logical.current_generation
@@ -460,9 +460,7 @@ class TraceabilityCredentialService:
         description: str,
     ) -> TraceabilityCredentialModel:
         """Update the only mutable normal metadata field."""
-        logical = TraceabilityCredentialModel.objects.select_for_update().get(
-            pk=traceability_credential.pk
-        )
+        logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=traceability_credential.pk)
         logical.description = description
         logical.save(update_fields=['description', 'updated_at'])
         return logical
