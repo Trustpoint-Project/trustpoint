@@ -73,25 +73,31 @@ def test_web_supervisor_detects_service_exit_and_stops_children(tmp_path, mode):
     binaries = tmp_path / 'bin'
     binaries.mkdir()
     nginx = binaries / 'nginx'
-    nginx.write_text('#!/bin/sh\nexec sleep 30\n')
+    nginx.write_text(f"""#!{sys.executable}
+import os, sys, time
+from pathlib import Path
+(Path(os.environ['TEST_DIR']) / (sys.argv[1] + '.ready')).touch()
+time.sleep(30)
+""")
     nginx.chmod(0o755)
     setup = """
-sleep 30 &
+nginx gunicorn &
 GUNICORN_PID=$!
 echo "$GUNICORN_PID" > "$TEST_DIR/gunicorn.pid"
 """
     if mode == 'handoff':
         setup += """
+until [ -f "$TEST_DIR/gunicorn.ready" ]; do sleep 0.01; done
 kill "$GUNICORN_PID"
 wait "$GUNICORN_PID" || true
-sleep 30 &
+nginx operational-gunicorn &
 echo "$!" > "$TEST_DIR/operational-gunicorn.pid"
-sleep 30 &
+nginx operational-qcluster &
 echo "$!" > "$TEST_DIR/operational-qcluster.pid"
 touch "$TEST_DIR/operational.ready"
 """
     elif mode in {'operational', 'shutdown'}:
-        setup += 'sleep 30 &\nQCLUSTER_PID=$!\necho "$QCLUSTER_PID" > "$TEST_DIR/qcluster.pid"\n'
+        setup += 'nginx qcluster &\nQCLUSTER_PID=$!\necho "$QCLUSTER_PID" > "$TEST_DIR/qcluster.pid"\n'
     source += '\ntrap stop_web_services EXIT\ntrap "exit 0" TERM INT\n' + setup
     source += 'echo READY\nstart_nginx_foreground\n'
     process = subprocess.Popen(
@@ -104,6 +110,16 @@ touch "$TEST_DIR/operational.ready"
     )
     try:
         assert process.stdout.readline().strip() == 'READY'
+        services = ['operational-gunicorn', 'operational-qcluster'] if mode == 'handoff' else ['gunicorn']
+        if mode in {'operational', 'shutdown'}:
+            services.append('qcluster')
+        services.append('-g')  # The supervisor starts nginx with -g as its first argument.
+        deadline = time.monotonic() + 5
+        # Bash can publish READY before its background children finish starting.
+        while not all((tmp_path / f'{service}.ready').exists() for service in services):
+            assert process.poll() is None, process.communicate()
+            assert time.monotonic() < deadline, 'Supervisor services did not start'
+            time.sleep(0.01)
         if mode == 'shutdown':
             process.send_signal(signal.SIGTERM)
         else:
