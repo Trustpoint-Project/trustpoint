@@ -329,7 +329,7 @@
                             href="{% url 'management:tls' %}"
                             class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}"
                         >
-                            {% trans "TLS" %}
+                            {% trans "TLS Credentials" %}
                         </a>
 
                         <a
@@ -345,6 +345,7 @@
                         >
                             {% trans "Crypto Backend" %}
                         </a>
+                    <a href="{% url 'management:traceability_credentials' %}" class="tp-menu-item {% if page_name == 'traceability_credentials' %}tp-menu-active{% endif %}">{% trans "Traceability Credentials" %}</a>
 
                         <a
                             href="{% url 'management:notifications' %}"

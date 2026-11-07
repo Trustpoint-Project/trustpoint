@@ -40,6 +40,9 @@ class Command(BaseCommand):
         output.write('Running database migrations...')
         call_command('migrate')
 
+        output.write('Loading default certificate profiles...')
+        call_command('create_default_cert_profiles')
+
         output.write('Applying security configuration from environment...')
         call_command('sync_security_config')
 
