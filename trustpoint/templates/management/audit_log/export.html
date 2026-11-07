@@ -1,0 +1,78 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block title %}{% trans 'Signed audit log export' %}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">
+            {% trans 'Signed audit log export' %}
+        </h1>
+        <p class="mb-0 text-muted">
+            {% trans 'Download a signed snapshot of the audit entries matching the current filters.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form
+                id="audit-log-export-form"
+                method="post"
+                autocomplete="off"
+            >
+                {% csrf_token %}
+
+                <section class="mb-5">
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">
+                            {% trans 'Export settings' %}
+                        </h2>
+                        <p class="mb-0 text-muted">
+                            {% trans 'Select a traceability credential to sign the snapshot. Exports are limited to 10,000 entries.' %}
+                        </p>
+                    </div>
+
+                    <hr class="mb-4">
+
+                    {{ form|crispy }}
+                </section>
+            </form>
+
+            <section>
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">
+                        {% trans 'Verification' %}
+                    </h2>
+                </div>
+
+                <hr class="mb-4">
+
+                <p>
+                    {% trans 'Verify offline using the audit export verifier and a separately trusted signing certificate. Keep the certificate for each signing generation.' %}
+                </p>
+                <p class="mb-0 text-muted">
+                    {% trans 'The signature protects this snapshot. It does not detect entries deleted before the export.' %}
+                </p>
+            </section>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a
+            href="{% url 'management:audit-log' %}?{{ request.GET.urlencode }}"
+            class="btn btn-secondary"
+        >
+            {% trans 'Cancel' %}
+        </a>
+        <button
+            type="submit"
+            form="audit-log-export-form"
+            class="btn btn-primary"
+        >
+            {% trans 'Download signed export' %}
+        </button>
+    </div>
+</div>
+{% endblock content %}

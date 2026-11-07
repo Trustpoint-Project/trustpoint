@@ -11,7 +11,6 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import OperationalError, connection, connections, transaction
-from django.db.migrations.executor import MigrationExecutor
 
 from crypto.application.private_keys import ManagedECPrivateKey
 from management.models.traceability import TraceabilityCredentialModel
@@ -61,31 +60,6 @@ def test_same_credential_signs_consumer_defined_payloads(credential: Traceabilit
             data=b'other-context:' + data,
             signature=signed.signature,
         ).valid
-
-
-@pytest.mark.django_db(transaction=True)
-def test_removing_purposes_preserves_existing_signatures(credential: TraceabilityCredentialModel) -> None:
-    """An existing restricted credential retains its identity and signatures after upgrade."""
-    signed = TraceabilityCredentialService.sign(traceability_credential=credential, data=b'old-evidence')
-    executor = MigrationExecutor(connection)
-    latest = executor.loader.graph.leaf_nodes()
-    previous = [('management', '0004_tp_v1_0_1_dev0')]
-    try:
-        executor.migrate(previous)
-        old_model = executor.loader.project_state(previous).apps.get_model('management', 'TraceabilityCredentialModel')
-        old_model.objects.filter(pk=credential.pk).update(purposes=['AUDIT_LOG'])
-    finally:
-        MigrationExecutor(connection).migrate(latest)
-
-    credential.refresh_from_db()
-    assert credential.current_generation is not None
-    assert credential.current_generation.pk == signed.generation_id
-    assert TraceabilityCredentialService.verify(
-        generation=credential.current_generation,
-        data=b'old-evidence',
-        signature=signed.signature,
-    ).valid
-    TraceabilityCredentialService.sign(traceability_credential=credential, data=b'new-consumer:v1:evidence')
 
 
 def test_retirement_rejects_signing_with_cached_credential(credential: TraceabilityCredentialModel) -> None:

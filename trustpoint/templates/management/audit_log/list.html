@@ -16,6 +16,9 @@
         <p class="mb-0 text-muted">
             {% trans 'Review security-relevant operations and changes recorded by Trustpoint.' %}
         </p>
+        {% if perms.users.view_audit_log and perms.users.manage_traceability_credentials %}
+        <a class="btn btn-outline-primary mt-3" href="{% url 'management:audit-log-export' %}?{{ request.GET.urlencode }}">{% trans 'Signed export' %}</a>
+        {% endif %}
     </div>
 
 

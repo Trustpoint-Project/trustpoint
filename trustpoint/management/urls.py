@@ -178,6 +178,7 @@ urlpatterns = [
     ),
     # Audit log
     path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
+    path('audit-log/export/', audit_log.AuditLogExportView.as_view(), name='audit-log-export'),
     # Organization
     path('organization/', organization.OrganizationTableView.as_view(), name='organization'),
     path('organization/add/', organization.OrganizationCreateView.as_view(), name='add_organization'),
