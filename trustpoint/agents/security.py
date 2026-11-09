@@ -15,7 +15,7 @@ from onboarding.enums import OnboardingProtocol
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest, HttpResponse
+    from django.http import HttpRequest, HttpResponseBase
 
 
 class AgentSecurity(LoggerMixin):
@@ -44,7 +44,7 @@ class AgentSecurity(LoggerMixin):
 class AgentSecurityMixin(LoggerMixin):
     """Mixin for views that require the AGENT protocol to be permitted."""
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Check if AGENT protocol is permitted before dispatching the view."""
         if not AgentSecurity.is_agent_protocol_permitted():
             self.logger.warning(

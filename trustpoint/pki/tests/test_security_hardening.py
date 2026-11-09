@@ -19,8 +19,33 @@ from pki.authorization import (
 from pki.forms.truststores import _validate_chain_integrity, validate_and_create_ca_chain
 from pki.models.truststore import TruststoreModel
 from pki.util.x509 import CertificateGenerator
+from pki.services.ca_enrollment import cmp_issuer_chain
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def cmp_policy():
+    return SecurityConfig.objects.create(security_mode=SecurityConfig.SecurityModeChoices.LAB)
+
+
+def test_cmp_extras_cannot_import_unrelated_or_same_name_forged_issuers(cmp_policy):
+    root, root_key = CertificateGenerator.create_root_ca('CMP issuer')
+    forged_root, _ = CertificateGenerator.create_root_ca('CMP issuer')
+    unrelated, _ = CertificateGenerator.create_root_ca('Unrelated CMP extra')
+    issued, _ = CertificateGenerator.create_issuing_ca(root_key, 'CMP issuer', 'Issued CMP CA')
+    assert cmp_issuer_chain(issued, [unrelated, forged_root, root, root], [root]) == [root]
+    assert cmp_issuer_chain(issued, [unrelated, forged_root], [root]) == [root]
+    with pytest.raises(ValueError, match='valid certificate chain'):
+        cmp_issuer_chain(issued, [root], [])
+
+
+def test_cmp_chain_retains_same_name_rollover_issuer(cmp_policy):
+    root, root_key = CertificateGenerator.create_root_ca('Rollover CA')
+    rollover, _ = CertificateGenerator.create_issuing_ca(root_key, 'Rollover CA', 'Rollover CA')
+    assert rollover.subject == rollover.issuer
+    rollover.verify_directly_issued_by(root)
+    assert cmp_issuer_chain(rollover, [root], [root]) == [root]
 
 
 def _ca(certificate: object | None = None) -> SimpleNamespace:

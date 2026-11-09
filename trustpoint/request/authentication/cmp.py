@@ -406,9 +406,9 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         intermediate_certs: list[x509.Certificate],
     ) -> DeviceModel:
         """Process device authentication using certificates."""
+        self._verify_protection_signature(context.parsed_message, cmp_signer_cert)
         device = self._authenticate_device(context, cmp_signer_cert, intermediate_certs)
         self._verify_device_configuration(device)
-        self._verify_protection_signature(context.parsed_message, cmp_signer_cert)
         return device
 
     def _handle_authentication_error(self, error: Exception) -> Never:
@@ -718,6 +718,7 @@ class CmpSignatureBasedPollAuthentication(CmpAuthenticationBase):
             cmp_signer_cert, intermediate_certs = self._extract_extra_certs(context)
             context.client_certificate = cmp_signer_cert
 
+            self._verify_protection_signature(context.parsed_message, cmp_signer_cert)
             device = self._authenticate_with_domain_credential(context)
             if device is None:
                 device = self._authenticate_with_idevid(context, cmp_signer_cert, intermediate_certs)

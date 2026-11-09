@@ -9,6 +9,7 @@ import datetime as dt
 import itertools
 import logging
 import urllib.parse
+from collections import defaultdict, deque
 from datetime import UTC
 from ipaddress import ip_address
 from typing import TYPE_CHECKING, TypeGuard, get_args
@@ -665,94 +666,38 @@ class CertificateVerifier:
             raise ValueError(msg) from exc
 
     @staticmethod
-    def _try_verify_against_issuer(
-        current: x509.Certificate,
-        candidate: x509.Certificate,
-        chain: list[x509.Certificate],
-        trusted_roots: list[x509.Certificate],
-        all_candidates: list[x509.Certificate],
-    ) -> list[x509.Certificate] | None:
-        """Try to verify current against a candidate issuer and recursively build the chain.
-
-        Args:
-            current: The certificate to verify.
-            candidate: The potential issuer certificate.
-            chain: The chain built so far.
-            trusted_roots: Trusted root CA certificates.
-            all_candidates: All intermediate + root candidates.
-
-        Returns:
-            The completed chain if successful, None otherwise.
-        """
-        if current.issuer != candidate.subject or candidate in chain:
-            return None
-        try:
-            CertificateVerifier._verify_cert_signature(current, candidate)
-        except (ValueError, TypeError):
-            return None
-        return CertificateVerifier._find_chain(candidate, [*chain, candidate], trusted_roots, all_candidates)
-
-    @staticmethod
-    def _find_chain(
-        current: x509.Certificate,
-        chain: list[x509.Certificate],
-        trusted_roots: list[x509.Certificate],
-        all_candidates: list[x509.Certificate],
-    ) -> list[x509.Certificate] | None:
-        """Recursively find a chain from current to a trusted root.
-
-        Args:
-            current: The current certificate being evaluated.
-            chain: The chain built so far (leaf to current).
-            trusted_roots: Trusted root CA certificates.
-            all_candidates: All intermediate + root candidates.
-
-        Returns:
-            The completed chain if a trusted root is reached, None otherwise.
-        """
-        for root in trusted_roots:
-            if current.issuer != root.subject:
-                continue
-            try:
-                CertificateVerifier._verify_cert_signature(current, root)
-            except (ValueError, TypeError):
-                continue
-            else:
-                return [*chain, root] if current != root else chain
-
-        for candidate in all_candidates:
-            result = CertificateVerifier._try_verify_against_issuer(
-                current, candidate, chain, trusted_roots, all_candidates
-            )
-            if result is not None:
-                return result
-        return None
-
-    @staticmethod
     def _build_ca_chain(
         cert: x509.Certificate,
         trusted_roots: list[x509.Certificate],
         untrusted_intermediates: list[x509.Certificate],
     ) -> list[x509.Certificate]:
-        """Build and verify a certificate chain from cert up to a trusted root.
-
-        Args:
-            cert: The CA certificate to verify.
-            trusted_roots: Trusted root CA certificates.
-            untrusted_intermediates: Untrusted intermediate certificates for chain building.
-
-        Returns:
-            The verified chain from leaf to trusted root.
-
-        Raises:
-            ValueError: If no valid chain can be built to a trusted root.
-        """
-        all_candidates = untrusted_intermediates + trusted_roots
-        chain = CertificateVerifier._find_chain(cert, [cert], trusted_roots, all_candidates)
-        if chain is None:
-            err_msg = 'Could not build a valid certificate chain to a trusted root.'
-            raise ValueError(err_msg)
-        return chain
+        """Find a signature-verified path without revisiting certificates or recursing."""
+        trusted = set(trusted_roots)
+        issuers: dict[x509.Name, list[x509.Certificate]] = defaultdict(list)
+        for issuer in dict.fromkeys(itertools.chain(trusted_roots, untrusted_intermediates)):
+            issuers[issuer.subject].append(issuer)
+        parents: dict[x509.Certificate, x509.Certificate | None] = {cert: None}
+        pending = deque([cert])
+        while pending:
+            current = pending.popleft()
+            for issuer in issuers.get(current.issuer, []):
+                if issuer in parents and issuer not in trusted:
+                    continue
+                try:
+                    CertificateVerifier._verify_cert_signature(current, issuer)
+                except (ValueError, TypeError):
+                    continue
+                if issuer in trusted:
+                    path = [] if current == issuer else [issuer]
+                    node: x509.Certificate | None = current
+                    while node is not None:
+                        path.append(node)
+                        node = parents[node]
+                    return path[::-1]
+                parents[issuer] = current
+                pending.append(issuer)
+        err_msg = 'Could not build a valid certificate chain to a trusted root.'
+        raise ValueError(err_msg)
 
     @staticmethod
     def verify_ca_cert(

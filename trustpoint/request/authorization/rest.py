@@ -13,7 +13,7 @@ from .base import (
     ProtocolAuthorization,
     SecurityConfigAuthorization,
 )
-from .http import HttpOperationAuthorization
+from .http import DeviceHttpProtocolAuthorization, HttpOperationAuthorization
 
 
 class RestOperationAuthorization(HttpOperationAuthorization):
@@ -41,5 +41,6 @@ class RestAuthorization(CompositeAuthorization):
         self.add(CertificateProfileAuthorization())
         self.add(OnboardingDomainCredentialAuthorization())
         self.add(ProtocolAuthorization(['rest']))
+        self.add(DeviceHttpProtocolAuthorization())
         self.add(RestOperationAuthorization(allowed_operations))
         self.add(SecurityConfigAuthorization())

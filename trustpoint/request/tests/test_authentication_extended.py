@@ -908,6 +908,7 @@ class TestRemainingCmpAuthenticationBranches:
         auth = CmpSignatureBasedPollAuthentication()
         context = CmpPollRequestContext(protocol='cmp', cmp_body_type='pollReq', parsed_message=_typed_cmp_message())
         with (
+            patch.object(auth, '_verify_protection_signature'),
             patch.object(auth, '_extract_extra_certs', return_value=(certificate, [])),
             patch.object(auth, '_authenticate_with_domain_credential', return_value=None),
             patch.object(auth, '_authenticate_with_idevid', return_value=None),

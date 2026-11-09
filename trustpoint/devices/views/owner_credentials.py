@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
@@ -49,7 +49,9 @@ from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
     SortableTableMixin,
+    UserPermissionRequiredMixin,
 )
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -129,11 +131,14 @@ class OwnerCredentialAddMethodSelectView(ZeroTouchContextMixin, FormView[OwnerCr
         return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials-add'))
 
 
-class OwnerCredentialFileImportView(ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]):
+class OwnerCredentialFileImportView(
+    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]
+):
     """View to import a Zero-Touch Credential from separate PEM files."""
 
     template_name = 'devices/zero_touch_credentials/add/file_import.html'
     form_class = OwnerCredentialFileImportForm
+    permission_required = AppPermissions.MANAGE_DEVICES
     success_url = reverse_lazy('devices:zero_touch_credentials')
 
     def form_valid(self, form: OwnerCredentialFileImportForm) -> HttpResponse:
@@ -182,12 +187,13 @@ class OwnerCredentialAddRequestEstMethodSelectView(ZeroTouchContextMixin, FormVi
 
 
 class OwnerCredentialAddRequestEstNoOnboardingView(
-    ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestEstNoOnboardingForm]
+    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestEstNoOnboardingForm]
 ):
     """View to request a Zero-Touch Credential via EST using HTTP Basic Auth (username/password)."""
 
     template_name = 'devices/zero_touch_credentials/add/est_request.html'
     form_class = OwnerCredentialAddRequestEstNoOnboardingForm
+    permission_required = AppPermissions.MANAGE_DEVICES
     success_url = reverse_lazy('devices:zero_touch_credentials')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -233,7 +239,7 @@ class OwnerCredentialAddRequestEstNoOnboardingView(
 
 
 class OwnerCredentialAddRequestEstOnboardingView(
-    ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestEstOnboardingForm]
+    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestEstOnboardingForm]
 ):
     """View to request a Zero-Touch Credential via EST using mTLS Client Auth.
 
@@ -242,6 +248,7 @@ class OwnerCredentialAddRequestEstOnboardingView(
 
     template_name = 'devices/zero_touch_credentials/add/est_request.html'
     form_class = OwnerCredentialAddRequestEstOnboardingForm
+    permission_required = AppPermissions.MANAGE_DEVICES
     success_url = reverse_lazy('devices:zero_touch_credentials')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -288,11 +295,12 @@ class OwnerCredentialAddRequestEstOnboardingView(
 
 
 class OwnerCredentialTruststoreAssociationView(
-    ZeroTouchContextMixin, FormView[OwnerCredentialTruststoreAssociationForm]
+    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialTruststoreAssociationForm]
 ):
     """View for associating a TLS truststore with a Zero-Touch Credential EST configuration."""
 
     form_class = OwnerCredentialTruststoreAssociationForm
+    permission_required = AppPermissions.MANAGE_DEVICES
     template_name = 'devices/zero_touch_credentials/truststore_association.html'
 
     def get_owner_credential(self) -> OwnerCredentialModel:
@@ -322,6 +330,8 @@ class OwnerCredentialTruststoreAssociationView(
 
     def _handle_import(self, request: HttpRequest) -> HttpResponse:
         """Import a truststore from the modal form and redirect back with its id pre-selected."""
+        if not request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES):
+            raise PermissionDenied
         from pki.forms import TruststoreAddForm  # noqa: PLC0415
         from pki.models.truststore import TruststoreModel  # noqa: PLC0415
 
@@ -390,7 +400,7 @@ class OwnerCredentialTruststoreAssociationView(
 
 
 class OwnerCredentialOnboardingSetupView(
-    LoggerMixin, ZeroTouchContextMixin, FormView[OwnerCredentialOnboardingSetupForm]
+    UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, FormView[OwnerCredentialOnboardingSetupForm]
 ):
     """Combined view for setting up AOKI zero-touch onboarding after DevOwnerID file import.
 
@@ -400,8 +410,13 @@ class OwnerCredentialOnboardingSetupView(
     """
 
     form_class = OwnerCredentialOnboardingSetupForm
+    permission_required = AppPermissions.MANAGE_DEVICES
     template_name = 'devices/zero_touch_credentials/onboarding_setup.html'
     success_url = reverse_lazy('devices:zero_touch_credentials')
+
+    def has_permission(self) -> bool:
+        """Setup creates a global truststore as well as device registration state."""
+        return super().has_permission() and self.request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES)
 
     def get_owner_credential(self) -> OwnerCredentialModel:
         """Get the OwnerCredentialModel from the URL pk."""
@@ -541,10 +556,11 @@ class OwnerCredentialCLMView(ZeroTouchContextMixin, DetailView[OwnerCredentialMo
         return context
 
 
-class OwnerCredentialBulkDeleteConfirmView(ZeroTouchContextMixin, BulkDeleteView):
+class OwnerCredentialBulkDeleteConfirmView(UserPermissionRequiredMixin, ZeroTouchContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple zero-touch credentials in the Devices section."""
 
     model = OwnerCredentialModel
+    permission_required = AppPermissions.MANAGE_DEVICES
     success_url = reverse_lazy('devices:zero_touch_credentials')
     ignore_url = reverse_lazy('devices:zero_touch_credentials')
     template_name = 'devices/zero_touch_credentials/confirm_delete.html'
@@ -580,7 +596,9 @@ class OwnerCredentialBulkDeleteConfirmView(ZeroTouchContextMixin, BulkDeleteView
         return response
 
 
-class IssuedCredentialDeleteView(LoggerMixin, ZeroTouchContextMixin, DetailView[RemoteIssuedCredentialModel]):
+class IssuedCredentialDeleteView(
+    UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, DetailView[RemoteIssuedCredentialModel]
+):
     """Confirm and delete a single zero-touch issued credential in the Devices section.
 
     Only credentials owned by an ``OwnerCredentialModel`` are accessible via this view.
@@ -589,6 +607,7 @@ class IssuedCredentialDeleteView(LoggerMixin, ZeroTouchContextMixin, DetailView[
     """
 
     http_method_names = ('get', 'post')
+    permission_required = AppPermissions.MANAGE_DEVICES
     model = RemoteIssuedCredentialModel
     template_name = 'devices/zero_touch_credentials/confirm_delete_issued_credential.html'
     context_object_name = 'issued_credential'
@@ -644,6 +663,7 @@ class IssuedCredentialDeleteView(LoggerMixin, ZeroTouchContextMixin, DetailView[
 
 
 class OwnerCredentialDefineCertContentEstView(
+    UserPermissionRequiredMixin,
     FormErrorMessageMixin,
     CertificateProfileSelectionMixin,
     LoggerMixin,
@@ -663,6 +683,7 @@ class OwnerCredentialDefineCertContentEstView(
     """
 
     default_profile_name = 'dev_owner_id'
+    permission_required = AppPermissions.ISSUE_CERTIFICATES
 
     form_class = CertificateIssuanceForm
     template_name = 'devices/zero_touch_credentials/define_cert_content_est.html'
@@ -716,6 +737,8 @@ class OwnerCredentialDefineCertContentEstView(
         is already a pending (certificate-less) credential from a previous visit its
         pk is reused so we do not accumulate orphan credentials.
         """
+        if not self.has_permission():
+            raise PermissionDenied
         self.owner_credential = get_object_or_404(OwnerCredentialModel, pk=kwargs['pk'])
 
         resolved_profile = self._resolve_cert_profile(request)
@@ -780,7 +803,9 @@ class OwnerCredentialDefineCertContentEstView(
         return redirect('devices:zero_touch_credentials-request-cert-est', pk=self.owner_credential.pk)
 
 
-class OwnerCredentialRequestCertEstView(LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]):
+class OwnerCredentialRequestCertEstView(
+    UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]
+):
     """Step 2 - Review and trigger the EST enrollment for a new Zero-Touch certificate in the Devices section.
 
     Reads the certificate content stored by
@@ -791,6 +816,7 @@ class OwnerCredentialRequestCertEstView(LoggerMixin, ZeroTouchContextMixin, Deta
     """
 
     http_method_names = ('get', 'post')
+    permission_required = AppPermissions.ISSUE_CERTIFICATES
     model = OwnerCredentialModel
     template_name = 'devices/zero_touch_credentials/request_cert_est.html'
     context_object_name = 'owner_credential'
@@ -931,6 +957,7 @@ class OwnerCredentialRequestCertEstView(LoggerMixin, ZeroTouchContextMixin, Deta
 
 
 class OwnerCredentialDefineCertContentDomainCredentialEstView(
+    UserPermissionRequiredMixin,
     FormErrorMessageMixin,
     CertificateProfileSelectionMixin,
     LoggerMixin,
@@ -945,6 +972,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
     """
 
     default_profile_name = 'devownerid_domain_credential'
+    permission_required = AppPermissions.ISSUE_CERTIFICATES
 
     form_class = CertificateIssuanceForm
     template_name = 'devices/zero_touch_credentials/define_cert_content_domain_credential_est.html'
@@ -984,6 +1012,8 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Resolve the OwnerCredentialModel and the selected certificate profile."""
+        if not self.has_permission():
+            raise PermissionDenied
         self.owner_credential = get_object_or_404(OwnerCredentialModel, pk=kwargs['pk'])
 
         if (
@@ -1051,7 +1081,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
 
 
 class OwnerCredentialRequestDomainCredentialEstView(
-    LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]
+    UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]
 ):
     """Step 2 - Review and trigger the EST enrollment for a new Domain Credential in the Devices section.
 
@@ -1062,6 +1092,7 @@ class OwnerCredentialRequestDomainCredentialEstView(
     """
 
     http_method_names = ('get', 'post')
+    permission_required = AppPermissions.ISSUE_CERTIFICATES
     model = OwnerCredentialModel
     template_name = 'devices/zero_touch_credentials/request_domain_credential_est.html'
     context_object_name = 'owner_credential'

@@ -14,7 +14,7 @@ from .base import (
     ProtocolAuthorization,
     SecurityConfigAuthorization,
 )
-from .http import HttpOperationAuthorization
+from .http import DeviceHttpProtocolAuthorization, HttpOperationAuthorization
 
 
 class EstOperationAuthorization(HttpOperationAuthorization):
@@ -42,6 +42,7 @@ class EstAuthorization(CompositeAuthorization):
         self.add(CertificateProfileAuthorization())
         self.add(OnboardingDomainCredentialAuthorization())
         self.add(ProtocolAuthorization(['est']))
+        self.add(DeviceHttpProtocolAuthorization())
         self.add(EstOperationAuthorization(allowed_operations))
         self.add(SecurityConfigAuthorization())
 

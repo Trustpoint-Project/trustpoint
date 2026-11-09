@@ -47,6 +47,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
+
 class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel]):
     """View to update the trustlist on an OPC UA GDS Push device."""
 
@@ -94,9 +95,10 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
         return HttpResponseRedirect(
             reverse_lazy(
                 f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
-                kwargs={'pk': self.object.pk}
+                kwargs={'pk': self.object.pk},
             )
         )
+
 
 class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[DeviceModel]):
     """View to update the server certificate on an OPC UA GDS Push device."""
@@ -120,7 +122,6 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         self.object = self.get_object()
 
         try:
-
             service = GdsPushService(device=self.object)
 
             success, message, certificate_bytes = asyncio.run(service.update_server_certificate())
@@ -153,21 +154,22 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
             return HttpResponseRedirect(
                 reverse_lazy(
                     f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
-                    kwargs={'pk': self.object.pk}
+                    kwargs={'pk': self.object.pk},
                 )
             )
         return HttpResponseRedirect(
             reverse_lazy(
                 f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
-                kwargs={'pk': self.object.pk}
+                kwargs={'pk': self.object.pk},
             )
         )
 
 
-class OpcUaGdsPushCertRenewalSettingsView(PageContextMixin, DetailView[DeviceModel]):
+class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to save the periodic server certificate and trustlist renewal settings for an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
+    permission_required = AppPermissions.MANAGE_DEVICES
     model = DeviceModel
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     page_category = DEVICES_PAGE_CATEGORY
@@ -194,10 +196,7 @@ class OpcUaGdsPushCertRenewalSettingsView(PageContextMixin, DetailView[DeviceMod
                 err_msg = 'Interval must be at least 1.'
                 raise ValueError(err_msg)  # noqa: TRY301
         except (ValueError, TypeError):
-            messages.error(
-                request,
-                gettext_lazy('Invalid renewal interval. Please enter a positive integer (hours).')
-            )
+            messages.error(request, gettext_lazy('Invalid renewal interval. Please enter a positive integer (hours).'))
             return self._redirect_to_help_page()
 
         self.object.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = enable
@@ -209,15 +208,10 @@ class OpcUaGdsPushCertRenewalSettingsView(PageContextMixin, DetailView[DeviceMod
         if enable:
             messages.success(
                 request,
-                gettext_lazy(
-                    f'Periodic server certificate and trustlist renewal enabled (every {interval} hour(s)).'
-                )
+                gettext_lazy(f'Periodic server certificate and trustlist renewal enabled (every {interval} hour(s)).'),
             )
         else:
-            messages.success(
-                request,
-                gettext_lazy('Periodic server certificate and trustlist renewal disabled.')
-            )
+            messages.success(request, gettext_lazy('Periodic server certificate and trustlist renewal disabled.'))
 
         return self._redirect_to_help_page()
 
@@ -230,13 +224,15 @@ class OpcUaGdsPushCertRenewalSettingsView(PageContextMixin, DetailView[DeviceMod
         return HttpResponseRedirect(
             reverse_lazy(
                 f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
-                kwargs={'pk': self.object.pk}
+                kwargs={'pk': self.object.pk},
             )
         )
 
 
 class OpcUaGdsPushDomainCredentialRenewalSettingsView(
-    UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel],
+    UserPermissionRequiredMixin,
+    PageContextMixin,
+    DetailView[DeviceModel],
 ):
     """Save the independent periodic GDS Push domain credential renewal settings."""
 
@@ -257,10 +253,12 @@ class OpcUaGdsPushDomainCredentialRenewalSettingsView(
             or self.object.onboarding_config.onboarding_protocol != OnboardingProtocol.OPC_GDS_PUSH
         ):
             raise Http404(gettext_lazy('Device is not configured for OPC UA GDS Push onboarding.'))
-        redirect = HttpResponseRedirect(reverse_lazy(
-            f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
-            kwargs={'pk': self.object.pk},
-        ))
+        redirect = HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                kwargs={'pk': self.object.pk},
+            )
+        )
         enabled = request.POST.get('opc_gds_push_enable_domain_credential_renewal') == 'on'
         try:
             interval = int(request.POST.get('opc_gds_push_domain_credential_renewal_interval', ''))
@@ -270,25 +268,33 @@ class OpcUaGdsPushDomainCredentialRenewalSettingsView(
         except (ValueError, TypeError):
             messages.error(request, gettext_lazy('Invalid renewal interval. Please enter a positive integer (hours).'))
             return redirect
-        if enabled and (self.object.domain is None or not self.object.issued_credentials.filter(
-            domain=self.object.domain,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-            credential__certificate__isnull=False,
-            credential__certificate__revoked_certificate__isnull=True,
-        ).exists()):
+        if enabled and (
+            self.object.domain is None
+            or not self.object.issued_credentials.filter(
+                domain=self.object.domain,
+                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                credential__certificate__isnull=False,
+                credential__certificate__revoked_certificate__isnull=True,
+            ).exists()
+        ):
             messages.error(
                 request, gettext_lazy('Issue an initial domain credential before enabling periodic renewal.')
             )
             return redirect
         self.object.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal = enabled
         self.object.opc_ua_gds_push_config.opc_gds_push_domain_credential_renewal_interval = interval
-        self.object.opc_ua_gds_push_config.save(update_fields=[
-            'opc_gds_push_enable_domain_credential_renewal', 'opc_gds_push_domain_credential_renewal_interval',
-        ])
+        self.object.opc_ua_gds_push_config.save(
+            update_fields=[
+                'opc_gds_push_enable_domain_credential_renewal',
+                'opc_gds_push_domain_credential_renewal_interval',
+            ]
+        )
         if enabled:
-            messages.success(request, gettext_lazy(
-                'Periodic domain credential renewal enabled (every %(interval)s hour(s)).'
-            ) % {'interval': interval})
+            messages.success(
+                request,
+                gettext_lazy('Periodic domain credential renewal enabled (every %(interval)s hour(s)).')
+                % {'interval': interval},
+            )
         else:
             messages.success(request, gettext_lazy('Periodic domain credential renewal disabled.'))
         return redirect

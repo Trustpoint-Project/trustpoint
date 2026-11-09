@@ -16,14 +16,52 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from management.models import PasswordPolicy
+from management.models import AccountSecurityConfig, PasswordPolicy
 from management.serializer.role import RoleSerializer
 from users.form import GroupPermissionForm
 from users.management_backend import INTERACTIVE_BACKEND
 from users.models import BuiltinRole, GroupProfile, ServiceAccountCredential, TrustpointUser
+from users.api_auth import EntitledJWTAuthentication
+from rest_framework.exceptions import PermissionDenied
+from rest_framework_simplejwt.tokens import RefreshToken
 
 pytestmark = pytest.mark.django_db
 PASSWORD = 'AuditPassword123!'
+
+
+def test_rest_entitlement_withdrawal_rejects_refresh_and_existing_access_token():
+    role = Group.objects.create(name='Withdrawn REST access')
+    permission = Permission.objects.get(codename='use_rest_api')
+    role.permissions.add(permission)
+    user = TrustpointUser.objects.create_user(username='withdraw-rest', role=role)
+    refresh = RefreshToken.for_user(user)
+    access = refresh.access_token
+    assert EntitledJWTAuthentication().get_user(access).pk == user.pk
+    role.permissions.remove(permission)
+
+    with pytest.raises(PermissionDenied):
+        EntitledJWTAuthentication().get_user(access)
+    response = APIClient().post(reverse('token_refresh'), {'refresh': str(refresh)}, format='json')
+    assert response.status_code == 403
+
+
+def test_global_api_credential_lifetime_applies_to_existing_credentials():
+    user = TrustpointUser.objects.create_user(username='aged-service', account_type='SERVICE')
+    credential = ServiceAccountCredential.objects.create(
+        service_account=user,
+        client_id=ServiceAccountCredential.generate_client_id(),
+        hashed_secret='unused',
+    )
+    ServiceAccountCredential.objects.filter(pk=credential.pk).update(created_at=timezone.now() - timedelta(days=2))
+    credential.refresh_from_db()
+    assert credential.is_valid()
+    policy = AccountSecurityConfig.get()
+    policy.api_credential_expiry_days = 1
+    policy.save()
+    assert not credential.is_valid()
+    policy.api_credential_expiry_days = 3
+    policy.save()
+    assert credential.is_valid()
 
 
 @pytest.fixture(autouse=True)

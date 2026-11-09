@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
@@ -117,6 +118,43 @@ def test_est_failure_keeps_the_pending_record_unissued(enrollment):
     assert pending.credential.get_private_key_serializer().as_pkcs8_pem() == original_key
     assert pending.issued_using_cert_profile == 'original-profile'
     assert not IDevIDReferenceModel.objects.filter(dev_owner_id=owner).exists()
+
+
+@pytest.mark.parametrize('mismatch', ['key', 'role'])
+def test_est_result_binding_fails_before_certificate_persistence(enrollment, mismatch):
+    domain, owner, pending, context = enrollment
+    key = pending.credential.get_private_key()
+    result_key = ec.generate_private_key(ec.SECP256R1()) if mismatch == 'key' else key
+    subject = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'owner')])
+    now = datetime.datetime.now(datetime.UTC)
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(result_key.public_key())
+        .serial_number(43)
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(days=1))
+        .add_extension(x509.BasicConstraints(ca=mismatch == 'role', path_length=None), critical=True)
+        .sign(result_key, hashes.SHA256())
+    )
+    csr = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(key, hashes.SHA256())
+    with (
+        patch('pki.services.owner_credential.ProfileAwareCsrBuilder') as builder,
+        patch('pki.services.owner_credential.EstDeviceCsrSignProcessor') as signer,
+        patch('pki.services.owner_credential.EstClient') as client,
+        patch('pki.services.owner_credential.CertificateModel.save_certificate') as save,
+    ):
+        builder.return_value.get_csr.return_value = csr
+        signer.return_value.get_signed_csr.return_value = csr
+        client.return_value.simple_enroll.return_value = (certificate, [])
+        with pytest.raises(ValueError, match='does not match'):
+            enroll_owner_credential_est(
+                context, owner, pending, logger=logging.getLogger(__name__), domain_credential=domain
+            )
+        save.assert_not_called()
+    pending.credential.refresh_from_db()
+    assert pending.credential.certificate_id is None
 
 
 def test_owner_enrollment_requires_profile_before_sending_request(enrollment):

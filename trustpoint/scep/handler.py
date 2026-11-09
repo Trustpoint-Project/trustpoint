@@ -380,14 +380,19 @@ class ScepPkiOperationHandler(LoggerMixin):
 
     def _authenticate_renewal(self, signer: x509.Certificate, csr: x509.CertificateSigningRequest) -> _Authenticated:
         """Authenticate with an existing valid certificate by its IssuedCredentialModel."""
+        fingerprint = signer.fingerprint(hashes.SHA256()).hex().upper()
         try:
             issued = IssuedCredentialModel.get_credential_for_certificate(signer)
         except IssuedCredentialModel.DoesNotExist:
+            cert_model = CertificateModel.objects.filter(sha256_fingerprint=fingerprint).first()
+            if cert_model is not None and cert_model.certificate_status != CertificateModel.CertificateStatus.OK:
+                raise ScepProtocolError(
+                    FailInfo.BAD_REQUEST, 'The signer certificate is not valid for renewal.'
+                ) from None
             raise ScepProtocolError(FailInfo.BAD_CERT_ID, 'The signer certificate is not known.') from None
         device = DeviceModel.objects.select_related('onboarding_config', 'no_onboarding_config').get(
             pk=issued.device_id
         )
-        fingerprint = signer.fingerprint(hashes.SHA256()).hex().upper()
         config = get_scep_config(device)
         if config is None:
             raise ScepProtocolError(FailInfo.BAD_CERT_ID, 'SCEP is not enabled for the signer certificate owner.')

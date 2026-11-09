@@ -13,8 +13,11 @@ from unittest.mock import patch, Mock
 
 import pytest
 from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import Encoding
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
+from django.contrib.auth.models import Group, Permission
 from django.contrib.messages import WARNING
 from django.test import Client
 from django.urls import reverse
@@ -28,6 +31,7 @@ from pki.forms.cert_profiles import CertificateIssuanceForm
 from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
+from users.permissions import AppPermissions
 
 
 @pytest.fixture
@@ -300,7 +304,65 @@ def grant_manage_devices_to_admin_client(admin_client: Client) -> None:
     user = get_user_model().objects.get(pk=user_id)
     manage_devices_perm = Permission.objects.get(codename='manage_devices')
     revoke_certificates_perm = Permission.objects.get(codename='revoke_certificates')
-    user.role.permissions.add(manage_devices_perm, revoke_certificates_perm)
+    issue_certificates_perm = Permission.objects.get(codename='issue_certificates')
+    user.role.permissions.add(manage_devices_perm, revoke_certificates_perm, issue_certificates_perm)
+
+
+@pytest.mark.parametrize('route', ['generated', 'csr', 'opc_ua'])
+def test_manual_issuance_requires_issue_permission(
+    client: Client,
+    request: pytest.FixtureRequest,
+    route: str,
+) -> None:
+    """Deny before form processing, then issue with the same user's permission granted."""
+    if route == 'opc_ua':
+        device = request.getfixturevalue('opc_ua_domain_device')
+        url = reverse('devices:devices_onboarding_clm_issue_domain_credential', kwargs={'pk': device.pk})
+        data = {'uris': 'urn:trustpoint:permission-test', 'days': 7}
+    else:
+        device = request.getfixturevalue('device_instance')['device']
+        profile = CertificateProfileModel.objects.create(
+            unique_name='permission_test',
+            profile_json={
+                'type': 'cert_profile',
+                'subj': {'common_name': {'value': 'Permission Test'}},
+                'ext': {},
+                'validity': {'days': 7},
+            },
+        )
+        DomainAllowedCertificateProfileModel.objects.create(domain=device.domain, certificate_profile=profile)
+        method = 'csr' if route == 'csr' else 'profile'
+        url = reverse(
+            f'devices:devices_certificate_lifecycle_management_issue_{method}_credential',
+            kwargs={'pk': device.pk, 'profile_id': profile.pk},
+        )
+        data = {}
+        if route == 'csr':
+            key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            csr = (
+                x509.CertificateSigningRequestBuilder()
+                .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Permission Test')]))
+                .sign(key, hashes.SHA256())
+            )
+            data = {'csr_text': csr.public_bytes(Encoding.PEM).decode()}
+
+    role = Group.objects.create(name='Manual issuance permission test')
+    role.permissions.add(Permission.objects.get(codename='manage_devices'))
+    user = get_user_model().objects.create_user(username='manual-issuer', role=role)
+    assert not user.is_superuser
+    assert not user.has_perm(AppPermissions.ISSUE_CERTIFICATES)
+    client.force_login(user)
+    before = list(IssuedCredentialModel.objects.values())
+    with patch('devices.views.credential_issuance.AbstractIssueCredentialView.get_form_kwargs') as form_kwargs:
+        assert client.get(url).status_code == HTTPStatus.FORBIDDEN
+        assert client.post(url, data=data).status_code == HTTPStatus.FORBIDDEN
+        form_kwargs.assert_not_called()
+    assert list(IssuedCredentialModel.objects.values()) == before
+
+    role.permissions.add(Permission.objects.get(codename='issue_certificates'))
+    assert client.get(url).status_code == HTTPStatus.OK
+    assert client.post(url, data=data).status_code == HTTPStatus.FOUND
+    assert IssuedCredentialModel.objects.filter(device=device).count() == 1
 
 
 @pytest.mark.django_db

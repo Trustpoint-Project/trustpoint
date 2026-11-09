@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from django.http import HttpRequest
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -116,9 +117,9 @@ def _build_synthetic_request(csr_value: str) -> HttpRequest:
 def _resolve_device(device_id: int) -> DeviceModel | Response:
     """Look up a device by primary key and return it or a 404 Response."""
     try:
-        return DeviceModel.objects.select_related(
-            'domain', 'onboarding_config', 'no_onboarding_config'
-        ).get(pk=device_id)
+        return DeviceModel.objects.select_related('domain', 'onboarding_config', 'no_onboarding_config').get(
+            pk=device_id
+        )
     except DeviceModel.DoesNotExist:
         return Response(
             {'detail': f'Device with id {device_id} not found.'},
@@ -181,6 +182,8 @@ class ApplicationCertificateEnrollView(LoggerMixin, APIView):
     )
     def post(self, request: Request) -> Response:
         """Issue an application certificate for a no-onboarding device."""
+        if not request.user.has_perm(AppPermissions.ISSUE_CERTIFICATES):
+            raise PermissionDenied
         serializer = CertificateEnrollRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -364,8 +367,7 @@ class CertificateRevokeView(LoggerMixin, APIView):
         actor = request.user if request.user.is_authenticated else None
         domain_name = issued_credential.domain.unique_name if issued_credential.domain else 'unknown'
         cred_display = (
-            f'Device: {device.common_name} | Domain: {domain_name}'
-            f' | Credential: {issued_credential.common_name}'
+            f'Device: {device.common_name} | Domain: {domain_name} | Credential: {issued_credential.common_name}'
         )
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.CREDENTIAL_REVOKED,

@@ -110,7 +110,7 @@ class AbstractBrowserOnboardingCancelView(
     """View to cancel the browser onboarding process and delete the associated RemoteDeviceCredentialDownloadModel."""
 
     permission_required = AppPermissions.DOWNLOAD_CREDENTIALS
-    http_method_names = ('get',)
+    http_method_names = ('post',)
 
     model = IssuedCredentialModel
     context_object_name = 'credential'
@@ -119,7 +119,7 @@ class AbstractBrowserOnboardingCancelView(
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
 
-    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Cancels the browser onboarding process and deletes the associated RemoteDeviceCredentialDownloadModel.
 
         Args:

@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 from agents.models import AgentAssignedProfile, TrustpointAgent
 from agents.security import AgentSecurity
 from devices.models import DeviceModel
+from request.request_validator.http_req import TrustedProxyHeadersValidation
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -36,6 +37,7 @@ def _parse_client_cert(request: Request) -> x509.Certificate | None:
         return None
 
     try:
+        TrustedProxyHeadersValidation().validate_request_peer(request)
         pem_bytes = urllib.parse.unquote(raw).encode('utf-8')
         return x509.load_pem_x509_certificate(pem_bytes)
     except Exception as exc:
@@ -66,9 +68,7 @@ class AgentCertificateAuthentication(LoggerMixin, BaseAuthentication):
                 self._raise_auth_failed('No device associated with the client certificate.')
 
             agent: TrustpointAgent | None = (
-                TrustpointAgent.objects.select_related('device__domain')
-                .filter(device=device, is_active=True)
-                .first()
+                TrustpointAgent.objects.select_related('device__domain').filter(device=device, is_active=True).first()
             )
             if agent is None:
                 self._raise_auth_failed('No active agent found for the device associated with the client certificate.')
@@ -96,6 +96,7 @@ class AgentCertificateAuthentication(LoggerMixin, BaseAuthentication):
     def authenticate_header(self, request: Request) -> str:  # noqa: ARG002
         """Return the ``WWW-Authenticate`` challenge value for 401 responses."""
         return 'mTLS realm="Trustpoint Agent API"'
+
 
 def _resolve_enrollment_url(agent: TrustpointAgent, cert_profile: str) -> str | None:
     """Return the server-side enrollment *path* for a 1-to-1 agent, or ``None`` for other types."""
@@ -162,6 +163,7 @@ def _build_resolved_profile(
 
     profile['certificate_request'] = cert_req
     return profile
+
 
 class IsAuthenticatedAgent(BasePermission):
     """Allow access only to requests authenticated as a :class:`~agents.models.TrustpointAgent`."""
@@ -273,9 +275,8 @@ class AgentJobsView(LoggerMixin, APIView):
 
         now = timezone.now()
 
-        assigned_profiles = (
-            AgentAssignedProfile.objects.filter(agent=agent, enabled=True)
-            .select_related('workflow_definition', 'agent__device__domain')
+        assigned_profiles = AgentAssignedProfile.objects.filter(agent=agent, enabled=True).select_related(
+            'workflow_definition', 'agent__device__domain'
         )
 
         pending_jobs: list[dict[str, Any]] = []
@@ -289,16 +290,16 @@ class AgentJobsView(LoggerMixin, APIView):
                     profile.workflow_definition.name,
                     due_at.isoformat(),
                 )
-                resolved_profile = _build_resolved_profile(
-                    agent, profile.workflow_definition.profile, profile
+                resolved_profile = _build_resolved_profile(agent, profile.workflow_definition.profile, profile)
+                pending_jobs.append(
+                    {
+                        'profile_id': profile.pk,
+                        'workflow_definition_id': profile.workflow_definition.pk,
+                        'workflow_definition_name': profile.workflow_definition.name,
+                        'workflow_profile': resolved_profile,
+                        'next_certificate_update': due_at,
+                    }
                 )
-                pending_jobs.append({
-                    'profile_id': profile.pk,
-                    'workflow_definition_id': profile.workflow_definition.pk,
-                    'workflow_definition_name': profile.workflow_definition.name,
-                    'workflow_profile': resolved_profile,
-                    'next_certificate_update': due_at,
-                })
 
         self.logger.info(
             'Agent %s checked in: %d pending job(s)',
@@ -348,6 +349,7 @@ class AgentJobResultResponseSerializer(serializers.Serializer):  # type: ignore[
     next_certificate_update = serializers.DateTimeField(
         help_text='Computed datetime at which the next renewal will be triggered.',
     )
+
 
 @extend_schema(tags=['Agents'])
 class AgentJobResultView(LoggerMixin, APIView):
@@ -419,9 +421,7 @@ class AgentJobResultView(LoggerMixin, APIView):
         error_message: str = serializer.validated_data.get('error_message', '')
 
         profile: AgentAssignedProfile | None = (
-            AgentAssignedProfile.objects.filter(pk=profile_id)
-            .select_related('workflow_definition')
-            .first()
+            AgentAssignedProfile.objects.filter(pk=profile_id).select_related('workflow_definition').first()
         )
 
         if profile is None:

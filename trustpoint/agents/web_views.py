@@ -22,12 +22,11 @@ from agents.models import AgentAssignedProfile, AgentProfileDefinition, Trustpoi
 from agents.security import AgentSecurityMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_AGENTS_SUBCATEGORY, DEVICES_PAGE_CATEGORY, PageContextMixin
-from trustpoint.views.base import BulkDeleteView
+from trustpoint.views.base import BulkDeleteView, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
-
 
 
 class AgentProfileDefinitionTableView(
@@ -49,11 +48,16 @@ class AgentProfileDefinitionTableView(
 
 
 class AgentProfileDefinitionConfigView(
-    AgentSecurityMixin, PageContextMixin, LoggerMixin, UpdateView[AgentProfileDefinition, Any]
+    UserPermissionRequiredMixin,
+    AgentSecurityMixin,
+    PageContextMixin,
+    LoggerMixin,
+    UpdateView[AgentProfileDefinition, Any],
 ):
     """View to display and edit an Agent Profile Definition."""
 
     http_method_names = ('get', 'post')
+    permission_required = AppPermissions.MANAGE_DEVICES
     model = AgentProfileDefinition
     success_url = reverse_lazy('agents:profiles')
     template_name = 'agents/profiles/config.html'
@@ -220,9 +224,7 @@ class AgentProfileDefinitionBulkDeleteConfirmView(AgentSecurityMixin, PageContex
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
-    def get(
-        self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests."""
         queryset = self.get_queryset()
         if not queryset.exists():
@@ -256,14 +258,18 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
         model = AgentAssignedProfile
         fields: ClassVar = ('workflow_definition', 'renewal_threshold_days', 'subject', 'subject_alt_name')
         widgets: ClassVar = {
-            'subject': forms.TextInput(attrs={
-                'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
-                'class': 'form-control',
-            }),
-            'subject_alt_name': forms.TextInput(attrs={
-                'placeholder': 'DNS:www.example.com,DNS:example.com,IP:192.0.2.10',
-                'class': 'form-control',
-            }),
+            'subject': forms.TextInput(
+                attrs={
+                    'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
+                    'class': 'form-control',
+                }
+            ),
+            'subject_alt_name': forms.TextInput(
+                attrs={
+                    'placeholder': 'DNS:www.example.com,DNS:example.com,IP:192.0.2.10',
+                    'class': 'form-control',
+                }
+            ),
         }
         help_texts: ClassVar = {
             'subject': 'OpenSSL-style subject DN. Leave empty to use default.',
@@ -289,14 +295,18 @@ class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
         model = AgentAssignedProfile
         fields: ClassVar = ('renewal_threshold_days', 'subject', 'subject_alt_name', 'enabled')
         widgets: ClassVar = {
-            'subject': forms.TextInput(attrs={
-                'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
-                'class': 'form-control',
-            }),
-            'subject_alt_name': forms.TextInput(attrs={
-                'placeholder': 'DNS:www.example.com,DNS:example.com,IP:192.0.2.10',
-                'class': 'form-control',
-            }),
+            'subject': forms.TextInput(
+                attrs={
+                    'placeholder': '/C=DE/ST=Berlin/L=Berlin/O=Example GmbH/OU=IT/CN=www.example.com',
+                    'class': 'form-control',
+                }
+            ),
+            'subject_alt_name': forms.TextInput(
+                attrs={
+                    'placeholder': 'DNS:www.example.com,DNS:example.com,IP:192.0.2.10',
+                    'class': 'form-control',
+                }
+            ),
         }
         help_texts: ClassVar = {
             'subject': 'OpenSSL-style subject DN. Leave empty to use default.',
@@ -361,9 +371,7 @@ class AgentAssignedProfileCreateView(
 
     def get_success_url(self) -> str:
         """Redirect to the assigned-profiles list after saving."""
-        return str(
-            reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']})
-        )
+        return str(reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']}))
 
     def form_valid(self, form: AgentAssignedProfileForm) -> HttpResponse:
         """Save the assignment and show a success message."""
@@ -385,7 +393,10 @@ class AgentAssignedProfileCreateView(
 
 
 class AgentAssignedProfileEditView(
-    AgentContextMixin, AgentSecurityMixin, PageContextMixin, LoggerMixin,
+    AgentContextMixin,
+    AgentSecurityMixin,
+    PageContextMixin,
+    LoggerMixin,
     UpdateView[AgentAssignedProfile, AgentAssignedProfileEditForm],
 ):
     """Edit an existing AgentAssignedProfile (renewal_threshold_days, subject, subject_alt_name)."""
@@ -404,9 +415,7 @@ class AgentAssignedProfileEditView(
 
     def get_success_url(self) -> str:
         """Redirect to the assigned-profiles list after saving."""
-        return str(
-            reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']})
-        )
+        return str(reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']}))
 
     def form_valid(self, form: AgentAssignedProfileEditForm) -> HttpResponse:
         """Save the changes and show a success message."""
@@ -431,16 +440,12 @@ class AgentAssignedProfileDeleteView(AgentContextMixin, AgentSecurityMixin, Page
 
     def get_success_url(self) -> str:
         """Return to the assigned-profiles list after deletion."""
-        return str(
-            reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']})
-        )
+        return str(reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']}))
 
     @property
     def ignore_url(self) -> str:
         """Return the list URL to go back without deleting."""
-        return str(
-            reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']})
-        )
+        return str(reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']}))
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Show confirmation page, or redirect back if nothing is selected."""
@@ -488,6 +493,4 @@ class AgentAssignedProfileForceUpdateView(AgentSecurityMixin, PageContextMixin, 
             f"Certificate update scheduled immediately for '{assignment.workflow_definition.name}'.",
         )
 
-        return HttpResponseRedirect(
-            reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': agent_id})
-        )
+        return HttpResponseRedirect(reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': agent_id}))

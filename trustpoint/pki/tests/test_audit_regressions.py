@@ -18,10 +18,14 @@ from django.utils import timezone
 from django_q.models import Schedule
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from management.models import SecurityConfig
+from onboarding.models import NoOnboardingConfigModel
 from pki.models import CaModel, CredentialModel, OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainModel
+from pki.models.certificate import CertificateModel
+from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from pki.rollover.import_ca import ImportCaRolloverStrategy
 from pki.services.ca_enrollment import CmpCaEnrollmentService, EstCaEnrollmentService
 from pki.services.ca_rollover import CaRolloverError, CaRolloverService
@@ -291,8 +295,91 @@ def test_cmp_enrollment_keeps_same_named_replacement_ca_distinct(issuing_ca_mode
         private_key=issuing_ca_model.credential.get_private_key(),
     )
     profile = CertificateProfileModel.objects.create(unique_name='profile', profile_json={})
+    _configure_cmp_trust(issuing_ca_model, new_root)
     CmpCaEnrollmentService()._save_cmp_certificates(issuing_ca_model, cert, [new_root], profile)
     issuing_ca_model.refresh_from_db()
     assert issuing_ca_model.parent_ca != old_ca
     assert issuing_ca_model.parent_ca.get_certificate() == new_root
     assert old_ca.get_certificate() == old_root
+
+
+def _configure_cmp_trust(ca, root):
+    SecurityConfig.objects.update_or_create(pk=1, defaults={'security_mode': SecurityConfig.SecurityModeChoices.LAB})
+    truststore = TruststoreModel.objects.create(
+        unique_name='cmp-issuer-trust',
+        intended_usage=TruststoreModel.IntendedUsage.GENERIC,
+    )
+    TruststoreOrderModel.objects.create(
+        trust_store=truststore,
+        certificate=CertificateModel.save_certificate(root),
+        order=0,
+    )
+    ca.no_onboarding_config = NoOnboardingConfigModel.objects.create(trust_store=truststore)
+    ca.save(update_fields=['no_onboarding_config'])
+
+
+@pytest.mark.parametrize('trusted_result', [True, False])
+def test_cmp_enrollment_never_imports_attacker_cross_signed_extras(issuing_ca_model, trusted_result):
+    ca = issuing_ca_model
+    root, root_key = CertificateGenerator.create_root_ca('Configured issuer')
+    attacker, attacker_key = CertificateGenerator.create_root_ca('Unapproved root')
+    _configure_cmp_trust(ca, root)
+    forged_builder = (
+        x509.CertificateBuilder()
+        .subject_name(root.subject)
+        .issuer_name(attacker.subject)
+        .public_key(root.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(root.not_valid_before_utc)
+        .not_valid_after(root.not_valid_after_utc)
+    )
+    for extension in root.extensions:
+        value = extension.value
+        if isinstance(value, x509.AuthorityKeyIdentifier):
+            value = x509.AuthorityKeyIdentifier.from_issuer_public_key(attacker_key.public_key())
+        forged_builder = forged_builder.add_extension(value, extension.critical)
+    forged_issuer = forged_builder.sign(attacker_key, hashes.SHA256())
+    forged_issuer.verify_directly_issued_by(attacker)
+    issued, _ = CertificateGenerator.create_issuing_ca(
+        root_key if trusted_result else attacker_key,
+        'Configured issuer' if trusted_result else 'Unapproved root',
+        'Requested CA',
+        private_key=ca.credential.get_private_key(),
+    )
+    if trusted_result:
+        issued.verify_directly_issued_by(forged_issuer)
+    profile = CertificateProfileModel.objects.create(unique_name='cmp-profile', profile_json={})
+    old_certificate = ca.credential.certificate_id
+    certificate_count = CertificateModel.objects.count()
+    ca_count = CaModel.objects.count()
+    service = CmpCaEnrollmentService()
+
+    if trusted_result:
+        service._save_cmp_certificates(ca, issued, [forged_issuer, attacker], profile)
+        ca.refresh_from_db()
+        assert ca.parent_ca.get_certificate() == root
+        assert ca.credential.get_certificate() == issued
+    else:
+        with pytest.raises(ValueError, match='valid certificate chain'):
+            service._save_cmp_certificates(ca, issued, [forged_issuer, attacker], profile)
+        ca.credential.refresh_from_db()
+        assert ca.credential.certificate_id == old_certificate
+        assert not RemoteIssuedCredentialModel.objects.filter(ca=ca).exists()
+        assert CertificateModel.objects.count() == certificate_count
+        assert CaModel.objects.count() == ca_count
+    fingerprints = [cert.fingerprint(hashes.SHA256()).hex().upper() for cert in (forged_issuer, attacker)]
+    assert not CertificateModel.objects.filter(sha256_fingerprint__in=fingerprints).exists()
+
+
+@pytest.mark.parametrize('with_config', [False, True])
+def test_cmp_enrollment_requires_explicit_issuer_trust_before_writing(issuing_ca_model, with_config):
+    ca = issuing_ca_model
+    if with_config:
+        ca.no_onboarding_config = NoOnboardingConfigModel.objects.create()
+        ca.save(update_fields=['no_onboarding_config'])
+    profile = CertificateProfileModel.objects.create(unique_name='cmp-profile', profile_json={})
+    before = CertificateModel.objects.count()
+    with pytest.raises(ValueError, match='configured issuer truststore'):
+        CmpCaEnrollmentService()._save_cmp_certificates(ca, ca.get_certificate(), [], profile)
+    assert CertificateModel.objects.count() == before
+    assert not RemoteIssuedCredentialModel.objects.filter(ca=ca).exists()

@@ -18,6 +18,7 @@ from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialC
 from pki.models.issued_credential import RemoteIssuedCredentialModel
 from pki.services.external_csr import certificate_matches_credential
 from pki.util.certificate_request import build_ca_request_data
+from pki.util.x509 import CertificateVerifier
 from request.clients import EstClient
 from request.clients.cmp_client import CmpClient
 from request.message_builder.cmp import CmpMessageBuilder
@@ -48,6 +49,18 @@ def validate_ca_enrollment_certificate(ca: CaModel, certificate: x509.Certificat
         msg = 'The upstream certificate does not match the managed key.'
         raise ValueError(msg)
     return ca.credential
+
+
+def cmp_issuer_chain(
+    issued_cert: x509.Certificate,
+    extra_certs: list[x509.Certificate],
+    trusted_roots: list[x509.Certificate],
+) -> list[x509.Certificate]:
+    """Return only issuers on a path to the explicitly configured CMP truststore."""
+    chain = CertificateVerifier.verify_ca_cert(issued_cert, trusted_roots, extra_certs)[1:]
+    for certificate in chain:
+        CaModel._validate_ca_certificate(certificate)  # noqa: SLF001
+    return chain
 
 
 class EstCaEnrollmentService(LoggerMixin):
@@ -283,6 +296,12 @@ class CmpCaEnrollmentService(LoggerMixin):
     ) -> None:
         """Save the issued certificate and chain certificates."""
         credential = validate_ca_enrollment_certificate(ca, issued_cert)
+        config = ca.no_onboarding_config
+        if config is None or config.trust_store is None:
+            msg = 'A configured issuer truststore is required for CMP CA enrollment.'
+            raise ValueError(msg)
+        trusted_roots = config.trust_store.get_certificate_collection_serializer().as_crypto()
+        chain_certs = cmp_issuer_chain(issued_cert, chain_certs, trusted_roots)
         cert_model = CertificateModel.save_certificate(issued_cert)
 
         chain_ca_models = []
@@ -347,11 +366,11 @@ class CmpCaEnrollmentService(LoggerMixin):
         chain_ca_models: list[CaModel],
     ) -> None:
         """Build the CA hierarchy by setting parent-child relationships."""
-        for ca in chain_ca_models:
+        for index, ca in enumerate(chain_ca_models):
             cert = ca.get_certificate()
             if cert is None:
                 continue
-            parent_ca = self._find_issuer_ca(cert, [candidate for candidate in chain_ca_models if candidate != ca])
+            parent_ca = self._find_issuer_ca(cert, chain_ca_models[index + 1 :])
             if parent_ca is not None and parent_ca != ca.parent_ca:
                 ca.parent_ca = parent_ca
                 ca.save()

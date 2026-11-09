@@ -31,9 +31,12 @@ if TYPE_CHECKING:
 
 
 def api_user_authentication_rule(user: TrustpointUser | None) -> bool:
-    """Require active accounts and enforce human password rotation for login and refresh."""
+    """Apply current account, REST entitlement and password policy to login and refresh."""
     if user is None or not default_user_authentication_rule(user):
         return False
+    if not user.has_perm('users.use_rest_api'):
+        msg = 'User is not permitted to use the REST API.'
+        raise PermissionDenied(msg)
     if user.account_type == TrustpointUser.AccountType.HUMAN and (
         user.must_change_password or user.password_is_expired()
     ):

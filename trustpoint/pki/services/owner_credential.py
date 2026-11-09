@@ -14,6 +14,7 @@ from trustpoint_core.serializer import PrivateKeySerializer
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
+from pki.services.external_csr import certificate_matches_credential
 from pki.util.certificate_request import public_key_info_from_key_type
 from request.clients import EstClient
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
@@ -142,6 +143,18 @@ def enroll_owner_credential_est(
 
     est_client = EstClient(context)
     issued_cert, _ = est_client.simple_enroll(signed_csr)
+
+    if not certificate_matches_credential(issued_cert, signing_credential):
+        msg = 'The upstream certificate does not match the pending key.'
+        raise ValueError(msg)
+    try:
+        is_ca = issued_cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca
+    except x509.ExtensionNotFound:
+        is_ca = False
+    requested_ca = any(isinstance(ext.value, x509.BasicConstraints) and ext.value.ca for ext in signed_csr.extensions)
+    if is_ca != requested_ca:
+        msg = 'The upstream certificate CA role does not match the request.'
+        raise ValueError(msg)
 
     cert_model = CertificateModel.save_certificate(issued_cert)
     signing_credential.certificate = cert_model
