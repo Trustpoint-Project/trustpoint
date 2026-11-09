@@ -5,11 +5,16 @@
 
 from __future__ import annotations
 
+import base64
+from io import BytesIO
 from typing import TYPE_CHECKING, Any
+from zipfile import ZipFile
 
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
 from django import forms
 from django.core.exceptions import ValidationError
-from django.http import JsonResponse
+from django.http import HttpResponse
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView
 from django.views.generic.list import ListView
@@ -23,10 +28,10 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 from trustpoint.views.base import UserPermissionRequiredMixin
 from users.permissions import AppPermissions
+from util.audit_log_export import base64url_decode, encode_json, load_json
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
-    from django.http import HttpResponse
 
 
 class AuditLogListView(UserPermissionRequiredMixin, PageContextMixin, LoggerMixin, ListView[AuditLog]):
@@ -64,6 +69,10 @@ class AuditLogExportForm(forms.Form):
         label=_('Signing credential'),
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
+    include_certificate = forms.BooleanField(
+        required=False,
+        label=_('Include signing certificate (PEM) in a ZIP download'),
+    )
 
 
 class AuditLogExportView(UserPermissionRequiredMixin, PageContextMixin, LoggerMixin, FormView[AuditLogExportForm]):
@@ -95,11 +104,19 @@ class AuditLogExportView(UserPermissionRequiredMixin, PageContextMixin, LoggerMi
             self.logger.exception('Could not create signed audit log export.')
             form.add_error(None, _('Could not sign the export. Check the signing credential and crypto backend.'))
             return self.form_invalid(form)
-        response = JsonResponse(
-            document,
-            content_type='application/jose+json',
-            json_dumps_params={'indent': 2, 'allow_nan': False},
-        )
-        response['Content-Disposition'] = 'attachment; filename="trustpoint-audit-log.json"'
+        content = encode_json(document)
+        content_type = 'application/jose+json'
+        filename = 'trustpoint-audit-log.json'
+        if form.cleaned_data['include_certificate']:
+            header = load_json(base64url_decode(document['protected']))
+            certificate = x509.load_der_x509_certificate(base64.b64decode(header['x5c'][0], validate=True))
+            archive = BytesIO()
+            with ZipFile(archive, 'w') as bundle:
+                bundle.writestr(filename, content)
+                bundle.writestr('signing-certificate.pem', certificate.public_bytes(serialization.Encoding.PEM))
+            content = archive.getvalue()
+            content_type, filename = 'application/zip', 'trustpoint-audit-log.zip'
+        response = HttpResponse(content, content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         response['Cache-Control'] = 'no-store'
         return response

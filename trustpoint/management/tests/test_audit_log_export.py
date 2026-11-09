@@ -7,8 +7,10 @@ import copy
 import json
 import subprocess
 import sys
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+from zipfile import ZipFile
 
 import pytest
 from cryptography import x509
@@ -263,3 +265,46 @@ def test_signing_failure_does_not_download_unsigned_data(credential, monkeypatch
     assert 'Content-Disposition' not in response
     assert 'Could not sign the export' in response.content.decode()
     assert 'backend signing unavailable' not in response.content.decode()
+
+
+@pytest.mark.parametrize('include_certificate', [False, True])
+def test_download_and_exact_signing_certificate(credential, trusted_certificate, monkeypatch, include_certificate):
+    user = get_user_model().objects.create_superuser(username='format-admin', password='test-password')
+    client = Client()
+    client.force_login(user)
+    url = reverse('management:audit-log-export')
+    page = client.get(url)
+    assert page.status_code == 200
+    assert 'name="format"' not in page.content.decode()
+    assert 'name="include_certificate"' in page.content.decode()
+
+    def sign_then_rotate(*args):
+        document = audit_log_export.create_signed_export(*args)
+        TraceabilityCredentialService.rotate(traceability_credential=credential)
+        return document
+
+    monkeypatch.setattr('management.views.audit_log.create_signed_export', sign_then_rotate)
+    response = client.post(
+        url,
+        {
+            'credential': credential.pk,
+            'include_certificate': include_certificate,
+        },
+    )
+    assert response.status_code == 200
+    assert response['Cache-Control'] == 'no-store'
+    filename = 'trustpoint-audit-log.json'
+    if include_certificate:
+        assert response['Content-Type'] == 'application/zip'
+        assert response['Content-Disposition'] == 'attachment; filename="trustpoint-audit-log.zip"'
+        with ZipFile(BytesIO(response.content)) as archive:
+            assert set(archive.namelist()) == {filename, 'signing-certificate.pem'}
+            assert archive.read('signing-certificate.pem') == trusted_certificate
+            content = archive.read(filename)
+    else:
+        assert response['Content-Type'] == 'application/jose+json'
+        assert response['Content-Disposition'] == f'attachment; filename="{filename}"'
+        content = response.content
+    document = load_json(content)
+    assert set(document) == {'payload', 'protected', 'signature'}
+    assert verify_export(document, trusted_certificate)['entry_count'] >= 2

@@ -126,6 +126,11 @@ class TraceabilityCredentialCreateView(
 
     form_class = TraceabilityCredentialSettingsForm
     template_name = 'management/traceability_credential/form.html'
+    extra_context: dict[str, Any] = {  # noqa: RUF012 - Django defines this as an instance attribute.
+        'form_title': _('Create Traceability Credential'),
+        'form_description': _('Choose a name and curve, then continue to certificate configuration.'),
+        'submit_label': _('Continue'),
+    }
     success_url = reverse_lazy('management:traceability_credentials')
     permission_required = AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS
 
@@ -158,6 +163,10 @@ class TraceabilityCredentialCertificateView(
 
     form_class = TraceabilityCertificateForm
     template_name = 'management/traceability_credential/form.html'
+    extra_context: dict[str, Any] = {  # noqa: RUF012 - Django defines this as an instance attribute.
+        'form_description': _('Configure the certificate for the first signing generation.'),
+        'submit_label': _('Create credential'),
+    }
     permission_required = AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
@@ -218,6 +227,11 @@ class TraceabilityCredentialEditView(
 
     form_class = TraceabilityCredentialDescriptionForm
     template_name = 'management/traceability_credential/form.html'
+    extra_context: dict[str, Any] = {  # noqa: RUF012 - Django defines this as an instance attribute.
+        'form_title': _('Edit credential description'),
+        'form_description': _('Update the description of this signing identity.'),
+        'submit_label': _('Save Changes'),
+    }
     permission_required = AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
@@ -228,6 +242,12 @@ class TraceabilityCredentialEditView(
     def get_initial(self) -> dict[str, str]:
         """Prefill the current description."""
         return {'description': self.credential.description}
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Keep navigation tied to the credential being edited."""
+        context = super().get_context_data(**kwargs)
+        context['credential'] = self.credential
+        return context
 
     def form_valid(self, form: TraceabilityCredentialDescriptionForm) -> HttpResponse:
         """Delegate the metadata mutation to the service."""
@@ -252,6 +272,13 @@ class TraceabilityCredentialRotateView(
 
     form_class = TraceabilityCertificateForm
     template_name = 'management/traceability_credential/form.html'
+    extra_context: dict[str, Any] = {  # noqa: RUF012 - Django defines this as an instance attribute.
+        'form_description': _(
+            'Generate a new key and certificate and retire the previous generation. '
+            'This credential remains active for signing.'
+        ),
+        'submit_label': _('Rotate key and certificate'),
+    }
     permission_required = AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
@@ -268,7 +295,7 @@ class TraceabilityCredentialRotateView(
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Expose the rotation title and credential to the template."""
         context = super().get_context_data(**kwargs)
-        context['form_title'] = _('Rotate Traceability Credential')
+        context['form_title'] = _('Rotate key and certificate')
         context['credential'] = self.credential
         return context
 
@@ -299,10 +326,29 @@ class TraceabilityCredentialRotateView(
         return redirect('management:traceability_credential_detail', pk=self.credential.pk)
 
 
-class TraceabilityCredentialRetireView(TraceabilityCredentialRotateView):
-    """Retire an Traceability Credential irreversibly."""
+class TraceabilityCredentialRetireView(
+    UserPermissionRequiredMixin,
+    TraceabilityCredentialContextMixin,
+    FormView[forms.Form],
+):
+    """Retire a Traceability Credential irreversibly after confirmation."""
 
-    def form_valid(self, form: TraceabilityCertificateForm) -> HttpResponse:
+    form_class = forms.Form
+    template_name = 'management/traceability_credential/confirm_action.html'
+    permission_required = AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Load the credential without requiring certificate configuration."""
+        self.credential = get_object_or_404(TraceabilityCredentialModel, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Expose the credential being retired."""
+        context = super().get_context_data(**kwargs)
+        context['credential'] = self.credential
+        return context
+
+    def form_valid(self, form: forms.Form) -> HttpResponse:
         """Delegate retirement and preserve the final generation reference."""
         try:
             TraceabilityCredentialService.retire(self.credential)

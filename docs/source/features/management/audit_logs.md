@@ -11,6 +11,12 @@ traceability credential. Exporting requires both **View audit log** and
 **Manage Traceability Credentials** permissions. Each export uses the selected
 credential; there is no automatic background signing.
 
+Select **Include signing certificate (PEM) in a ZIP download**
+to download the export together with `signing-certificate.pem`. The certificate
+is taken from the signed export, so it belongs to the exact signing generation,
+even if the credential rotates during the download. This contains only the
+public certificate; private keys are never included.
+
 The download contains all matching entries, independent of the current page,
 in timestamp and entry-ID order. Exports are limited to 10,000 entries; narrow
 the filters for larger logs. The signed payload includes the context
@@ -37,7 +43,7 @@ signature is the fixed-width `R || S` encoding defined by
 64 bytes for ES256 and 96 bytes for ES384 before base64url encoding.
 The payload contains UTF-8 JSON. Verification uses its exact encoded bytes;
 JSON canonicalization is neither needed nor claimed. The response media type
-is `application/jose+json`.
+is `application/jose+json`. Extract ZIP downloads before verifying.
 
 The verifier supports this audit-export profile only: all header parameters
 must be protected, the certificate must match the independently pinned,
@@ -56,7 +62,10 @@ python -I trustpoint/util/audit_log_export.py trustpoint-audit-log.json \
 Obtain the signing-generation certificate independently from a trusted
 administrator and check its SHA-256 fingerprint against the traceability
 credential's generation history. Do not establish trust using only the
-certificate embedded in an untrusted export. Retain trusted certificates for
+certificate embedded in an untrusted export or included in its ZIP download.
+After independently confirming the bundled certificate's fingerprint, it can
+be passed as `--trusted-certificate signing-certificate.pem`.
+Retain trusted certificates for
 older generations: verification uses the exact historical certificate and does
 not require the Trustpoint database or a currently active, unexpired credential.
 

@@ -8,9 +8,11 @@ from threading import Event
 from typing import Any
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import OperationalError, connection, connections, transaction
+from django.urls import reverse
 
 from crypto.application.private_keys import ManagedECPrivateKey
 from management.models.traceability import TraceabilityCredentialModel
@@ -157,3 +159,49 @@ def test_verification_rejects_invalid_signature(credential: TraceabilityCredenti
 
     assert not result.valid
     assert result.failure_reason == VerificationFailureReason.INVALID_SIGNATURE
+
+
+def test_retirement_view_confirms_without_certificate_fields(credential, client):
+    """Retirement needs only confirmation, preserves history, and reports repeated retirement."""
+    user = get_user_model().objects.create_superuser(username='retirement-admin', password='test-password')
+    client.force_login(user)
+    url = reverse('management:traceability_credential_retire', kwargs={'pk': credential.pk})
+    generation_id = credential.current_generation_id
+    generation_count = credential.generations.count()
+
+    response = client.get(url)
+    assert response.status_code == 200
+    assert not response.context['form'].fields
+    assert 'Retire credential' in response.content.decode()
+    assert 'permanently stops signing' in response.content.decode()
+    credential.refresh_from_db()
+    assert credential.status == TraceabilityCredentialModel.Status.ACTIVE
+
+    rotation = client.get(reverse('management:traceability_credential_rotate', kwargs={'pk': credential.pk}))
+    assert rotation.status_code == 200
+    assert rotation.context['form'].fields
+    assert rotation.context['form_title'] == 'Rotate key and certificate'
+
+    response = client.post(url, {})
+    assert response.status_code == 302
+    assert response.url == reverse('management:traceability_credential_detail', kwargs={'pk': credential.pk})
+    credential.refresh_from_db()
+    assert credential.status == TraceabilityCredentialModel.Status.RETIRED
+    assert credential.current_generation_id == generation_id
+    assert credential.generations.count() == generation_count
+    assert credential.current_generation.status == 'RETIRED'
+
+    repeated = client.post(url, {})
+    assert repeated.status_code == 200
+    assert 'already retired' in repeated.content.decode()
+
+
+def test_retirement_view_requires_management_permission(credential, client):
+    """The confirmation and mutation both require permission to manage credentials."""
+    user = get_user_model().objects.create_user(username='retirement-reader')
+    client.force_login(user)
+    url = reverse('management:traceability_credential_retire', kwargs={'pk': credential.pk})
+    assert client.get(url).status_code == 403
+    assert client.post(url, {}).status_code == 403
+    credential.refresh_from_db()
+    assert credential.status == TraceabilityCredentialModel.Status.ACTIVE
