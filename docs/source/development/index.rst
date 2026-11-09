@@ -281,6 +281,8 @@ Open ``docs/build/html/index.html`` after the build succeeds. A successful build
 with warnings is not the same as passing this strict check. Renderer execution
 and local test-server ports may need to be permitted by your execution environment.
 Do not regenerate autodoc sources over maintained user guides.
+See :doc:`documentation` for the complete build and editing workflow and
+:doc:`overview` for the grouped development guides.
 
 To rebuild the workflow editor, see :doc:`../features/workflows/index`.
 To add dependencies, use ``uv add <package>`` for runtime imports and
