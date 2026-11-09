@@ -24,6 +24,10 @@ from management.models.password_policy import PasswordPolicy
 from management.models.prometheus import PrometheusConfig
 from management.models.security import SecurityConfig
 from management.models.tls import TlsSettings
+from management.models.traceability import (
+    TraceabilityCredentialGenerationModel,
+    TraceabilityCredentialModel,
+)
 
 __all__ = [
     'AccountSecurityConfig',
@@ -43,6 +47,8 @@ __all__ = [
     'SecurityConfig',
     'SmtpEmailConfig',
     'TlsSettings',
+    'TraceabilityCredentialGenerationModel',
+    'TraceabilityCredentialModel',
     'WeakECCCurve',
     'WeakSignatureAlgorithm',
 ]

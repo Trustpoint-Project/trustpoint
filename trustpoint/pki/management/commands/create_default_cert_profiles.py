@@ -38,20 +38,21 @@ class Command(BaseCommand):
                 display_name = profile_dict.get('display_name', '')
                 credential_type = profile_dict.get('credential_type', 'application')
             except (ValidationError, ValueError) as e:
-                self.stdout.write(self.style.ERROR(f'Invalid JSON certificate profile in {profile_file}: {e}'))
+                self.stderr.write(f'Invalid JSON certificate profile in {profile_file}: {e}')
                 continue
 
             # Set is_default based on profile name
             is_default = unique_name != 'issuing_ca'
 
+            defaults = {
+                'profile_json': profile_json,
+                'is_default': is_default,
+                'display_name': display_name,
+                'credential_type': credential_type,
+            }
             _obj, created = CertificateProfileModel.objects.get_or_create(
                 unique_name=unique_name,
-                defaults={
-                    'profile_json': profile_json,
-                    'is_default': is_default,
-                    'display_name': display_name,
-                    'credential_type': credential_type
-                },
+                defaults=defaults,
             )
 
             if created:

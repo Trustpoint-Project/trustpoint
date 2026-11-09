@@ -1,0 +1,57 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n internationalization_tags %}
+
+{% block title %}{% trans 'Traceability Credentials' %}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">{% trans 'Traceability Credentials' %}</h1>
+        <p class="mb-0 text-muted">{% trans 'Manage signing identities and their key and certificate generations.' %}</p>
+    </div>
+    <div class="card-body text-start">
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">{% trans 'Credential inventory' %}</h2>
+            </div>
+            <hr class="mb-4">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">{% trans 'Name' %}</th>
+                            <th scope="col">{% trans 'Status' %}</th>
+                            <th scope="col">{% trans 'Usable' %}</th>
+                            <th scope="col">{% trans 'Curve' %}</th>
+                            <th scope="col">{% trans 'Current generation' %}</th>
+                            <th scope="col">{% trans 'Certificate expiry' %}</th>
+                            <th scope="col" class="text-end">{% trans 'Actions' %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for credential in credentials %}
+                        <tr>
+                            <td>{{ credential.name }}</td>
+                            <td><span class="badge {% if credential.status == 'ACTIVE' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ credential.get_status_display }}</span></td>
+                            <td>{% if credential.is_usable %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</td>
+                            <td>{{ credential.get_curve_display }}</td>
+                            <td>{{ credential.current_generation.generation_number|default:'—' }}</td>
+                            <td>{% if credential.current_generation.credential.certificate %}{{ credential.current_generation.credential.certificate.not_valid_after|local_datetime }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-secondary" href="{% url 'management:traceability_credential_detail' credential.pk %}">{% trans 'Details' %}</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-5">{% trans 'No Traceability Credentials have been created.' %}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% include 'trustpoint/pagination.html' %}
+        </section>
+    </div>
+    <div class="card-footer d-flex justify-content-end align-items-center">
+        <a class="btn btn-primary" href="{% url 'management:traceability_credential_create' %}">{% trans 'Create Traceability Credential' %}</a>
+    </div>
+</div>
+{% endblock content %}

@@ -11,10 +11,10 @@ class AppPermissions:
     # -------------------------------------------------------------------------
     # User and access management
     # -------------------------------------------------------------------------
-    MANAGE_USERS = f'{APP_LABEL}.manage_users' #ok
-    MANAGE_ROLES = f'{APP_LABEL}.manage_roles'#ok
-    MANAGE_ORGANIZATIONS = f'{APP_LABEL}.manage_organizations' #ok
-    MANAGE_SERVICE_ACCOUNTS = f'{APP_LABEL}.manage_service_accounts' #ok
+    MANAGE_USERS = f'{APP_LABEL}.manage_users'  # ok
+    MANAGE_ROLES = f'{APP_LABEL}.manage_roles'  # ok
+    MANAGE_ORGANIZATIONS = f'{APP_LABEL}.manage_organizations'  # ok
+    MANAGE_SERVICE_ACCOUNTS = f'{APP_LABEL}.manage_service_accounts'  # ok
 
     # -------------------------------------------------------------------------
     # PKI configuration
@@ -42,35 +42,28 @@ class AppPermissions:
     # -------------------------------------------------------------------------
     # Automation and integration
     # -------------------------------------------------------------------------
-    MANAGE_CERTIFICATE_DISCOVERY = (
-        f'{APP_LABEL}.manage_certificate_discovery'
-    )
+    MANAGE_CERTIFICATE_DISCOVERY = f'{APP_LABEL}.manage_certificate_discovery'
     MANAGE_SIGNER = f'{APP_LABEL}.manage_signer'
+    MANAGE_TRACEABILITY_CREDENTIALS = f'{APP_LABEL}.manage_traceability_credentials'
 
     # -------------------------------------------------------------------------
     # Workflow engine
     # -------------------------------------------------------------------------
-    MANAGE_WORKFLOWS = f'{APP_LABEL}.manage_workflows' # OK
-    APPROVE_WORKFLOWS = f'{APP_LABEL}.approve_workflows' # OK
+    MANAGE_WORKFLOWS = f'{APP_LABEL}.manage_workflows'  # OK
+    APPROVE_WORKFLOWS = f'{APP_LABEL}.approve_workflows'  # OK
 
     # -------------------------------------------------------------------------
     # System administration
     # -------------------------------------------------------------------------
-    MANAGE_SYSTEM_CONFIGURATION = (
-        f'{APP_LABEL}.manage_system_configuration'
-    )
-    MANAGE_SECURITY_CONFIGURATION = (
-        f'{APP_LABEL}.manage_security_configuration'
-    ) #ok
-    MANAGE_TLS_WEBSERVER_CONFIGURATION = (
-        f'{APP_LABEL}.manage_tls_webserver_configuration'
-    ) #ok
-    MANAGE_BACKUPS = f'{APP_LABEL}.manage_backups' #ok
-    MANAGE_NOTIFICATIONS = f'{APP_LABEL}.manage_notifications' #ok
+    MANAGE_SYSTEM_CONFIGURATION = f'{APP_LABEL}.manage_system_configuration'
+    MANAGE_SECURITY_CONFIGURATION = f'{APP_LABEL}.manage_security_configuration'  # ok
+    MANAGE_TLS_WEBSERVER_CONFIGURATION = f'{APP_LABEL}.manage_tls_webserver_configuration'  # ok
+    MANAGE_BACKUPS = f'{APP_LABEL}.manage_backups'  # ok
+    MANAGE_NOTIFICATIONS = f'{APP_LABEL}.manage_notifications'  # ok
 
     # -------------------------------------------------------------------------
     # Monitoring and audit
     # -------------------------------------------------------------------------
-    VIEW_AUDIT_LOG = f'{APP_LABEL}.view_audit_log'#ok
-    VIEW_SYSTEM_LOGS = f'{APP_LABEL}.view_system_logs' #ok
-    VIEW_METRICS = f'{APP_LABEL}.view_metrics' #ok
+    VIEW_AUDIT_LOG = f'{APP_LABEL}.view_audit_log'  # ok
+    VIEW_SYSTEM_LOGS = f'{APP_LABEL}.view_system_logs'  # ok
+    VIEW_METRICS = f'{APP_LABEL}.view_metrics'  # ok

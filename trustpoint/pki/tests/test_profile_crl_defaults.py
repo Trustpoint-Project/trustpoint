@@ -17,6 +17,8 @@ def test_shipped_device_profiles_expose_editable_crl_urls() -> None:
         if path.stem == 'issuing_ca':
             continue
         profile = JSONProfileVerifier(json.loads(path.read_text())).get_profile()
+        if profile['credential_type'] not in {'application', 'domain'}:
+            continue
         crl = profile['extensions']['crl_distribution_points']
         assert crl['critical'] is False, path.name
         assert crl['uris']['mutable'] is True, path.name

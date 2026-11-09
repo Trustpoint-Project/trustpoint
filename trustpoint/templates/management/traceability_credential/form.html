@@ -1,0 +1,31 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n crispy_forms_filters %}
+
+{% block title %}{{ form_title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">{{ form_title }}</h1>
+        <p class="mb-0 text-muted">{{ form_description }}</p>
+    </div>
+    <div class="card-body text-start">
+        <div class="tp-card-centered-content">
+            <form id="traceability-credential-form" method="post" autocomplete="off">
+                {% csrf_token %}
+                <section>
+                    <div class="mb-3">
+                        <h2 class="h4 mb-1">{% trans 'Configuration' %}</h2>
+                    </div>
+                    <hr class="mb-4">
+                    {{ form|crispy }}
+                </section>
+            </form>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a class="btn btn-secondary" href="{% if credential %}{% url 'management:traceability_credential_detail' credential.pk %}{% else %}{% url 'management:traceability_credentials' %}{% endif %}">{% trans 'Cancel' %}</a>
+        <button class="btn btn-primary" type="submit" form="traceability-credential-form">{{ submit_label }}</button>
+    </div>
+</div>
+{% endblock content %}

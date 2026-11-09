@@ -66,7 +66,7 @@ def test_profile_migration_preserves_or_flags_legacy_names(credential_instance, 
         executor = MigrationExecutor(connection)
         if NEW[0] not in executor.loader.applied_migrations:
             records.objects.filter(pk=record.pk).update(issued_using_cert_profile=profile.unique_name)
-        executor.migrate(NEW)
+        executor.migrate(executor.loader.graph.leaf_nodes())
 
 
 @pytest.mark.parametrize('label', ['', 'dev_owner_id'])
@@ -96,4 +96,5 @@ def test_imported_owner_migration_keeps_profile_empty(credential_instance, label
         MigrationExecutor(connection).migrate(OLD)
         assert records.objects.get(pk=record.pk).issued_using_cert_profile == ''
     finally:
-        MigrationExecutor(connection).migrate(NEW)
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())

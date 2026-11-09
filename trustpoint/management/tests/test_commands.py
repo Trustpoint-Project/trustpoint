@@ -227,7 +227,7 @@ class StartupManagerCommandTest(TestCase):
 
             self.assertEqual(
                 mock_call_command.call_args_list,
-                [call('migrate'), call('sync_security_config')],
+                [call('migrate'), call('create_default_cert_profiles'), call('sync_security_config')],
             )
             mock_strategy_class.assert_called_once_with()
             mock_strategy.execute.assert_called_once_with(mock_context)
@@ -263,7 +263,7 @@ class StartupManagerCommandTest(TestCase):
 
             self.assertEqual(
                 mock_call_command.call_args_list,
-                [call('migrate'), call('sync_security_config')],
+                [call('migrate'), call('create_default_cert_profiles'), call('sync_security_config')],
             )
             mock_strategy_class.assert_called_once_with()
 
