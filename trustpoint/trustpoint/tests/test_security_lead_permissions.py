@@ -35,31 +35,34 @@ from workflows2.views.runs import (
 )
 
 
-@pytest.mark.parametrize('view_class', [
-    SignHashView,
-    AgentProfileDefinitionConfigView,
-    OpcUaGdsPushTruststoreAssociationView,
-    OpcUaGdsPushCertRenewalSettingsView,
-    IssuingCaCrlGenerationView,
-    owners.OwnerCredentialFileImportView,
-    owners.OwnerCredentialAddRequestEstNoOnboardingView,
-    owners.OwnerCredentialAddRequestEstOnboardingView,
-    owners.OwnerCredentialTruststoreAssociationView,
-    owners.OwnerCredentialOnboardingSetupView,
-    owners.OwnerCredentialBulkDeleteConfirmView,
-    owners.IssuedCredentialDeleteView,
-    owners.OwnerCredentialDefineCertContentEstView,
-    owners.OwnerCredentialRequestCertEstView,
-    owners.OwnerCredentialDefineCertContentDomainCredentialEstView,
-    owners.OwnerCredentialRequestDomainCredentialEstView,
-    Workflow2RunCancelView,
-    Workflow2RunReleaseIdempotencyView,
-    Workflow2RunRunInlineView,
-    Workflow2InstanceCancelView,
-    Workflow2InstanceStopView,
-    Workflow2InstanceResumeView,
-    Workflow2InstanceRunInlineView,
-])
+@pytest.mark.parametrize(
+    'view_class',
+    [
+        SignHashView,
+        AgentProfileDefinitionConfigView,
+        OpcUaGdsPushTruststoreAssociationView,
+        OpcUaGdsPushCertRenewalSettingsView,
+        IssuingCaCrlGenerationView,
+        owners.OwnerCredentialFileImportView,
+        owners.OwnerCredentialAddRequestEstNoOnboardingView,
+        owners.OwnerCredentialAddRequestEstOnboardingView,
+        owners.OwnerCredentialTruststoreAssociationView,
+        owners.OwnerCredentialOnboardingSetupView,
+        owners.OwnerCredentialBulkDeleteConfirmView,
+        owners.IssuedCredentialDeleteView,
+        owners.OwnerCredentialDefineCertContentEstView,
+        owners.OwnerCredentialRequestCertEstView,
+        owners.OwnerCredentialDefineCertContentDomainCredentialEstView,
+        owners.OwnerCredentialRequestDomainCredentialEstView,
+        Workflow2RunCancelView,
+        Workflow2RunReleaseIdempotencyView,
+        Workflow2RunRunInlineView,
+        Workflow2InstanceCancelView,
+        Workflow2InstanceStopView,
+        Workflow2InstanceResumeView,
+        Workflow2InstanceRunInlineView,
+    ],
+)
 @pytest.mark.parametrize('method', ['get', 'post'])
 def test_unprivileged_browser_requests_never_reach_handlers(view_class, method):
     request = getattr(RequestFactory(), method)('/protected/')
@@ -73,11 +76,19 @@ def test_unprivileged_browser_requests_never_reach_handlers(view_class, method):
         handler.assert_not_called()
 
 
-@pytest.mark.parametrize('view_class', [
-    SignHashView, OpcUaGdsPushTruststoreAssociationView, OpcUaGdsPushCertRenewalSettingsView,
-    AgentProfileDefinitionConfigView, owners.OwnerCredentialTruststoreAssociationView,
-    Workflow2RunCancelView, Workflow2InstanceStopView, IssuingCaCrlGenerationView,
-])
+@pytest.mark.parametrize(
+    'view_class',
+    [
+        SignHashView,
+        OpcUaGdsPushTruststoreAssociationView,
+        OpcUaGdsPushCertRenewalSettingsView,
+        AgentProfileDefinitionConfigView,
+        owners.OwnerCredentialTruststoreAssociationView,
+        Workflow2RunCancelView,
+        Workflow2InstanceStopView,
+        IssuingCaCrlGenerationView,
+    ],
+)
 def test_permitted_browser_requests_reach_handlers(view_class):
     request = RequestFactory().post('/protected/')
     request.user = Mock(is_authenticated=True, has_perm=Mock(return_value=True))
@@ -101,7 +112,9 @@ def test_rest_management_issuance_checks_permission_before_parsing(permitted):
     assert serializer.called is permitted
 
 
-@pytest.mark.parametrize('view_class', [OpcUaGdsPushTruststoreAssociationView, owners.OwnerCredentialTruststoreAssociationView])
+@pytest.mark.parametrize(
+    'view_class', [OpcUaGdsPushTruststoreAssociationView, owners.OwnerCredentialTruststoreAssociationView]
+)
 def test_truststore_upload_requires_its_own_management_permission(view_class):
     request = RequestFactory().post('/import/')
     request.user = Mock(has_perm=Mock(return_value=False))
@@ -115,13 +128,16 @@ def test_truststore_upload_requires_its_own_management_permission(view_class):
         gds_form.assert_not_called()
 
 
-@pytest.mark.parametrize('permissions,member,allowed', [
-    (set(), False, False),
-    ({AppPermissions.MANAGE_TRUSTSTORES}, True, False),
-    ({AppPermissions.MANAGE_CAS}, True, False),
-    ({AppPermissions.MANAGE_CAS}, False, True),
-    ({AppPermissions.MANAGE_CAS, AppPermissions.MANAGE_TRUSTSTORES}, True, True),
-])
+@pytest.mark.parametrize(
+    'permissions,member,allowed',
+    [
+        (set(), False, False),
+        ({AppPermissions.MANAGE_TRUSTSTORES}, True, False),
+        ({AppPermissions.MANAGE_CAS}, True, False),
+        ({AppPermissions.MANAGE_CAS}, False, True),
+        ({AppPermissions.MANAGE_CAS, AppPermissions.MANAGE_TRUSTSTORES}, True, True),
+    ],
+)
 def test_certificate_deletion_preserves_unauthorized_truststore_memberships(permissions, member, allowed):
     view = CertificateViewSet()
     view.request = Mock(user=Mock(has_perm=lambda permission: permission in permissions))

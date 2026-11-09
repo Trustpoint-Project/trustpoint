@@ -26,7 +26,9 @@ def certificate():
 
 
 def test_denied_deletion_keeps_certificate_and_membership(certificate):
-    truststore = TruststoreModel.objects.create(unique_name='deletion-test', intended_usage=TruststoreModel.IntendedUsage.TLS)
+    truststore = TruststoreModel.objects.create(
+        unique_name='deletion-test', intended_usage=TruststoreModel.IntendedUsage.TLS
+    )
     membership = TruststoreOrderModel.objects.create(certificate=certificate, trust_store=truststore, order=0)
     view = CertificateViewSet()
     view.request = SimpleNamespace(user=SimpleNamespace(has_perm=lambda name: name == AppPermissions.MANAGE_CAS))

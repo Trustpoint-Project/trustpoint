@@ -46,7 +46,9 @@ def snapshot(staging_root: Path, source: Path, destination: Path | None) -> None
                     remaining -= len(chunk)
             after = os.fstat(staged.fileno())
             if (before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
-                after.st_size, after.st_mtime_ns, after.st_ctime_ns
+                after.st_size,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
             ):
                 msg = 'Staged file changed during snapshot.'
                 raise ValueError(msg)

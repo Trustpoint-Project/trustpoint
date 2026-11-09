@@ -14,8 +14,16 @@ Feature: REST PKI API authorization
     When an unauthenticated client posts to the REST PKI revoke endpoint
     Then the response is an authentication failure
 
+  Scenario: Authenticated enrollment requires certificate issuance permission
+    Given an active service account credential exists
+    When the service account requests an OAuth2 token with client credentials
+    Then the response status code is 200
+    When the authenticated service account enrolls for missing device 999999
+    Then the response status code is 403
+
   Scenario: Authenticated enrollment reports a missing target device
     Given an active service account credential exists
+    And the service account may issue certificates
     When the service account requests an OAuth2 token with client credentials
     Then the response status code is 200
     When the authenticated service account enrolls for missing device 999999
